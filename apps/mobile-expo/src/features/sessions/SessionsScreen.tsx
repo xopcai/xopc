@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +17,7 @@ import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
-import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
 import {
@@ -33,6 +33,8 @@ import {
   useGatewayConfigured,
 } from '../../query/sessions';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, typography, useTheme } from '../../theme';
+import { useGatewayStore } from '../../stores/gateway-store';
+import { prefetchSessionChatEntry } from '../chat/session-history-prefetch';
 
 import { RenameDialog } from './RenameDialog';
 import { SessionCard } from './SessionCard';
@@ -43,6 +45,7 @@ export function SessionsScreen() {
   const router = useRouter();
   useDismissOnHardwareBack(router);
   const queryClient = useQueryClient();
+  const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const m = useMessages();
@@ -53,6 +56,13 @@ export function SessionsScreen() {
   const [snackMsg, setSnackMsg] = useState('');
   const [renameTarget, setRenameTarget] = useState<SessionListItem | null>(null);
   const [showBatchDelete, setShowBatchDelete] = useState(false);
+  const historyPrefetchesRef = useRef(new Map<string, Promise<void>>());
+  const openingSessionKeyRef = useRef('');
+  const openingResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (openingResetTimerRef.current) clearTimeout(openingResetTimerRef.current);
+  }, []);
   const {
     selectionMode,
     selectedIds,
@@ -162,9 +172,26 @@ export function SessionsScreen() {
     onError: (error) => setSnackMsg(error instanceof Error ? error.message : sa.failedToDelete),
   });
 
+  const primeSessionHistory = useCallback((sessionKey: string): Promise<void> => {
+    const existing = historyPrefetchesRef.current.get(sessionKey);
+    if (existing) return existing;
+    const pending = prefetchSessionChatEntry(queryClient, sessionKey, activeGatewayId)
+      .finally(() => historyPrefetchesRef.current.delete(sessionKey));
+    historyPrefetchesRef.current.set(sessionKey, pending);
+    return pending;
+  }, [activeGatewayId, queryClient]);
+
   const handleOpenSession = useCallback((session: SessionListItem) => {
-    router.push(`/chat/${session.key}`);
-  }, [router]);
+    if (openingSessionKeyRef.current) return;
+    openingSessionKeyRef.current = session.key;
+    void primeSessionHistory(session.key).catch(() => undefined);
+    openChat(router, session.key);
+    if (openingResetTimerRef.current) clearTimeout(openingResetTimerRef.current);
+    openingResetTimerRef.current = setTimeout(() => {
+      openingSessionKeyRef.current = '';
+      openingResetTimerRef.current = null;
+    }, 600);
+  }, [primeSessionHistory, router]);
 
   const handleSessionPress = useCallback((session: SessionListItem) => {
     if (selectionMode) {
@@ -287,6 +314,9 @@ export function SessionsScreen() {
     <SessionCard
       session={item}
       onPress={() => handleSessionPress(item)}
+      onPressIn={selectionMode
+        ? undefined
+        : () => { void primeSessionHistory(item.key).catch(() => undefined); }}
       onLongPress={() => handleSessionLongPress(item)}
       onSwipeAction={(action) => handleSwipeAction(item, action)}
       selectionMode={selectionMode}
@@ -294,7 +324,7 @@ export function SessionsScreen() {
       isFirst={index === 0}
       isLast={index === allSessions.length - 1}
     />
-  ), [allSessions.length, handleSessionPress, handleSessionLongPress, handleSwipeAction, selectedIds, selectionMode]);
+  ), [allSessions.length, handleSessionPress, handleSessionLongPress, handleSwipeAction, primeSessionHistory, selectedIds, selectionMode]);
 
   const renderListFooter = useCallback(() => {
     if (sessionsQuery.isFetchingNextPage) {

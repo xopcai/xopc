@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,53 +20,6 @@ import { radii, spacing, typography, useTheme } from '../../theme';
 import { buildMobileTaskCreateRequest, resolveTaskAgentId } from './task-create-input';
 
 function firstParam(value: string | string[] | undefined): string { return Array.isArray(value) ? value[0] ?? '' : value ?? ''; }
-
-export function ProjectsScreen() {
-  const router = useRouter();
-  const configured = useGatewayConfigured();
-  const { colors } = useTheme();
-  const { tasksPage: labels } = useMessages();
-  const query = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
-      {query.isLoading ? <ListSkeleton count={6} /> : query.isError ? (
-        <View style={styles.loading}>
-          <Text style={{ color: colors.semantic.error }}>{labels.projectsLoadFailed}</Text>
-          <Button onPress={() => void query.refetch()}>{labels.retry}</Button>
-        </View>
-      ) : <FlatList data={query.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />} ListEmptyComponent={<Text style={{ color: colors.text.tertiary }}>{labels.projectsEmpty}</Text>} renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={item.name} onPress={() => router.push(`/projects/${item.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.name}</Text>{item.description ? <Text numberOfLines={2} style={{ color: colors.text.secondary }}>{item.description}</Text> : null}</Pressable>} />}
-    </View>
-  );
-}
-
-export function ProjectDetailScreen() {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const projectId = firstParam(id);
-  const configured = useGatewayConfigured();
-  const { colors } = useTheme();
-  const { tasksPage: labels } = useMessages();
-  const view = useQuery({ queryKey: queryKeys.projectOperatingView(projectId), queryFn: () => fetchProjectOperatingView(projectId), enabled: configured && !!projectId });
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={view.data?.project.name ?? labels.projectsTitle} onBack={() => dismissOrHome(router)} rightActions={view.data ? [{ icon: 'plus', onPress: () => router.push(`/tasks/create?projectId=${projectId}`), accessibilityLabel: labels.create }] : undefined} />
-      {view.isLoading ? <ListSkeleton count={5} /> : view.isError || !view.data ? (
-        <View style={styles.loading}>
-          <Text style={{ color: colors.semantic.error }}>{labels.projectLoadFailed}</Text>
-          <Button onPress={() => void view.refetch()}>{labels.retry}</Button>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={view.isFetching} onRefresh={() => void view.refetch()} />}>
-          <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text><Text style={{ color: colors.text.secondary }}>{view.data.digest.summary}</Text>{view.data.digest.recommendedAction ? <Text style={{ color: colors.accent.primary }}>{view.data.digest.recommendedAction}</Text> : null}</View>
-          {view.data.tasks.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.tasks}</Text>{view.data.tasks.map((task) => <Pressable accessibilityRole="button" key={task.id} onPress={() => router.push(`/tasks/${task.id}`)} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{task.title}</Text><Text style={{ color: colors.accent.primary }}>{task.phase} · {task.operationalState}</Text>{task.attention[0] ? <Text style={{ color: colors.text.secondary }}>{task.attention[0].summary}</Text> : null}</Pressable>)}</> : null}
-          {view.data.blockers.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.attention}</Text>{view.data.blockers.map((item) => <View key={item.id} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.title}</Text>{item.detail ? <Text style={{ color: colors.text.secondary }}>{item.detail}</Text> : null}</View>)}</> : null}
-          {view.data.recentReceipts.length ? <><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.recentResults}</Text>{view.data.recentReceipts.slice(0, 5).map((receipt) => <View key={receipt.runId} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{receipt.summary}</Text><Text style={{ color: colors.accent.primary }}>{receipt.status} · {receipt.verification.status}</Text></View>)}</> : null}
-        </ScrollView>
-      )}
-    </View>
-  );
-}
 
 export function CreateTaskScreen() {
   const router = useRouter();

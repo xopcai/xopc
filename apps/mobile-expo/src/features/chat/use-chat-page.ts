@@ -30,7 +30,7 @@ import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipbo
 import { captureWorkspaceText } from '../../sync/workspace-sync';
 import { buildUserResendPayload, findPrecedingUserMessage } from './composer-send-helpers';
 import type { ComposerAttachment, WireAttachment } from './composer.types';
-import type { Message } from './messages.types';
+import { coerceReasoningLevel, type Message } from './messages.types';
 import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
 import { sendOrQueueMessage } from './send-or-queue';
 import { parseSessionMessages, dedupeWireMessages } from './session-message-parser';
@@ -504,6 +504,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     agentName,
     modelName,
     displayMessages,
+    reasoningLevel: coerceReasoningLevel(sessionAgentConfigQuery.data?.reasoningLevel),
+    sessionPresentationReady: !sessionKey || !sessionAgentConfigQuery.isLoading,
     welcomeModel,
     isEmptyChat,
     composerDisabled,

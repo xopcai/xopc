@@ -22,9 +22,8 @@ import {
   fetchHome,
   respondToHomeDecision,
   retryHomeAttention,
-  type HomeAttention,
-  type HomeData,
-  type HomeDecision,
+  type HomeAction,
+  type HomeFocusItem,
   type HomeGateway,
   type HomeWorkflowRun,
 } from '../../query/home';
@@ -42,6 +41,8 @@ import {
 } from '../../theme';
 import { resolveNoteListTitle } from '../notes/note-title';
 import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
+import { readPinnedHomeFocusId, writePinnedHomeFocusId } from './home-focus-preference';
+import { rankHomeContinueCandidates, selectHomeFocusItem } from './home-presentation';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
 import { useOptionalWorkspaceTransition } from './workspace-transition-context';
@@ -74,6 +75,13 @@ function timeLabel(value: string | number | undefined, hm: ReturnType<typeof use
   return t(hm.daysAgo, { n: Math.floor(hours / 24) });
 }
 
+function timestampMs(value: string | number | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessages>['homePage']): string {
   if (run.metrics.agentCount <= 0) return hm.workflowRunning;
   return t(hm.workflowProgress, {
@@ -82,17 +90,7 @@ function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessage
   });
 }
 
-function decisionIcon(decision: HomeDecision): string {
-  if (decision.kind === 'agent_judgment') return 'creation-outline';
-  if (decision.kind === 'connector_approval') return 'shield-check-outline';
-  if (decision.kind === 'task') return 'target';
-  return decision.reason === 'overdue' ? 'clock-alert-outline' : 'checkbox-marked-circle-outline';
-}
-
-function decisionObjectId(decision: HomeDecision): string {
-  const separator = decision.id.indexOf(':');
-  return separator >= 0 ? decision.id.slice(separator + 1) : decision.id;
-}
+type RemoteHomeAction = Exclude<HomeAction, { type: 'open' | 'ask_ai' }>;
 
 export function WorkspaceHomeScreen() {
   const router = useRouter();
@@ -111,6 +109,7 @@ export function WorkspaceHomeScreen() {
   } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [pinnedFocusId, setPinnedFocusId] = useState(readPinnedHomeFocusId);
   const homeReadyRecorded = useRef(false);
 
   useHomeChatPrefetch(configured);
@@ -156,83 +155,136 @@ export function WorkspaceHomeScreen() {
     openNoteDetail(router, note.id);
   }, [router]);
 
+  const primaryFocus = useMemo(
+    () => selectHomeFocusItem(home?.focusItems ?? [], pinnedFocusId),
+    [home?.focusItems, pinnedFocusId],
+  );
+
+  useEffect(() => {
+    if (!pinnedFocusId || !home) return;
+    if (home.focusItems.some((item) => item.id === pinnedFocusId && item.pinnable)) return;
+    writePinnedHomeFocusId(null);
+    setPinnedFocusId(null);
+  }, [home, pinnedFocusId]);
+
   const continueItems = useMemo<ContinueItem[]>(() => {
     const workflowItems = (home?.workflowRuns.active ?? []).map((run) => ({
       id: `workflow:${run.id}`,
-      title: run.title,
-      meta: `${hm.workflowItemMeta} · ${workflowProgress(run, hm)}`,
-      icon: 'source-branch-sync',
-      onPress: () => run.sessionKey ? handleSessionPress(run.sessionKey) : router.push(`/workflows/runs/${run.id}`),
+      kind: 'running_work' as const,
+      updatedAt: run.startedAtMs ?? run.createdAtMs,
+      value: {
+        id: `workflow:${run.id}`,
+        title: run.title,
+        meta: `${hm.workflowItemMeta} · ${workflowProgress(run, hm)}`,
+        icon: 'source-branch-sync',
+        onPress: () => run.sessionKey ? handleSessionPress(run.sessionKey) : router.push(`/workflows/runs/${run.id}`),
+      },
     }));
-    const sessionItems = (home?.chats.recent ?? []).map((session) => ({
-      id: `session:${session.key}`,
-      title: session.name || m.sessions.untitled,
-      meta: `${hm.chatItemMeta} · ${timeLabel(session.updatedAt, hm)}`,
-      icon: 'message-processing-outline',
-      onPress: () => handleSessionPress(session.key),
-    }));
+    const runningKeys = new Set((home?.chats.running ?? []).map((session) => session.key));
+    const sessionItems = [...(home?.chats.running ?? []), ...(home?.chats.recent ?? []).filter((session) => !runningKeys.has(session.key))]
+      .map((session) => ({
+        id: `session:${session.key}`,
+        kind: session.active ? 'active_chat' as const : 'recent_chat' as const,
+        updatedAt: timestampMs(session.updatedAt),
+        value: {
+          id: `session:${session.key}`,
+          title: session.name || m.sessions.untitled,
+          meta: session.active
+            ? `${hm.chatItemMeta} · ${hm.taskStatusRunning}`
+            : `${hm.chatItemMeta} · ${timeLabel(session.updatedAt, hm)}`,
+          icon: 'message-processing-outline',
+          onPress: () => handleSessionPress(session.key),
+        },
+      }));
     const noteItems = homeNotes.map((note) => ({
       id: `note:${note.id}`,
-      title: resolveNoteListTitle(note, hm.untitled),
-      meta: `${hm.noteItemMeta} · ${timeLabel(note.lastOpenedAt ?? note.updatedAt, hm)}`,
-      icon: iconForNoteKind(note.kind),
-      onPress: () => handleNotePress(note),
+      kind: 'note' as const,
+      updatedAt: timestampMs(note.lastOpenedAt ?? note.updatedAt),
+      value: {
+        id: `note:${note.id}`,
+        title: resolveNoteListTitle(note, hm.untitled),
+        meta: `${hm.noteItemMeta} · ${timeLabel(note.lastOpenedAt ?? note.updatedAt, hm)}`,
+        icon: iconForNoteKind(note.kind),
+        onPress: () => handleNotePress(note),
+      },
     }));
     const taskItems = (home?.tasks.running ?? []).map((task) => ({
       id: `task:${task.id}`,
-      title: task.title,
-      meta: `${hm.libraryWork} · ${hm.taskStatusRunning}`,
-      icon: 'progress-clock',
-      onPress: () => router.push(`/tasks/${task.id}`),
+      kind: 'running_work' as const,
+      updatedAt: task.updatedAt,
+      value: {
+        id: `task:${task.id}`,
+        title: task.title,
+        meta: `${hm.libraryWork} · ${hm.taskStatusRunning}`,
+        icon: 'progress-clock',
+        onPress: () => router.push(`/tasks/${task.id}`),
+      },
     }));
-    return [...workflowItems, ...taskItems, ...sessionItems, ...noteItems].slice(0, 3);
-  }, [handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.tasks.running, home?.workflowRuns.active, homeNotes, m.sessions.untitled, router]);
+    return rankHomeContinueCandidates(
+      [...workflowItems, ...taskItems, ...sessionItems, ...noteItems],
+      primaryFocus?.id,
+    ).slice(0, 3);
+  }, [handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.chats.running, home?.tasks.running, home?.workflowRuns.active, homeNotes, m.sessions.untitled, primaryFocus?.id, router]);
 
-  const decisionMutation = useMutation({
-    mutationFn: ({ id: _id, response, answer }: {
-      id: string;
-      response: NonNullable<HomeDecision['response']>;
-      answer: 'approve' | 'deny';
-    }) => respondToHomeDecision(response, answer),
-    onSuccess: () => {
-      recordUsageEvent('home_decision_completed');
-      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
-      setToastMessage(hm.decisionCompleted);
+  const toggleFocusPin = useCallback((item: HomeFocusItem) => {
+    const nextId = pinnedFocusId === item.id ? null : item.id;
+    writePinnedHomeFocusId(nextId);
+    setPinnedFocusId(nextId);
+    recordUsageEvent('home_focus_pinned');
+  }, [pinnedFocusId]);
+
+  const remoteActionMutation = useMutation({
+    mutationFn: async (action: RemoteHomeAction) => {
+      if (action.type === 'connector_decision') {
+        return respondToHomeDecision(
+          { kind: 'connector_approval', approvalId: action.approvalId },
+          action.decision,
+        );
+      }
+      const item = { kind: action.subjectKind, runId: action.runId };
+      if (action.type === 'retry_run') return retryHomeAttention(item);
+      return acknowledgeHomeAttention(item);
     },
-    onError: (error) => {
-      setToastMessage(error instanceof Error ? error.message : hm.decisionFailed);
+    onSuccess: (_result, action) => {
+      recordUsageEvent('home_focus_action_completed');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+      setToastMessage(
+        action.type === 'connector_decision'
+          ? hm.decisionCompleted
+          : action.type === 'retry_run'
+            ? hm.attentionRetryStarted
+            : hm.attentionAcknowledged,
+      );
+    },
+    onError: (error, action) => {
+      setToastMessage(
+        error instanceof Error
+          ? error.message
+          : action.type === 'connector_decision'
+            ? hm.decisionFailed
+            : hm.attentionActionFailed,
+      );
     },
   });
 
-  const attentionMutation = useMutation({
-    mutationFn: async ({ item, action }: { item: HomeAttention; action: 'retry' | 'acknowledge' }) => {
-      if (action === 'retry') await retryHomeAttention(item);
-      else await acknowledgeHomeAttention(item);
-    },
-    onSuccess: (_result, variables) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
-      setToastMessage(variables.action === 'retry' ? hm.attentionRetryStarted : hm.attentionAcknowledged);
-    },
-    onError: (error) => {
-      setToastMessage(error instanceof Error ? error.message : hm.attentionActionFailed);
-    },
-  });
-
-  const openDecision = useCallback((decision: HomeDecision) => {
-    recordUsageEvent('home_decision_opened');
-    const objectId = decisionObjectId(decision);
-    if (decision.kind === 'agent_judgment' && decision.judgment) router.push({ pathname: '/inbox', params: { item: decision.judgment.inboxItemId } });
-    else if (decision.kind === 'task') router.push(`/tasks/${objectId}`);
-    else router.push('/tasks');
-  }, [router]);
-
-  const openAttention = useCallback((item: HomeAttention) => {
-    if (item.kind === 'workflow_run' && item.sessionKey) {
-      router.push(`/chat/${item.sessionKey}`);
-      return;
+  const runHomeAction = useCallback((action: HomeAction) => {
+    if (action.type === 'ask_ai') {
+      recordUsageEvent('ask_ai_started');
+      openAskAi();
+    } else if (action.type === 'open') {
+      recordUsageEvent('home_focus_opened');
+      if (action.target === 'work') router.push('/tasks');
+      else if (action.target === 'task' && action.targetId) router.push(`/tasks/${action.targetId}`);
+      else if (action.target === 'workflow_run' && action.targetId) router.push(`/workflows/runs/${action.targetId}`);
+      else if (action.target === 'automation' && action.targetId) router.push(`/automation/runs/${action.targetId}`);
+      else if (action.target === 'automation') router.push('/automation');
+      else if (action.target === 'session' && action.sessionKey) router.push(`/chat/${action.sessionKey}`);
+      else if (action.target === 'inbox') router.push('/inbox');
+      else if (action.target === 'inbox_judgment' && action.targetId) router.push({ pathname: '/inbox', params: { item: action.targetId } });
+    } else {
+      remoteActionMutation.mutate(action);
     }
-    router.push({ pathname: '/automation', params: { run: item.runId } });
-  }, [router]);
+  }, [openAskAi, remoteActionMutation, router]);
 
   const refresh = useCallback(async () => {
     await homeQuery.refetch();
@@ -306,26 +358,15 @@ export function WorkspaceHomeScreen() {
           />
         ) : (
           <>
-            <HomeGatewayStatus gateway={home.gateway} />
-            {home.attention[0] ? (
-              <AttentionSection
-                items={[home.attention[0]]}
-                pendingId={attentionMutation.isPending ? attentionMutation.variables.item.id : undefined}
-                onOpen={openAttention}
-                onAction={(item, action) => attentionMutation.mutate({ item, action })}
-              />
-            ) : home.decisions[0] ? (
-              <DecisionSection
-                decisions={[home.decisions[0]]}
-                pendingDecisionId={decisionMutation.isPending ? decisionMutation.variables.id : undefined}
-                onOpen={openDecision}
-                onRespond={(decision, answer) => {
-                  if (decision.response) decisionMutation.mutate({ id: decision.id, response: decision.response, answer });
-                }}
-              />
-            ) : (
-              <BriefingCard briefing={home.briefing} />
-            )}
+            <HomeGatewayStatus gateway={home.gateway} onPress={() => router.push('/settings/gateway')} />
+            <HomeFocusCard
+              item={primaryFocus ?? home.focusItems[0]}
+              remainingCount={Math.max(0, home.focusItems.length - 1)}
+              pending={remoteActionMutation.isPending}
+              pinned={primaryFocus?.id === pinnedFocusId}
+              onAction={runHomeAction}
+              onTogglePin={toggleFocusPin}
+            />
             <ContinueSection items={continueItems} />
             <LibrarySection
               inboxCount={home.inboxCount}
@@ -333,6 +374,9 @@ export function WorkspaceHomeScreen() {
               onInbox={() => router.push('/inbox')}
               onNotes={() => router.push('/notes')}
               onSessions={() => router.push('/sessions')}
+              onFiles={() => router.push('/files')}
+              onAutomation={() => router.push('/automation')}
+              showAutomation={home.upcomingAutomations.length > 0}
             />
           </>
         )}
@@ -387,176 +431,142 @@ function HomeLoadError({ onRetry, retrying }: { onRetry: () => void; retrying: b
   );
 }
 
-function HomeGatewayStatus({ gateway }: { gateway: HomeGateway }) {
-  const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  if (gateway.ready) return null;
-  return (
-    <View style={[styles.statusBanner, { backgroundColor: colors.surface.grouped }]}>
-      <Icon source="progress-clock" size={16} color={colors.semantic.warning} />
-      <Text style={[styles.statusText, { color: colors.text.secondary }]}>{hm.gatewayStartingStatus}</Text>
-    </View>
-  );
-}
-
-function BriefingCard({
-  briefing,
-}: {
-  briefing: HomeData['briefing'];
-}) {
+function HomeGatewayStatus({ gateway, onPress }: { gateway: HomeGateway; onPress: () => void }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   return (
-    <View style={[styles.briefingCard, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
-      <View style={[styles.briefingMark, { backgroundColor: colors.accent.soft }]}>
-        <Icon source={briefing.progress.movingCount > 0 ? 'progress-clock' : 'check'} size={20} color={colors.accent.primary} />
-      </View>
-      <Text style={[styles.briefingTitle, { color: colors.text.primary }]}>
-        {briefing.progress.movingCount > 0 ? hm.briefingMovingTitle : hm.briefingClear}
+    <Pressable
+      style={[styles.statusBanner, !gateway.ready && { backgroundColor: colors.surface.grouped }]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Icon
+        source={gateway.ready ? 'check-circle-outline' : 'progress-clock'}
+        size={16}
+        color={gateway.ready ? colors.semantic.success : colors.semantic.warning}
+      />
+      <Text style={[styles.statusText, { color: colors.text.secondary }]}>
+        {gateway.ready ? hm.gatewayReadyStatus : hm.gatewayStartingStatus}
       </Text>
-      <Text style={[styles.briefingSummary, { color: colors.text.secondary }]}>{briefing.summary}</Text>
-      {briefing.progress.movingCount > 0 ? (
-        <Text style={[styles.briefingProgress, { color: colors.text.tertiary }]}>
-          {t(hm.briefingMoving, { count: briefing.progress.movingCount })}
+      <Icon source="chevron-right" size={16} color={colors.text.tertiary} />
+    </Pressable>
+  );
+}
+
+function focusIcon(kind: HomeFocusItem['kind']): string {
+  if (kind === 'decision') return 'shield-check-outline';
+  if (kind === 'failure') return 'alert-circle-outline';
+  if (kind === 'result') return 'check-circle-outline';
+  if (kind === 'suggestion') return 'creation-outline';
+  return 'progress-clock';
+}
+
+function HomeFocusCard({
+  item,
+  remainingCount,
+  pending,
+  pinned,
+  onAction,
+  onTogglePin,
+}: {
+  item: HomeFocusItem;
+  remainingCount: number;
+  pending: boolean;
+  pinned: boolean;
+  onAction: (action: HomeAction) => void;
+  onTogglePin: (item: HomeFocusItem) => void;
+}) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  const openAction = item.openAction;
+  const body = (
+    <>
+      <Text style={[styles.focusTitle, { color: colors.text.primary }]}>{item.title}</Text>
+      <Text style={[styles.focusSummary, { color: colors.text.secondary }]}>{item.summary}</Text>
+      {remainingCount > 0 ? (
+        <Text style={[styles.focusRemaining, { color: colors.text.tertiary }]}>
+          {t(hm.moreFocusItems, { count: remainingCount })}
         </Text>
       ) : null}
-      {briefing.wins[0] ? (
-        <Text style={[styles.briefingProgress, { color: colors.semantic.success }]}>
-          {t(hm.briefingLatestWin, { title: briefing.wins[0].title })}
-        </Text>
-      ) : null}
-      {briefing.nextScheduled ? (
-        <Text style={[styles.briefingProgress, { color: colors.text.tertiary }]}>
-          {t(hm.briefingNextScheduled, { title: briefing.nextScheduled.name ?? briefing.nextScheduled.id })}
-        </Text>
+    </>
+  );
+  const actions = [item.primaryAction, ...item.secondaryActions].filter((action): action is HomeAction => Boolean(action));
+  return (
+    <View style={[styles.focusCard, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
+      <View style={styles.focusHeader}>
+        <View style={[styles.briefingMark, { backgroundColor: colors.accent.soft }]}>
+          <Icon
+            source={focusIcon(item.kind)}
+            size={20}
+            color={item.kind === 'failure' ? colors.semantic.error : item.kind === 'decision' ? colors.semantic.warning : colors.accent.primary}
+          />
+        </View>
+        <View style={styles.focusHeaderActions}>
+          {item.statusLabel ? (
+            <Text style={[styles.focusStatus, { color: colors.accent.primary, backgroundColor: colors.accent.soft }]}>
+              {item.statusLabel}
+            </Text>
+          ) : null}
+          {item.pinnable ? (
+            <Pressable
+              style={styles.focusPinButton}
+              onPress={() => onTogglePin(item)}
+              accessibilityRole="button"
+              accessibilityLabel={pinned ? hm.unpinFocus : hm.pinFocus}
+            >
+              <Icon source={pinned ? 'pin' : 'pin-outline'} size={19} color={pinned ? colors.accent.primary : colors.text.tertiary} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+      {openAction ? (
+        <Pressable onPress={() => onAction(openAction)} accessibilityRole="button">
+          {body}
+        </Pressable>
+      ) : body}
+      {actions.length > 0 ? (
+        <View style={styles.focusActions}>
+          {actions.map((action, index) => (
+            <FocusActionButton
+              key={`${action.type}:${action.label}`}
+              label={action.label}
+              primary={index === 0}
+              pending={pending}
+              onPress={() => onAction(action)}
+            />
+          ))}
+        </View>
       ) : null}
     </View>
   );
 }
 
-function AttentionSection({
-  items,
-  pendingId,
-  onOpen,
-  onAction,
+function FocusActionButton({
+  label,
+  primary,
+  pending,
+  onPress,
 }: {
-  items: HomeAttention[];
-  pendingId?: string;
-  onOpen: (item: HomeAttention) => void;
-  onAction: (item: HomeAttention, action: 'retry' | 'acknowledge') => void;
+  label: string;
+  primary: boolean;
+  pending: boolean;
+  onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  if (items.length === 0) return null;
   return (
-    <Section title={hm.sectionRunIssues}>
-      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
-        {items.map((item, index) => {
-          const pending = pendingId === item.id;
-          return (
-            <View key={item.id}>
-              <Pressable style={styles.decisionRow} onPress={() => onOpen(item)} accessibilityRole="button">
-                <Icon source="alert-circle-outline" size={20} color={colors.semantic.error} />
-                <View style={styles.rowCopy}>
-                  <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-                  <Text numberOfLines={3} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.detail}</Text>
-                </View>
-                <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-              </Pressable>
-              <View style={styles.decisionActions}>
-                <Pressable
-                  style={[styles.decisionButton, { backgroundColor: colors.surface.grouped }]}
-                  onPress={() => onAction(item, 'acknowledge')}
-                  disabled={pending}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: pending, busy: pending }}
-                >
-                  <Text style={[styles.decisionButtonText, { color: colors.text.secondary }]}>{hm.attentionAcknowledge}</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.decisionButton, { backgroundColor: colors.accent.primary }]}
-                  onPress={() => onAction(item, 'retry')}
-                  disabled={pending}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: pending, busy: pending }}
-                >
-                  {pending ? <ActivityIndicator size={16} color={colors.accent.onPrimary} /> : null}
-                  <Text style={[styles.decisionButtonText, { color: colors.accent.onPrimary }]}>{hm.attentionRetry}</Text>
-                </Pressable>
-              </View>
-              {index < items.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} /> : null}
-            </View>
-          );
-        })}
-      </View>
-    </Section>
-  );
-}
-
-function DecisionSection({
-  decisions,
-  pendingDecisionId,
-  onOpen,
-  onRespond,
-}: {
-  decisions: HomeDecision[];
-  pendingDecisionId?: string;
-  onOpen: (decision: HomeDecision) => void;
-  onRespond: (decision: HomeDecision, answer: 'approve' | 'deny') => void;
-}) {
-  const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  if (decisions.length === 0) return null;
-  return (
-    <Section title={hm.sectionAttention}>
-      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
-        {decisions.map((decision, index) => {
-          const pending = pendingDecisionId === decision.id;
-          return (
-            <View key={decision.id}>
-              <Pressable
-                style={styles.decisionRow}
-                onPress={() => onOpen(decision)}
-                accessibilityRole="button"
-              >
-                <Icon source={decisionIcon(decision)} size={20} color={colors.semantic.warning} />
-                <View style={styles.rowCopy}>
-                  <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{decision.title}</Text>
-                  <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>
-                    {decision.detail || hm.decisionNeedsReview}
-                  </Text>
-                </View>
-                {!decision.response ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
-              </Pressable>
-              {decision.response ? (
-                <View style={styles.decisionActions}>
-                  <Pressable
-                    style={[styles.decisionButton, { backgroundColor: colors.surface.grouped }]}
-                    onPress={() => onRespond(decision, 'deny')}
-                    disabled={pending}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: pending, busy: pending }}
-                  >
-                    <Text style={[styles.decisionButtonText, { color: colors.text.secondary }]}>{hm.deny}</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.decisionButton, { backgroundColor: colors.accent.primary }]}
-                    onPress={() => onRespond(decision, 'approve')}
-                    disabled={pending}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: pending, busy: pending }}
-                  >
-                    {pending ? <ActivityIndicator size={16} color={colors.accent.onPrimary} /> : null}
-                    <Text style={[styles.decisionButtonText, { color: colors.accent.onPrimary }]}>{hm.approve}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-              {index < decisions.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.border.subtle }]} /> : null}
-            </View>
-          );
-        })}
-      </View>
-    </Section>
+    <Pressable
+      style={[
+        styles.focusButton,
+        { backgroundColor: primary ? colors.accent.primary : colors.surface.grouped },
+      ]}
+      disabled={pending}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: pending, busy: pending }}
+    >
+      {pending && primary ? <ActivityIndicator size={16} color={colors.accent.onPrimary} /> : null}
+      <Text style={[styles.focusButtonText, { color: primary ? colors.accent.onPrimary : colors.text.secondary }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -594,12 +604,18 @@ function LibrarySection({
   onInbox,
   onNotes,
   onSessions,
+  onFiles,
+  onAutomation,
+  showAutomation,
 }: {
   inboxCount: number;
   onWork: () => void;
   onInbox: () => void;
   onNotes: () => void;
   onSessions: () => void;
+  onFiles: () => void;
+  onAutomation: () => void;
+  showAutomation: boolean;
 }) {
   const { homePage: hm } = useMessages();
   return (
@@ -607,7 +623,9 @@ function LibrarySection({
       <LibraryRow icon="briefcase-outline" label={hm.libraryWork} onPress={onWork} />
       <LibraryRow icon="tray-arrow-down" label={hm.inboxMetric} value={inboxCount > 0 ? String(inboxCount) : undefined} onPress={onInbox} />
       <LibraryRow icon="note-text-outline" label={hm.libraryNotes} onPress={onNotes} />
-      <LibraryRow icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} last />
+      <LibraryRow icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />
+      <LibraryRow icon="folder-outline" label={hm.libraryFiles} onPress={onFiles} last={!showAutomation} />
+      {showAutomation ? <LibraryRow icon="calendar-clock-outline" label={hm.libraryAutomation} onPress={onAutomation} last /> : null}
     </Section>
   );
 }
@@ -727,22 +745,24 @@ const styles = StyleSheet.create({
   loadError: { minHeight: 280, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl, gap: spacing.md },
   retryButton: { minHeight: 48, borderRadius: radii.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, marginTop: spacing.sm },
   retryButtonText: { ...typography.ui, fontWeight: '600' },
-  statusBanner: { minHeight: 36, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
+  statusBanner: { minHeight: 44, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   statusText: { ...typography.caption, fontWeight: '500' },
-  briefingCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, padding: spacing.content, gap: spacing.sm },
+  focusCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, padding: spacing.content, gap: spacing.md },
+  focusHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  focusHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   briefingMark: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
-  briefingTitle: { ...typography.title },
-  briefingSummary: { ...typography.body },
-  briefingProgress: { ...typography.caption },
+  focusTitle: { ...typography.title, marginBottom: spacing.xs },
+  focusSummary: { ...typography.body },
+  focusStatus: { ...typography.caption, fontWeight: '600', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.sm },
+  focusPinButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.sm, marginTop: -spacing.sm },
+  focusRemaining: { ...typography.caption, marginTop: spacing.sm },
+  focusActions: { flexDirection: 'row', gap: spacing.sm },
+  focusButton: { minHeight: 44, flex: 1, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
+  focusButtonText: { ...typography.ui, fontWeight: '600' },
   section: { gap: spacing.md },
   sectionBody: { borderRadius: radii.lg, overflow: 'hidden' },
   sectionTitle: { ...typography.heading },
   groupedList: { borderRadius: radii.lg, overflow: 'hidden' },
-  decisionRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  decisionActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  decisionButton: { minWidth: 84, minHeight: 44, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
-  decisionButtonText: { ...typography.ui, fontWeight: '600' },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: 52 },
   listRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   rowCopy: { flex: 1, gap: spacing.xxs },
   rowTitle: { ...typography.ui, fontWeight: '600' },

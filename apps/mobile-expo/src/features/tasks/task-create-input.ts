@@ -9,7 +9,7 @@ export function resolveTaskAgentId({
   selectedAgentId,
 }: {
   agents: ChatAgentsPayload;
-  project?: Project;
+  project?: Pick<Project, 'defaultAgentId'>;
   selectedAgentId?: string;
 }): string {
   const available = new Set(agents.items.map((agent) => agent.id));

@@ -6,6 +6,10 @@
 export type TextContent = {
   type: 'text';
   text: string;
+  /** One model message segment within an assistant turn. */
+  segmentId?: string;
+  /** Pending text is rendered like narration until the segment completes. */
+  presentation?: 'pending' | 'narration' | 'answer';
 };
 
 export type ImageContent = {
@@ -117,5 +121,5 @@ export type ReasoningLevel = 'off' | 'on' | 'stream';
 
 export function coerceReasoningLevel(raw: string | undefined): ReasoningLevel {
   if (raw === 'on' || raw === 'stream' || raw === 'off') return raw;
-  return 'off';
+  return 'on';
 }

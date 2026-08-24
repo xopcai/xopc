@@ -3,8 +3,9 @@ import { KEYS, storage } from '../storage/mmkv';
 export type UsageEventName =
   | 'home_viewed'
   | 'home_continue_opened'
-  | 'home_decision_opened'
-  | 'home_decision_completed'
+  | 'home_focus_opened'
+  | 'home_focus_action_completed'
+  | 'home_focus_pinned'
   | 'capture_started'
   | 'capture_completed'
   | 'ask_ai_started'

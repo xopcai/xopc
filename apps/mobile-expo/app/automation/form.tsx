@@ -1,5 +1,5 @@
-import { CronJobFormScreen } from '@/features/automation/CronJobFormScreen';
+import { AutomationFormScreen } from '@/features/automation/AutomationFormScreen';
 
-export default function CronJobFormRoute() {
-  return <CronJobFormScreen />;
+export default function AutomationFormRoute() {
+  return <AutomationFormScreen />;
 }

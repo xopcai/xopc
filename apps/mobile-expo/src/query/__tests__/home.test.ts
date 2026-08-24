@@ -11,6 +11,17 @@ const mockedApiFetch = vi.mocked(apiFetch);
 
 function currentGatewayHomeResponse() {
   return {
+    focusItems: [{
+      id: 'suggestion:ask-agent',
+      kind: 'suggestion',
+      priority: 10,
+      title: 'What would you like to move forward?',
+      summary: 'Hand me the outcome you want.',
+      updatedAt: 1,
+      pinnable: false,
+      primaryAction: { type: 'ask_ai', label: 'Ask an agent' },
+      secondaryActions: [],
+    }],
     briefing: {
       generatedAt: 1,
       summary: 'All clear',
@@ -55,7 +66,7 @@ describe('fetchHome', () => {
     mockedApiFetch.mockReset();
   });
 
-  it('accepts the current gateway response after focus fields moved out of home', async () => {
+  it('returns only the mobile home read model', async () => {
     mockedApiFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => currentGatewayHomeResponse(),
@@ -64,7 +75,7 @@ describe('fetchHome', () => {
     const home = await fetchHome('en');
 
     expect(home).toMatchObject({
-      briefing: { summary: 'All clear' },
+      focusItems: [{ kind: 'suggestion' }],
       chats: { running: [], recent: [] },
       tasks: { running: [] },
     });
