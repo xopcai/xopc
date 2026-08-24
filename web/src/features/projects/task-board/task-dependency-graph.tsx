@@ -11,7 +11,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { ProjectTaskCard, ProjectTaskDependencyEdge, ProjectTaskLane } from '@xopcai/gateway-contract';
+import type { ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
 import { ExternalLink, Focus, Hourglass } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -32,32 +32,32 @@ export type TaskDependencyGraphCopy = {
   empty: string;
   hint: string;
   blockedBy: string;
-  lanes: Record<ProjectTaskLane, string>;
+  phases: Record<TaskPhase, string>;
 };
 
 interface TaskNodeData extends Record<string, unknown> {
   task: ProjectTaskCard;
-  laneLabel: string;
+  phaseLabel: string;
   dimmed: boolean;
 }
 
 type TaskFlowNode = Node<TaskNodeData>;
 
-const NODE_TONES: Record<ProjectTaskLane, string> = {
+const NODE_TONES: Record<TaskPhase, string> = {
+  backlog: 'border-edge',
   ready: 'border-edge',
-  moving: 'border-accent ring-2 ring-accent/15',
-  waiting: 'border-violet-400/70',
-  needs_user: 'border-amber-400/80',
-  done: 'border-emerald-400/60',
+  active: 'border-accent ring-2 ring-accent/15',
+  review: 'border-amber-400/80',
+  closed: 'border-emerald-400/60',
 };
 
 function TaskNodeCard({ data, selected }: NodeProps<TaskFlowNode>) {
   const task = data.task;
-  const isWaiting = task.lane === 'waiting';
+  const isWaiting = task.operationalState === 'waiting' || task.operationalState === 'blocked';
   return (
     <div className={cn(
       'w-56 rounded-xl border bg-surface-panel p-3 shadow-surface transition-opacity',
-      NODE_TONES[task.lane],
+      NODE_TONES[task.phase],
       selected && 'ring-2 ring-accent/30',
       data.dimmed && 'opacity-30',
     )}>
@@ -67,7 +67,7 @@ function TaskNodeCard({ data, selected }: NodeProps<TaskFlowNode>) {
         {isWaiting ? <Hourglass className="mt-0.5 size-3.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden /> : null}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-fg-subtle">
-        <span>{data.laneLabel}</span>
+        <span>{data.phaseLabel}</span>
         {isWaiting && task.blockedBy.length > 0 ? <span>{task.blockedBy.length}</span> : null}
       </div>
       <Handle type="source" position={Position.Right} className="!invisible" />
@@ -103,8 +103,8 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
     id: task.id,
     type: 'taskNode',
     position: positions.get(task.id) ?? { x: 0, y: 0 },
-    data: { task, laneLabel: copy.lanes[task.lane], dimmed: Boolean(related && !related.has(task.id)) },
-  })), [copy.lanes, positions, related, visibleTasks]);
+    data: { task, phaseLabel: copy.phases[task.phase], dimmed: Boolean(related && !related.has(task.id)) },
+  })), [copy.phases, positions, related, visibleTasks]);
   const edges = useMemo<Edge[]>(() => visibleEdges.map((edge) => {
     const dependency = taskById.get(edge.dependencyTaskId);
     const satisfied = dependency?.phase === 'closed' && dependency.resolution === 'done';
@@ -182,9 +182,9 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
           </ReactFlow>
           {selectedTask ? (
             <aside className="overflow-y-auto border-t border-edge bg-surface-panel p-4 lg:border-l lg:border-t-0">
-              <p className="text-xs font-medium text-accent-fg">{copy.lanes[selectedTask.lane]}</p>
+              <p className="text-xs font-medium text-accent-fg">{copy.phases[selectedTask.phase]}</p>
               <h3 className="mt-2 text-sm font-semibold leading-6 text-fg">{selectedTask.title}</h3>
-              {selectedTask.lane === 'waiting' && selectedTask.blockedBy.length > 0 ? (
+              {selectedTask.operationalState === 'blocked' && selectedTask.blockedBy.length > 0 ? (
                 <div className="mt-4 rounded-lg bg-violet-500/8 p-3">
                   <p className="text-xs font-medium text-violet-700 dark:text-violet-300">{copy.blockedBy.replace('{{count}}', String(selectedTask.blockedBy.length))}</p>
                   <ul className="mt-2 space-y-1 text-xs leading-5 text-fg-muted">

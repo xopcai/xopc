@@ -1,37 +1,8 @@
-import { networkInterfaces } from 'node:os';
-
+import { enumerateLanGatewayCandidates } from '../gateway/host.js';
 import type { TunnelQrPayload } from './tunnel-types.js';
 
 function trimBase(raw: string): string {
   return raw.trim().replace(/\/+$/, '');
-}
-
-export type LanGatewayCandidate = {
-  url: string;
-  address: string;
-  interfaceName: string;
-};
-
-/** Non-internal IPv4 addresses on this machine (independent of gateway bind mode). */
-export function enumerateLanGatewayCandidates(port: number): LanGatewayCandidate[] {
-  const nets = networkInterfaces();
-  const seen = new Set<string>();
-  const out: LanGatewayCandidate[] = [];
-
-  for (const [interfaceName, addrs] of Object.entries(nets)) {
-    for (const addr of addrs ?? []) {
-      if (addr.family !== 'IPv4' || addr.internal) continue;
-      if (seen.has(addr.address)) continue;
-      seen.add(addr.address);
-      out.push({
-        address: addr.address,
-        interfaceName,
-        url: trimBase(`http://${addr.address}:${port}`),
-      });
-    }
-  }
-
-  return out;
 }
 
 /** First non-internal IPv4 suitable for LAN QR (when gateway listens on 0.0.0.0). */

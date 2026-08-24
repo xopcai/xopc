@@ -587,7 +587,9 @@ Notes:
 
 ### Browser Origin Protection (CSRF)
 
-- Browser-initiated requests (with `Origin`) are checked against `gateway.corsOrigins`.
+- Browser-initiated requests (with `Origin`) are checked against the gateway-owned origins plus `gateway.corsOrigins`.
+- Loopback, development, and detected LAN origins owned by the gateway are added automatically.
+- Additional `gateway.corsOrigins` changes apply immediately.
 - Same-host fallback and local loopback fallback are supported for trusted local dev paths.
 - Requests without `Origin` (CLI / server-to-server) skip origin checks and rely on auth credentials.
 
@@ -633,7 +635,7 @@ Repeated failed authentication attempts from a client IP are governed by `gatewa
 | `auth.token` | auto-generated in token mode | Token credential |
 | `auth.password` | unset | Password credential |
 | `auth.rateLimit.*` | see defaults above | Failed-auth rate limiter config |
-| `corsOrigins` | `[]` | Allowed browser origins |
+| `corsOrigins` | `[]` | Additional browser origins |
 | `channelConnectDeferMode` | *(unset → `auto`)* | `auto` / `off` / `explicit` — see [Configuration](configuration.md#channel-connect-defer) |
 | `channelConnectDeferIds` | - | Explicit defer list when mode is `explicit` |
 | `channelConnectDeferSkipIds` | - | Subtract from auto or explicit defer sets |

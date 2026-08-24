@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   gatewaySettingsRequireRestart,
+  fetchGatewayCorsOriginCandidates,
   isMaskedGatewaySecret,
   isNonLoopbackGatewayBind,
   normalizeGatewayFromConfig,
@@ -12,6 +13,28 @@ import {
   DEFAULT_GATEWAY_PORT,
   DEFAULT_TRUSTED_PROXY,
 } from '../gateway-settings.types';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('fetchGatewayCorsOriginCandidates', () => {
+  it('requests candidates for the selected gateway port', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      ok: true,
+      payload: {
+        candidates: [{ url: 'http://192.168.1.8:28790', address: '192.168.1.8', interfaceName: 'en0' }],
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('window', { location: { origin: 'http://localhost:3000' } });
+
+    await expect(fetchGatewayCorsOriginCandidates(28790)).resolves.toEqual([
+      { url: 'http://192.168.1.8:28790', address: '192.168.1.8', interfaceName: 'en0' },
+    ]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('port=28790');
+  });
+});
 
 describe('normalizeGatewayFromConfig', () => {
   it('maps gateway auth, listen, cors, security, and trusted-proxy fields', () => {
@@ -199,10 +222,10 @@ describe('gatewaySettingsRequireRestart', () => {
     expect(gatewaySettingsRequireRestart(from, to)).toBe(true);
   });
 
-  it('detects cors origin changes', () => {
+  it('applies cors origin changes without a restart', () => {
     const from = normalizeGatewayFromConfig({ gateway: { corsOrigins: ['http://localhost:5173'] } });
     const to = normalizeGatewayFromConfig({ gateway: { corsOrigins: ['http://127.0.0.1:5173'] } });
-    expect(gatewaySettingsRequireRestart(from, to)).toBe(true);
+    expect(gatewaySettingsRequireRestart(from, to)).toBe(false);
   });
 
   it('ignores masked secrets when auth mode is unchanged', () => {

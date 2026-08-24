@@ -205,25 +205,6 @@ export function collectGatewayConfigFindings(params: {
 
   if (
     !loopback &&
-    (!params.corsOrigins || params.corsOrigins.length === 0) &&
-    params.dangerouslyAllowHostHeaderOriginFallback !== true
-  ) {
-    findings.push({
-      checkId: 'gateway.cors.no_explicit_origins',
-      severity: 'info',
-      title: 'No custom CORS origins — loopback browsers only',
-      detail:
-        'Gateway listens on a network address with empty gateway.corsOrigins. ' +
-        'localhost and 127.0.0.1 on the gateway port are allowed by default; ' +
-        'LAN or remote browser URLs must be added explicitly.',
-      remediation:
-        'Add gateway.corsOrigins entries (e.g. http://192.168.x.x:<port>) for non-loopback browser access, ' +
-        'or enable gateway.dangerouslyAllowHostHeaderOriginFallback only if you understand the CSRF risk.',
-    });
-  }
-
-  if (
-    !loopback &&
     params.auth.mode !== 'none' &&
     params.auth.mode !== 'trusted-proxy' &&
     params.rateLimitEnabled === false

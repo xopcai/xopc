@@ -37,6 +37,8 @@ const log = createLogger('Gateway:App');
 
 export interface HonoAppConfig {
   service: GatewayService;
+  /** Actual host selected for this process; bind config changes take effect after restart. */
+  listenHost?: string;
 }
 
 /**
@@ -57,12 +59,13 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const app = new Hono();
 
   const gatewayPort = resolveGatewayServiceListenPort(service);
+  const gatewayBindHost = config.listenHost ?? resolveGatewayEffectiveHost(service.currentConfig);
 
   const resolveBrowserOrigins = (): string[] =>
     resolveAllowedBrowserOrigins({
       configuredOrigins: service.currentConfig.gateway.corsOrigins,
       port: gatewayPort,
-      bindHost: resolveGatewayEffectiveHost(service.currentConfig),
+      bindHost: gatewayBindHost,
       tunnelPublicUrl: loadTunnelState()?.publicUrl,
       reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
     });

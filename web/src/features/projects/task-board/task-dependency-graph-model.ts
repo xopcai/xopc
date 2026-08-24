@@ -49,11 +49,11 @@ export function layoutTaskGraph(
 }
 
 export function blockedChainTaskIds(
-  tasks: Pick<ProjectTaskCard, 'id' | 'lane'>[],
+  tasks: Pick<ProjectTaskCard, 'id' | 'operationalState'>[],
   edges: ProjectTaskDependencyEdge[],
 ): Set<string> {
   const { incoming } = adjacency(edges);
-  const included = new Set(tasks.filter((task) => task.lane === 'waiting').map((task) => task.id));
+  const included = new Set(tasks.filter((task) => task.operationalState === 'blocked').map((task) => task.id));
   const queue = [...included];
   for (let index = 0; index < queue.length; index += 1) {
     for (const dependencyId of incoming.get(queue[index]) ?? []) {

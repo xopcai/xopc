@@ -77,7 +77,7 @@ function sortedStringList(values: string[]): string[] {
   return [...values].map((value) => value.trim()).sort();
 }
 
-/** Snapshot of gateway settings that require a process restart (listen, auth, CORS). */
+/** Snapshot of gateway settings that require a process restart. */
 function snapshotGatewayRestartSettings(state: GatewaySettingsState): string {
   return JSON.stringify({
     bind: state.bind,
@@ -95,19 +95,33 @@ function snapshotGatewayRestartSettings(state: GatewaySettingsState): string {
         allowLoopback: state.auth.trustedProxy.allowLoopback,
       },
     },
-    corsOrigins: sortedStringList(state.corsOrigins),
     trustedProxies: sortedStringList(state.trustedProxies),
     allowRealIpFallback: state.allowRealIpFallback,
     dangerouslyAllowHostHeaderOriginFallback: state.dangerouslyAllowHostHeaderOriginFallback,
   });
 }
 
-/** True when listen address, authentication, or CORS settings differ between two states. */
+/** True when process-bound gateway settings differ between two states. */
 export function gatewaySettingsRequireRestart(
   from: GatewaySettingsState,
   to: GatewaySettingsState,
 ): boolean {
   return snapshotGatewayRestartSettings(from) !== snapshotGatewayRestartSettings(to);
+}
+
+export type GatewayCorsOriginCandidate = {
+  url: string;
+  address: string;
+  interfaceName: string;
+};
+
+export async function fetchGatewayCorsOriginCandidates(
+  port: number,
+): Promise<GatewayCorsOriginCandidate[]> {
+  const response = await fetchJson<{
+    payload?: { candidates?: GatewayCorsOriginCandidate[] };
+  }>(apiUrl(`/api/gateway/cors-origin-candidates?port=${encodeURIComponent(String(port))}`));
+  return response.payload?.candidates ?? [];
 }
 
 function normalizeAuthMode(raw: unknown): GatewayAuthMode {

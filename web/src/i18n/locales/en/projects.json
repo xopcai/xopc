@@ -294,7 +294,7 @@
     },
     "board": {
       "title": "Task board",
-      "description": "Every card is a task xopc is responsible for advancing. Columns reflect its real execution state.",
+      "description": "Manage tasks by stable phase. Runtime, waits, and attention appear on each card.",
       "empty": "No tasks here",
       "acceptanceCriteria": "{{count}} acceptance criteria",
       "blockedBy": "Waiting for {{count}} dependencies",
@@ -327,10 +327,13 @@
       "creating": "Creating…",
       "createFailed": "The task could not be created.",
       "actions": {
+        "ready": "Mark ready",
         "run": "Start advancing",
         "resume": "Continue advancing",
         "pause": "Pause",
-        "verify": "Verify task"
+        "review": "Request review",
+        "complete": "Mark complete",
+        "reopen": "Reopen"
       },
       "verification": {
         "passed": "Verified",
@@ -352,12 +355,20 @@
         "hint": "Read left to right to see how dependencies unlock later work. Select a node to focus its chain.",
         "blockedBy": "Still waiting for {{count}} dependencies"
       },
-      "lanes": {
+      "phases": {
+        "backlog": "Backlog",
         "ready": "Ready",
-        "moving": "In progress",
+        "active": "In progress",
+        "review": "Review",
+        "closed": "Done"
+      },
+      "operationalStates": {
+        "idle": "Idle",
+        "queued": "Queued",
+        "running": "Running",
         "waiting": "Waiting",
-        "needs_user": "Needs you",
-        "done": "Done"
+        "verifying": "Verifying",
+        "blocked": "Blocked"
       }
     },
     "automations": {

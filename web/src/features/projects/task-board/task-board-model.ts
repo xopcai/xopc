@@ -1,36 +1,52 @@
-import type { ProjectTaskCard, ProjectTaskLane } from '@xopcai/gateway-contract';
+import type { ProjectTaskCard, TaskPhase } from '@xopcai/gateway-contract';
 
-export type TaskBoardAction = 'run' | 'resume' | 'pause' | 'verify';
+export type TaskBoardAction =
+  | 'ready'
+  | 'run'
+  | 'resume'
+  | 'pause'
+  | 'review'
+  | 'complete'
+  | 'reopen';
 
-export const PROJECT_TASK_LANES: ProjectTaskLane[] = ['ready', 'moving', 'waiting', 'needs_user', 'done'];
+export const PROJECT_TASK_PHASES: TaskPhase[] = ['backlog', 'ready', 'active', 'review', 'closed'];
 
 export function groupProjectTasks(
   tasks: ProjectTaskCard[],
-): Record<ProjectTaskLane, ProjectTaskCard[]> {
+): Record<TaskPhase, ProjectTaskCard[]> {
   return {
-    ready: tasks.filter((task) => task.lane === 'ready'),
-    moving: tasks.filter((task) => task.lane === 'moving'),
-    waiting: tasks.filter((task) => task.lane === 'waiting'),
-    needs_user: tasks.filter((task) => task.lane === 'needs_user'),
-    done: tasks.filter((task) => task.lane === 'done'),
+    backlog: tasks.filter((task) => task.phase === 'backlog'),
+    ready: tasks.filter((task) => task.phase === 'ready'),
+    active: tasks.filter((task) => task.phase === 'active'),
+    review: tasks.filter((task) => task.phase === 'review'),
+    closed: tasks.filter((task) => task.phase === 'closed'),
   };
 }
 
-export function taskActionForLane(
+export function taskActionForPhase(
   task: ProjectTaskCard,
-  targetLane: ProjectTaskLane,
+  targetPhase: TaskPhase,
 ): TaskBoardAction | undefined {
-  if (targetLane === 'ready' && task.allowedCommands.includes('add_wait')) return 'pause';
-  if (targetLane === 'moving' && task.allowedCommands.includes('start')) return 'run';
-  if (targetLane === 'moving' && task.allowedCommands.includes('resolve_wait')) return 'resume';
-  if (targetLane === 'done' && task.allowedCommands.includes('request_review')) return 'verify';
+  if (task.phase === targetPhase) return undefined;
+  if (targetPhase === 'ready' && task.phase === 'backlog' && task.allowedCommands.includes('mark_ready')) return 'ready';
+  if (targetPhase === 'ready' && task.phase === 'closed' && task.allowedCommands.includes('reopen')) return 'reopen';
+  if (targetPhase === 'active' && task.allowedCommands.includes('start')) return 'run';
+  if (targetPhase === 'review' && task.allowedCommands.includes('request_review')) return 'review';
+  if (targetPhase === 'closed' && task.phase === 'review' && task.allowedCommands.includes('close')) return 'complete';
   return undefined;
 }
 
+export function canDragTask(task: ProjectTaskCard): boolean {
+  return PROJECT_TASK_PHASES.some((phase) => taskActionForPhase(task, phase));
+}
+
 export function primaryTaskAction(task: ProjectTaskCard): TaskBoardAction | undefined {
-  if (task.allowedCommands.includes('start')) return 'run';
   if (task.allowedCommands.includes('resolve_wait')) return 'resume';
-  if (task.allowedCommands.includes('request_review')) return 'verify';
+  if (task.allowedCommands.includes('mark_ready')) return 'ready';
+  if (task.allowedCommands.includes('start')) return 'run';
+  if (task.allowedCommands.includes('request_review')) return 'review';
+  if (task.phase === 'review' && task.allowedCommands.includes('close')) return 'complete';
+  if (task.allowedCommands.includes('reopen')) return 'reopen';
   if (task.allowedCommands.includes('add_wait')) return 'pause';
   return undefined;
 }

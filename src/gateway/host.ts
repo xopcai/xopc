@@ -1,3 +1,5 @@
+import { networkInterfaces } from 'node:os';
+
 import { DEFAULT_GATEWAY_PORT } from '../daemon/constants.js';
 
 /** True when the bind address is local-only (127.x, localhost, ::1). */
@@ -40,6 +42,32 @@ const GATEWAY_LOOPBACK_DEV_ORIGINS = [
   ...GATEWAY_EXPO_DEV_ORIGINS,
 ] as const;
 
+export type LanGatewayCandidate = {
+  url: string;
+  address: string;
+  interfaceName: string;
+};
+
+/** Non-internal IPv4 addresses that can serve this gateway on the local network. */
+export function enumerateLanGatewayCandidates(port: number): LanGatewayCandidate[] {
+  const seen = new Set<string>();
+  const candidates: LanGatewayCandidate[] = [];
+
+  for (const [interfaceName, addresses] of Object.entries(networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family !== 'IPv4' || address.internal || seen.has(address.address)) continue;
+      seen.add(address.address);
+      candidates.push({
+        address: address.address,
+        interfaceName,
+        url: `http://${address.address}:${port}`,
+      });
+    }
+  }
+
+  return candidates;
+}
+
 /** Effective HTTP listen port: CLI `--port` override wins over config (default 18790). */
 export function resolveEffectiveGatewayPort(
   config: { gateway?: { port?: number } },
@@ -72,12 +100,18 @@ export function buildDefaultCorsOrigins(params: { port: number; bindHost?: strin
   if (bindHost && !isLoopbackHost(bindHost) && !isAllInterfacesHost(bindHost)) {
     origins.add(`http://${bindHost}:${params.port}`);
   }
+  if (isAllInterfacesHost(bindHost)) {
+    for (const candidate of enumerateLanGatewayCandidates(params.port)) {
+      origins.add(candidate.url);
+    }
+  }
   return [...origins];
 }
 
 /**
  * Effective browser origins for CORS and CSRF checks.
- * Custom `gateway.corsOrigins` (e.g. after LAN pairing) still merge loopback Vite dev origins.
+ * Configured origins extend the gateway's own browser origins instead of replacing them.
+ * This keeps the bundled console reachable while allowing explicit external frontends.
  */
 export function resolveGatewayCorsOrigins(params: {
   configuredOrigins?: string[];
@@ -87,10 +121,10 @@ export function resolveGatewayCorsOrigins(params: {
   const configured = (params.configuredOrigins ?? [])
     .map((origin) => origin.trim())
     .filter(Boolean);
-  if (configured.length === 0) {
-    return buildDefaultCorsOrigins({ port: params.port, bindHost: params.bindHost });
-  }
-  return [...new Set([...configured, ...GATEWAY_LOOPBACK_DEV_ORIGINS])];
+  return [...new Set([
+    ...configured,
+    ...buildDefaultCorsOrigins({ port: params.port, bindHost: params.bindHost }),
+  ])];
 }
 
 /** Browser origin (`https://host`) from a gateway public/tunnel root URL. */

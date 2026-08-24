@@ -66,7 +66,7 @@ describe('assertGatewayRuntimeConfig', () => {
     expect(result.bindMode).toBe('loopback');
   });
 
-  it('allows lan bind without corsOrigins (loopback defaults)', () => {
+  it('resolves gateway-owned origins for a lan bind', () => {
     const cfg = baseConfig({ bind: 'lan', corsOrigins: [] });
     const result = assertGatewayRuntimeConfig({
       cfg,
@@ -75,7 +75,10 @@ describe('assertGatewayRuntimeConfig', () => {
     });
     expect(result.bindMode).toBe('lan');
     expect(result.bindHost).toBe('0.0.0.0');
-    expect(result.corsOrigins).toEqual([]);
+    expect(result.corsOrigins).toEqual(expect.arrayContaining([
+      'http://localhost:18790',
+      'http://127.0.0.1:18790',
+    ]));
   });
 
   it('allows lan bind with corsOrigins configured', () => {
