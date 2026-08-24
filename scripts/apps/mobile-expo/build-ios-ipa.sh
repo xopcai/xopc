@@ -13,7 +13,7 @@ EXPORT_DIR="${EXPORT_DIR:-$DIST_DIR/ios/export}"
 IPA_PATH="${IPA_PATH:-$DIST_DIR/${APP_NAME}.ipa}"
 EXPORT_METHOD="${EXPORT_METHOD:-app-store-connect}"
 SIGNING_STYLE="${SIGNING_STYLE:-automatic}"
-ARCHIVE_CODE_SIGN_IDENTITY="${ARCHIVE_CODE_SIGN_IDENTITY:-Apple Distribution}"
+ARCHIVE_SIGNING="${ARCHIVE_SIGNING:-unsigned}"
 GENERATED_EXPORT_OPTIONS_PLIST="$DIST_DIR/ios/ExportOptions.plist"
 EXPORT_OPTIONS_PLIST="${EXPORT_OPTIONS_PLIST:-$GENERATED_EXPORT_OPTIONS_PLIST}"
 DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-}"
@@ -54,7 +54,7 @@ Optional build variables:
   EXPORT_DIR                       default: dist/ios/export
   EXPORT_METHOD                    default: app-store-connect
   SIGNING_STYLE                    default: automatic
-  ARCHIVE_CODE_SIGN_IDENTITY       default: Apple Distribution
+  ARCHIVE_SIGNING                  default: unsigned; automatic|distribution|unsigned
   EXPORT_OPTIONS_PLIST             default: generated under dist/ios/
   PREBUILD=auto|1|0                default: 1; regenerate the native project
   CLEAN_PREBUILD=0                 preserve the native project during prebuild
@@ -221,11 +221,22 @@ XCODEBUILD_ARGS=(
   "CURRENT_PROJECT_VERSION=$IOS_BUILD_NUMBER"
 )
 add_xcodebuild_common_args
+case "$ARCHIVE_SIGNING" in
+  automatic)
+    ;;
+  distribution)
+    XCODEBUILD_ARGS+=("CODE_SIGN_IDENTITY=Apple Distribution")
+    ;;
+  unsigned)
+    XCODEBUILD_ARGS+=("CODE_SIGNING_ALLOWED=NO" "CODE_SIGNING_REQUIRED=NO")
+    ;;
+  *)
+    echo "Error: ARCHIVE_SIGNING must be automatic, distribution, or unsigned" >&2
+    exit 1
+    ;;
+esac
 if [[ -n "$DEVELOPMENT_TEAM" ]]; then
   XCODEBUILD_ARGS+=("DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM")
-fi
-if [[ -n "$ARCHIVE_CODE_SIGN_IDENTITY" ]]; then
-  XCODEBUILD_ARGS+=("CODE_SIGN_IDENTITY=$ARCHIVE_CODE_SIGN_IDENTITY")
 fi
 xcodebuild "${XCODEBUILD_ARGS[@]}"
 
