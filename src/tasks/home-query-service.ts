@@ -520,7 +520,7 @@ export class HomeQueryService {
         kind: 'agent_judgment',
         title: item.insight.title,
         detail: item.insight.summary,
-        reason: 'decision_needed',
+        reason: item.insight.disposition === 'request_approval' ? 'approval_required' : 'decision_needed',
         urgency: item.insight.urgency === 'critical' || item.insight.urgency === 'high' ? 'now' : 'soon',
         href: `/?judgment=${encodeURIComponent(item.id)}`,
         updatedAt: Date.parse(item.updatedAt),
@@ -532,7 +532,14 @@ export class HomeQueryService {
           recommendation: item.insight.recommendation,
           confidence: item.insight.confidence,
           valueScore: item.insight.valueScore,
-          ...(item.insight.decision ? { decision: item.insight.decision } : {}),
+          disposition: item.insight.disposition,
+          dispositionReason: item.insight.dispositionReason,
+          ...(item.insight.actionStatus ? { actionStatus: item.insight.actionStatus } : {}),
+          ...(item.insight.proposedAction ? { proposedActionTitle: item.insight.proposedAction.input.title } : {}),
+          ...(item.insight.actionError ? { actionError: item.insight.actionError } : {}),
+          ...(item.insight.decision && (!item.insight.proposedAction || item.insight.actionStatus === 'approval_required')
+            ? { decision: item.insight.decision }
+            : {}),
         },
       })),
       ...activeTasks

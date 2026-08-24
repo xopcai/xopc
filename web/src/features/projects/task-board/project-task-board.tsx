@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { TaskPriority, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
+import type { TaskPriority, ProjectMonitoringPolicy, ProjectMonitoringUpdate, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
 import { CalendarClock, CheckCircle2, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
-import { type FormEvent, type Ref, useImperativeHandle, useState } from 'react';
+import { type FormEvent, type Ref, useEffect, useImperativeHandle, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -17,13 +17,13 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   groupProjectTasks,
-  canDragTask,
   taskActionForPhase,
   primaryTaskAction,
   PROJECT_TASK_PHASES,
   type TaskBoardAction,
 } from './task-board-model';
 import { TaskDependencyGraph, type TaskDependencyGraphCopy } from './task-dependency-graph';
+import { ProjectMonitoringControl, type ProjectMonitoringCopy } from './project-monitoring-control';
 
 type BoardCopy = {
   title: string;
@@ -32,6 +32,8 @@ type BoardCopy = {
   acceptanceCriteria: string;
   blockedBy: string;
   actionFailed: string;
+  moved: string;
+  undo: string;
   create: string;
   createTitle: string;
   createDescription: string;
@@ -54,12 +56,13 @@ type BoardCopy = {
   cancel: string;
   creating: string;
   createFailed: string;
-  actions: Record<TaskBoardAction, string>;
+  actions: Record<Exclude<TaskBoardAction, `${'move' | 'reopen'}_${string}`>, string>;
   verification: Record<'passed' | 'failed' | 'unverified', string>;
   phases: Record<TaskPhase, string>;
   operationalStates: Record<ProjectTaskCard['operationalState'], string>;
   views: { board: string; graph: string };
   graph: Omit<TaskDependencyGraphCopy, 'phases'>;
+  monitoring: ProjectMonitoringCopy;
 };
 
 export type CreateProjectTaskInput = {
@@ -91,24 +94,34 @@ const LANE_TONES: Record<TaskPhase, string> = {
   closed: 'text-emerald-700 dark:text-emerald-300',
 };
 
-function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
+function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBefore }: {
   task: ProjectTaskCard;
   returnTo: string;
   copy: BoardCopy;
   busy: boolean;
   onAction: (task: ProjectTaskCard, action: TaskBoardAction) => void;
   onDragStart: (taskId: string) => void;
+  onDropBefore: (beforeTaskId: string) => void;
 }) {
   const primaryAction = primaryTaskAction(task);
   return (
     <article
-      draggable={canDragTask(task)}
+      draggable
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', task.id);
         onDragStart(task.id);
       }}
       onDragEnd={() => onDragStart('')}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDropBefore(task.id);
+      }}
       className="min-h-max min-w-0 shrink-0 overflow-hidden rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
     >
       <Link
@@ -193,17 +206,23 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart }: {
   );
 }
 
-export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAction, onCreate, actionBusyId, ref }: {
+export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo, copy, onAction, onReorder, onUndoMove, onDependenciesChange, onMonitoringChange, onCreate, actionBusyId, ref }: {
   tasks: ProjectTaskCard[];
   dependencyEdges: ProjectTaskDependencyEdge[];
+  monitoring: ProjectMonitoringPolicy;
   returnTo: string;
   copy: BoardCopy;
-  onAction: (task: ProjectTaskCard, action: TaskBoardAction) => Promise<void>;
+  onAction: (task: ProjectTaskCard, action: TaskBoardAction) => Promise<boolean>;
+  onReorder: (taskId: string, beforeTaskId: string | null) => Promise<boolean>;
+  onUndoMove: (taskId: string, phase: TaskPhase, beforeTaskId: string | null) => Promise<boolean>;
+  onDependenciesChange: (taskId: string, dependencyTaskIds: string[]) => Promise<void>;
+  onMonitoringChange: (update: ProjectMonitoringUpdate) => Promise<void>;
   onCreate: (input: CreateProjectTaskInput) => Promise<void>;
   actionBusyId?: string | null;
   ref?: Ref<ProjectTaskBoardHandle>;
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [undoMove, setUndoMove] = useState<{ taskId: string; phase: TaskPhase; beforeTaskId: string | null } | null>(null);
   const [viewMode, setViewMode] = useState<'board' | 'graph'>('board');
   const [createOpen, setCreateOpen] = useState(false);
   const [createRequestId, setCreateRequestId] = useState(() => crypto.randomUUID());
@@ -217,8 +236,20 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
   const attachmentState = useComposerAttachments({ chat: messages(language).chat });
   const grouped = groupProjectTasks(tasks);
   const dependencyCandidates = tasks.filter((task) => task.phase !== 'closed');
-  const performAction = (task: ProjectTaskCard, action: TaskBoardAction) => {
-    void onAction(task, action);
+  const performAction = (task: ProjectTaskCard, action: TaskBoardAction) => void onAction(task, action);
+  const dropTask = async (targetPhase: TaskPhase, beforeTaskId: string | null) => {
+    const task = tasks.find((item) => item.id === draggedId);
+    setDraggedId(null);
+    if (!task || task.id === beforeTaskId) return;
+    const currentItems = grouped[task.phase];
+    const currentIndex = currentItems.findIndex((item) => item.id === task.id);
+    const previousBeforeTaskId = currentIndex >= 0 ? currentItems[currentIndex + 1]?.id ?? null : null;
+    if (task.phase === targetPhase && previousBeforeTaskId === beforeTaskId) return;
+    const action = taskActionForPhase(task, targetPhase);
+    if (task.phase !== targetPhase && !action) return;
+    if (action && !await onAction(task, action)) return;
+    if (!await onReorder(task.id, beforeTaskId)) return;
+    setUndoMove({ taskId: task.id, phase: task.phase, beforeTaskId: previousBeforeTaskId });
   };
 
   const submitCreate = async (event: FormEvent<HTMLFormElement>) => {
@@ -264,6 +295,12 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
 
   useImperativeHandle(ref, () => ({ openCreate }));
 
+  useEffect(() => {
+    if (!undoMove) return undefined;
+    const timer = window.setTimeout(() => setUndoMove(null), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [undoMove]);
+
   return (
     <section id="project-panel-board" role="tabpanel" aria-labelledby="project-primary-tab-board" className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
@@ -271,7 +308,9 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
           <h2 className="text-base font-semibold text-fg">{copy.title}</h2>
           <p className="mt-1 text-sm leading-6 text-fg-muted">{copy.description}</p>
         </div>
-        <div className="flex shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5">
+        <div className="flex shrink-0 items-center gap-2">
+          <ProjectMonitoringControl policy={monitoring} copy={copy.monitoring} onSave={onMonitoringChange} />
+          <div className="flex rounded-lg border border-edge bg-surface-panel p-0.5">
           <button type="button" aria-pressed={viewMode === 'board'} onClick={() => setViewMode('board')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium', viewMode === 'board' ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}>
             <LayoutGrid className="size-3.5" aria-hidden />
             {copy.views.board}
@@ -280,6 +319,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
             <GitBranch className="size-3.5" aria-hidden />
             {copy.views.graph}
           </button>
+          </div>
         </div>
       </div>
       {viewMode === 'board' ? <div className="min-h-0 w-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [scrollbar-width:thin]">
@@ -292,14 +332,11 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
                 key={phase}
                 onDragOver={(event) => {
                   const task = tasks.find((item) => item.id === draggedId);
-                  if (task && taskActionForPhase(task, phase)) event.preventDefault();
+                  if (task && (task.phase === phase || taskActionForPhase(task, phase))) event.preventDefault();
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
-                  const task = tasks.find((item) => item.id === draggedId);
-                  const action = task ? taskActionForPhase(task, phase) : undefined;
-                  setDraggedId(null);
-                  if (task && action) performAction(task, action);
+                  void dropTask(phase, null);
                 }}
                 className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-muted/60 p-2.5"
               >
@@ -321,6 +358,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
                         busy={actionBusyId === task.id}
                         onAction={performAction}
                         onDragStart={setDraggedId}
+                        onDropBefore={(beforeTaskId) => void dropTask(phase, beforeTaskId)}
                       />
                     )) : (
                       <p className="rounded-lg border border-dashed border-edge px-3 py-5 text-center text-xs text-fg-subtle">
@@ -340,6 +378,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
             dependencyEdges={dependencyEdges}
             returnTo={returnTo}
             copy={{ ...copy.graph, phases: copy.phases }}
+            onDependenciesChange={onDependenciesChange}
           />
         </div>
       )}
@@ -470,6 +509,24 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      {undoMove ? (
+        <div role="status" className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-lg border border-edge bg-surface-panel px-4 py-3 text-sm text-fg shadow-float">
+          <span>{copy.moved}</span>
+          <button
+            type="button"
+            className="font-medium text-accent-fg hover:underline"
+            onClick={() => {
+              const pending = undoMove;
+              setUndoMove(null);
+              void onUndoMove(pending.taskId, pending.phase, pending.beforeTaskId).then((ok) => {
+                if (!ok) setUndoMove(pending);
+              });
+            }}
+          >
+            {copy.undo}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

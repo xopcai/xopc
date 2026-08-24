@@ -23,13 +23,13 @@ export function isForcedNewChatNavigation(state: unknown): boolean {
 }
 
 /** URL → focused session key; keeps {@link useChatSessionStore} `focusedSessionKey` in sync. */
-export function useChatSessionRoute() {
+export function useChatSessionRoute(fixedSessionKey?: string) {
   const location = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
 
-  const isNewRoute = location.pathname.endsWith('/new');
+  const isNewRoute = fixedSessionKey ? false : location.pathname.endsWith('/new');
   const forceNewChat = isNewRoute && isForcedNewChatNavigation(location.state);
-  const decodedKey = decodeConcreteSessionKey(isNewRoute, sessionKeyParam);
+  const decodedKey = fixedSessionKey ?? decodeConcreteSessionKey(isNewRoute, sessionKeyParam);
   const routedSessionKey = parseRoutedSessionKey(isNewRoute, decodedKey);
   const viewSessionKey = resolveViewSessionKey(routedSessionKey);
   const routedFocusedSessionKey = isNewRoute ? null : (decodedKey ?? null);

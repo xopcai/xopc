@@ -1,6 +1,7 @@
 import type { Hono } from 'hono';
 import {
   ProjectMonitoringUpdateSchema,
+  TaskBoardPositionRequestSchema,
   TaskCommandRequestSchema,
   TaskContextInputSchema,
   TaskCreateRequestSchema,
@@ -25,6 +26,7 @@ import { TaskValueMetricsService } from '../../../tasks/task-value-metrics-servi
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  const taskRateLimit = deps.taskRateLimitMiddleware ?? deps.strictRateLimitMiddleware;
   const application = new TaskApplicationService();
   const operatingViews = new ProjectOperatingViewService(deps.service.projects);
   const monitoring = new ProjectMonitoringService();
@@ -50,7 +52,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     });
   });
 
-  authenticated.post('/api/tasks', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/tasks', taskRateLimit, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const parsed = TaskCreateRequestSchema.safeParse(body);
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task request' }, 400);
@@ -92,7 +94,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     });
   });
 
-  authenticated.patch('/api/tasks/:id', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.patch('/api/tasks/:id', taskRateLimit, async (c) => {
     const parsed = TaskPatchRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task patch' }, 400);
     const updated = tasks.update(c.req.param('id'), parsed.data);
@@ -100,7 +102,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return c.json({ ok: true, task: updated });
   });
 
-  authenticated.put('/api/tasks/:id/dependencies', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.put('/api/tasks/:id/dependencies', taskRateLimit, async (c) => {
     const parsed = TaskDependencyUpdateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task dependencies' }, 400);
     try {
@@ -122,7 +124,20 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     }
   });
 
-  authenticated.post('/api/tasks/:id/commands', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.put('/api/tasks/:id/board-position', taskRateLimit, async (c) => {
+    const parsed = TaskBoardPositionRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid task board position' }, 400);
+    try {
+      const task = tasks.reorder({ taskId: c.req.param('id'), ...parsed.data });
+      return task
+        ? c.json({ ok: true, task })
+        : c.json({ ok: false, error: 'Task changed or was not found' }, 409);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.post('/api/tasks/:id/commands', taskRateLimit, async (c) => {
     const parsed = TaskCommandRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task command' }, 400);
     const result = application.execute({
@@ -147,7 +162,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return c.json({ ok: true, ...result.model, ...(result.runId ? { run: runs.get(result.runId) } : {}) });
   });
 
-  authenticated.post('/api/tasks/:id/context', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/tasks/:id/context', taskRateLimit, async (c) => {
     const task = tasks.get(c.req.param('id'));
     if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
     const parsed = TaskContextInputSchema.safeParse(await c.req.json().catch(() => ({})));
@@ -158,7 +173,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     }, 201);
   });
 
-  authenticated.delete('/api/tasks/:id/context/:edgeId', deps.strictRateLimitMiddleware, (c) => {
+  authenticated.delete('/api/tasks/:id/context/:edgeId', taskRateLimit, (c) => {
     const removed = context.remove(c.req.param('id'), c.req.param('edgeId'));
     return removed
       ? c.json({ ok: true })
@@ -179,7 +194,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       : c.json({ ok: false, error: 'TaskRun not found' }, 404);
   });
 
-  authenticated.post('/api/task-runs/:runId/cancel', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/task-runs/:runId/cancel', taskRateLimit, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const run = runs.get(c.req.param('runId'));
     if (!run) return c.json({ ok: false, error: 'TaskRun not found' }, 404);
@@ -208,7 +223,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return c.json({ ok: true, run: runs.get(run.id), receipt: runs.getReceipt(run.id) });
   });
 
-  authenticated.post('/api/task-runs/:runId/feedback', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/task-runs/:runId/feedback', taskRateLimit, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     if (body.rating !== 'helpful' && body.rating !== 'not_helpful') {
       return c.json({ ok: false, error: 'Invalid feedback rating' }, 400);
@@ -238,7 +253,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return c.json({ ok: true, policy: monitoring.get(projectId) });
   });
 
-  authenticated.patch('/api/projects/:projectId/monitoring', deps.strictRateLimitMiddleware, async (c) => {
+  authenticated.patch('/api/projects/:projectId/monitoring', taskRateLimit, async (c) => {
     const projectId = c.req.param('projectId');
     if (!deps.service.projects.get(projectId)) return c.json({ ok: false, error: 'Project not found' }, 404);
     const parsed = ProjectMonitoringUpdateSchema.safeParse(await c.req.json().catch(() => ({})));

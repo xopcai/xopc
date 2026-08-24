@@ -91,6 +91,14 @@ export function createChatRateLimitMiddleware(deps: StrictRateLimitDeps) {
   });
 }
 
+export function createTaskRateLimitMiddleware(deps: StrictRateLimitDeps) {
+  return createClientRateLimitMiddleware(deps, {
+    limiter: () => buckets.taskApi(),
+    exceededMessage: 'Task API rate limit exceeded',
+    reason: 'task_rate_limit_exceeded',
+  });
+}
+
 export function createXopcCloudPollRateLimitMiddleware(deps: StrictRateLimitDeps) {
   return createClientRateLimitMiddleware(deps, {
     limiter: () => buckets.xopcCloudPoll(),

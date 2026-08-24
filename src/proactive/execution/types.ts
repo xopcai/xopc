@@ -17,6 +17,12 @@ export interface InsightCandidate {
     question: string;
     options: Array<{ id: string; label: string; consequence: string }>;
   };
+  proposedAction?: {
+    id: 'create_project_task';
+    risk: 'low';
+    rationale: string;
+    input: { title: string; objective: string };
+  };
   urgency: 'low' | 'medium' | 'high' | 'critical';
   confidence: number;
   evidenceIds: string[];
@@ -28,6 +34,11 @@ export interface ProactiveInsight extends InsightCandidate {
   subscriptionId: string;
   scenarioKey: string;
   valueScore: number;
+  disposition?: 'record_silently' | 'show_in_work' | 'request_approval' | 'auto_execute';
+  dispositionReason?: string;
+  actionStatus?: 'not_authorized' | 'approval_required' | 'pending' | 'executing' | 'completed' | 'rejected' | 'failed';
+  actionResult?: Record<string, unknown>;
+  actionError?: string;
   createdAt: string;
 }
 

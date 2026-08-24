@@ -73,6 +73,7 @@ class BucketRegistry {
 
   private strictApiLimiter?: RateLimiter;
   private chatApiLimiter?: RateLimiter;
+  private taskApiLimiter?: RateLimiter;
   private xopcCloudPollLimiter?: RateLimiter;
   private channelApiLimiter?: RateLimiter;
   private tunnelMutateLimiter?: RateLimiter;
@@ -114,6 +115,14 @@ class BucketRegistry {
       this.chatApiLimiter = new RateLimiter({ maxRequests: 180, windowMs: 60_000 });
     }
     return this.chatApiLimiter;
+  }
+
+  /** Interactive task and board mutations — 300 req / 60 s per client IP. */
+  taskApi(): RateLimiter {
+    if (!this.taskApiLimiter) {
+      this.taskApiLimiter = new RateLimiter({ maxRequests: 300, windowMs: 60_000 });
+    }
+    return this.taskApiLimiter;
   }
 
   /** XOPC Cloud authorization polling — 60 req / 60 s per client IP. */
@@ -181,6 +190,7 @@ class BucketRegistry {
     this.authFailureLimiter?.destroy();
     this.strictApiLimiter?.destroy();
     this.chatApiLimiter?.destroy();
+    this.taskApiLimiter?.destroy();
     this.xopcCloudPollLimiter?.destroy();
     this.channelApiLimiter?.destroy();
     this.tunnelMutateLimiter?.destroy();
@@ -190,6 +200,7 @@ class BucketRegistry {
     this.authFailureLimiter = undefined;
     this.strictApiLimiter = undefined;
     this.chatApiLimiter = undefined;
+    this.taskApiLimiter = undefined;
     this.xopcCloudPollLimiter = undefined;
     this.channelApiLimiter = undefined;
     this.tunnelMutateLimiter = undefined;
@@ -204,6 +215,7 @@ class BucketRegistry {
     this.authFailureLimiter?.resetForTests();
     this.strictApiLimiter?.resetForTests();
     this.chatApiLimiter?.resetForTests();
+    this.taskApiLimiter?.resetForTests();
     this.xopcCloudPollLimiter?.resetForTests();
     this.channelApiLimiter?.resetForTests();
     this.tunnelMutateLimiter?.resetForTests();

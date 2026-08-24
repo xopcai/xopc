@@ -7,8 +7,8 @@ Do not invent dates, owners, dependencies, impact, or actions.
 Return only the protected output schema.`;
 
 const OUTPUT_CONTRACT = `Return JSON only with these fields:
-{"title":"...","summary":"...","whyNow":"...","impact":"...","workDone":"What you investigated or ruled out","recommendation":"...","decision":{"question":"The exact user decision","options":[{"id":"stable-id","label":"short choice","consequence":"likely consequence"}]},"urgency":"low|medium|high|critical","confidence":0.0,"evidenceIds":["event-id"]}
-Use decision only when the user must choose; otherwise set decision to null. Provide 2-3 mutually exclusive options. If evidence does not support a timely and actionable insight, return the same shape with urgency "low" and confidence below 0.65. Never add unknown fields.`;
+{"title":"...","summary":"...","whyNow":"...","impact":"...","workDone":"What you investigated or ruled out","recommendation":"...","decision":{"question":"The exact user decision","options":[{"id":"stable-id","label":"short choice","consequence":"likely consequence"}]},"proposedAction":{"id":"create_project_task","risk":"low","rationale":"why this is safe and useful","input":{"title":"...","objective":"..."}},"urgency":"low|medium|high|critical","confidence":0.0,"evidenceIds":["event-id"]}
+Use proposedAction only when the evidence clearly supports creating a follow-up task in the current project; otherwise set it to null. A proposed action must include exactly two decision options in this order: approve, reject. Use decision without proposedAction only when the user must choose; otherwise set decision to null. Provide 2-3 mutually exclusive options. If evidence does not support a timely and actionable insight, return the same shape with urgency "low" and confidence below 0.65. Never add unknown fields.`;
 
 export interface ComposedPrompt {
   platformSafety: string;

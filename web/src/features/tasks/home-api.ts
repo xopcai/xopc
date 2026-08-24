@@ -10,6 +10,7 @@ import {
   type TaskCreateRequest,
   type TaskCreateResponse,
   type TaskDetailResponse,
+  type TaskPatchRequest,
 } from '@xopcai/gateway-contract';
 
 import { fetchJson } from '@/lib/fetch';
@@ -29,6 +30,18 @@ export async function fetchTask(taskId: string): Promise<TaskDetail> {
   return TaskDetailResponseSchema.parse(await fetchJson<unknown>(
     apiUrl(`/api/tasks/${encodeURIComponent(taskId)}`),
   ));
+}
+
+export async function updateTask(
+  taskId: string,
+  patch: Omit<TaskPatchRequest, 'expectedVersion'>,
+  expectedVersion: number,
+): Promise<TaskDetail> {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}`), {
+    method: 'PATCH',
+    body: JSON.stringify({ ...patch, expectedVersion }),
+  });
+  return fetchTask(taskId);
 }
 
 export async function commandTask(
@@ -51,6 +64,18 @@ export async function updateTaskDependencies(
   await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/dependencies`), {
     method: 'PUT',
     body: JSON.stringify({ dependsOnTaskIds, expectedVersion }),
+  });
+  return fetchTask(taskId);
+}
+
+export async function updateTaskBoardPosition(
+  taskId: string,
+  beforeTaskId: string | null,
+  expectedVersion: number,
+): Promise<TaskDetail> {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/board-position`), {
+    method: 'PUT',
+    body: JSON.stringify({ beforeTaskId, expectedVersion }),
   });
   return fetchTask(taskId);
 }

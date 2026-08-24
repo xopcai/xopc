@@ -35,6 +35,7 @@ describe('Task contracts', () => {
       priority: 'normal',
       source: 'api',
       latestContractVersion: 1,
+      boardRank: 1024,
       version: 1,
       createdAt: 1,
       updatedAt: 1,

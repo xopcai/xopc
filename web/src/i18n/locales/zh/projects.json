@@ -299,6 +299,8 @@
       "acceptanceCriteria": "{{count}} 条验收标准",
       "blockedBy": "等待 {{count}} 个前置任务",
       "actionFailed": "任务已发生变化或无法更新，看板已恢复。",
+      "moved": "任务已移动",
+      "undo": "撤销",
       "create": "新建任务",
       "createTitle": "创建任务",
       "createDescription": "把需要长期跟进的事情放进项目；创建后先留在待推进，直到你让 xopc 开始。",
@@ -344,6 +346,27 @@
         "board": "看板",
         "graph": "依赖图"
       },
+      "monitoring": {
+        "title": "主动跟进策略",
+        "description": "控制 AI 何时静默观察、何时请求批准，以及哪些低风险动作可以自动执行。",
+        "mode": "处理方式",
+        "modes": {
+          "observe": "仅观察",
+          "ask_before_action": "行动前询问",
+          "auto_low_risk": "自动执行低风险动作"
+        },
+        "confidence": "最低置信度",
+        "quietHours": "启用免打扰时段",
+        "quietStart": "开始小时",
+        "quietEnd": "结束小时",
+        "timezone": "时区",
+        "allowTaskCreation": "允许自动创建后续任务",
+        "allowTaskCreationDescription": "仅在当前项目的待规划列创建任务，不会启动 Agent 或执行外部操作。",
+        "cancel": "取消",
+        "save": "保存策略",
+        "saving": "保存中…",
+        "saveFailed": "策略保存失败。"
+      },
       "graph": {
         "showCompleted": "显示已完成",
         "hideCompleted": "隐藏已完成",
@@ -352,8 +375,9 @@
         "locateTask": "定位任务",
         "openTask": "打开任务详情",
         "empty": "当前筛选下没有可展示的任务",
-        "hint": "从左到右查看前置任务如何解锁后续任务；点击节点聚焦整条依赖链。",
-        "blockedBy": "仍在等待 {{count}} 个前置任务"
+        "blockedBy": "仍在等待 {{count}} 个前置任务",
+        "connectHint": "从前置任务拖出连线到后续任务；选择连线可移除。",
+        "removeDependency": "移除依赖"
       },
       "phases": {
         "backlog": "待规划",
