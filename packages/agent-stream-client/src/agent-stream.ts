@@ -31,7 +31,19 @@ export type AgentStreamCallbacks = {
   onStreamStart: () => void;
   onReplayGap?: () => void | Promise<void>;
   onUserTranscript?: (payload: AgentStreamUserTranscriptPayload) => void;
-  onToken: (delta: string) => void;
+  onToken: (delta: string, messageId?: string) => void;
+  onAssistantMessageEnd?: (
+    messageId: string,
+    presentation: 'narration' | 'answer',
+    usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      totalTokens?: number;
+      cost?: number;
+    },
+  ) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
   onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
@@ -180,15 +192,25 @@ export function dispatchAgentStreamEvent(
       cb?.onStreamStart();
       break;
     case 'assistant_delta':
-      if (typeof p.delta === 'string' && p.delta) cb?.onToken(p.delta);
+      if (typeof p.delta === 'string' && p.delta) {
+        cb?.onToken(p.delta, typeof p.messageId === 'string' ? p.messageId : undefined);
+      }
       break;
     case 'thinking_delta':
       if (typeof p.delta === 'string' && p.delta) cb?.onThinking(p.delta, true);
       break;
     case 'thinking_end':
-    case 'assistant_message_end':
       cb?.onThinkingEnd();
       break;
+    case 'assistant_message_end': {
+      const messageId = typeof p.messageId === 'string' ? p.messageId : '';
+      const presentation = p.presentation === 'narration' ? 'narration' : 'answer';
+      const usage = p.usage && typeof p.usage === 'object'
+        ? p.usage as Parameters<NonNullable<AgentStreamCallbacks['onAssistantMessageEnd']>>[2]
+        : undefined;
+      if (messageId) cb?.onAssistantMessageEnd?.(messageId, presentation, usage);
+      break;
+    }
     case 'tool_start': {
       const toolName = String(p.toolName || 'unknown');
       const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : undefined;

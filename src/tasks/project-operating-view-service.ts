@@ -1,4 +1,8 @@
-import type { ProjectOperatingView, ProjectTaskCard } from '@xopcai/gateway-contract';
+import type {
+  ProjectOperatingSummary,
+  ProjectOperatingView,
+  ProjectTaskCard,
+} from '@xopcai/gateway-contract';
 
 import type { ProjectService } from '../projects/index.js';
 import { ProjectMonitoringService } from './project-monitoring-service.js';
@@ -17,6 +21,25 @@ export function projectTaskLane(
   if (['queued', 'running', 'verifying'].includes(card.operationalState)) return 'moving';
   if (card.operationalState === 'waiting' || card.operationalState === 'blocked') return 'waiting';
   return 'ready';
+}
+
+export function summarizeProjectOperatingView(view: ProjectOperatingView): ProjectOperatingSummary {
+  const counts = {
+    ready: 0,
+    moving: 0,
+    waiting: 0,
+    needsUser: 0,
+    done: 0,
+  };
+  for (const task of view.tasks) {
+    if (task.lane === 'needs_user') counts.needsUser += 1;
+    else counts[task.lane] += 1;
+  }
+  return {
+    ...view.digest,
+    counts,
+    updatedAt: Math.max(view.project.updatedAt, ...view.tasks.map((task) => task.updatedAt)),
+  };
 }
 
 export class ProjectOperatingViewService {
@@ -53,9 +76,13 @@ export class ProjectOperatingViewService {
       };
       return { ...base, lane: projectTaskLane(base) };
     });
-    const recentReceipts = projectTasks
-      .flatMap((task) => this.#runs.listReceipts(task.id, 10))
-      .sort((a, b) => b.finalizedAt - a.finalizedAt)
+    const recentResults = projectTasks
+      .flatMap((task) => this.#runs.listReceipts(task.id, 10).map((receipt) => ({
+        taskId: task.id,
+        taskTitle: task.title,
+        receipt,
+      })))
+      .sort((a, b) => b.receipt.finalizedAt - a.receipt.finalizedAt)
       .slice(0, 10);
     const attentionCount = cards.filter((card) => card.lane === 'needs_user').length;
     return {
@@ -64,18 +91,23 @@ export class ProjectOperatingViewService {
       dependencyEdges: this.#dependencies.listProjectEdges(project.id),
       blockers: cards.flatMap((card) => card.attention.map((item) => ({
         id: item.sourceId ?? `${card.id}:${item.kind}`,
+        taskId: card.id,
         kind: item.kind,
         title: card.title,
         detail: item.summary,
+        href: `/tasks/${encodeURIComponent(card.id)}`,
         updatedAt: card.updatedAt,
       }))),
       running: project.recentWorkflowRuns.filter((run) => run.status === 'queued' || run.status === 'running'),
-      recentReceipts,
+      recentResults,
       digest: {
         health: cards.length === 0 ? 'empty' : attentionCount > 0 ? 'attention' : 'healthy',
         summary: cards.length === 0
           ? 'No tasks yet'
           : `${cards.filter((card) => card.lane === 'moving').length} moving, ${attentionCount} need attention`,
+        recommendedAction: cards.find((card) => card.lane === 'needs_user')?.attention[0]?.summary
+          ?? cards.find((card) => card.lane === 'moving')?.title
+          ?? cards.find((card) => card.lane === 'ready')?.title,
       },
       monitoring: this.#monitoring.get(project.id),
     };

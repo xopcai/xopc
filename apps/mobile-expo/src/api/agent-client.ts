@@ -151,6 +151,7 @@ function wrapTerminalCallbacks(cb?: MessagingCallbacks): {
       onStreamStart: guarded(cb.onStreamStart),
       onUserTranscript: guarded(cb.onUserTranscript),
       onToken: guarded(cb.onToken),
+      onAssistantMessageEnd: guarded(cb.onAssistantMessageEnd),
       onThinking: guarded(cb.onThinking),
       onThinkingEnd: guarded(cb.onThinkingEnd),
       onToolStart: guarded(cb.onToolStart),

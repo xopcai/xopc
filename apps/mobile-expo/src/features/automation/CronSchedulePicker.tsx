@@ -22,7 +22,7 @@ const MINUTE_OPTIONS = [0, 15, 30, 45] as const;
 export function CronSchedulePicker({ value, onChange }: CronSchedulePickerProps) {
   const { colors } = useTheme();
   const m = useMessages();
-  const pm = m.cronForm;
+  const pm = m.automationForm;
 
   const chipBg = colors.surface.input;
   const chipActiveBg = colors.accent.primary;
@@ -124,7 +124,7 @@ export function CronSchedulePicker({ value, onChange }: CronSchedulePickerProps)
   );
 }
 
-function intervalLabel(minutes: IntervalPreset, pm: ReturnType<typeof useMessages>['cronForm']): string {
+function intervalLabel(minutes: IntervalPreset, pm: ReturnType<typeof useMessages>['automationForm']): string {
   if (minutes === 15) return pm.every15Min;
   if (minutes === 30) return pm.every30Min;
   return pm.everyHour;

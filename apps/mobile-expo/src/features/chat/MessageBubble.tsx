@@ -8,7 +8,7 @@ import { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
-import { AssistantStepsBlock, hasTextAfterIndex, isAnyBlockActive } from './AssistantStepsBlock';
+import { AssistantStepsBlock } from './AssistantStepsBlock';
 import { AttachmentRenderer } from './AttachmentRenderer';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import { MarkdownView } from './MarkdownView';
@@ -25,9 +25,8 @@ import type {
   Message,
   MessageContent,
   ProgressState,
+  ReasoningLevel,
   ReviewContent,
-  ThinkingContent,
-  ToolUseContent,
 } from './messages.types';
 import { useMessages } from '../../i18n/messages';
 import { colors as tokenColors, typography, useTheme } from '../../theme';
@@ -36,6 +35,15 @@ import { chatColors, chatLayout } from './styles';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { buildSpeakableText, detectSpeechLanguage } from '../voice/read-aloud-text';
 import { useReadAloudStore } from '../voice/read-aloud-store';
+import {
+  assistantTextForDisplay,
+  getAssistantFinalResultText,
+  isAssistantNarration,
+} from './assistant-text-presentation';
+import {
+  buildAssistantTurnViewModel,
+  type AssistantActivityPresentation,
+} from './assistant-turn-view-model';
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -176,44 +184,51 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
 function renderAssistantContent(
   content: MessageContent[],
   isStreaming: boolean,
+  activity: AssistantActivityPresentation,
+  showStreamingCursor: boolean,
   sessionKey?: string | null,
   allowTrailingMargin = false,
 ) {
   const nodes: React.ReactNode[] = [];
+  let activityRendered = false;
+  let narrationRendered = false;
   let i = 0;
 
   while (i < content.length) {
     const block = content[i];
 
-    // ── Group consecutive thinking / tool_use blocks ──
     if (block.type === 'thinking' || block.type === 'tool_use') {
-      const start = i;
-      const stepBlocks: Array<ThinkingContent | ToolUseContent> = [];
-      while (
-        i < content.length &&
-        (content[i].type === 'thinking' || content[i].type === 'tool_use')
-      ) {
-        stepBlocks.push(content[i] as ThinkingContent | ToolUseContent);
-        i++;
-      }
-      if (stepBlocks.length > 0) {
-        const finalAnswerStarted = hasTextAfterIndex(content, i);
+      if (!activityRendered && activity.blocks.length > 0) {
         nodes.push(
           <AssistantStepsBlock
-            key={`steps-${start}`}
-            blocks={stepBlocks}
+            key="turn-activity"
+            blocks={activity.blocks}
             isMessageStreaming={isStreaming}
-            finalAnswerStarted={finalAnswerStarted}
+            expandedByDefault={activity.expandedByDefault}
             sessionKey={sessionKey}
           />,
         );
+        activityRendered = true;
       }
+      i++;
     } else if (block.type === 'text') {
-      // Merge consecutive text blocks
-      let merged = block.text || '';
+      if (isAssistantNarration(block)) {
+        if (narrationRendered) {
+          i++;
+          continue;
+        }
+        narrationRendered = true;
+      }
+      let merged = assistantTextForDisplay(block);
       let j = i + 1;
-      while (j < content.length && content[j].type === 'text') {
-        merged += '\n' + ((content[j] as { text: string }).text || '');
+      while (j < content.length) {
+        const next = content[j];
+        if (
+          next.type !== 'text'
+          || next.presentation !== block.presentation
+          || isAssistantNarration(next)
+        ) break;
+        merged += '\n' + assistantTextForDisplay(next);
         j++;
       }
       if (merged.trim()) {
@@ -252,7 +267,7 @@ function renderAssistantContent(
   }
 
   // Streaming cursor: show blinking indicator while waiting or at the end of streamed content
-  if (isStreaming) {
+  if (showStreamingCursor) {
     nodes.push(
       <View key="cursor" style={styles.cursor}>
         <View style={[styles.cursorDot, { backgroundColor: chatColors.cursorBlink }]} />
@@ -265,6 +280,7 @@ function renderAssistantContent(
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  reasoningLevel = 'on',
   messageIndex,
   isStreaming = false,
   progress,
@@ -277,6 +293,7 @@ export const MessageBubble = memo(function MessageBubble({
   onAssistantRegenerate,
 }: {
   message: Message;
+  reasoningLevel?: ReasoningLevel;
   messageIndex: number;
   isStreaming?: boolean;
   progress?: ProgressState | null;
@@ -294,6 +311,12 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user' || message.role === 'user-with-attachments';
   const isAssistant = message.role === 'assistant';
   const contentBlocks = message.content ?? [];
+  const assistantTurnView = useMemo(
+    () => isAssistant
+      ? buildAssistantTurnViewModel({ content: contentBlocks, isStreaming, reasoningLevel })
+      : null,
+    [contentBlocks, isAssistant, isStreaming, reasoningLevel],
+  );
 
   const userText = useMemo(
     () => (isUser ? userContentText(contentBlocks) : ''),
@@ -306,8 +329,10 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const displayContent = useMemo(
-    () => (isAssistant ? contentBlocks.filter((b) => b.type !== 'image') : contentBlocks),
-    [isAssistant, contentBlocks],
+    () => (isAssistant
+      ? (assistantTurnView?.displayContent ?? contentBlocks).filter((b) => b.type !== 'image')
+      : contentBlocks),
+    [assistantTurnView?.displayContent, isAssistant, contentBlocks],
   );
 
   const assistantWorkspacePaths = useMemo(
@@ -331,21 +356,19 @@ export const MessageBubble = memo(function MessageBubble({
   const showAssistantArtifacts =
     isAssistant && !isStreaming && (assistantWorkspacePaths.length > 0 || assistantImageAttachments.length > 0);
 
-  const stepsActive = useMemo(() => {
-    if (!isAssistant || !isStreaming) return false;
-    const stepBlocks = contentBlocks.filter(
-      (b): b is ThinkingContent | ToolUseContent => b.type === 'thinking' || b.type === 'tool_use',
-    );
-    return isAnyBlockActive(stepBlocks);
-  }, [isAssistant, isStreaming, contentBlocks]);
+  const stepsActive = Boolean(assistantTurnView?.activity.active);
+  const progressForMeta = reasoningLevel === 'off'
+    || Boolean(assistantTurnView?.activity.blocks.length)
+    ? null
+    : progress;
 
   const showProgressDetail =
-    Boolean(progress?.detail?.trim()) &&
-    progress?.detail?.trim() !== progress?.message?.trim();
+    Boolean(progressForMeta?.detail?.trim()) &&
+    progressForMeta?.detail?.trim() !== progressForMeta?.message?.trim();
 
   const showMetaFallbackThinking =
     isStreaming &&
-    !progress?.message &&
+    !progressForMeta?.message &&
     !stepsActive &&
     !contentBlocks.some((b) => b.type === 'thinking' && b.streaming);
 
@@ -357,7 +380,7 @@ export const MessageBubble = memo(function MessageBubble({
   const showMeta =
     Boolean(message.timestamp) ||
     Boolean(message.deliveryState) ||
-    Boolean(progress?.message) ||
+    Boolean(progressForMeta?.message) ||
     showProgressDetail ||
     showMetaFallbackThinking;
 
@@ -370,14 +393,19 @@ export const MessageBubble = memo(function MessageBubble({
       .trim();
   }, [isAssistant, contentBlocks]);
 
+  const assistantFinalResultText = useMemo(
+    () => (isAssistant ? getAssistantFinalResultText(contentBlocks) : ''),
+    [contentBlocks, isAssistant],
+  );
+
   const assistantCodeText = useMemo(
     () => (assistantPlainText ? extractMarkdownCodeBlocks(assistantPlainText) : ''),
     [assistantPlainText],
   );
   const hasAssistantAudio = isAssistant && contentBlocks.some((block) => block.type === 'audio');
   const speakableText = useMemo(
-    () => (assistantPlainText ? buildSpeakableText(assistantPlainText) : ''),
-    [assistantPlainText],
+    () => (assistantFinalResultText ? buildSpeakableText(assistantFinalResultText) : ''),
+    [assistantFinalResultText],
   );
   const readAloudSourceId = `${sessionKey ?? 'chat'}:${message.id ?? message.timestamp ?? messageIndex}`;
   const readAloudStatus = useReadAloudStore((state) => (
@@ -529,16 +557,16 @@ export const MessageBubble = memo(function MessageBubble({
               {message.deliveryState === 'failed' ? m.chat.sendFailed : m.chat.waitingToSend}
             </Text>
           ) : null}
-          {progress?.message || showProgressDetail || showMetaFallbackThinking ? (
+          {progressForMeta?.message || showProgressDetail || showMetaFallbackThinking ? (
             <View style={styles.metaProgressCol}>
-              {progress?.message ? (
+              {progressForMeta?.message ? (
                 <Text variant="labelSmall" style={styles.metaProgress} numberOfLines={1}>
-                  {progress.message}
+                  {progressForMeta.message}
                 </Text>
               ) : null}
               {showProgressDetail ? (
                 <Text variant="labelSmall" style={styles.metaProgressDetail} numberOfLines={2}>
-                  {progress?.detail}
+                  {progressForMeta?.detail}
                 </Text>
               ) : null}
               {showMetaFallbackThinking ? (
@@ -606,7 +634,14 @@ export const MessageBubble = memo(function MessageBubble({
               },
             ]}
           >
-            {renderAssistantContent(displayContent, isStreaming, sessionKey, showAssistantArtifacts)}
+            {renderAssistantContent(
+              displayContent,
+              isStreaming,
+              assistantTurnView?.activity ?? { blocks: [], active: false, expandedByDefault: false },
+              Boolean(assistantTurnView?.showStreamingCursor),
+              sessionKey,
+              showAssistantArtifacts,
+            )}
 
             {attachmentsForBubble?.length ? (
               <AttachmentRenderer attachments={attachmentsForBubble} sessionKey={sessionKey} />

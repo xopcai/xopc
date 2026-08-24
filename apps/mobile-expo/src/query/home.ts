@@ -1,18 +1,16 @@
 import {
   parseHomeResponse,
-  type TaskRunReceipt,
+  type HomeAttention,
+  type HomeDecision,
+  type HomeFocusItem,
   type HomeResponse,
 } from '@xopcai/gateway-contract';
+
+export type { HomeAction, HomeAttention, HomeDecision, HomeFocusItem } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
 import type { NoteIndexEntry } from './notes';
-
-export type HomeAgent = {
-  id: string;
-  name?: string;
-  description?: string;
-};
 
 export type HomeGateway = {
   status: string;
@@ -27,104 +25,18 @@ export type HomeGateway = {
   };
 };
 
-export type HomeWorkflowRun = {
-  id: string;
-  definitionId: string;
-  title: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
-  sessionKey?: string;
-  createdAtMs: number;
-  startedAtMs?: number;
-  completedAtMs?: number;
-  metrics: {
-    agentCount: number;
-    doneAgentCount: number;
-    errorAgentCount: number;
-    skippedAgentCount: number;
-    artifactCount: number;
-    durationMs?: number;
-  };
-};
-
-export type HomeAutomation = {
-  id: string;
-  name?: string;
-  trigger: string;
-  action: string;
-  nextRunAt: string;
-};
-
-export type HomeDecision = {
-  id: string;
-  kind: 'agent_judgment' | 'task' | 'connector_approval';
-  title: string;
-  detail?: string;
-  reason: 'needs_input' | 'blocked' | 'user_input' | 'user_approval' | 'dependency' | 'external' | 'scheduled' | 'retry' | 'paused' | 'overdue' | 'due_soon' | 'decision_needed' | 'approval_required';
-  urgency: 'now' | 'soon';
-  href: string;
-  projectId?: string;
-  projectName?: string;
-  updatedAt: number;
-  judgment?: {
-    inboxItemId: string;
-    whyNow: string;
-    impact: string;
-    workDone: string;
-    recommendation: string;
-    confidence: number;
-    decision?: { question: string; options: Array<{ id: string; label: string; consequence: string }> };
-  };
-  response?: { kind: 'connector_approval'; approvalId: string };
-};
-
-export type HomeAttention = {
-  id: string;
-  kind: 'automation_run' | 'workflow_run';
-  runId: string;
-  title: string;
-  detail: string;
-  reason: 'run_failed' | 'run_timeout';
-  href: string;
-  updatedAt: number;
-  sessionKey?: string;
-};
-
-export type HomeBriefing = {
-  generatedAt: number;
-  summary: string;
-  focus: HomeDecision[];
-  progress: {
-    activeWorkflowCount: number;
-    activeTaskCount: number;
-    movingCount: number;
-  };
-  wins: Array<{
-    id: string;
-    kind: 'task' | 'workflow_run' | 'automation_run';
-    title: string;
-    href: string;
-    completedAt: number;
-  }>;
-  nextScheduled?: HomeAutomation;
-};
+export type HomeWorkflowRun = HomeResponse['workflowRuns']['active'][number];
 
 export interface HomeData {
-  briefing: HomeBriefing;
-  decisions: HomeDecision[];
-  attention: HomeAttention[];
+  focusItems: [HomeFocusItem, ...HomeFocusItem[]];
   recentlyOpened: NoteIndexEntry[];
   inboxCount: number;
-  pendingTasks: NoteIndexEntry[];
-  pendingTaskCount: number;
   chats: HomeResponse['chats'];
-  activeAgent: HomeAgent;
   gateway: HomeGateway;
   workflowRuns: {
     active: HomeWorkflowRun[];
-    recent: HomeWorkflowRun[];
   };
-  upcomingAutomations: HomeAutomation[];
-  recentTasks: TaskRunReceipt[];
+  upcomingAutomations: HomeResponse['upcomingAutomations'];
   tasks: HomeResponse['tasks'];
 }
 
@@ -135,20 +47,14 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const core = parseHomeResponse(raw);
   const home = raw as HomeData;
   return {
-    briefing: home.briefing,
-    decisions: home.decisions,
-    attention: home.attention,
+    focusItems: core.focusItems as [HomeFocusItem, ...HomeFocusItem[]],
     recentlyOpened: home.recentlyOpened,
     inboxCount: home.inboxCount,
-    pendingTasks: home.pendingTasks,
-    pendingTaskCount: home.pendingTaskCount,
     chats: core.chats,
-    activeAgent: home.activeAgent,
     gateway: home.gateway,
-    workflowRuns: home.workflowRuns,
+    workflowRuns: { active: home.workflowRuns.active },
     upcomingAutomations: home.upcomingAutomations,
     tasks: core.tasks,
-    recentTasks: core.recentTasks,
   };
 }
 

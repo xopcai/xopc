@@ -7,7 +7,7 @@
  * so the scroll position resets cleanly — no visible "scroll down" flash.
  */
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -23,11 +23,28 @@ import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
 import { MessageBubble } from './MessageBubble';
 import { isLastAssistantMessage } from './composer-send-helpers';
 import { messageKey } from './message-key';
-import type { Message, ProgressState } from './messages.types';
+import type { Message, ProgressState, ReasoningLevel } from './messages.types';
 import type { MobileWelcomeStarter } from './mobile-welcome-starters';
 import { useChatListScrollFollow } from './use-chat-list-scroll-follow';
 
 const LIST_BASE_PADDING_BOTTOM = 8;
+const LOADING_INDICATOR_DELAY_MS = 160;
+const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = { startRenderingFromBottom: true } as const;
+
+function useDelayedLoadingIndicator(loading: boolean): boolean {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setVisible(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setVisible(true), LOADING_INDICATOR_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  return visible;
+}
 
 function starterIconSource(icon: string): string {
   switch (icon) {
@@ -58,6 +75,7 @@ function starterIconSource(icon: string): string {
 
 export const MessageList = memo(function MessageList({
   messages,
+  reasoningLevel,
   streaming,
   progress,
   loading,
@@ -81,6 +99,7 @@ export const MessageList = memo(function MessageList({
   networkUnreachableTip,
 }: {
   messages: Message[];
+  reasoningLevel: ReasoningLevel;
   streaming: boolean;
   progress: ProgressState | null;
   loading: boolean;
@@ -106,6 +125,7 @@ export const MessageList = memo(function MessageList({
 }) {
   const { colors } = useTheme();
   const keyboardPadding = useKeyboardListPadding();
+  const showLoadingIndicator = useDelayedLoadingIndicator(loading);
   const listRef = useRef<FlashListRef<Message>>(null);
 
   const {
@@ -178,6 +198,7 @@ export const MessageList = memo(function MessageList({
         >
           <MessageBubble
             message={item}
+            reasoningLevel={reasoningLevel}
             messageIndex={index}
             isStreaming={isStreamRow}
             progress={isStreamRow ? progress : null}
@@ -200,6 +221,7 @@ export const MessageList = memo(function MessageList({
     },
     [
       messages,
+      reasoningLevel,
       onUserMessageCopy,
       onUserMessageEdit,
       onUserMessageRetry,
@@ -221,7 +243,7 @@ export const MessageList = memo(function MessageList({
     return (
       <View style={styles.center}>
         {listHeader}
-        <ActivityIndicator size="large" />
+        {showLoadingIndicator ? <ActivityIndicator size="large" /> : null}
       </View>
     );
   }
@@ -333,6 +355,7 @@ export const MessageList = memo(function MessageList({
         ref={listRef}
         style={styles.listFlex}
         data={messages}
+        maintainVisibleContentPosition={CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         contentContainerStyle={listContentStyle}

@@ -122,18 +122,29 @@ export async function fetchSessionAgentConfig(
 ): Promise<{
   model: string;
   thinkingLevel: string;
+  reasoningLevel: string;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
 }> {
   const key = encodeURIComponent(sessionKey);
   const res = await apiFetch(`/api/sessions/${key}/agent-config`);
   if (!res.ok) {
-    return { model: '', thinkingLevel: '', effectiveWorkspacePath: '', workingDirectoryLocked: false };
+    return {
+      model: '',
+      thinkingLevel: '',
+      reasoningLevel: 'on',
+      effectiveWorkspacePath: '',
+      workingDirectoryLocked: false,
+    };
   }
   const data = (await res.json().catch(() => ({}))) as {
     payload?: {
       model?: string;
       thinkingLevel?: string;
+      reasoningLevel?: string | null;
+      activityDetail?: {
+        effective?: string;
+      };
       effectiveWorkspacePath?: string;
       workingDirectoryLocked?: boolean;
     };
@@ -141,6 +152,12 @@ export async function fetchSessionAgentConfig(
   return {
     model: typeof data.payload?.model === 'string' ? data.payload.model : '',
     thinkingLevel: data.payload?.thinkingLevel ?? '',
+    reasoningLevel:
+      typeof data.payload?.activityDetail?.effective === 'string'
+        ? data.payload.activityDetail.effective
+        : typeof data.payload?.reasoningLevel === 'string'
+          ? data.payload.reasoningLevel
+          : 'on',
     effectiveWorkspacePath:
       typeof data.payload?.effectiveWorkspacePath === 'string' ? data.payload.effectiveWorkspacePath : '',
     workingDirectoryLocked: Boolean(data.payload?.workingDirectoryLocked),

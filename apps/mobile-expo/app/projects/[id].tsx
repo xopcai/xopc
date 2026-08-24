@@ -1,5 +1,5 @@
-import { ProjectDetailScreen } from '@/features/tasks/ProjectScreens';
+import { ProjectOperatingScreen } from '@/features/tasks/ProjectOperatingScreen';
 
 export default function ProjectDetailRoute() {
-  return <ProjectDetailScreen />;
+  return <ProjectOperatingScreen />;
 }

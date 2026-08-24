@@ -11,7 +11,7 @@ import {
 } from './tasks.js';
 import { ProjectMonitoringPolicySchema } from './project-monitoring.js';
 
-const ProjectSummarySchema = z.object({
+export const ProjectSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   status: z.string(),
@@ -45,12 +45,27 @@ export const ProjectTaskCardSchema = z.object({
   updatedAt: z.number(),
 });
 
+export const ProjectOperatingSummarySchema = z.object({
+  health: z.enum(['healthy', 'attention', 'idle', 'empty']),
+  summary: z.string(),
+  recommendedAction: z.string().optional(),
+  counts: z.object({
+    ready: z.number().int().nonnegative(),
+    moving: z.number().int().nonnegative(),
+    waiting: z.number().int().nonnegative(),
+    needsUser: z.number().int().nonnegative(),
+    done: z.number().int().nonnegative(),
+  }),
+  updatedAt: z.number().int().nonnegative(),
+});
+
 export const ProjectOperatingViewSchema = z.object({
   project: ProjectSummarySchema,
   tasks: z.array(ProjectTaskCardSchema),
   dependencyEdges: z.array(ProjectTaskDependencyEdgeSchema),
   blockers: z.array(z.object({
     id: z.string(),
+    taskId: z.string(),
     kind: z.string(),
     title: z.string(),
     detail: z.string().optional(),
@@ -63,7 +78,11 @@ export const ProjectOperatingViewSchema = z.object({
     status: z.string(),
     createdAt: z.number(),
   })),
-  recentReceipts: z.array(TaskRunReceiptSchema),
+  recentResults: z.array(z.object({
+    taskId: z.string(),
+    taskTitle: z.string(),
+    receipt: TaskRunReceiptSchema,
+  })),
   digest: z.object({
     health: z.enum(['healthy', 'attention', 'idle', 'empty']),
     summary: z.string(),
@@ -73,6 +92,7 @@ export const ProjectOperatingViewSchema = z.object({
 });
 
 export type ProjectOperatingView = z.infer<typeof ProjectOperatingViewSchema>;
+export type ProjectOperatingSummary = z.infer<typeof ProjectOperatingSummarySchema>;
 export type ProjectTaskLane = z.infer<typeof ProjectTaskLaneSchema>;
 export type ProjectTaskCard = z.infer<typeof ProjectTaskCardSchema>;
 export type ProjectTaskDependencyEdge = z.infer<typeof ProjectTaskDependencyEdgeSchema>;

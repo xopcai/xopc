@@ -9,7 +9,7 @@ describe('resolveNotificationRoute', () => {
     expect(resolveNotificationRoute({ route: '/chat/agent%3Amain' })).toBe('/chat/agent%3Amain');
     expect(resolveNotificationRoute({ route: '/inbox?capture=1' })).toBe('/inbox?capture=1');
     expect(resolveNotificationRoute({ route: '/inbox?item=insight-1' })).toBe('/inbox?item=insight-1');
-    expect(resolveNotificationRoute({ route: '/automation', runId: 'run 1' })).toBe('/automation?run=run%201');
+    expect(resolveNotificationRoute({ route: '/automation', runId: 'run 1' })).toBe('/automation/runs/run%201');
     expect(resolveNotificationRoute({ route: '/tasks/work-123' })).toBe('/tasks/work-123');
     expect(resolveNotificationRoute({ route: '/projects/project-123' })).toBe('/projects/project-123');
     expect(resolveNotificationRoute({ route: '/workflows/runs/run-123?agentId=research' }))

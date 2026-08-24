@@ -21,6 +21,8 @@ import type { SessionMessagePage } from '../../query/sessions';
 export type WireContentBlock = {
   type?: string;
   text?: string;
+  segmentId?: string;
+  presentation?: string;
   thinking?: string;
   source?: { data?: string; media_type?: string };
   data?: string;
@@ -50,6 +52,7 @@ export type WireMessage = {
   messageId?: string;
   role?: string;
   content?: unknown;
+  rawContent?: unknown;
   timestamp?: string | number;
   attachments?: unknown;
   media?: unknown;
@@ -226,7 +229,19 @@ function wireImageBlockToContent(block: WireContentBlock): MessageContent | null
 export function parseContentBlock(b: Record<string, unknown>): MessageContent | null {
   const block = b as WireContentBlock;
   const t = block.type;
-  if (t === 'text') return { type: 'text', text: String(block.text ?? '') };
+  if (t === 'text') {
+    const presentation = block.presentation === 'pending'
+      || block.presentation === 'narration'
+      || block.presentation === 'answer'
+      ? block.presentation
+      : undefined;
+    return {
+      type: 'text',
+      text: String(block.text ?? ''),
+      ...(typeof block.segmentId === 'string' ? { segmentId: block.segmentId } : {}),
+      ...(presentation ? { presentation } : {}),
+    };
+  }
   if (t === 'thinking') return { type: 'thinking', text: String(block.text ?? block.thinking ?? ''), streaming: false };
   if (t === 'review') return normalizeReviewBlock(block);
   const mimeType = firstString(block.mimeType, block.mime_type);
@@ -317,7 +332,10 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
 
 /** Build assistant content, including top-level tool_calls / toolCalls fields. */
 function buildAssistantContent(m: WireMessage): MessageContent[] {
-  const blocks = normalizeContentBlocks(m.content);
+  // Session history includes flattened content for simple clients. Prefer the
+  // structured copy so thinking/tool/text ordering survives a reload.
+  const rawBlocks = normalizeContentBlocks(m.rawContent);
+  const blocks = rawBlocks.length > 0 ? rawBlocks : normalizeContentBlocks(m.content);
   appendReviewFromMetadata(blocks, m.metadata);
 
   // OpenAI format: top-level tool_calls array
@@ -340,6 +358,13 @@ function buildAssistantContent(m: WireMessage): MessageContent[] {
   }
 
   appendTopLevelTtsAudio(blocks, m);
+
+  const presentation = blocks.some((block) => block.type === 'tool_use')
+    ? 'narration'
+    : 'answer';
+  for (const block of blocks) {
+    if (block.type === 'text') block.presentation = presentation;
+  }
 
   return blocks;
 }

@@ -64,6 +64,8 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     agentName,
     modelName,
     displayMessages,
+    reasoningLevel,
+    sessionPresentationReady,
     welcomeModel,
     composerDisabled,
     composerSuggestion,
@@ -168,9 +170,14 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         <View style={styles.listFill}>
           <MessageList
             messages={displayMessages}
+            reasoningLevel={reasoningLevel}
             streaming={chat.streaming}
             progress={chat.progress}
-            loading={sessionHistoryQuery.isLoading || (!sessionKey && bootstrap.creatingInitialSession)}
+            loading={
+              sessionHistoryQuery.isLoading
+              || !sessionPresentationReady
+              || (!sessionKey && bootstrap.creatingInitialSession)
+            }
             loadError={sessionHistoryQuery.isError ? {
               message: m.chat.historyLoadFailed,
               retryLabel: m.common.retry,

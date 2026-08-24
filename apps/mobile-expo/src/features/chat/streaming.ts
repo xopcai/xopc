@@ -124,14 +124,32 @@ function commandResultFromDetails(details: Record<string, unknown>): unknown {
   };
 }
 
-export function appendTextDelta(content: MessageContent[], delta: string): void {
+export function appendTextDelta(content: MessageContent[], delta: string, segmentId?: string): void {
   closeStreamingThinkingIfAny(content);
   const last = content[content.length - 1];
-  if (last?.type === 'text') {
+  if (last?.type === 'text' && last.segmentId === segmentId) {
     last.text = appendWithOverlap(last.text || '', delta);
     return;
   }
-  content.push({ type: 'text', text: delta });
+  content.push({
+    type: 'text',
+    text: delta,
+    ...(segmentId ? { segmentId, presentation: 'pending' as const } : {}),
+  });
+}
+
+export function finishTextSegment(
+  content: MessageContent[],
+  segmentId: string,
+  presentation: 'narration' | 'answer',
+): void {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const block = content[i];
+    if (block.type === 'text' && block.segmentId === segmentId) {
+      block.presentation = presentation;
+      return;
+    }
+  }
 }
 
 function normalizeReview(raw: unknown): ReviewContent | null {

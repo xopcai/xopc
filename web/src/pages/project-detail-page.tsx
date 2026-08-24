@@ -1556,21 +1556,22 @@ export function ProjectDetailPage() {
               </div>
             </div>
 
-            {operatingView?.recentReceipts.length ? (
+            {operatingView?.recentResults.length ? (
               <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
                 <div className="border-b border-edge px-4 py-3">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.recentResults}</h2>
                 </div>
                 <div className="divide-y divide-edge">
-                  {operatingView.recentReceipts.slice(0, 5).map((receipt) => (
-                    <div key={receipt.runId} className="px-4 py-3">
+                  {operatingView.recentResults.slice(0, 5).map(({ taskId, taskTitle, receipt }) => (
+                    <Link key={receipt.runId} to={taskDetailModalHref(projectTabHref('overview'), taskId)} className="block px-4 py-3 hover:bg-surface-hover">
                       <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{receipt.summary}</span>
+                        <span className="min-w-0 truncate text-sm font-medium text-fg">{taskTitle}</span>
                         <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
                           {receipt.status} · {receipt.verification.status}
                         </span>
                       </div>
-                    </div>
+                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{receipt.summary}</p>
+                    </Link>
                   ))}
                 </div>
               </div>
