@@ -33,6 +33,7 @@ type TaskRow = {
   source: string;
   locale: TaskUiLocale | null;
   latest_contract_version: number;
+  board_rank: number;
   version: number;
   created_at: number;
   updated_at: number;
@@ -94,6 +95,7 @@ function taskFromRow(row: TaskRow, contract?: TaskContract): TaskAggregate {
     source: row.source,
     ...(row.locale ? { locale: row.locale } : {}),
     latestContractVersion: row.latest_contract_version,
+    boardRank: row.board_rank,
     version: row.version,
     ...(contract ? { contract } : {}),
     createdAt: row.created_at,
@@ -139,12 +141,16 @@ export class TaskRepository {
     const id = input.id ?? randomUUID();
     const now = input.now ?? Date.now();
     runSqliteWriteTransaction((db) => {
+      const phase = input.phase ?? 'backlog';
+      const boardRank = Number((db.prepare(
+        'SELECT COALESCE(MAX(board_rank), 0) + 1024 AS board_rank FROM tasks WHERE project_id IS ? AND phase = ?',
+      ).get(input.projectId ?? null, phase) as { board_rank: number }).board_rank);
       db.prepare(
         `INSERT INTO tasks (
           task_id, creation_idempotency_key, project_id, milestone_id, parent_task_id,
           title, body, phase, priority, due_at, owner_id, delegate_agent_id,
-          source, locale, latest_contract_version, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
+          source, locale, latest_contract_version, board_rank, version, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 1, ?, ?)`,
       ).run(
         id,
         input.idempotencyKey ?? null,
@@ -153,13 +159,14 @@ export class TaskRepository {
         input.parentTaskId ?? null,
         title,
         input.body?.trim() || null,
-        input.phase ?? 'backlog',
+        phase,
         input.priority ?? 'normal',
         input.dueAt ?? null,
         input.ownerId ?? null,
         input.delegateAgentId ?? null,
         input.source ?? 'api',
         input.locale ?? null,
+        boardRank,
         now,
         now,
       );
@@ -212,7 +219,7 @@ export class TaskRepository {
     return row ? taskFromRow(row, this.getContract(row.task_id, row.latest_contract_version)) : undefined;
   }
 
-  list(input: { phase?: TaskPhase; projectId?: string; limit?: number } = {}): TaskAggregate[] {
+  list(input: { phase?: TaskPhase; projectId?: string; limit?: number; order?: 'recent' | 'board' } = {}): TaskAggregate[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (input.phase) {
@@ -227,7 +234,9 @@ export class TaskRepository {
     params.push(limit);
     const rows = getSqliteDatabase().prepare(
       `SELECT * FROM tasks${clauses.length ? ` WHERE ${clauses.join(' AND ')}` : ''}
-       ORDER BY updated_at DESC LIMIT ?`,
+       ORDER BY ${input.order === 'board'
+        ? 'board_rank ASC, created_at ASC, task_id ASC'
+        : 'updated_at DESC'} LIMIT ?`,
     ).all(...params) as TaskRow[];
     return rows.map((row) => taskFromRow(
       row,
@@ -236,7 +245,7 @@ export class TaskRepository {
   }
 
   listByProject(projectId: string, limit = 50): TaskAggregate[] {
-    return this.list({ projectId, limit });
+    return this.list({ projectId, limit, order: 'board' });
   }
 
   getContract(taskId: string, version?: number): TaskContract | undefined {
@@ -303,19 +312,62 @@ export class TaskRepository {
     const current = this.get(input.taskId);
     if (!current || current.version !== input.expectedVersion) return undefined;
     const now = Math.max(input.now ?? Date.now(), current.updatedAt + 1);
+    const boardRank = current.phase === input.phase
+      ? current.boardRank
+      : Number((getSqliteDatabase().prepare(
+        'SELECT COALESCE(MAX(board_rank), 0) + 1024 AS board_rank FROM tasks WHERE project_id IS ? AND phase = ?',
+      ).get(current.projectId ?? null, input.phase) as { board_rank: number }).board_rank);
     const result = getSqliteDatabase().prepare(
       `UPDATE tasks SET phase = ?, resolution = ?, closed_at = ?,
-       version = version + 1, updated_at = ?
+       board_rank = ?, version = version + 1, updated_at = ?
        WHERE task_id = ? AND version = ?`,
     ).run(
       input.phase,
       input.resolution ?? null,
       input.phase === 'closed' ? now : null,
+      boardRank,
       now,
       input.taskId,
       input.expectedVersion,
     );
     return result.changes === 0 ? undefined : this.get(input.taskId);
+  }
+
+  reorder(input: {
+    taskId: string;
+    expectedVersion: number;
+    beforeTaskId?: string | null;
+    now?: number;
+  }): TaskAggregate | undefined {
+    const current = this.get(input.taskId);
+    if (!current || current.version !== input.expectedVersion) return undefined;
+    const before = input.beforeTaskId
+      ? this.get(input.beforeTaskId)
+      : undefined;
+    if (input.beforeTaskId && (!before
+      || before.id === current.id
+      || before.projectId !== current.projectId
+      || before.phase !== current.phase)) {
+      throw new Error('Board position target must be another task in the same project phase');
+    }
+    const now = Math.max(input.now ?? Date.now(), current.updatedAt + 1);
+    return runSqliteWriteTransaction((db) => {
+      const rows = db.prepare(
+        `SELECT task_id FROM tasks
+         WHERE project_id IS ? AND phase = ? AND task_id <> ?
+         ORDER BY board_rank ASC, created_at ASC, task_id ASC`,
+      ).all(current.projectId ?? null, current.phase, current.id) as Array<{ task_id: string }>;
+      const ids = rows.map((row) => row.task_id);
+      const insertAt = before ? ids.indexOf(before.id) : ids.length;
+      ids.splice(insertAt, 0, current.id);
+      const updateRank = db.prepare('UPDATE tasks SET board_rank = ? WHERE task_id = ?');
+      ids.forEach((id, index) => updateRank.run((index + 1) * 1024, id));
+      const result = db.prepare(
+        `UPDATE tasks SET version = version + 1, updated_at = ?
+         WHERE task_id = ? AND version = ?`,
+      ).run(now, current.id, current.version);
+      return result.changes === 0 ? undefined : this.get(current.id);
+    });
   }
 
   reviseContract(input: {

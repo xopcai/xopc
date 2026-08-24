@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ProjectMonitoringPolicy } from '@xopcai/gateway-contract';
+
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { decideProactiveDisposition, nextQuietHoursEnd, proactiveDispositionReason } from '../../tasks/project-monitoring-service.js';
 
 import type { InboxItem, InboxStatus } from './types.js';
 
@@ -16,33 +19,82 @@ function itemFromRow(row: Row): InboxItem {
     insight: { scenarioKey: s(row, 'scenario_key'), title: s(row, 'title'), summary: s(row, 'summary'),
       whyNow: s(row, 'why_now'), impact: s(row, 'impact'), recommendation: s(row, 'recommendation'), workDone: s(row, 'work_done'),
       ...(row.decision_json ? { decision: JSON.parse(s(row, 'decision_json')) as NonNullable<InboxItem['insight']['decision']> } : {}),
+      ...(row.proposed_action_json ? { proposedAction: JSON.parse(s(row, 'proposed_action_json')) as NonNullable<InboxItem['insight']['proposedAction']> } : {}),
+      disposition: s(row, 'disposition') as InboxItem['insight']['disposition'],
+      dispositionReason: s(row, 'disposition_reason'),
+      ...(row.action_status ? { actionStatus: s(row, 'action_status') as NonNullable<InboxItem['insight']['actionStatus']> } : {}),
+      ...(row.action_result_json ? { actionResult: JSON.parse(s(row, 'action_result_json')) as Record<string, unknown> } : {}),
+      ...(row.action_error ? { actionError: s(row, 'action_error') } : {}),
       urgency: s(row, 'urgency') as InboxItem['insight']['urgency'], confidence: Number(row.confidence),
       valueScore: Number(row.value_score), evidenceIds: JSON.parse(s(row, 'evidence_ids_json')) as string[] },
   };
 }
 
 const SELECT_ITEM = `SELECT i.*, x.subscription_id, x.scenario_key, x.title, x.summary, x.why_now, x.impact, x.recommendation,
-  x.work_done, x.decision_json, x.urgency, x.confidence, x.value_score, x.evidence_ids_json FROM proactive_inbox_items i
+  x.work_done, x.decision_json, x.proposed_action_json, x.disposition, x.disposition_reason,
+  x.action_status, x.action_result_json, x.action_error, x.urgency, x.confidence, x.value_score, x.evidence_ids_json FROM proactive_inbox_items i
   JOIN proactive_insights x ON x.insight_id = i.insight_id`;
 
 export function projectInsightsToInbox(now = new Date()): number {
   return runSqliteWriteTransaction((db) => {
-    const missing = db.prepare(`SELECT x.insight_id FROM proactive_insights x
+    const missing = db.prepare(`SELECT x.insight_id, x.confidence, x.value_score, x.decision_json,
+      x.proposed_action_json, b.aggregation_key, p.project_id, p.mode, p.quiet_hours_json,
+      p.allowed_actions_json, p.confidence_threshold FROM proactive_insights x
       JOIN proactive_runs r ON r.run_id = x.run_id
       JOIN proactive_signal_batches b ON b.batch_id = r.batch_id
       LEFT JOIN project_monitoring_policies p
         ON b.aggregation_key = 'project:' || p.project_id
-      WHERE x.insight_id NOT IN (SELECT insight_id FROM proactive_inbox_items)
-        AND (p.project_id IS NULL OR (p.mode != 'observe' AND x.confidence >= p.confidence_threshold))
-      ORDER BY x.created_at`).all() as { insight_id: string }[];
+      WHERE x.disposition IS NULL ORDER BY x.created_at`).all() as Array<Record<string, unknown>>;
+    let projected = 0;
     for (const row of missing) {
-      const id = randomUUID(); const nowIso = now.toISOString();
+      const aggregationKey = String(row.aggregation_key);
+      const projectId = aggregationKey.startsWith('project:') ? aggregationKey.slice('project:'.length) : undefined;
+      const policy: ProjectMonitoringPolicy = projectId
+        ? row.project_id
+          ? {
+              projectId,
+              mode: String(row.mode) as ProjectMonitoringPolicy['mode'],
+              ...(row.quiet_hours_json ? { quietHours: JSON.parse(String(row.quiet_hours_json)) as ProjectMonitoringPolicy['quietHours'] } : {}),
+              allowedActions: JSON.parse(String(row.allowed_actions_json)) as string[],
+              confidenceThreshold: Number(row.confidence_threshold),
+              scenarios: [],
+              configured: true,
+            }
+          : { projectId, mode: 'observe', allowedActions: [], confidenceThreshold: 0.75, scenarios: [], configured: false }
+        : { projectId: '', mode: 'ask_before_action', allowedActions: [], confidenceThreshold: 0, scenarios: [], configured: false };
+      const action = row.proposed_action_json
+        ? JSON.parse(String(row.proposed_action_json)) as NonNullable<InboxItem['insight']['proposedAction']>
+        : undefined;
+      const dispositionInput = {
+        confidence: Number(row.confidence),
+        valueScore: Number(row.value_score),
+        risk: action?.risk ?? 'low' as const,
+        ...(action ? { actionId: action.id } : {}),
+        requiresApproval: !action && Boolean(row.decision_json),
+      };
+      const disposition = action && !projectId ? 'show_in_work' : decideProactiveDisposition(policy, dispositionInput);
+      const reason = action && !projectId
+        ? 'Proposed project action cannot run outside a project scope'
+        : proactiveDispositionReason(policy, dispositionInput, disposition);
+      const actionStatus = action
+        ? disposition === 'auto_execute' ? 'pending'
+          : disposition === 'request_approval' ? 'approval_required'
+            : disposition === 'show_in_work' ? 'not_authorized' : null
+        : null;
+      const nowIso = now.toISOString();
+      db.prepare(`UPDATE proactive_insights SET disposition = ?, disposition_reason = ?, action_status = ?,
+        disposition_at = ?, action_updated_at = ? WHERE insight_id = ? AND disposition IS NULL`)
+        .run(disposition, reason, actionStatus, nowIso, actionStatus ? nowIso : null, String(row.insight_id));
+      if (disposition === 'record_silently') continue;
+      const id = randomUUID();
       db.prepare(`INSERT INTO proactive_inbox_items (inbox_item_id, insight_id, status, created_at, updated_at)
-        VALUES (?, ?, 'unread', ?, ?)`).run(id, row.insight_id, nowIso, nowIso);
+        VALUES (?, ?, 'unread', ?, ?)`).run(id, String(row.insight_id), nowIso, nowIso);
+      const nextAttemptAt = nextQuietHoursEnd(policy.quietHours, now)?.toISOString() ?? nowIso;
       db.prepare(`INSERT INTO proactive_delivery_outbox (delivery_id, inbox_item_id, status, attempt, next_attempt_at, created_at, updated_at)
-        VALUES (?, ?, 'pending', 0, ?, ?, ?)`).run(randomUUID(), id, nowIso, nowIso, nowIso);
+        VALUES (?, ?, 'pending', 0, ?, ?, ?)`).run(randomUUID(), id, nextAttemptAt, nowIso, nowIso);
+      projected += 1;
     }
-    return missing.length;
+    return projected;
   });
 }
 

@@ -113,11 +113,12 @@ export function finishRun(input: { run: ClaimedRun; candidate?: InsightCandidate
     const insight: ProactiveInsight = { ...input.candidate, id: randomUUID(), runId: input.run.id,
       subscriptionId: input.run.subscriptionId, scenarioKey: input.run.scenarioKey, valueScore: input.valueScore ?? 0, createdAt: nowIso };
     db.prepare(`INSERT INTO proactive_insights (insight_id, run_id, subscription_id, scenario_key, title, summary,
-      why_now, impact, recommendation, work_done, decision_json, urgency, confidence, value_score,
+      why_now, impact, recommendation, work_done, decision_json, proposed_action_json, urgency, confidence, value_score,
       evidence_ids_json, content_fingerprint, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(insight.id, insight.runId, insight.subscriptionId, insight.scenarioKey, insight.title, insight.summary,
         insight.whyNow, insight.impact, insight.recommendation, insight.workDone, insight.decision ? JSON.stringify(insight.decision) : null,
+        insight.proposedAction ? JSON.stringify(insight.proposedAction) : null,
         insight.urgency, insight.confidence, insight.valueScore,
         JSON.stringify(insight.evidenceIds), fingerprint, insight.createdAt);
     return insight;
@@ -142,7 +143,14 @@ export function listInsights(limit = 50): ProactiveInsight[] {
     title: str(row, 'title'), summary: str(row, 'summary'), whyNow: str(row, 'why_now'), impact: str(row, 'impact'),
     recommendation: str(row, 'recommendation'), workDone: str(row, 'work_done'),
     ...(row.decision_json ? { decision: JSON.parse(str(row, 'decision_json')) as NonNullable<ProactiveInsight['decision']> } : {}),
+    ...(row.proposed_action_json ? { proposedAction: JSON.parse(str(row, 'proposed_action_json')) as NonNullable<ProactiveInsight['proposedAction']> } : {}),
     urgency: str(row, 'urgency') as ProactiveInsight['urgency'], confidence: Number(row.confidence),
-    valueScore: Number(row.value_score), evidenceIds: JSON.parse(str(row, 'evidence_ids_json')) as string[], createdAt: str(row, 'created_at'),
+    valueScore: Number(row.value_score),
+    ...(row.disposition ? { disposition: str(row, 'disposition') as NonNullable<ProactiveInsight['disposition']> } : {}),
+    ...(row.disposition_reason ? { dispositionReason: str(row, 'disposition_reason') } : {}),
+    ...(row.action_status ? { actionStatus: str(row, 'action_status') as NonNullable<ProactiveInsight['actionStatus']> } : {}),
+    ...(row.action_result_json ? { actionResult: JSON.parse(str(row, 'action_result_json')) as Record<string, unknown> } : {}),
+    ...(row.action_error ? { actionError: str(row, 'action_error') } : {}),
+    evidenceIds: JSON.parse(str(row, 'evidence_ids_json')) as string[], createdAt: str(row, 'created_at'),
   }));
 }

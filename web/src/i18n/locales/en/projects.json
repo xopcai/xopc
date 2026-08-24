@@ -299,6 +299,8 @@
       "acceptanceCriteria": "{{count}} acceptance criteria",
       "blockedBy": "Waiting for {{count}} dependencies",
       "actionFailed": "The task changed or could not be updated. The board has been restored.",
+      "moved": "Task moved",
+      "undo": "Undo",
       "create": "New task",
       "createTitle": "Create a task",
       "createDescription": "Add work to track over time. It stays ready until you ask xopc to advance it.",
@@ -344,6 +346,27 @@
         "board": "Board",
         "graph": "Dependencies"
       },
+      "monitoring": {
+        "title": "Proactive policy",
+        "description": "Choose when AI observes silently, asks for approval, or runs explicitly allowed low-risk actions.",
+        "mode": "Behavior",
+        "modes": {
+          "observe": "Observe only",
+          "ask_before_action": "Ask before acting",
+          "auto_low_risk": "Auto-run low-risk actions"
+        },
+        "confidence": "Minimum confidence",
+        "quietHours": "Enable quiet hours",
+        "quietStart": "Start hour",
+        "quietEnd": "End hour",
+        "timezone": "Timezone",
+        "allowTaskCreation": "Allow follow-up task creation",
+        "allowTaskCreationDescription": "Only creates a backlog task in this project; it never starts an agent or performs an external action.",
+        "cancel": "Cancel",
+        "save": "Save policy",
+        "saving": "Saving…",
+        "saveFailed": "Could not save the policy."
+      },
       "graph": {
         "showCompleted": "Show completed",
         "hideCompleted": "Hide completed",
@@ -352,8 +375,9 @@
         "locateTask": "Locate task",
         "openTask": "Open task details",
         "empty": "No tasks match the current filters",
-        "hint": "Read left to right to see how dependencies unlock later work. Select a node to focus its chain.",
-        "blockedBy": "Still waiting for {{count}} dependencies"
+        "blockedBy": "Still waiting for {{count}} dependencies",
+        "connectHint": "Connect a prerequisite to the task it unlocks. Select a connection to remove it.",
+        "removeDependency": "Remove dependency"
       },
       "phases": {
         "backlog": "Backlog",

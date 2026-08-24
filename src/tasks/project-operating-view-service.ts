@@ -82,10 +82,10 @@ export class ProjectOperatingViewService {
       (item) => item.kind === 'input_required' || item.kind === 'approval_required',
     );
     const moving = (card: ProjectTaskCard) => ['queued', 'running', 'verifying'].includes(card.operationalState);
-    const attentionCount = cards.filter(needsUser).length;
+    const attentionCount = cards.filter((card) => card.attention.length > 0).length;
     return {
       project,
-      tasks: cards.sort((a, b) => b.updatedAt - a.updatedAt),
+      tasks: cards,
       dependencyEdges: this.#dependencies.listProjectEdges(project.id),
       blockers: cards.flatMap((card) => card.attention.map((item) => ({
         id: item.sourceId ?? `${card.id}:${item.kind}`,
@@ -104,6 +104,7 @@ export class ProjectOperatingViewService {
           ? 'No tasks yet'
           : `${cards.filter(moving).length} moving, ${attentionCount} need attention`,
         recommendedAction: cards.find(needsUser)?.attention[0]?.summary
+          ?? cards.find((card) => card.attention.length > 0)?.attention[0]?.summary
           ?? cards.find(moving)?.title
           ?? cards.find((card) => card.phase === 'ready')?.title
           ?? cards.find((card) => card.phase === 'backlog')?.title,

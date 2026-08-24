@@ -35,6 +35,11 @@ export const HomeDecisionSchema = z.object({
     recommendation: z.string(),
     confidence: z.number(),
     valueScore: z.number().min(0).max(1).optional(),
+    disposition: z.enum(['show_in_work', 'request_approval', 'auto_execute']).optional(),
+    dispositionReason: z.string().optional(),
+    actionStatus: z.enum(['not_authorized', 'approval_required', 'pending', 'executing', 'completed', 'rejected', 'failed']).optional(),
+    proposedActionTitle: z.string().optional(),
+    actionError: z.string().optional(),
     decision: z.object({
       question: z.string(),
       options: z.array(z.object({

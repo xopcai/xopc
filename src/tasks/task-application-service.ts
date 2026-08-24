@@ -130,6 +130,14 @@ export class TaskApplicationService {
     return runSqliteWriteTransaction((db) => {
       let result: TaskApplicationResult;
       switch (input.command.type) {
+        case 'move':
+          result = task.phase !== 'closed'
+            && task.phase !== input.command.phase
+            && !this.#runs.getActiveRoot(task.id)
+            && this.#runs.listActiveWaits(task.id).length === 0
+            ? this.lifecycle(task.id, task.version, input.command.phase)
+            : { ok: false, reason: 'invalid_transition', model };
+          break;
         case 'mark_ready':
           result = task.phase === 'backlog'
             ? this.lifecycle(task.id, task.version, 'ready')

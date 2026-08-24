@@ -10,6 +10,8 @@ import { ProjectMonitoringService } from '../../tasks/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProactiveInboxService } from '../inbox/service.js';
 import { ProactiveInboxWorker } from '../inbox/worker.js';
+import { executePendingProactiveActions } from '../actions/service.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
 
 describe('proactive inbox', () => {
   let stateDir: string;
@@ -73,10 +75,67 @@ describe('proactive inbox', () => {
     monitoring.configure({ projectId: project.id, mode: 'observe' });
     expect(inbox.project()).toBe(0);
 
+    getSqliteDatabase().prepare('UPDATE proactive_insights SET disposition = NULL, disposition_reason = NULL, disposition_at = NULL').run();
     monitoring.configure({ projectId: project.id, mode: 'ask_before_action', confidenceThreshold: 0.95 });
     expect(inbox.project()).toBe(0);
 
+    getSqliteDatabase().prepare('UPDATE proactive_insights SET disposition = NULL, disposition_reason = NULL, disposition_at = NULL').run();
     monitoring.configure({ projectId: project.id, mode: 'ask_before_action', confidenceThreshold: 0.8 });
     expect(inbox.project()).toBe(1);
+  });
+
+  it('auto-executes only an allowlisted low-risk project action', () => {
+    const project = new ProjectService().create({ name: 'Launch' });
+    const db = getSqliteDatabase();
+    db.prepare('UPDATE proactive_signal_batches SET aggregation_key = ? WHERE batch_id = ?').run(`project:${project.id}`, 'batch');
+    db.prepare(`UPDATE proactive_insights SET proposed_action_json = ?, decision_json = ? WHERE insight_id = 'insight'`).run(
+      JSON.stringify({ id: 'create_project_task', risk: 'low', rationale: 'Follow-up is explicit', input: { title: 'Resolve launch blocker', objective: 'Resolve the launch blocker using the cited evidence.' } }),
+      JSON.stringify({ question: 'Create this task?', options: [{ id: 'approve', label: 'Approve', consequence: 'Creates the task' }, { id: 'reject', label: 'Reject', consequence: 'Creates nothing' }] }),
+    );
+    new ProjectMonitoringService().configure({
+      projectId: project.id,
+      mode: 'auto_low_risk',
+      allowedActions: ['create_project_task'],
+      confidenceThreshold: 0.8,
+    });
+
+    expect(inbox.project()).toBe(1);
+    expect(executePendingProactiveActions()).toBe(1);
+    expect(new TaskRepository().listByProject(project.id).map((task) => task.title)).toEqual(['Resolve launch blocker']);
+    expect(inbox.list()[0]?.insight).toMatchObject({ disposition: 'auto_execute', actionStatus: 'completed' });
+  });
+
+  it('requires approval before executing a proposed action', () => {
+    const project = new ProjectService().create({ name: 'Launch' });
+    const db = getSqliteDatabase();
+    db.prepare('UPDATE proactive_signal_batches SET aggregation_key = ? WHERE batch_id = ?').run(`project:${project.id}`, 'batch');
+    db.prepare(`UPDATE proactive_insights SET proposed_action_json = ?, decision_json = ? WHERE insight_id = 'insight'`).run(
+      JSON.stringify({ id: 'create_project_task', risk: 'low', rationale: 'Follow-up is explicit', input: { title: 'Resolve launch blocker', objective: 'Resolve the launch blocker.' } }),
+      JSON.stringify({ question: 'Create this task?', options: [{ id: 'approve', label: 'Approve', consequence: 'Creates the task' }, { id: 'reject', label: 'Reject', consequence: 'Creates nothing' }] }),
+    );
+    new ProjectMonitoringService().configure({ projectId: project.id, mode: 'ask_before_action', confidenceThreshold: 0.8 });
+
+    inbox.project();
+    const item = inbox.list()[0]!;
+    expect(item.insight).toMatchObject({ disposition: 'request_approval', actionStatus: 'approval_required' });
+    expect(new TaskRepository().listByProject(project.id)).toHaveLength(0);
+    expect(inbox.decide(item.id, 'approve').insight.actionStatus).toBe('completed');
+    expect(new TaskRepository().listByProject(project.id)).toHaveLength(1);
+  });
+
+  it('defers delivery until project quiet hours end', () => {
+    const project = new ProjectService().create({ name: 'Launch' });
+    const db = getSqliteDatabase();
+    db.prepare('UPDATE proactive_signal_batches SET aggregation_key = ? WHERE batch_id = ?').run(`project:${project.id}`, 'batch');
+    new ProjectMonitoringService().configure({
+      projectId: project.id,
+      mode: 'ask_before_action',
+      confidenceThreshold: 0.8,
+      quietHours: { startHour: 0, endHour: 6, timezone: 'UTC' },
+    });
+    const now = new Date('2026-08-13T01:00:00.000Z');
+    expect(inbox.project(now)).toBe(1);
+    const delivery = db.prepare('SELECT next_attempt_at FROM proactive_delivery_outbox').get() as { next_attempt_at: string };
+    expect(Date.parse(delivery.next_attempt_at)).toBeGreaterThanOrEqual(Date.parse('2026-08-13T06:00:00.000Z'));
   });
 });

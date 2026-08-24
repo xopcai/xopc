@@ -1,10 +1,18 @@
-import { ProjectOperatingViewSchema, type ProjectOperatingView } from '@xopcai/gateway-contract';
+import { ProjectMonitoringPolicySchema, ProjectOperatingViewSchema, type ProjectMonitoringPolicy, type ProjectMonitoringUpdate, type ProjectOperatingView } from '@xopcai/gateway-contract';
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed' | 'cancelled' | 'archived';
 export type ProjectHealth = 'unknown' | 'on_track' | 'at_risk' | 'off_track';
+
+export async function updateProjectMonitoring(projectId: string, update: ProjectMonitoringUpdate): Promise<ProjectMonitoringPolicy> {
+  const response = await fetchJson<{ ok: true; policy: unknown }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/monitoring`), {
+    method: 'PATCH',
+    body: JSON.stringify(update),
+  });
+  return ProjectMonitoringPolicySchema.parse(response.policy);
+}
 
 export type ProjectMilestone = {
   id: string;

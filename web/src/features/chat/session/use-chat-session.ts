@@ -32,7 +32,7 @@ import { useChatSessionStreaming } from '@/features/chat/session/use-chat-sessio
 import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-session-window-events';
 
 /** @see docs/web/chat-session-semantics.md */
-export function useChatSession() {
+export function useChatSession(options?: { fixedSessionKey?: string }) {
   const navigate = useNavigate();
   const {
     isNewRoute,
@@ -44,7 +44,7 @@ export function useChatSession() {
     locationKey,
     locationSearch,
     locationState,
-  } = useChatSessionRoute();
+  } = useChatSessionRoute(options?.fixedSessionKey);
 
   const sessionMgrRef = useRef(new SessionManager());
   const loadingSessionRef = useRef(false);

@@ -12,6 +12,7 @@ import {
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskContextRepository } from '../task-context-repository.js';
 import { TaskOutboxDispatcher } from '../task-outbox-dispatcher.js';
+import { TaskRepository } from '../task-repository.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskSignalService } from '../task-signal-service.js';
 
@@ -60,6 +61,53 @@ describe('TaskApplicationService', () => {
     expect(result.model.task.phase).toBe('backlog');
     expect(result.model.operationalState).toBe('idle');
     expect(result.runId).toBeUndefined();
+  });
+
+  it('moves an idle task between board phases without starting execution', () => {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: 'move-1',
+      title: 'Move on board',
+      priority: 'normal',
+      contract,
+      dependencies: [],
+      context: [],
+      authorityGrants: [],
+      activation: { mode: 'capture', phase: 'backlog' },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const moved = service.execute({
+      taskId: created.model.task.id,
+      idempotencyKey: 'move-1:active',
+      expectedVersion: created.model.task.version,
+      command: { type: 'move', phase: 'active' },
+    });
+
+    expect(moved.ok).toBe(true);
+    if (!moved.ok) return;
+    expect(moved.model.task.phase).toBe('active');
+    expect(moved.model.operationalState).toBe('idle');
+    expect(new TaskRunRepository().getActiveRoot(moved.model.task.id)).toBeUndefined();
+  });
+
+  it('persists explicit ordering within a board phase', () => {
+    const tasks = new TaskRepository();
+    const create = (id: string) => tasks.create({
+      id,
+      title: id,
+      phase: 'ready',
+      objective: id,
+      now: 1,
+    });
+    const first = create('first');
+    create('second');
+    const third = create('third');
+
+    expect(tasks.list({ phase: 'ready', order: 'board' }).map((task) => task.id)).toEqual(['first', 'second', 'third']);
+    expect(tasks.reorder({ taskId: third.id, expectedVersion: third.version, beforeTaskId: first.id })).toBeDefined();
+    expect(tasks.list({ phase: 'ready', order: 'board' }).map((task) => task.id)).toEqual(['third', 'first', 'second']);
   });
 
   it('creates one root run idempotently and snapshots before execution', () => {

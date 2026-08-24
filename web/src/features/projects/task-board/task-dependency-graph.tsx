@@ -6,6 +6,7 @@ import {
   Position,
   ReactFlow,
   type Edge,
+  type Connection,
   type Node,
   type NodeProps,
   type ReactFlowInstance,
@@ -30,9 +31,10 @@ export type TaskDependencyGraphCopy = {
   locateTask: string;
   openTask: string;
   empty: string;
-  hint: string;
   blockedBy: string;
   phases: Record<TaskPhase, string>;
+  connectHint: string;
+  removeDependency: string;
 };
 
 interface TaskNodeData extends Record<string, unknown> {
@@ -56,12 +58,12 @@ function TaskNodeCard({ data, selected }: NodeProps<TaskFlowNode>) {
   const isWaiting = task.operationalState === 'waiting' || task.operationalState === 'blocked';
   return (
     <div className={cn(
-      'w-56 rounded-xl border bg-surface-panel p-3 shadow-surface transition-opacity',
+      'group w-56 rounded-xl border bg-surface-panel p-3 shadow-surface transition-opacity',
       NODE_TONES[task.phase],
       selected && 'ring-2 ring-accent/30',
       data.dimmed && 'opacity-30',
     )}>
-      <Handle type="target" position={Position.Left} className="!invisible" />
+      <Handle type="target" position={Position.Left} className="!size-3 !border-2 !border-surface-panel !bg-accent opacity-60 transition-opacity group-hover:opacity-100" />
       <div className="flex items-start justify-between gap-2">
         <strong className="line-clamp-2 min-w-0 text-sm font-medium leading-5 text-fg">{task.title}</strong>
         {isWaiting ? <Hourglass className="mt-0.5 size-3.5 shrink-0 text-violet-600 dark:text-violet-300" aria-hidden /> : null}
@@ -70,22 +72,24 @@ function TaskNodeCard({ data, selected }: NodeProps<TaskFlowNode>) {
         <span>{data.phaseLabel}</span>
         {isWaiting && task.blockedBy.length > 0 ? <span>{task.blockedBy.length}</span> : null}
       </div>
-      <Handle type="source" position={Position.Right} className="!invisible" />
+      <Handle type="source" position={Position.Right} className="!size-3 !border-2 !border-surface-panel !bg-accent opacity-60 transition-opacity group-hover:opacity-100" />
     </div>
   );
 }
 
 const TASK_NODE_TYPES = { taskNode: TaskNodeCard };
 
-export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: {
+export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy, onDependenciesChange }: {
   tasks: ProjectTaskCard[];
   dependencyEdges: ProjectTaskDependencyEdge[];
   returnTo: string;
   copy: TaskDependencyGraphCopy;
+  onDependenciesChange: (taskId: string, dependencyTaskIds: string[]) => Promise<void>;
 }) {
   const [showCompleted, setShowCompleted] = useState(false);
   const [blockedOnly, setBlockedOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string>();
   const flowRef = useRef<ReactFlowInstance<TaskFlowNode, Edge> | null>(null);
   const blockedChain = useMemo(() => blockedChainTaskIds(tasks, dependencyEdges), [dependencyEdges, tasks]);
   const visibleTasks = useMemo(() => blockedOnly
@@ -128,6 +132,10 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
   }, [selectedId, visibleIds]);
 
   useEffect(() => {
+    if (selectedEdgeId && !edges.some((edge) => edge.id === selectedEdgeId)) setSelectedEdgeId(undefined);
+  }, [edges, selectedEdgeId]);
+
+  useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       void flowRef.current?.fitView({ padding: 0.2, minZoom: 0.35, maxZoom: 1, duration: 250 });
     });
@@ -138,11 +146,31 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
     if (!selectedId) return;
     void flowRef.current?.fitView({ nodes: [{ id: selectedId }], padding: 1.5, minZoom: 0.7, maxZoom: 1, duration: 250 });
   };
+  const connectTasks = (connection: Connection) => {
+    if (!connection.source || !connection.target || connection.source === connection.target) return;
+    const current = dependencyEdges
+      .filter((edge) => edge.dependentTaskId === connection.target)
+      .map((edge) => edge.dependencyTaskId);
+    if (current.includes(connection.source)) return;
+    void onDependenciesChange(connection.target, [...current, connection.source]);
+  };
+  const removeSelectedEdge = () => {
+    if (!selectedEdgeId) return;
+    const edge = dependencyEdges.find((item) => `${item.dependencyTaskId}:${item.dependentTaskId}` === selectedEdgeId);
+    if (!edge) return;
+    setSelectedEdgeId(undefined);
+    void onDependenciesChange(
+      edge.dependentTaskId,
+      dependencyEdges
+        .filter((item) => item.dependentTaskId === edge.dependentTaskId && item.dependencyTaskId !== edge.dependencyTaskId)
+        .map((item) => item.dependencyTaskId),
+    );
+  };
 
   return (
     <section className="overflow-hidden rounded-xl border border-edge bg-surface-base/40">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge bg-surface-panel px-3 py-2.5">
-        <p className="text-xs text-fg-muted">{copy.hint}</p>
+        <p className="text-xs text-fg-muted">{copy.connectHint}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <Button type="button" variant={blockedOnly ? 'secondary' : 'ghost'} className="h-8 rounded-lg px-2.5 text-xs" aria-pressed={blockedOnly} onClick={() => setBlockedOnly((value) => !value)}>
             {blockedOnly ? copy.allTasks : copy.blockedChains}
@@ -156,6 +184,11 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
               {copy.locateTask}
             </Button>
           ) : null}
+          {selectedEdgeId ? (
+            <Button type="button" variant="ghost" className="h-8 rounded-lg px-2.5 text-xs text-danger" onClick={removeSelectedEdge}>
+              {copy.removeDependency}
+            </Button>
+          ) : null}
         </div>
       </div>
       {visibleTasks.length > 0 ? (
@@ -165,10 +198,12 @@ export function TaskDependencyGraph({ tasks, dependencyEdges, returnTo, copy }: 
             edges={edges}
             nodeTypes={TASK_NODE_TYPES}
             nodesDraggable={false}
-            nodesConnectable={false}
+            nodesConnectable
             elementsSelectable
             onNodeClick={(_event, node) => setSelectedId(node.id)}
-            onPaneClick={() => setSelectedId(undefined)}
+            onEdgeClick={(_event, edge) => setSelectedEdgeId(edge.id)}
+            onConnect={connectTasks}
+            onPaneClick={() => { setSelectedId(undefined); setSelectedEdgeId(undefined); }}
             onInit={(instance) => { flowRef.current = instance; }}
             fitView
             minZoom={0.25}
