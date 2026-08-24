@@ -232,10 +232,10 @@ export async function analyzeWorkContext(input: {
     'You help a user resume real work in one explicitly selected local folder.',
     'Analyze only the supplied bounded snapshot. Never claim that you ran commands, tests, or inspected anything absent from it.',
     'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, lowConfidence, and contextQuestion.',
-    'profileCandidates contains up to 6 stable, useful facts about the user inferred from the supplied project evidence.',
+    'profileCandidates contains stable, useful facts about the user inferred from the supplied project evidence. Include every distinct fact with direct support; do not pad the list.',
     'Each profile candidate has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
     'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
-    'workThreads contains up to 3 evidence-backed work streams with topicKey, title, summary, horizon, status, confidence, and evidenceRefs.',
+    'workThreads contains every distinct evidence-backed work stream with topicKey, title, summary, horizon, status, confidence, and evidenceRefs. Do not merge unrelated streams to force a fixed count.',
     'horizon is current, ongoing, or long_term. status is active, paused, blocked, completed, or uncertain.',
     'topicKey is a short stable topic identifier. evidenceRefs must use exact relative paths from the snapshot or git://recent-state.',
     'Distinguish one-off recent edits from work sustained across multiple days. Prefer one current thread and only add ongoing or long_term threads when evidence supports them.',
@@ -297,13 +297,11 @@ export async function analyzeWorkContext(input: {
     ? parsed.profileCandidates
       .map((value) => validateProfileCandidate(value))
       .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
-      .slice(0, 6)
     : [];
   const workThreadCandidates = Array.isArray(parsed.workThreads)
     ? parsed.workThreads
       .map((value) => validateWorkThreadCandidate(value, allowedThreadRefs))
       .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
-      .slice(0, 3)
     : [];
   const projectSummary = typeof parsed.projectSummary === 'string' ? parsed.projectSummary.trim() : '';
   const currentState = typeof parsed.currentState === 'string' ? parsed.currentState.trim() : '';
@@ -363,10 +361,10 @@ export async function analyzeUnderstandingSources(input: {
   const prompt = [
     'Analyze bounded context from sources the user explicitly chose to connect.',
     'Return only one JSON object with profileCandidates and workThreads.',
-    'profileCandidates contains at most 6 stable, useful work-related facts.',
+    'profileCandidates contains every distinct, stable, useful work-related fact with direct support. Do not pad the list.',
     'Each item has category (role, focus, technology, workflow, or preference), statement, confidence, evidence, and evidenceRefs.',
     'profileCandidates evidenceRefs must contain only supplied refs. Do not create a candidate without direct support.',
-    'workThreads contains at most 3 evidence-backed current, ongoing, or long-term work streams.',
+    'workThreads contains every distinct evidence-backed current, ongoing, or long-term work stream. Do not merge unrelated streams to force a fixed count.',
     'Each work thread has topicKey, title, summary, status, horizon, confidence, and evidenceRefs.',
     'evidenceRefs must contain only supplied refs. Do not create a thread without direct support.',
     'Synthesize across source types. Repeated independent signals are stronger than a single item.',
@@ -396,13 +394,11 @@ export async function analyzeUnderstandingSources(input: {
     ? parsed.profileCandidates
       .map((value) => validateProfileCandidate(value, allowedRefs))
       .filter((value): value is WorkDiscoveryProfileCandidate => Boolean(value))
-      .slice(0, 6)
     : [];
   const workThreadCandidates = Array.isArray(parsed.workThreads)
     ? parsed.workThreads
       .map((value) => validateWorkThreadCandidate(value, allowedRefs))
       .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
-      .slice(0, 3)
     : [];
   return { modelRef, profileCandidates, workThreadCandidates };
 }
