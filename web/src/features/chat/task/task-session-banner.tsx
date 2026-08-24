@@ -1,14 +1,12 @@
 import type { TaskOperationalState, TaskPhase } from '@xopcai/gateway-contract';
 import { ExternalLink, Target } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import useSWR from 'swr';
 
-import { fetchTask } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { cn } from '@/lib/cn';
-import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 function statusClass(phase: TaskPhase, operationalState: TaskOperationalState): string {
@@ -25,32 +23,8 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
 }) {
   const location = useLocation();
   const language = useLocaleStore((state) => state.language);
-  const token = useGatewayStore((state) => state.token);
   const copy = taskCopy(language);
-  const { data, mutate } = useSWR(
-    token ? ['task-session-banner', taskId, token] : null,
-    () => fetchTask(taskId),
-    {
-      revalidateOnFocus: true,
-      refreshInterval: (latest) => latest && latest.task.phase !== 'closed'
-        ? 2_000
-        : 0,
-    },
-  );
-
-  useEffect(() => {
-    const refresh = () => void mutate();
-    const events = [
-      'agent-run-started',
-      'agent-run-ended',
-      'session-transcript-updated',
-      'task-run-updated',
-    ];
-    for (const event of events) window.addEventListener(event, refresh);
-    return () => {
-      for (const event of events) window.removeEventListener(event, refresh);
-    };
-  }, [mutate]);
+  const { data } = useTaskDetail(taskId);
 
   if (!data) return null;
 

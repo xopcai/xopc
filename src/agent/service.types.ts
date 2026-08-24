@@ -35,6 +35,7 @@ export interface AgentServiceConfig {
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
+  dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
   /**
    * Gateway: reuse the gateway `SessionManager` store so web API and agent share one index + files.

@@ -12,13 +12,20 @@ import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
  * Clicking a file in the file tree simply swaps the content here — no modal
  * open/close animation.
  */
-export const WorkspacePreviewPane = memo(function WorkspacePreviewPane() {
+export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
+  allowOutsideChat = false,
+  sessionKey: sessionKeyOverride,
+}: {
+  allowOutsideChat?: boolean;
+  sessionKey?: string;
+} = {}) {
   const { pathname } = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
-  const chatSessionKey =
+  const chatSessionKey = sessionKeyOverride ?? (
     pathname.startsWith('/chat') && sessionKeyParam
       ? decodeURIComponent(sessionKeyParam)
-      : undefined;
+      : undefined
+  );
   const path = useWorkspacePreviewStore((s) => s.path);
   const line = useWorkspacePreviewStore((s) => s.line);
   const projectId = useWorkspacePreviewStore((s) => s.projectId);
@@ -27,10 +34,10 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane() {
 
   // Close preview when leaving /chat routes.
   useEffect(() => {
-    if (!pathname.startsWith('/chat')) {
+    if (!allowOutsideChat && !pathname.startsWith('/chat')) {
       setPath(null);
     }
-  }, [pathname, setPath]);
+  }, [allowOutsideChat, pathname, setPath]);
 
   // Escape closes the preview.
   useEffect(() => {

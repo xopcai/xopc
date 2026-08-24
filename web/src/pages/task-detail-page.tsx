@@ -1,4 +1,4 @@
-import type { TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
+import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
@@ -14,13 +14,19 @@ import { fetchProjectOperatingView } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
-import { commandTask, fetchTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { commandTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
+import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
+import { useTaskDetail } from '@/features/tasks/use-task-detail';
+import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { formatMediumDateTime } from '@/lib/date-formatters';
+import { cn } from '@/lib/cn';
 import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 function phaseLabel(phase: TaskPhase, language: 'en' | 'zh'): string {
   const labels = language === 'zh'
@@ -67,6 +73,7 @@ function readTaskChatPanelPercent(): number {
 
 type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
 type VerificationStatus = 'passed' | 'failed' | 'unverified';
+type TaskEditConflict = 'title' | 'description' | null;
 
 function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
@@ -107,7 +114,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const [detail, setDetail] = useState<TaskDetail | null>(null);
+  const { data: detail, error: loadError, mutate: mutateDetail, lastChange } = useTaskDetail(taskId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
@@ -123,7 +130,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const skipTitleSaveRef = useRef(false);
   const skipDescriptionSaveRef = useRef(false);
   const initialDescriptionDraftRef = useRef('');
+  const titleEditBaseRef = useRef<TaskEditBase | null>(null);
+  const descriptionEditBaseRef = useRef<TaskEditBase | null>(null);
   const projectNameProjectIdRef = useRef<string | null>(null);
+  const [editConflict, setEditConflict] = useState<TaskEditConflict>(null);
+  const [recentChange, setRecentChange] = useState<TaskChangedEvent | null>(null);
   const dependencySignature = detail?.dependencies
     .map((dependency) => `${dependency.id}:${dependency.title}`)
     .join('\u0000') ?? '';
@@ -134,12 +145,12 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   ), [searchParams]);
 
   useEffect(() => {
-    let active = true;
-    setDetail(null);
     setError(null);
-    void fetchTask(taskId).then((value) => { if (active) setDetail(value); }).catch(() => { if (active) setError(copy.taskNotFound); });
-    return () => { active = false; };
-  }, [copy.taskNotFound, taskId, token]);
+    setEditConflict(null);
+    setEditingTitle(false);
+    setEditingDescription(false);
+    setRecentChange(null);
+  }, [taskId]);
 
   useEffect(() => {
     let active = true;
@@ -148,19 +159,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   }, [token]);
 
   useEffect(() => {
-    const isWaitingForSession = detail?.runs.some((run) =>
-      ['queued', 'running', 'waiting', 'verifying'].includes(run.status) && !run.sessionKey,
-    );
-    if (!isWaitingForSession) return undefined;
-    let active = true;
-    const timer = window.setInterval(() => {
-      void fetchTask(taskId).then((value) => { if (active) setDetail(value); }).catch(() => undefined);
-    }, 1_000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [detail?.runs, taskId]);
+    if (!lastChange || lastChange.source === 'user') return;
+    setRecentChange(lastChange);
+    const timer = window.setTimeout(() => setRecentChange(null), 3_500);
+    return () => window.clearTimeout(timer);
+  }, [lastChange]);
 
   useEffect(() => {
     const projectId = detail?.task.projectId;
@@ -197,7 +200,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     setBusy(true);
     setError(null);
     try {
-      setDetail(await commandTask(taskId, command, detail.task.version));
+      await mutateDetail(await commandTask(taskId, command, detail.task.version), { revalidate: false });
     } catch {
       setError(copy.actionFailed);
     } finally {
@@ -210,7 +213,13 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     setBusy(true);
     setError(null);
     try {
-      setDetail(await updateTask(taskId, patch, detail.task.version));
+      const request = updateTask(taskId, patch, detail.task.version);
+      await mutateDetail(request, {
+        optimisticData: optimisticallyPatchTask(detail, patch),
+        populateCache: true,
+        revalidate: false,
+        rollbackOnError: true,
+      });
       return true;
     } catch {
       setError(copy.actionFailed);
@@ -227,12 +236,20 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       return;
     }
     const title = titleDraft.trim();
+    const editBase = titleEditBaseRef.current;
+    if (hasTaskEditConflict(editBase, detail.task.version, detail.task.title, title)) {
+      setEditConflict('title');
+      return;
+    }
     if (!title || title === detail.task.title) {
       setTitleDraft(detail.task.title);
       setEditingTitle(false);
       return;
     }
-    if (await savePatch({ title })) setEditingTitle(false);
+    if (await savePatch({ title })) {
+      setEditConflict(null);
+      setEditingTitle(false);
+    }
   };
 
   const saveDescriptionOnBlur = async () => {
@@ -242,11 +259,24 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       return;
     }
     const body = descriptionDraft.trim();
+    const editBase = descriptionEditBaseRef.current;
+    if (hasTaskEditConflict(
+      editBase,
+      detail.task.version,
+      detail.task.body ?? '',
+      body,
+    )) {
+      setEditConflict('description');
+      return;
+    }
     if (descriptionDraft === initialDescriptionDraftRef.current || body === (detail.task.body ?? '').trim()) {
       setEditingDescription(false);
       return;
     }
-    if (await savePatch({ body: body || null })) setEditingDescription(false);
+    if (await savePatch({ body: body || null })) {
+      setEditConflict(null);
+      setEditingDescription(false);
+    }
   };
 
   const changePhase = async (phase: TaskPhase) => {
@@ -323,7 +353,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     setBusy(true);
     setError(null);
     try {
-      setDetail(await updateTaskDependencies(taskId, dependsOnTaskIds, detail.task.version));
+      await mutateDetail(
+        await updateTaskDependencies(taskId, dependsOnTaskIds, detail.task.version),
+        { revalidate: false },
+      );
     } catch {
       setError(copy.dependencyUpdateFailed);
     } finally {
@@ -341,7 +374,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     return clearPageHeader;
   }, [clearPageHeader, copy.backToWork, copy.detailStatuses, copy.taskLabel, detail, presentation, projectName, returnPath, setPageHeader]);
 
-  if (error && !detail) return <div className={presentation === 'modal' ? 'p-5 text-sm text-danger' : 'mx-auto max-w-3xl p-6 text-sm text-danger'}>{error}</div>;
+  if (loadError && !detail) return <div className={presentation === 'modal' ? 'p-5 text-sm text-danger' : 'mx-auto max-w-3xl p-6 text-sm text-danger'}>{copy.taskNotFound}</div>;
   if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><DetailSkeleton /></div>;
 
   const activeWait = detail.waits[0];
@@ -371,6 +404,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const approvalRequired = detail.task.contract?.approvalRequired ?? [];
   const assumptions = detail.task.contract?.assumptions ?? [];
   const risks = detail.task.contract?.risks ?? [];
+  const recentlyChanged = (...fields: TaskChangedEvent['changedFields']): boolean => Boolean(
+    recentChange?.changedFields.some((field) => fields.includes(field)),
+  );
   const taskHref = (relatedTaskId: string) => presentation === 'modal' && backgroundPath
     ? taskDetailModalHref(backgroundPath, relatedTaskId)
     : withReturnTo(`/tasks/${relatedTaskId}`, returnPath);
@@ -398,12 +434,19 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
       <section className="task-detail-scroll min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
-      <header className="pb-5">
+      <header className={cn('px-4 pb-5', recentlyChanged('title') && 'task-detail-live-update')}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
               {projectName ? <span className="inline-flex items-center gap-1.5"><FolderKanban className="size-3.5" aria-hidden />{projectName}</span> : null}
               <span>/</span><span>{copy.taskLabel}</span>
+              {recentChange ? (
+                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg" role="status">
+                  {recentChange.source === 'agent'
+                    ? (language === 'zh' ? 'Agent 刚刚更新' : 'Updated by Agent')
+                    : (language === 'zh' ? '执行结果已同步' : 'Execution result synced')}
+                </span>
+              ) : null}
             </div>
             {editingTitle ? (
               <input
@@ -426,10 +469,17 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
                 className="mt-3 w-full max-w-3xl rounded-lg bg-surface-hover px-3 py-2 text-2xl font-semibold leading-8 text-fg outline-none ring-2 ring-accent/30 focus:ring-accent/60"
               />
             ) : (
-              <button type="button" className="mt-3 block max-w-3xl rounded-lg text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { setTitleDraft(detail.task.title); setEditingTitle(true); }}>
-                <h1 className="px-1 text-2xl font-semibold leading-8 text-fg">{detail.task.title}</h1>
+              <button type="button" className="mt-3 block max-w-3xl rounded-lg text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { titleEditBaseRef.current = { value: detail.task.title, version: detail.task.version }; setEditConflict(null); setTitleDraft(detail.task.title); setEditingTitle(true); }}>
+                <h1 className="text-2xl font-semibold leading-8 text-fg">{detail.task.title}</h1>
               </button>
             )}
+            {editConflict === 'title' ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning" role="alert">
+                <span>{language === 'zh' ? 'Agent 在你编辑期间更新了标题。' : 'The Agent updated the title while you were editing.'}</span>
+                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setTitleDraft(detail.task.title); setEditConflict(null); setEditingTitle(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
+                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ title: titleDraft.trim() }).then((saved) => { if (saved) { setEditConflict(null); setEditingTitle(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
+              </div>
+            ) : null}
           </div>
         </div>
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
@@ -437,7 +487,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
 
       <div className="mt-5 flex flex-col gap-5">
         <main className="order-2 min-w-0 space-y-5">
-          <section className="rounded-xl bg-surface-panel p-5">
+          <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('body') && 'task-detail-live-update')}>
             <h2 className="font-medium text-fg">{copy.taskDescription}</h2>
             {editingDescription ? (
               <textarea
@@ -460,15 +510,22 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
                 className="mt-3 w-full resize-y rounded-lg bg-surface-hover px-3 py-2 text-sm leading-6 text-fg outline-none ring-2 ring-accent/20 focus:ring-accent/50"
               />
             ) : (
-              <button type="button" className="mt-2 block w-full rounded-lg px-1 py-1 text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; setDescriptionDraft(draft); setEditingDescription(true); }}>
+              <button type="button" className="-mx-1 mt-2 block w-[calc(100%+0.5rem)] rounded-lg px-1 py-1 text-left outline-none hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>
                 <span className="whitespace-pre-wrap text-sm leading-6 text-fg-muted">{objective && objective !== detail.task.title ? objective : copy.noTaskDescription}</span>
               </button>
             )}
+            {editConflict === 'description' ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning" role="alert">
+                <span>{language === 'zh' ? 'Agent 在你编辑期间更新了描述。' : 'The Agent updated the description while you were editing.'}</span>
+                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setDescriptionDraft(detail.task.body ?? ''); setEditConflict(null); setEditingDescription(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
+                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ body: descriptionDraft.trim() || null }).then((saved) => { if (saved) { setEditConflict(null); setEditingDescription(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
+              </div>
+            ) : null}
           </section>
 
-          {detail.attention.length > 0 ? <section className="rounded-xl bg-warning/10 p-5"><h3 className="font-medium text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h3><ul className="mt-3 space-y-2 text-sm text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`}>{item.summary}</li>)}</ul></section> : null}
+          {detail.attention.length > 0 ? <section className={cn('rounded-xl bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h3 className="font-medium text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h3><ul className="mt-3 space-y-2 text-sm text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`}>{item.summary}</li>)}</ul></section> : null}
 
-          <section className="rounded-xl bg-surface-panel p-5">
+          <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('contract') && 'task-detail-live-update')}>
             <h2 className="font-medium text-fg">{copy.taskDefinition}</h2>
             <div className="mt-5"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-medium text-fg">{copy.successDefinition}</h3>{acceptanceCriteria.length > 0 ? <span className="text-xs text-fg-subtle">{copy.criteriaProgress.replace('{{verified}}', String(verifiedCriteriaCount)).replace('{{total}}', String(acceptanceCriteria.length))}</span> : null}</div><div className="mt-3"><TextList items={acceptanceCriteria} empty={copy.noDefinition} verificationByCriterion={verificationByCriterion} /></div></div>
             {expectedOutputs.length > 0 ? <div className="mt-5 rounded-lg bg-surface-hover p-4"><h3 className="text-sm font-medium text-fg">{copy.expectedOutputs}</h3><div className="mt-3"><TextList items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
@@ -478,13 +535,13 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
             {risks.length > 0 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList items={risks} empty={copy.noDefinition} /></div></details> : null}
           </section>
 
-          {latestReceipt ? <section className="rounded-xl bg-surface-panel p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-medium text-fg">{copy.latestResult}</h2><p className="mt-2 text-sm leading-6 text-fg">{latestReceipt.summary}</p></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button>{latestReceipt.evidence.filter((evidence) => evidence.uri).map((evidence) => <a key={`${evidence.title}-${evidence.uri}`} className="ml-auto inline-flex items-center gap-1 text-xs text-accent hover:underline" href={evidence.uri}><ExternalLink className="size-3" />{evidence.title}</a>)}</div>{detail.receipts.length > 1 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-active p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
+          {latestReceipt ? <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-medium text-fg">{copy.latestResult}</h2><p className="mt-2 text-sm leading-6 text-fg">{latestReceipt.summary}</p></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button>{latestReceipt.evidence.filter((evidence) => evidence.uri).map((evidence) => <a key={`${evidence.title}-${evidence.uri}`} className="ml-auto inline-flex items-center gap-1 text-xs text-accent hover:underline" href={evidence.uri}><ExternalLink className="size-3" />{evidence.title}</a>)}</div>{detail.receipts.length > 1 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-active p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
 
-          {detail.context.length > 0 ? <section className="rounded-xl bg-surface-panel p-5"><h2 className="font-medium text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
+          {detail.context.length > 0 ? <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="font-medium text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </main>
 
         <aside className="order-1 min-w-0 space-y-4">
-          <section className="rounded-xl bg-surface-subtle p-4">
+          <section className={cn('rounded-xl bg-surface-subtle p-4', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
             <h2 className="font-medium text-fg">{copy.taskProperties}</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.taskPhase}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.phase} disabled={busy} onChange={(event) => void changePhase(event.target.value as TaskPhase)}>{(['backlog', 'ready', 'active', 'review', 'closed'] as TaskPhase[]).map((phase) => <SelectOption key={phase} value={phase} disabled={phaseDisabled(phase)}>{phaseLabel(phase, language)}</SelectOption>)}</Select></label>
@@ -496,7 +553,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
             <div className="mt-4 rounded-lg bg-surface-hover p-3 text-xs leading-5 text-fg-subtle"><p>{statusLabel}</p><p>{statusDescription}</p><p className="mt-2">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</p></div>
           </section>
 
-          <section className="rounded-xl bg-surface-panel p-4">
+          <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('dependencies') && 'task-detail-live-update')}>
             <h2 className="font-medium text-fg">{copy.taskRelations}</h2>
             <div className="mt-4 space-y-4">
               <div>
@@ -559,15 +616,52 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
   onClose: () => void;
 }) {
   const language = useLocaleStore((state) => state.language);
+  const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
+  const workspacePanelWidth = useWorkspacePanelStore((state) => state.widthPx);
+  const workspaceSessionKey = useWorkspacePanelStore((state) => state.sessionKeyOverride);
+  const previewPath = useWorkspacePreviewStore((state) => state.path);
+  const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
+  const workspacePanelOffset = workspacePanelOpen ? workspacePanelWidth : 0;
+
   return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog.Root
+      modal={false}
+      open
+      onOpenChange={(open) => {
+        if (open) return;
+        setPreviewPath(null);
+        onClose();
+      }}
+    >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]" />
+        <button
+          type="button"
+          tabIndex={-1}
+          data-task-modal-backdrop
+          className="fixed inset-0 z-[80] bg-black/45 backdrop-blur-[1px]"
+          aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}
+          onClick={() => {
+            setPreviewPath(null);
+            onClose();
+          }}
+        />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] w-[min(76rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-surface-base shadow-float focus:outline-none"
+          className="task-detail-modal-content fixed top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-surface-base shadow-float focus:outline-none"
+          data-workspace-panel-open={workspacePanelOpen ? 'true' : 'false'}
+          style={{
+            '--task-detail-workspace-offset': `${workspacePanelOffset / 2}px`,
+            '--task-detail-workspace-width': `${workspacePanelOffset}px`,
+          } as CSSProperties}
           onEscapeKeyDown={(event) => {
             const target = event.target;
             if (target instanceof HTMLElement && target.closest('[data-task-inline-editor]')) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            const target = event.detail.originalEvent.target;
+            if (
+              target instanceof Element
+              && target.closest('#app-workspace-panel, [data-task-modal-backdrop]')
+            ) event.preventDefault();
           }}
         >
           <header className="flex shrink-0 items-center justify-between gap-3 bg-surface-panel px-5 py-3.5">
@@ -576,7 +670,14 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
             <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} />
+            {previewPath ? (
+              <WorkspacePreviewPane
+                allowOutsideChat
+                sessionKey={workspaceSessionKey ?? undefined}
+              />
+            ) : (
+              <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} />
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

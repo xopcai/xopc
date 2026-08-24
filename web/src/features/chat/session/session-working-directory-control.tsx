@@ -38,7 +38,7 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const wd = m.chat.workingDirectory;
-  const toggleWorkspacePanel = useWorkspacePanelStore((s) => s.toggleOpen);
+  const openWorkspacePanelForSession = useWorkspacePanelStore((s) => s.openForSession);
 
   const [effectivePath, setEffectivePath] = useState('');
   const [loading, setLoading] = useState(false);
@@ -184,7 +184,7 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
           aria-label={`${wd.tooltipAgentWorkspace}: ${fullPath}`}
           onClick={(e) => {
             e.stopPropagation();
-            if (hasPath && !disabled && !loading) toggleWorkspacePanel();
+            if (hasPath && !disabled && !loading) openWorkspacePanelForSession(sessionKey);
           }}
         >
           <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />

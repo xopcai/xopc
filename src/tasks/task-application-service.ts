@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type {
   ActorRef,
   TaskCommand,
+  TaskChangedField,
   TaskCreateRequest,
   TaskExecutorSelection,
   TaskRunReceipt,
@@ -11,6 +12,7 @@ import type {
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import { TaskContextRepository } from './task-context-repository.js';
+import { enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { TaskRepository } from './task-repository.js';
@@ -34,6 +36,26 @@ function executorRef(executor: TaskExecutorSelection): Record<string, unknown> {
     };
     case 'human': return { actorId: executor.actorId };
     case 'external': return { provider: executor.provider, config: executor.config };
+  }
+}
+
+function commandChangedFields(command: TaskCommand): TaskChangedField[] {
+  switch (command.type) {
+    case 'move':
+    case 'mark_ready':
+    case 'request_review':
+    case 'close':
+    case 'reopen':
+      return ['phase', 'resolution', 'attention'];
+    case 'start':
+      return ['phase', 'runs', 'attention'];
+    case 'add_wait':
+    case 'resolve_wait':
+      return ['runs', 'attention'];
+    case 'delegate':
+      return ['delegateAgentId'];
+    case 'revise_contract':
+      return ['contract'];
   }
 }
 
@@ -98,16 +120,33 @@ export class TaskApplicationService {
         phase: current.phase,
         projectId: current.projectId,
       });
+      enqueueTaskChangedEvent(db, {
+        taskId: current.id,
+        projectId: current.projectId,
+        version: current.version,
+        changedFields: ['title', 'body', 'phase', 'priority', 'contract', 'dependencies', 'context'],
+        actor,
+      });
 
       if (input.activation.mode === 'capture') {
         return { ok: true, model: this.#projector.project(current) };
       }
-      return this.start(current.id, current.version, input.activation.executor, {
+      const started = this.start(current.id, current.version, input.activation.executor, {
         idempotencyKey: `${input.idempotencyKey}:start`,
         scheduleAt: input.activation.scheduleAt,
         actor,
         correlationId: input.idempotencyKey,
       });
+      if (started.ok) {
+        enqueueTaskChangedEvent(db, {
+          taskId: started.model.task.id,
+          projectId: started.model.task.projectId,
+          version: started.model.task.version,
+          changedFields: ['phase', 'runs', 'attention'],
+          actor,
+        });
+      }
+      return started;
     });
   }
 
@@ -259,6 +298,13 @@ export class TaskApplicationService {
           projectId: result.model.task.projectId,
         });
       }
+      enqueueTaskChangedEvent(db, {
+        taskId: result.model.task.id,
+        projectId: result.model.task.projectId,
+        version: result.model.task.version,
+        changedFields: commandChangedFields(input.command),
+        actor,
+      });
       return result;
     });
   }
@@ -271,7 +317,7 @@ export class TaskApplicationService {
     terminalCode?: string;
     terminalMessage?: string;
   }): TaskApplicationResult {
-    return runSqliteWriteTransaction(() => {
+    return runSqliteWriteTransaction((db) => {
       const run = this.#runs.get(input.runId);
       if (!run) return { ok: false, reason: 'not_found' };
       if (run.version !== input.expectedRunVersion) {
@@ -290,7 +336,16 @@ export class TaskApplicationService {
       }
       const task = this.#tasks.require(run.taskId);
       if (input.receipt.status !== 'succeeded') {
-        return { ok: true, model: this.#projector.project(task) };
+        const model = this.#projector.project(task);
+        enqueueTaskChangedEvent(db, {
+          taskId: task.id,
+          projectId: task.projectId,
+          version: task.version,
+          changedFields: ['runs', 'receipts', 'attention'],
+          actor: input.actor,
+          source: input.actor ? undefined : 'runtime',
+        });
+        return { ok: true, model };
       }
       const verified = input.receipt.verification.status === 'passed';
       const phase = task.contract?.acceptancePolicy === 'verified_auto' && verified
@@ -303,6 +358,14 @@ export class TaskApplicationService {
         ...(phase === 'closed' ? { resolution: 'done' as const } : {}),
       });
       if (!updated) throw new Error('Task changed while its run was being finalized');
+      enqueueTaskChangedEvent(db, {
+        taskId: updated.id,
+        projectId: updated.projectId,
+        version: updated.version,
+        changedFields: ['phase', 'resolution', 'runs', 'receipts', 'attention'],
+        actor: input.actor,
+        source: input.actor ? undefined : 'runtime',
+      });
       return { ok: true, model: this.#projector.project(updated) };
     });
   }

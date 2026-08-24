@@ -531,6 +531,7 @@ export class GatewayService {
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getLocalAppService: () => this.localApps,
+      dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
@@ -669,9 +670,13 @@ export class GatewayService {
 
   dispatchTaskRuns(): void {
     new TaskSignalService().tick();
-    new TaskOutboxDispatcher(publishAutomationProductEvent).drain();
+    this.dispatchTaskEvents();
     this.createTaskRunDispatcher().dispatch();
     void this.createWorkflowRunService().dispatchTaskRuns();
+  }
+
+  dispatchTaskEvents(): void {
+    new TaskOutboxDispatcher(publishAutomationProductEvent).drain();
   }
 
   runAgent(

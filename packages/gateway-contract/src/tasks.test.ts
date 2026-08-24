@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   TaskCreateRequestSchema,
+  TaskChangedEventSchema,
   TaskSchema,
 } from './tasks.js';
 
@@ -50,6 +51,24 @@ describe('Task contracts', () => {
       requestId: '70ef31fc-cb6c-4c5e-986f-85693256c74b',
       mode: 'capture',
       objective: 'Legacy create',
+    })).toThrow();
+  });
+
+  it('validates versioned task change notifications', () => {
+    expect(TaskChangedEventSchema.parse({
+      taskId: 'task-1',
+      version: 2,
+      changedFields: ['phase', 'receipts'],
+      source: 'agent',
+      actorId: 'main',
+      occurredAt: 10,
+    })).toMatchObject({ taskId: 'task-1', version: 2, source: 'agent' });
+    expect(() => TaskChangedEventSchema.parse({
+      taskId: 'task-1',
+      version: 2,
+      changedFields: ['unknown'],
+      source: 'agent',
+      occurredAt: 10,
     })).toThrow();
   });
 });
