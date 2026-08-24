@@ -164,6 +164,8 @@
       "title": "项目",
       "subtitle": "创建、查找和管理长期事项空间。",
       "filterLabel": "筛选项目",
+      "resultCount": "{{status}} · {{count}} 个项目",
+      "clearSearch": "清除搜索",
       "pin": "置顶",
       "unpin": "取消置顶",
       "archive": "归档",

@@ -3,6 +3,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
+import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 /**
@@ -21,7 +22,8 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
 } = {}) {
   const { pathname } = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
-  const chatSessionKey = sessionKeyOverride ?? (
+  const workspaceSessionKey = useWorkspacePanelStore((s) => s.sessionKeyOverride);
+  const chatSessionKey = sessionKeyOverride ?? workspaceSessionKey ?? (
     pathname.startsWith('/chat') && sessionKeyParam
       ? decodeURIComponent(sessionKeyParam)
       : undefined
@@ -32,12 +34,12 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
   const setPath = useWorkspacePreviewStore((s) => s.setPath);
   const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
-  // Close preview when leaving /chat routes.
+  // Keep a task-scoped workspace preview available after its modal closes.
   useEffect(() => {
-    if (!allowOutsideChat && !pathname.startsWith('/chat')) {
+    if (!allowOutsideChat && !workspaceSessionKey && !pathname.startsWith('/chat')) {
       setPath(null);
     }
-  }, [allowOutsideChat, pathname, setPath]);
+  }, [allowOutsideChat, pathname, setPath, workspaceSessionKey]);
 
   // Escape closes the preview.
   useEffect(() => {

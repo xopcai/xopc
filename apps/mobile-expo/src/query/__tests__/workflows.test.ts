@@ -47,4 +47,34 @@ describe('workflow queries', () => {
     await expect(fetchWorkflowRun('run/1')).rejects.toThrow('Workflow run not found');
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/workflows/runs/run%2F1');
   });
+
+  it('retains the structured Markdown result from a completed run', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
+      view: {
+        run: {
+          ...summary,
+          status: 'succeeded',
+          goal: 'Prepare a report',
+          result: {
+            summary: '# Report\n\nDone.',
+            sections: [{ kind: 'questions', title: 'Next', items: ['Review it'] }],
+          },
+        },
+        phases: [],
+        agents: [],
+        nodes: [],
+        artifacts: [],
+        controls: { canCancel: false, canRetry: false, canArchive: true },
+      },
+    }), { status: 200 }));
+
+    await expect(fetchWorkflowRun('run-1')).resolves.toMatchObject({
+      run: {
+        result: {
+          summary: '# Report\n\nDone.',
+          sections: [{ kind: 'questions', items: ['Review it'] }],
+        },
+      },
+    });
+  });
 });

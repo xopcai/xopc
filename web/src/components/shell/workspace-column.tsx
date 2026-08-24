@@ -1,5 +1,5 @@
 import { FileText, Search, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -28,6 +28,7 @@ import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
+import { writeWorkspaceFileDrag } from '@/features/workspace/workspace-file-drag';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
@@ -80,6 +81,19 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     [chatSessionKey, workspaceAgentId],
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
+
+  const handleFileDragStart = useCallback(
+    (event: DragEvent<HTMLButtonElement>, entry: { name: string; path: string }) => {
+      setPreviewPath(null);
+      writeWorkspaceFileDrag(event.dataTransfer, {
+        name: entry.name,
+        path: entry.path,
+        ...(chatSessionKey ? { sessionKey: chatSessionKey } : {}),
+        ...(!chatSessionKey && workspaceAgentId.trim() ? { agentId: workspaceAgentId.trim() } : {}),
+      });
+    },
+    [chatSessionKey, setPreviewPath, workspaceAgentId],
+  );
 
   const {
     dialogOpen,
@@ -434,11 +448,13 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                     <button
                       key={entry.path}
                       type="button"
+                      draggable
                       className={cn(
-                        'flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover',
+                        'flex w-full min-w-0 cursor-grab items-center gap-2 px-3 py-2 text-left active:cursor-grabbing hover:bg-surface-hover',
                         previewPath === entry.path && 'bg-accent-soft text-accent-fg',
                       )}
                       onClick={() => setPreviewPath(entry.path)}
+                      onDragStart={(event) => handleFileDragStart(event, entry)}
                       title={entry.path}
                     >
                       <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
@@ -457,6 +473,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                 onSelectFile={(path) => setPreviewPath(path)}
                 onExpandDir={handleExpandDir}
                 onAction={handleAction}
+                onFileDragStart={handleFileDragStart}
                 actionLabels={{
                   preview: m.workspace.preview,
                   download: m.workspace.download,

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
@@ -546,7 +547,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.taskPhase}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.phase} disabled={busy} onChange={(event) => void changePhase(event.target.value as TaskPhase)}>{(['backlog', 'ready', 'active', 'review', 'closed'] as TaskPhase[]).map((phase) => <SelectOption key={phase} value={phase} disabled={phaseDisabled(phase)}>{phaseLabel(phase, language)}</SelectOption>)}</Select></label>
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.priority}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.priority} disabled={busy} onChange={(event) => void savePatch({ priority: event.target.value as TaskPriority })}>{(['low', 'normal', 'high', 'critical'] as TaskPriority[]).map((priority) => <SelectOption key={priority} value={priority}>{copy.priorityLabels[priority]}</SelectOption>)}</Select></label>
-              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.dueDate}</span><input type="date" disabled={busy} value={dateInputValue(detail.task.dueAt)} onChange={(event) => void savePatch({ dueAt: dueAtFromInput(event.target.value) })} className="h-10 rounded-lg bg-surface-hover px-3 text-sm text-fg outline-none focus:ring-2 focus:ring-accent/30" /></label>
+              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.dueDate}</span><DatePicker disabled={busy} value={dateInputValue(detail.task.dueAt)} onChange={(value) => void savePatch({ dueAt: dueAtFromInput(value) })} ariaLabel={copy.dueDate} /></label>
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.executorLabel}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.delegateAgentId ?? ''} disabled={busy} onChange={(event) => void savePatch({ delegateAgentId: event.target.value || null })}><SelectOption value="">{copy.unassigned}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}</Select></label>
               {projectName ? <div className="grid gap-1 text-xs text-fg-muted"><span>{copy.projectLabel}</span><span className="flex items-center gap-1.5 rounded-lg bg-surface-hover px-3 py-2 text-sm text-fg"><FolderKanban className="size-3.5" />{projectName}</span></div> : null}
             </div>
@@ -670,16 +671,20 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
             <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden">
-            {previewPath ? (
-              <WorkspacePreviewPane
-                allowOutsideChat
-                sessionKey={workspaceSessionKey ?? undefined}
-              />
-            ) : (
-              <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} />
-            )}
+            <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} />
           </div>
         </Dialog.Content>
+        {previewPath ? (
+          <div
+            className="fixed inset-y-0 left-0 z-[100] flex min-h-0 min-w-0 overflow-hidden bg-surface-panel transition-[right] duration-200 ease-out motion-reduce:transition-none"
+            style={{ right: workspacePanelOpen ? workspacePanelWidth : 0 }}
+          >
+            <WorkspacePreviewPane
+              allowOutsideChat
+              sessionKey={workspaceSessionKey ?? undefined}
+            />
+          </div>
+        ) : null}
       </Dialog.Portal>
     </Dialog.Root>
   );

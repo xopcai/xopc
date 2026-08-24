@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppToast } from '../../components/AppToast';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
@@ -12,8 +15,16 @@ import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { fetchProjects } from '../../query/projects';
 import { cancelWorkflowRun, fetchWorkflowRun, fetchWorkflowRuns } from '../../query/workflows';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
+import { MarkdownView } from '../chat/MarkdownView';
+import { MessageActionsBar, type MessageAction } from '../chat/MessageActionsBar';
+import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 import { resolveTaskAgentId } from '../tasks/task-create-input';
+import { buildSpeakableText, detectSpeechLanguage } from '../voice/read-aloud-text';
+import { useReadAloudStore } from '../voice/read-aloud-store';
+
+import { workflowResultToMarkdown } from './workflow-result-markdown';
 
 const activeStatuses = new Set(['queued', 'running']);
 
@@ -76,6 +87,7 @@ export function WorkflowRunDetailScreen() {
   const { id = '', agentId: routeAgentId = '', projectId = '' } = useLocalSearchParams<{ id: string; agentId?: string; projectId?: string }>();
   const { colors } = useTheme();
   const labels = useMessages().workflowsPage;
+  const [toastMessage, setToastMessage] = useState('');
   const agents = useQuery({ queryKey: queryKeys.agents, queryFn: fetchChatAgents });
   const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: Boolean(projectId) });
   let ownerAgentId = '';
@@ -107,6 +119,21 @@ export function WorkflowRunDetailScreen() {
     },
   });
   const view = query.data;
+  const resultMarkdown = useMemo(() => {
+    if (!view) return '';
+    if (view.run.result) return workflowResultToMarkdown(view.run.result);
+    if (activeStatuses.has(view.run.status)) return '';
+    return [...view.nodes].reverse().find((node) => node.status === 'done' && node.resultPreview?.trim())?.resultPreview?.trim() ?? '';
+  }, [view]);
+  const copyResult = useCallback(async () => {
+    if (!resultMarkdown) return;
+    try {
+      await setAppClipboardStringAsync(resultMarkdown);
+      setToastMessage(labels.resultCopied);
+    } catch {
+      setToastMessage(labels.resultCopyFailed);
+    }
+  }, [labels.resultCopied, labels.resultCopyFailed, resultMarkdown]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
@@ -136,24 +163,101 @@ export function WorkflowRunDetailScreen() {
             {cancel.isError ? <Text style={[styles.meta, { color: colors.semantic.error }]}>{labels.cancelFailed}</Text> : null}
           </View>
 
+          {resultMarkdown ? (
+            <WorkflowResultCard
+              runId={view.run.id}
+              title={view.run.title}
+              markdown={resultMarkdown}
+              onCopy={() => void copyResult()}
+            />
+          ) : null}
           {view.phases.length ? <Section title={labels.phases}>{view.phases.map((phase) => <StatusRow key={phase.id} title={phase.title} status={phase.status} />)}</Section> : null}
-          {view.agents.length ? <Section title={labels.agents}>{view.agents.map((agent) => <StatusRow key={agent.id} title={agent.label} status={agent.status} detail={agent.error ?? agent.currentStep ?? agent.resultPreview} error={agent.status === 'error'} />)}</Section> : null}
-          {view.nodes.length ? <Section title={labels.steps}>{view.nodes.map((node) => <StatusRow key={node.id} title={node.title} status={node.status} detail={node.error ?? node.resultPreview} error={node.status === 'error'} />)}</Section> : null}
+          {view.agents.length ? <Section title={labels.agents}>{view.agents.map((agent) => <StatusRow key={agent.id} title={agent.label} status={agent.status} detail={agent.error ?? agent.currentStep ?? agent.resultPreview} detailMarkdown={Boolean(agent.resultPreview && !agent.error && !agent.currentStep)} error={agent.status === 'error'} />)}</Section> : null}
+          {view.nodes.length ? <Section title={labels.steps}>{view.nodes.map((node) => <StatusRow key={node.id} title={node.title} status={node.status} detail={node.error ?? node.resultPreview} detailMarkdown={Boolean(node.resultPreview && !node.error)} error={node.status === 'error'} />)}</Section> : null}
           {view.artifacts.length ? <Section title={labels.artifacts}>{view.artifacts.map((artifact) => <StatusRow key={artifact.id} title={artifact.title ?? artifact.name} status={artifact.mimeType} />)}</Section> : null}
         </ScrollView>
       )}
+      <AppToast visible={Boolean(toastMessage)} onDismiss={() => setToastMessage('')}>
+        {toastMessage}
+      </AppToast>
     </View>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function WorkflowResultCard({
+  runId,
+  title,
+  markdown,
+  onCopy,
+}: {
+  runId: string;
+  title: string;
+  markdown: string;
+  onCopy: () => void;
+}) {
+  const { colors } = useTheme();
+  const labels = useMessages().workflowsPage;
+  const language = usePreferencesStore((state) => state.language);
+  const speakableText = useMemo(() => buildSpeakableText(markdown), [markdown]);
+  const sourceId = `workflow:${runId}:result`;
+  const readAloudStatus = useReadAloudStore((state) => (
+    state.source?.id === sourceId ? state.status : 'idle'
+  ));
+  const requestReadAloud = useReadAloudStore((state) => state.requestStart);
+  const readAloudLabel = readAloudStatus === 'preparing'
+    ? labels.resultReadAloudPreparing
+    : readAloudStatus === 'playing'
+      ? labels.resultReadAloudPause
+      : readAloudStatus === 'paused'
+        ? labels.resultReadAloudResume
+        : readAloudStatus === 'error'
+          ? labels.resultReadAloudRetry
+          : labels.resultReadAloud;
+  const actions = useMemo((): MessageAction[] => {
+    const result: MessageAction[] = [{
+      icon: 'content-copy',
+      label: labels.resultCopy,
+      onPress: onCopy,
+      accessibilityLabel: labels.resultCopy,
+    }];
+    if (speakableText) {
+      result.push({
+        icon: readAloudStatus === 'preparing'
+          ? 'loading'
+          : readAloudStatus === 'playing'
+            ? 'pause'
+            : readAloudStatus === 'error'
+              ? 'refresh'
+              : 'volume-high',
+        label: readAloudLabel,
+        onPress: () => requestReadAloud({
+          source: { id: sourceId, title },
+          text: speakableText,
+          language: detectSpeechLanguage(speakableText, language),
+        }),
+        accessibilityLabel: readAloudLabel,
+      });
+    }
+    return result;
+  }, [labels.resultCopy, language, onCopy, readAloudLabel, readAloudStatus, requestReadAloud, sourceId, speakableText, title]);
+
+  return (
+    <View style={[styles.card, styles.resultCard, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.result}</Text>
+      <MarkdownView content={markdown} allowTrailingMargin />
+      <MessageActionsBar actions={actions} align="left" />
+    </View>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
   const { colors } = useTheme();
   return <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{title}</Text>{children}</View>;
 }
 
-function StatusRow({ title, status, detail, error }: { title: string; status: string; detail?: string; error?: boolean }) {
+function StatusRow({ title, status, detail, detailMarkdown, error }: { title: string; status: string; detail?: string; detailMarkdown?: boolean; error?: boolean }) {
   const { colors } = useTheme();
-  return <View style={[styles.statusRow, { borderTopColor: colors.border.subtle }]}><View style={styles.row}><Text style={[styles.body, styles.flex, { color: colors.text.primary }]}>{title}</Text><Text style={[styles.meta, { color: error ? colors.semantic.error : colors.text.tertiary }]}>{status}</Text></View>{detail ? <Text style={[styles.meta, { color: error ? colors.semantic.error : colors.text.secondary }]}>{detail}</Text> : null}</View>;
+  return <View style={[styles.statusRow, { borderTopColor: colors.border.subtle }]}><View style={styles.row}><Text style={[styles.body, styles.flex, { color: colors.text.primary }]}>{title}</Text><Text style={[styles.meta, { color: error ? colors.semantic.error : colors.text.tertiary }]}>{status}</Text></View>{detail ? detailMarkdown ? <MarkdownView content={detail} /> : <Text style={[styles.meta, { color: error ? colors.semantic.error : colors.text.secondary }]}>{detail}</Text> : null}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -161,6 +265,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xxl },
   center: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
+  resultCard: { paddingBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   flex: { flex: 1 },
   itemTitle: { ...typography.body, flex: 1, fontWeight: '600' },
