@@ -6,6 +6,7 @@ DIST_DIR="${DIST_DIR:-dist}"
 IOS_SCHEME="${IOS_SCHEME:-$APP_NAME}"
 IOS_CONFIGURATION="${IOS_CONFIGURATION:-Release}"
 IOS_BUILD_NUMBER="${IOS_BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
+IOS_MARKETING_VERSION="${IOS_MARKETING_VERSION:-}"
 IOS_WORKSPACE="${IOS_WORKSPACE:-ios/${APP_NAME}.xcworkspace}"
 ARCHIVE_PATH="${ARCHIVE_PATH:-$DIST_DIR/ios/archive/${APP_NAME}.xcarchive}"
 EXPORT_DIR="${EXPORT_DIR:-$DIST_DIR/ios/export}"
@@ -15,8 +16,8 @@ SIGNING_STYLE="${SIGNING_STYLE:-automatic}"
 GENERATED_EXPORT_OPTIONS_PLIST="$DIST_DIR/ios/ExportOptions.plist"
 EXPORT_OPTIONS_PLIST="${EXPORT_OPTIONS_PLIST:-$GENERATED_EXPORT_OPTIONS_PLIST}"
 DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-}"
-PREBUILD="${PREBUILD:-auto}"
-CLEAN_PREBUILD="${CLEAN_PREBUILD:-0}"
+PREBUILD="${PREBUILD:-1}"
+CLEAN_PREBUILD="${CLEAN_PREBUILD:-1}"
 ALLOW_PROVISIONING_UPDATES="${ALLOW_PROVISIONING_UPDATES:-1}"
 API_KEY="${APP_STORE_CONNECT_API_KEY:-}"
 API_ISSUER="${APP_STORE_CONNECT_API_ISSUER:-}"
@@ -44,6 +45,7 @@ Optional build variables:
   IOS_SCHEME                       default: xopc
   IOS_CONFIGURATION                default: Release
   IOS_BUILD_NUMBER                 default: current timestamp, e.g. 202606251430
+  IOS_MARKETING_VERSION            default: expo.version from app.json
   IOS_WORKSPACE                    default: ios/xopc.xcworkspace
   DIST_DIR                         default: dist
   IPA_PATH                         default: dist/xopc.ipa
@@ -52,8 +54,8 @@ Optional build variables:
   EXPORT_METHOD                    default: app-store-connect
   SIGNING_STYLE                    default: automatic
   EXPORT_OPTIONS_PLIST             default: generated under dist/ios/
-  PREBUILD=auto|1|0                default: auto; run prebuild when ios workspace is missing
-  CLEAN_PREBUILD=1                 pass --clean to expo prebuild
+  PREBUILD=auto|1|0                default: 1; regenerate the native project
+  CLEAN_PREBUILD=0                 preserve the native project during prebuild
   ALLOW_PROVISIONING_UPDATES=0     disable xcodebuild -allowProvisioningUpdates
 
 Examples:
@@ -152,9 +154,21 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 APP_DIR="${REPO_ROOT}/apps/mobile-expo"
 cd "$APP_DIR"
 
+if [[ -z "$IOS_MARKETING_VERSION" ]]; then
+  IOS_MARKETING_VERSION="$(node -e "process.stdout.write(require('./app.json').expo.version)")"
+fi
+if [[ ! "$IOS_MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Error: IOS_MARKETING_VERSION must use x.y.z format: $IOS_MARKETING_VERSION" >&2
+  exit 1
+fi
+if [[ ! "$IOS_BUILD_NUMBER" =~ ^[0-9]+([.][0-9]+){0,2}$ ]]; then
+  echo "Error: IOS_BUILD_NUMBER must contain one to three dot-separated integers: $IOS_BUILD_NUMBER" >&2
+  exit 1
+fi
+
 if [[ "$PREBUILD" == "1" || ( "$PREBUILD" == "auto" && ! -d "$IOS_WORKSPACE" ) ]]; then
   echo "Preparing iOS native project..."
-  prebuild_args=(exec expo prebuild --platform ios)
+  prebuild_args=(exec expo prebuild --platform ios --no-install)
   if is_truthy "$CLEAN_PREBUILD"; then
     prebuild_args+=(--clean)
   fi
@@ -164,19 +178,20 @@ elif [[ "$PREBUILD" != "0" && "$PREBUILD" != "auto" ]]; then
   exit 1
 fi
 
+if [[ -f ios/Podfile ]]; then
+  pnpm run pods:install
+fi
+
 if [[ ! -d "$IOS_WORKSPACE" ]]; then
   cat >&2 <<EOF
-Error: iOS workspace not found:
+Error: iOS workspace not found after prebuild and pod install:
   $IOS_WORKSPACE
 
 Run:
   pnpm -C apps/mobile-expo exec expo prebuild --platform ios
+  pnpm -C apps/mobile-expo run pods:install
 EOF
   exit 1
-fi
-
-if [[ -f ios/Podfile ]]; then
-  pnpm run pods:install
 fi
 
 if [[ "$EXPORT_OPTIONS_PLIST" == "$GENERATED_EXPORT_OPTIONS_PLIST" || ! -f "$EXPORT_OPTIONS_PLIST" ]]; then
@@ -190,6 +205,7 @@ rm -rf "$ARCHIVE_PATH" "$EXPORT_DIR"
 mkdir -p "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR" "$(dirname "$IPA_PATH")"
 
 echo "Archiving iOS app..."
+echo "  Marketing version: $IOS_MARKETING_VERSION"
 echo "  Build number: $IOS_BUILD_NUMBER"
 XCODEBUILD_ARGS=(
   "-workspace" "$IOS_WORKSPACE"
@@ -199,6 +215,7 @@ XCODEBUILD_ARGS=(
   "-archivePath" "$ARCHIVE_PATH"
   "clean"
   "archive"
+  "MARKETING_VERSION=$IOS_MARKETING_VERSION"
   "CURRENT_PROJECT_VERSION=$IOS_BUILD_NUMBER"
 )
 add_xcodebuild_common_args

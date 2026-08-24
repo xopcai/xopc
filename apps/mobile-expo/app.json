@@ -107,6 +107,7 @@
           "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to take photos in chat."
         }
       ],
+      "./plugins/with-ios-widget-version",
       [
         "expo-widgets",
         {
@@ -124,8 +125,7 @@
             }
           ]
         }
-      ],
-      "./plugins/with-ios-widget-version"
+      ]
     ],
     "extra": {
       "router": {},

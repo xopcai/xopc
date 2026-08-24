@@ -256,14 +256,40 @@ EAS profiles:
 | `pnpm -C apps/mobile-expo run submit:ios` | Submit latest production iOS build |
 | `pnpm -C apps/mobile-expo run submit:ios:direct` | Upload local `dist/xopc.ipa` directly, or pass an IPA URL/local path |
 
-Local iOS build example:
+### One-command iOS TestFlight release
+
+When the App Store Connect API key is configured locally, run:
+
+```bash
+APPLE_TEAM_ID="TEAMID1234" pnpm run mobile:release:ios:testflight
+```
+
+This runs the mobile quality checks, regenerates the iOS project, builds and validates the
+production IPA, and uploads it to TestFlight. By default, the private API key is read from
+`~/.appstoreconnect/private_keys/AuthKey_<APP_STORE_CONNECT_API_KEY>.p8`. To build without upload:
+
+```bash
+UPLOAD_TO_TESTFLIGHT=0 APPLE_TEAM_ID="TEAMID1234" pnpm run mobile:release:ios:testflight
+```
+
+The `Mobile iOS TestFlight` GitHub Actions workflow supports manual one-command builds/uploads.
+Tags matching `mobile-expo-v*` automatically build and upload the production IPA to TestFlight,
+while retaining the `xopc-ios-production` artifact for 30 days. It requires these secrets:
+
+- `APPLE_TEAM_ID`
+- `APP_STORE_CONNECT_API_KEY`
+- `APP_STORE_CONNECT_API_ISSUER`
+- `APP_STORE_CONNECT_PRIVATE_KEY_BASE64`
+
+Low-level local iOS build example:
 
 ```bash
 DEVELOPMENT_TEAM="TEAMID1234" pnpm -C apps/mobile-expo run build:ios
 pnpm -C apps/mobile-expo run submit:ios:direct
 ```
 
-`build:ios` uses the current timestamp as the iOS build number by default; pass `IOS_BUILD_NUMBER=123` when you need a fixed value.
+`build:ios` synchronizes the marketing version from `app.json` and uses the current timestamp as
+the iOS build number by default; pass `IOS_BUILD_NUMBER=123` when you need a fixed value.
 
 To let Xcode fetch signing assets automatically, reuse the App Store Connect API key environment variables from the direct submit script:
 
