@@ -225,13 +225,21 @@ configuration through `plugins/with-android-release-signing.js`; credentials are
 through environment variables and must not be committed.
 
 Tags matching `mobile-expo-v*` trigger `.github/workflows/mobile-expo-release.yml`. The workflow
-builds the signed APK/AAB directly on a GitHub Ubuntu runner without EAS Build. It requires these
-GitHub Actions secrets:
+builds a preview APK and production APK/AAB artifacts directly on GitHub Ubuntu runners without
+EAS Build. Manual runs can select `preview`, `production`, or `both`. It requires these GitHub
+Actions secrets:
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+- `ANDROID_PREVIEW_KEYSTORE_BASE64`
+- `ANDROID_PREVIEW_KEYSTORE_PASSWORD`
+- `ANDROID_PREVIEW_KEY_ALIAS`
+- `ANDROID_PREVIEW_KEY_PASSWORD`
+- `ANDROID_PRODUCTION_KEYSTORE_BASE64`
+- `ANDROID_PRODUCTION_KEYSTORE_PASSWORD`
+- `ANDROID_PRODUCTION_KEY_ALIAS`
+- `ANDROID_PRODUCTION_KEY_PASSWORD`
+
+The workflow uploads `xopc-android-preview` (APK) and `xopc-android-production` (APK + AAB).
+Tag-triggered GitHub Releases use the production APK.
 
 Reuse the Android keystore from previous EAS builds. Changing it prevents upgrades over existing
 installs, and Google Play rejects updates signed with the wrong upload key.
