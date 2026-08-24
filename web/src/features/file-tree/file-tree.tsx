@@ -1,5 +1,5 @@
 import { ChevronRight, FileText, Folder, MoreHorizontal } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
 
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { fileExtColor } from '@/features/file-tree/file-tree-utils';
@@ -204,6 +204,7 @@ function TreeRow({
   onExpandDir,
   onAction,
   actionLabels,
+  onFileDragStart,
 }: {
   entry: TreeEntry;
   depth: number;
@@ -213,6 +214,7 @@ function TreeRow({
   onExpandDir?: (dirPath: string) => void;
   onAction?: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
   actionLabels?: FileTreeActionLabels;
+  onFileDragStart?: (event: DragEvent<HTMLButtonElement>, entry: TreeEntry) => void;
 }) {
   /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
   const [open, setOpen] = useState(false);
@@ -263,6 +265,7 @@ function TreeRow({
                 onExpandDir={onExpandDir}
                 onAction={onAction}
                 actionLabels={actionLabels}
+                onFileDragStart={onFileDragStart}
               />
             ))}
           </div>
@@ -275,13 +278,16 @@ function TreeRow({
     <div className="group flex w-full items-stretch gap-0.5">
       <button
         type="button"
+        draggable={Boolean(onFileDragStart)}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm',
           'hover:bg-surface-hover',
+          onFileDragStart && 'cursor-grab active:cursor-grabbing',
           isSel && 'bg-accent-soft text-accent-fg',
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
         onClick={() => onSelect(entry.path, false)}
+        onDragStart={onFileDragStart ? (event) => onFileDragStart(event, entry) : undefined}
       >
         <FileText className={cn('size-3.5 shrink-0', fileExtColor(entry.name))} aria-hidden />
         <span className="truncate">{entry.name}</span>
@@ -323,6 +329,7 @@ export function FileTree({
   emptyHint,
   searchQuery,
   emptySearchHint,
+  onFileDragStart,
 }: {
   tree: TreeEntry[];
   selectedPath: string | null;
@@ -335,6 +342,7 @@ export function FileTree({
   emptyHint: string;
   searchQuery?: string;
   emptySearchHint?: string;
+  onFileDragStart?: (event: DragEvent<HTMLButtonElement>, entry: TreeEntry) => void;
 }) {
   const normalizedSearchQuery = (searchQuery ?? '').trim().toLocaleLowerCase();
   const visibleTree = useMemo(
@@ -367,6 +375,7 @@ export function FileTree({
           onExpandDir={onExpandDir}
           onAction={onAction}
           actionLabels={actionLabels}
+          onFileDragStart={onFileDragStart}
         />
       ))}
     </div>

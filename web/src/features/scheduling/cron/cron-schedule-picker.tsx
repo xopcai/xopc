@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 import { TimePicker } from '@/components/ui/time-picker';
+import { DatePicker } from '@/components/ui/date-picker';
 
 import {
   buildCronFromPickerState,
@@ -39,11 +40,6 @@ export type CronSchedulePickerLabels = {
 const pickerSelectClass = cn(
   selectTriggerClass,
   'min-w-0 shrink text-xs sm:min-w-[7rem] sm:max-w-[11rem]',
-);
-
-const dateInputClass = cn(
-  'h-9 min-w-[9.5rem] shrink-0 rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1.5 text-sm text-fg',
-  formControlBorderFocusClass,
 );
 
 const numberInputClass = cn(
@@ -171,15 +167,12 @@ export function CronSchedulePicker({
 
       {mode === 'no_repeat' && (
         <>
-          <input
-            type="date"
+          <DatePicker
             disabled={disabled}
-            className={dateInputClass}
+            className="h-9 min-w-[9.5rem] shrink-0 bg-surface-panel px-2"
             value={onceDate}
-            onChange={(e) => {
-              commitPicker({ onceDate: e.target.value });
-            }}
-            aria-label={labels.modeNoRepeat}
+            onChange={(value) => commitPicker({ onceDate: value })}
+            ariaLabel={labels.modeNoRepeat}
           />
           <TimePicker
             disabled={disabled}

@@ -164,6 +164,8 @@
       "title": "Projects",
       "subtitle": "Create, find, and manage spaces for ongoing work.",
       "filterLabel": "Filter projects",
+      "resultCount": "{{status}} · {{count}} projects",
+      "clearSearch": "Clear search",
       "pin": "Pin",
       "unpin": "Unpin",
       "archive": "Archive",
