@@ -50,8 +50,16 @@ if [[ "$TARGET" == "aab" || "$TARGET" == "both" ]]; then
   gradle_tasks+=(":app:bundleRelease")
 fi
 
+gradle_args=("--stacktrace")
+if [[ -n "${ANDROID_GRADLE_JVM_ARGS:-}" ]]; then
+  gradle_args+=("-Dorg.gradle.jvmargs=${ANDROID_GRADLE_JVM_ARGS}")
+fi
+if [[ -n "${ANDROID_GRADLE_MAX_WORKERS:-}" ]]; then
+  gradle_args+=("--max-workers=${ANDROID_GRADLE_MAX_WORKERS}")
+fi
+
 echo "Building Android release target: $TARGET"
-(cd "${APP_DIR}/android" && ./gradlew "${gradle_tasks[@]}" --stacktrace)
+(cd "${APP_DIR}/android" && ./gradlew "${gradle_args[@]}" "${gradle_tasks[@]}")
 
 mkdir -p "$OUTPUT_DIR"
 if [[ "$TARGET" == "apk" || "$TARGET" == "both" ]]; then
