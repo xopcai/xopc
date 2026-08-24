@@ -98,6 +98,9 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -117,6 +120,8 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_GRADLE_JVM_ARGS: -Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+          ANDROID_GRADLE_MAX_WORKERS: "2"
         run: bash scripts/apps/mobile-expo/build-android-release.sh "${{ steps.target.outputs.value }}"
 
       - name: Upload Android artifacts
