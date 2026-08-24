@@ -280,6 +280,24 @@ GitHub Actions 中的 `Mobile iOS TestFlight` 支持手动一键构建/上传。
 - `APP_STORE_CONNECT_API_KEY`
 - `APP_STORE_CONNECT_API_ISSUER`
 - `APP_STORE_CONNECT_PRIVATE_KEY_BASE64`
+- `IOS_DISTRIBUTION_CERTIFICATE_BASE64`
+- `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD`
+- `IOS_PROVISIONING_PROFILE_MAIN_BASE64`
+- `IOS_PROVISIONING_PROFILE_SHARE_BASE64`
+- `IOS_PROVISIONING_PROFILE_WIDGET_BASE64`
+
+首次配置或续期 iOS 签名资料时，先通过 EAS 为主 App、Share Extension 和 Widget Extension
+生成 production 凭据并下载到本机，再一键同步到 GitHub Secrets：
+
+```bash
+pnpm -C apps/mobile-expo exec eas credentials -p ios
+pnpm run mobile:configure:ios:github
+```
+
+在 EAS 菜单中选择 `production`，登录 Apple 账号，然后在 `Build Credentials` 中为全部
+target 配置 App Store 凭据；返回后选择
+`credentials.json: Upload/Download credentials between EAS servers and your local json` 下载。
+同步脚本会校验每份 profile 的 bundle ID，且不会输出证书密码或证书内容。
 
 底层本地 iOS 构建示例：
 
@@ -291,7 +309,8 @@ pnpm -C apps/mobile-expo run submit:ios:direct
 `build:ios` 默认从 `app.json` 同步营销版本，并用当前时间生成唯一 iOS build number；需要
 固定值时可传 `IOS_BUILD_NUMBER=123`。
 
-如需让 Xcode 自动拉取签名配置，可复用提交脚本的 App Store Connect API Key 环境变量：
+若 Apple 团队为 API Key 开启了 Cloud-managed Distribution Certificate 权限，也可让 Xcode
+自动拉取签名配置：
 
 ```bash
 APP_STORE_CONNECT_API_KEY="KEY_ID" \
