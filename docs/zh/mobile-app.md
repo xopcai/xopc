@@ -1,5 +1,7 @@
 # 手机端 App
 
+Android/iOS 正式构建、签名凭据和 TestFlight 发布步骤见[移动端构建与发布手册](../mobile-build-release.md)。
+
 如果你想在 iOS 或 Android 上继续使用同一个 xopc 助手，可以使用 **[xopc 移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)**。
 
 移动端 App 是 Expo / React Native 网关客户端，现在维护在当前仓库的 `apps/mobile-expo` 目录。它不会替代网关，也不会变成另一个云端账号：它连接到已经运行的 xopc 网关，可通过局域网、FRP、Tailscale 或你自己的 HTTPS 反向代理访问，并使用同一套网关 Bearer token / 配对流程。

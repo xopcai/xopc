@@ -1,5 +1,7 @@
 # Mobile app
 
+For the verified Android/iOS signing, GitHub Actions, artifact, and TestFlight procedures, see the [mobile build and release runbook](./mobile-build-release.md).
+
 Use the **[xopc mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)** when you want to continue the same xopc assistant from iOS or Android.
 
 The mobile app is an Expo / React Native client for the xopc gateway, now maintained in this repository under `apps/mobile-expo`. It does not replace the gateway or create a separate hosted account: it connects to a running gateway over LAN, FRP, Tailscale, or your own HTTPS reverse proxy, then uses the same gateway Bearer token / pairing flow.
