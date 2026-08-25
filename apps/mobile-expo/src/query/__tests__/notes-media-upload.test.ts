@@ -105,6 +105,38 @@ describe('captureNote attachments', () => {
     expect(file.type).toBe('image/png');
     expect(await file.text()).toBe('png-data');
   });
+
+  it('links a multipart note to its project', async () => {
+    await captureNote({
+      projectId: 'project-1',
+      text: 'reference',
+      attachments: [{ fileName: 'brief.txt', mimeType: 'text/plain', data: btoa('brief') }],
+    });
+
+    const form = mockedApiFetch.mock.calls[0][1]?.body as FormData;
+    expect(form.get('projectId')).toBe('project-1');
+  });
+});
+
+describe('captureNote project', () => {
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({ note: { id: 'note-1' } })));
+  });
+
+  it('uses the full create endpoint so a text note can retain its project link', async () => {
+    await captureNote({ projectId: 'project-1', text: 'Project decision' });
+
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/notes', {
+      method: 'POST',
+      body: JSON.stringify({
+        markdown: 'Project decision',
+        projectId: 'project-1',
+        channel: 'app',
+        platform: 'ios',
+      }),
+    });
+  });
 });
 
 describe('quickCaptureNote', () => {

@@ -13,8 +13,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { InfiniteData } from '@tanstack/react-query';
+import { AppState } from 'react-native';
 
-import { AgentMessageSender, submitClarifyResponse, type MessagingCallbacks } from '../../api/agent-client';
+import {
+  AgentMessageSender,
+  AgentStreamReplayExpiredError,
+  submitClarifyResponse,
+  type MessagingCallbacks,
+} from '../../api/agent-client';
 import { queryKeys } from '../../query/keys';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { fetchSessionMessagePage, type SessionMessagePage } from '../../query/sessions';
@@ -63,6 +69,7 @@ import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { requestMobileRealtimeReconnect } from '../gateway/use-gateway-realtime';
 import { readPendingSessionInput } from '../gateway/session-input-outbox';
 import { resolveResumeRunId } from './resolve-resume-run-id';
+import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 
 const STREAMING_RENDER_THROTTLE_MS = 100;
 const QUEUED_MESSAGE_DISPLAY_DELAY_MS = 20_000;
@@ -272,6 +279,17 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const invalidateSession = useCallback(() => {
     invalidateSessionByKey(sessionKey);
   }, [invalidateSessionByKey, sessionKey]);
+
+  const reconcileSessionHead = useCallback(async (targetSessionKey = sessionKey) => {
+    await refreshSessionHeadByKey(targetSessionKey).catch(() => {
+      invalidateSessionByKey(targetSessionKey);
+    });
+    if (activeSessionKeyRef.current !== targetSessionKey) return;
+    sendingRef.current = false;
+    streamActiveRef.current = false;
+    runBusyRef.current = false;
+    clearAllState();
+  }, [clearAllState, invalidateSessionByKey, refreshSessionHeadByKey, sessionKey]);
 
   // ── Session key change ───────────────────────────────────
   useEffect(() => {
@@ -619,6 +637,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
           return true;
         }
+        if (e instanceof AgentStreamReplayExpiredError) {
+          await reconcileSessionHead(sessionKey);
+          return true;
+        }
         clearQueuedDisplayTimer();
         const pendingInput = readPendingSessionInput(sessionKey);
         setInputQueued(Boolean(pendingInput));
@@ -639,6 +661,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       clearStreamingMessage,
       buildCallbacks,
       clearQueuedDisplayTimer,
+      reconcileSessionHead,
       scheduleQueuedDeliveryState,
       setOptimisticDeliveryState,
     ],
@@ -692,6 +715,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           scheduleQueuedDeliveryState(readPendingSessionInput(sessionKey)?.createdAt);
           return;
         }
+        if (e instanceof AgentStreamReplayExpiredError) {
+          await reconcileSessionHead(sessionKey);
+          return;
+        }
         clearQueuedDisplayTimer();
         const pendingInput = readPendingSessionInput(sessionKey);
         setInputQueued(Boolean(pendingInput));
@@ -710,6 +737,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       buildCallbacks,
       m.chat.voiceSending,
       clearQueuedDisplayTimer,
+      reconcileSessionHead,
       scheduleQueuedDeliveryState,
       setOptimisticDeliveryState,
     ],
@@ -801,9 +829,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         const message = e instanceof Error ? e.message : String(e);
         if (isTransientNetworkError(message)) throw e;
         clearPendingAgentRun(sessionKey);
-        setStreaming(false);
-        streamingRef.current = false;
-        await refreshSessionHeadByKey(sessionKey).catch(() => invalidateSessionByKey(sessionKey));
+        await reconcileSessionHead(sessionKey);
       }
     } finally {
       resumeInFlightRef.current = false;
@@ -812,7 +838,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     sessionKey,
     invalidateSessionByKey,
     buildCallbacks,
-    refreshSessionHeadByKey,
+    reconcileSessionHead,
   ]);
 
   // ── Stream recovery ──────────────────────────────────────
@@ -835,12 +861,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       if (pendingInput) scheduleQueuedDeliveryState(pendingInput.createdAt);
     },
     onReconcile: async () => {
-      sendingRef.current = false;
-      streamActiveRef.current = false;
-      setStreaming(false);
-      streamingRef.current = false;
-      setInputQueued(false);
-      await refreshSessionHeadByKey(sessionKey).catch(() => invalidateSessionByKey(sessionKey));
+      await reconcileSessionHead(sessionKey);
     },
     onSubmissionFailed: () => {
       clearQueuedDisplayTimer();
@@ -865,7 +886,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     streaming,
   });
 
-  const triggerStreamRecovery = useCallback(() => {
+  const wakeStreamRecovery = useCallback(() => {
     if (!sessionKey) return;
     if (senderRef.current.isStreamingFor(sessionKey)) {
       senderRef.current.detachLocalStream();
@@ -874,9 +895,38 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     streamActiveRef.current = streamingRef.current;
     runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
     lastStreamActivityAtRef.current = Date.now();
-    requestMobileRealtimeReconnect();
     streamRecoveryRef.current.wake();
   }, [awaitingSessionRefresh, sessionKey]);
+
+  const triggerStreamRecovery = useCallback(() => {
+    requestMobileRealtimeReconnect();
+    wakeStreamRecovery();
+  }, [wakeStreamRecovery]);
+
+  // Native timers and socket callbacks can be suspended while the device is
+  // locked. On foreground, explicitly replace the old local run attachment;
+  // the root realtime owner is responsible for reconnecting the shared socket.
+  useEffect(() => {
+    let previous = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (next) => {
+      const previousAppState = previous;
+      previous = next;
+      const sessionIsActive = Boolean(sessionKey) && activeSessionKeyRef.current === sessionKey;
+      const hasResumableWork = Boolean(sessionKey) && (
+        senderRef.current.isStreamingFor(sessionKey)
+        || Boolean(readPendingSessionInput(sessionKey))
+        || Boolean(readPendingAgentRunId(sessionKey))
+      );
+      if (!shouldWakeStreamRecoveryOnForeground({
+        previousAppState,
+        nextAppState: next,
+        sessionIsActive,
+        hasResumableWork,
+      })) return;
+      wakeStreamRecovery();
+    });
+    return () => subscription.remove();
+  }, [sessionKey, wakeStreamRecovery]);
 
   // Resolve server-side active runs on session entry. Local pending run storage is
   // only a cache; the gateway is the source of truth when the screen remounts.

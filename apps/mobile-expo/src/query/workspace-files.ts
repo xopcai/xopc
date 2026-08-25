@@ -3,6 +3,7 @@ import { apiFetch, formatApiHttpError } from '../api/client';
 export type WorkspaceScope =
   | { kind: 'session'; sessionKey: string }
   | { kind: 'agent'; agentId: string }
+  | { kind: 'project'; projectId: string }
   | { kind: 'default' };
 
 export type WorkspaceEntry = {
@@ -26,7 +27,7 @@ type WorkspaceEntryWire = Partial<Omit<WorkspaceEntry, 'isDirectory'>> & {
 };
 
 function appendScope(params: URLSearchParams, scope?: WorkspaceScope): void {
-  if (!scope || scope.kind === 'default') return;
+  if (!scope || scope.kind === 'default' || scope.kind === 'project') return;
   if (scope.kind === 'session') {
     const sessionKey = scope.sessionKey.trim();
     if (sessionKey) params.set('sessionKey', sessionKey);
@@ -44,6 +45,7 @@ async function parseErrorMessage(res: Response): Promise<string | undefined> {
 export function workspaceScopeKey(scope?: WorkspaceScope): string {
   if (!scope || scope.kind === 'default') return 'default';
   if (scope.kind === 'session') return `session:${scope.sessionKey.trim()}`;
+  if (scope.kind === 'project') return `project:${scope.projectId.trim()}`;
   return `agent:${scope.agentId.trim()}`;
 }
 
@@ -92,17 +94,21 @@ export async function fetchWorkspaceDir({
 }): Promise<WorkspaceEntry[]> {
   const params = new URLSearchParams();
   const normalizedDir = normalizeWorkspaceDir(dir);
-  if (normalizedDir) params.set('dir', normalizedDir);
+  if (normalizedDir) params.set(scope?.kind === 'project' ? 'path' : 'dir', normalizedDir);
   appendScope(params, scope);
 
   const query = params.toString();
-  const res = await apiFetch(`/api/workspace/editor/list${query ? `?${query}` : ''}`);
+  const endpoint = scope?.kind === 'project'
+    ? `/api/projects/${encodeURIComponent(scope.projectId)}/files`
+    : '/api/workspace/editor/list';
+  const res = await apiFetch(`${endpoint}${query ? `?${query}` : ''}`);
   if (!res.ok) {
     throw new Error(formatApiHttpError(res.status, res.statusText, await parseErrorMessage(res)));
   }
-  const data = (await res.json()) as ListWorkspaceDirResponse;
-  if (!data.ok || !Array.isArray(data.payload?.entries)) {
+  const data = (await res.json()) as ListWorkspaceDirResponse & { entries?: WorkspaceEntryWire[] };
+  const entries = scope?.kind === 'project' ? data.entries : data.payload?.entries;
+  if (!data.ok || !Array.isArray(entries)) {
     throw new Error('Invalid workspace list response');
   }
-  return data.payload.entries.map(normalizeWorkspaceEntry);
+  return entries.map(normalizeWorkspaceEntry);
 }

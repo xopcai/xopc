@@ -59,7 +59,7 @@ vi.mock('../../storage/mmkv', () => ({
   pendingRunStorageKey: (sessionKey: string) => `pending:${sessionKey}`,
 }));
 
-import { AgentMessageSender } from '../agent-client';
+import { AgentMessageSender, AgentStreamReplayExpiredError } from '../agent-client';
 import {
   clearMobileEndpointTurnClaim,
   publishMobileEndpointTurnClaim,
@@ -120,7 +120,7 @@ describe('AgentMessageSender local detach', () => {
       topic: 'run:run-expired', requestedSeq: 0, earliestSeq: 1, recoverable: false,
     });
 
-    await expect(pending).rejects.toThrow('realtime replay expired');
+    await expect(pending).rejects.toBeInstanceOf(AgentStreamReplayExpiredError);
     expect(testState.memory.get('pending:session-a')).toBeUndefined();
   });
 

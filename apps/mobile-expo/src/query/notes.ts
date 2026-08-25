@@ -86,6 +86,7 @@ export interface NotesListResult {
 }
 
 export interface NotesListQuery {
+  projectId?: string;
   status?: NoteStatus;
   kind?: NoteKind;
   search?: string;
@@ -131,6 +132,7 @@ async function readError(res: Response): Promise<Error> {
 
 export async function fetchNotes(query?: NotesListQuery): Promise<NotesListResult> {
   const params = new URLSearchParams();
+  if (query?.projectId) params.set('projectId', query.projectId);
   if (query?.status) params.set('status', query.status);
   if (query?.kind) params.set('kind', query.kind);
   if (query?.search) params.set('search', query.search);
@@ -183,6 +185,7 @@ export type CaptureNoteAttachment = {
 };
 
 export interface CaptureNoteInput {
+  projectId?: string;
   markdown?: string;
   text?: string;
   kind?: NoteKind;
@@ -210,6 +213,7 @@ async function createNoteJson(input: CaptureNoteInput): Promise<CaptureNoteResul
     method: 'POST',
     body: JSON.stringify({
       markdown: (input.markdown ?? input.text)?.trim() || undefined,
+      projectId: input.projectId,
       kind: input.kind,
       channel: input.channel ?? 'app',
       platform,
@@ -232,7 +236,7 @@ export async function createBlankNote(): Promise<CaptureNoteResult> {
 export async function captureNote(input: CaptureNoteInput): Promise<CaptureNoteResult> {
   const trimmedMarkdown = (input.markdown ?? input.text)?.trim() ?? '';
   if (!input.attachments?.length) {
-    if (!input.kind && trimmedMarkdown) return quickCaptureNote(trimmedMarkdown);
+    if (!input.projectId && !input.kind && trimmedMarkdown) return quickCaptureNote(trimmedMarkdown);
     return createNoteJson(input);
   }
 
@@ -240,6 +244,7 @@ export async function captureNote(input: CaptureNoteInput): Promise<CaptureNoteR
   const [firstAttachment, ...restAttachments] = input.attachments;
   const form = new FormData();
   form.append('markdown', trimmedMarkdown);
+  if (input.projectId) form.append('projectId', input.projectId);
   if (input.kind) form.append('kind', input.kind);
   form.append('channel', input.channel ?? 'app');
   form.append('platform', platform);

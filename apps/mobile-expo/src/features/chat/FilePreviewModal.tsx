@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import {
   Image,
   Linking,
@@ -13,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import type { ShareAutoRequest } from '../../api/share';
+import { apiFetch } from '../../api/client';
 import { t, useMessages } from '../../i18n/messages';
 import { useCreateShare } from '../../query/shares';
 import { useGatewayStore } from '../../stores/gateway-store';
@@ -46,6 +49,7 @@ export type FilePreviewModalProps = {
   file: PreviewableFile | null;
   sessionKey?: string | null;
   agentId?: string | null;
+  projectId?: string | null;
   onClose: () => void;
 };
 
@@ -102,6 +106,7 @@ async function loadPreview(
   file: PreviewableFile,
   sessionKey?: string | null,
   agentId?: string | null,
+  projectId?: string | null,
 ): Promise<LoadedPreview> {
   const name = file.name || fileName(file.workspaceRelativePath ?? 'preview');
   const mimeType = file.mimeType || mimeTypeFromFileName(name);
@@ -133,13 +138,17 @@ async function loadPreview(
       return { kind, mimeType, text: null, base64: globalThis.btoa(binary), absolutePath };
     }
     if (file.workspaceRelativePath) {
-      const loaded = await readWorkspaceFileBase64(file.workspaceRelativePath, { sessionKey, agentId });
+      const loaded = await readWorkspaceFileBase64(file.workspaceRelativePath, { sessionKey, agentId, projectId });
       return { kind, mimeType, text: null, base64: loaded.contentBase64, absolutePath: loaded.absolutePath ?? absolutePath };
     }
     return { kind, mimeType, text: null, base64: null, absolutePath };
   }
 
   if (kind === 'html') {
+    if (file.workspaceRelativePath && projectId) {
+      const loaded = await readWorkspaceFile(file.workspaceRelativePath, { projectId });
+      return { kind, mimeType, text: loaded.content, base64: null, absolutePath: loaded.absolutePath ?? absolutePath };
+    }
     if (file.workspaceRelativePath) {
       return {
         kind,
@@ -168,7 +177,7 @@ async function loadPreview(
       return { kind, mimeType, text: file.textContent, base64: null, absolutePath };
     }
     if (file.workspaceRelativePath) {
-      const loaded = await readWorkspaceFile(file.workspaceRelativePath, { sessionKey, agentId });
+      const loaded = await readWorkspaceFile(file.workspaceRelativePath, { sessionKey, agentId, projectId });
       return { kind, mimeType, text: loaded.content, base64: null, absolutePath: loaded.absolutePath ?? absolutePath };
     }
     const fromBase64 = normalizeBase64Payload(file.contentBase64);
@@ -215,7 +224,7 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export function FilePreviewModal({ visible, file, sessionKey, agentId, onClose }: FilePreviewModalProps) {
+export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId, onClose }: FilePreviewModalProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const m = useMessages();
@@ -230,8 +239,8 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, onClose }
 
   const title = useMemo(() => (file ? file.name || fileName(file.workspaceRelativePath ?? 'Preview') : ''), [file]);
   const shareRequest = useMemo(
-    () => (file ? buildShareRequestForFile(file, sessionKey, agentId) : null),
-    [agentId, file, sessionKey],
+    () => (file && !projectId ? buildShareRequestForFile(file, sessionKey, agentId) : null),
+    [agentId, file, projectId, sessionKey],
   );
 
   useEffect(() => {
@@ -241,7 +250,7 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, onClose }
     setLoaded(null);
     if (!visible || !file) return;
     setLoading(true);
-    void loadPreview(file, sessionKey, agentId)
+    void loadPreview(file, sessionKey, agentId, projectId)
       .then((next) => {
         if (!cancelled) setLoaded(next);
       })
@@ -254,7 +263,7 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, onClose }
     return () => {
       cancelled = true;
     };
-  }, [agentId, file, sessionKey, visible]);
+  }, [agentId, file, projectId, sessionKey, visible]);
 
   useEffect(() => {
     if (!downloadError) return;
@@ -268,6 +277,23 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, onClose }
     setDownloadError('');
     setDownloadPending(true);
     try {
+      if (projectId?.trim() && file.workspaceRelativePath) {
+        if (!(await Sharing.isAvailableAsync())) throw new Error(cm.filePreviewShareUnavailable);
+        const params = new URLSearchParams({ path: file.workspaceRelativePath });
+        const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId.trim())}/files/raw?${params.toString()}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const directory = new Directory(Paths.cache, 'project-file-share', `${Date.now()}`);
+        directory.create({ intermediates: true });
+        try {
+          const localFile = new File(directory, file.name || 'project-file');
+          localFile.create();
+          localFile.write(new Uint8Array(await response.arrayBuffer()));
+          await Sharing.shareAsync(localFile.uri, { mimeType: file.mimeType, dialogTitle: cm.shareFile });
+        } finally {
+          try { directory.delete(); } catch { /* Sharing already completed. */ }
+        }
+        return;
+      }
       const remoteUrl = buildDownloadUrlForFile(file);
       if (remoteUrl) {
         await Linking.openURL(remoteUrl);
