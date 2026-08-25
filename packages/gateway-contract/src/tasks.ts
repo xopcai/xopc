@@ -90,7 +90,7 @@ export const TaskSchema = z.object({
   source: z.string(),
   locale: z.enum(['en', 'zh']).optional(),
   latestContractVersion: z.number().int().positive(),
-  boardRank: z.number().finite(),
+  boardRank: z.number().finite().default(0),
   version: z.number().int().positive(),
   contract: TaskContractSchema.optional(),
   createdAt: z.number().int().nonnegative(),
