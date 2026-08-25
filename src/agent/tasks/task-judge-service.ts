@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
+import type { TaskEvidence, TaskJudgment } from '@xopcai/gateway-contract';
 
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
@@ -11,11 +12,11 @@ import {
 } from '../../providers/model-response.js';
 import { getApiKey, resolveModel } from '../../providers/index.js';
 import type { SessionStore } from '../../session/store.js';
-import type { TaskEvidence, TaskJudgment } from '@xopcai/gateway-contract';
 import { createLogger } from '../../utils/logger.js';
+import { TaskApplicationService } from '../../tasks/task-application-service.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
-import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import type { ModelManager } from '../models/index.js';
 
 const log = createLogger('TaskJudge');
@@ -110,6 +111,7 @@ export class TaskJudgeService {
   readonly #tasks = new TaskRepository();
   readonly #runs = new TaskRunRepository();
   readonly #application = new TaskApplicationService();
+  readonly #conversations = new TaskConversationRepository();
 
   constructor(private readonly options: {
     sessionStore: SessionStore;
@@ -119,10 +121,7 @@ export class TaskJudgeService {
 
   async reviewTurn(payload: TaskTurnCompletion): Promise<void> {
     if (payload.skipTaskReview || payload.aborted || payload.streamError) return;
-    const metadata = await this.options.sessionStore.getMetadata(payload.sessionKey);
-    const taskId = typeof metadata?.customData?.taskId === 'string'
-      ? metadata.customData.taskId.trim()
-      : '';
+    const taskId = this.#conversations.resolveActiveExecutionSession(payload.sessionKey)?.taskId;
     if (!taskId) return;
 
     const task = this.#tasks.get(taskId);

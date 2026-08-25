@@ -13,6 +13,7 @@ import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskContextRepository } from '../../tasks/task-context-repository.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
@@ -213,7 +214,12 @@ export class WorkflowRunService {
         sessionKey,
       });
       if (!started) throw new Error('TaskRun changed before workflow execution started');
-      context.linkSession({ taskId: task.id, sessionKey, role: 'execution' });
+      new TaskConversationRepository().activateExecutionSession({
+        taskId: task.id,
+        sessionKey,
+        agentId: params.agentId,
+        runId: linkedTaskRun.id,
+      });
     }
     const source = normalizeWorkflowRunSourceForSession(params.source, sessionKey, params.parentSessionKey);
     const abortController = new AbortController();

@@ -1,5 +1,9 @@
 export const TASK_DETAIL_MODAL_PARAM = 'task';
 
+export function taskChatHref(taskId: string): string {
+  return `/chat/task/${encodeURIComponent(taskId)}`;
+}
+
 export function taskDetailModalHref(backgroundPath: string, taskId: string): string {
   const [pathname, rawSearch = ''] = backgroundPath.split('?');
   const search = new URLSearchParams(rawSearch);

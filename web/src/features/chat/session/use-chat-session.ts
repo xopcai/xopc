@@ -32,7 +32,7 @@ import { useChatSessionStreaming } from '@/features/chat/session/use-chat-sessio
 import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-session-window-events';
 
 /** @see docs/web/chat-session-semantics.md */
-export function useChatSession(options?: { fixedSessionKey?: string }) {
+export function useChatSession(options?: { fixedSessionKey?: string; taskId?: string }) {
   const navigate = useNavigate();
   const {
     isNewRoute,
@@ -193,6 +193,7 @@ export function useChatSession(options?: { fixedSessionKey?: string }) {
     detachForNewConversation,
     sessionKey: focusedSessionKey,
     hasMore,
+    taskId: options?.taskId,
   });
 
   const restoreLiveCacheIfNeeded = useCallback((key: string) => {
@@ -219,6 +220,7 @@ export function useChatSession(options?: { fixedSessionKey?: string }) {
   const { tryResumeAgentRun, sendMessage, interruptAndSend, abort, deleteMessageRound, retryUserMessageRound } =
     useChatSessionStreaming({
       sessionKey: focusedSessionKey,
+      taskId: options?.taskId,
       thinkingLevel,
       modelSupportsThinking,
       sessionKeyRef: focusedSessionKeyRef,
@@ -289,7 +291,7 @@ export function useChatSession(options?: { fixedSessionKey?: string }) {
   const loadTimelineById = useCallback(
     async (key: string) => {
       try {
-        const items = await sessionMgrRef.current.loadTimeline(key);
+        const items = await sessionMgrRef.current.loadTimeline(key, options?.taskId);
         if (routeSessionKeyRef.current !== key) return;
         setTimelineItems(items);
       } catch {
@@ -298,7 +300,7 @@ export function useChatSession(options?: { fixedSessionKey?: string }) {
         }
       }
     },
-    [routeSessionKeyRef],
+    [routeSessionKeyRef, options?.taskId],
   );
 
   useEffect(() => {

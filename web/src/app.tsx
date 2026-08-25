@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { CHAT_SESSION_ROUTE_PATH } from '@/features/chat/chat-session-route';
+import { TaskChatPage } from '@/features/chat/task/task-chat-page';
 import { DesktopPetEventBridge } from '@/features/desktop-pet/desktop-pet-event-bridge';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
@@ -180,6 +181,7 @@ const router = createHashRouter([
         path: 'chat',
         element: <ChatRouteLayout />,
         children: [
+          { path: 'task/:taskId', element: <TaskChatPage /> },
           { path: CHAT_SESSION_ROUTE_PATH, element: <ChatPage /> },
         ],
       },

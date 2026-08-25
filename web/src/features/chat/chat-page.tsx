@@ -82,9 +82,10 @@ function welcomeExplorationDaySeed(date = new Date()): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-export function ChatPage({ embedded = false, sessionKey }: {
+export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: {
   embedded?: boolean;
   sessionKey?: string;
+  taskId?: string;
 } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -111,7 +112,11 @@ export function ChatPage({ embedded = false, sessionKey }: {
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
 
-  const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession({ fixedSessionKey: sessionKey });
+  const taskId = boundTaskId?.trim() || null;
+  const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession({
+    fixedSessionKey: sessionKey,
+    taskId: taskId ?? undefined,
+  });
 
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
@@ -125,7 +130,6 @@ export function ChatPage({ embedded = false, sessionKey }: {
   const { data: sessionMetadata } = useChatSessionMetadata(chatSessionKey);
   const workflowRunId = sessionMetadata?.workflowRunId ?? null;
   const workflowOwnerAgentId = sessionMetadata?.ownerAgentId ?? undefined;
-  const taskId = sessionMetadata?.taskId ?? null;
   const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
   const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
     useSessionWorkflowRunLinks(chatSessionKey);
@@ -987,8 +991,8 @@ export function ChatPage({ embedded = false, sessionKey }: {
                     onRetryWelcomeContext={welcomeContextState.retry}
                     onRefreshWelcomeExploration={refreshWelcomeExploration}
                     onSelectWelcomeProject={selectWelcomeProject}
-                    onDeleteRound={stream.deleteMessageRound}
-                    onRetryUserMessageRound={stream.retryUserMessageRound}
+                    onDeleteRound={taskId ? undefined : stream.deleteMessageRound}
+                    onRetryUserMessageRound={taskId ? undefined : stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
@@ -1068,14 +1072,14 @@ export function ChatPage({ embedded = false, sessionKey }: {
                 onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
-                showModelSelector={!embedded}
+                showModelSelector
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
                   isSessionTransitioning || stream.streaming
                 }
                 contextUsageMessages={msgSlice.items}
                 onChatAgentChange={
-                  agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
+                  !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
                 currentAgentId={agents.displayAgentId}
               />

@@ -347,7 +347,7 @@ export function HomePage() {
         dependencies: [],
         context: [],
         authorityGrants: [],
-        activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
+        activation: { mode: 'start' },
       });
       setCreateOpen(false);
       setTask('');
