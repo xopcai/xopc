@@ -251,6 +251,10 @@ export const en = {
 
   // ── Chat screen ─────────────────────────────────────────
   chat: {
+    contextProjectLabel: 'Project context',
+    contextTaskLabel: 'Task context',
+    contextActive: 'Context is active',
+    openContext: 'Open context',
     missingKey: 'Missing session key.',
     inputPlaceholder: 'Ask anything…',
     inputPlaceholderSteering: 'Follow-up queues; tap row to edit',

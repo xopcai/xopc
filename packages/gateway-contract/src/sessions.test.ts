@@ -121,11 +121,15 @@ describe('sessions contract', () => {
     const page = parseSessionMessagePage({
       session: {
         key: 'session-a',
+        projectId: 'project-a',
+        customData: { taskId: 'task-a' },
         messages: [{ role: 'assistant', content: [{ type: 'text', text: 'hi' }] }],
       },
       pagination: { total: 1, limit: 50, offset: 0, hasMore: false },
     });
     expect(page.session.messages).toHaveLength(1);
+    expect(page.session.projectId).toBe('project-a');
+    expect(page.session.customData?.taskId).toBe('task-a');
   });
 
   it('normalizes active run and create responses', () => {

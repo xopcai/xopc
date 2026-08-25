@@ -44,6 +44,8 @@ export type SessionDetail = {
   status?: SessionStatus;
   sourceChannel?: string;
   sourceChatId?: string;
+  projectId?: string;
+  customData?: Record<string, unknown>;
   routing?: SessionRoutingMeta;
 };
 
