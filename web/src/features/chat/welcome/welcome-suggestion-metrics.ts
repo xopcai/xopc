@@ -1,14 +1,15 @@
-const STORAGE_KEY = 'xopc:chat-welcome-suggestion-metrics:v1';
+const STORAGE_KEY = 'xopc:chat-welcome-suggestion-metrics:v2';
 const EVENT_NAME = 'xopc:welcome-suggestion-metric';
 const MAX_RECORDS = 64;
 
-export type WelcomeSuggestionMetricType = 'impression' | 'pick' | 'send';
+export type WelcomeSuggestionMetricType = 'impression' | 'pick' | 'send' | 'skip';
 
 export type WelcomeSuggestionMetric = {
   type: WelcomeSuggestionMetricType;
   suggestionId: string;
   categoryId: string;
   contextKind: string;
+  agentId: string;
   edited?: boolean;
   characterDelta?: number;
 };
@@ -17,6 +18,8 @@ type MetricRecord = {
   impressions: number;
   picks: number;
   sends: number;
+  acceptedSends: number;
+  skips: number;
   lastUsedAt: number;
 };
 
@@ -36,6 +39,8 @@ function readStore(): MetricStore {
         impressions: Number.isFinite(record.impressions) ? Number(record.impressions) : 0,
         picks: Number.isFinite(record.picks) ? Number(record.picks) : 0,
         sends: Number.isFinite(record.sends) ? Number(record.sends) : 0,
+        acceptedSends: Number.isFinite(record.acceptedSends) ? Number(record.acceptedSends) : 0,
+        skips: Number.isFinite(record.skips) ? Number(record.skips) : 0,
         lastUsedAt: Number.isFinite(record.lastUsedAt) ? Number(record.lastUsedAt) : 0,
       };
     }
@@ -56,10 +61,22 @@ function writeStore(store: MetricStore): void {
   }
 }
 
-export function readWelcomeSuggestionAffinity(): Record<string, number> {
+function metricKey(metric: Pick<WelcomeSuggestionMetric, 'contextKind' | 'agentId' | 'suggestionId'>): string {
+  return `${metric.contextKind}\u0000${metric.agentId}\u0000${metric.suggestionId}`;
+}
+
+export function readWelcomeSuggestionAffinity(contextKind: string, agentId: string): Record<string, number> {
   const store = readStore();
   return Object.fromEntries(
-    Object.entries(store).map(([id, record]) => [id, Math.min(35, record.picks * 4 + record.sends * 8)]),
+    Object.entries(store).flatMap(([key, record]) => {
+      const [storedContext, storedAgent, suggestionId] = key.split('\u0000');
+      if (storedContext !== contextKind || storedAgent !== agentId || !suggestionId) return [];
+      const score = Math.max(
+        0,
+        record.picks * 3 + record.sends * 2 + record.acceptedSends * 6 - record.skips * 4,
+      );
+      return [[suggestionId, Math.min(35, score)]];
+    }),
   );
 }
 
@@ -67,11 +84,22 @@ export function recordWelcomeSuggestionMetric(metric: WelcomeSuggestionMetric): 
   const suggestionId = metric.suggestionId.trim();
   if (!suggestionId) return;
   const store = readStore();
-  const current = store[suggestionId] ?? { impressions: 0, picks: 0, sends: 0, lastUsedAt: 0 };
-  store[suggestionId] = {
+  const key = metricKey({ ...metric, suggestionId });
+  const current = store[key] ?? {
+    impressions: 0,
+    picks: 0,
+    sends: 0,
+    acceptedSends: 0,
+    skips: 0,
+    lastUsedAt: 0,
+  };
+  const acceptedSend = metric.type === 'send' && (!metric.edited || Math.abs(metric.characterDelta ?? 0) < 40);
+  store[key] = {
     impressions: current.impressions + (metric.type === 'impression' ? 1 : 0),
     picks: current.picks + (metric.type === 'pick' ? 1 : 0),
     sends: current.sends + (metric.type === 'send' ? 1 : 0),
+    acceptedSends: current.acceptedSends + (acceptedSend ? 1 : 0),
+    skips: current.skips + (metric.type === 'skip' ? 1 : 0),
     lastUsedAt: Date.now(),
   };
   writeStore(store);

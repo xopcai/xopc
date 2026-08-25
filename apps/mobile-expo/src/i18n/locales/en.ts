@@ -375,6 +375,17 @@ export const en = {
       },
       contextPrompts: {
         codingWorkspace: 'Start from "{{workspaceRoot}}" and understand project "{{projectName}}". Identify entry points, core modules, and the files worth reading first.',
+        projectBlocked: 'Project "{{projectName}}" is blocked by {{blockedReason}}. Propose the smallest way to unblock it and begin.',
+        projectNextAction: 'Continue the next action for project "{{projectName}}": {{nextAction}}. Check the state, then proceed.',
+        projectFailure: 'Project "{{projectName}}" failed: {{recentFailure}}. Find the cause and propose a verified fix.',
+        taskAttention: 'Task "{{taskTitle}}" needs attention: {{attentionSummary}}. Explain what I need to decide.',
+        taskNextAction: 'Continue the next action for task "{{taskTitle}}": {{nextAction}}. Check constraints, then proceed.',
+        taskFailure: 'Task "{{taskTitle}}" failed: {{recentFailure}}. Analyze the cause and propose verified recovery.',
+        taskReview: 'Check task "{{taskTitle}}" against its acceptance criteria and list evidence, gaps, and a completion verdict.',
+        taskClosed: 'Summarize the result, evidence, and remaining work for task "{{taskTitle}}".',
+        fileStart: 'Read "{{fileName}}", identify the most valuable improvements, and provide an editing plan.',
+        workflowNextAction: 'Continue the next action for workflow "{{workflowName}}": {{nextAction}}.',
+        workflowFailure: 'Workflow "{{workflowName}}" failed: {{recentFailure}}. Propose a recovery plan.',
       },
       exploreCards: [
         {
@@ -472,22 +483,38 @@ export const en = {
       codingProject: {
         headline: 'Start from this project',
         tagline: 'Understand the entry points, then move forward.',
-        categories: [],
+        categories: [
+          { id: 'understand-codebase', icon: 'code', title: 'Understand codebase', description: 'Structure, entry points, modules', scenarios: [{ prompt: 'Map the structure, entry points, and core modules of project "{{projectName}}".' }] },
+          { id: 'implement-feature', icon: 'target', title: 'Move a change forward', description: 'Locate, implement, verify', scenarios: [{ prompt: 'Find the best change to move forward in project "{{projectName}}" and give verification steps.' }] },
+          { id: 'review-debug', icon: 'review', title: 'Review and debug', description: 'Risks, tests, failures', scenarios: [{ prompt: 'Check project "{{projectName}}" for risks, test gaps, and failures.' }] },
+        ],
       },
       codingWorkspace: {
         headline: 'Start from this code workspace',
         tagline: 'Understand the structure and entry points, then make the next change.',
-        categories: [],
+        categories: [
+          { id: 'directory-understand', icon: 'folder', title: 'Understand folder', description: 'Structure and key files', scenarios: [{ prompt: 'Understand the structure, stack, and key files in "{{path}}".' }] },
+          { id: 'directory-entry', icon: 'code', title: 'Find entry points', description: 'Startup and config', scenarios: [{ prompt: 'Find startup entry points, config, and dependencies in "{{path}}".' }] },
+          { id: 'directory-organize', icon: 'review', title: 'Engineering review', description: 'Risks and cleanup', scenarios: [{ prompt: 'Review module boundaries and risks in "{{path}}".' }] },
+        ],
       },
       generalProject: {
-        headline: 'Start from this project',
-        tagline: 'Clarify state, then plan the next step.',
-        categories: [],
+        headline: 'Continue this project',
+        tagline: 'Use its current state to start the next step quickly.',
+        categories: [
+          { id: 'project-next-step', icon: 'target', title: 'Continue next step', description: 'Follow the current recommendation', scenarios: [{ prompt: 'Review project "{{projectName}}" and execute its smallest next step.' }] },
+          { id: 'project-status', icon: 'search', title: 'Check project status', description: 'Progress, risks, blockers', scenarios: [{ prompt: 'Summarize progress, risks, and blockers for project "{{projectName}}".' }] },
+          { id: 'project-material', icon: 'documents', title: 'Prepare project update', description: 'Summary and communication', scenarios: [{ prompt: 'Prepare a concise progress update for project "{{projectName}}".' }] },
+        ],
       },
       note: {
         headline: 'Continue this note',
         tagline: 'Summarize, expand, or turn it into action.',
-        categories: [],
+        categories: [
+          { id: 'note-summarize', icon: 'note', title: 'Summarize note', description: 'Ideas and conclusions', scenarios: [{ prompt: 'Summarize the core ideas and conclusions in "{{noteTitle}}".' }] },
+          { id: 'note-think', icon: 'search', title: 'Think further', description: 'Questions and gaps', scenarios: [{ prompt: 'Find questions and gaps worth exploring in "{{noteTitle}}".' }] },
+          { id: 'note-output', icon: 'content', title: 'Turn into output', description: 'Article, tasks, plan', scenarios: [{ prompt: 'Turn "{{noteTitle}}" into an actionable output.' }] },
+        ],
       },
       workingDirectory: {
         headline: 'Start from the current folder',
@@ -522,6 +549,26 @@ export const en = {
           },
         ],
       },
+      task: {
+        headline: 'Move task "{{taskTitle}}" forward',
+        tagline: 'Handle its next step, blockers, and acceptance.',
+        categories: [
+          { id: 'task-next-step', icon: 'target', title: 'Continue next step', description: 'Act and verify', scenarios: [{ prompt: 'Execute the smallest verifiable next step for task "{{taskTitle}}".' }] },
+          { id: 'task-clarify', icon: 'search', title: 'Fill key gaps', description: 'Inputs, dependencies, decisions', scenarios: [{ prompt: 'Check which input, dependency, or decision task "{{taskTitle}}" still needs.' }] },
+          { id: 'task-recover', icon: 'review', title: 'Diagnose and recover', description: 'Failures, blockers, retries', scenarios: [{ prompt: 'Inspect failures and blockers for task "{{taskTitle}}" and propose recovery.' }] },
+          { id: 'task-verify', icon: 'review', title: 'Verify result', description: 'Criteria and evidence', scenarios: [{ prompt: 'Verify task "{{taskTitle}}" against its acceptance criteria.' }] },
+        ],
+      },
+      file: { headline: 'Work with "{{fileName}}"', tagline: 'Understand, edit, or extract.', categories: [
+        { id: 'file-understand', icon: 'documents', title: 'Understand file', description: 'Summary and highlights', scenarios: [{ prompt: 'Summarize the structure and core content of "{{fileName}}".' }] },
+        { id: 'file-edit', icon: 'content', title: 'Edit file', description: 'Rewrite and organize', scenarios: [{ prompt: 'Review "{{fileName}}" and propose edits.' }] },
+        { id: 'file-extract', icon: 'task', title: 'Extract actions', description: 'Tasks and conclusions', scenarios: [{ prompt: 'Extract tasks, data, and conclusions from "{{fileName}}".' }] },
+      ] },
+      workflow: { headline: 'Continue workflow "{{workflowName}}"', tagline: 'Review results or continue.', categories: [
+        { id: 'workflow-next-step', icon: 'target', title: 'Continue next step', description: 'Build on existing output', scenarios: [{ prompt: 'Continue the best next step from workflow "{{workflowName}}".' }] },
+        { id: 'workflow-review', icon: 'review', title: 'Review results', description: 'Outputs and gaps', scenarios: [{ prompt: 'Summarize results and gaps from workflow "{{workflowName}}".' }] },
+        { id: 'workflow-recover', icon: 'search', title: 'Handle failure', description: 'Recover and retry', scenarios: [{ prompt: 'Inspect workflow "{{workflowName}}" errors and propose recovery.' }] },
+      ] },
     },
     suggestion1: 'Find today’s top tech news and summarize what matters most',
     suggestion2: 'Review my schedule and todos, then suggest what to do next',

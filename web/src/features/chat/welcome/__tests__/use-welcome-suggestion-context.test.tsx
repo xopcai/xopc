@@ -10,14 +10,15 @@ import {
   type WelcomeSuggestionContextState,
 } from '@/features/chat/welcome/use-welcome-suggestion-context';
 
-const { getSessionDetail, fetchProject, inferProjectDefaults } = vi.hoisted(() => ({
+const { getSessionDetail, fetchProject, fetchProjectOperatingView, inferProjectDefaults } = vi.hoisted(() => ({
   getSessionDetail: vi.fn(),
   fetchProject: vi.fn(),
+  fetchProjectOperatingView: vi.fn(),
   inferProjectDefaults: vi.fn(),
 }));
 
 vi.mock('@/features/sessions/session-api', () => ({ getSessionDetail }));
-vi.mock('@/features/projects/api', () => ({ fetchProject, inferProjectDefaults }));
+vi.mock('@/features/projects/api', () => ({ fetchProject, fetchProjectOperatingView, inferProjectDefaults }));
 
 function Probe({
   sessionKey = 'agent:main:webchat:test',
@@ -51,6 +52,11 @@ describe('useWelcomeSuggestionContext', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
     inferProjectDefaults.mockResolvedValue({ inference: { kind: 'general' } });
+    fetchProjectOperatingView.mockResolvedValue({
+      blockers: [],
+      recentResults: [],
+      digest: { health: 'healthy', summary: 'On track' },
+    });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -137,6 +143,30 @@ describe('useWelcomeSuggestionContext', () => {
       resolveSecondDetail?.({ projectId: null });
       await Promise.resolve();
       await Promise.resolve();
+    });
+  });
+
+  it('adds the project blocker and recommended action to the resolved context', async () => {
+    getSessionDetail.mockResolvedValue({ projectId: 'p1' });
+    fetchProject.mockResolvedValue({ id: 'p1', name: 'xopc', kind: 'coding' });
+    fetchProjectOperatingView.mockResolvedValue({
+      blockers: [{ title: 'Release blocked', detail: 'CI is failing' }],
+      recentResults: [],
+      digest: { health: 'attention', summary: 'Needs attention', recommendedAction: 'Fix CI' },
+    });
+    const sessionManager = { loadSessionAgentConfig: vi.fn() } as unknown as SessionManager;
+    let latest!: WelcomeSuggestionContextState;
+
+    await act(async () => {
+      root.render(<Probe sessionManager={sessionManager} onState={(state) => { latest = state; }} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(latest.context).toMatchObject({
+      kind: 'codingProject',
+      blockedReason: 'CI is failing',
+      recommendedAction: 'Fix CI',
     });
   });
 

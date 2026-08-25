@@ -373,6 +373,17 @@ export const zh: MessageBundle = {
       },
       contextPrompts: {
         codingWorkspace: '请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位入口、核心模块和最值得阅读的文件。',
+        projectBlocked: '项目「{{projectName}}」被“{{blockedReason}}”阻塞。请给出解除阻塞的最小方案并开始推进。',
+        projectNextAction: '继续项目「{{projectName}}」的下一步：“{{nextAction}}”。核对状态后直接推进。',
+        projectFailure: '项目「{{projectName}}」最近失败：“{{recentFailure}}”。请定位原因并给出修复验证方案。',
+        taskAttention: '任务「{{taskTitle}}」需要处理：“{{attentionSummary}}”。请说明需要我决定什么。',
+        taskNextAction: '继续任务「{{taskTitle}}」的下一步：“{{nextAction}}”。核对约束后直接推进。',
+        taskFailure: '任务「{{taskTitle}}」失败：“{{recentFailure}}”。请分析原因并给出恢复验证方案。',
+        taskReview: '按验收标准检查任务「{{taskTitle}}」，列出证据、缺口和完成结论。',
+        taskClosed: '总结任务「{{taskTitle}}」的结果、证据和遗留工作。',
+        fileStart: '阅读文件「{{fileName}}」，找出最值得修改的地方并给出编辑方案。',
+        workflowNextAction: '继续工作流「{{workflowName}}」的下一步：“{{nextAction}}”。',
+        workflowFailure: '工作流「{{workflowName}}」失败：“{{recentFailure}}”。请给出恢复方案。',
       },
       exploreCards: [
         {
@@ -468,24 +479,40 @@ export const zh: MessageBundle = {
         ],
       },
       codingProject: {
-        headline: '从项目开始',
-        tagline: '先理解入口，再推进下一步。',
-        categories: [],
+        headline: '继续这个代码项目',
+        tagline: '理解、实现或排查。',
+        categories: [
+          { id: 'understand-codebase', icon: 'code', title: '理解代码库', description: '结构、入口、模块', scenarios: [{ prompt: '快速梳理项目「{{projectName}}」的结构、入口和核心模块。' }] },
+          { id: 'implement-feature', icon: 'target', title: '推进改动', description: '定位、实现、验证', scenarios: [{ prompt: '定位项目「{{projectName}}」最适合推进的改动并给出验证步骤。' }] },
+          { id: 'review-debug', icon: 'review', title: '审查与排查', description: '风险、测试、失败', scenarios: [{ prompt: '检查项目「{{projectName}}」的风险、测试缺口和失败。' }] },
+        ],
       },
       codingWorkspace: {
         headline: '从这个代码工作区开始',
         tagline: '先理解结构和入口，再完成下一处改动。',
-        categories: [],
+        categories: [
+          { id: 'directory-understand', icon: 'folder', title: '理解目录', description: '结构与关键文件', scenarios: [{ prompt: '理解代码目录「{{path}}」的结构、技术栈和关键文件。' }] },
+          { id: 'directory-entry', icon: 'code', title: '找到入口', description: '启动与配置', scenarios: [{ prompt: '找出代码目录「{{path}}」的启动入口、配置和依赖。' }] },
+          { id: 'directory-organize', icon: 'review', title: '工程审查', description: '风险与清理建议', scenarios: [{ prompt: '审查代码目录「{{path}}」的模块边界和潜在风险。' }] },
+        ],
       },
       generalProject: {
-        headline: '从项目开始',
-        tagline: '先梳理状态，再规划下一步。',
-        categories: [],
+        headline: '继续推进这个项目',
+        tagline: '围绕当前状态，快速开始下一步。',
+        categories: [
+          { id: 'project-next-step', icon: 'target', title: '继续下一步', description: '按当前建议推进', scenarios: [{ prompt: '梳理项目「{{projectName}}」的状态，并直接推进最小下一步。' }] },
+          { id: 'project-status', icon: 'search', title: '检查项目状态', description: '进展、风险、阻塞', scenarios: [{ prompt: '总结项目「{{projectName}}」的进展、风险和阻塞。' }] },
+          { id: 'project-material', icon: 'documents', title: '整理项目材料', description: '摘要、同步、汇报', scenarios: [{ prompt: '为项目「{{projectName}}」整理一份简洁的进展同步。' }] },
+        ],
       },
       note: {
         headline: '继续这条笔记',
         tagline: '提炼、扩展或转成行动。',
-        categories: [],
+        categories: [
+          { id: 'note-summarize', icon: 'note', title: '提炼笔记', description: '观点与结论', scenarios: [{ prompt: '总结笔记「{{noteTitle}}」的核心观点和结论。' }] },
+          { id: 'note-think', icon: 'search', title: '继续思考', description: '问题与缺口', scenarios: [{ prompt: '找出笔记「{{noteTitle}}」值得继续思考的问题和缺口。' }] },
+          { id: 'note-output', icon: 'content', title: '转成产出', description: '文章、任务、计划', scenarios: [{ prompt: '把笔记「{{noteTitle}}」整理成可执行的产出。' }] },
+        ],
       },
       workingDirectory: {
         headline: '从当前目录开始',
@@ -520,6 +547,26 @@ export const zh: MessageBundle = {
           },
         ],
       },
+      task: {
+        headline: '推进任务「{{taskTitle}}」',
+        tagline: '处理下一步、阻塞和验收。',
+        categories: [
+          { id: 'task-next-step', icon: 'target', title: '继续下一步', description: '直接推进并验证', scenarios: [{ prompt: '执行任务「{{taskTitle}}」最小可验证的下一步。' }] },
+          { id: 'task-clarify', icon: 'search', title: '补齐关键信息', description: '输入、依赖、决策', scenarios: [{ prompt: '检查任务「{{taskTitle}}」缺少的输入、依赖或决策。' }] },
+          { id: 'task-recover', icon: 'review', title: '排查与恢复', description: '失败、阻塞、重试', scenarios: [{ prompt: '检查任务「{{taskTitle}}」的失败和阻塞并给出恢复方案。' }] },
+          { id: 'task-verify', icon: 'review', title: '验证任务结果', description: '验收标准与证据', scenarios: [{ prompt: '按验收标准验证任务「{{taskTitle}}」的结果。' }] },
+        ],
+      },
+      file: { headline: '处理文件「{{fileName}}」', tagline: '理解、编辑或提取信息。', categories: [
+        { id: 'file-understand', icon: 'documents', title: '理解文件', description: '摘要与重点', scenarios: [{ prompt: '总结文件「{{fileName}}」的结构和核心内容。' }] },
+        { id: 'file-edit', icon: 'content', title: '编辑文件', description: '改写与整理', scenarios: [{ prompt: '检查文件「{{fileName}}」并提出编辑方案。' }] },
+        { id: 'file-extract', icon: 'task', title: '提取行动', description: '任务与结论', scenarios: [{ prompt: '从文件「{{fileName}}」提取任务、数据和结论。' }] },
+      ] },
+      workflow: { headline: '继续工作流「{{workflowName}}」', tagline: '检查结果或继续下一步。', categories: [
+        { id: 'workflow-next-step', icon: 'target', title: '继续下一步', description: '沿用已有产物', scenarios: [{ prompt: '基于工作流「{{workflowName}}」的产物继续下一步。' }] },
+        { id: 'workflow-review', icon: 'review', title: '检查结果', description: '产物与缺口', scenarios: [{ prompt: '总结工作流「{{workflowName}}」的结果和缺口。' }] },
+        { id: 'workflow-recover', icon: 'search', title: '处理异常', description: '恢复与重试', scenarios: [{ prompt: '检查工作流「{{workflowName}}」的异常并给出恢复方案。' }] },
+      ] },
     },
     suggestion1: '帮我检索今天值得关注的科技新闻，并按重要性总结',
     suggestion2: '根据我的日程和待办，帮我规划接下来优先做什么',

@@ -37,6 +37,7 @@ import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session
 import { useWelcomeSuggestionContext } from '@/features/chat/welcome/use-welcome-suggestion-context';
 import {
   buildWelcomeSpotlight,
+  type WelcomeSpotlightModel,
   type WelcomeSuggestionSelection,
 } from '@/features/chat/welcome/welcome-suggestions';
 import {
@@ -57,6 +58,8 @@ import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path'
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { showActivity } from '@/stores/activity-store';
 import { Button } from '@/components/ui/button';
+import { useTaskDetail } from '@/features/tasks/use-task-detail';
+import { peekComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 
 type PendingSourceNoteSave = {
   sourceNoteId: string;
@@ -100,11 +103,10 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const welcomeDraftSeq = useRef(0);
   const pendingWelcomeSelectionRef = useRef<WelcomeSuggestionSelection | null>(null);
   const welcomeImpressionRef = useRef('');
+  const activeWelcomeSpotlightRef = useRef<WelcomeSpotlightModel | null>(null);
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
-  const [welcomeAffinity, setWelcomeAffinity] = useState<Record<string, number>>(() =>
-    readWelcomeSuggestionAffinity(),
-  );
+  const [welcomeAffinity, setWelcomeAffinity] = useState<Record<string, number>>({});
   const [welcomeExplorationOffset, setWelcomeExplorationOffset] = useState(0);
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
@@ -113,6 +115,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
 
   const taskId = boundTaskId?.trim() || null;
+  const { data: taskDetail } = useTaskDetail(taskId ?? '');
   const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession({
     fixedSessionKey: sessionKey,
     taskId: taskId ?? undefined,
@@ -122,7 +125,22 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
   const draftQuery = searchParams.get('draft') ?? '';
   const autoSendQuery = searchParams.get('autoSend') === '1';
+  const attachmentHandoffId = searchParams.get('attachmentHandoff');
   const chatSessionKey = session.decodedKey ?? session.sessionKey;
+  const [launchFile, setLaunchFile] = useState<Pick<File, 'name' | 'type'> | null>(null);
+  const launchFileSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (attachmentHandoffId) {
+      const file = peekComposerAttachmentHandoff(attachmentHandoffId);
+      if (file) setLaunchFile(file);
+      launchFileSessionRef.current = chatSessionKey;
+      return;
+    }
+    if (launchFileSessionRef.current !== chatSessionKey) {
+      launchFileSessionRef.current = chatSessionKey;
+      setLaunchFile(null);
+    }
+  }, [attachmentHandoffId, chatSessionKey]);
   const markChatRunViewed = useChatRunPresenceStore((state) => state.markViewed);
   useEffect(() => {
     if (chatSessionKey) markChatRunViewed(chatSessionKey);
@@ -409,7 +427,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     setWelcomeDraftSeed(null);
     pendingWelcomeSelectionRef.current = null;
     welcomeImpressionRef.current = '';
-    setWelcomeAffinity(readWelcomeSuggestionAffinity());
+    setWelcomeAffinity({});
   }, [session.sessionKey]);
 
   const onPickWelcomePrompt = useCallback((selection: WelcomeSuggestionSelection) => {
@@ -419,13 +437,26 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       suggestionId: selection.suggestionId,
       categoryId: selection.categoryId,
       contextKind: selection.contextKind,
+      agentId: agents.displayAgentId,
     });
     welcomeDraftSeq.current += 1;
     setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: selection.prompt });
-  }, []);
+  }, [agents.displayAgentId]);
   const refreshWelcomeExploration = useCallback(() => {
+    const spotlight = activeWelcomeSpotlightRef.current;
+    const exploration = spotlight?.categories.find((category) => category.scope === 'explore');
+    const scenario = exploration?.scenarios[0];
+    if (spotlight && exploration && scenario) {
+      recordWelcomeSuggestionMetric({
+        type: 'skip',
+        suggestionId: scenario.id ?? `${exploration.id}:0`,
+        categoryId: exploration.id,
+        contextKind: spotlight.contextKind,
+        agentId: agents.displayAgentId,
+      });
+    }
     setWelcomeExplorationOffset((value) => value + 1);
-  }, []);
+  }, [agents.displayAgentId]);
   const selectWelcomeProject = useCallback(
     async (projectId: string) => {
       await session.createNewSession({ projectId });
@@ -524,6 +555,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     effectiveWorkspacePath: session.effectiveWorkspacePath,
     workingDirectoryLocked:
       session.workspaceSource === 'session_override' || session.workspaceSource === 'agent_workspace',
+    task: taskDetail,
+    file: launchFile,
+    workflow: workflowRunView,
     sessionManager: session.sessionManager,
   });
   const welcomeAgent = useMemo(
@@ -533,6 +567,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       },
     [agents.chatAgents?.items, agents.displayAgentId],
   );
+  useEffect(() => {
+    setWelcomeAffinity(
+      readWelcomeSuggestionAffinity(welcomeContextState.context.kind, agents.displayAgentId),
+    );
+  }, [agents.displayAgentId, welcomeContextState.context.kind]);
   const welcomeSpotlight = useMemo(
     () =>
       buildWelcomeSpotlight(welcomeContextState.context, m.chat.welcomeSpotlight, welcomeAgent, {
@@ -552,6 +591,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   );
   const welcomeContextLoading = welcomeContextState.status === 'loading';
   const activeWelcomeSpotlight = welcomeContextLoading ? undefined : welcomeSpotlight;
+  activeWelcomeSpotlightRef.current = activeWelcomeSpotlight ?? null;
   useEffect(() => {
     if (!welcomeContextLoading) {
       setShowWelcomeSkeleton(false);
@@ -585,8 +625,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       suggestionId: recommendation.id,
       categoryId: recommendation.categoryId,
       contextKind: activeWelcomeSpotlight.contextKind,
+      agentId: agents.displayAgentId,
     });
-  }, [activeWelcomeSpotlight, chatSessionKey, msgSlice.items.length, stream.streaming]);
+  }, [activeWelcomeSpotlight, agents.displayAgentId, chatSessionKey, msgSlice.items.length, stream.streaming]);
 
   const handleComposerSend = useCallback(
     (...args: Parameters<typeof stream.sendMessage>) => {
@@ -598,6 +639,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           suggestionId: selection.suggestionId,
           categoryId: selection.categoryId,
           contextKind: selection.contextKind,
+          agentId: agents.displayAgentId,
           edited: selection.prompt.trim() !== text.trim(),
           characterDelta: text.length - selection.prompt.length,
         });
@@ -605,7 +647,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       pendingWelcomeSelectionRef.current = null;
       return stream.sendMessage(...args);
     },
-    [stream.sendMessage],
+    [agents.displayAgentId, stream.sendMessage],
   );
 
   useEffect(() => {
@@ -989,7 +1031,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                       ) : undefined
                     }
                     onRetryWelcomeContext={welcomeContextState.retry}
-                    onRefreshWelcomeExploration={refreshWelcomeExploration}
+                    onRefreshWelcomeExploration={
+                      activeWelcomeSpotlight?.categories.some((category) => category.scope === 'explore')
+                        ? refreshWelcomeExploration
+                        : undefined
+                    }
                     onSelectWelcomeProject={selectWelcomeProject}
                     onDeleteRound={taskId ? undefined : stream.deleteMessageRound}
                     onRetryUserMessageRound={taskId ? undefined : stream.retryUserMessageRound}
