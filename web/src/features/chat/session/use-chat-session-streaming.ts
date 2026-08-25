@@ -40,6 +40,7 @@ import type { ChatFollowUpClarifyApi } from '@/features/chat/session/use-chat-fo
 
 export function useChatSessionStreaming(deps: {
   sessionKey: string | null;
+  taskId?: string;
   thinkingLevel: string;
   modelSupportsThinking: boolean;
 
@@ -65,6 +66,7 @@ export function useChatSessionStreaming(deps: {
 }) {
   const {
     sessionKey,
+    taskId,
     thinkingLevel,
     modelSupportsThinking,
     sessionKeyRef,
@@ -143,7 +145,7 @@ export function useChatSessionStreaming(deps: {
       let seedMessages = loadedMessages ?? getSessionMessages(chatId);
       let seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
       try {
-        const fresh = await sessionMgrRef.current.loadSession(chatId, 0);
+        const fresh = await sessionMgrRef.current.loadSession(chatId, 0, undefined, taskId);
         store().mergeCommittedFromServer(chatId, fresh.messages, fresh.hasMore);
         seedMessages = fresh.messages;
         seedHasMore = fresh.hasMore;
@@ -226,6 +228,7 @@ export function useChatSessionStreaming(deps: {
       applyLoadedSessionSnapshot,
       finalizeMessage,
       loadSessionById,
+      taskId,
     ],
   );
 
@@ -237,6 +240,10 @@ export function useChatSessionStreaming(deps: {
       }
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
+        if (taskId) {
+          setShellError('A task has one continuous conversation.');
+          return;
+        }
         await createNewSession({ forceNew: true });
         return;
       }
@@ -281,6 +288,10 @@ export function useChatSessionStreaming(deps: {
 
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
+        if (taskId) {
+          setShellError('A task has one continuous conversation.');
+          return;
+        }
         await createNewSession({ forceNew: true });
         return;
       }
@@ -356,6 +367,7 @@ export function useChatSessionStreaming(deps: {
           attachments,
           effectiveThinking,
           sendStreamCallbacks,
+          taskId,
         );
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
@@ -384,6 +396,7 @@ export function useChatSessionStreaming(deps: {
       finalizeMessage,
       fq.dismissClarify,
       createNewSession,
+      taskId,
     ],
   );
 

@@ -33,6 +33,7 @@ export function useChatSessionLoad(deps: {
   detachForNewConversation: () => void;
 
   sessionKey: string | null;
+  taskId?: string;
   hasMore: boolean;
 }) {
   const {
@@ -49,6 +50,7 @@ export function useChatSessionLoad(deps: {
     dismissClarifyOnSessionLoad,
     detachForNewConversation,
     sessionKey,
+    taskId,
     hasMore,
   } = deps;
 
@@ -190,7 +192,7 @@ export function useChatSessionLoad(deps: {
             hasMore: more,
             name,
             nextBeforeCursor,
-          } = await sessionMgrRef.current.loadSession(k, o, cursor);
+          } = await sessionMgrRef.current.loadSession(k, o, cursor, taskId);
           if (initialLoad) {
             store().setCommittedSnapshot(k, { messages: loaded, hasMore: more, name: name ?? null });
             if (!isStillViewingSession(k)) {
@@ -288,6 +290,7 @@ export function useChatSessionLoad(deps: {
       refreshModelThinkingSupport,
       resolveAgentIdForPost,
       sessionMgrRef,
+      taskId,
     ],
   );
 
@@ -307,14 +310,15 @@ export function useChatSessionLoad(deps: {
       if (!sessionKey) return;
       try {
         store().setShellError(null);
-        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { model: modelId });
+        if (taskId) await sessionMgrRef.current.patchTaskConversationModel(taskId, modelId);
+        else await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { model: modelId });
         store().patchSessionMeta(sessionKey, { model: modelId });
         void refreshModelThinkingSupport(modelId);
       } catch (e) {
         store().setShellError(e instanceof Error ? e.message : 'Failed to switch model');
       }
     },
-    [sessionKey, sessionMgrRef, refreshModelThinkingSupport],
+    [sessionKey, taskId, sessionMgrRef, refreshModelThinkingSupport],
   );
 
   const onSessionThinkingLevelChange = useCallback(

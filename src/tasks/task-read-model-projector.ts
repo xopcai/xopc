@@ -111,7 +111,7 @@ export class TaskReadModelProjector {
     hasWaits: boolean,
   ): string[] {
     if (task.phase === 'closed') return ['reopen'];
-    const commands = ['revise_contract', 'delegate', 'close'];
+    const commands = ['revise_contract', 'close'];
     if (!activeRunStatus && !hasWaits) commands.unshift('move');
     if (hasWaits) commands.unshift('resolve_wait');
     else if (activeRunStatus === 'running' || activeRunStatus === 'verifying') commands.unshift('add_wait');

@@ -22,7 +22,7 @@ function metadata(patch: Partial<SessionMetadata> = {}): SessionMetadata {
 }
 
 describe('resolveExecutionContext', () => {
-  it('links project work and explicit execution metadata', () => {
+  it('does not accept task binding from mutable session metadata', () => {
     const context = resolveExecutionContext({
       runId: 'run-1',
       sessionKey: 'session-1',
@@ -40,11 +40,11 @@ describe('resolveExecutionContext', () => {
 
     expect(context).toMatchObject({
       projectId: 'project-1',
-      taskId: 'goal-1',
       origin: 'task',
       triggerKind: 'retry',
       parentRunId: 'run-0',
     });
+    expect(context.taskId).toBeUndefined();
   });
 
   it('derives automation and proactive origins from the session type', () => {

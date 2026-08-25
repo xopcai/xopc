@@ -1116,6 +1116,11 @@ html.dark[data-color-scheme="clay"] {
   word-break: break-word;
 }
 
+/* Preserve the text baseline when Markdown follows a skill/file/command pill. */
+.chat-user-message-segment .markdown-render-boundary {
+  contain: paint;
+}
+
 .markdown-content .markdown-body pre {
   max-width: 100%;
   min-width: 0;

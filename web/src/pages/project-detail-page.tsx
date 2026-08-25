@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
-import { commandTask, createTask, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
+import { commandTask, createTask, ensureTaskConversation, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
@@ -842,7 +842,14 @@ export function ProjectDetailPage() {
         : action === 'ready'
         ? { type: 'mark_ready' }
         : action === 'run'
-          ? { type: 'start', executor: { kind: 'agent', agentId: detail.task.delegateAgentId ?? 'main' } }
+          ? {
+              type: 'start',
+              executor: {
+                kind: 'agent',
+                agentId: detail.task.delegateAgentId
+                  ?? (await ensureTaskConversation(task.id)).agentId,
+              },
+            }
           : action === 'pause'
             ? { type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } }
             : action === 'review'

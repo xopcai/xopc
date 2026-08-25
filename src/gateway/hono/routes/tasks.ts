@@ -7,14 +7,19 @@ import {
   TaskCreateRequestSchema,
   type TaskChangedField,
   TaskDependencyUpdateRequestSchema,
+  TaskHandoffRequestSchema,
   TaskPatchRequestSchema,
   TaskPhaseSchema,
 } from '@xopcai/gateway-contract';
 
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import { ProjectMonitoringService } from '../../../tasks/project-monitoring-service.js';
+import { resolveProjectAgentId } from '../../../projects/project-agent.js';
 import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
+import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
+import { TaskConversationQueryService } from '../../service/task-conversation-query-service.js';
+import { TaskHandoffService } from '../../../tasks/task-handoff-service.js';
 import { enqueueTaskChangedEvent } from '../../../tasks/task-change-events.js';
 import {
   TaskDependencyError,
@@ -27,6 +32,7 @@ import { TaskSignalService } from '../../../tasks/task-signal-service.js';
 import { ProjectOperatingViewService } from '../../../tasks/project-operating-view-service.js';
 import { TaskValueMetricsService } from '../../../tasks/task-value-metrics-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { submitSessionInput } from './session-input-handler.js';
 
 export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const taskRateLimit = deps.taskRateLimitMiddleware ?? deps.strictRateLimitMiddleware;
@@ -37,9 +43,17 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const tasks = new TaskRepository();
   const runs = new TaskRunRepository();
   const context = new TaskContextRepository();
+  const conversations = new TaskConversationRepository();
+  const conversationQuery = new TaskConversationQueryService(deps.service.sessions);
   const projector = new TaskReadModelProjector();
   const signals = new TaskSignalService(() => deps.service.dispatchTaskRuns());
   const dependencies = new TaskDependencyService();
+  const handoffs = new TaskHandoffService({
+    getConfig: () => deps.service.currentConfig,
+    sessionIndex: deps.service.sessionIndexInstance,
+    getActiveRunId: (sessionKey) => deps.service.getActiveWebchatRunId(sessionKey),
+    abortRun: (runId) => deps.service.abortAgentRun(runId),
+  });
 
   authenticated.get('/api/tasks', (c) => {
     const phase = TaskPhaseSchema.safeParse(c.req.query('phase'));
@@ -60,7 +74,29 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const parsed = TaskCreateRequestSchema.safeParse(body);
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task request' }, 400);
     try {
-      const created = application.create(parsed.data);
+      const requestedAgentId = parsed.data.delegateAgentId
+        ?? (parsed.data.activation.mode === 'start' && parsed.data.activation.executor?.kind === 'agent'
+          ? parsed.data.activation.executor.agentId
+          : undefined);
+      const agentId = resolveProjectAgentId({
+        config: deps.service.currentConfig,
+        projects: deps.service.projects,
+        explicitAgentId: requestedAgentId,
+        projectId: parsed.data.projectId,
+      });
+      const input = {
+        ...parsed.data,
+        delegateAgentId: agentId,
+        activation: parsed.data.activation.mode === 'start'
+          ? {
+              ...parsed.data.activation,
+              executor: parsed.data.activation.executor?.kind === 'agent' || !parsed.data.activation.executor
+                ? { kind: 'agent' as const, agentId }
+                : parsed.data.activation.executor,
+            }
+          : parsed.data.activation,
+      };
+      const created = application.create(input);
       if (created.ok === false) return c.json({ ok: false, code: created.reason, error: created.reason }, 409);
       if (created.runId) deps.service.dispatchTaskRuns();
       else deps.service.dispatchTaskEvents();
@@ -91,11 +127,106 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       runs: runs.listByTask(task.id),
       receipts: runs.listReceipts(task.id),
       context: context.list(task.id),
+      conversation: conversations.requireState(task.id),
+      sessions: conversations.listSessions(task.id),
       authorityGrants: context.listActiveGrants(task.id),
       dependencies: dependencies.listDependencies(task.id),
       dependents: dependencies.listDependents(task.id),
       allowedCommands: model.allowedCommands,
     });
+  });
+
+  authenticated.post('/api/tasks/:id/conversation', taskRateLimit, async (c) => {
+    try {
+      const result = await deps.service.ensureTaskConversation(c.req.param('id'));
+      if (result.created) {
+        const task = tasks.require(c.req.param('id'));
+        runSqliteWriteTransaction((db) => enqueueTaskChangedEvent(db, {
+          taskId: task.id,
+          projectId: task.projectId,
+          version: task.version,
+          changedFields: ['conversation'],
+          actor: { kind: 'user' },
+        }));
+        deps.service.dispatchTaskEvents();
+      }
+      return c.json({ ok: true, ...result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: message }, message.startsWith('Task not found') ? 404 : 409);
+    }
+  });
+
+  authenticated.post('/api/tasks/:id/handoff', taskRateLimit, async (c) => {
+    const parsed = TaskHandoffRequestSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid task handoff request' }, 400);
+    try {
+      const result = await handoffs.handoff({ taskId: c.req.param('id'), ...parsed.data });
+      runSqliteWriteTransaction((db) => enqueueTaskChangedEvent(db, {
+        taskId: result.task.id,
+        projectId: result.task.projectId,
+        version: result.task.version,
+        changedFields: ['delegateAgentId', 'conversation'],
+        actor: { kind: 'user' },
+      }));
+      deps.service.dispatchTaskEvents();
+      return c.json({
+        ok: true,
+        task: result.task,
+        conversation: result.conversation,
+        ...(result.fromAgentId ? { fromAgentId: result.fromAgentId } : {}),
+        toAgentId: result.toAgentId,
+        activeSessionKey: result.activeSessionKey,
+        assignmentEpoch: result.assignmentEpoch,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: message }, message.startsWith('Agent not found') || message.startsWith('Task not found') ? 404 : 409);
+    }
+  });
+
+  authenticated.post('/api/tasks/:id/inputs', deps.chatRateLimitMiddleware, async (c) => {
+    const active = conversations.getActiveSession(c.req.param('id'));
+    if (!active?.sessionKey) {
+      return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Task has no active conversation' } }, 404);
+    }
+    const expectedSessionKey = c.req.header('X-Xopc-Expected-Session-Key')?.trim();
+    if (expectedSessionKey && expectedSessionKey !== active.sessionKey) {
+      return c.json({ ok: false, error: { code: 'CONFLICT', message: 'Task executor changed; refresh the conversation' } }, 409);
+    }
+    return submitSessionInput(c, deps, active.sessionKey);
+  });
+
+  authenticated.patch('/api/tasks/:id/conversation/config', taskRateLimit, async (c) => {
+    const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+    const model = typeof body?.model === 'string' ? body.model.trim() : '';
+    if (!model) return c.json({ ok: false, error: 'Missing model' }, 400);
+    const active = conversations.getActiveSession(c.req.param('id'));
+    if (!active?.sessionKey) return c.json({ ok: false, error: 'Task has no active conversation' }, 404);
+    const result = await deps.service.sessions.patchAgentConfig(active.sessionKey, { model });
+    if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
+    return c.json({ ok: true, activeSessionKey: active.sessionKey });
+  });
+
+  authenticated.get('/api/tasks/:id/conversation/history', async (c) => {
+    const parsedLimit = Number.parseInt(c.req.query('limit') ?? '50', 10);
+    const parsedOffset = Number.parseInt(c.req.query('offset') ?? '0', 10);
+    const rawBefore = c.req.query('before')?.trim();
+    const before = rawBefore === undefined ? undefined : Number.parseInt(rawBefore, 10);
+    if (rawBefore !== undefined && (!Number.isInteger(before) || before! < 0)) {
+      return c.json({ error: 'Invalid conversation history cursor' }, 400);
+    }
+    const result = await conversationQuery.getMessagePage(c.req.param('id'), {
+      limit: Number.isFinite(parsedLimit) ? Math.min(200, Math.max(1, parsedLimit)) : 50,
+      offset: Number.isFinite(parsedOffset) ? Math.max(0, parsedOffset) : 0,
+      ...(before === undefined ? {} : { before }),
+    });
+    return result ? c.json(result) : c.json({ error: 'Task conversation not found' }, 404);
+  });
+
+  authenticated.get('/api/tasks/:id/conversation/timeline', async (c) => {
+    const items = await conversationQuery.getTimeline(c.req.param('id'));
+    return items ? c.json({ ok: true, items }) : c.json({ ok: false, error: 'Task conversation not found' }, 404);
   });
 
   authenticated.patch('/api/tasks/:id', taskRateLimit, async (c) => {

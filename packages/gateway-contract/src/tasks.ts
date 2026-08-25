@@ -37,6 +37,7 @@ export const TaskChangedFieldSchema = z.enum([
   'runs',
   'receipts',
   'attention',
+  'conversation',
 ]);
 export const TaskChangedEventSchema = z.object({
   taskId: z.string().min(1),
@@ -248,7 +249,7 @@ export const TaskCreateRequestSchema = z.object({
     z.object({ mode: z.literal('capture'), phase: z.enum(['backlog', 'ready']).default('backlog') }),
     z.object({
       mode: z.literal('start'),
-      executor: TaskExecutorSelectionSchema,
+      executor: TaskExecutorSelectionSchema.optional(),
       scheduleAt: z.number().int().nonnegative().optional(),
     }),
   ]),
@@ -264,7 +265,6 @@ export const TaskPatchRequestSchema = z.object({
   priority: TaskPrioritySchema.optional(),
   dueAt: z.number().int().nonnegative().nullable().optional(),
   ownerId: z.string().trim().min(1).nullable().optional(),
-  delegateAgentId: z.string().trim().min(1).nullable().optional(),
 }).strict();
 
 const TaskWaitInputSchema = z.object({
@@ -290,7 +290,6 @@ export const TaskCommandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('reopen'), phase: z.enum(['backlog', 'ready', 'active', 'review']) }),
   z.object({ type: z.literal('add_wait'), wait: TaskWaitInputSchema }),
   z.object({ type: z.literal('resolve_wait'), waitId: z.string(), resolution: z.unknown().optional() }),
-  z.object({ type: z.literal('delegate'), agentId: z.string().optional() }),
   z.object({ type: z.literal('revise_contract'), contract: TaskContractInputSchema }),
 ]);
 
@@ -326,6 +325,45 @@ export const TaskCreateResponseSchema = z.object({
   run: TaskRunSchema.optional(),
 });
 
+export const TaskConversationStateSchema = z.object({
+  taskId: z.string(),
+  activeSessionKey: z.string().optional(),
+  currentExecutorAgentId: z.string().optional(),
+  assignmentEpoch: z.number().int().nonnegative(),
+  status: z.enum(['idle', 'active']),
+  updatedAt: z.number().int().nonnegative(),
+});
+
+export const TaskSessionLinkSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  sessionKey: z.string(),
+  role: z.enum(['primary', 'discussion', 'execution']),
+  agentId: z.string().optional(),
+  runId: z.string().optional(),
+  assignmentEpoch: z.number().int().nonnegative(),
+  status: z.enum(['active', 'completed', 'superseded', 'failed']),
+  startedAt: z.number().int().nonnegative(),
+  endedAt: z.number().int().nonnegative().optional(),
+  createdAt: z.number().int().nonnegative(),
+});
+
+export const TaskHandoffRequestSchema = z.object({
+  toAgentId: z.string().trim().min(1),
+  expectedVersion: z.number().int().positive(),
+  idempotencyKey: z.string().trim().min(1).max(200),
+}).strict();
+
+export const TaskHandoffResponseSchema = z.object({
+  ok: z.literal(true),
+  task: TaskSchema,
+  conversation: TaskConversationStateSchema,
+  fromAgentId: z.string().optional(),
+  toAgentId: z.string(),
+  activeSessionKey: z.string(),
+  assignmentEpoch: z.number().int().positive(),
+});
+
 export const TaskDetailResponseSchema = z.object({
   ok: z.literal(true),
   task: TaskSchema,
@@ -335,6 +373,8 @@ export const TaskDetailResponseSchema = z.object({
   runs: z.array(TaskRunSchema),
   receipts: z.array(TaskRunReceiptSchema),
   context: z.array(TaskContextEdgeSchema),
+  conversation: TaskConversationStateSchema,
+  sessions: z.array(TaskSessionLinkSchema),
   authorityGrants: z.array(TaskAuthorityGrantSchema),
   dependencies: z.array(TaskDependencySummarySchema),
   dependents: z.array(TaskDependencySummarySchema),
@@ -371,6 +411,10 @@ export type TaskDependencyUpdateRequest = z.infer<typeof TaskDependencyUpdateReq
 export type TaskBoardPositionRequest = z.infer<typeof TaskBoardPositionRequestSchema>;
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 export type TaskCreateResponse = z.infer<typeof TaskCreateResponseSchema>;
+export type TaskConversationState = z.infer<typeof TaskConversationStateSchema>;
+export type TaskSessionLink = z.infer<typeof TaskSessionLinkSchema>;
+export type TaskHandoffRequest = z.infer<typeof TaskHandoffRequestSchema>;
+export type TaskHandoffResponse = z.infer<typeof TaskHandoffResponseSchema>;
 export type TaskDetailResponse = z.infer<typeof TaskDetailResponseSchema>;
 export type TaskRunReceiptListResponse = z.infer<typeof TaskRunReceiptListResponseSchema>;
 
