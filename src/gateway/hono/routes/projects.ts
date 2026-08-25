@@ -1022,6 +1022,44 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
+  authenticated.post('/api/projects/:id/files/upload', async (c) => {
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.parseBody();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid multipart body' } }, 400);
+    }
+    const file = body.file;
+    if (!(file instanceof File)) {
+      return c.json({ ok: false, error: { message: 'Missing file' } }, 400);
+    }
+    const requestedPath = typeof body.path === 'string' ? body.path.trim() : '';
+    if (!requestedPath) return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    const resolved = await resolveProjectWorkspaceWritePath(service, c.req.param('id'), requestedPath);
+    if (resolved.ok === false) return c.json({ ok: false, error: { message: resolved.error } }, resolved.status as 400);
+    if (resolved.existingStat) {
+      return c.json({ ok: false, error: { message: 'File already exists' } }, 409);
+    }
+    try {
+      await writeFile(resolved.absolutePath, Buffer.from(await file.arrayBuffer()), { flag: 'wx' });
+      const entryStat = await stat(resolved.absolutePath);
+      return c.json({
+        ok: true,
+        entry: {
+          name: path.basename(resolved.relativePath),
+          path: resolved.relativePath,
+          absolutePath: resolved.absolutePath,
+          type: 'file',
+          size: entryStat.size,
+          updatedAt: entryStat.mtime.toISOString(),
+        },
+      }, 201);
+    } catch (err) {
+      log.error({ err, projectId: resolved.projectId, path: resolved.absolutePath }, 'project file upload failed');
+      return c.json({ ok: false, error: { message: 'Upload failed' } }, 500);
+    }
+  });
+
   authenticated.post('/api/projects/:id/sessions/:sessionKey', async (c) => {
     try {
       service.projects.attachSession(c.req.param('sessionKey'), c.req.param('id'));

@@ -507,9 +507,11 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
 function mergeAssistantContentFragments(left: MessageContent[], right: MessageContent[]): MessageContent[] {
   const out: MessageContent[] = left.map((b) => ({ ...b }));
   const toolIndexById = new Map<string, number>();
+  const textIndexBySegmentId = new Map<string, number>();
   for (let i = 0; i < out.length; i++) {
     const b = out[i];
     if (b.type === 'tool_use') toolIndexById.set(b.id, i);
+    if (b.type === 'text' && b.segmentId) textIndexBySegmentId.set(b.segmentId, i);
   }
 
   for (const b of right) {
@@ -518,14 +520,50 @@ function mergeAssistantContentFragments(left: MessageContent[], right: MessageCo
       out[idx] = { ...b }; // keep the later (more complete) version
       continue;
     }
+    if (b.type === 'text' && b.segmentId && textIndexBySegmentId.has(b.segmentId)) {
+      const idx = textIndexBySegmentId.get(b.segmentId)!;
+      out[idx] = { ...b }; // streaming/history overlap for the same model segment
+      continue;
+    }
     if (b.type === 'thinking' && out.length > 0) {
       const last = out[out.length - 1];
       if (last.type === 'thinking' && (last.text || '').trim() === (b.text || '').trim()) continue;
     }
     if (b.type === 'tool_use') toolIndexById.set(b.id, out.length);
+    if (b.type === 'text' && b.segmentId) textIndexBySegmentId.set(b.segmentId, out.length);
     out.push({ ...b });
   }
   return out;
+}
+
+/**
+ * Fold a live assistant projection into the trailing persisted assistant row.
+ *
+ * Session history can refresh after an assistant segment commits while the
+ * overall run is still streaming. Keeping the live id makes the FlashList row
+ * stable and prevents one assistant turn from briefly rendering as two rows.
+ */
+export function mergeStreamingAssistantIntoMessages(
+  messages: Message[],
+  streamingMessage: Message,
+): Message[] {
+  const last = messages[messages.length - 1];
+  if (last?.role !== 'assistant' || streamingMessage.role !== 'assistant') {
+    return [...messages, streamingMessage];
+  }
+
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      ...streamingMessage,
+      id: streamingMessage.id ?? last.id,
+      content: mergeAssistantContentFragments(last.content, streamingMessage.content),
+      attachments: streamingMessage.attachments ?? last.attachments,
+      usage: streamingMessage.usage ?? last.usage,
+      timestamp: streamingMessage.timestamp ?? last.timestamp,
+    },
+  ];
 }
 
 /** Merge consecutive assistant messages into a single bubble (session stores fragments). */

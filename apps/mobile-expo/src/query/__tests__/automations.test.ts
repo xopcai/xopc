@@ -50,6 +50,13 @@ describe('automation gateway query', () => {
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/automations');
   });
 
+  it('filters automations by project', async () => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ automations: [automation] }));
+
+    await expect(fetchAutomations('project/one')).resolves.toEqual([automation]);
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/automations?projectId=project%2Fone');
+  });
+
   it('creates a scheduled agent automation using the canonical API shape', async () => {
     mockedApiFetch.mockResolvedValueOnce(jsonResponse({ automation }, 201));
 

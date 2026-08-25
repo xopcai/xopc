@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
@@ -19,6 +20,7 @@ import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { useMessages } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
+import { uploadProjectFile } from '../../query/projects';
 import {
   fetchWorkspaceDir,
   normalizeWorkspaceDir,
@@ -122,6 +124,7 @@ function buildShareRequest(entry: WorkspaceEntry, scope: WorkspaceScope): ShareA
 
 export function FilesScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams();
   const configured = useGatewayConfigured();
   const { colors } = useTheme();
@@ -130,6 +133,7 @@ export function FilesScreen() {
   const createShare = useCreateShare();
   const sessionKey = firstParam(params.sessionKey).trim();
   const agentId = firstParam(params.agentId).trim();
+  const projectId = firstParam(params.projectId).trim();
   const initialDir = normalizeWorkspaceDir(firstParam(params.dir));
   const [currentDir, setCurrentDir] = useState(initialDir);
   const [activeFile, setActiveFile] = useState<PreviewableFile | null>(null);
@@ -139,16 +143,26 @@ export function FilesScreen() {
   const [toast, setToast] = useState('');
 
   const scope = useMemo<WorkspaceScope>(() => {
+    if (projectId) return { kind: 'project', projectId };
     if (sessionKey) return { kind: 'session', sessionKey };
     if (agentId) return { kind: 'agent', agentId };
     return { kind: 'default' };
-  }, [agentId, sessionKey]);
+  }, [agentId, projectId, sessionKey]);
   const scopeKey = workspaceScopeKey(scope);
 
   const query = useQuery({
     queryKey: queryKeys.workspaceDir(scopeKey, currentDir),
     queryFn: () => fetchWorkspaceDir({ dir: currentDir, scope }),
     enabled: configured,
+  });
+  const upload = useMutation({
+    mutationFn: uploadProjectFile,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaceDir(scopeKey, currentDir) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectFiles(projectId) });
+      setToast(labels.uploadSucceeded);
+    },
+    onError: (error) => setToast(error instanceof Error ? error.message : labels.uploadFailed),
   });
 
   const breadcrumbs = useMemo(() => {
@@ -168,6 +182,10 @@ export function FilesScreen() {
       return;
     }
     if (!isPreviewableEntry(entry)) {
+      if (scope.kind === 'project') {
+        setActiveFile(entryToPreviewable(entry));
+        return;
+      }
       void downloadEntry(entry);
       return;
     }
@@ -237,6 +255,16 @@ export function FilesScreen() {
     router.back();
   };
 
+  const pickProjectFile = async () => {
+    if (scope.kind !== 'project' || upload.isPending) return;
+    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+    const asset = result.canceled ? undefined : result.assets[0];
+    if (!asset?.uri) return;
+    const name = asset.name || `file-${Date.now()}`;
+    const path = currentDir ? `${currentDir}/${name}` : name;
+    upload.mutate({ projectId: scope.projectId, path, uri: asset.uri, name, mimeType: asset.mimeType });
+  };
+
   const entries = query.data ?? [];
   const refreshing = query.isFetching && !query.isLoading;
   const listBottomPadding = floatingBottomPadding(0) + spacing.xxl;
@@ -259,13 +287,15 @@ export function FilesScreen() {
       <NativeScreenHeader
         title={labels.title}
         onBack={goBack}
-        rightActions={currentFolderEntry ? [
-          {
+        rightActions={scope.kind === 'project' ? [{
+          icon: upload.isPending ? 'progress-upload' : 'file-upload-outline',
+          onPress: () => void pickProjectFile(),
+          accessibilityLabel: labels.uploadFile,
+        }] : currentFolderEntry ? [{
             icon: 'folder-upload-outline',
             onPress: () => requestFolderShare(currentFolderEntry),
             accessibilityLabel: labels.shareCurrentFolder,
-          },
-        ] : undefined}
+        }] : undefined}
       />
       <View style={styles.breadcrumbWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.breadcrumbContent}>
@@ -327,7 +357,7 @@ export function FilesScreen() {
               subtitle={entrySubtitle(item, labels)}
               isLast={index === entries.length - 1}
               onPress={() => openEntry(item)}
-              onLongPress={() => setActionTarget(item)}
+              onLongPress={() => scope.kind === 'project' ? void copyEntryPath(item) : setActionTarget(item)}
             />
           )}
         />
@@ -338,6 +368,7 @@ export function FilesScreen() {
         file={activeFile}
         sessionKey={scope.kind === 'session' ? scope.sessionKey : undefined}
         agentId={scope.kind === 'agent' ? scope.agentId : undefined}
+        projectId={scope.kind === 'project' ? scope.projectId : undefined}
         onClose={() => setActiveFile(null)}
       />
       <ShareSheet

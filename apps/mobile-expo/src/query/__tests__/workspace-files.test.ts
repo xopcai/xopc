@@ -64,4 +64,25 @@ describe('fetchWorkspaceDir', () => {
     ]);
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/workspace/editor/list?dir=reports');
   });
+
+  it('uses the project workspace endpoint for project-scoped browsing', async () => {
+    mockedApiFetch.mockResolvedValue(okJson({
+      ok: true,
+      root: '/workspace',
+      path: 'docs',
+      parentPath: '',
+      entries: [{ name: 'brief.md', path: 'docs/brief.md', type: 'file', size: 10 }],
+    }));
+
+    await expect(fetchWorkspaceDir({
+      dir: 'docs',
+      scope: { kind: 'project', projectId: 'project/one' },
+    })).resolves.toEqual([{
+      name: 'brief.md',
+      path: 'docs/brief.md',
+      isDirectory: false,
+      size: 10,
+    }]);
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/projects/project%2Fone/files?path=docs');
+  });
 });

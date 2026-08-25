@@ -33,7 +33,11 @@ import type { ComposerAttachment, WireAttachment } from './composer.types';
 import { coerceReasoningLevel, type Message } from './messages.types';
 import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
 import { sendOrQueueMessage } from './send-or-queue';
-import { parseSessionMessages, dedupeWireMessages } from './session-message-parser';
+import {
+  parseSessionMessages,
+  dedupeWireMessages,
+  mergeStreamingAssistantIntoMessages,
+} from './session-message-parser';
 import { takeNewChatSessionKey } from './session-prefetch';
 import { consumeNoteChatPrefill } from './note-chat-prefill-storage';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits';
@@ -184,7 +188,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
         ? [...sessionMessages, ...chatSession.optimisticMessages]
         : sessionMessages;
     if (!chatSession.streamingMsg) return base;
-    return [...base, chatSession.streamingMsg];
+    return mergeStreamingAssistantIntoMessages(base, chatSession.streamingMsg);
   }, [sessionRefreshComplete, sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);
 
   useEffect(() => {

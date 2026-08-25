@@ -5,6 +5,8 @@ export type WorkspaceRequestOptions = {
   sessionKey?: string | null;
   /** Optional agent workspace fallback. */
   agentId?: string | null;
+  /** Project workspace. Takes precedence over session and agent scopes. */
+  projectId?: string | null;
 };
 
 type ReadWorkspaceFileResult = {
@@ -121,8 +123,12 @@ export async function readWorkspaceFile(
   options?: WorkspaceRequestOptions,
 ): Promise<ReadWorkspaceFileResult> {
   const params = new URLSearchParams({ path });
-  appendWorkspaceScope(params, options);
-  const res = await apiFetch(`/api/workspace/editor/read?${params.toString()}`);
+  const projectId = options?.projectId?.trim();
+  if (!projectId) appendWorkspaceScope(params, options);
+  const endpoint = projectId
+    ? `/api/projects/${encodeURIComponent(projectId)}/files/read`
+    : '/api/workspace/editor/read';
+  const res = await apiFetch(`${endpoint}?${params.toString()}`);
   if (!res.ok) {
     throw new Error(formatApiHttpError(res.status, res.statusText, await parseErrorMessage(res)));
   }
@@ -138,6 +144,17 @@ export async function readWorkspaceFileBase64(
   options?: WorkspaceRequestOptions,
 ): Promise<ReadWorkspaceFileBase64Result> {
   const params = new URLSearchParams({ path });
+  const projectId = options?.projectId?.trim();
+  if (projectId) {
+    const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/files/raw?${params.toString()}`);
+    if (!res.ok) throw new Error(formatApiHttpError(res.status, res.statusText, await parseErrorMessage(res)));
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return { contentBase64: globalThis.btoa(binary), path };
+  }
   appendWorkspaceScope(params, options);
   const res = await apiFetch(`/api/workspace/editor/read-base64?${params.toString()}`);
   if (!res.ok) {

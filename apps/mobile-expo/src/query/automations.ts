@@ -80,8 +80,11 @@ export function automationInstruction(automation: Automation): string {
   return automation.action.kind === 'agent' ? automation.action.instruction.trim() : '';
 }
 
-export async function fetchAutomations(): Promise<Automation[]> {
-  const data = await expectOk(await apiFetch('/api/automations'));
+export async function fetchAutomations(projectId?: string): Promise<Automation[]> {
+  const query = new URLSearchParams();
+  if (projectId?.trim()) query.set('projectId', projectId.trim());
+  const suffix = query.toString();
+  const data = await expectOk(await apiFetch(`/api/automations${suffix ? `?${suffix}` : ''}`));
   return z.object({ automations: z.array(AutomationSchema) }).parse(data).automations;
 }
 
