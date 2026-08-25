@@ -56,6 +56,7 @@ describe('mobile task create input', () => {
       mode: 'start',
       executor: { kind: 'agent', agentId: 'agent-1' },
     });
+    expect(input.delegateAgentId).toBe('agent-1');
     expect(input.body).toBe('Publish the launch plan');
     expect(input.contract.objective).toBe('Publish the launch plan');
     expect(input.contract.acceptanceCriteria).toEqual(['Plan is reviewed', 'Owner is named']);
@@ -66,5 +67,17 @@ describe('mobile task create input', () => {
       pinned: true,
       retrievalPolicy: { mode: 'always' },
     })]);
+  });
+
+  it('leaves automatic agent resolution to the gateway', () => {
+    const input = buildMobileTaskCreateRequest({
+      idempotencyKey: 'request-2',
+      title: 'Automatic task',
+      projectId: 'project-1',
+      dependencies: [],
+    });
+
+    expect(input.delegateAgentId).toBeUndefined();
+    expect(input.activation).toEqual({ mode: 'start' });
   });
 });

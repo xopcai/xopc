@@ -54,6 +54,53 @@ export async function fetchTask(id: string): Promise<TaskDetail> {
   return TaskDetailResponseSchema.parse(await response.json());
 }
 
+export type EnsuredTaskConversation = {
+  ok: true;
+  sessionKey: string;
+  agentId: string;
+  created: boolean;
+};
+
+export async function ensureTaskConversation(id: string): Promise<EnsuredTaskConversation> {
+  const response = await apiFetch(`/api/tasks/${encodeURIComponent(id)}/conversation`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await taskError(response, `Failed to create task conversation: ${response.status}`);
+  }
+  const body = await response.json() as Partial<EnsuredTaskConversation>;
+  if (body.ok !== true || typeof body.sessionKey !== 'string' || typeof body.agentId !== 'string') {
+    throw new Error('Task conversation response was invalid');
+  }
+  return {
+    ok: true,
+    sessionKey: body.sessionKey,
+    agentId: body.agentId,
+    created: body.created === true,
+  };
+}
+
+export async function handoffTaskConversation(
+  id: string,
+  toAgentId: string,
+  expectedVersion: number,
+): Promise<{ activeSessionKey: string; toAgentId: string }> {
+  const response = await apiFetch(`/api/tasks/${encodeURIComponent(id)}/handoff`, {
+    method: 'POST',
+    body: JSON.stringify({
+      toAgentId,
+      expectedVersion,
+      idempotencyKey: randomUUID(),
+    }),
+  });
+  if (!response.ok) throw await taskError(response, `Failed to hand off task: ${response.status}`);
+  const body = await response.json() as { activeSessionKey?: unknown; toAgentId?: unknown };
+  if (typeof body.activeSessionKey !== 'string' || typeof body.toAgentId !== 'string') {
+    throw new Error('Task handoff response was invalid');
+  }
+  return { activeSessionKey: body.activeSessionKey, toAgentId: body.toAgentId };
+}
+
 export async function commandTask(
   id: string,
   command: TaskCommand,

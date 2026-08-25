@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { noteDetailRoute } from '../navigation-routes';
+import { chatRoute, noteDetailRoute } from '../navigation-routes';
 
 describe('noteDetailRoute', () => {
   it('passes draft ids as route params instead of interpolating them into the path', () => {
@@ -19,6 +19,15 @@ describe('noteDetailRoute', () => {
         start: '3',
         end: '8',
       },
+    });
+  });
+});
+
+describe('chatRoute', () => {
+  it('keeps task context as an explicit route parameter', () => {
+    expect(chatRoute('agent:a:webchat:task', { taskId: 'task/1' })).toEqual({
+      pathname: '/chat/[k]',
+      params: { k: 'agent:a:webchat:task', taskId: 'task/1' },
     });
   });
 });

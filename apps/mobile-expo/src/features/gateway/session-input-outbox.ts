@@ -8,6 +8,7 @@ import { storage } from '../../storage/mmkv';
 export type PendingSessionInput = {
   version: 1;
   sessionKey: string;
+  taskId?: string;
   clientMessageId: string;
   fingerprint: string;
   content: string;
@@ -96,6 +97,7 @@ export function enqueueSessionInput(
   sessionKey: string,
   content: string,
   attachments: WireAttachment[] = [],
+  taskId?: string,
 ): PendingSessionInput {
   const persistedAttachments = attachments.map(persistentAttachment);
   const fingerprint = sessionInputFingerprint({ content, attachments: persistedAttachments });
@@ -106,6 +108,7 @@ export function enqueueSessionInput(
   const entry: PendingSessionInput = {
     version: 1,
     sessionKey,
+    ...(taskId?.trim() ? { taskId: taskId.trim() } : {}),
     clientMessageId: randomUUID(),
     fingerprint,
     content,
