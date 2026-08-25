@@ -46,6 +46,22 @@ describe('Task contracts', () => {
     expect(TaskSchema.parse({ ...base, resolution: 'done' }).resolution).toBe('done');
   });
 
+  it('normalizes an omitted board position in task read payloads', () => {
+    const task = TaskSchema.parse({
+      id: 'task-1',
+      title: 'Task',
+      phase: 'ready',
+      priority: 'normal',
+      source: 'api',
+      latestContractVersion: 1,
+      version: 1,
+      createdAt: 10,
+      updatedAt: 10,
+    });
+
+    expect(task.boardRank).toBe(0);
+  });
+
   it('rejects the removed status and objective-only create contract', () => {
     expect(() => TaskCreateRequestSchema.parse({
       requestId: '70ef31fc-cb6c-4c5e-986f-85693256c74b',
