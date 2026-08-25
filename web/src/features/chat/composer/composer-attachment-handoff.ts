@@ -1,7 +1,9 @@
 const COMPOSER_ATTACHMENT_HANDOFF_TTL_MS = 2 * 60 * 1000;
 
 type ComposerAttachmentHandoff = {
-  file: File;
+  file: File | null;
+  name: string;
+  type: string;
   expiresAt: number;
 };
 
@@ -24,16 +26,41 @@ function removeExpiredHandoffs(now: number): void {
 export function createComposerAttachmentHandoff(file: File, now = Date.now()): string {
   removeExpiredHandoffs(now);
   const id = createHandoffId();
-  handoffs.set(id, { file, expiresAt: now + COMPOSER_ATTACHMENT_HANDOFF_TTL_MS });
+  handoffs.set(id, {
+    file,
+    name: file.name,
+    type: file.type,
+    expiresAt: now + COMPOSER_ATTACHMENT_HANDOFF_TTL_MS,
+  });
   return id;
+}
+
+/** Reads pending file metadata without consuming the handoff. */
+export function peekComposerAttachmentHandoff(
+  id: string,
+  now = Date.now(),
+): Pick<File, 'name' | 'type'> | null {
+  const handoff = handoffs.get(id);
+  if (!handoff) return null;
+  if (handoff.expiresAt <= now) {
+    handoffs.delete(id);
+    return null;
+  }
+  return { name: handoff.name, type: handoff.type };
 }
 
 /** Atomically consumes a pending file snapshot. Expired and unknown ids return null. */
 export function takeComposerAttachmentHandoff(id: string, now = Date.now()): File | null {
   const handoff = handoffs.get(id);
-  handoffs.delete(id);
-  if (!handoff || handoff.expiresAt <= now) return null;
-  return handoff.file;
+  if (!handoff) return null;
+  if (handoff.expiresAt <= now) {
+    handoffs.delete(id);
+    return null;
+  }
+  if (!handoff.file) return null;
+  const file = handoff.file;
+  handoff.file = null;
+  return file;
 }
 
 export function resetComposerAttachmentHandoffsForTests(): void {

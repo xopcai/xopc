@@ -39,7 +39,7 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.categories.map((card) => card.title)).toEqual([
       '理解代码库',
       '推进功能改动',
-      '学习新主题',
+      '审查与排查',
     ]);
     expect(spotlight.categories[0]?.scenarios[0]?.prompt).toContain('xopc');
   });
@@ -55,8 +55,22 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.categories.map((card) => card.title)).toEqual([
       '规划下一步',
       '梳理项目状态',
-      '学习新主题',
+      '生成项目材料',
     ]);
+  });
+
+  it('prioritizes a project blocker over a failure and next action', () => {
+    const spotlight = build({
+      kind: 'codingProject',
+      projectId: 'p2',
+      projectName: 'xopc',
+      blockedReason: 'CI is failing',
+      recentFailure: 'Tests failed',
+      recommendedAction: 'Publish release',
+    });
+
+    expect(spotlight.primaryRecommendation.categoryId).toBe('review-debug');
+    expect(spotlight.primaryRecommendation.prompt).toContain('CI is failing');
   });
 
   it('returns note cards', () => {
@@ -127,6 +141,69 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.primaryRecommendation.prompt).not.toContain('「」');
   });
 
+  it('offers coding work for a coder agent in an empty chat', () => {
+    const spotlight = buildWelcomeSpotlight({ kind: 'empty' }, copy, {
+      id: 'coder',
+      name: 'Coding Expert',
+    });
+
+    expect(spotlight.categories[0]?.id).toBe('agent-coding');
+    expect(spotlight.primaryRecommendation.title).toBe('代码落地');
+  });
+
+  it('prioritizes task attention without an exploration card', () => {
+    const spotlight = build({
+      kind: 'task',
+      taskId: 'task-1',
+      taskTitle: '发布新版本',
+      phase: 'active',
+      operationalState: 'waiting',
+      attentionSummary: '需要确认发布日期',
+    });
+
+    expect(spotlight.primaryRecommendation.categoryId).toBe('task-clarify');
+    expect(spotlight.primaryRecommendation.prompt).toContain('需要确认发布日期');
+    expect(spotlight.categories).toHaveLength(3);
+    expect(spotlight.categories.every((card) => card.scope === 'context')).toBe(true);
+  });
+
+  it('prioritizes task recovery over the next action', () => {
+    const spotlight = build({
+      kind: 'task',
+      taskId: 'task-2',
+      taskTitle: '修复构建',
+      phase: 'active',
+      operationalState: 'blocked',
+      nextAction: '重新构建',
+      recentFailure: '类型检查失败',
+    });
+
+    expect(spotlight.primaryRecommendation.categoryId).toBe('task-recover');
+    expect(spotlight.primaryRecommendation.prompt).toContain('类型检查失败');
+  });
+
+  it('uses edit-first recommendations for a file handoff', () => {
+    const spotlight = build({ kind: 'file', fileName: 'brief.md' });
+
+    expect(spotlight.primaryRecommendation.categoryId).toBe('file-edit');
+    expect(spotlight.primaryRecommendation.prompt).toContain('brief.md');
+    expect(spotlight.categories.every((card) => card.scope === 'context')).toBe(true);
+  });
+
+  it('prioritizes recovery for a failed workflow and review for a completed workflow', () => {
+    const failed = build({
+      kind: 'workflow',
+      workflowName: 'Release',
+      status: 'failed',
+      recentFailure: 'Publish step timed out',
+    });
+    const completed = build({ kind: 'workflow', workflowName: 'Release', status: 'succeeded' });
+
+    expect(failed.primaryRecommendation.categoryId).toBe('workflow-recover');
+    expect(failed.primaryRecommendation.prompt).toContain('timed out');
+    expect(completed.primaryRecommendation.categoryId).toBe('workflow-review');
+  });
+
   it('biases note cards for researcher agent', () => {
     const spotlight = buildWelcomeSpotlight(
       {
@@ -164,7 +241,7 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.categories.map((card) => card.title)).toEqual([
       '理解代码库',
       '推进功能改动',
-      '学习新主题',
+      '审查与排查',
     ]);
   });
 
@@ -209,7 +286,7 @@ describe('buildWelcomeSpotlight', () => {
     expect(degraded.statusLabel).toContain('暂时不可用');
   });
 
-  it('always keeps the third card outside the active context', () => {
+  it('keeps exploration only for low-intent contexts', () => {
     const contexts: WelcomeSuggestionContext[] = [
       { kind: 'codingProject', projectId: 'p4', projectName: 'xopc', workspaceRoot: '/repo/xopc' },
       { kind: 'note', noteId: 'n4', title: '产品方向' },
@@ -221,8 +298,12 @@ describe('buildWelcomeSpotlight', () => {
       expect(spotlight.categories).toHaveLength(3);
       expect(spotlight.categories[0]?.scope).toBe('context');
       expect(spotlight.categories[1]?.scope).toBe('context');
-      expect(spotlight.categories[2]?.scope).toBe('explore');
-      expect(spotlight.categories[2]?.id).toBe('explore-news');
+      if (context.kind === 'codingProject') {
+        expect(spotlight.categories[2]?.scope).toBe('context');
+      } else {
+        expect(spotlight.categories[2]?.scope).toBe('explore');
+        expect(spotlight.categories[2]?.id).toBe('explore-news');
+      }
       expect(spotlight.primaryRecommendation.categoryId).not.toMatch(/^explore-/);
     }
   });

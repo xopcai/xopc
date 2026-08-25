@@ -55,4 +55,42 @@ describe('buildMobileWelcomeModel', () => {
     });
     expect(model.starters[0]?.prompt).toContain('/Users/example/project');
   });
+
+  it('shows task-state starters before project or directory starters', () => {
+    const model = buildMobileWelcomeModel({
+      messages: en,
+      agent: agent({ id: 'coder', name: 'Coder' }),
+      agentId: 'coder',
+      effectiveWorkspacePath: '/repo/xopc',
+      project: { id: 'project-1', name: 'xopc' } as never,
+      task: {
+        task: { id: 'task-1', title: 'Ship release', phase: 'active' },
+        operationalState: 'waiting',
+        attention: [{ summary: 'Approve the release date' }],
+        receipts: [],
+      } as never,
+    });
+
+    expect(model.headline).toContain('Ship release');
+    expect(model.starters[0]?.title).toBe('Fill key gaps');
+    expect(model.starters[0]?.prompt).toContain('Approve the release date');
+  });
+
+  it('uses project operating state for project starters', () => {
+    const model = buildMobileWelcomeModel({
+      messages: en,
+      agent: agent(),
+      agentId: 'creative',
+      project: { id: 'project-1', name: 'Launch' } as never,
+      projectOperating: {
+        blockers: [{ title: 'Legal review' }],
+        recentResults: [],
+        digest: { health: 'attention', summary: 'Blocked', recommendedAction: 'Get approval' },
+      } as never,
+    });
+
+    expect(model.headline).toBe('Continue this project');
+    expect(model.starters[0]?.title).toBe('Check project status');
+    expect(model.starters[0]?.prompt).toContain('Legal review');
+  });
 });

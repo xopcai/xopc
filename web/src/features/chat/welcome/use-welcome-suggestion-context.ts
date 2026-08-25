@@ -2,8 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import type { WelcomeSuggestionContext, WelcomeSuggestionContextStatus } from '@/features/chat/welcome/welcome-suggestions';
-import { fetchProject, inferProjectDefaults, type Project, type ProjectKind } from '@/features/projects/api';
+import {
+  fetchProject,
+  fetchProjectOperatingView,
+  inferProjectDefaults,
+  type Project,
+  type ProjectKind,
+} from '@/features/projects/api';
 import { getSessionDetail } from '@/features/sessions/session-api';
+import type { TaskDetail } from '@/features/tasks/home-api';
+import type { WorkflowRunView } from '@/features/workflows/workflow-api';
 
 type ProjectWithKind = Project & {
   kind?: ProjectKind;
@@ -19,6 +27,9 @@ type UseWelcomeSuggestionContextOptions = {
   sourceContextFailed?: boolean;
   effectiveWorkspacePath?: string | null;
   workingDirectoryLocked?: boolean;
+  task?: TaskDetail | null;
+  file?: Pick<File, 'name' | 'type'> | null;
+  workflow?: WorkflowRunView | null;
   sessionManager: SessionManager;
 };
 
@@ -57,9 +68,15 @@ function contextStateKey({
   sourceContextFailed,
   effectiveWorkspacePath,
   workingDirectoryLocked,
+  task,
+  file,
+  workflow,
 }: UseWelcomeSuggestionContextOptions & { attempt: number }): string {
   if (!enabled) return 'disabled';
   if (sourceContextPending) return `pending:${sessionKey ?? ''}`;
+  if (task) return `task:${task.task.id}:${task.task.version}`;
+  if (file) return `file:${file.name}:${file.type}`;
+  if (workflow) return `workflow:${workflow.run.id}:${workflow.run.status}`;
   if (sourceNoteId) return `note:${sourceNoteId}:${sourceNoteTitle?.trim() ?? ''}`;
   if (workingDirectoryLocked && effectiveWorkspacePath?.trim()) {
     return `workspace:${sessionKey ?? ''}:${effectiveWorkspacePath.trim()}`;
@@ -77,6 +94,44 @@ function immediateContextState(
   }
   if (options.sourceContextPending) {
     return { key, context: { kind: 'empty' }, status: 'loading' };
+  }
+  if (options.task) {
+    const latestReceipt = options.task.receipts[0];
+    return {
+      key,
+      context: {
+        kind: 'task',
+        taskId: options.task.task.id,
+        taskTitle: options.task.task.title,
+        phase: options.task.task.phase,
+        operationalState: options.task.operationalState,
+        attentionSummary: options.task.attention[0]?.summary,
+        nextAction: latestReceipt?.nextAction,
+        recentFailure: latestReceipt?.failure?.recoveryAction,
+      },
+      status: 'ready',
+    };
+  }
+  if (options.file) {
+    return {
+      key,
+      context: { kind: 'file', fileName: options.file.name },
+      status: 'ready',
+    };
+  }
+  if (options.workflow) {
+    const run = options.workflow.run;
+    return {
+      key,
+      context: {
+        kind: 'workflow',
+        workflowName: run.goal.trim() || run.title || run.definitionId,
+        status: run.status,
+        nextAction: run.result?.followUps?.[0]?.prompt ?? run.result?.actions?.[0]?.label,
+        recentFailure: run.error?.message,
+      },
+      status: 'ready',
+    };
   }
   if (options.sourceNoteId) {
     return {
@@ -112,6 +167,9 @@ export function useWelcomeSuggestionContext({
   sourceContextFailed = false,
   effectiveWorkspacePath,
   workingDirectoryLocked = false,
+  task,
+  file,
+  workflow,
   sessionManager,
 }: UseWelcomeSuggestionContextOptions): WelcomeSuggestionContextState {
   const [attempt, setAttempt] = useState(0);
@@ -125,6 +183,9 @@ export function useWelcomeSuggestionContext({
     sourceContextFailed,
     effectiveWorkspacePath,
     workingDirectoryLocked,
+    task,
+    file,
+    workflow,
     sessionManager,
   };
   const currentKey = contextStateKey(currentOptions);
@@ -142,6 +203,16 @@ export function useWelcomeSuggestionContext({
 
     if (sourceContextPending) {
       setState({ key: currentKey, context: { kind: 'empty' }, status: 'loading' });
+      return undefined;
+    }
+
+    if (task) {
+      setState(immediateContextState(currentOptions));
+      return undefined;
+    }
+
+    if (file || workflow) {
+      setState(immediateContextState(currentOptions));
       return undefined;
     }
 
@@ -205,7 +276,14 @@ export function useWelcomeSuggestionContext({
 
       if (projectId) {
         try {
-          const project = (await fetchProject(projectId)) as ProjectWithKind;
+          const [projectResult, operatingResult] = await Promise.allSettled([
+            fetchProject(projectId),
+            fetchProjectOperatingView(projectId),
+          ]);
+          if (projectResult.status === 'rejected') throw projectResult.reason;
+          const project = projectResult.value as ProjectWithKind;
+          const operating = operatingResult.status === 'fulfilled' ? operatingResult.value : null;
+          if (!operating) degraded = true;
           let inferredKind: ProjectKind | null = project.kind ?? project.projectKind ?? null;
           if (!inferredKind) {
             try {
@@ -222,6 +300,18 @@ export function useWelcomeSuggestionContext({
           }
           if (cancelled) return;
           const kind = projectKindFromWire(project, inferredKind);
+          const blocker = operating?.blockers[0];
+          const failedResult = operating?.digest.health === 'attention'
+            ? operating.recentResults.find(
+                ({ receipt }) => receipt.status === 'failed' || receipt.verification.status === 'failed',
+              )
+            : undefined;
+          const continuation = {
+            recommendedAction: operating?.digest.recommendedAction,
+            blockedReason: blocker?.detail ?? blocker?.title,
+            recentFailure:
+              failedResult?.receipt.failure?.recoveryAction ?? failedResult?.receipt.summary,
+          };
           setState({
             key: currentKey,
             context:
@@ -231,8 +321,9 @@ export function useWelcomeSuggestionContext({
                     projectId,
                     projectName: project.name,
                     workspaceRoot: projectWorkspace(project),
+                    ...continuation,
                   }
-                : { kind: 'generalProject', projectId, projectName: project.name },
+                : { kind: 'generalProject', projectId, projectName: project.name, ...continuation },
             status: degraded ? 'degraded' : 'ready',
           });
           return;
@@ -282,6 +373,9 @@ export function useWelcomeSuggestionContext({
     sourceContextPending,
     effectiveWorkspacePath,
     workingDirectoryLocked,
+    task,
+    file,
+    workflow,
     sourceNoteId,
     sourceNoteTitle,
   ]);

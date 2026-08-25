@@ -24,6 +24,7 @@ import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId 
 import { fetchChatModels, resolveEffectiveModelId, setSessionModelRef, fetchSessionAgentConfig } from '../../query/models';
 import { queryKeys } from '../../query/keys';
 import { fetchTask, handoffTaskConversation } from '../../query/tasks';
+import { fetchProject, fetchProjectOperatingView } from '../../query/projects';
 import { getColors } from '../../theme';
 
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
@@ -124,6 +125,21 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     );
     return { projectId, taskId };
   }, [routeTaskId, sessionHistoryQuery.data?.pages]);
+  const welcomeTaskQuery = useQuery({
+    queryKey: queryKeys.task(sessionContext.taskId ?? ''),
+    queryFn: () => fetchTask(sessionContext.taskId!),
+    enabled: Boolean(sessionContext.taskId),
+  });
+  const welcomeProjectQuery = useQuery({
+    queryKey: queryKeys.project(sessionContext.projectId ?? ''),
+    queryFn: () => fetchProject(sessionContext.projectId!),
+    enabled: Boolean(sessionContext.projectId),
+  });
+  const welcomeProjectOperatingQuery = useQuery({
+    queryKey: queryKeys.projectOperatingView(sessionContext.projectId ?? ''),
+    queryFn: () => fetchProjectOperatingView(sessionContext.projectId!),
+    enabled: Boolean(sessionContext.projectId),
+  });
 
   const modelsQuery = useQuery({
     queryKey: queryKeys.models(currentSessionAgentId),
@@ -228,8 +244,19 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       agent: welcomeAgent,
       agentId: welcomeAgentId,
       effectiveWorkspacePath: sessionAgentConfigQuery.data?.effectiveWorkspacePath,
+      project: welcomeProjectQuery.data,
+      projectOperating: welcomeProjectOperatingQuery.data,
+      task: welcomeTaskQuery.data,
     }),
-    [m, sessionAgentConfigQuery.data?.effectiveWorkspacePath, welcomeAgent, welcomeAgentId],
+    [
+      m,
+      sessionAgentConfigQuery.data?.effectiveWorkspacePath,
+      welcomeAgent,
+      welcomeAgentId,
+      welcomeProjectOperatingQuery.data,
+      welcomeProjectQuery.data,
+      welcomeTaskQuery.data,
+    ],
   );
 
   const isEmptyChat = displayMessages.length === 0 && !chatSession.streaming && !sessionHistoryQuery.isLoading;
