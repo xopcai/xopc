@@ -1,6 +1,7 @@
 import type { ProjectTaskCard } from '@xopcai/gateway-contract';
 
 import type { Project } from '../../query/projects';
+import type { TaskListItem } from '../../query/tasks';
 
 const HEALTH_PRIORITY: Record<Project['operating']['health'], number> = {
   attention: 0,
@@ -8,6 +9,8 @@ const HEALTH_PRIORITY: Record<Project['operating']['health'], number> = {
   idle: 2,
   empty: 3,
 };
+
+const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'cancelled', 'archived']);
 
 export function sortProjectPortfolio(projects: Project[]): Project[] {
   return [...projects].sort((left, right) => {
@@ -25,6 +28,18 @@ export function projectPortfolioTotals(projects: Project[]): { needsUser: number
     needsUser: total.needsUser + project.operating.counts.needsUser,
     moving: total.moving + project.operating.counts.moving,
   }), { needsUser: 0, moving: 0 });
+}
+
+export function selectWorkOverviewProjects(projects: Project[], limit = 4): Project[] {
+  return sortProjectPortfolio(projects)
+    .filter((project) => !project.status || !TERMINAL_PROJECT_STATUSES.has(project.status))
+    .slice(0, limit);
+}
+
+export function selectWorkOverviewTasks(tasks: TaskListItem[], limit = 4): TaskListItem[] {
+  return tasks
+    .filter((item) => item.task.phase !== 'closed')
+    .slice(0, limit);
 }
 
 export function groupProjectTasks(tasks: ProjectTaskCard[]): {

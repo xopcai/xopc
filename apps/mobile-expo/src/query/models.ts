@@ -104,9 +104,15 @@ export async function fetchChatModels(agentId?: string): Promise<ChatModelsPaylo
   return parseModelsPayload(raw) ?? { defaultId: '', items: [] };
 }
 
-export async function setSessionModelRef(sessionKey: string, modelRef: string): Promise<boolean> {
-  const key = encodeURIComponent(sessionKey);
-  const res = await apiFetch(`/api/sessions/${key}/agent-config`, {
+export async function setSessionModelRef(
+  sessionKey: string,
+  modelRef: string,
+  taskId?: string,
+): Promise<boolean> {
+  const path = taskId
+    ? `/api/tasks/${encodeURIComponent(taskId)}/conversation/config`
+    : `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`;
+  const res = await apiFetch(path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: modelRef.trim() }),

@@ -77,6 +77,7 @@ const MAX_PENDING_FOLLOW_UPS = 5;
 
 export interface UseChatSessionOptions {
   sessionKey: string;
+  taskId?: string;
 }
 
 export interface UseChatSessionReturn {
@@ -114,7 +115,7 @@ export interface UseChatSessionReturn {
 }
 
 export function useChatSession(options: UseChatSessionOptions): UseChatSessionReturn {
-  const { sessionKey } = options;
+  const { sessionKey, taskId } = options;
 
   const queryClient = useQueryClient();
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
@@ -312,6 +313,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const followUp = useChatFollowUp({
     sessionKey,
     sessionKeyRef: activeSessionKeyRef,
+    taskId,
     onQueueFull: () => {
       setSnackMsg(t(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }));
     },
@@ -622,6 +624,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           sessionKey,
           buildCallbacks(sessionKey),
           attachments,
+          taskId,
         );
         setInputQueued(false);
         return true;
@@ -655,6 +658,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     },
     [
       sessionKey,
+      taskId,
       streaming,
       awaitingSessionRefresh,
       invalidateSessionByKey,
@@ -704,6 +708,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           payload,
           sessionKey,
           buildCallbacks(sessionKey),
+          taskId,
         );
         setInputQueued(false);
       } catch (e) {
@@ -730,6 +735,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     },
     [
       sessionKey,
+      taskId,
       streaming,
       awaitingSessionRefresh,
       invalidateSessionByKey,

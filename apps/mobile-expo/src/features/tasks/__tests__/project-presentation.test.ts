@@ -2,10 +2,13 @@ import type { ProjectTaskCard } from '@xopcai/gateway-contract';
 import { describe, expect, it } from 'vitest';
 
 import type { Project } from '../../../query/projects';
+import type { TaskListItem } from '../../../query/tasks';
 import {
   formatProjectRelativeTime,
   groupProjectTasks,
   projectPortfolioTotals,
+  selectWorkOverviewProjects,
+  selectWorkOverviewTasks,
   sortProjectPortfolio,
 } from '../project-presentation';
 
@@ -43,6 +46,30 @@ function task(
   };
 }
 
+function taskListItem(
+  id: string,
+  phase: TaskListItem['task']['phase'],
+  operationalState: TaskListItem['operationalState'],
+): TaskListItem {
+  return {
+    task: {
+      id,
+      title: id,
+      phase,
+      ...(phase === 'closed' ? { resolution: 'done' as const } : {}),
+      priority: 'normal',
+      source: 'api',
+      latestContractVersion: 1,
+      boardRank: 0,
+      version: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    },
+    operationalState,
+    attention: [],
+  };
+}
+
 describe('project mobile presentation', () => {
   it('orders attention before active and idle projects', () => {
     const result = sortProjectPortfolio([
@@ -64,6 +91,22 @@ describe('project mobile presentation', () => {
     expect(result.needsUser.map((item) => item.id)).toEqual(['user']);
     expect(result.moving.map((item) => item.id)).toEqual(['moving']);
     expect(result.other.map((item) => item.id)).toEqual(['ready', 'done']);
+  });
+
+  it('keeps non-running work visible in the overview', () => {
+    const projects = [
+      { ...project('idle-project', 'idle', 0, 0, 3), status: 'active' },
+      { ...project('archived-project', 'healthy', 0, 1, 4), status: 'archived' },
+      { ...project('completed-project', 'healthy', 0, 1, 5), status: 'completed' },
+    ];
+    const tasks = [
+      taskListItem('waiting', 'active', 'waiting'),
+      taskListItem('planned', 'backlog', 'idle'),
+      taskListItem('done', 'closed', 'idle'),
+    ];
+
+    expect(selectWorkOverviewProjects(projects).map((item) => item.id)).toEqual(['idle-project']);
+    expect(selectWorkOverviewTasks(tasks).map((item) => item.task.id)).toEqual(['waiting', 'planned']);
   });
 
   it('falls back without throwing when the runtime rejects the locale', () => {

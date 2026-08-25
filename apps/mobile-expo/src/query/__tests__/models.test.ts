@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
-import { fetchSessionAgentConfig } from '../models';
+import { fetchSessionAgentConfig, setSessionModelRef } from '../models';
 
 vi.mock('../../api/client', () => ({
   apiFetch: vi.fn(),
@@ -29,5 +29,19 @@ describe('fetchSessionAgentConfig', () => {
       model: 'openai/gpt-test',
       reasoningLevel: 'off',
     });
+  });
+});
+
+describe('setSessionModelRef', () => {
+  beforeEach(() => mockedApiFetch.mockReset());
+
+  it('updates a task-bound conversation through the task endpoint', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await expect(setSessionModelRef('session-1', 'openai/gpt-test', 'task/1')).resolves.toBe(true);
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/tasks/task%2F1/conversation/config', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ model: 'openai/gpt-test' }),
+    }));
   });
 });

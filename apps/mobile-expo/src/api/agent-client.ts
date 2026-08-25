@@ -40,12 +40,12 @@ import {
   type PendingSessionInput,
 } from '../features/gateway/session-input-outbox';
 
-async function postSessionInput(path: string, body: string): Promise<Response> {
+async function postSessionInput(path: string, body: string, headers?: Record<string, string>): Promise<Response> {
   let lastError: unknown;
   for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
     if (delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
     try {
-      const response = await apiFetch(path, { method: 'POST', body });
+      const response = await apiFetch(path, { method: 'POST', body, ...(headers ? { headers } : {}) });
       if (!shouldRetrySessionInputStatus(response.status)) return response;
       lastError = new Error(`Session input temporarily unavailable (${response.status})`);
     } catch (error) {
@@ -308,9 +308,10 @@ export class AgentMessageSender {
     sessionKey: string,
     callbacks?: MessagingCallbacks,
     attachments?: WireAttachment[],
+    taskId?: string,
   ): Promise<void> {
     const capped = capAttachments(attachments);
-    const entry = enqueueSessionInput(sessionKey, message, capped ?? []);
+    const entry = enqueueSessionInput(sessionKey, message, capped ?? [], taskId);
     await this._submitPendingInput(entry, callbacks);
   }
 
@@ -346,7 +347,9 @@ export class AgentMessageSender {
       requestMobileRealtimeReconnect,
     );
     const res = await postSessionInput(
-      `/api/sessions/${encodeURIComponent(entry.sessionKey)}/inputs`,
+      entry.taskId
+        ? `/api/tasks/${encodeURIComponent(entry.taskId)}/inputs`
+        : `/api/sessions/${encodeURIComponent(entry.sessionKey)}/inputs`,
       JSON.stringify({
         clientMessageId: entry.clientMessageId,
         delivery: 'next',
@@ -354,6 +357,7 @@ export class AgentMessageSender {
         origin,
         ...(attachments.length ? { attachments } : {}),
       }),
+      entry.taskId ? { 'X-Xopc-Expected-Session-Key': entry.sessionKey } : undefined,
     );
     if (!res.ok) {
       const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
@@ -378,6 +382,7 @@ export class AgentMessageSender {
     payload: VoiceMessagePayload,
     sessionKey: string,
     callbacks?: MessagingCallbacks,
+    taskId?: string,
   ): Promise<void> {
     const mimeType = payload.mimeType || 'audio/mp4';
     const name = payload.name || (mimeType.includes('mpeg') ? 'voice.mp3' : 'voice.m4a');
@@ -394,7 +399,7 @@ export class AgentMessageSender {
       size,
       ...(durationSeconds != null ? { durationSeconds } : {}),
     };
-    return this.sendMessage('', sessionKey, callbacks, [wire]);
+    return this.sendMessage('', sessionKey, callbacks, [wire], taskId);
   }
 
   async resume(runId: string, sessionKey: string, callbacks?: MessagingCallbacks): Promise<void> {

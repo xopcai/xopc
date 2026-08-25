@@ -28,7 +28,7 @@ import { useGatewayConfigured } from '../../query/sessions';
 import { createTask } from '../../query/tasks';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-import { buildMobileTaskCreateRequest, resolveTaskAgentId } from './task-create-input';
+import { buildMobileTaskCreateRequest } from './task-create-input';
 
 type Picker = 'project' | 'agent' | 'dependencies' | null;
 
@@ -80,15 +80,12 @@ export function CreateTaskScreen() {
   const markChanged = () => setRequestId(randomUUID());
   const create = useMutation({
     mutationFn: () => {
-      if (!agents.data) throw new Error(labels.agentUnavailable);
-      const project = projects.data?.find((item) => item.id === projectId);
-      const agentId = resolveTaskAgentId({ agents: agents.data, project, selectedAgentId });
       return createTask(buildMobileTaskCreateRequest({
         idempotencyKey: requestId,
         title,
         projectId,
         dependencies: dependsOnTaskIds,
-        agentId,
+        agentId: selectedAgentId || undefined,
         noteId: firstParam(params.noteId),
         body,
         acceptanceCriteria: completionCriteria.split('\n'),
@@ -106,15 +103,15 @@ export function CreateTaskScreen() {
     },
   });
 
-  const hasAvailableAgent = Boolean(agents.data?.items.length);
   const projectSelectionReady = !projectId || Boolean(selectedProject);
+  const selectedAgentUnavailable = Boolean(selectedAgentId)
+    && !agents.isLoading
+    && (agents.isError || !selectedAgent);
   const canCreate = Boolean(title.trim())
-    && hasAvailableAgent
     && projectSelectionReady
     && !create.isPending
-    && !agents.isLoading
-    && !agents.isError;
-  const setupError = agents.isError || (agents.data && !hasAvailableAgent)
+    && !selectedAgentUnavailable;
+  const setupError = selectedAgentUnavailable
     ? labels.agentUnavailable
     : projectId && projects.isError
       ? labels.projectsLoadFailed
@@ -187,9 +184,7 @@ export function CreateTaskScreen() {
               icon="account-outline"
               label={labels.agentLabel}
               value={agentValue}
-              hint={agents.data && !hasAvailableAgent
-                ? labels.agentUnavailable
-                : selectedAgentId ? undefined : labels.automaticAgentHint}
+              hint={selectedAgentId ? undefined : labels.automaticAgentHint}
               onPress={() => setPicker('agent')}
               loading={agents.isLoading}
             />
