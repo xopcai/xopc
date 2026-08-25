@@ -41,7 +41,18 @@
         "directory": "根据当前目录「{{path}}」开始"
       },
       "contextPrompts": {
-        "codingWorkspace": "请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位启动入口、核心模块和最值得阅读的文件，再建议我下一步看哪里。"
+        "codingWorkspace": "请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位启动入口、核心模块和最值得阅读的文件，再建议我下一步看哪里。",
+        "projectBlocked": "项目「{{projectName}}」当前被“{{blockedReason}}”阻塞。请先核对相关上下文，给出解除阻塞的最小可执行方案并开始推进。",
+        "projectNextAction": "继续推进项目「{{projectName}}」已经明确的下一步：“{{nextAction}}”。请先核对当前状态，然后直接执行。",
+        "projectFailure": "项目「{{projectName}}」最近出现失败：“{{recentFailure}}”。请定位原因，提出修复方案，并说明如何验证。",
+        "taskAttention": "任务「{{taskTitle}}」当前需要处理：“{{attentionSummary}}”。请先说明需要我决定或补充什么，再继续推进。",
+        "taskNextAction": "继续任务「{{taskTitle}}」已经明确的下一步：“{{nextAction}}”。请核对任务约束后直接推进。",
+        "taskFailure": "任务「{{taskTitle}}」最近失败：“{{recentFailure}}”。请分析原因，修复可恢复的问题，并给出重试前的验证结果。",
+        "taskReview": "请按任务「{{taskTitle}}」的验收标准核对当前结果，列出通过项、缺口和证据，再给出是否可以完成的结论。",
+        "taskClosed": "总结任务「{{taskTitle}}」的完成结果、验证证据和遗留工作，并判断是否需要创建后续任务。",
+        "fileStart": "请阅读文件「{{fileName}}」，说明最值得修改的地方，并直接给出具体的编辑方案。",
+        "workflowNextAction": "继续工作流「{{workflowName}}」已经明确的下一步：“{{nextAction}}”，先核对已有产物再推进。",
+        "workflowFailure": "工作流「{{workflowName}}」最近失败：“{{recentFailure}}”。请定位失败环节并给出安全的恢复方案。"
       },
       "exploreCards": [
         {
@@ -475,6 +486,37 @@
               }
             ]
           }
+        ]
+      },
+      "task": {
+        "headline": "推进任务「{{taskTitle}}」",
+        "tagline": "围绕当前状态，处理下一步、阻塞和验收。",
+        "contextLabel": "任务：{{taskTitle}}",
+        "categories": [
+          { "id": "task-next-step", "icon": "target", "title": "继续下一步", "description": "按目标直接推进", "scenarios": [{ "prompt": "梳理任务「{{taskTitle}}」的当前状态，并执行最小可验证的下一步。" }] },
+          { "id": "task-clarify", "icon": "search", "title": "补齐关键信息", "description": "约束、依赖、待决策", "scenarios": [{ "prompt": "检查任务「{{taskTitle}}」还缺少哪些输入、依赖或决策，只提出最关键的问题。" }] },
+          { "id": "task-recover", "icon": "review", "title": "排查与恢复", "description": "失败、阻塞、重试", "scenarios": [{ "prompt": "检查任务「{{taskTitle}}」的失败和阻塞记录，给出恢复方案和验证步骤。" }] },
+          { "id": "task-verify", "icon": "review", "title": "验证任务结果", "description": "验收标准与证据", "scenarios": [{ "prompt": "按验收标准检查任务「{{taskTitle}}」的结果，并列出证据和剩余缺口。" }] }
+        ]
+      },
+      "file": {
+        "headline": "处理文件「{{fileName}}」",
+        "tagline": "先理解内容，再编辑、转换或提取信息。",
+        "contextLabel": "文件：{{fileName}}",
+        "categories": [
+          { "id": "file-understand", "icon": "documents", "title": "理解文件", "description": "摘要、结构、重点", "scenarios": [{ "prompt": "阅读文件「{{fileName}}」，总结结构、核心内容和需要注意的问题。" }] },
+          { "id": "file-edit", "icon": "content", "title": "编辑与转换", "description": "改写、整理、格式转换", "scenarios": [{ "prompt": "检查文件「{{fileName}}」并提出具体的编辑或格式优化方案。" }] },
+          { "id": "file-extract", "icon": "task", "title": "提取可执行内容", "description": "任务、数据、结论", "scenarios": [{ "prompt": "从文件「{{fileName}}」中提取任务、关键数据和明确结论。" }] }
+        ]
+      },
+      "workflow": {
+        "headline": "继续工作流「{{workflowName}}」",
+        "tagline": "检查产物、处理异常或继续下一步。",
+        "contextLabel": "工作流：{{workflowName}}",
+        "categories": [
+          { "id": "workflow-next-step", "icon": "target", "title": "继续下一步", "description": "沿用已有产物", "scenarios": [{ "prompt": "检查工作流「{{workflowName}}」的已有产物并继续最合适的下一步。" }] },
+          { "id": "workflow-review", "icon": "review", "title": "检查运行结果", "description": "产物、证据、缺口", "scenarios": [{ "prompt": "总结工作流「{{workflowName}}」的运行结果、证据和未完成事项。" }] },
+          { "id": "workflow-recover", "icon": "search", "title": "处理运行异常", "description": "定位、恢复、重试", "scenarios": [{ "prompt": "检查工作流「{{workflowName}}」的异常记录，并给出恢复和重试方案。" }] }
         ]
       }
     },

@@ -41,7 +41,18 @@
         "directory": "Starts from the current directory: {{path}}"
       },
       "contextPrompts": {
-        "codingWorkspace": "Start from {{workspaceRoot}} and understand project {{projectName}}. Locate the entrypoints, core modules, and highest-value files to read, then recommend where I should look next."
+        "codingWorkspace": "Start from {{workspaceRoot}} and understand project {{projectName}}. Locate the entrypoints, core modules, and highest-value files to read, then recommend where I should look next.",
+        "projectBlocked": "Project {{projectName}} is blocked by: {{blockedReason}}. Check the relevant context, propose the smallest executable way to unblock it, and start moving it forward.",
+        "projectNextAction": "Continue the defined next action for project {{projectName}}: {{nextAction}}. Check the current state, then carry it out.",
+        "projectFailure": "Project {{projectName}} recently failed: {{recentFailure}}. Find the cause, propose a fix, and explain how to verify it.",
+        "taskAttention": "Task {{taskTitle}} needs attention: {{attentionSummary}}. Explain what decision or input is needed from me, then continue.",
+        "taskNextAction": "Continue the defined next action for task {{taskTitle}}: {{nextAction}}. Check the task constraints, then proceed.",
+        "taskFailure": "Task {{taskTitle}} recently failed: {{recentFailure}}. Analyze the cause, fix recoverable problems, and show verification before retrying.",
+        "taskReview": "Check task {{taskTitle}} against its acceptance criteria. List passes, gaps, and evidence, then decide whether it is complete.",
+        "taskClosed": "Summarize the result, verification evidence, and remaining work for task {{taskTitle}}, then decide whether a follow-up task is needed.",
+        "fileStart": "Read {{fileName}}, identify the most valuable improvements, and provide a concrete editing plan.",
+        "workflowNextAction": "Continue the defined next action for workflow {{workflowName}}: {{nextAction}}. Check existing outputs before proceeding.",
+        "workflowFailure": "Workflow {{workflowName}} recently failed: {{recentFailure}}. Locate the failed stage and propose a safe recovery plan."
       },
       "exploreCards": [
         {
@@ -475,6 +486,37 @@
               }
             ]
           }
+        ]
+      },
+      "task": {
+        "headline": "Move task {{taskTitle}} forward",
+        "tagline": "Act on its current state, blockers, and acceptance criteria.",
+        "contextLabel": "Task: {{taskTitle}}",
+        "categories": [
+          { "id": "task-next-step", "icon": "target", "title": "Continue next step", "description": "Move directly toward the goal", "scenarios": [{ "prompt": "Review the current state of task {{taskTitle}} and execute the smallest verifiable next step." }] },
+          { "id": "task-clarify", "icon": "search", "title": "Fill key gaps", "description": "Constraints, dependencies, decisions", "scenarios": [{ "prompt": "Check what input, dependency, or decision task {{taskTitle}} still needs, and ask only the most important question." }] },
+          { "id": "task-recover", "icon": "review", "title": "Diagnose and recover", "description": "Failures, blockers, retries", "scenarios": [{ "prompt": "Inspect failures and blockers for task {{taskTitle}}, then propose recovery and verification steps." }] },
+          { "id": "task-verify", "icon": "review", "title": "Verify the result", "description": "Acceptance criteria and evidence", "scenarios": [{ "prompt": "Check task {{taskTitle}} against its acceptance criteria and list evidence and remaining gaps." }] }
+        ]
+      },
+      "file": {
+        "headline": "Work with {{fileName}}",
+        "tagline": "Understand it first, then edit, convert, or extract information.",
+        "contextLabel": "File: {{fileName}}",
+        "categories": [
+          { "id": "file-understand", "icon": "documents", "title": "Understand file", "description": "Summary, structure, highlights", "scenarios": [{ "prompt": "Read {{fileName}} and summarize its structure, core content, and important issues." }] },
+          { "id": "file-edit", "icon": "content", "title": "Edit or convert", "description": "Rewrite, organize, transform", "scenarios": [{ "prompt": "Review {{fileName}} and propose concrete editing or formatting improvements." }] },
+          { "id": "file-extract", "icon": "task", "title": "Extract actions", "description": "Tasks, data, conclusions", "scenarios": [{ "prompt": "Extract tasks, key data, and explicit conclusions from {{fileName}}." }] }
+        ]
+      },
+      "workflow": {
+        "headline": "Continue workflow {{workflowName}}",
+        "tagline": "Review outputs, handle failures, or continue the next step.",
+        "contextLabel": "Workflow: {{workflowName}}",
+        "categories": [
+          { "id": "workflow-next-step", "icon": "target", "title": "Continue next step", "description": "Build on existing outputs", "scenarios": [{ "prompt": "Review existing outputs from workflow {{workflowName}} and continue the best next step." }] },
+          { "id": "workflow-review", "icon": "review", "title": "Review run results", "description": "Outputs, evidence, gaps", "scenarios": [{ "prompt": "Summarize the results, evidence, and unfinished work from workflow {{workflowName}}." }] },
+          { "id": "workflow-recover", "icon": "search", "title": "Handle run failure", "description": "Locate, recover, retry", "scenarios": [{ "prompt": "Inspect errors from workflow {{workflowName}} and propose a recovery and retry plan." }] }
         ]
       }
     },
