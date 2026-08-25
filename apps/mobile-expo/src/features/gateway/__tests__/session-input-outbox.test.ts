@@ -47,4 +47,9 @@ describe('session input outbox', () => {
     enqueueSessionInput('session-a', 'first');
     expect(() => enqueueSessionInput('session-a', 'second')).toThrow('already waiting');
   });
+
+  it('persists the task binding for reconnect delivery', () => {
+    enqueueSessionInput('session-a', 'task message', [], 'task-1');
+    expect(readPendingSessionInput('session-a')?.taskId).toBe('task-1');
+  });
 });

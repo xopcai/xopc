@@ -23,6 +23,7 @@ import { useMessages, t } from '../../i18n/messages';
 import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId } from '../../query/agents';
 import { fetchChatModels, resolveEffectiveModelId, setSessionModelRef, fetchSessionAgentConfig } from '../../query/models';
 import { queryKeys } from '../../query/keys';
+import { fetchTask, handoffTaskConversation } from '../../query/tasks';
 import { getColors } from '../../theme';
 
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
@@ -55,10 +56,15 @@ export type UseChatPageOptions = {
 
 export function useChatPage(options: UseChatPageOptions = {}) {
   const { embedded = false, onBack } = options;
-  const { k: rawKey, msg: rawMsg } = useLocalSearchParams<{ k?: string; msg?: string }>();
+  const { k: rawKey, msg: rawMsg, taskId: rawTaskId } = useLocalSearchParams<{
+    k?: string;
+    msg?: string;
+    taskId?: string;
+  }>();
   const savingAssistantNoteRef = useRef(false);
   const urlSessionKey = typeof rawKey === 'string' ? rawKey : Array.isArray(rawKey) ? rawKey[0] : '';
   const urlPrefillMessage = typeof rawMsg === 'string' ? rawMsg : Array.isArray(rawMsg) ? rawMsg[0] : '';
+  const routeTaskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
   const router = useRouter();
   useDismissOnHardwareBack(router, { enabled: !embedded });
   const queryClient = useQueryClient();
@@ -112,10 +118,12 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const sessionContext = useMemo(() => {
     const session = sessionHistoryQuery.data?.pages[0]?.session;
     const projectId = session?.projectId?.trim() || undefined;
-    const rawTaskId = session?.customData?.taskId;
-    const taskId = typeof rawTaskId === 'string' && rawTaskId.trim() ? rawTaskId.trim() : undefined;
+    const metadataTaskId = session?.customData?.taskId;
+    const taskId = routeTaskId || (
+      typeof metadataTaskId === 'string' && metadataTaskId.trim() ? metadataTaskId.trim() : undefined
+    );
     return { projectId, taskId };
-  }, [sessionHistoryQuery.data?.pages]);
+  }, [routeTaskId, sessionHistoryQuery.data?.pages]);
 
   const modelsQuery = useQuery({
     queryKey: queryKeys.models(currentSessionAgentId),
@@ -124,7 +132,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   });
 
   const effectiveModelId = resolveEffectiveModelId(modelsQuery.data, localSelectedModelRef);
-  const chatSession = useChatSession({ sessionKey });
+  const chatSession = useChatSession({ sessionKey, taskId: routeTaskId || undefined });
   const sessionAgentConfigQuery = useQuery({
     queryKey: queryKeys.sessionAgentConfig(sessionKey),
     queryFn: () => fetchSessionAgentConfig(sessionKey),
@@ -280,25 +288,37 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const handleModelSelect = useCallback(
     (modelId: string) => {
       setSelectedModelRef(modelId);
-      if (sessionKey) void setSessionModelRef(sessionKey, modelId).catch(() => {});
+      if (sessionKey) void setSessionModelRef(sessionKey, modelId, routeTaskId || undefined).catch(() => {});
     },
-    [sessionKey, setSelectedModelRef],
+    [routeTaskId, sessionKey, setSelectedModelRef],
   );
 
   const handleAgentSelect = useCallback(
     (agentId: string) => {
       void (async () => {
-        const key = await takeNewChatSessionKey(agentId);
+        const key = routeTaskId
+          ? (await handoffTaskConversation(
+              routeTaskId,
+              agentId,
+              (await queryClient.fetchQuery({
+                queryKey: queryKeys.task(routeTaskId),
+                queryFn: () => fetchTask(routeTaskId),
+              })).task.version,
+            )).activeSessionKey
+          : await takeNewChatSessionKey(agentId);
         chatSession.activeSessionKeyRef.current = key;
         bootstrap.setPendingBootstrapKey(key);
+        if (routeTaskId) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.task(routeTaskId) });
+        }
         if (!embedded) {
-          openChat(router, key, { replace: true });
+          openChat(router, key, { replace: true, ...(routeTaskId ? { taskId: routeTaskId } : {}) });
         }
       })().catch((err) => {
         chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
       });
     },
-    [embedded, router, chatSession, bootstrap],
+    [embedded, queryClient, routeTaskId, router, chatSession, bootstrap],
   );
 
   const handleNewChat = useCallback(() => {

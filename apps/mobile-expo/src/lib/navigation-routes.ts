@@ -4,6 +4,17 @@ export type NoteDetailOptions = {
 };
 
 type NoteDetailRouteParams = { id: string; heading?: string; start?: string; end?: string };
+type ChatRouteParams = { k: string; msg?: string; taskId?: string };
+
+export function chatRoute(
+  key: string,
+  options?: { msg?: string; taskId?: string },
+): { pathname: '/chat/[k]'; params: ChatRouteParams } {
+  const params: ChatRouteParams = { k: key };
+  if (options?.msg) params.msg = options.msg;
+  if (options?.taskId) params.taskId = options.taskId;
+  return { pathname: '/chat/[k]', params };
+}
 
 export function noteDetailRoute(
   noteId: string,

@@ -3,24 +3,16 @@ import { useCallback } from 'react';
 import { BackHandler, Platform } from 'react-native';
 
 import { buildIntakeRoute, type IntakeRouteParams } from '../features/content-intake/route-intake';
-import { noteDetailRoute, type NoteDetailOptions } from './navigation-routes';
+import { chatRoute, noteDetailRoute, type NoteDetailOptions } from './navigation-routes';
 
-export { noteDetailRoute } from './navigation-routes';
-
-type ChatRouteParams = { k: string; msg?: string };
-
-export function chatRoute(key: string, msg?: string): { pathname: '/chat/[k]'; params: ChatRouteParams } {
-  const params: ChatRouteParams = { k: key };
-  if (msg) params.msg = msg;
-  return { pathname: '/chat/[k]', params };
-}
+export { chatRoute, noteDetailRoute } from './navigation-routes';
 
 export function openChat(
   router: ImperativeRouter,
   key: string,
-  options?: { msg?: string; replace?: boolean },
+  options?: { msg?: string; taskId?: string; replace?: boolean },
 ): void {
-  const href = chatRoute(key, options?.msg);
+  const href = chatRoute(key, options);
   if (options?.replace) router.replace(href);
   else router.push(href);
 }

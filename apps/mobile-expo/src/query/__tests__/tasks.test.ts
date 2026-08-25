@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
-import { fetchTask, fetchTasks, TaskApiError } from '../tasks';
+import { ensureTaskConversation, fetchTask, fetchTasks, handoffTaskConversation, TaskApiError } from '../tasks';
 
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn() }));
 
@@ -67,6 +67,8 @@ describe('task queries', () => {
       runs: [],
       receipts: [],
       context: [],
+      conversation: { taskId: 'task-1', assignmentEpoch: 0, status: 'idle', updatedAt: 10 },
+      sessions: [],
       authorityGrants: [],
       dependencies: [],
       dependents: [],
@@ -74,5 +76,35 @@ describe('task queries', () => {
     })));
 
     await expect(fetchTask('task-1')).resolves.toMatchObject({ task: { id: 'task-1', boardRank: 0 } });
+  });
+
+  it('ensures a task conversation through the canonical task endpoint', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      sessionKey: 'agent:project:webchat:task-1',
+      agentId: 'project',
+      created: true,
+    })));
+
+    await expect(ensureTaskConversation('task/1')).resolves.toMatchObject({
+      agentId: 'project',
+      created: true,
+    });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/tasks/task%2F1/conversation', { method: 'POST' });
+  });
+
+  it('hands a task conversation to a new agent', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      activeSessionKey: 'agent:new:webchat:task-1',
+      toAgentId: 'new',
+    })));
+
+    await expect(handoffTaskConversation('task/1', 'new', 3)).resolves.toMatchObject({ toAgentId: 'new' });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/tasks/task%2F1/handoff', expect.objectContaining({ method: 'POST' }));
+    expect(JSON.parse(String(mockedApiFetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+      toAgentId: 'new',
+      expectedVersion: 3,
+    });
   });
 });
