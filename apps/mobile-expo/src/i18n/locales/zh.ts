@@ -251,6 +251,10 @@ export const zh: MessageBundle = {
 
   // ── 聊天界面 ────────────────────────────────────────────
   chat: {
+    contextProjectLabel: '项目上下文',
+    contextTaskLabel: '任务上下文',
+    contextActive: '上下文已生效',
+    openContext: '打开上下文',
     missingKey: '缺少会话密钥。',
     inputPlaceholder: '尽管问，带图也行',
     inputPlaceholderSteering: '追问排队，点行编辑',
