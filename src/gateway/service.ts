@@ -60,14 +60,14 @@ import type { ClarifyStreamEvent } from './clarify-bridge.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { MobileNotificationService } from '../mobile/notification-service.js';
-import { ProjectService } from '../projects/index.js';
+import { ProjectService, resolveProjectAgentId } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import {
   TaskRepository,
   TaskApplicationService,
   TaskOutboxDispatcher,
 } from '../tasks/index.js';
-import { TaskContextRepository } from '../tasks/task-context-repository.js';
+import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
@@ -609,40 +609,7 @@ export class GatewayService {
       this.taskRunDispatcher = new TaskRunDispatcher({
         workerId: 'gateway-agent',
         ensureSession: async (taskId, runId, requestedAgentId) => {
-          const task = new TaskRepository().require(taskId);
-          const agentId = requestedAgentId || task.delegateAgentId || getDefaultAgentId(this.config);
-          const peerId = `task-${sanitizeSegment(taskId) || Date.now()}`;
-          const sessionKey = buildSessionKey({
-            agentId,
-            source: 'webchat',
-            accountId: 'default',
-            peerKind: 'direct',
-            peerId,
-          });
-          if (!await this.sessionIndex.getSessionMetadata(sessionKey)) {
-            await this.sessionIndex.saveMessages(sessionKey, [], { metadata: {
-              sourceChannel: 'webchat',
-              sourceChatId: `default:direct:${peerId}`,
-              sessionType: 'chat',
-              routing: {
-                agentId,
-                source: 'webchat',
-                accountId: 'default',
-                peerKind: 'direct',
-                peerId,
-              },
-              projectId: task.projectId,
-              customData: {
-                taskId,
-                origin: 'task',
-                triggerKind: 'user',
-                taskRunId: runId,
-              },
-            } });
-          }
-          if (task.projectId) this.projects.attachSession(sessionKey, task.projectId);
-          new TaskContextRepository().linkSession({ taskId, sessionKey, role: 'execution' });
-          return sessionKey;
+          return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).sessionKey;
         },
         runAgent: async (runId, sessionKey, message) => {
           const stream = this.agentRunner.runAgent(
@@ -673,6 +640,75 @@ export class GatewayService {
     this.dispatchTaskEvents();
     this.createTaskRunDispatcher().dispatch();
     void this.createWorkflowRunService().dispatchTaskRuns();
+  }
+
+  async ensureTaskConversation(
+    taskId: string,
+    options: { runId?: string; requestedAgentId?: string } = {},
+  ): Promise<{
+    sessionKey: string;
+    agentId: string;
+    created: boolean;
+    conversation: ReturnType<TaskConversationRepository['requireState']>;
+  }> {
+    const task = new TaskRepository().require(taskId);
+    const agentId = resolveProjectAgentId({
+      config: this.config,
+      projects: this.projects,
+      explicitAgentId: options.requestedAgentId ?? task.delegateAgentId,
+      projectId: task.projectId,
+    });
+    const conversations = new TaskConversationRepository();
+    const active = conversations.getActiveSession(task.id);
+    if (active) {
+      if (active.agentId && active.agentId !== agentId) {
+        throw new Error('Task executor differs from the active conversation');
+      }
+      const conversation = conversations.activateExecutionSession({
+        taskId: task.id,
+        sessionKey: active.sessionKey,
+        agentId,
+        runId: options.runId,
+      });
+      return { sessionKey: active.sessionKey, agentId, created: false, conversation };
+    }
+
+    const peerId = `task-${sanitizeSegment(task.id) || Date.now()}`;
+    const sessionKey = buildSessionKey({
+      agentId,
+      source: 'webchat',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId,
+    });
+    if (!await this.sessionIndex.getSessionMetadata(sessionKey)) {
+      await this.sessionIndex.saveMessages(sessionKey, [], { metadata: {
+        sourceChannel: 'webchat',
+        sourceChatId: `default:direct:${peerId}`,
+        sessionType: 'chat',
+        routing: {
+          agentId,
+          source: 'webchat',
+          accountId: 'default',
+          peerKind: 'direct',
+          peerId,
+        },
+        projectId: task.projectId,
+        customData: {
+          origin: 'task',
+          triggerKind: 'user',
+          ...(options.runId ? { taskRunId: options.runId } : {}),
+        },
+      } });
+    }
+    if (task.projectId) this.projects.attachSession(sessionKey, task.projectId);
+    const conversation = conversations.activateExecutionSession({
+      taskId: task.id,
+      sessionKey,
+      agentId,
+      runId: options.runId,
+    });
+    return { sessionKey, agentId, created: true, conversation };
   }
 
   dispatchTaskEvents(): void {

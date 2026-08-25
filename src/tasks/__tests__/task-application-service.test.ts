@@ -63,6 +63,23 @@ describe('TaskApplicationService', () => {
     expect(result.runId).toBeUndefined();
   });
 
+  it('starts with the resolved task delegate when creation omits an executor', () => {
+    const result = new TaskApplicationService().create({
+      idempotencyKey: 'default-executor',
+      title: 'Use resolved executor',
+      delegateAgentId: 'project-agent',
+      priority: 'normal',
+      contract,
+      dependencies: [],
+      context: [],
+      authorityGrants: [],
+      activation: { mode: 'start' },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok || !result.runId) throw new Error('Expected TaskRun');
+    expect(new TaskRunRepository().get(result.runId)?.executorRef).toEqual({ agentId: 'project-agent' });
+  });
+
   it('moves an idle task between board phases without starting execution', () => {
     const service = new TaskApplicationService();
     const created = service.create({

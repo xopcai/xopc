@@ -1,8 +1,8 @@
 import { TaskChangedEventSchema, type TaskChangedEvent } from '@xopcai/gateway-contract';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 
-import { fetchTask } from '@/features/tasks/home-api';
+import { ensureTaskConversation, fetchTask } from '@/features/tasks/home-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function taskDetailSWRKey(taskId: string, token: string | undefined): readonly [string, string, string] | null {
@@ -12,6 +12,9 @@ export function taskDetailSWRKey(taskId: string, token: string | undefined): rea
 export function useTaskDetail(taskId: string) {
   const token = useGatewayStore((state) => state.token);
   const [lastChange, setLastChange] = useState<TaskChangedEvent | null>(null);
+  const [conversationLoading, setConversationLoading] = useState(false);
+  const [conversationError, setConversationError] = useState<unknown>(null);
+  const ensureMarkerRef = useRef('');
   const swr = useSWR(
     taskDetailSWRKey(taskId, token),
     () => fetchTask(taskId),
@@ -27,7 +30,30 @@ export function useTaskDetail(taskId: string) {
     },
   );
 
-  useEffect(() => setLastChange(null), [taskId]);
+  useEffect(() => {
+    setLastChange(null);
+    setConversationLoading(false);
+    setConversationError(null);
+    ensureMarkerRef.current = '';
+  }, [taskId]);
+
+  useEffect(() => {
+    const detail = swr.data;
+    if (!detail || detail.conversation.activeSessionKey) return;
+    const marker = `${taskId}:${detail.task.version}`;
+    if (ensureMarkerRef.current === marker) return;
+    ensureMarkerRef.current = marker;
+    setConversationLoading(true);
+    setConversationError(null);
+    void ensureTaskConversation(taskId)
+      .then(() => ensureMarkerRef.current === marker ? swr.mutate() : undefined)
+      .catch((error: unknown) => {
+        if (ensureMarkerRef.current === marker) setConversationError(error);
+      })
+      .finally(() => {
+        if (ensureMarkerRef.current === marker) setConversationLoading(false);
+      });
+  }, [swr.data, swr.mutate, taskId]);
 
   useEffect(() => {
     let refreshTimer: number | undefined;
@@ -53,5 +79,5 @@ export function useTaskDetail(taskId: string) {
     };
   }, [swr.mutate, taskId]);
 
-  return { ...swr, lastChange };
+  return { ...swr, lastChange, conversationLoading, conversationError };
 }

@@ -1,5 +1,6 @@
-import { getSessionMetadata, isXopcDatabaseOpen } from '../storage/sqlite/index.js';
+import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { TaskContextRepository } from './task-context-repository.js';
+import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 
@@ -39,8 +40,7 @@ const STANDARD: TaskContextAllocation = {
 };
 
 function taskIdForSession(sessionKey: string): string | undefined {
-  const value = getSessionMetadata(sessionKey)?.customData?.taskId;
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  return new TaskConversationRepository().resolveActiveExecutionSession(sessionKey)?.taskId;
 }
 
 export function getTaskExecutionBrief(taskId: string): TaskExecutionBrief | undefined {
@@ -85,13 +85,18 @@ export function assembleTaskContext(sessionKey: string, userQuery: string): Asse
   const brief = getTaskExecutionBrief(taskId);
   if (!brief) return { taskId, retrievalQuery: query, allocation: STANDARD };
   const { task, latestReceipt, remainingCriteria, allocation, manifest } = brief;
+  const handoff = new TaskConversationRepository().getLatestHandoff(taskId);
+  const handoffPayload = handoff?.toSessionKey === sessionKey
+    ? JSON.stringify(handoff.payload).slice(0, 12_000)
+    : '';
   const contract = task.contract!;
   const sections = [query, `Task: ${contract.objective}`,
     contract.expectedOutputs.length ? `Expected outputs: ${contract.expectedOutputs.join('; ')}` : '',
     remainingCriteria.length ? `Remaining acceptance criteria: ${remainingCriteria.join('; ')}` : '',
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
     contract.risks.length ? `Risks: ${contract.risks.join('; ')}` : '',
-    latestReceipt?.summary ? `Latest run: ${latestReceipt.summary}` : ''].filter(Boolean);
+    latestReceipt?.summary ? `Latest run: ${latestReceipt.summary}` : '',
+    handoffPayload ? `Handoff snapshot: ${handoffPayload}` : ''].filter(Boolean);
   return { taskId, retrievalQuery: sections.join('\n'), allocation, manifest };
 }
 
@@ -100,6 +105,10 @@ export function buildTaskExecutionDirective(sessionKey: string): string {
   const brief = taskId ? getTaskExecutionBrief(taskId) : undefined;
   if (!brief) return '';
   const { task, remainingCriteria } = brief;
+  const handoff = new TaskConversationRepository().getLatestHandoff(task.id);
+  const handoffPayload = handoff?.toSessionKey === sessionKey
+    ? JSON.stringify(handoff.payload).slice(0, 12_000)
+    : '';
   const contract = task.contract!;
   return [
     '<xopc_task_execution>',
@@ -109,6 +118,7 @@ export function buildTaskExecutionDirective(sessionKey: string): string {
     `Remaining acceptance criteria: ${remainingCriteria.join('; ')}`,
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
     contract.approvalRequired.length ? `Authority required: ${contract.approvalRequired.join('; ')}` : '',
+    handoffPayload ? `Handoff snapshot: ${handoffPayload}` : '',
     'Take safe in-scope steps and produce inspectable evidence. Do not claim completion without verification.',
     '</xopc_task_execution>',
   ].filter(Boolean).join('\n');

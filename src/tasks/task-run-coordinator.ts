@@ -26,11 +26,13 @@ export class TaskRunCoordinator {
     let run = runs.get(input.runId);
     if (!run) {
       if (runs.getActiveRoot(task.id)) return undefined;
+      const agentId = task.delegateAgentId ?? input.context.agentId;
+      if (!agentId) return undefined;
       run = runs.create({
         id: input.runId,
         taskId: task.id,
         executorKind: 'agent',
-        executorRef: { agentId: input.context.agentId ?? task.delegateAgentId ?? 'main' },
+        executorRef: { agentId },
         trigger: { kind: input.context.triggerKind },
         correlationId: input.runId,
         idempotencyKey: input.runId,

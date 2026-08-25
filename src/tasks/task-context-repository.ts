@@ -209,18 +209,6 @@ export class TaskContextRepository {
     ).run(now, grantId).changes > 0;
   }
 
-  linkSession(input: {
-    taskId: string;
-    sessionKey: string;
-    role: 'primary' | 'discussion' | 'execution';
-    now?: number;
-  }): void {
-    getSqliteDatabase().prepare(
-      `INSERT OR IGNORE INTO task_sessions (task_session_id, task_id, session_key, role, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(randomUUID(), input.taskId, input.sessionKey, input.role, input.now ?? Date.now());
-  }
-
   private requireGrant(id: string): TaskAuthorityGrant {
     const row = getSqliteDatabase().prepare(
       'SELECT * FROM task_authority_grants WHERE grant_id = ?',

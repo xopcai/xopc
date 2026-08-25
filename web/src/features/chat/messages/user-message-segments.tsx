@@ -64,7 +64,7 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
         ) : p.text ? (
           <div
             key={key}
-            className="markdown-content inline-block min-w-0 max-w-full align-baseline text-fg"
+            className="chat-user-message-segment markdown-content inline-block min-w-0 max-w-full align-baseline text-fg"
           >
             <MarkdownView content={p.text} compact breaks />
           </div>

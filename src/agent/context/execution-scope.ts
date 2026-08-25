@@ -1,6 +1,7 @@
 import { getSessionMetadata, isXopcDatabaseOpen } from '../../storage/sqlite/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
@@ -42,7 +43,8 @@ function bounded(value: string | undefined, max = MAX_OBJECTIVE_TEXT): string | 
 }
 
 function taskObjective(sessionKey: string): ExecutionObjective | undefined {
-  const task = new TaskRepository().getBySession(sessionKey);
+  const taskId = new TaskConversationRepository().resolveActiveExecutionSession(sessionKey)?.taskId;
+  const task = taskId ? new TaskRepository().get(taskId) : undefined;
   if (!task) return undefined;
   const contract = task.contract;
   return {

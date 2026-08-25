@@ -188,6 +188,23 @@ describe('MessageSender terminal state', () => {
     clearEndpointTurnClaim();
   });
 
+  it('submits task chat input through the task endpoint with an active-session guard', async () => {
+    const sender = new MessageSender();
+    vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({
+      payload: { sessionKey, state: { inputs: [] } },
+    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+
+    await sender.send('continue', sessionKey, undefined, undefined, undefined, 'task-1');
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/tasks/task-1/inputs'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-Xopc-Expected-Session-Key': sessionKey }),
+      }),
+    );
+  });
+
   it.each(['send', 'resume'] as const)(
     'marks the %s stream idle before notifying sidebar listeners',
     async (method) => {

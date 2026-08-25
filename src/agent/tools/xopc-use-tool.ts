@@ -22,12 +22,14 @@ import type { NoteKind, NotesService, NoteStatus } from '../../notes/index.js';
 import {
   isValidProjectAgentId,
   normalizeProjectAgentId,
+  resolveProjectAgentId,
   type ProjectHealth,
   type ProjectMilestone,
   type ProjectService,
   type ProjectStatus,
 } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
+import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
@@ -106,7 +108,7 @@ const TASK_PHASES = new Set<TaskPhase>(['backlog', 'ready', 'active', 'review', 
 const TASK_PRIORITIES = new Set<TaskPriority>(['low', 'normal', 'high', 'critical']);
 const TASK_COMMANDS = new Set<TaskCommand['type']>([
   'mark_ready', 'start', 'request_review', 'close', 'reopen',
-  'add_wait', 'resolve_wait', 'delegate', 'revise_contract',
+  'add_wait', 'resolve_wait', 'revise_contract',
 ]);
 const TASK_CREATE_MODES = new Set(['capture', 'start'] as const);
 
@@ -889,13 +891,19 @@ async function handleTask(
       contract[field] = value;
     }
     const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
-    const agentId = trimString(args.agentId) ?? deps.getCurrentAgentId?.() ?? 'main';
+    const config = deps.getConfig?.();
+    const projectService = deps.getProjectService?.();
+    const explicitAgentId = trimString(args.agentId);
+    const agentId = config && projectService
+      ? resolveProjectAgentId({ config, projects: projectService, explicitAgentId, projectId })
+      : explicitAgentId ?? (config ? getDefaultAgentId(config) : deps.getCurrentAgentId?.() ?? 'main');
     const input = {
       idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID(),
       title: trimString(args.title) ?? objective,
       priority: priority ?? 'normal' as const,
       ...(dueAt === undefined ? {} : { dueAt }),
       ...(projectId ? { projectId } : {}),
+      delegateAgentId: agentId,
       ...(locale ? { locale } : {}),
       contract: {
         ...contract,

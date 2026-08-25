@@ -32,6 +32,17 @@ export async function fetchTask(taskId: string): Promise<TaskDetail> {
   ));
 }
 
+export async function ensureTaskConversation(taskId: string): Promise<{
+  ok: true;
+  sessionKey: string;
+  agentId: string;
+  created: boolean;
+}> {
+  return fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/conversation`), {
+    method: 'POST',
+  });
+}
+
 export async function updateTask(
   taskId: string,
   patch: Omit<TaskPatchRequest, 'expectedVersion'>,
@@ -52,6 +63,22 @@ export async function commandTask(
   await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/commands`), {
     method: 'POST',
     body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), expectedVersion, command }),
+  });
+  return fetchTask(taskId);
+}
+
+export async function handoffTask(
+  taskId: string,
+  toAgentId: string,
+  expectedVersion: number,
+): Promise<TaskDetail> {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/handoff`), {
+    method: 'POST',
+    body: JSON.stringify({
+      toAgentId,
+      expectedVersion,
+      idempotencyKey: crypto.randomUUID(),
+    }),
   });
   return fetchTask(taskId);
 }

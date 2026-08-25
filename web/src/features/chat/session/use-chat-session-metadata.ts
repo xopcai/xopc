@@ -5,7 +5,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface ChatSessionMetadata {
   workflowRunId: string | null;
-  taskId: string | null;
   ownerAgentId: string | null;
   sessionType: string | null;
   sourceNoteId: string | null;
@@ -24,9 +23,6 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
       const rawRunId = detail.customData?.workflowRunId;
       const workflowRunId =
         typeof rawRunId === 'string' && rawRunId.trim() ? rawRunId.trim() : null;
-      const rawTaskId = detail.customData?.taskId;
-      const taskId =
-        typeof rawTaskId === 'string' && rawTaskId.trim() ? rawTaskId.trim() : null;
       const sessionType =
         typeof detail.sessionType === 'string' && detail.sessionType.trim()
           ? detail.sessionType.trim()
@@ -45,7 +41,6 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
           : null;
       return {
         workflowRunId,
-        taskId,
         ownerAgentId,
         sessionType,
         sourceNoteId,

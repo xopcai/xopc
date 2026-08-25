@@ -89,7 +89,9 @@ export function AppShell() {
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
-  const chatPathSessionKey = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
+  const chatPathSessionKey = pathname.startsWith('/chat/task/')
+    ? ''
+    : pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
   const parentSessionKey = chatPathSessionKey && chatPathSessionKey !== 'new'
     ? decodeURIComponent(chatPathSessionKey)
     : null;

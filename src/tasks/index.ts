@@ -13,6 +13,8 @@ export * from './task-value-metrics-service.js';
 export * from './task-application-service.js';
 export * from './task-change-events.js';
 export * from './task-context-repository.js';
+export * from './task-conversation-repository.js';
+export * from './task-handoff-service.js';
 export * from './task-dependency-service.js';
 export * from './task-read-model-projector.js';
 export * from './task-outbox-dispatcher.js';
