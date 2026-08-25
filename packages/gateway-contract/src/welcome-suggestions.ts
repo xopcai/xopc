@@ -5,11 +5,17 @@ export type WelcomeSuggestionContext =
       projectId: string;
       projectName: string;
       workspaceRoot?: string;
+      recommendedAction?: string;
+      blockedReason?: string;
+      recentFailure?: string;
     }
   | {
       kind: 'generalProject';
       projectId: string;
       projectName: string;
+      recommendedAction?: string;
+      blockedReason?: string;
+      recentFailure?: string;
     }
   | {
       kind: 'note';
@@ -24,6 +30,27 @@ export type WelcomeSuggestionContext =
   | {
       kind: 'codingWorkspace';
       path: string;
+    }
+  | {
+      kind: 'task';
+      taskId: string;
+      taskTitle: string;
+      phase: 'backlog' | 'ready' | 'active' | 'review' | 'closed';
+      operationalState: 'idle' | 'queued' | 'running' | 'waiting' | 'verifying' | 'blocked';
+      attentionSummary?: string;
+      nextAction?: string;
+      recentFailure?: string;
+    }
+  | {
+      kind: 'file';
+      fileName: string;
+    }
+  | {
+      kind: 'workflow';
+      workflowName: string;
+      status?: string;
+      nextAction?: string;
+      recentFailure?: string;
     };
 
 export type WelcomeSuggestionContextStatus = 'loading' | 'ready' | 'degraded';
@@ -115,6 +142,17 @@ export type WelcomeSpotlightCopy = {
   };
   contextPrompts: {
     codingWorkspace: string;
+    projectBlocked: string;
+    projectNextAction: string;
+    projectFailure: string;
+    taskAttention: string;
+    taskNextAction: string;
+    taskFailure: string;
+    taskReview: string;
+    taskClosed: string;
+    fileStart: string;
+    workflowNextAction: string;
+    workflowFailure: string;
   };
   exploreCards: WelcomeSuggestionCard[];
   agentCards: Partial<Record<WelcomeSuggestionAgentKind, WelcomeSuggestionCard>>;
@@ -124,6 +162,9 @@ export type WelcomeSpotlightCopy = {
   generalProject: SpotlightTemplate;
   note: SpotlightTemplate;
   workingDirectory: SpotlightTemplate;
+  task: SpotlightTemplate;
+  file: SpotlightTemplate;
+  workflow: SpotlightTemplate;
 };
 
 type RankedCandidate = WelcomeRecommendation & {
@@ -198,6 +239,12 @@ function contextTitle(context: WelcomeSuggestionContext): string {
     case 'workingDirectory':
     case 'codingWorkspace':
       return context.path;
+    case 'task':
+      return context.taskTitle;
+    case 'file':
+      return context.fileName;
+    case 'workflow':
+      return context.workflowName;
     case 'empty':
     default:
       return '';
@@ -222,6 +269,10 @@ function contextReason(
     case 'workingDirectory':
     case 'codingWorkspace':
       return fillTemplate(copy.reasons.directory, { path: context.path }) ?? copy.reasons.general;
+    case 'task':
+    case 'file':
+    case 'workflow':
+      return copy.reasons.general;
     case 'empty':
     default:
       return agentName
@@ -243,6 +294,71 @@ function dynamicContextCandidate(
     categoryId = 'understand-codebase';
     promptTemplate = copy.contextPrompts.codingWorkspace;
     vars = { projectName: context.projectName, workspaceRoot: context.workspaceRoot };
+  }
+
+  if (
+    (context.kind === 'codingProject' || context.kind === 'generalProject') &&
+    context.blockedReason?.trim()
+  ) {
+    categoryId = context.kind === 'codingProject' ? 'review-debug' : 'project-status';
+    promptTemplate = copy.contextPrompts.projectBlocked;
+    vars = { projectName: context.projectName, blockedReason: context.blockedReason };
+  } else if (
+    (context.kind === 'codingProject' || context.kind === 'generalProject') &&
+    context.recentFailure?.trim()
+  ) {
+    categoryId = context.kind === 'codingProject' ? 'review-debug' : 'project-status';
+    promptTemplate = copy.contextPrompts.projectFailure;
+    vars = { projectName: context.projectName, recentFailure: context.recentFailure };
+  } else if (
+    (context.kind === 'codingProject' || context.kind === 'generalProject') &&
+    context.recommendedAction?.trim()
+  ) {
+    categoryId = context.kind === 'codingProject' ? 'implement-feature' : 'project-next-step';
+    promptTemplate = copy.contextPrompts.projectNextAction;
+    vars = { projectName: context.projectName, nextAction: context.recommendedAction };
+  }
+
+  if (context.kind === 'task') {
+    vars = { taskTitle: context.taskTitle };
+    if (context.attentionSummary?.trim()) {
+      categoryId = 'task-clarify';
+      promptTemplate = copy.contextPrompts.taskAttention;
+      vars.attentionSummary = context.attentionSummary;
+    } else if (context.recentFailure?.trim()) {
+      categoryId = 'task-recover';
+      promptTemplate = copy.contextPrompts.taskFailure;
+      vars.recentFailure = context.recentFailure;
+    } else if (context.phase === 'review' || context.operationalState === 'verifying') {
+      categoryId = 'task-verify';
+      promptTemplate = copy.contextPrompts.taskReview;
+    } else if (context.phase === 'closed') {
+      categoryId = 'task-verify';
+      promptTemplate = copy.contextPrompts.taskClosed;
+    } else if (context.nextAction?.trim()) {
+      categoryId = 'task-next-step';
+      promptTemplate = copy.contextPrompts.taskNextAction;
+      vars.nextAction = context.nextAction;
+    }
+  }
+
+  if (context.kind === 'file') {
+    categoryId = 'file-edit';
+    promptTemplate = copy.contextPrompts.fileStart;
+    vars = { fileName: context.fileName };
+  }
+
+  if (context.kind === 'workflow') {
+    vars = { workflowName: context.workflowName };
+    if (context.recentFailure?.trim()) {
+      categoryId = 'workflow-recover';
+      promptTemplate = copy.contextPrompts.workflowFailure;
+      vars.recentFailure = context.recentFailure;
+    } else if (context.nextAction?.trim()) {
+      categoryId = 'workflow-next-step';
+      promptTemplate = copy.contextPrompts.workflowNextAction;
+      vars.nextAction = context.nextAction;
+    }
   }
 
   if (!categoryId || !promptTemplate) return null;
@@ -272,6 +388,17 @@ function candidateContextBoost(context: WelcomeSuggestionContext, categoryId: st
       return categoryId === 'note-summarize' ? 40 : 25;
     case 'workingDirectory':
       return categoryId === 'directory-understand' ? 40 : 25;
+    case 'task':
+      if (context.attentionSummary) return categoryId === 'task-clarify' ? 60 : 20;
+      if (context.recentFailure) return categoryId === 'task-recover' ? 60 : 20;
+      if (context.phase === 'review' || context.phase === 'closed') return categoryId === 'task-verify' ? 55 : 20;
+      return categoryId === 'task-next-step' ? 45 : 25;
+    case 'file':
+      return categoryId === 'file-edit' ? 45 : 25;
+    case 'workflow':
+      if (context.recentFailure) return categoryId === 'workflow-recover' ? 50 : 20;
+      if (context.status === 'succeeded') return categoryId === 'workflow-review' ? 45 : 20;
+      return categoryId === 'workflow-next-step' ? 40 : 20;
     case 'empty':
     default:
       return 0;
@@ -355,6 +482,15 @@ function isCodingWorkspaceContext(context: WelcomeSuggestionContext): boolean {
   return context.kind === 'codingProject' || context.kind === 'codingWorkspace';
 }
 
+function includesExploration(context: WelcomeSuggestionContext): boolean {
+  return (
+    context.kind === 'empty' ||
+    context.kind === 'note' ||
+    context.kind === 'workingDirectory' ||
+    context.kind === 'codingWorkspace'
+  );
+}
+
 export function buildWelcomeSpotlight(
   context: WelcomeSuggestionContext,
   copy: WelcomeSpotlightCopy,
@@ -385,6 +521,18 @@ export function buildWelcomeSpotlight(
       template = copy.workingDirectory;
       vars.path = context.path;
       break;
+    case 'task':
+      template = copy.task;
+      vars.taskTitle = context.taskTitle;
+      break;
+    case 'file':
+      template = copy.file;
+      vars.fileName = context.fileName;
+      break;
+    case 'workflow':
+      template = copy.workflow;
+      vars.workflowName = context.workflowName;
+      break;
     case 'empty':
     default:
       template = copy.empty;
@@ -397,11 +545,11 @@ export function buildWelcomeSpotlight(
   const contextName = contextTitle(context) || copy.contextFallbackTitle;
   let agentCategoryId: string | null = null;
   const categories = [...base.categories];
-  if (
+  const canAddAgentCard =
     agentKind !== 'general' &&
-    agentKind !== 'coding' &&
-    !isCodingWorkspaceContext(context)
-  ) {
+    !isCodingWorkspaceContext(context) &&
+    (agentKind !== 'coding' || context.kind === 'empty');
+  if (canAddAgentCard) {
     const agentTemplate = copy.agentCards[agentKind];
     if (agentTemplate) {
       const [agentCard] = fillSpotlightTemplate(
@@ -421,25 +569,37 @@ export function buildWelcomeSpotlight(
     throw new Error('Welcome spotlight requires at least one suggestion');
   }
   const reason = contextReason(context, copy, agentName, primary.categoryId === agentCategoryId);
+  const displayCategories = categories.map((category) => {
+    if (!primary.id.startsWith('context:') || category.id !== primary.categoryId) return category;
+    return {
+      ...category,
+      scenarios: [
+        { id: primary.id, prompt: primary.prompt },
+        ...category.scenarios.filter((scenario) => scenario.prompt !== primary.prompt),
+      ],
+    };
+  });
 
   const categoryScores = new Map<string, number>();
   for (const candidate of ranked) {
     categoryScores.set(candidate.categoryId, Math.max(categoryScores.get(candidate.categoryId) ?? 0, candidate.score));
   }
   const contextCategories = (context.kind === 'empty'
-    ? categories.filter((category) => category.id !== 'research')
-    : categories
+    ? displayCategories.filter((category) => category.id !== 'research')
+    : displayCategories
   )
     .filter((category) => category.scenarios.length > 0)
     .sort((a, b) => (categoryScores.get(b.id) ?? 0) - (categoryScores.get(a.id) ?? 0))
-    .slice(0, 2)
+    .slice(0, includesExploration(context) ? 2 : 3)
     .map((category) => ({ ...category, scope: 'context' as const }));
-  const explorationCard = selectExplorationCard(
-    copy,
-    options.affinity ?? {},
-    options.explorationSeed ?? 'default',
-    Math.max(0, options.explorationOffset ?? 0),
-  );
+  const explorationCard = includesExploration(context)
+    ? selectExplorationCard(
+        copy,
+        options.affinity ?? {},
+        options.explorationSeed ?? 'default',
+        Math.max(0, options.explorationOffset ?? 0),
+      )
+    : null;
 
   const contextStatus = options.contextStatus ?? 'ready';
   return {
@@ -467,6 +627,6 @@ export function buildWelcomeSpotlight(
       prompt: primary.prompt,
       reason,
     },
-    categories: [...contextCategories, explorationCard],
+    categories: explorationCard ? [...contextCategories, explorationCard] : contextCategories,
   };
 }
