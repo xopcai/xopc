@@ -39,7 +39,7 @@ export function SchedulesList() {
   const [toast, setToast] = useState('');
   const [menuAutomationId, setMenuAutomationId] = useState<string>();
 
-  const automationsQuery = useQuery({ queryKey: queryKeys.automations, queryFn: fetchAutomations, enabled: configured });
+  const automationsQuery = useQuery({ queryKey: queryKeys.automations, queryFn: () => fetchAutomations(), enabled: configured });
   const metricsQuery = useQuery({ queryKey: queryKeys.automationMetrics, queryFn: fetchAutomationMetrics, enabled: configured });
 
   const toggleMutation = useMutation({

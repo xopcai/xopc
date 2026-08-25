@@ -3,6 +3,12 @@ set -euo pipefail
 
 TARGET="${1:-both}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+APP_DIR="${REPO_ROOT}/apps/mobile-expo"
+OUTPUT_DIR="${APP_DIR}/dist/android"
+CREDENTIALS_FILE="${ANDROID_CREDENTIALS_FILE:-${APP_DIR}/credentials.json}"
+
 case "$TARGET" in
   apk|aab|both) ;;
   *)
@@ -19,6 +25,26 @@ require_value() {
   fi
 }
 
+read_android_credential() {
+  node -e '
+    const fs = require("node:fs");
+    const credentials = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const value = credentials?.android?.keystore?.[process.argv[2]];
+    if (typeof value === "string") process.stdout.write(value);
+  ' "$CREDENTIALS_FILE" "$1"
+}
+
+if [[ -f "$CREDENTIALS_FILE" ]]; then
+  ANDROID_KEYSTORE_PATH="${ANDROID_KEYSTORE_PATH:-$(read_android_credential keystorePath)}"
+  ANDROID_KEYSTORE_PASSWORD="${ANDROID_KEYSTORE_PASSWORD:-$(read_android_credential keystorePassword)}"
+  ANDROID_KEY_ALIAS="${ANDROID_KEY_ALIAS:-$(read_android_credential keyAlias)}"
+  ANDROID_KEY_PASSWORD="${ANDROID_KEY_PASSWORD:-$(read_android_credential keyPassword)}"
+
+  if [[ -n "$ANDROID_KEYSTORE_PATH" && "$ANDROID_KEYSTORE_PATH" != /* ]]; then
+    ANDROID_KEYSTORE_PATH="${APP_DIR}/${ANDROID_KEYSTORE_PATH}"
+  fi
+fi
+
 require_value ANDROID_KEYSTORE_PATH
 require_value ANDROID_KEYSTORE_PASSWORD
 require_value ANDROID_KEY_ALIAS
@@ -29,13 +55,11 @@ if [[ ! -f "$ANDROID_KEYSTORE_PATH" ]]; then
   exit 1
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-APP_DIR="${REPO_ROOT}/apps/mobile-expo"
-OUTPUT_DIR="${APP_DIR}/dist/android"
-
 echo "Generating the Android native project..."
 pnpm -C "$APP_DIR" exec expo prebuild --platform android --clean --no-install
+
+export NODE_ENV="${NODE_ENV:-production}"
+mkdir -p "${APP_DIR}/android/app/build/intermediates/sourcemaps/react/release"
 
 export ORG_GRADLE_PROJECT_XOPC_UPLOAD_STORE_FILE="$ANDROID_KEYSTORE_PATH"
 export ORG_GRADLE_PROJECT_XOPC_UPLOAD_STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"

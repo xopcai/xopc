@@ -188,11 +188,10 @@ export async function fetchSessionMessagePage(
   return parseSessionMessagePage(await res.json());
 }
 
-export async function createSession(
-  agentId?: string,
-): Promise<string> {
+async function createSessionRequest(input: { agentId?: string; projectId?: string }): Promise<string> {
   const body: Record<string, unknown> = { channel: 'webchat' };
-  if (agentId?.trim()) body.agentId = agentId.trim().toLowerCase();
+  if (input.agentId?.trim()) body.agentId = input.agentId.trim().toLowerCase();
+  if (input.projectId?.trim()) body.projectId = input.projectId.trim();
   const res = await apiFetch(buildCreateSessionPath(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -200,6 +199,14 @@ export async function createSession(
   });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   return extractCreatedSessionKey(await res.json());
+}
+
+export async function createSession(agentId?: string): Promise<string> {
+  return createSessionRequest({ agentId });
+}
+
+export async function createProjectSession(projectId: string, agentId?: string): Promise<string> {
+  return createSessionRequest({ agentId, projectId });
 }
 
 // ── Session actions ──────────────────────────────────────────────

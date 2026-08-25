@@ -57,6 +57,13 @@ async function postSessionInput(path: string, body: string): Promise<Response> {
 
 export type MessagingCallbacks = AgentStreamCallbacks;
 
+export class AgentStreamReplayExpiredError extends Error {
+  constructor() {
+    super('Run not found or realtime replay expired');
+    this.name = 'AgentStreamReplayExpiredError';
+  }
+}
+
 async function materializeAttachments(attachments: WireAttachment[]): Promise<WireAttachment[]> {
   return Promise.all(attachments.map(async ({ localUri, ...attachment }) => {
     if (!localUri || attachment.uri || attachment.workspaceRelativePath) return attachment;
@@ -434,7 +441,7 @@ export class AgentMessageSender {
           },
           onGap: (gap) => {
             if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
-            finish(new Error('Run not found or realtime replay expired'));
+            finish(new AgentStreamReplayExpiredError());
           },
         }, afterSeq);
         abortController.signal.addEventListener('abort', () => finish(), { once: true });

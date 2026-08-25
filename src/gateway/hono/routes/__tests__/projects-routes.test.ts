@@ -657,6 +657,26 @@ describe('project association routes', () => {
     expect(writeRes.status).toBe(200);
     expect(readFileSync(join(workspaceRoot, 'README.md'), 'utf-8')).toBe('# Updated\n');
 
+    const upload = new FormData();
+    upload.set('path', 'src/mobile.txt');
+    upload.set('file', new File(['mobile upload'], 'mobile.txt', { type: 'text/plain' }));
+    const uploadRes = await app.request(`/api/projects/${project.id}/files/upload`, {
+      method: 'POST',
+      body: upload,
+    });
+    expect(uploadRes.status).toBe(201);
+    expect(readFileSync(join(workspaceRoot, 'src', 'mobile.txt'), 'utf-8')).toBe('mobile upload');
+
+    const duplicateUpload = new FormData();
+    duplicateUpload.set('path', 'src/mobile.txt');
+    duplicateUpload.set('file', new File(['replace'], 'mobile.txt', { type: 'text/plain' }));
+    const duplicateRes = await app.request(`/api/projects/${project.id}/files/upload`, {
+      method: 'POST',
+      body: duplicateUpload,
+    });
+    expect(duplicateRes.status).toBe(409);
+    expect(readFileSync(join(workspaceRoot, 'src', 'mobile.txt'), 'utf-8')).toBe('mobile upload');
+
     const outsideReadRes = await app.request(`/api/projects/${project.id}/files/read?path=..`);
     expect(outsideReadRes.status).toBe(400);
 
