@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  createProjectSession,
   createSession,
   fetchSession,
   fetchSessionActiveRun,
@@ -69,6 +70,15 @@ describe('createSession', () => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
 
     expect(body).toEqual({ channel: 'webchat', agentId: 'mainagent' });
+  });
+
+  it('creates a project chat without overriding the project default agent', async () => {
+    await createProjectSession('  project-1  ');
+
+    const [, init] = mockedApiFetch.mock.calls[0];
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+
+    expect(body).toEqual({ channel: 'webchat', projectId: 'project-1' });
   });
 });
 

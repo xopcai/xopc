@@ -201,6 +201,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return path === '/api/notes' && contentType?.includes('multipart/form-data') === true;
   };
 
+  const isProjectFileUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => (
+    method === 'POST'
+    && /^\/api\/projects\/[^/]+\/files\/upload$/.test(path)
+    && contentType?.includes('multipart/form-data') === true
+  );
+
   const discussionUploadBodyMax = (
     path: string,
     method: string,
@@ -233,8 +239,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           ? VOICE_TRANSCRIBE_BODY_MAX
           : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
             ? NOTE_MEDIA_BODY_MAX
-            : discussionUploadBodyMax(c.req.path, c.req.method, contentType)
-              ?? DEFAULT_API_BODY_MAX;
+            : isProjectFileUploadRequest(c.req.path, c.req.method, contentType)
+              ? NOTE_MEDIA_BODY_MAX
+              : discussionUploadBodyMax(c.req.path, c.req.method, contentType)
+                ?? DEFAULT_API_BODY_MAX;
     const maxSizeMb = Math.ceil(maxSize / (1024 * 1024));
     return bodyLimit({
       maxSize,
