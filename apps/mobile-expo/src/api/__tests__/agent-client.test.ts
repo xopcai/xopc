@@ -139,6 +139,21 @@ describe('AgentMessageSender local detach', () => {
     await expect(pending).resolves.toBeUndefined();
   });
 
+  it('submits task chat messages through the bound task endpoint', async () => {
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+      payload: { state: { inputs: [] } },
+    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+
+    await new AgentMessageSender().sendMessage('hello', 'session-a', undefined, undefined, 'task/1');
+
+    expect(testState.apiFetch).toHaveBeenCalledWith(
+      '/api/tasks/task%2F1/inputs',
+      expect.objectContaining({
+        headers: { 'X-Xopc-Expected-Session-Key': 'session-a' },
+      }),
+    );
+  });
+
   it('times out a stalled run attachment and preserves it for recovery', async () => {
     vi.useFakeTimers();
     const sender = new AgentMessageSender();

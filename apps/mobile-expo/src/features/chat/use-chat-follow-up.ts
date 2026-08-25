@@ -36,9 +36,10 @@ function parseState(value: unknown): { sessionKey: string; revision: number; row
 export function useChatFollowUp(options: {
   sessionKey: string | null;
   sessionKeyRef: MutableRefObject<string | null>;
+  taskId?: string;
   onQueueFull?: () => void;
 }): ChatFollowUpApi {
-  const { sessionKey, sessionKeyRef, onQueueFull } = options;
+  const { sessionKey, sessionKeyRef, taskId, onQueueFull } = options;
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const rowsRef = useRef<PendingFollowUp[]>([]);
   const revisionRef = useRef(-1);
@@ -87,8 +88,8 @@ export function useChatFollowUp(options: {
       throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
     }
     applyState(await submitSessionInput(key, { clientMessageId: newFollowUpRowId(), delivery: 'next',
-      content: content.trim() || content, attachments }));
-  }, [applyState, onQueueFull, sessionKeyRef]);
+      content: content.trim() || content, attachments }, taskId));
+  }, [applyState, onQueueFull, sessionKeyRef, taskId]);
 
   const removePendingFollowUp = useCallback((id: string) => {
     const key = sessionKeyRef.current;
@@ -127,10 +128,10 @@ export function useChatFollowUp(options: {
     if (!key || !row?.text.trim() || row.attachments?.length) return;
     setSteeringFollowUpId(id);
     try {
-      applyState(await submitSessionInput(key, { clientMessageId: newFollowUpRowId(), delivery: 'steer', content: row.text.trim() }));
+      applyState(await submitSessionInput(key, { clientMessageId: newFollowUpRowId(), delivery: 'steer', content: row.text.trim() }, taskId));
       removePendingFollowUp(id);
     } finally { setSteeringFollowUpId(null); }
-  }, [applyState, removePendingFollowUp, sessionKeyRef]);
+  }, [applyState, removePendingFollowUp, sessionKeyRef, taskId]);
 
   return {
     pendingFollowUps, steeringFollowUpId, editingFollowUpId, addPendingFollowUp,

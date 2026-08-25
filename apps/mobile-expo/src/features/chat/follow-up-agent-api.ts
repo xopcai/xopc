@@ -2,13 +2,20 @@ import { apiFetch } from '../../api/client';
 import { waitForMobileEndpointTurnClaim } from '../endpoint-tools/turn-claim';
 import { requestMobileRealtimeReconnect } from '../gateway/use-gateway-realtime';
 
-export async function submitSessionInput(sessionKey: string, input: Record<string, unknown>): Promise<unknown> {
+export async function submitSessionInput(
+  sessionKey: string,
+  input: Record<string, unknown>,
+  taskId?: string,
+): Promise<unknown> {
   const origin = await waitForMobileEndpointTurnClaim(
     undefined,
     requestMobileRealtimeReconnect,
   );
-  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
+  const res = await apiFetch(taskId
+    ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
+    : `/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
     method: 'POST',
+    ...(taskId ? { headers: { 'X-Xopc-Expected-Session-Key': sessionKey } } : {}),
     body: JSON.stringify({
       ...input,
       origin,

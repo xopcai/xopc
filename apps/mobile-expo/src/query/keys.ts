@@ -38,6 +38,7 @@ export const queryKeys = {
   projectAutomations: (id: string) => ['project', id, 'automations'] as const,
   home: ['home'] as const,
   task: (id: string) => ['task', id] as const,
+  taskConversation: (id: string) => ['task', id, 'conversation'] as const,
   tasks: ['tasks'] as const,
   workflowRuns: ['workflows', 'runs'] as const,
   workflowRun: (id: string, agentId?: string) => ['workflows', 'runs', id, agentId ?? ''] as const,

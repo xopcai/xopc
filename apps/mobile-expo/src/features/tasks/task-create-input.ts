@@ -38,7 +38,7 @@ export function buildMobileTaskCreateRequest(input: {
   title: string;
   projectId?: string;
   dependencies: string[];
-  agentId: string;
+  agentId?: string;
   noteId?: string;
   body?: string;
   acceptanceCriteria?: string[];
@@ -66,6 +66,9 @@ export function buildMobileTaskCreateRequest(input: {
     dependencies: input.dependencies,
     context: noteTaskContext(input.noteId, title),
     authorityGrants: [],
-    activation: { mode: 'start', executor: { kind: 'agent', agentId: input.agentId } },
+    ...(input.agentId ? { delegateAgentId: input.agentId } : {}),
+    activation: input.agentId
+      ? { mode: 'start', executor: { kind: 'agent', agentId: input.agentId } }
+      : { mode: 'start' },
   };
 }

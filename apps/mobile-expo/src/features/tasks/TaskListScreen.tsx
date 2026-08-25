@@ -18,7 +18,12 @@ import { fetchTasks, type TaskListItem } from '../../query/tasks';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-import { formatProjectRelativeTime, sortProjectPortfolio } from './project-presentation';
+import {
+  formatProjectRelativeTime,
+  selectWorkOverviewProjects,
+  selectWorkOverviewTasks,
+  sortProjectPortfolio,
+} from './project-presentation';
 
 type WorkTab = 'overview' | 'projects' | 'tasks';
 
@@ -131,13 +136,11 @@ function WorkOverview({
     [openTasks],
   );
   const activeTasks = useMemo(
-    () => openTasks.filter((item) => ['queued', 'running', 'verifying'].includes(item.operationalState)).slice(0, 4),
-    [openTasks],
+    () => selectWorkOverviewTasks(tasksQuery.data ?? []),
+    [tasksQuery.data],
   );
   const activeProjects = useMemo(
-    () => sortProjectPortfolio(projectsQuery.data ?? []).filter((project) => (
-      project.operating.counts.moving > 0 || project.operating.counts.needsUser > 0
-    )).slice(0, 4),
+    () => selectWorkOverviewProjects(projectsQuery.data ?? []),
     [projectsQuery.data],
   );
 
