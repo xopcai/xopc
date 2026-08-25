@@ -109,6 +109,13 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     () => sessionHistoryQuery.data?.pages[0]?.session.routing?.agentId?.trim().toLowerCase() ?? '',
     [sessionHistoryQuery.data?.pages],
   );
+  const sessionContext = useMemo(() => {
+    const session = sessionHistoryQuery.data?.pages[0]?.session;
+    const projectId = session?.projectId?.trim() || undefined;
+    const rawTaskId = session?.customData?.taskId;
+    const taskId = typeof rawTaskId === 'string' && rawTaskId.trim() ? rawTaskId.trim() : undefined;
+    return { projectId, taskId };
+  }, [sessionHistoryQuery.data?.pages]);
 
   const modelsQuery = useQuery({
     queryKey: queryKeys.models(currentSessionAgentId),
@@ -502,6 +509,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     modelsQuery,
     sessionHistoryQuery,
     currentSessionAgentId,
+    sessionContext,
     effectiveModelId,
 
     // Derived

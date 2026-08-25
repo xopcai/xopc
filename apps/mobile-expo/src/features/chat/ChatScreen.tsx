@@ -25,6 +25,7 @@ import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 
 import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
+import { ChatContextBanner } from './ChatContextBanner';
 import { ChatHeader } from './ChatHeader';
 import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ClarifyPrompt } from './ClarifyPrompt';
@@ -59,6 +60,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     agentsQuery,
     modelsQuery,
     sessionHistoryQuery,
+    sessionContext,
     currentSessionAgentId,
     effectiveModelId,
     agentName,
@@ -147,6 +149,11 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
       <ConnectionInterventionBanner
         onOpenSettings={handleGatewayManageSettings}
         onReconnect={openReconnectLanding}
+      />
+
+      <ChatContextBanner
+        projectId={sessionContext.projectId}
+        taskId={sessionContext.taskId}
       />
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>

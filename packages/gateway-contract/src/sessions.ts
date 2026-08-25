@@ -178,6 +178,8 @@ export interface SessionMessagePage {
     status?: SessionStatus;
     sourceChannel?: string;
     sourceChatId?: string;
+    projectId?: string;
+    customData?: Record<string, unknown>;
     routing?: SessionRoutingMeta;
   };
   pagination: {
@@ -265,6 +267,8 @@ export const sessionMessagePageSchema = z
         status: sessionStatusSchema.optional(),
         sourceChannel: z.string().optional(),
         sourceChatId: z.string().optional(),
+        projectId: z.string().optional(),
+        customData: z.record(z.string(), z.unknown()).optional(),
         routing: sessionRoutingMetaSchema.optional(),
       })
       .passthrough(),

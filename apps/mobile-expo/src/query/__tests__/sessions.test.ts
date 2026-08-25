@@ -265,6 +265,8 @@ describe('fetchSessionMessagePage', () => {
       json: async () => ({
         session: {
           key: 'agent:main:webchat:default:direct:chat_a',
+          projectId: 'project-a',
+          customData: { taskId: 'task-a' },
           messages: [{
             role: 'assistant',
             content: [{ type: 'text', text: 'hi' }],
@@ -282,6 +284,8 @@ describe('fetchSessionMessagePage', () => {
 
     expect(page?.session.messages).toHaveLength(1);
     expect(page?.session.messages[0]?.timestamp).toBe(1_784_064_001_000);
+    expect(page?.session.projectId).toBe('project-a');
+    expect(page?.session.customData?.taskId).toBe('task-a');
     expect(mockedApiFetch).toHaveBeenCalledWith(
       '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/history?limit=50&before=cursor_1',
     );
