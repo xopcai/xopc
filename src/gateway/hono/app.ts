@@ -230,6 +230,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const contentType = c.req.header('content-type');
     const isAttachmentInputRequest = (c.req.method === 'POST' && c.req.path === '/api/tasks')
       || (c.req.method === 'POST' && /^\/api\/sessions\/[^/]+\/inputs$/.test(c.req.path))
+      || (c.req.method === 'POST' && /^\/api\/tasks\/[^/]+\/inputs$/.test(c.req.path))
       || (c.req.method === 'PATCH' && /^\/api\/sessions\/[^/]+\/inputs\/[^/]+$/.test(c.req.path));
     const maxSize = isAttachmentInputRequest
       ? SESSION_INPUT_BODY_MAX

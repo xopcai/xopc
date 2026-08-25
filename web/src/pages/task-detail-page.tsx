@@ -14,8 +14,8 @@ import { ChatPage } from '@/features/chat/chat-page';
 import { fetchProjectOperatingView } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
-import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
-import { commandTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { commandTask, handoffTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
@@ -115,7 +115,14 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const { data: detail, error: loadError, mutate: mutateDetail, lastChange } = useTaskDetail(taskId);
+  const {
+    data: detail,
+    error: loadError,
+    mutate: mutateDetail,
+    lastChange,
+    conversationLoading,
+    conversationError,
+  } = useTaskDetail(taskId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
@@ -365,6 +372,19 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     }
   };
 
+  const switchExecutor = async (toAgentId: string) => {
+    if (!detail || !toAgentId || toAgentId === detail.conversation.currentExecutorAgentId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await mutateDetail(await handoffTask(taskId, toAgentId, detail.task.version), { revalidate: false });
+    } catch {
+      setError(copy.actionFailed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   useLayoutEffect(() => {
     if (presentation === 'modal') return;
     setPageHeader({
@@ -390,11 +410,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const canPause = detail.allowedCommands.includes('add_wait');
   const canApprove = detail.task.phase === 'review' && detail.allowedCommands.includes('close');
   const canReopen = detail.allowedCommands.includes('reopen');
-  const conversationSessionKey = detail.runs.find((run) => run.sessionKey)?.sessionKey
-    ?? detail.context.find((item) => item.targetKind === 'session')?.targetId;
-  const runAgentId = detail.runs.find((run) => typeof run.executorRef.agentId === 'string')?.executorRef.agentId;
-  const conversationAgentId = detail.task.delegateAgentId
-    ?? (typeof runAgentId === 'string' ? runAgentId : undefined)
+  const conversationSessionKey = detail.conversation.activeSessionKey;
+  const conversationAgentId = detail.conversation.currentExecutorAgentId
+    ?? detail.task.delegateAgentId
     ?? detail.task.ownerId;
   const conversationAgent = agents.find((agent) => agent.id === conversationAgentId);
   const needsUserAttention = detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
@@ -420,11 +438,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     <div className="flex flex-wrap gap-2">
       {canSchedule ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
       {pausedWait ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
-      {!activeWait && canStart ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: detail.task.delegateAgentId ?? 'main' } })}><Play className="size-4" />{copy.runTask}</Button> : null}
+      {!activeWait && canStart && conversationAgentId ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
       {canApprove ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
       {canReopen ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
       {!activeWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={busy} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
-      {detail.task.phase !== 'closed' ? <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="size-9 p-0" disabled={busy} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-40 rounded-lg bg-surface-elevated p-1 shadow-lg"><DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void execute({ type: 'close', resolution: 'cancelled' })}>{copy.cancelTask}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root> : null}
+      {detail.task.phase !== 'closed' ? <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="size-9 p-0" disabled={busy} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"><DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void execute({ type: 'close', resolution: 'cancelled' })}>{copy.cancelTask}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root> : null}
     </div>
   );
 
@@ -548,7 +566,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.taskPhase}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.phase} disabled={busy} onChange={(event) => void changePhase(event.target.value as TaskPhase)}>{(['backlog', 'ready', 'active', 'review', 'closed'] as TaskPhase[]).map((phase) => <SelectOption key={phase} value={phase} disabled={phaseDisabled(phase)}>{phaseLabel(phase, language)}</SelectOption>)}</Select></label>
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.priority}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.priority} disabled={busy} onChange={(event) => void savePatch({ priority: event.target.value as TaskPriority })}>{(['low', 'normal', 'high', 'critical'] as TaskPriority[]).map((priority) => <SelectOption key={priority} value={priority}>{copy.priorityLabels[priority]}</SelectOption>)}</Select></label>
               <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.dueDate}</span><DatePicker disabled={busy} value={dateInputValue(detail.task.dueAt)} onChange={(value) => void savePatch({ dueAt: dueAtFromInput(value) })} ariaLabel={copy.dueDate} /></label>
-              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.executorLabel}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.delegateAgentId ?? ''} disabled={busy} onChange={(event) => void savePatch({ delegateAgentId: event.target.value || null })}><SelectOption value="">{copy.unassigned}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}</Select></label>
+              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.executorLabel}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.conversation.currentExecutorAgentId ?? ''} disabled={busy} onChange={(event) => void switchExecutor(event.target.value)}><SelectOption value="" disabled>{copy.unassigned}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}</Select></label>
               {projectName ? <div className="grid gap-1 text-xs text-fg-muted"><span>{copy.projectLabel}</span><span className="flex items-center gap-1.5 rounded-lg bg-surface-hover px-3 py-2 text-sm text-fg"><FolderKanban className="size-3.5" />{projectName}</span></div> : null}
             </div>
             <div className="mt-4 rounded-lg bg-surface-hover p-3 text-xs leading-5 text-fg-subtle"><p>{statusLabel}</p><p>{statusDescription}</p><p className="mt-2">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</p></div>
@@ -588,14 +606,22 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 bg-surface-subtle px-4 py-3.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
-              <AgentAvatarDisplay agentId={conversationAgentId ?? 'main'} avatar={conversationAgent?.avatar} size={28} className="shrink-0" />
+              {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={28} className="shrink-0" /> : null}
               <div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{language === 'zh' ? 'Agent 执行与对话' : 'Agent execution and chat'}</p><p className="mt-0.5 truncate text-xs text-fg-muted">{conversationAgent?.name ?? conversationAgentId ?? copy.unassigned} · {statusLabel}</p></div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">{taskActions}{conversationSessionKey ? <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs"><Link to={`/chat/${encodeURIComponent(conversationSessionKey)}`}><ExternalLink className="size-3.5" />{language === 'zh' ? '全屏' : 'Full screen'}</Link></Button> : null}</div>
+          <div className="flex flex-wrap items-center justify-end gap-2">{taskActions}{conversationSessionKey ? <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs"><Link to={taskChatHref(taskId)}><ExternalLink className="size-3.5" />{language === 'zh' ? '全屏' : 'Full screen'}</Link></Button> : null}</div>
         </div>
         {conversationSessionKey ? (
-          <div className="min-h-0 flex-1"><ChatPage embedded sessionKey={conversationSessionKey} /></div>
+          <div className="min-h-0 flex-1"><ChatPage embedded sessionKey={conversationSessionKey} taskId={taskId} /></div>
+        ) : conversationLoading ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
+            <div className="max-w-xs"><MessageSquare className="mx-auto size-8 animate-pulse text-fg-subtle" /><p className="mt-3 text-sm font-medium text-fg">{language === 'zh' ? '正在创建任务会话' : 'Creating task conversation'}</p></div>
+          </div>
+        ) : conversationError ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
+            <div className="max-w-xs"><MessageSquare className="mx-auto size-8 text-danger" /><p className="mt-3 text-sm font-medium text-fg">{language === 'zh' ? '任务会话创建失败' : 'Could not create task conversation'}</p><p className="mt-2 text-xs leading-5 text-fg-muted">{conversationError instanceof Error ? conversationError.message : String(conversationError)}</p></div>
+          </div>
         ) : (
           <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
             <div className="max-w-xs"><MessageSquare className="mx-auto size-8 text-fg-subtle" /><p className="mt-3 text-sm font-medium text-fg">{language === 'zh' ? '等待任务会话' : 'Waiting for a task conversation'}</p><p className="mt-2 text-xs leading-5 text-fg-muted">{language === 'zh' ? '安排或开始任务后，Agent 的执行过程和持续对话会显示在这里。' : 'Schedule or start the task to see the agent run and continue the conversation here.'}</p></div>

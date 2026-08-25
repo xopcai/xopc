@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { closeTaskDetailModalHref, modalizeTaskDetailHref, taskDetailModalHref } from '../task-detail-route';
+import {
+  closeTaskDetailModalHref,
+  modalizeTaskDetailHref,
+  taskChatHref,
+  taskDetailModalHref,
+} from '../task-detail-route';
 
 describe('task detail modal route', () => {
   it('adds the task id while preserving background search params', () => {
@@ -21,5 +26,9 @@ describe('task detail modal route', () => {
   it('turns standalone task links into modal links without changing other links', () => {
     expect(modalizeTaskDetailHref('/home?view=focus', '/tasks/task%201')).toBe('/home?view=focus&task=task+1');
     expect(modalizeTaskDetailHref('/home', '/chat/new')).toBe('/chat/new');
+  });
+
+  it('keeps the task binding when opening its conversation full screen', () => {
+    expect(taskChatHref('task 1')).toBe('/chat/task/task%201');
   });
 });

@@ -26,7 +26,7 @@ export function optimisticallyPatchTask(
   if (patch.title !== undefined) task.title = patch.title;
   if (patch.priority !== undefined) task.priority = patch.priority;
   for (const field of [
-    'body', 'projectId', 'milestoneId', 'parentTaskId', 'dueAt', 'ownerId', 'delegateAgentId',
+    'body', 'projectId', 'milestoneId', 'parentTaskId', 'dueAt', 'ownerId',
   ] as const) {
     const value = patch[field];
     if (value === undefined) continue;

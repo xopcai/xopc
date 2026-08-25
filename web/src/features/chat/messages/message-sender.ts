@@ -39,7 +39,12 @@ async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-async function postSessionInput(url: string, body: string, signal: AbortSignal): Promise<Response> {
+async function postSessionInput(
+  url: string,
+  body: string,
+  signal: AbortSignal,
+  expectedSessionKey?: string,
+): Promise<Response> {
   let lastError: unknown;
   for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
     await retryDelay(delayMs, signal);
@@ -50,7 +55,10 @@ async function postSessionInput(url: string, body: string, signal: AbortSignal):
     try {
       const response = await apiFetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(expectedSessionKey ? { 'X-Xopc-Expected-Session-Key': expectedSessionKey } : {}),
+        },
         body,
         signal: controller.signal,
       });
@@ -268,6 +276,7 @@ export class MessageSender {
     attachments?: WireAttachment[],
     thinkingLevel?: string,
     callbacks?: MessagingCallbacks,
+    taskId?: string,
   ): Promise<void> {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
@@ -282,7 +291,9 @@ export class MessageSender {
     const fingerprint = sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel });
     const clientMessageId = claimSubmissionId(chatId, fingerprint);
     const res = await postSessionInput(
-      apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/inputs`),
+      apiUrl(taskId
+        ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
+        : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
       JSON.stringify({
         clientMessageId,
         delivery: 'next',
@@ -292,6 +303,7 @@ export class MessageSender {
         origin,
       }),
       this._abort.signal,
+      taskId ? chatId : undefined,
     );
 
     if (!res.ok) {
@@ -300,13 +312,17 @@ export class MessageSender {
     }
 
     const json = await res.json() as {
-      payload?: { state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> } };
+      payload?: {
+        sessionKey?: string;
+        state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
+      };
     };
     completeSubmission(chatId, clientMessageId);
     const state = json.payload?.state;
+    const resolvedChatId = json.payload?.sessionKey?.trim() || chatId;
     const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
     if (state?.activeRunId && ownInput?.id === state.activeInputId) {
-      await this.resume(state.activeRunId, chatId, callbacks);
+      await this.resume(state.activeRunId, resolvedChatId, callbacks);
       return;
     }
     this._abort = undefined;

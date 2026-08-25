@@ -215,24 +215,46 @@ export class SessionManager {
     }
   }
 
+  async patchTaskConversationModel(taskId: string, model: string): Promise<void> {
+    const res = await apiFetch(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/conversation/config`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model }),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(json.error ?? `HTTP ${res.status}`);
+    }
+  }
+
   /** Gateway read-only active webchat run (`GET /api/sessions/:key/run`). */
   fetchSessionActiveRun(sessionKey: string) {
     return fetchSessionActiveRun(sessionKey);
   }
 
-  async loadSession(sessionKey: string, offset = 0, beforeCursor?: string | null): Promise<SessionLoadResult> {
-    const dedupeKey = `${sessionKey}\0${offset}\0${beforeCursor ?? ''}`;
+  async loadSession(
+    sessionKey: string,
+    offset = 0,
+    beforeCursor?: string | null,
+    taskId?: string,
+  ): Promise<SessionLoadResult> {
+    const dedupeKey = `${taskId ?? sessionKey}\0${offset}\0${beforeCursor ?? ''}`;
     const existing = _sessionLoadInflight.get(dedupeKey);
     if (existing) return existing;
 
     const pending = (async () => {
       const loadPage = async (pageOffset: number, pageBeforeCursor?: string | null) => {
         const res = await apiFetchWithStartupRetry(
-          apiUrl(buildSessionHistoryPath(sessionKey, {
-            limit: INITIAL_HISTORY_PAGE_LIMIT,
-            before: pageBeforeCursor,
-            offset: pageBeforeCursor ? undefined : pageOffset,
-          })),
+          apiUrl(taskId
+            ? `/api/tasks/${encodeURIComponent(taskId)}/conversation/history?${new URLSearchParams({
+                limit: String(INITIAL_HISTORY_PAGE_LIMIT),
+                ...(pageBeforeCursor ? { before: pageBeforeCursor } : { offset: String(pageOffset) }),
+              }).toString()}`
+            : buildSessionHistoryPath(sessionKey, {
+                limit: INITIAL_HISTORY_PAGE_LIMIT,
+                before: pageBeforeCursor,
+                offset: pageBeforeCursor ? undefined : pageOffset,
+              })),
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         return parseSessionMessagePage(await res.json());
@@ -282,13 +304,16 @@ export class SessionManager {
     return pending;
   }
 
-  async loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]> {
-    const existing = _timelineInflight.get(sessionKey);
+  async loadTimeline(sessionKey: string, taskId?: string): Promise<SessionTimelineItem[]> {
+    const cacheKey = taskId ?? sessionKey;
+    const existing = _timelineInflight.get(cacheKey);
     if (existing) return existing;
 
     const pending = (async () => {
       const res = await apiFetchWithStartupRetry(
-        apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/timeline`),
+        apiUrl(taskId
+          ? `/api/tasks/${encodeURIComponent(taskId)}/conversation/timeline`
+          : `/api/sessions/${encodeURIComponent(sessionKey)}/timeline`),
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = (await res.json()) as {
@@ -300,10 +325,10 @@ export class SessionManager {
       }
       return data.items;
     })().finally(() => {
-      _timelineInflight.delete(sessionKey);
+      _timelineInflight.delete(cacheKey);
     });
 
-    _timelineInflight.set(sessionKey, pending);
+    _timelineInflight.set(cacheKey, pending);
     return pending;
   }
 

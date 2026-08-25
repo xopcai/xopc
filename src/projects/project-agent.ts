@@ -15,8 +15,8 @@ export function resolveProjectAgentId(input: {
 }): string {
   const fallback = getDefaultAgentId(input.config);
   const explicitAgentId = normalizeAgentId(input.explicitAgentId);
-  if (explicitAgentId) {
-    return agentExists(explicitAgentId, input.config) ? explicitAgentId : fallback;
+  if (explicitAgentId && agentExists(explicitAgentId, input.config)) {
+    return explicitAgentId;
   }
 
   const projectId = input.projectId?.trim();

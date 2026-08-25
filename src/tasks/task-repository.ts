@@ -209,16 +209,6 @@ export class TaskRepository {
     return row ? taskFromRow(row, this.getContract(row.task_id, row.latest_contract_version)) : undefined;
   }
 
-  getBySession(sessionKey: string): TaskAggregate | undefined {
-    const row = getSqliteDatabase().prepare(
-      `SELECT tasks.* FROM tasks
-       JOIN task_sessions ON task_sessions.task_id = tasks.task_id
-       WHERE task_sessions.session_key = ?
-       ORDER BY task_sessions.created_at DESC LIMIT 1`,
-    ).get(sessionKey) as TaskRow | undefined;
-    return row ? taskFromRow(row, this.getContract(row.task_id, row.latest_contract_version)) : undefined;
-  }
-
   list(input: { phase?: TaskPhase; projectId?: string; limit?: number; order?: 'recent' | 'board' } = {}): TaskAggregate[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
@@ -269,7 +259,6 @@ export class TaskRepository {
     priority?: TaskPriority;
     dueAt?: number | null;
     ownerId?: string | null;
-    delegateAgentId?: string | null;
     now?: number;
   }): TaskAggregate | undefined {
     const current = this.get(taskId);
@@ -279,7 +268,7 @@ export class TaskRepository {
     const now = Math.max(patch.now ?? Date.now(), current.updatedAt + 1);
     const result = getSqliteDatabase().prepare(
       `UPDATE tasks SET title = ?, body = ?, project_id = ?, milestone_id = ?,
-       parent_task_id = ?, priority = ?, due_at = ?, owner_id = ?, delegate_agent_id = ?,
+       parent_task_id = ?, priority = ?, due_at = ?, owner_id = ?,
        version = version + 1, updated_at = ?
        WHERE task_id = ? AND version = ?`,
     ).run(
@@ -291,7 +280,6 @@ export class TaskRepository {
       patch.priority ?? current.priority,
       patch.dueAt === undefined ? current.dueAt ?? null : patch.dueAt,
       patch.ownerId === undefined ? current.ownerId ?? null : patch.ownerId,
-      patch.delegateAgentId === undefined ? current.delegateAgentId ?? null : patch.delegateAgentId,
       now,
       taskId,
       patch.expectedVersion,

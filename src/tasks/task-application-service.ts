@@ -52,8 +52,6 @@ function commandChangedFields(command: TaskCommand): TaskChangedField[] {
     case 'add_wait':
     case 'resolve_wait':
       return ['runs', 'attention'];
-    case 'delegate':
-      return ['delegateAgentId'];
     case 'revise_contract':
       return ['contract'];
   }
@@ -94,6 +92,12 @@ export class TaskApplicationService {
         ...input.contract,
         createdBy: actor,
       });
+      db.prepare(
+        `INSERT INTO task_conversation_state (
+          task_id, active_session_key, current_executor_agent_id,
+          assignment_epoch, status, updated_at
+        ) VALUES (?, NULL, ?, 0, 'idle', ?)`,
+      ).run(task.id, task.delegateAgentId ?? task.ownerId ?? null, task.createdAt);
       let current = task;
       if (input.dependencies.length > 0) {
         current = this.#dependencies.replace({
@@ -131,7 +135,10 @@ export class TaskApplicationService {
       if (input.activation.mode === 'capture') {
         return { ok: true, model: this.#projector.project(current) };
       }
-      const started = this.start(current.id, current.version, input.activation.executor, {
+      const executor = input.activation.executor
+        ?? (current.delegateAgentId ? { kind: 'agent' as const, agentId: current.delegateAgentId } : undefined);
+      if (!executor) throw new Error('Task start executor was not resolved');
+      const started = this.start(current.id, current.version, executor, {
         idempotencyKey: `${input.idempotencyKey}:start`,
         scheduleAt: input.activation.scheduleAt,
         actor,
@@ -239,16 +246,6 @@ export class TaskApplicationService {
             });
             result = { ok: true, model: this.#projector.get(task.id)! };
           }
-          break;
-        }
-        case 'delegate': {
-          const updated = this.#tasks.update(task.id, {
-            expectedVersion: task.version,
-            delegateAgentId: input.command.agentId ?? null,
-          });
-          result = updated
-            ? { ok: true, model: this.#projector.project(updated) }
-            : { ok: false, reason: 'conflict', model: this.#projector.get(task.id) };
           break;
         }
         case 'revise_contract': {
