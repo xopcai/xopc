@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { complete } from '@earendil-works/pi-ai/compat';
+import { completeSimple } from '@earendil-works/pi-ai/compat';
 
 import {
   createWebExtractTool,
@@ -10,7 +10,7 @@ import {
 
 vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
-  return { ...mod, complete: vi.fn() };
+  return { ...mod, completeSimple: vi.fn() };
 });
 
 vi.mock('../../../providers/index.js', async (importOriginal) => {
@@ -73,13 +73,13 @@ describe('stripHtmlBoilerplate', () => {
 
 describe('createWebExtractTool', () => {
   beforeEach(() => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: '## Extracted\n\nBody.' }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
   });
 
   afterEach(() => {
-    vi.mocked(complete).mockReset();
+    vi.mocked(completeSimple).mockReset();
     vi.unstubAllGlobals();
   });
 
@@ -108,7 +108,7 @@ describe('createWebExtractTool', () => {
     const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     const r = await tool.execute('2', { url: 'https://example.com/tiny' });
     expect((r.content[0] as { text: string }).text).toContain('no extractable content');
-    expect(vi.mocked(complete)).not.toHaveBeenCalled();
+    expect(vi.mocked(completeSimple)).not.toHaveBeenCalled();
   });
 
   it('passes instruction into the LLM user message', async () => {
@@ -127,8 +127,8 @@ describe('createWebExtractTool', () => {
       instruction: 'pricing table only',
     });
 
-    expect(complete).toHaveBeenCalledTimes(1);
-    const call = vi.mocked(complete).mock.calls[0];
+    expect(completeSimple).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(completeSimple).mock.calls[0];
     const messages = (call[1] as { messages: Array<{ content: string }> }).messages;
     expect(messages[0]?.content).toContain('FOCUS: pricing table only');
   });
@@ -145,8 +145,8 @@ describe('createWebExtractTool', () => {
     );
     const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     await tool.execute('4', { url: 'https://example.com/q', maxLength: 99 });
-    expect(complete).toHaveBeenCalled();
-    const call = vi.mocked(complete).mock.calls[0];
+    expect(completeSimple).toHaveBeenCalled();
+    const call = vi.mocked(completeSimple).mock.calls[0];
     expect(call[2]).toMatchObject({ maxTokens: expect.any(Number) });
     const messages = (call[1] as { messages: Array<{ content: string }> }).messages;
     expect(messages[0]?.content).toContain('Keep output under 99 characters');
@@ -163,9 +163,9 @@ describe('createWebExtractTool', () => {
       }),
     );
     const blob = 'Z'.repeat(500);
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: blob }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
 
     const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     const r = await tool.execute('5', {
@@ -189,8 +189,8 @@ describe('createWebExtractTool', () => {
     );
     const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     await tool.execute('6', { url: 'https://example.com/api' });
-    expect(complete).toHaveBeenCalled();
-    const call = vi.mocked(complete).mock.calls[0];
+    expect(completeSimple).toHaveBeenCalled();
+    const call = vi.mocked(completeSimple).mock.calls[0];
     const messages = (call[1] as { messages: Array<{ content: string }> }).messages;
     expect(messages[0]?.content).toContain('"a": 1');
   });
