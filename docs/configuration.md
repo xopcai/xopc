@@ -202,7 +202,7 @@ Resolution order is the global preset, inherited preset parents, the agent's lis
 | `skills` | object | Skill visibility policy: `all`, `allowlist`, `denylist`, or `off`. |
 | `workflows` | object | Optional default/allowed/suggested workflow policy. |
 | `boundaries` | object | Confirmation, forbidden, and escalation rules. |
-| `runtime` | object | Optional runtime limits (`maxTurns`, `timeoutMs`, `maxToolFailuresPerTurn`) and `promptCacheRetention` (`none`, `short`, or `long`). Omit the cache field to use the provider adapter default. |
+| `runtime` | object | Optional runtime limits (`maxTurns`, `timeoutMs`, `maxToolFailuresPerTurn`) and `promptCache` (`mode`: `off` or `auto`; `lifetime`: `short` or `long`). Omit it to use automatic short-lived caching. |
 | `prompt` | object | Optional structured prompt customizations. |
 
 Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent registry outside config.

@@ -23,6 +23,7 @@ import { resolveResponseLanguageForSession } from './response-language.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { buildTtsSystemPromptHint } from '../../voice/tts/directives.js';
 import { createLogger } from '../../utils/logger.js';
+import { appendStablePromptSection } from './cache-boundary.js';
 
 const log = createLogger('SystemPromptBuilder');
 
@@ -142,7 +143,9 @@ export class SystemPromptBuilder {
             options.registeredToolNames,
           );
 
-    const fullPrompt = skillPrompt ? `${basePrompt}\n\n${skillPrompt}` : basePrompt;
+    const fullPrompt = skillPrompt
+      ? appendStablePromptSection(basePrompt, skillPrompt)
+      : basePrompt;
 
     log.debug(
       {

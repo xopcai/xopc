@@ -41,3 +41,19 @@ export function normalizePromptSection(text: string): string {
     .replace(/[ \t]+$/gm, '')
     .trim();
 }
+
+/** Add stable content immediately before the cache boundary. */
+export function appendStablePromptSection(systemPrompt: string, section: string): string {
+  const normalizedSection = normalizePromptSection(section);
+  if (!normalizedSection) return systemPrompt;
+
+  const split = splitPromptCacheBoundary(systemPrompt);
+  if (!split) {
+    return [normalizePromptSection(systemPrompt), normalizedSection].filter(Boolean).join('\n\n');
+  }
+
+  const stablePrefix = [split.stablePrefix, normalizedSection].filter(Boolean).join('\n\n');
+  return split.dynamicSuffix
+    ? `${stablePrefix}${PROMPT_CACHE_BOUNDARY}${split.dynamicSuffix}`
+    : `${stablePrefix}${PROMPT_CACHE_BOUNDARY}`;
+}

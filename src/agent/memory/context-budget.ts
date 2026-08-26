@@ -26,6 +26,8 @@ export interface ContextBudgetInput {
   canCompact?: boolean;
 }
 
+export type ContextProjectionReason = 'normal' | 'cache_expired' | 'hard_limit';
+
 export interface ContextBudgetEvaluation {
   route: ContextBudgetRoute;
   estimatedTokens: number;
@@ -146,7 +148,7 @@ export function evaluateContextBudget(input: ContextBudgetInput): ContextBudgetE
   };
 }
 
-export function pruneToolResultsToFit(input: ContextBudgetInput): {
+function truncateToolResultsToFit(input: ContextBudgetInput): {
   messages: AgentMessage[];
   evaluation: ContextBudgetEvaluation;
   prunedToolResults: number;
@@ -174,4 +176,77 @@ export function pruneToolResultsToFit(input: ContextBudgetInput): {
     evaluation: evaluateContextBudget({ ...input, messages }),
     prunedToolResults,
   };
+}
+
+function protectedRecentTurnStart(messages: readonly AgentMessage[], recentTurns: number): number {
+  let remaining = recentTurns;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if ((messages[index] as { role?: string }).role !== 'assistant') continue;
+    remaining -= 1;
+    if (remaining === 0) return index;
+  }
+  return 0;
+}
+
+function replaceOldImages(message: AgentMessage): { message: AgentMessage; removed: number } {
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return { message, removed: 0 };
+  let removed = 0;
+  const nextContent = content.map((block) => {
+    if (!block || typeof block !== 'object' || (block as { type?: string }).type !== 'image') return block;
+    removed += 1;
+    return { type: 'text', text: '[Earlier image omitted from the model context.]' };
+  });
+  return removed > 0
+    ? { message: { ...message, content: nextContent } as AgentMessage, removed }
+    : { message, removed: 0 };
+}
+
+export function projectContextForModel(
+  input: ContextBudgetInput & { reason: ContextProjectionReason; recentTurns?: number },
+): {
+  messages: AgentMessage[];
+  evaluation: ContextBudgetEvaluation;
+  prunedToolResults: number;
+  prunedImages: number;
+} {
+  const initial = evaluateContextBudget(input);
+  const mustFit = input.reason === 'hard_limit' || initial.estimatedTokens > initial.hardLimitTokens;
+  if (input.reason !== 'cache_expired' && !mustFit) {
+    return { messages: input.messages, evaluation: initial, prunedToolResults: 0, prunedImages: 0 };
+  }
+  if (input.reason === 'cache_expired' && initial.usagePercent < 0.3 && !mustFit) {
+    return { messages: input.messages, evaluation: initial, prunedToolResults: 0, prunedImages: 0 };
+  }
+
+  const protectedStart = protectedRecentTurnStart(input.messages, input.recentTurns ?? 3);
+  let prunedToolResults = 0;
+  let prunedImages = 0;
+  let messages = input.messages.map((message, index) => {
+    if (index >= protectedStart) return message;
+    const imageProjection = replaceOldImages(message);
+    prunedImages += imageProjection.removed;
+    if (getToolResultTextLength(imageProjection.message) <= 3_000) return imageProjection.message;
+    prunedToolResults += 1;
+    return truncateToolResultMessage(imageProjection.message, 3_000, { minKeepChars: 1_500 });
+  });
+
+  let evaluation = evaluateContextBudget({ ...input, messages });
+  if (input.reason === 'cache_expired' && evaluation.usagePercent > 0.5) {
+    messages = messages.map((message, index) => {
+      if (index >= protectedStart || getToolResultTextLength(message) <= 400) return message;
+      prunedToolResults += 1;
+      return truncateToolResultMessage(message, 400, { minKeepChars: 200 });
+    });
+    evaluation = evaluateContextBudget({ ...input, messages });
+  }
+
+  if (evaluation.estimatedTokens > evaluation.hardLimitTokens) {
+    const fitted = truncateToolResultsToFit({ ...input, messages });
+    messages = fitted.messages;
+    prunedToolResults += fitted.prunedToolResults;
+    evaluation = fitted.evaluation;
+  }
+
+  return { messages, evaluation, prunedToolResults, prunedImages };
 }
