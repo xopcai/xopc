@@ -23,6 +23,7 @@ xopc is one package with several surfaces:
 ## Requirements
 
 - Node.js **22** or newer for the CLI package.
+- Docker Desktop, or Docker Engine with Compose, when using the official container image.
 - At least one model provider key, local model server, or configured OpenAI-compatible endpoint.
 - `pnpm` only when building from this repository.
 
@@ -43,6 +44,7 @@ Configuration is stored in `~/.xopc/xopc.json` by default. Override it with `XOP
 | --- | --- |
 | Easiest first run | [PC Desktop app](./desktop-app.md) |
 | Fastest terminal first run | [First 5 Minutes](./first-5-minutes.md) |
+| Self-host with a container | [Install with Docker](./docker.md) |
 | Browser chat, settings, logs | [Gateway](./gateway.md) |
 | Telegram bot | [Connect Telegram](./how-to/connect-telegram.md) |
 | Mobile access | [Mobile app](./mobile-app.md) and [Remote access](./remote-access.md) |
