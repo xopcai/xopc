@@ -61,9 +61,17 @@ function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
-function callbackHtml(title: string, message: string, tone: 'success' | 'error'): string {
+function callbackHtml(
+  title: string,
+  message: string,
+  tone: 'success' | 'error',
+  returnToAppUrl?: string,
+): string {
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
+  const safeReturnToAppUrl = returnToAppUrl?.startsWith('xopc://')
+    ? escapeHtml(returnToAppUrl)
+    : undefined;
   const statusLabel = tone === 'success' ? 'Authorization successful' : 'Authorization needs attention';
   const statusIcon = tone === 'success'
     ? '<path d="m7.5 12 3 3 6-7" />'
@@ -159,6 +167,20 @@ function callbackHtml(title: string, message: string, tone: 'success' | 'error')
       line-height: 1.55;
     }
     .window-icon { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .return-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 22px;
+      min-height: 42px;
+      border-radius: 12px;
+      padding: 0 16px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      text-decoration: none;
+    }
     @media (prefers-color-scheme: dark) {
       :root {
         --accent-soft: rgba(58, 107, 255, 0.16);
@@ -208,11 +230,18 @@ function callbackHtml(title: string, message: string, tone: 'success' | 'error')
     </div>
     <h1>${safeTitle}</h1>
     <p class="message">${safeMessage}</p>
+    ${safeReturnToAppUrl ? `<a id="return-to-xopc" class="return-button" href="${safeReturnToAppUrl}">Open XOPC</a>` : ''}
     <div class="next-step">
       <svg class="window-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18" /></svg>
       <span>You can safely close this window and return to XOPC.</span>
     </div>
   </main>
+  ${safeReturnToAppUrl ? `<script>
+    window.setTimeout(function () {
+      var link = document.getElementById('return-to-xopc');
+      if (link) window.location.href = link.href;
+    }, 350);
+  </script>` : ''}
 </body>
 </html>`;
 }
@@ -255,7 +284,12 @@ async function loginWithBrowser(callbacks: OAuthLoginCallbacks): Promise<OAuthCr
         return;
       }
       response.statusCode = 200;
-      response.end(callbackHtml('Authorization complete', 'XOPC received the authorization callback successfully.', 'success'));
+      response.end(callbackHtml(
+        'Authorization complete',
+        'XOPC received the authorization callback successfully.',
+        'success',
+        callbacks.returnToAppUrl,
+      ));
       settle?.({ code });
     } catch {
       const error = new Error('XOPC OAuth callback could not be processed');
