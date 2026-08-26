@@ -19,11 +19,15 @@ describe('tunnel-qr', () => {
 
   it('builds mobile-connect payload with tunnel, lan, and pairing secret', () => {
     const qr = buildMobileConnectQrPayload({
+      pairingSessionId: 'pair-session-1',
       publicUrl: 'https://abc123.frp.xopc.ai',
       lanUrl: 'http://192.168.1.10:18790',
       pairingSecret: 'pair-secret-abc',
     });
     expect(qr.qrPayload).toContain('xopc://gateway/mobile-connect');
+    expect(qr.qrPayload).toContain('v=2');
+    expect(qr.qrPayload).toContain('sid=pair-session-1');
+    expect(qr.pairingSessionId).toBe('pair-session-1');
     expect(qr.qrPayload).toContain('baseUrl=');
     expect(qr.qrPayload).toContain('lanUrl=');
     expect(qr.qrPayload).toContain('ps=pair-secret-abc');

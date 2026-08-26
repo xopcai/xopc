@@ -39,6 +39,8 @@ function resolveSuggestedPairBaseUrl(
 }
 
 export type MobilePairQrState = {
+  pairingSessionId: string | null;
+  expiresAt: string | null;
   tunnelActive: boolean;
   tunnelStatus: TunnelStatusResponse | undefined;
   tunnelQr: TunnelQrResponse | undefined;
@@ -55,7 +57,7 @@ export type MobilePairQrState = {
   qrDataUrl: string | null;
   qrGenFailed: boolean;
   encoding: boolean;
-  refreshQr: (payload?: string) => Promise<void>;
+  refreshQr: (payload?: string, pairingSessionId?: string) => Promise<void>;
   resetPairBaseFromContext: (url?: string | null) => void;
 };
 
@@ -231,11 +233,16 @@ export function useMobilePairQr(
   const encoding = Boolean(deepLink && !qrDataUrl && !qrGenFailed);
 
   const refreshQr = useCallback(
-    async (payload?: string) => {
+    async (payload?: string, pairingSessionId?: string) => {
       if (payload?.trim()) {
         setManualPayload(payload.trim());
         void mutTunnelQr(
-          { qrPayload: payload.trim(), publicUrl: tunnelStatus?.publicUrl ?? '', lanUrl: tunnelQr?.lanUrl ?? null },
+          {
+            pairingSessionId,
+            qrPayload: payload.trim(),
+            publicUrl: tunnelStatus?.publicUrl ?? '',
+            lanUrl: tunnelQr?.lanUrl ?? null,
+          },
           false,
         );
         return;
@@ -252,6 +259,8 @@ export function useMobilePairQr(
   );
 
   return {
+    pairingSessionId: (useTunnelQr ? tunnelQr?.pairingSessionId : lanPair?.pairingSessionId) ?? null,
+    expiresAt: (useTunnelQr ? tunnelQr?.expiresAt : lanPair?.expiresAt) ?? null,
     tunnelActive,
     tunnelStatus,
     tunnelQr,

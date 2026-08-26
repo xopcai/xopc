@@ -146,7 +146,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
       const res = await startTunnel();
       await mutStatus();
       void revalidateGatewayConfig();
-      await pairQr.refreshQr(res.qrPayload);
+      await pairQr.refreshQr(res.qrPayload, res.pairingSessionId);
     } catch (e) {
       dispatchUi({
         type: 'patch',

@@ -16,6 +16,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsGateway'
   | 'settingsRuntimes'
   | 'settingsDevices'
+  | 'settingsMobile'
   | 'settingsHeartbeat'
   | 'settingsTunnel'
   | 'settingsShares'
@@ -34,6 +35,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsGateway: 'gateway',
   settingsRuntimes: 'runtimes',
   settingsDevices: 'devices',
+  settingsMobile: 'mobile',
   settingsHeartbeat: 'heartbeat',
   settingsTunnel: 'remote-access',
   settingsShares: 'shares',
@@ -93,7 +95,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'connection',
-    tabs: ['settingsDevices', 'settingsGateway', 'settingsRuntimes', 'settingsTunnel', 'settingsShares'],
+    tabs: ['settingsMobile', 'settingsDevices', 'settingsGateway', 'settingsRuntimes', 'settingsTunnel', 'settingsShares'],
   },
   {
     id: 'automation',

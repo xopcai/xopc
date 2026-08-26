@@ -13,6 +13,7 @@ import {
   loadKeyboardShortcutsSettingsPanel,
   loadCapabilityPresetsSettingsPanel,
   loadRemoteAccessHub,
+  loadMobileConnectPanel,
   loadSetupStatusPanel,
   loadSharesSettingsPanel,
   loadSystemSettingsPanel,
@@ -31,6 +32,7 @@ const SECTIONS: SettingsSectionId[] = [
   'gateway',
   'runtimes',
   'devices',
+  'mobile',
   'heartbeat',
   'remote-access',
   'shares',
@@ -58,6 +60,9 @@ const HeartbeatSettingsPanel = lazy(() =>
   loadHeartbeatSettingsPanel().then((m) => ({ default: m.HeartbeatSettingsPanel })),
 );
 const RemoteAccessHub = lazy(() => loadRemoteAccessHub().then((m) => ({ default: m.RemoteAccessHub })));
+const MobileConnectPanel = lazy(() =>
+  loadMobileConnectPanel().then((m) => ({ default: m.MobileConnectPanel })),
+);
 const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ default: m.SharesSettingsPanel })));
 const CapabilityPresetsSettingsPanel = lazy(() =>
   loadCapabilityPresetsSettingsPanel().then((m) => ({ default: m.CapabilityPresetsSettingsPanel })),
@@ -135,6 +140,10 @@ export function SettingsPage() {
 
   if (id === 'devices') {
     return renderLazySection(EndpointToolsManagementSettings);
+  }
+
+  if (id === 'mobile') {
+    return renderLazySection(MobileConnectPanel);
   }
 
   if (id === 'heartbeat') {

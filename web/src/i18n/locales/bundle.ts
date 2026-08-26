@@ -5,6 +5,7 @@ import enChannels from './en/channels.json' with { type: 'json' };
 import enChat from './en/chat.json' with { type: 'json' };
 import enCron from './en/cron.json' with { type: 'json' };
 import enLogs from './en/logs.json' with { type: 'json' };
+import enMobileConnect from './en/mobile-connect.json' with { type: 'json' };
 import enNotes from './en/notes.json' with { type: 'json' };
 import enOnboarding from './en/onboarding.json' with { type: 'json' };
 import enProviders from './en/providers.json' with { type: 'json' };
@@ -28,6 +29,7 @@ import zhChannels from './zh/channels.json' with { type: 'json' };
 import zhChat from './zh/chat.json' with { type: 'json' };
 import zhCron from './zh/cron.json' with { type: 'json' };
 import zhLogs from './zh/logs.json' with { type: 'json' };
+import zhMobileConnect from './zh/mobile-connect.json' with { type: 'json' };
 import zhNotes from './zh/notes.json' with { type: 'json' };
 import zhOnboarding from './zh/onboarding.json' with { type: 'json' };
 import zhProviders from './zh/providers.json' with { type: 'json' };
@@ -53,6 +55,7 @@ export const en = {
   ...enChat,
   ...enCron,
   ...enLogs,
+  ...enMobileConnect,
   ...enNotes,
   ...enOnboarding,
   ...enProviders,
@@ -79,6 +82,7 @@ export const zh = {
   ...zhChat,
   ...zhCron,
   ...zhLogs,
+  ...zhMobileConnect,
   ...zhNotes,
   ...zhOnboarding,
   ...zhProviders,

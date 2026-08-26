@@ -37,6 +37,7 @@ export const loadRuntimeToolsSettingsPanel = () =>
   import('@/features/settings/runtime-tools/runtime-tools-settings-panel');
 export const loadHeartbeatSettingsPanel = () => import('@/features/settings/heartbeat-settings');
 export const loadRemoteAccessHub = () => import('@/features/remote-access/remote-access-hub');
+export const loadMobileConnectPanel = () => import('@/features/mobile-connect/mobile-connect-panel');
 export const loadSharesSettingsPanel = () => import('@/features/shares/shares-settings');
 export const loadCapabilityPresetsSettingsPanel = () =>
   import('@/features/settings/capability-presets/capability-presets-settings-panel');
@@ -74,6 +75,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'gateway') return preload(loadGatewaySettingsPanel);
   if (section === 'runtimes') return preload(loadRuntimeToolsSettingsPanel);
   if (section === 'devices') return preload(loadEndpointToolsManagementSettings);
+  if (section === 'mobile') return preload(loadMobileConnectPanel);
   if (section === 'heartbeat') return preload(loadHeartbeatSettingsPanel);
   if (section === 'tunnel' || section === 'remote-access') return preload(loadRemoteAccessHub);
   if (section === 'shares') return preload(loadSharesSettingsPanel);

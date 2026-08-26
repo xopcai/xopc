@@ -1,0 +1,37 @@
+{
+  "mobileConnect": {
+    "title": "连接手机",
+    "subtitle": "自动配置网络并配对 xopc 移动端，无需复制地址或访问令牌。",
+    "steps": {
+      "install": "安装 App",
+      "network": "选择网络",
+      "pair": "扫码配对",
+      "done": "连接成功"
+    },
+    "installTitle": "在手机上安装 xopc",
+    "installBody": "前往 xopc.ai 下载 iOS 或 Android App，安装后回到这里连接当前 Gateway。",
+    "download": "打开 xopc.ai",
+    "installed": "我已安装 App",
+    "networkTitle": "你准备在哪里使用手机？",
+    "networkBody": "我们会自动配置 Gateway，并选择手机可以访问的地址。",
+    "lanTitle": "同一 Wi-Fi 下使用",
+    "lanBody": "速度快且更私密，手机通过可信局域网直接连接这台电脑。",
+    "lanBadge": "家庭使用推荐",
+    "remoteTitle": "随时随地使用",
+    "remoteBody": "通过 xopc FRP 服务建立 HTTPS 远程连接，支持蜂窝网络和其他 Wi-Fi。",
+    "remoteBadge": "远程访问",
+    "pairTitle": "使用 xopc 移动端扫码",
+    "pairBodyLan": "请让手机和电脑连接同一 Wi-Fi。如有需要，可在下方一键允许局域网访问。",
+    "pairBodyRemote": "开启远程访问，等待公网地址准备完成，然后扫描配对二维码。",
+    "waiting": "正在等待手机连接…",
+    "waitingHint": "二维码只包含一次性密钥，不会直接暴露 Gateway 访问令牌。",
+    "successTitle": "手机已连接",
+    "successBody": "移动端已成功交换一次性密钥，现在可以使用当前 Gateway。",
+    "successTime": "连接时间 {{time}}",
+    "finish": "完成",
+    "connectAnother": "连接另一台手机",
+    "back": "返回",
+    "advanced": "高级网络设置",
+    "needToken": "请先登录 Gateway，再连接手机。"
+  }
+}

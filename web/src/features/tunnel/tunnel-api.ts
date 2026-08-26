@@ -42,6 +42,7 @@ export type TunnelStatusResponse = {
 };
 
 export type TunnelStartResponse = {
+  pairingSessionId?: string;
   publicUrl: string | null;
   subdomain: string | null;
   qrPayload: string;
@@ -49,6 +50,7 @@ export type TunnelStartResponse = {
 };
 
 export type TunnelQrResponse = {
+  pairingSessionId?: string;
   qrPayload: string;
   publicUrl: string | null;
   lanUrl: string | null;
@@ -56,6 +58,7 @@ export type TunnelQrResponse = {
 };
 
 export type TunnelPairResponse = {
+  pairingSessionId: string;
   pairingSecret: string;
   expiresAt: string;
 };

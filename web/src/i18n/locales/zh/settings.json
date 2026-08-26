@@ -8,6 +8,7 @@
     "connectors": "连接器",
     "channels": "消息通道",
     "devices": "设备与工具",
+    "mobile": "连接手机",
     "gateway": "网关",
     "runtimes": "工具运行时",
     "heartbeat": "心跳",

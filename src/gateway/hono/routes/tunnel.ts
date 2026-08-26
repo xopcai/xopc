@@ -17,7 +17,12 @@ import {
   resolveTunnelBrokerUrl,
 } from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
-import { createPairingSecret, exchangePairingSecretOnce, getCachedPairingExchange } from '../../../tunnel/pairing.js';
+import {
+  createPairingSecret,
+  exchangePairingSecretOnce,
+  getCachedPairingExchange,
+  getPairingSessionId,
+} from '../../../tunnel/pairing.js';
 import { buildMobilePairContext } from '../../../tunnel/pair-context.js';
 import { applyLanPairingGatewayPatch } from '../../../tunnel/enable-lan-pairing.js';
 import {
@@ -172,6 +177,8 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       return c.json(cached);
     }
 
+    const pairingSessionId = getPairingSessionId(pairingSecret);
+
     const token = service.getAuthToken();
     if (!token) {
       return c.json({ error: 'Gateway token not configured' }, 500);
@@ -216,6 +223,10 @@ export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): 
       { ok: true, clientIp, subdomain: persisted?.subdomain ?? null, phase: 'pairing_exchange' },
       'Pairing secret exchanged for gateway token',
     );
+    service.emit('mobile.pairing.completed', {
+      pairingSessionId,
+      connectedAt: new Date().toISOString(),
+    });
     return c.json(payload);
   });
 }
@@ -291,7 +302,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);
 
-    const { secret, expiresAt } = createPairingSecret();
+    const { pairingSessionId, secret, expiresAt } = createPairingSecret();
     logTunnelAudit(
       'tunnel.pair',
       {
@@ -300,7 +311,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       },
       'Mobile pairing session created',
     );
-    return c.json({ pairingSecret: secret, expiresAt: expiresAt.toISOString() });
+    return c.json({ pairingSessionId, pairingSecret: secret, expiresAt: expiresAt.toISOString() });
   });
 
   /**

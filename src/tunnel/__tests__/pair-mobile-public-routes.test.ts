@@ -19,6 +19,7 @@ function mockService(overrides: { gateway?: Record<string, unknown>; tunnelState
     getAuthToken: () => 'gateway-secret-token',
     getResolvedAuth: () => ({ mode: 'token', token: 'gateway-secret-token' }),
     getHealth: () => ({ status: 'ok', version: '0', uptime: 0 }),
+    emit: () => {},
   } as unknown as import('../../gateway/service.js').GatewayService;
 }
 

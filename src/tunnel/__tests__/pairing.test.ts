@@ -4,6 +4,7 @@ import {
   cachePairingExchange,
   consumePairingSecret,
   createPairingSecret,
+  getPairingSessionId,
   getCachedPairingExchange,
   resetPairingSessionsForTests,
 } from '../pairing.js';
@@ -14,7 +15,9 @@ describe('tunnel pairing', () => {
   });
 
   it('creates a secret valid for 5 minutes', () => {
-    const { secret, expiresAt } = createPairingSecret();
+    const { pairingSessionId, secret, expiresAt } = createPairingSecret();
+    expect(pairingSessionId.length).toBeGreaterThan(16);
+    expect(getPairingSessionId(secret)).toBe(pairingSessionId);
     expect(secret.length).toBeGreaterThan(20);
     const ttlMs = expiresAt.getTime() - Date.now();
     expect(ttlMs).toBeGreaterThan(4 * 60_000);
@@ -24,6 +27,7 @@ describe('tunnel pairing', () => {
   it('consumes a secret once', () => {
     const { secret } = createPairingSecret();
     expect(consumePairingSecret(secret)).toBe(true);
+    expect(getPairingSessionId(secret)).toBeNull();
     expect(consumePairingSecret(secret)).toBe(false);
   });
 

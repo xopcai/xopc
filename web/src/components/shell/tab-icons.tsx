@@ -45,6 +45,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsGateway: Globe,
   settingsRuntimes: TerminalSquare,
   settingsDevices: Smartphone,
+  settingsMobile: Smartphone,
   settingsHeartbeat: Heart,
   settingsTunnel: Radio,
   settingsShares: Share2,

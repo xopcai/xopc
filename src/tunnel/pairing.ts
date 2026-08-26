@@ -8,6 +8,7 @@ const PAIRING_TTL_MS = 5 * 60_000;
 const CLEANUP_INTERVAL_MS = 60_000;
 
 type PairingSession = {
+  id: string;
   expiresAt: Date;
   consumed: boolean;
 };
@@ -28,6 +29,7 @@ function ensureCleanupTimer(): void {
 }
 
 export type PairingSecretResult = {
+  pairingSessionId: string;
   secret: string;
   expiresAt: Date;
 };
@@ -96,11 +98,19 @@ export async function exchangePairingSecretOnce(
 
 export function createPairingSecret(): PairingSecretResult {
   ensureCleanupTimer();
+  const pairingSessionId = randomBytes(16).toString('base64url');
   const secret = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + PAIRING_TTL_MS);
-  sessions.set(secret, { expiresAt, consumed: false });
-  log.info({ expiresAt: expiresAt.toISOString() }, 'Pairing session created');
-  return { secret, expiresAt };
+  sessions.set(secret, { id: pairingSessionId, expiresAt, consumed: false });
+  log.info({ pairingSessionId, expiresAt: expiresAt.toISOString() }, 'Pairing session created');
+  return { pairingSessionId, secret, expiresAt };
+}
+
+/** Resolve the public session identifier before a one-time secret is consumed. */
+export function getPairingSessionId(secret: string): string | null {
+  const session = sessions.get(secret.trim());
+  if (!session || session.consumed || Date.now() > session.expiresAt.getTime()) return null;
+  return session.id;
 }
 
 export function consumePairingSecret(secret: string): boolean {

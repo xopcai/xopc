@@ -1,10 +1,10 @@
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, afterEach, vi } from 'vitest';
 
 import { createHonoApp } from '../../gateway/hono/app.js';
 import { consumePairingSecret, createPairingSecret, resetPairingSessionsForTests } from '../pairing.js';
 import { resetPairingExchangeLimitsForTests } from '../pairing-rate-limit.js';
 
-function mockService() {
+function mockService(emit = vi.fn()) {
   return {
     currentConfig: {
       gateway: { port: 18790, bind: 'loopback', auth: { mode: 'token' as const } },
@@ -13,6 +13,7 @@ function mockService() {
     getAuthToken: () => 'gateway-secret-token',
     getResolvedAuth: () => ({ mode: 'token', token: 'gateway-secret-token' }),
     getHealth: () => ({ status: 'ok', version: '0', uptime: 0 }),
+    emit,
   } as unknown as import('../../gateway/service.js').GatewayService;
 }
 
@@ -23,8 +24,9 @@ describe('POST /api/tunnel/exchange-token', () => {
   });
 
   it('exchanges a valid pairing secret for gateway token', async () => {
-    const { secret } = createPairingSecret();
-    const app = createHonoApp({ service: mockService(), token: 'admin-token' });
+    const { pairingSessionId, secret } = createPairingSecret();
+    const emit = vi.fn();
+    const app = createHonoApp({ service: mockService(emit), token: 'admin-token' });
 
     const res = await app.request('/api/tunnel/exchange-token', {
       method: 'POST',
@@ -37,6 +39,7 @@ describe('POST /api/tunnel/exchange-token', () => {
     expect(body.token).toBe('gateway-secret-token');
     expect(Array.isArray(body.connectUrls)).toBe(true);
     expect(consumePairingSecret(secret)).toBe(false);
+    expect(emit).toHaveBeenCalledWith('mobile.pairing.completed', expect.objectContaining({ pairingSessionId }));
   });
 
   it('deduplicates concurrent exchange for the same secret', async () => {

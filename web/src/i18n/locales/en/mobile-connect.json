@@ -1,0 +1,37 @@
+{
+  "mobileConnect": {
+    "title": "Connect your phone",
+    "subtitle": "Set up the network and pair the xopc mobile app without copying addresses or tokens.",
+    "steps": {
+      "install": "Install app",
+      "network": "Choose access",
+      "pair": "Scan to pair",
+      "done": "Connected"
+    },
+    "installTitle": "Get xopc on your phone",
+    "installBody": "Download the iOS or Android app from xopc.ai, then return here to connect it to this gateway.",
+    "download": "Open xopc.ai",
+    "installed": "I have the app",
+    "networkTitle": "Where will you use your phone?",
+    "networkBody": "We will configure the gateway and choose an address your phone can reach.",
+    "lanTitle": "On the same Wi-Fi",
+    "lanBody": "Fast and private. The phone connects directly to this computer on a trusted local network.",
+    "lanBadge": "Recommended at home",
+    "remoteTitle": "From anywhere",
+    "remoteBody": "Creates an HTTPS remote connection through the xopc FRP service for cellular and other networks.",
+    "remoteBadge": "Remote access",
+    "pairTitle": "Scan with the xopc mobile app",
+    "pairBodyLan": "Keep the phone and this computer on the same Wi-Fi. If needed, xopc can enable local-network access below.",
+    "pairBodyRemote": "Start remote access, wait until the public address is ready, then scan the pairing QR.",
+    "waiting": "Waiting for your phone…",
+    "waitingHint": "The QR contains a single-use key and never exposes the gateway token directly.",
+    "successTitle": "Your phone is connected",
+    "successBody": "The mobile app exchanged the one-time key and can now use this gateway.",
+    "successTime": "Connected {{time}}",
+    "finish": "Done",
+    "connectAnother": "Connect another phone",
+    "back": "Back",
+    "advanced": "Advanced network settings",
+    "needToken": "Sign in to the gateway before connecting a phone."
+  }
+}

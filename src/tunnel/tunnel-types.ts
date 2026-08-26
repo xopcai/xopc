@@ -69,6 +69,7 @@ export type TunnelStatus = {
 };
 
 export type TunnelQrPayload = {
+  pairingSessionId?: string;
   qrPayload: string;
   publicUrl: string | null;
   lanUrl: string | null;

@@ -24,17 +24,21 @@ export function resolveLanGatewayUrl(gatewayHost: string, gatewayPort: number): 
 }
 
 export function buildMobileConnectQrPayload(input: {
+  pairingSessionId?: string;
   publicUrl: string;
   lanUrl: string | null;
   pairingSecret: string;
   expiresAt?: string;
 }): TunnelQrPayload {
   const params = new URLSearchParams();
+  params.set('v', '2');
+  if (input.pairingSessionId) params.set('sid', input.pairingSessionId);
   params.set('baseUrl', input.publicUrl);
   if (input.lanUrl) params.set('lanUrl', input.lanUrl);
   if (input.pairingSecret) params.set('ps', input.pairingSecret);
   const qrPayload = `xopc://gateway/mobile-connect?${params.toString()}`;
   return {
+    pairingSessionId: input.pairingSessionId,
     qrPayload,
     publicUrl: input.publicUrl,
     lanUrl: input.lanUrl,

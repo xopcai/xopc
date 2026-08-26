@@ -34,6 +34,7 @@
     "settingsGateway": "网关",
     "settingsRuntimes": "工具运行时",
     "settingsDevices": "设备与工具",
+    "settingsMobile": "连接手机",
     "settingsHeartbeat": "心跳",
     "settingsTunnel": "远程访问",
     "settingsShares": "文件分享",

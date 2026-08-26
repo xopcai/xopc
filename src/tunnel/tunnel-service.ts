@@ -112,8 +112,9 @@ export class TunnelService extends EventEmitter {
     if (!publicUrl) {
       return { qrPayload: '', publicUrl: null, lanUrl: null };
     }
-    const { secret, expiresAt } = createPairingSecret();
+    const { pairingSessionId, secret, expiresAt } = createPairingSecret();
     return buildMobileConnectQrPayload({
+      pairingSessionId,
       publicUrl,
       lanUrl: resolveLanGatewayUrl(gatewayHost, gatewayPort),
       pairingSecret: secret,
