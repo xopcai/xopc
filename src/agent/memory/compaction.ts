@@ -174,6 +174,28 @@ function summaryAudit(summary: string, identifiers: readonly string[]): string[]
   return issues;
 }
 
+function enforceSummaryContract(summary: string, identifiers: readonly string[]): string {
+  let normalized = summary.trim();
+  for (const heading of REQUIRED_SUMMARY_HEADINGS) {
+    if (!new RegExp(`^#{1,3}\\s+${heading.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\s*$`, 'im').test(normalized)) {
+      normalized = `${normalized}\n\n## ${heading}\nNone`.trim();
+    }
+  }
+
+  const missingIdentifiers = identifiers.filter((identifier) => !normalized.includes(identifier));
+  if (missingIdentifiers.length === 0) return normalized;
+
+  const exactHeading = /^#{1,3}\s+Exact identifiers\s*$/im.exec(normalized);
+  if (!exactHeading) return normalized;
+  const insertAt = exactHeading.index + exactHeading[0].length;
+  const identifierList = missingIdentifiers.map((identifier) => `- \`${identifier}\``).join('\n');
+  const suffix = normalized.slice(insertAt).replace(
+    /^\r?\n[ \t]*None[ \t]*(?=\r?\n#{1,3}\s|$)/i,
+    '',
+  );
+  return `${normalized.slice(0, insertAt)}\n${identifierList}${suffix}`;
+}
+
 function createLinkedAbortSignal(parent: AbortSignal | undefined, timeoutMs: number): {
   signal: AbortSignal;
   dispose: () => void;
@@ -315,7 +337,7 @@ Do not omit facts already present and do not invent new facts.
 ${summary}
 </summary_to_repair>`;
         const repaired = await this.callSummaryModels(models, repairPrompt, signal);
-        summary = repaired.summary;
+        summary = enforceSummaryContract(repaired.summary, identifiers);
         summaryModelRef = repaired.modelRef;
         const remaining = summaryAudit(summary, identifiers);
         if (remaining.length > 0) {

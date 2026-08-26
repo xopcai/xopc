@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCompactionUnits,
+  extractExactIdentifiers,
   planCompactionChunks,
   serializeMessageForCompaction,
 } from '../compaction-planner.js';
@@ -69,5 +70,25 @@ describe('compaction planner', () => {
     expect(serialized).toContain('[image content]');
     expect(serialized).toContain('image/png');
     expect(serialized).not.toContain('secret-binary-data');
+  });
+
+  it('does not mistake slash-separated technical terms for paths', () => {
+    const messages = [{
+      role: 'user',
+      content: [
+        'Q/K/V FP16/BF16/INT8 FP16/BF16 token/s Key/Value',
+        'q4/k4/v4 k4/v4 Prompt/KV PR/commit',
+        '/run/123/logs release/1.2 src/agent/service.ts',
+        'https://example.com/run/123',
+      ].join(' '),
+      timestamp: 1,
+    }] as AgentMessage[];
+
+    expect(extractExactIdentifiers(messages)).toEqual([
+      '/run/123/logs',
+      'release/1.2',
+      'src/agent/service.ts',
+      'https://example.com/run/123',
+    ]);
   });
 });
