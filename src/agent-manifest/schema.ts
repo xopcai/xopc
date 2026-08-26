@@ -214,7 +214,10 @@ export const RuntimePolicySchema = z
     maxTurns: z.number().int().positive().optional(),
     timeoutMs: z.number().int().positive().optional(),
     maxToolFailuresPerTurn: z.number().int().positive().optional(),
-    promptCacheRetention: z.enum(['none', 'short', 'long']).optional(),
+    promptCache: z.object({
+      mode: z.enum(['off', 'auto']).default('auto'),
+      lifetime: z.enum(['short', 'long']).default('short'),
+    }).strict().optional(),
   })
   .strict()
   .optional();

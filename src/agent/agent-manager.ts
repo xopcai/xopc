@@ -62,6 +62,7 @@ import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
 import { getSessionConfig, getSessionMetadata } from '../storage/sqlite/index.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
+import { sortToolsForPromptCache } from './tools/cache-stability.js';
 import type { SessionContext } from './session/session-context.js';
 import type {
   Skill,
@@ -610,7 +611,9 @@ export class AgentManager implements AgentInstanceGateway {
     const originalSystemPrompt = inst.agent.state.systemPrompt;
     const nextRegisteredToolNames = [...originalRegisteredToolNames, ...newTools.map((tool) => tool.name)];
 
-    inst.agent.state.tools = newTools.length > 0 ? [...originalTools, ...newTools] : originalTools;
+    inst.agent.state.tools = newTools.length > 0
+      ? sortToolsForPromptCache([...originalTools, ...newTools])
+      : originalTools;
     inst.registeredToolNames = nextRegisteredToolNames;
     inst.agent.state.systemPrompt = this.buildSystemPromptForInstance(
       inst,

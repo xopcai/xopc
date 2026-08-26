@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MarkdownView } from '@/components/markdown/markdown-view';
+import { MarkdownView, type MarkdownViewProps } from '@/components/markdown/markdown-view';
 
 const mounted: Array<{ container: HTMLDivElement; unmount: () => void }> = [];
 
@@ -16,14 +16,14 @@ afterEach(() => {
   }
 });
 
-function renderMarkdown(content: string): HTMLDivElement {
+function renderMarkdown(content: string, props: Omit<MarkdownViewProps, 'content'> = {}): HTMLDivElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
     root.render(
       <MemoryRouter>
-        <MarkdownView content={content} />
+        <MarkdownView content={content} {...props} />
       </MemoryRouter>,
     );
   });
@@ -63,9 +63,31 @@ describe('MarkdownView security boundary', () => {
   it('sanitizes generated Mermaid SVG before mounting it', async () => {
     const container = renderMarkdown('```mermaid\ngraph TD\nA --> B\n```');
 
-    await vi.waitFor(() => expect(container.querySelector('svg')).not.toBeNull());
+    await vi.waitFor(() => {
+      expect(container.querySelector('svg')).not.toBeNull();
+      expect(container.querySelector('.markdown-mermaid-pending')).toBeNull();
+    });
+    const shell = container.querySelector<HTMLElement>('.markdown-mermaid-shell');
+    expect(shell?.classList.contains('markdown-mermaid-pending')).toBe(false);
+    expect(shell?.style.getPropertyValue('--markdown-mermaid-placeholder-height')).toBe('');
     expect(container.innerHTML).not.toContain('@import');
     expect(container.innerHTML).not.toContain('fonts.googleapis.com');
     expect(container.querySelector('svg script,svg foreignObject,svg [href]')).toBeNull();
+  });
+
+  it('mounts opt-in Mermaid actions and opens the enlarged preview', async () => {
+    const container = renderMarkdown('```mermaid\ngraph LR\nA --> B\n```', {
+      mermaidActions: true,
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-action="preview"]')).not.toBeNull();
+    });
+    const svg = container.querySelector<SVGSVGElement>('[data-mermaid-diagram] svg');
+    expect(svg).not.toBeNull();
+    act(() => svg?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.textContent).toContain('Mermaid diagram preview');
   });
 });

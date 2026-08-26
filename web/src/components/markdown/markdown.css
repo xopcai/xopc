@@ -390,7 +390,7 @@ html.dark .markdown-code-copy-btn:hover {
   text-align: center;
 }
 
-.markdown-mermaid-shell {
+.markdown-mermaid-shell.markdown-mermaid-pending {
   min-height: var(--markdown-mermaid-placeholder-height, 11.25rem);
 }
 
@@ -402,6 +402,88 @@ html.dark .markdown-code-copy-btn:hover {
   max-width: 100%;
   height: auto;
   display: inline-block;
+}
+
+.markdown-mermaid-interactive {
+  position: relative;
+}
+
+.markdown-mermaid-interactive > svg {
+  cursor: zoom-in;
+}
+
+.markdown-mermaid-actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-panel) 92%, transparent);
+  box-shadow: var(--shadow-popover);
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 150ms ease, transform 150ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.markdown-mermaid-interactive:hover .markdown-mermaid-actions,
+.markdown-mermaid-interactive:focus-within .markdown-mermaid-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.markdown-mermaid-action-button,
+.mermaid-preview-toolbar-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-fg-muted);
+  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.markdown-mermaid-action-button:hover,
+.mermaid-preview-toolbar-button:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-fg);
+}
+
+.markdown-mermaid-action-button:active,
+.mermaid-preview-toolbar-button:active {
+  transform: scale(0.95);
+}
+
+.markdown-mermaid-action-button:focus-visible,
+.mermaid-preview-toolbar-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.markdown-mermaid-action-button:disabled,
+.mermaid-preview-toolbar-button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+@media (hover: none) {
+  .markdown-mermaid-actions {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .mermaid-preview-secondary-action {
+    display: none;
+  }
 }
 
 /* Fallback: raw source display when render fails */

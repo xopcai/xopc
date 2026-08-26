@@ -35,7 +35,7 @@ import {
 import {
   buildProjectContextSection,
   getContextFileBasename,
-  isDynamicContextFile,
+  isHeartbeatContextFile,
   sortContextFilesForPrompt,
 } from './sections/project-context.js';
 import { buildToolingSection, hasSkillsTools } from './sections/tooling.js';
@@ -52,7 +52,6 @@ import type { MemoryCitationsMode, PromptMode, SilentReplyPromptMode } from './t
 export type { MemoryCitationsMode } from './types.js';
 export {
   getContextFileBasename,
-  isDynamicContextFile,
   sortContextFilesForPrompt,
 } from './sections/project-context.js';
 
@@ -64,8 +63,6 @@ export interface SystemPromptOptions {
   /** Registered tool names for Tooling section and memory/skills gating. */
   toolNames?: string[];
   toolSummaries?: Record<string, string>;
-  /** @deprecated Prefer toolNames — kept for skill-section gating compatibility. */
-  availableTools?: string[];
   memoryCitationsMode?: MemoryCitationsMode;
   includeMemorySection?: boolean;
   userTimezone?: string;
@@ -98,9 +95,8 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     promptMode = 'full',
     heartbeatEnabled = false,
     heartbeatPrompt,
-    toolNames: toolNamesOption,
+    toolNames = [],
     toolSummaries,
-    availableTools = [],
     memoryCitationsMode = 'on',
     includeMemorySection,
     userTimezone,
@@ -132,16 +128,13 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   }
 
   const isMinimal = promptMode === 'minimal';
-  const toolNames = toolNamesOption ?? availableTools;
   const normalizedTools = new Set(toolNames.map((tool) => tool.toLowerCase()));
   const effectiveAgentId = agentId ?? runtime?.agentId;
   const sectionOverrides = promptContribution?.sectionOverrides ?? {};
 
   const orderedContextFiles = sortContextFilesForPrompt(
-    contextFiles.filter((file) => file.path.trim().length > 0),
+    contextFiles.filter((file) => file.path.trim().length > 0 && !isHeartbeatContextFile(file.path)),
   );
-  const stableContextFiles = orderedContextFiles.filter((file) => !isDynamicContextFile(file.path));
-  const dynamicContextFiles = orderedContextFiles.filter((file) => isDynamicContextFile(file.path));
   const hasProfileMemory = orderedContextFiles.some(
     (file) => getContextFileBasename(file.path) === 'memory.md',
   );
@@ -234,9 +227,8 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   stableSections.push(
     joinSections(
       buildProjectContextSection({
-        files: stableContextFiles,
+        files: orderedContextFiles,
         heading: '# Project Context',
-        dynamic: false,
       }),
     ),
   );
@@ -248,16 +240,6 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   }
 
   const dynamicSections: string[] = [];
-
-  dynamicSections.push(
-    joinSections(
-      buildProjectContextSection({
-        files: dynamicContextFiles,
-        heading: stableContextFiles.length > 0 ? '# Dynamic Project Context' : '# Project Context',
-        dynamic: true,
-      }),
-    ),
-  );
 
   if (extraSystemPrompt?.trim()) {
     const contextHeader = isMinimal ? '## Subagent Context' : '## Group Chat Context';

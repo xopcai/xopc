@@ -3,7 +3,6 @@ import type {
   AssistantMessageEvent,
   Model,
   Api,
-  CacheRetention,
   ImageContent,
 } from '@earendil-works/pi-ai';
 
@@ -65,7 +64,7 @@ export type RunXopcEmbeddedTurnParams = {
   tools: import('@earendil-works/pi-agent-core').AgentTool[];
   systemPrompt: string;
   thinkingLevel?: ThinkingLevel;
-  cacheRetention?: CacheRetention;
+  promptCachePolicy?: import('../../providers/prompt-cache-plan.js').PromptCachePolicy;
   workspaceDir: string;
   sessionStore?: SessionStore;
   transcriptRuntime?: EmbeddedTranscriptRuntime;

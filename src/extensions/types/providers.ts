@@ -101,8 +101,6 @@ export interface ProviderStreamParams {
   maxRetries?: number;
   /** Provider request metadata */
   metadata?: Record<string, unknown>;
-  /** Prompt cache retention preference */
-  cacheRetention?: string;
   /** Preferred transport, if the provider supports multiple transports */
   transport?: string;
   /** Custom token budgets for thinking levels */

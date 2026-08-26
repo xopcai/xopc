@@ -28,7 +28,7 @@ describe('buildSystemPrompt section order', () => {
     expect(runtimeIndex).toBeGreaterThan(boundaryIndex);
   });
 
-  it('places HEARTBEAT in Dynamic Project Context below boundary', () => {
+  it('keeps HEARTBEAT out of the system prompt', () => {
     const prompt = buildSystemPrompt('/workspace/main', {
       heartbeatEnabled: true,
       toolNames: BASE_TOOLS,
@@ -41,8 +41,7 @@ describe('buildSystemPrompt section order', () => {
     expect(split).toBeDefined();
     expect(split!.stablePrefix).toContain('# Project Context');
     expect(split!.stablePrefix).not.toContain('check inbox');
-    expect(split!.dynamicSuffix).toContain('# Dynamic Project Context');
-    expect(split!.dynamicSuffix).toContain('check inbox');
+    expect(split!.dynamicSuffix).not.toContain('check inbox');
     expect(split!.dynamicSuffix).toContain('## Heartbeats');
   });
 });
