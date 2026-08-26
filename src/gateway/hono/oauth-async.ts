@@ -103,6 +103,29 @@ function generateSessionId(): string {
   return `oauth_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
 
+export function normalizeDesktopOAuthReturnPath(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const path = value.trim();
+  if (
+    path.length === 0 ||
+    path.length > 2_048 ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    path.includes('\\') ||
+    /[\u0000-\u001f\u007f]/.test(path)
+  ) {
+    return undefined;
+  }
+  return path;
+}
+
+function desktopOAuthReturnUrl(sessionId: string, returnPath: unknown): string {
+  const params = new URLSearchParams({ request_id: sessionId });
+  const normalizedReturnPath = normalizeDesktopOAuthReturnPath(returnPath);
+  if (normalizedReturnPath) params.set('return_path', normalizedReturnPath);
+  return `xopc://cloud/model-connected?${params.toString()}`;
+}
+
 function cancelOAuthSession(session: OAuthSession, message = 'OAuth flow cancelled'): void {
   if (session.abortController) {
     session.abortController.abort();
@@ -198,7 +221,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
       id: sessionId,
       provider,
       ...(body.client === 'desktop' && provider === 'xopc-cloud'
-        ? { returnToAppUrl: `xopc://cloud/model-connected?request_id=${encodeURIComponent(sessionId)}` }
+        ? { returnToAppUrl: desktopOAuthReturnUrl(sessionId, body.returnPath) }
         : {}),
       preferredLoginMethod: preferredOAuthLoginMethod({
         provider,

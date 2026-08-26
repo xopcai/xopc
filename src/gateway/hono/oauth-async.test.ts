@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { GatewayService } from '../service.js';
-import { refreshModelCatalogAfterOAuth, resolveOAuthLoginMethodPreference } from './oauth-async.js';
+import {
+  normalizeDesktopOAuthReturnPath,
+  refreshModelCatalogAfterOAuth,
+  resolveOAuthLoginMethodPreference,
+} from './oauth-async.js';
+
+describe('normalizeDesktopOAuthReturnPath', () => {
+  it('accepts internal routes and rejects external or malformed paths', () => {
+    expect(normalizeDesktopOAuthReturnPath('/chat?onboarding=1')).toBe('/chat?onboarding=1');
+    expect(normalizeDesktopOAuthReturnPath('//evil.example')).toBeUndefined();
+    expect(normalizeDesktopOAuthReturnPath('https://evil.example')).toBeUndefined();
+    expect(normalizeDesktopOAuthReturnPath('/chat\\evil')).toBeUndefined();
+  });
+});
 
 describe('resolveOAuthLoginMethodPreference', () => {
   const supportedMethods = ['browser', 'device_code'] as const;
