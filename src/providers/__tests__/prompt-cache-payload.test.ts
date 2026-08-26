@@ -65,6 +65,21 @@ describe('prompt cache payload adaptation', () => {
     });
   });
 
+  it('adds a Bedrock history cache point before the current user message', () => {
+    const bedrock = model('bedrock-converse-stream');
+    const payload = transformPromptCachePayload(bedrock, {
+      system: [{ text: prompt }],
+      messages: [
+        { role: 'user', content: [{ text: 'old' }] },
+        { role: 'assistant', content: [{ text: 'answer' }] },
+        { role: 'user', content: [{ text: 'current' }] },
+      ],
+    }) as Record<string, any>;
+
+    expect(payload.messages[0].content.at(-1)).toEqual({ cachePoint: { type: 'default' } });
+    expect(payload.messages[2].content.at(-1)).toEqual({ text: 'current' });
+  });
+
   it('strips the internal marker for implicit-prefix-cache providers', () => {
     expect(preparePromptCacheContext(model('openai-responses'), { systemPrompt: prompt }))
       .toEqual({ systemPrompt: 'stable\ndynamic' });
@@ -109,17 +124,67 @@ describe('prompt cache payload adaptation', () => {
 
   it('does not send an OpenAI cache key when caching is disabled', () => {
     const openai = model('openai-responses');
-    expect(withPromptCachePayloadTransform(openai, { systemPrompt: prompt }, {
-      cacheRetention: 'none',
-      sessionId: 'session-a',
-    })).toEqual({ cacheRetention: 'none', sessionId: 'session-a' });
+    const options = withPromptCachePayloadTransform(
+      openai,
+      { systemPrompt: prompt },
+      { sessionId: 'session-a' },
+      { mode: 'off', lifetime: 'short' },
+    );
+    expect(options.cacheRetention).toBe('none');
   });
 
   it('does not inject an unsupported field into custom OpenAI-compatible endpoints', () => {
     const compatible = model('openai-responses', 'custom-provider');
     const options = { sessionId: 'session-a' };
 
-    expect(withPromptCachePayloadTransform(compatible, { systemPrompt: prompt }, options))
-      .toBe(options);
+    const transformed = withPromptCachePayloadTransform(compatible, { systemPrompt: prompt }, options);
+    expect(transformed.cacheRetention).toBe('none');
+  });
+
+  it('uses explicit OpenAI breakpoints for GPT-5.6 Responses', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-5.6' } as Model<Api>;
+    const context = { systemPrompt: prompt, tools: [] };
+    const options = withPromptCachePayloadTransform(openai, context, undefined);
+    const payload = await options.onPayload?.({
+      instructions: 'stable\ndynamic',
+      input: [
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'old' }] },
+        { type: 'message', role: 'assistant', content: [{ type: 'input_text', text: 'answer' }] },
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'current' }] },
+      ],
+    }, openai) as Record<string, any>;
+
+    expect(payload.prompt_cache_options).toEqual({ mode: 'explicit', ttl: '30m' });
+    expect(payload.instructions[0].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
+    expect(payload.input[1].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
+    expect(payload.input[2].content[0].prompt_cache_breakpoint).toBeUndefined();
+  });
+
+  it('does not overwrite an upstream OpenAI instruction transform', async () => {
+    const openai = { ...model('openai-responses'), id: 'gpt-5.6' } as Model<Api>;
+    const options = withPromptCachePayloadTransform(openai, { systemPrompt: prompt }, {
+      onPayload: (payload) => ({ ...(payload as object), instructions: 'upstream identity' }),
+    });
+    const payload = await options.onPayload?.({ input: [] }, openai) as Record<string, any>;
+    expect(payload.instructions).toBe('upstream identity');
+  });
+
+  it('adds an Anthropic history breakpoint before the current user message', () => {
+    const anthropic = model('anthropic-messages');
+    const plan = {
+      policy: { mode: 'auto' as const, lifetime: 'long' as const },
+      providerMode: 'explicit' as const,
+    };
+    const payload = transformPromptCachePayload(anthropic, {
+      system: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'old' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'answer' }] },
+        { role: 'user', content: [{ type: 'text', text: 'current' }] },
+      ],
+    }, plan) as Record<string, any>;
+
+    expect(payload.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(payload.messages[2].content[0].cache_control).toBeUndefined();
   });
 });
