@@ -63,6 +63,7 @@ describe('xopcCloudOAuthProvider', () => {
   it('completes authorization code login with PKCE through a loopback callback', async () => {
     process.env.XOPC_CONSOLE_URL = 'https://console.test/';
     let authorizationUrl: URL | undefined;
+    let callbackPage: Promise<string> | undefined;
     const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
       const url = new URL(String(input));
       if (url.hostname === '127.0.0.1') return nativeFetch(input, init);
@@ -91,7 +92,7 @@ describe('xopcCloudOAuthProvider', () => {
       const callback = new URL(redirectUri);
       callback.searchParams.set('code', 'authorization-code');
       callback.searchParams.set('state', authorizationUrl.searchParams.get('state')!);
-      void nativeFetch(callback);
+      callbackPage = nativeFetch(callback).then((response) => response.text());
     });
 
     await expect(xopcCloudOAuthProvider.login({
@@ -99,11 +100,15 @@ describe('xopcCloudOAuthProvider', () => {
       onDeviceCode: vi.fn(),
       onPrompt: async () => '',
       onSelect: async () => 'browser',
+      returnToAppUrl: 'xopc://cloud/model-connected?request_id=oauth-test',
     })).resolves.toMatchObject({
       access: 'browser-access-token',
       refresh: 'browser-refresh-token',
     });
     expect(onAuth).toHaveBeenCalledOnce();
+    await expect(callbackPage).resolves.toContain(
+      'href="xopc://cloud/model-connected?request_id=oauth-test"',
+    );
   });
 
   it('rejects a loopback callback with the wrong state', async () => {

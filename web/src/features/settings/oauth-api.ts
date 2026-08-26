@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/fetch';
+import { isElectron } from '@/lib/electron-env';
 import { apiUrl } from '@/lib/url';
 
 export interface OAuthStartResult {
@@ -23,7 +24,7 @@ export interface OAuthSessionStatus {
 export async function startAsyncOAuthLogin(provider: string): Promise<OAuthStartResult> {
   const res = await apiFetch(apiUrl('/api/auth/oauth-async/start'), {
     method: 'POST',
-    body: JSON.stringify({ provider }),
+    body: JSON.stringify({ provider, client: isElectron() ? 'desktop' : 'web' }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
