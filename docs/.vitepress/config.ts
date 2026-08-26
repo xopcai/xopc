@@ -59,6 +59,7 @@ export default defineConfig({
             items: [
               { text: 'First 5 Minutes', link: '/first-5-minutes' },
               { text: 'Getting Started', link: '/getting-started' },
+              { text: 'Docker installation', link: '/docker' },
               { text: 'Continuous Work Model', link: '/concepts/loops' },
               { text: 'Comparison', link: '/comparison' },
               { text: 'Models', link: '/models' }
@@ -168,6 +169,7 @@ export default defineConfig({
             items: [
               { text: '5分钟快速入门', link: '/zh/first-5-minutes' },
               { text: '快速上手', link: '/zh/getting-started' },
+              { text: 'Docker 安装', link: '/zh/docker' },
               { text: '持续工作模型', link: '/zh/concepts/loops' },
               { text: '产品对比', link: '/zh/comparison' },
               { text: '模型支持', link: '/zh/models' }
