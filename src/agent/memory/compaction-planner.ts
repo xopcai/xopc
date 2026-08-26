@@ -164,14 +164,30 @@ export function planCompactionChunks(
   return chunks;
 }
 
-const IDENTIFIER_PATTERN = /(?:\/?[\w.-]+\/)+(?:[\w.@-]+)|https?:\/\/[^\s)>]+|\b[0-9a-f]{8,64}\b|\b\d{4}-\d{2}-\d{2}\b|\bport\s+\d{2,5}\b/gi;
+const IDENTIFIER_PATTERNS = [
+  /https?:\/\/[^\s)>]+/gi,
+  /(?<![\w:/])\/(?:[\w.@-]+\/)*[\w.@-]+/g,
+  /(?<![\w./-])(?:[\w.@-]+\/)+[\w.@-]+\.[a-z0-9]{1,10}\b/gi,
+  /\b(?:release|feature|fix|hotfix|bugfix|chore)\/[\w.@-]+\b/gi,
+  /\b[0-9a-f]{8,64}\b/gi,
+  /\b\d{4}-\d{2}-\d{2}\b/g,
+  /\bport\s+\d{2,5}\b/gi,
+] as const;
 
 export function extractExactIdentifiers(messages: readonly AgentMessage[], limit = 12): string[] {
   const text = messages.map(serializeMessageForCompaction).join('\n');
+  const matches: Array<{ identifier: string; index: number }> = [];
+  for (const pattern of IDENTIFIER_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      const identifier = match[0].trim();
+      if (identifier.length < 4 || match.index == null) continue;
+      matches.push({ identifier, index: match.index });
+    }
+  }
+  matches.sort((left, right) => left.index - right.index);
+
   const found = new Set<string>();
-  for (const match of text.matchAll(IDENTIFIER_PATTERN)) {
-    const identifier = match[0].trim();
-    if (identifier.length < 4) continue;
+  for (const { identifier } of matches) {
     found.add(identifier);
     if (found.size >= limit) break;
   }
