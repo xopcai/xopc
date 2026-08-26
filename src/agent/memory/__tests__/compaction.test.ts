@@ -170,6 +170,50 @@ describe('SessionCompactor', () => {
     );
   });
 
+  it('deterministically completes the quality contract when model repair remains incomplete', async () => {
+    const incompleteRepair = `## Decisions
+Keep the benchmark results.
+## Pending user asks
+None
+## Open TODOs
+None
+## Constraints and rules
+None
+## Exact identifiers
+None`;
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [{ type: 'text', text: incompleteRepair }],
+      } as never)
+      .mockResolvedValueOnce({
+        role: 'assistant',
+        content: [{ type: 'text', text: incompleteRepair }],
+      } as never);
+    const messages = conversation();
+    messages[0] = {
+      role: 'user',
+      content: 'Inspect /run/123/logs before deploying release/1.2.',
+      timestamp: 1,
+    } as AgentMessage;
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(messages, model, undefined, true);
+
+    expect(result.summary).toContain('## Tool operations and results\nNone');
+    expect(result.summary).toContain('## Recent state\nNone');
+    expect(result.summary).toContain('- `/run/123/logs`');
+    expect(result.summary).toContain('- `release/1.2`');
+    expect(result.summary).not.toContain('## Exact identifiers\nNone');
+    expect(result.qualityAudit).toBe('passed');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+  });
+
   it('refuses to split a single active user/tool turn during forced compaction', async () => {
     const compactor = new SessionCompactor({ minMessagesBeforeCompact: 2 });
     const messages = [
