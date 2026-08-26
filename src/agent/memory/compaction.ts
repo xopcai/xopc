@@ -366,11 +366,30 @@ ${summary}
           }, {
             maxTokens: this.config.summaryMaxTokens,
             temperature: 0.2,
+            reasoning: 'low',
             signal: linked.signal as never,
             sessionId: COMPACTION_CACHE_SESSION_ID,
           });
           const summary = extractSummaryText(result);
-          if (!summary) throw new Error('Compaction model returned an empty summary');
+          if (!summary) {
+            const response = result as unknown as {
+              stopReason?: unknown;
+              rawStopReason?: unknown;
+              content?: Array<{ type?: unknown }>;
+              usage?: { output?: unknown; reasoning?: unknown };
+            };
+            const contentTypes = Array.isArray(response.content)
+              ? response.content.map((block) => String(block?.type ?? 'unknown'))
+              : [];
+            throw new Error(
+              'Compaction model returned an empty summary'
+              + ` (stopReason=${String(response.stopReason ?? 'unknown')}`
+              + `, rawStopReason=${String(response.rawStopReason ?? 'unknown')}`
+              + `, contentTypes=${contentTypes.join(',') || 'none'}`
+              + `, outputTokens=${String(response.usage?.output ?? 'unknown')}`
+              + `, reasoningTokens=${String(response.usage?.reasoning ?? 'unknown')})`,
+            );
+          }
           return { summary, modelRef: `${model.provider}/${model.id}` };
         } catch (error) {
           lastError = linked.timedOut()

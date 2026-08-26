@@ -4,13 +4,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections } = vi.hoisted(() => ({
+const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections } = vi.hoisted(() => ({
   createSideChat: vi.fn(async (parentSessionKey: string, selections: unknown[]) => ({
     id: 'side-2',
     parentSessionKey,
     context: { selections },
   })),
   getSideChatMessages: vi.fn(async () => [] as unknown[]),
+  deleteSideChat: vi.fn(async () => undefined),
   realtime: {
     onEvent: null as null | ((event: { event: string; data?: unknown }) => void),
     onGap: null as null | (() => void),
@@ -23,7 +24,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
   abortSideChat: vi.fn(),
   answerSideChatClarification: vi.fn(),
   createSideChat,
-  deleteSideChat: vi.fn(),
+  deleteSideChat,
   getSideChat: vi.fn(async () => ({
     id: 'side-1',
     parentSessionKey: 'parent',
@@ -74,6 +75,7 @@ vi.mock('@/features/chat/messages/message-list', () => ({
 }));
 
 import { useSideChatStore } from '@/stores/side-chat-store';
+import { useLocaleStore } from '@/stores/locale-store';
 import { SideChatColumn, SideChatConversation } from '../side-chat-column';
 
 describe('SideChatConversation composer', () => {
@@ -86,6 +88,8 @@ describe('SideChatConversation composer', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     sendSideChatInput.mockClear();
     createSideChat.mockClear();
+    deleteSideChat.mockClear();
+    localStorage.removeItem('xopc:side-chat-close-confirm-disabled:v1');
     sideChatSelections.current = [];
     getSideChatMessages.mockReset();
     getSideChatMessages.mockResolvedValue([]);
@@ -123,7 +127,9 @@ describe('SideChatConversation composer', () => {
   afterEach(() => {
     act(() => root.unmount());
     useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null });
+    useLocaleStore.setState({ language: 'en' });
     container.remove();
+    localStorage.removeItem('xopc:side-chat-close-confirm-disabled:v1');
     vi.unstubAllGlobals();
   });
 
@@ -237,6 +243,112 @@ describe('SideChatConversation composer', () => {
     const form = container.querySelector('form');
     expect(form?.textContent).toContain('1 selection');
     expect(container.querySelector('[data-side-chat-scroll-viewport]')?.textContent).not.toContain('1 selection');
+  });
+
+  it('renders side chat chrome and selection counts in Chinese', async () => {
+    useLocaleStore.setState({ language: 'zh' });
+    sideChatSelections.current = [{ id: 'selection-1', type: 'text', text: 'quoted text', label: '所选文本' }];
+    await renderConversation();
+
+    expect(container.querySelector('[data-side-chat-scroll-viewport]')?.textContent).toContain('侧边对话');
+    expect(container.querySelector('form')?.textContent).toContain('1 处选中内容');
+    expect(container.querySelector('[title="沿用主任务的工具与审批策略"]')?.textContent).toContain('主任务权限');
+  });
+
+  it('localizes side chat API errors by error code', async () => {
+    useLocaleStore.setState({ language: 'zh' });
+    sendSideChatInput.mockRejectedValueOnce(Object.assign(
+      new Error('A side chat run is already active'),
+      { body: { code: 'CONFLICT' } },
+    ));
+    await renderConversation();
+    const textarea = await typeDraft('hello');
+
+    await act(async () => {
+      textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('此侧边对话正忙，请等待当前回复完成。');
+    expect(container.textContent).not.toContain('A side chat run is already active');
+  });
+
+  it('translates the side chat pane controls and legacy default tab title', async () => {
+    useLocaleStore.setState({ language: 'zh' });
+    useSideChatStore.setState({
+      panes: { parent: { open: true, activeId: 'side-1' } },
+      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      pendingCreate: null,
+    });
+    await act(async () => {
+      root.render(<SideChatColumn parentSessionKey="parent" />);
+    });
+
+    expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('侧边对话');
+    expect(container.querySelector('button')?.textContent).toBe('侧边对话');
+    expect(container.querySelector('button[aria-label="新建侧边对话"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="关闭侧边对话面板"]')).not.toBeNull();
+  });
+
+  it('confirms before permanently closing a side chat', async () => {
+    useLocaleStore.setState({ language: 'zh' });
+    useSideChatStore.setState({
+      panes: { parent: { open: true, activeId: 'side-1' } },
+      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      pendingCreate: null,
+    });
+    await act(async () => {
+      root.render(<SideChatColumn parentSessionKey="parent" />);
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="关闭侧边对话"]')?.click();
+    });
+
+    expect(document.body.textContent).toContain('关闭侧边对话？');
+    expect(document.body.textContent).toContain('无法恢复');
+    expect(useSideChatStore.getState().tabs).toHaveLength(1);
+    expect(deleteSideChat).not.toHaveBeenCalled();
+
+    const confirm = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === '关闭侧边对话');
+    await act(async () => confirm?.click());
+
+    expect(useSideChatStore.getState().tabs).toHaveLength(0);
+    expect(deleteSideChat).toHaveBeenCalledWith('side-1');
+  });
+
+  it('can remember not to ask before closing another side chat', async () => {
+    useSideChatStore.setState({
+      panes: { parent: { open: true, activeId: 'side-1' } },
+      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      pendingCreate: null,
+    });
+    await act(async () => {
+      root.render(<SideChatColumn parentSessionKey="parent" />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Close side chat"]')?.click();
+    });
+
+    const checkbox = document.body.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    await act(async () => {
+      checkbox?.click();
+    });
+    const confirm = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Close side chat');
+    await act(async () => confirm?.click());
+
+    expect(localStorage.getItem('xopc:side-chat-close-confirm-disabled:v1')).toBe('true');
+
+    useSideChatStore.getState().addTab({ id: 'side-2', parentSessionKey: 'parent', title: 'Side chat' });
+    await act(async () => {});
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Close side chat"]')?.click();
+    });
+
+    expect(deleteSideChat).toHaveBeenLastCalledWith('side-2');
+    expect(document.body.textContent).not.toContain('Close side chat?');
   });
 
   it('creates a new empty side chat from the top tab bar', async () => {

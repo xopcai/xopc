@@ -282,7 +282,7 @@ export class RealtimeRuntime {
       }
     });
 
-    socket.on('close', () => {
+    socket.on('close', (code, reasonBuffer) => {
       clearTimeout(helloTimer);
       clearInterval(heartbeatTimer);
       releaseBudget();
@@ -290,7 +290,13 @@ export class RealtimeRuntime {
       for (const handle of subscriptions.values()) handle.unsubscribe();
       subscriptions.clear();
       if (endpointId && connectionId) this.endpointTools?.remove(endpointId, connectionId);
-      if (connectionId) log.info({ connectionId }, 'Realtime client disconnected');
+      if (connectionId) {
+        const reason = reasonBuffer.toString();
+        log.info(
+          { connectionId, code, ...(reason ? { reason } : {}) },
+          `Realtime client disconnected (${code}${reason ? `: ${reason}` : ''})`,
+        );
+      }
     });
   }
 

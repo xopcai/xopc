@@ -194,6 +194,37 @@ describe('RealtimeClient', () => {
     vi.useRealTimers();
   });
 
+  it('does not retry a connection closed for an oversized event', async () => {
+    vi.useFakeTimers();
+    const sockets: FakeSocket[] = [];
+    const onStateChange = vi.fn();
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => 'x'.repeat(32),
+      createWebSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+      onStateChange,
+    });
+    client.connect();
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    sockets[0]!.open();
+    sockets[0]!.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+
+    sockets[0]!.onerror?.({});
+    sockets[0]!.onclose?.({ code: 1009, reason: 'Realtime event exceeds delivery limit' });
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(sockets).toHaveLength(1);
+    expect(onStateChange).toHaveBeenLastCalledWith('error', 'Realtime event exceeds delivery limit');
+    client.disconnect();
+    vi.useRealTimers();
+  });
+
   it('closes a half-open socket when server heartbeats stop', async () => {
     vi.useFakeTimers();
     const socket = new FakeSocket();

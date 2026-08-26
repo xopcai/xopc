@@ -1,9 +1,9 @@
-import { complete, type Api, type Model } from '@earendil-works/pi-ai/compat';
+import { completeSimple, type Api, type Model } from '@earendil-works/pi-ai/compat';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
-  return { ...actual, complete: vi.fn() };
+  return { ...actual, completeSimple: vi.fn() };
 });
 
 vi.mock('../index.js', () => ({
@@ -63,7 +63,26 @@ describe('model-call', () => {
       ),
     ).resolves.toBe(message);
 
-    expect(complete).not.toHaveBeenCalled();
+    expect(completeSimple).not.toHaveBeenCalled();
     expect(result).toHaveBeenCalledOnce();
+  });
+
+  it('uses the unified simple completion path for built-in models', async () => {
+    const message = { role: 'assistant', content: [], stopReason: 'stop' };
+    vi.mocked(completeSimple).mockResolvedValue(message as never);
+
+    await expect(
+      completeWithResolvedCredentials(
+        model(),
+        { messages: [] },
+        { maxTokens: 1000, reasoning: 'low' },
+      ),
+    ).resolves.toBe(message);
+
+    expect(completeSimple).toHaveBeenCalledWith(
+      model(),
+      { messages: [] },
+      { maxTokens: 1000, reasoning: 'low', apiKey: 'oauth-token' },
+    );
   });
 });

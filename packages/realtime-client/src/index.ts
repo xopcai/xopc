@@ -56,6 +56,10 @@ function frameText(data: unknown): string {
   throw new Error('Realtime server sent a non-text frame');
 }
 
+function isNonRetryableCloseCode(code: number | undefined): boolean {
+  return code === 1009 || code === 4400 || code === 4401 || code === 4413;
+}
+
 export class RealtimeClient {
   private readonly desiredSubscriptions = new Map<string, number | undefined>();
   private readonly cursors = new Map<string, number>();
@@ -142,7 +146,7 @@ export class RealtimeClient {
     let socket: RealtimeWebSocket | undefined;
     let closed = false;
     let messageQueue: Promise<void> | undefined;
-    const failAttempt = (error: string) => {
+    const failAttempt = (error: string, retry = true) => {
       if (closed || generation !== this.generation) return;
       closed = true;
       this.clearConnectionTimer();
@@ -159,8 +163,11 @@ export class RealtimeClient {
         socket.onclose = null;
         socket.close(4000, error.slice(0, 120));
       }
-      if (this.shouldReconnect) this.scheduleReconnect(error);
-      else this.options.onStateChange?.('disconnected');
+      if (this.shouldReconnect && retry) this.scheduleReconnect(error);
+      else if (this.shouldReconnect) {
+        this.shouldReconnect = false;
+        this.options.onStateChange?.('error', error);
+      } else this.options.onStateChange?.('disconnected');
     };
     this.connectionTimer = setTimeout(() => failAttempt('Realtime connection timed out'), timeoutMs);
     this.options.onStateChange?.(reconnecting ? 'reconnecting' : 'connecting');
@@ -217,11 +224,14 @@ export class RealtimeClient {
           if (messageQueue === current) messageQueue = undefined;
         });
       };
-      socket.onerror = () => {
-        failAttempt('Realtime WebSocket failed');
-      };
+      // Browsers report `error` immediately before `close`. Wait for `close` so
+      // its code and reason can decide whether reconnecting is safe.
+      socket.onerror = () => {};
       socket.onclose = (event) => {
-        failAttempt(event.reason || `WebSocket closed (${event.code ?? 0})`);
+        failAttempt(
+          event.reason || `WebSocket closed (${event.code ?? 0})`,
+          !isNonRetryableCloseCode(event.code),
+        );
       };
     } catch (error) {
       failAttempt(error instanceof Error ? error.message : 'Realtime connection failed');

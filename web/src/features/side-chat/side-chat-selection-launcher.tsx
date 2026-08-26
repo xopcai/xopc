@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { messages as getMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
@@ -23,6 +24,7 @@ export function SideChatSelectionLauncher() {
   const { pathname } = useLocation();
   const sessionKey = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
   const language = useLocaleStore((state) => state.language);
+  const m = getMessages(language).sideChat;
   const requestCreate = useSideChatStore((state) => state.requestCreate);
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
   const setWorkspaceOpen = useWorkspacePanelStore((state) => state.setOpen);
@@ -102,7 +104,7 @@ export function SideChatSelectionLauncher() {
   return (
     <div
       role="group"
-      aria-label={language === 'zh' ? '选中文本操作' : 'Selected text actions'}
+      aria-label={m.selectedTextActionsAria}
       className="fixed z-[70] flex h-9 overflow-hidden rounded-lg border border-edge bg-surface-panel text-xs font-medium text-fg shadow-popover"
       style={{ left: popup.left, top: popup.top, width: POPOVER_WIDTH }}
       onPointerDown={(event) => event.preventDefault()}
@@ -117,7 +119,7 @@ export function SideChatSelectionLauncher() {
         }}
       >
         <Plus className="size-3.5 shrink-0" />
-        <span>{language === 'zh' ? '添加到对话' : 'Add to chat'}</span>
+        <span>{m.addToChat}</span>
       </button>
       <button
         type="button"
@@ -129,14 +131,14 @@ export function SideChatSelectionLauncher() {
             id: crypto.randomUUID(),
             type: 'text',
             text: popup.text,
-            label: language === 'zh' ? '所选文本' : 'Selected text',
+            label: m.selectedText,
           }]);
           window.getSelection()?.removeAllRanges();
           setPopup(null);
         }}
       >
         <MessageSquarePlus className="size-3.5 shrink-0" />
-        <span>{language === 'zh' ? '在侧边对话' : 'Ask in side chat'}</span>
+        <span>{m.askInSideChat}</span>
       </button>
     </div>
   );
