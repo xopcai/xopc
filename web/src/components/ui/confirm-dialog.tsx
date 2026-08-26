@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -12,6 +13,9 @@ export type ConfirmDialogProps = {
   cancelLabel: string;
   /** Red/destructive styling for the confirm action (e.g. remove/delete). */
   destructive?: boolean;
+  checkboxLabel?: string;
+  checkboxChecked?: boolean;
+  onCheckboxCheckedChange?: (checked: boolean) => void;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -23,9 +27,14 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   destructive,
+  checkboxLabel,
+  checkboxChecked = false,
+  onCheckboxCheckedChange,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const checkboxId = useId();
+
   return (
     <Dialog.Root
       open={open}
@@ -51,6 +60,18 @@ export function ConfirmDialog({
           <Dialog.Description className="mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted whitespace-pre-wrap break-all">
             {description}
           </Dialog.Description>
+          {checkboxLabel ? (
+            <label htmlFor={checkboxId} className="mt-5 flex w-fit cursor-pointer items-center gap-2.5 text-sm text-fg">
+              <input
+                id={checkboxId}
+                type="checkbox"
+                checked={checkboxChecked}
+                onChange={(event) => onCheckboxCheckedChange?.(event.target.checked)}
+                className="size-4 rounded border-edge accent-accent"
+              />
+              <span>{checkboxLabel}</span>
+            </label>
+          ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onCancel}>
               {cancelLabel}
