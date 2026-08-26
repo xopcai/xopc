@@ -1,0 +1,31 @@
+{
+  "sideChat": {
+    "title": "Side chat",
+    "paneAria": "Side chat",
+    "resizeAria": "Resize side chat",
+    "closeAria": "Close side chat",
+    "newAria": "New side chat",
+    "closePaneAria": "Close side chat pane",
+    "closeConfirmTitle": "Close side chat?",
+    "closeConfirmDescription": "This side chat and its messages will be permanently deleted and can't be recovered. Are you sure?",
+    "closeConfirmDontAskAgain": "Don't ask again",
+    "closeConfirmCancel": "Cancel",
+    "closeConfirmAction": "Close side chat",
+    "temporaryDescription": "Side chats are temporary and disappear when you close the app.",
+    "creating": "Creating…",
+    "emptyDescription": "Ask without interrupting the main task.",
+    "failed": "Side chat failed",
+    "errorInvalidRequest": "The side chat request is invalid.",
+    "errorNotFound": "This side chat is no longer available.",
+    "errorConflict": "This side chat is busy. Wait for the current response to finish.",
+    "errorLimitReached": "You have reached the side chat limit. Close one and try again.",
+    "selectionCount_one": "{{count}} selection",
+    "selectionCount_other": "{{count}} selections",
+    "parentPermissionsHint": "Inherits the parent task's tool and approval policy",
+    "parentPermissions": "Parent permissions · {{model}}",
+    "selectedTextActionsAria": "Selected text actions",
+    "addToChat": "Add to chat",
+    "askInSideChat": "Ask in side chat",
+    "selectedText": "Selected text"
+  }
+}

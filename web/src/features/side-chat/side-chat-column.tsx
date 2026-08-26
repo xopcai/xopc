@@ -2,6 +2,7 @@ import { MessageSquarePlus, MessageSquareText, Plus, Send, ShieldCheck, Square, 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { MessageList } from '@/features/chat/messages/message-list';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
@@ -18,7 +19,7 @@ import {
 import { subscribeRealtimeTopic } from '@/features/gateway/gateway-realtime';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { messages as getMessages } from '@/i18n/messages';
+import { messages as getMessages, type SideChatMessages } from '@/i18n/messages';
 import {
   SIDE_CHAT_WIDTH_MAX,
   SIDE_CHAT_WIDTH_MIN,
@@ -38,7 +39,24 @@ import {
 import type { SideChatView } from './side-chat.types';
 
 type SideChatClarifyPrompt = { requestId: string; question: string; choices?: string[] };
+const SIDE_CHAT_CLOSE_CONFIRM_DISABLED_KEY = 'xopc:side-chat-close-confirm-disabled:v1';
 const loadNoOlderSideChatMessages = () => {};
+
+function isSideChatCloseConfirmDisabled(): boolean {
+  try {
+    return localStorage.getItem(SIDE_CHAT_CLOSE_CONFIRM_DISABLED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function disableSideChatCloseConfirm(): void {
+  try {
+    localStorage.setItem(SIDE_CHAT_CLOSE_CONFIRM_DISABLED_KEY, 'true');
+  } catch {
+    // Closing the side chat should still work when preferences cannot be persisted.
+  }
+}
 
 function userMessageText(message: Message): string {
   if (message.role !== 'user') return '';
@@ -47,6 +65,16 @@ function userMessageText(message: Message): string {
     .map((block) => block.text)
     .join('\n')
     .trim();
+}
+
+function sideChatErrorMessage(cause: unknown, m: SideChatMessages): string {
+  const code = (cause as { body?: { code?: unknown } } | null)?.body?.code;
+  if (code === 'INVALID_REQUEST') return m.errorInvalidRequest;
+  if (code === 'NOT_FOUND') return m.errorNotFound;
+  if (code === 'CONFLICT') return m.errorConflict;
+  if (code === 'LIMIT_REACHED') return m.errorLimitReached;
+  if (code === 'INTERNAL_ERROR') return m.failed;
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 function reconcilePendingUserMessages(
@@ -74,6 +102,8 @@ function reconcilePendingUserMessages(
 }
 
 export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string }) {
+  const language = useLocaleStore((state) => state.language);
+  const m = getMessages(language).sideChat;
   const open = useSideChatStore((state) => state.panes[parentSessionKey]?.open === true);
   const allTabs = useSideChatStore((state) => state.tabs);
   const tabs = useMemo(
@@ -96,6 +126,8 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
+  const [pendingCloseId, setPendingCloseId] = useState<string | null>(null);
+  const [dontAskCloseAgain, setDontAskCloseAgain] = useState(false);
 
   useEffect(() => {
     if (!pendingCreate || pendingCreate.parentSessionKey !== parentSessionKey) return;
@@ -108,17 +140,26 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
         addTab({ id: sideChat.id, parentSessionKey: sideChat.parentSessionKey, title: 'Side chat' });
       })
       .catch((error) => {
-        setCreateError(error instanceof Error ? error.message : String(error));
+        setCreateError(sideChatErrorMessage(error, m));
       })
       .finally(() => {
         setCreating(false);
       });
-  }, [addTab, claimPendingCreate, parentSessionKey, pendingCreate]);
+  }, [addTab, claimPendingCreate, m, parentSessionKey, pendingCreate]);
 
   const closeTab = useCallback((id: string) => {
     removeTab(id);
     void deleteSideChat(id).catch(() => {});
   }, [removeTab]);
+
+  const requestCloseTab = useCallback((id: string) => {
+    if (isSideChatCloseConfirmDisabled()) {
+      closeTab(id);
+      return;
+    }
+    setDontAskCloseAgain(false);
+    setPendingCloseId(id);
+  }, [closeTab]);
 
   const onResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -148,7 +189,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
   return (
     <aside
       id="app-side-chat-panel"
-      aria-label="Side chat"
+      aria-label={m.paneAria}
       className={cn(
         'relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-edge bg-surface-base',
         'max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[min(92vw,34rem)] max-md:shadow-popover',
@@ -160,15 +201,15 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize side chat"
+        aria-label={m.resizeAria}
         onPointerDown={onResize}
         className="absolute left-0 top-0 z-20 hidden h-full w-2 cursor-col-resize touch-none md:block"
       />
       <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-edge px-2">
         {tabs.map((tab) => (
           <div key={tab.id} className={cn('flex h-8 shrink-0 items-center rounded-lg pl-3 text-sm', tab.id === activeId ? 'bg-surface-hover text-fg' : 'text-fg-muted')}>
-            <button type="button" className="max-w-32 truncate" onClick={() => setActive(tab.id)}>{tab.title}</button>
-            <button type="button" className="flex size-8 items-center justify-center rounded-md hover:bg-surface-active" aria-label="Close side chat" onClick={() => closeTab(tab.id)}>
+            <button type="button" className="max-w-32 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}</button>
+            <button type="button" className="flex size-8 items-center justify-center rounded-md hover:bg-surface-active" aria-label={m.closeAria} onClick={() => requestCloseTab(tab.id)}>
               <X className="size-3.5" />
             </button>
           </div>
@@ -177,14 +218,14 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
           type="button"
           variant="ghost"
           className="size-8 shrink-0 p-0"
-          aria-label="New side chat"
-          title="New side chat"
+          aria-label={m.newAria}
+          title={m.newAria}
           disabled={creating}
           onClick={() => requestCreate(parentSessionKey)}
         >
           <Plus className="size-4" />
         </Button>
-        <Button type="button" variant="ghost" className="ml-auto size-8 shrink-0 p-0" aria-label="Close side chat pane" onClick={() => setOpen(parentSessionKey, false)}>
+        <Button type="button" variant="ghost" className="ml-auto size-8 shrink-0 p-0" aria-label={m.closePaneAria} onClick={() => setOpen(parentSessionKey, false)}>
           <X className="size-4" />
         </Button>
       </div>
@@ -200,12 +241,35 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 text-center">
           <MessageSquarePlus className="mb-4 size-10 text-fg-muted" strokeWidth={1.5} />
-          <h2 className="text-lg font-semibold text-fg">Side chat</h2>
-          <p className="mt-2 max-w-sm text-sm leading-6 text-fg-muted">Side chats are temporary and disappear when you close the app.</p>
-          {creating ? <p className="mt-4 text-xs text-fg-muted">Creating…</p> : null}
+          <h2 className="text-lg font-semibold text-fg">{m.title}</h2>
+          <p className="mt-2 max-w-sm text-sm leading-6 text-fg-muted">{m.temporaryDescription}</p>
+          {creating ? <p className="mt-4 text-xs text-fg-muted">{m.creating}</p> : null}
           {createError ? <p className="mt-4 text-xs text-red-600 dark:text-red-400">{createError}</p> : null}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingCloseId !== null}
+        title={m.closeConfirmTitle}
+        description={m.closeConfirmDescription}
+        confirmLabel={m.closeConfirmAction}
+        cancelLabel={m.closeConfirmCancel}
+        checkboxLabel={m.closeConfirmDontAskAgain}
+        checkboxChecked={dontAskCloseAgain}
+        onCheckboxCheckedChange={setDontAskCloseAgain}
+        destructive
+        onConfirm={() => {
+          const id = pendingCloseId;
+          if (!id) return;
+          if (dontAskCloseAgain) disableSideChatCloseConfirm();
+          setPendingCloseId(null);
+          setDontAskCloseAgain(false);
+          closeTab(id);
+        }}
+        onCancel={() => {
+          setPendingCloseId(null);
+          setDontAskCloseAgain(false);
+        }}
+      />
     </aside>
   );
 }
@@ -237,6 +301,7 @@ export function SideChatConversation({
   const pendingUserMessagesRef = useRef(new Map<string, Message>());
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language);
+  const sideChatMessages = m.sideChat;
   const {
     scrollRef,
     atBottom,
@@ -270,11 +335,11 @@ export function SideChatConversation({
   useEffect(() => {
     void reload().catch((cause: unknown) => {
       if ((cause as { status?: number })?.status === 404) onMissing(sideChatId);
-      else setError(cause instanceof Error ? cause.message : String(cause));
+      else setError(sideChatErrorMessage(cause, sideChatMessages));
     });
     const timer = window.setInterval(() => heartbeatSideChat(sideChatId), 60_000);
     return () => window.clearInterval(timer);
-  }, [onMissing, reload, sideChatId]);
+  }, [onMissing, reload, sideChatId, sideChatMessages]);
 
   const clarifyVisible = Boolean(clarify);
   const previousClarifyVisibleRef = useRef(clarifyVisible);
@@ -320,7 +385,7 @@ export function SideChatConversation({
             choices: Array.isArray(payload.choices) ? payload.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
           });
           setClarifyError(null);
-        } else if (event.event === 'error') setError(String(payload.message ?? 'Side chat failed'));
+        } else if (event.event === 'error') setError(String(payload.message ?? sideChatMessages.failed));
         else if (event.event === 'run_end') {
           setRunning(false);
           setRunId(undefined);
@@ -331,7 +396,7 @@ export function SideChatConversation({
       },
       onGap: () => reload(),
     });
-  }, [mutateAssistant, onRunIdChange, reload, runId, sideChatId]);
+  }, [mutateAssistant, onRunIdChange, reload, runId, sideChatId, sideChatMessages.failed]);
 
   const submitDraft = () => {
     const content = draft.trim();
@@ -358,7 +423,7 @@ export function SideChatConversation({
         pendingUserMessagesRef.current.delete(optimisticId);
         setMessages((current) => current.filter((message) => message.renderKey !== optimisticMessage.renderKey));
         setRunning(false);
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(sideChatErrorMessage(cause, sideChatMessages));
       });
   };
 
@@ -370,7 +435,7 @@ export function SideChatConversation({
       await answerSideChatClarification(sideChatId, clarify.requestId, answer);
       setClarify(null);
     } catch (cause) {
-      setClarifyError(cause instanceof Error ? cause.message : String(cause));
+      setClarifyError(sideChatErrorMessage(cause, sideChatMessages));
     } finally {
       setClarifySubmitting(false);
     }
@@ -410,8 +475,8 @@ export function SideChatConversation({
           ) : (
             <div className="flex min-h-64 flex-col items-center justify-center text-center">
               <MessageSquarePlus className="mb-4 size-9 text-fg-muted" strokeWidth={1.5} />
-              <h2 className="text-lg font-semibold text-fg">Side chat</h2>
-              <p className="mt-2 text-sm text-fg-muted">Ask without interrupting the main task.</p>
+              <h2 className="text-lg font-semibold text-fg">{sideChatMessages.title}</h2>
+              <p className="mt-2 text-sm text-fg-muted">{sideChatMessages.emptyDescription}</p>
             </div>
           )}
         </div>
@@ -446,7 +511,10 @@ export function SideChatConversation({
             >
               <MessageSquareText className="size-3.5 shrink-0" />
               <span className="truncate">
-                {view.context.selections.length} selection{view.context.selections.length === 1 ? '' : 's'}
+                {(view.context.selections.length === 1
+                  ? sideChatMessages.selectionCount_one
+                  : sideChatMessages.selectionCount_other
+                ).replace('{{count}}', String(view.context.selections.length))}
               </span>
             </div>
           ) : null}
@@ -465,9 +533,9 @@ export function SideChatConversation({
             className="w-full resize-none bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
           />
           <div className="mt-2 flex items-center justify-between">
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-fg-muted" title="Inherits the parent task's tool and approval policy">
+            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-fg-muted" title={sideChatMessages.parentPermissionsHint}>
               <ShieldCheck className="size-3.5 shrink-0" />
-              <span className="truncate">Parent permissions · {view?.config.modelRef ?? ''}</span>
+              <span className="truncate">{sideChatMessages.parentPermissions.replace('{{model}}', view?.config.modelRef ?? '')}</span>
             </span>
             {running ? (
               <Button type="button" className="size-9 rounded-full p-0" aria-label={m.chat.abort} onClick={() => void abortSideChat(sideChatId, runId)}><Square className="size-3.5 fill-current" /></Button>

@@ -1,5 +1,5 @@
 import {
-  complete,
+  completeSimple,
   type Api,
   type AssistantMessage,
   type Context,
@@ -85,7 +85,7 @@ export async function completeWithResolvedCredentials(
     const stream = await createExtensionAwareStreamFn()(model, context, resolvedOptions);
     return await stream.result();
   }
-  return await complete(model, context, resolvedOptions as never);
+  return await completeSimple(model, context, resolvedOptions);
 }
 
 /**

@@ -20,7 +20,10 @@ import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
 import { getOAuthProviderIds } from '../auth/oauth/registry.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
-import { getSupplementalModels } from './model-supplements.js';
+import {
+	applyOfficialModelMetadataCorrections,
+	getSupplementalModels,
+} from './model-supplements.js';
 import { splitProviderModelRef } from './model-ref.js';
 import { getProviderRegistry } from './plugin-registry.js';
 import { resolveProviderApiKey } from './provider-auth-service.js';
@@ -31,10 +34,11 @@ export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
 const OPENAI_CODEX_CANONICAL_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
 function normalizeProviderModel(model: Model<Api>): Model<Api> {
+	const correctedModel = applyOfficialModelMetadataCorrections(model);
 	if (model.provider === 'openai-codex' && model.api === 'openai-codex-responses') {
-		return { ...model, baseUrl: OPENAI_CODEX_CANONICAL_BASE_URL } as Model<Api>;
+		return { ...correctedModel, baseUrl: OPENAI_CODEX_CANONICAL_BASE_URL } as Model<Api>;
 	}
-	return model;
+	return correctedModel;
 }
 
 /** Map a plugin registry model to the pi-ai {@link Model} shape. */
@@ -92,7 +96,7 @@ export function resolveModel(ref: string): Model<Api> {
 	const registry = getModelRegistry();
 	const customModel = registry.resolve(trimmedRef);
 	if (customModel) {
-		return customModel;
+		return normalizeProviderModel(customModel);
 	}
 
 	const qualifiedRef = splitProviderModelRef(trimmedRef);

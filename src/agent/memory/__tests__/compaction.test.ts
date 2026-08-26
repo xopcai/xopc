@@ -70,7 +70,7 @@ describe('SessionCompactor', () => {
           content: expect.stringContaining('I am married, have two children, and am changing jobs.'),
         })],
       }),
-      expect.objectContaining({ maxTokens: 2000 }),
+      expect.objectContaining({ maxTokens: 2000, reasoning: 'low' }),
     );
   });
 

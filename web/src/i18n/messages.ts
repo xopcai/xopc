@@ -65,6 +65,7 @@ export type McpSettingsMessages = MessageBundle['mcpSettings'];
 export type ConnectorsSettingsMessages = MessageBundle['connectorsSettings'];
 export type AgentsSettingsMessages = MessageBundle['agentsSettings'];
 export type ChatMessages = MessageBundle['chat'];
+export type SideChatMessages = MessageBundle['sideChat'];
 export type LogsMessages = MessageBundle['logs'];
 
 export function messages(lang: StoredLanguage) {

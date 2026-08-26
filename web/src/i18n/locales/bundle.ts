@@ -12,6 +12,7 @@ import enProjects from './en/projects.json' with { type: 'json' };
 import enRemoteAccess from './en/remote-access.json' with { type: 'json' };
 import enSessions from './en/sessions.json' with { type: 'json' };
 import enSettings from './en/settings.json' with { type: 'json' };
+import enSideChat from './en/side-chat.json' with { type: 'json' };
 import enShell from './en/shell.json' with { type: 'json' };
 import enShares from './en/shares.json' with { type: 'json' };
 import enTunnel from './en/tunnel.json' with { type: 'json' };
@@ -34,6 +35,7 @@ import zhProjects from './zh/projects.json' with { type: 'json' };
 import zhRemoteAccess from './zh/remote-access.json' with { type: 'json' };
 import zhSessions from './zh/sessions.json' with { type: 'json' };
 import zhSettings from './zh/settings.json' with { type: 'json' };
+import zhSideChat from './zh/side-chat.json' with { type: 'json' };
 import zhShell from './zh/shell.json' with { type: 'json' };
 import zhShares from './zh/shares.json' with { type: 'json' };
 import zhTunnel from './zh/tunnel.json' with { type: 'json' };
@@ -58,6 +60,7 @@ export const en = {
   ...enRemoteAccess,
   ...enSessions,
   ...enSettings,
+  ...enSideChat,
   ...enShell,
   ...enShares,
   ...enTunnel,
@@ -83,6 +86,7 @@ export const zh = {
   ...zhRemoteAccess,
   ...zhSessions,
   ...zhSettings,
+  ...zhSideChat,
   ...zhShell,
   ...zhShares,
   ...zhTunnel,
