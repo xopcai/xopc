@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { complete } from '@earendil-works/pi-ai/compat';
+import { completeSimple } from '@earendil-works/pi-ai/compat';
 
 vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
-  return { ...actual, complete: vi.fn() };
+  return { ...actual, completeSimple: vi.fn() };
 });
 
 vi.mock('../../config/agent-typed-models.js', () => ({
@@ -48,11 +48,11 @@ function draftJson(graph: typeof validGraph): string {
 
 describe('WorkflowDraftService', () => {
   beforeEach(() => {
-    vi.mocked(complete).mockReset();
+    vi.mocked(completeSimple).mockReset();
   });
 
   it('asks the model to repair invalid drafts and returns only the valid result', async () => {
-    vi.mocked(complete)
+    vi.mocked(completeSimple)
       .mockResolvedValueOnce({ role: 'assistant', content: [{ type: 'text', text: draftJson(invalidGraph) }] } as never)
       .mockResolvedValueOnce({ role: 'assistant', content: [{ type: 'text', text: draftJson(validGraph) }] } as never);
 
@@ -65,13 +65,13 @@ describe('WorkflowDraftService', () => {
 
     expect(response.validation.valid).toBe(true);
     expect(response.repairAttempts).toBe(1);
-    expect(complete).toHaveBeenCalledTimes(2);
-    expect((vi.mocked(complete).mock.calls[1]?.[1] as { messages: Array<{ content: string }> }).messages[0]?.content)
+    expect(completeSimple).toHaveBeenCalledTimes(2);
+    expect((vi.mocked(completeSimple).mock.calls[1]?.[1] as { messages: Array<{ content: string }> }).messages[0]?.content)
       .toContain('missing_output');
   });
 
   it('fails with validation details when repair attempts are exhausted', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       role: 'assistant',
       content: [{ type: 'text', text: draftJson(invalidGraph) }],
     } as never);
@@ -80,6 +80,6 @@ describe('WorkflowDraftService', () => {
 
     await expect(service.createDraft({ prompt: 'Create a planning workflow', agentId: 'main' }))
       .rejects.toThrow('Unable to generate a valid workflow draft after 2 attempts');
-    expect(complete).toHaveBeenCalledTimes(2);
+    expect(completeSimple).toHaveBeenCalledTimes(2);
   });
 });

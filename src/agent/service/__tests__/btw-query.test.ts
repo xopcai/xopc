@@ -1,4 +1,4 @@
-import { complete } from '@earendil-works/pi-ai/compat';
+import { completeSimple } from '@earendil-works/pi-ai/compat';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getApiKey, resolveModel } from '../../../providers/index.js';
@@ -6,7 +6,7 @@ import { runBtwQuery } from '../btw-query.js';
 
 vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
-  return { ...actual, complete: vi.fn() };
+  return { ...actual, completeSimple: vi.fn() };
 });
 
 vi.mock('../../../providers/index.js', async (importOriginal) => {
@@ -36,13 +36,13 @@ describe('runBtwQuery', () => {
       api: 'openai-completions',
     } as never);
     vi.mocked(getApiKey).mockResolvedValue('test-api-key');
-    vi.mocked(complete).mockReset();
+    vi.mocked(completeSimple).mockReset();
   });
 
   it('answers a side question using recent session messages as read-only background', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: 'Short answer.' }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
     const sessionStore = makeSessionStore([
       { role: 'user', content: 'Build the TUI command review.' },
       { role: 'assistant', content: [{ type: 'text', text: 'Reviewed commands.' }] },
@@ -60,15 +60,15 @@ describe('runBtwQuery', () => {
     expect(resolveModel).toHaveBeenCalledWith('openai/gpt-test');
     expect(getApiKey).toHaveBeenCalledWith('openai');
     expect(sessionStore.load).toHaveBeenCalledWith('agent:main:main');
-    const completeArgs = vi.mocked(complete).mock.calls[0];
+    const completeArgs = vi.mocked(completeSimple).mock.calls[0];
     expect(String(completeArgs?.[1].messages[0]?.content)).toContain('Build the TUI command review.');
     expect(String(completeArgs?.[1].messages[0]?.content)).toContain('Side question:\nwhat was reviewed?');
   });
 
   it('accepts providers that return plain string content', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: 'String answer.',
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
 
     const result = await runBtwQuery({
       sessionKey: 'agent:main:main',
@@ -99,7 +99,7 @@ describe('runBtwQuery', () => {
     });
 
     expect(result).toEqual({ text: '', error: 'No API key for provider: openai-codex' });
-    expect(complete).not.toHaveBeenCalled();
+    expect(completeSimple).not.toHaveBeenCalled();
     expect(log.warn).toHaveBeenCalledWith(
       { modelRef: 'openai-codex/gpt-5.6-luna', provider: 'openai-codex' },
       'btwQuery: provider credentials are not configured',
@@ -107,9 +107,9 @@ describe('runBtwQuery', () => {
   });
 
   it('passes caller token and temperature overrides to the model call', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: 'Longer answer.' }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
 
     const result = await runBtwQuery({
       sessionKey: 'agent:main:main',
@@ -122,7 +122,7 @@ describe('runBtwQuery', () => {
     });
 
     expect(result).toEqual({ text: 'Longer answer.' });
-    expect(vi.mocked(complete).mock.calls[0]?.[2]).toMatchObject({
+    expect(vi.mocked(completeSimple).mock.calls[0]?.[2]).toMatchObject({
       maxTokens: 8192,
       temperature: 0.1,
       apiKey: 'test-api-key',
@@ -136,9 +136,9 @@ describe('runBtwQuery', () => {
       api: 'openai-completions',
       maxTokens: 4096,
     } as never);
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: 'Capped answer.' }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
 
     await runBtwQuery({
       sessionKey: 'agent:main:main',
@@ -149,15 +149,15 @@ describe('runBtwQuery', () => {
       maxTokens: 8192,
     });
 
-    expect(vi.mocked(complete).mock.calls[0]?.[2]).toMatchObject({
+    expect(vi.mocked(completeSimple).mock.calls[0]?.[2]).toMatchObject({
       maxTokens: 4096,
     });
   });
 
   it('returns an explicit error when the model returns no text content', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
 
     const result = await runBtwQuery({
       sessionKey: 'agent:main:main',
@@ -171,9 +171,9 @@ describe('runBtwQuery', () => {
   });
 
   it('does not force a temperature when the caller did not specify one', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: 'Answer.' }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
 
     await runBtwQuery({
       sessionKey: 'agent:main:main',
@@ -183,15 +183,15 @@ describe('runBtwQuery', () => {
       log: makeLog(),
     });
 
-    expect(vi.mocked(complete).mock.calls[0]?.[2]).not.toHaveProperty('temperature');
+    expect(vi.mocked(completeSimple).mock.calls[0]?.[2]).not.toHaveProperty('temperature');
   });
 
   it('returns the provider error from an errored assistant response', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [],
       stopReason: 'error',
       errorMessage: '401: invalid API key',
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
     const log = makeLog();
 
     const result = await runBtwQuery({
@@ -214,9 +214,9 @@ describe('runBtwQuery', () => {
   });
 
   it('can skip session context for isolated tasks', async () => {
-    vi.mocked(complete).mockResolvedValue({
+    vi.mocked(completeSimple).mockResolvedValue({
       content: [{ type: 'text', text: 'Review complete.' }],
-    } as Awaited<ReturnType<typeof complete>>);
+    } as Awaited<ReturnType<typeof completeSimple>>);
     const sessionStore = makeSessionStore([{ role: 'user', content: 'Unrelated conversation.' }]);
 
     await runBtwQuery({
@@ -229,7 +229,7 @@ describe('runBtwQuery', () => {
     });
 
     expect(sessionStore.load).not.toHaveBeenCalled();
-    expect(complete).toHaveBeenCalledWith(expect.anything(), {
+    expect(completeSimple).toHaveBeenCalledWith(expect.anything(), {
       messages: [expect.objectContaining({ content: 'Review this diff.' })],
     }, expect.anything());
   });
@@ -247,7 +247,7 @@ describe('runBtwQuery', () => {
 
     expect(result).toEqual({ text: '', error: 'Empty question.' });
     expect(sessionStore.load).not.toHaveBeenCalled();
-    expect(complete).not.toHaveBeenCalled();
+    expect(completeSimple).not.toHaveBeenCalled();
   });
 
   it('returns a model resolution error with structured warning context', async () => {
@@ -269,11 +269,11 @@ describe('runBtwQuery', () => {
       expect.objectContaining({ modelRef: 'missing/model', errorMessage: 'unknown model' }),
       'btwQuery: model resolve failed',
     );
-    expect(complete).not.toHaveBeenCalled();
+    expect(completeSimple).not.toHaveBeenCalled();
   });
 
   it('returns LLM failures as command errors', async () => {
-    vi.mocked(complete).mockRejectedValue(new Error('provider down'));
+    vi.mocked(completeSimple).mockRejectedValue(new Error('provider down'));
     const log = makeLog();
 
     const result = await runBtwQuery({
