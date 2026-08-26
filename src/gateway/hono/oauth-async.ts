@@ -65,6 +65,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = getOAuthProvider
 interface OAuthSession {
   id: string;
   provider: string;
+  returnToAppUrl?: string;
   preferredLoginMethod?: string;
   status: 'pending' | 'waiting_auth' | 'waiting_code' | 'completed' | 'failed' | 'cancelled';
   authUrl?: string;
@@ -196,6 +197,9 @@ export function createOAuthAsyncHandler(service: GatewayService) {
     const session: OAuthSession = {
       id: sessionId,
       provider,
+      ...(body.client === 'desktop' && provider === 'xopc-cloud'
+        ? { returnToAppUrl: `xopc://cloud/model-connected?request_id=${encodeURIComponent(sessionId)}` }
+        : {}),
       preferredLoginMethod: preferredOAuthLoginMethod({
         provider,
         requestedMethod: body.loginMethod,
@@ -423,6 +427,7 @@ async function runOAuthFlow(
       );
       return selectedOption.id;
     },
+    returnToAppUrl: session.returnToAppUrl,
     signal: abortController.signal,
   };
 

@@ -50,6 +50,8 @@ export interface OAuthLoginCallbacks {
 	onProgress?: (message: string) => void;
 	onManualCodeInput?: () => Promise<string>;
 	onSelect: (prompt: OAuthSelectPrompt) => Promise<string | undefined>;
+	/** Optional app deep link shown after a successful browser callback. */
+	returnToAppUrl?: string;
 	signal?: AbortSignal;
 }
 
