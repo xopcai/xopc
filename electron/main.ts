@@ -20,7 +20,7 @@ import {
 import './thread-stream-bundle-shim.js';
 
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
-import { xopcDeepLinkToRoute } from './deep-link.js';
+import { xopcDeepLinkTarget } from './deep-link.js';
 import {
   isCliBundlePresent,
   resolveCliEntry,
@@ -293,13 +293,22 @@ if (process.defaultApp) {
 }
 
 function handleDeepLink(url: string): boolean {
-  const route = xopcDeepLinkToRoute(url);
-  if (!route) {
+  const target = xopcDeepLinkTarget(url);
+  if (!target) {
     console.warn(`[main] Invalid deep link URL: ${url}`);
     return false;
   }
-  pendingMainWindowNavigation = route;
-  if (app.isReady()) navigateMainWindow(route);
+  if (
+    target.focusOnlyWhenReady &&
+    mainWindowNavigationReady &&
+    mainWindow &&
+    !mainWindow.isDestroyed()
+  ) {
+    focusOrCreateMainWindow();
+    return true;
+  }
+  pendingMainWindowNavigation = target.route;
+  if (app.isReady()) navigateMainWindow(target.route);
   return true;
 }
 
