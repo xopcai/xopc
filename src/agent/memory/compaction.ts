@@ -370,24 +370,34 @@ ${summary}
             signal: linked.signal as never,
             sessionId: COMPACTION_CACHE_SESSION_ID,
           });
+          const response = result as unknown as {
+            stopReason?: unknown;
+            rawStopReason?: unknown;
+            errorMessage?: unknown;
+            content?: Array<{ type?: unknown }>;
+            usage?: { output?: unknown; reasoning?: unknown };
+          };
+          const contentTypes = Array.isArray(response.content)
+            ? response.content.map((block) => String(block?.type ?? 'unknown'))
+            : [];
+          const responseDetails = [
+            `stopReason=${String(response.stopReason ?? 'unknown')}`,
+            `rawStopReason=${String(response.rawStopReason ?? 'unknown')}`,
+            `contentTypes=${contentTypes.join(',') || 'none'}`,
+            `outputTokens=${String(response.usage?.output ?? 'unknown')}`,
+            `reasoningTokens=${String(response.usage?.reasoning ?? 'unknown')}`,
+          ].join(', ');
+          if (response.stopReason === 'error' || response.stopReason === 'aborted') {
+            const providerError = typeof response.errorMessage === 'string' && response.errorMessage.trim()
+              ? response.errorMessage.trim()
+              : 'Provider returned no error message';
+            throw new Error(`Compaction model request failed (${responseDetails}): ${providerError}`);
+          }
+
           const summary = extractSummaryText(result);
           if (!summary) {
-            const response = result as unknown as {
-              stopReason?: unknown;
-              rawStopReason?: unknown;
-              content?: Array<{ type?: unknown }>;
-              usage?: { output?: unknown; reasoning?: unknown };
-            };
-            const contentTypes = Array.isArray(response.content)
-              ? response.content.map((block) => String(block?.type ?? 'unknown'))
-              : [];
             throw new Error(
-              'Compaction model returned an empty summary'
-              + ` (stopReason=${String(response.stopReason ?? 'unknown')}`
-              + `, rawStopReason=${String(response.rawStopReason ?? 'unknown')}`
-              + `, contentTypes=${contentTypes.join(',') || 'none'}`
-              + `, outputTokens=${String(response.usage?.output ?? 'unknown')}`
-              + `, reasoningTokens=${String(response.usage?.reasoning ?? 'unknown')})`,
+              `Compaction model returned an empty summary (${responseDetails})`,
             );
           }
           return { summary, modelRef: `${model.provider}/${model.id}` };

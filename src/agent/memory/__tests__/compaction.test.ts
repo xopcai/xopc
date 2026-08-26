@@ -110,6 +110,27 @@ describe('SessionCompactor', () => {
     );
   });
 
+  it('preserves the provider error when a completion returns no content', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
+      role: 'assistant',
+      content: [],
+      stopReason: 'error',
+      errorMessage: 'OAuth token expired',
+      usage: { output: 0 },
+    } as never);
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+      qualityGuard: false,
+    });
+
+    await expect(compactor.compact(conversation(), model, undefined, true)).rejects.toThrow(
+      'Compaction model request failed (stopReason=error, rawStopReason=unknown, contentTypes=none, outputTokens=0, reasoningTokens=unknown): OAuth token expired',
+    );
+  });
+
   it('uses a fallback model when the primary summarizer fails', async () => {
     vi.mocked(completeWithResolvedCredentials)
       .mockRejectedValueOnce(new Error('primary unavailable'))
