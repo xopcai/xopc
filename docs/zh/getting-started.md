@@ -34,6 +34,7 @@ xopc 是一个包，提供多个使用入口：
 | Windows 安装脚本 | `iex (irm https://xopc.ai/install.ps1)` | PowerShell |
 | npm 包 | `npm install -g @xopcai/xopc` | 已安装 Node.js 22+ |
 | 国内 npm 镜像 | `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com` | npmjs 访问较慢 |
+| Docker 镜像 | `docker pull ghcr.io/xopcai/xopc:latest` | 容器化、自托管 gateway |
 | 源码构建 | `pnpm install && pnpm run build` | 开发 xopc 本体 |
 
 ## 配置模式
@@ -55,6 +56,7 @@ xopc 是一个包，提供多个使用入口：
 | --- | --- |
 | 最省心的开始方式 | [PC 桌面端](./desktop-app.md) |
 | 最快终端首次使用 | [5分钟快速入门](./first-5-minutes.md) |
+| 使用容器自托管 | [Docker 安装](./docker.md) |
 | 浏览器聊天、设置、日志 | [网关](./gateway.md) |
 | Telegram bot | [接入 Telegram](./how-to/connect-telegram.md) |
 | 手机访问 | [手机端 App](./mobile-app.md) 和 [远程访问](./remote-access.md) |
