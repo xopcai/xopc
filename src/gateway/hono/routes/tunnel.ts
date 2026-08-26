@@ -450,6 +450,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       await deps.service.saveConfig(config);
       const status = tunnel.getStatus();
       return c.json({
+        pairingSessionId: qr.pairingSessionId,
         publicUrl: qr.publicUrl,
         subdomain: status.subdomain,
         qrPayload: qr.qrPayload,
