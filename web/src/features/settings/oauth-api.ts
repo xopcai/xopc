@@ -21,10 +21,22 @@ export interface OAuthSessionStatus {
   expiresAt: number;
 }
 
+function currentDesktopReturnPath(): string | undefined {
+  if (!isElectron()) return undefined;
+  const hashPath = window.location.hash.startsWith('#/')
+    ? window.location.hash.slice(1)
+    : '/';
+  return hashPath.length <= 2_048 ? hashPath : '/';
+}
+
 export async function startAsyncOAuthLogin(provider: string): Promise<OAuthStartResult> {
   const res = await apiFetch(apiUrl('/api/auth/oauth-async/start'), {
     method: 'POST',
-    body: JSON.stringify({ provider, client: isElectron() ? 'desktop' : 'web' }),
+    body: JSON.stringify({
+      provider,
+      client: isElectron() ? 'desktop' : 'web',
+      returnPath: currentDesktopReturnPath(),
+    }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
