@@ -18,8 +18,17 @@ import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygie
 import { acquireEmbeddedSessionRunner } from './session-runner.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
-import { pruneToolResultsToFit } from '../memory/context-budget.js';
+import { projectContextForModel } from '../memory/context-budget.js';
 import { isContextOverflowError } from '../orchestration/context-overflow.js';
+import {
+  buildPromptCacheSnapshot,
+  observePromptCacheSnapshot,
+} from '../../providers/prompt-cache-observability.js';
+import {
+  isPromptCacheExpired,
+  recordPromptCacheTouch,
+} from '../../providers/prompt-cache-lifecycle.js';
+import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -162,6 +171,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
+  const promptCachePolicy = resolvePromptCachePolicy(params.promptCachePolicy);
   const transcriptRuntime = params.transcriptRuntime ?? (
     sessionStore
       ? await createSqliteTranscriptRuntime({ sessionKey, sessionStore })
@@ -190,7 +200,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     const { session, reused } = runner;
     runner.piSm.setActiveTurnId?.(runId);
 
-    const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(session.agent.streamFunction);
+    const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(
+      session.agent.streamFunction,
+      params.promptCachePolicy,
+    );
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
       const sourceMessages = [...context.messages];
       const hygienicMessages = tryApplySessionTranscriptHygiene(sourceMessages, streamModel) as typeof sourceMessages;
@@ -210,29 +223,41 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         effectiveContext = { ...context, messages, tools: contextTools };
       }
 
-      const pruned = pruneToolResultsToFit({
+      const projection = projectContextForModel({
         messages: effectiveContext.messages as AgentMessage[],
         contextWindow: streamModel.contextWindow ?? 128_000,
         systemPrompt: effectiveContext.systemPrompt,
         tools: effectiveContext.tools,
         canCompact: false,
+        reason: isPromptCacheExpired(sessionKey, streamModel, promptCachePolicy)
+          ? 'cache_expired'
+          : 'normal',
       });
-      if (pruned.prunedToolResults > 0) {
+      if (projection.prunedToolResults > 0 || projection.prunedImages > 0) {
         effectiveContext = {
           ...effectiveContext,
-          messages: pruned.messages as typeof effectiveContext.messages,
+          messages: projection.messages as typeof effectiveContext.messages,
         };
         log.warn(
           {
             sessionKey,
             runId,
-            prunedToolResults: pruned.prunedToolResults,
-            estimatedTokens: pruned.evaluation.estimatedTokens,
-            hardLimitTokens: pruned.evaluation.hardLimitTokens,
+            prunedToolResults: projection.prunedToolResults,
+            prunedImages: projection.prunedImages,
+            estimatedTokens: projection.evaluation.estimatedTokens,
+            hardLimitTokens: projection.evaluation.hardLimitTokens,
           },
-          'Pruned old tool results to fit the model context window',
+          'Projected a smaller provider context',
         );
       }
+
+      const promptCacheSnapshot = buildPromptCacheSnapshot({
+        model: streamModel,
+        systemPrompt: effectiveContext.systemPrompt,
+        tools: effectiveContext.tools,
+        reasoning: options?.reasoning,
+      });
+      const promptCacheChanges = observePromptCacheSnapshot(sessionKey, promptCacheSnapshot);
 
       log.debug(
         {
@@ -247,6 +272,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
           loopWarningInjected: !!loopGuard.injection,
           hiddenToolCount: loopGuard.hiddenTools.size,
+          promptCache: promptCacheSnapshot,
+          promptCacheChanges,
           ...(process.env.XOPC_LOG_LLM_PAYLOAD === 'true'
             ? {
                 effectiveContext: {
@@ -261,16 +288,16 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       );
       return streamFnWithXopcExtensions(streamModel, effectiveContext, {
         ...options,
-        ...(params.cacheRetention ? { cacheRetention: params.cacheRetention } : {}),
       });
     };
     session.agent.streamFunction = loggingStreamFn;
 
-    if (onEvent) {
-      unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
-        onEvent({ ...event, runId });
-      });
-    }
+    unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
+      if (event.type === 'message_end' && event.message.role === 'assistant') {
+        recordPromptCacheTouch(sessionKey, resolvedModel, event.message.usage);
+      }
+      onEvent?.({ ...event, runId });
+    });
 
     const handle = {
       sessionKey,

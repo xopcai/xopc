@@ -389,6 +389,7 @@ function ChatMarkdownView({
               onWorkspaceFileOpen={openFile}
               openHttpLinksInNewTab
               renderMermaid={!progressivelyRevealing}
+              mermaidActions
               streamingMetricsKey={metricsKey}
             />
           ))}
@@ -399,6 +400,7 @@ function ChatMarkdownView({
           compact={compact}
           onWorkspaceFileOpen={openFile}
           openHttpLinksInNewTab
+          mermaidActions
         />
       )}
       {resolution ? (

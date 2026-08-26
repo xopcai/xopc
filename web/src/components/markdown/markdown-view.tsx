@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify';
-import { memo, useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   parseProductReferenceDeepLink,
@@ -21,6 +21,12 @@ import {
   type WorkspaceFileLinkTarget,
 } from './internal-links';
 import { estimateMermaidPlaceholderHeight } from './mermaid-layout';
+import { createMermaidSnapshot, downloadMermaidPng } from './mermaid-export';
+import {
+  MermaidPreviewDialog,
+  type MermaidPreviewLabels,
+  type MermaidPreviewState,
+} from './mermaid-preview-dialog';
 import './markdown.css';
 
 /** Lucide-style 14px icons for DOM-injected code-copy control (keeps bundle self-contained here). */
@@ -29,6 +35,12 @@ const ICON_COPY_SVG =
 
 const ICON_CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+const ICON_DOWNLOAD_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
+
+const ICON_MAXIMIZE_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>';
 
 const FORBIDDEN_MARKDOWN_TAGS = [
   'base',
@@ -210,10 +222,95 @@ function commitMermaidShell(
 ): void {
   shell.replaceChildren(...Array.from(renderedNode.childNodes));
   shell.className = `${renderedNode.className} markdown-mermaid-shell`;
+  shell.style.removeProperty('--markdown-mermaid-placeholder-height');
   shell.removeAttribute('data-md-code-block');
   shell.removeAttribute('data-mermaid-diagram');
   shell.removeAttribute('data-mermaid-fallback');
   shell.setAttribute(error ? 'data-mermaid-fallback' : 'data-mermaid-diagram', '');
+}
+
+type MermaidInlineActionLabels = {
+  preview: string;
+  downloadPng: string;
+  downloadFailed: string;
+};
+
+function createMermaidActionButton(label: string, icon: string, action: string): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'markdown-mermaid-action-button';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.dataset.mermaidAction = action;
+  button.innerHTML = icon;
+  return button;
+}
+
+function mountMermaidActions(
+  shell: HTMLElement,
+  diagramIndex: number,
+  labels: MermaidInlineActionLabels,
+  onPreview: (preview: MermaidPreviewState) => void,
+): () => void {
+  const svg = shell.querySelector<SVGSVGElement>('svg');
+  if (!svg) return () => {};
+
+  const baseName = `mermaid-diagram-${diagramIndex + 1}`;
+  const actions = document.createElement('div');
+  actions.className = 'markdown-mermaid-actions';
+  const downloadButton = createMermaidActionButton(labels.downloadPng, ICON_DOWNLOAD_SVG, 'download-png');
+  const previewButton = createMermaidActionButton(labels.preview, ICON_MAXIMIZE_SVG, 'preview');
+  actions.append(downloadButton, previewButton);
+  shell.appendChild(actions);
+  shell.classList.add('markdown-mermaid-interactive');
+
+  const buildPreview = (): MermaidPreviewState => ({
+    snapshot: createMermaidSnapshot(svg, shell),
+    baseName,
+  });
+  const openPreview = () => onPreview(buildPreview());
+  const onPreviewClick = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openPreview();
+  };
+  const onDownloadClick = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (downloadButton.disabled) return;
+    downloadButton.disabled = true;
+    downloadButton.title = labels.downloadPng;
+    downloadButton.setAttribute('aria-label', labels.downloadPng);
+    downloadButton.setAttribute('aria-busy', 'true');
+    void downloadMermaidPng(buildPreview().snapshot, `${baseName}.png`)
+      .catch(() => {
+        downloadButton.title = labels.downloadFailed;
+        downloadButton.setAttribute('aria-label', labels.downloadFailed);
+      })
+      .finally(() => {
+        if (!downloadButton.isConnected) return;
+        downloadButton.disabled = false;
+        downloadButton.removeAttribute('aria-busy');
+      });
+  };
+  const onShellClick = (event: MouseEvent) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('svg') && !target.closest('.markdown-mermaid-actions')) {
+      openPreview();
+    }
+  };
+
+  previewButton.addEventListener('click', onPreviewClick);
+  downloadButton.addEventListener('click', onDownloadClick);
+  shell.addEventListener('click', onShellClick);
+
+  return () => {
+    previewButton.removeEventListener('click', onPreviewClick);
+    downloadButton.removeEventListener('click', onDownloadClick);
+    shell.removeEventListener('click', onShellClick);
+    actions.remove();
+    shell.classList.remove('markdown-mermaid-interactive');
+  };
 }
 
 export interface MarkdownViewProps {
@@ -231,6 +328,8 @@ export interface MarkdownViewProps {
   openHttpLinksInNewTab?: boolean;
   /** Render Mermaid diagrams. Disabled while chat Markdown is still streaming. */
   renderMermaid?: boolean;
+  /** Add preview and image download actions to rendered Mermaid diagrams. */
+  mermaidActions?: boolean;
   /** Development-only stream identifier for parse timing metrics. */
   streamingMetricsKey?: string;
 }
@@ -244,6 +343,7 @@ function MarkdownViewImpl({
   onWorkspaceFileOpen,
   openHttpLinksInNewTab: shouldOpenHttpLinksInNewTab = false,
   renderMermaid = true,
+  mermaidActions = false,
   streamingMetricsKey,
 }: MarkdownViewProps) {
   const routeLocation = useLocation();
@@ -251,7 +351,25 @@ function MarkdownViewImpl({
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
     const m = messages(language).chat;
-    return { copy: m.codeBlockCopy, copied: m.messageCopied };
+    return {
+      copy: m.codeBlockCopy,
+      copied: m.messageCopied,
+      mermaidInline: {
+        preview: m.mermaidPreview,
+        downloadPng: m.mermaidDownloadPng,
+        downloadFailed: m.mermaidDownloadFailed,
+      },
+      mermaidPreview: {
+        title: m.mermaidPreviewTitle,
+        close: m.mermaidPreviewClose,
+        zoomIn: m.mermaidZoomIn,
+        zoomOut: m.mermaidZoomOut,
+        fit: m.mermaidFit,
+        downloadPng: m.mermaidDownloadPng,
+        downloadSvg: m.mermaidDownloadSvg,
+        downloadFailed: m.mermaidDownloadFailed,
+      } satisfies MermaidPreviewLabels,
+    };
   }, [language]);
 
   const safeHtml = useMemo(() => {
@@ -266,6 +384,14 @@ function MarkdownViewImpl({
   }, [content, breaks, streamingMetricsKey]);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  const [mermaidPreview, setMermaidPreview] = useState<MermaidPreviewState | null>(null);
+  const openMermaidPreview = useCallback((preview: MermaidPreviewState) => {
+    setMermaidPreview(preview);
+  }, []);
+
+  useEffect(() => {
+    setMermaidPreview(null);
+  }, [safeHtml]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -303,10 +429,11 @@ function MarkdownViewImpl({
       );
 
     let cancelled = false;
+    const actionDisposers: Array<() => void> = [];
     void import('./mermaid-render')
       .then(({ renderMermaidBlock }) => {
         if (cancelled) return;
-        for (const { code, shell } of pending) {
+        for (const [index, { code, shell }] of pending.entries()) {
           if (!code.isConnected || !shell.isConnected) continue;
           const rendered = renderMermaidBlock(code.textContent ?? '');
           const template = document.createElement('template');
@@ -314,6 +441,11 @@ function MarkdownViewImpl({
           const node = template.content.firstElementChild;
           if (node) {
             commitMermaidShell(shell, node, rendered.error);
+            if (mermaidActions && !rendered.error) {
+              actionDisposers.push(
+                mountMermaidActions(shell, index, labels.mermaidInline, openMermaidPreview),
+              );
+            }
           }
         }
       })
@@ -321,14 +453,16 @@ function MarkdownViewImpl({
         if (cancelled) return;
         for (const { shell } of pending) {
           shell.classList.remove('markdown-mermaid-pending');
+          shell.style.removeProperty('--markdown-mermaid-placeholder-height');
           shell.setAttribute('data-mermaid-fallback', '');
         }
       });
 
     return () => {
       cancelled = true;
+      for (const dispose of actionDisposers) dispose();
     };
-  }, [renderMermaid, safeHtml]);
+  }, [labels.mermaidInline, mermaidActions, openMermaidPreview, renderMermaid, safeHtml]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -383,13 +517,22 @@ function MarkdownViewImpl({
   }, [routeLocation.pathname, routeLocation.search, navigate, onWorkspaceFileOpen]);
 
   return (
-    <div ref={hostRef} className="markdown-render-boundary">
-      <div
-        className={['markdown-body', compact ? 'markdown-compact' : '', className ?? ''].filter(Boolean).join(' ')}
-        // safeHtml is sanitized via DOMPurify above; link behavior is applied only after sanitization.
-        dangerouslySetInnerHTML={{ __html: safeHtml }}
-      />
-    </div>
+    <>
+      <div ref={hostRef} className="markdown-render-boundary">
+        <div
+          className={['markdown-body', compact ? 'markdown-compact' : '', className ?? ''].filter(Boolean).join(' ')}
+          // safeHtml is sanitized via DOMPurify above; link behavior is applied only after sanitization.
+          dangerouslySetInnerHTML={{ __html: safeHtml }}
+        />
+      </div>
+      {mermaidActions ? (
+        <MermaidPreviewDialog
+          preview={mermaidPreview}
+          labels={labels.mermaidPreview}
+          onClose={() => setMermaidPreview(null)}
+        />
+      ) : null}
+    </>
   );
 }
 

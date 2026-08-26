@@ -7,6 +7,7 @@ import {
   preparePromptCacheContext,
   withPromptCachePayloadTransform,
 } from '../../providers/prompt-cache-payload.js';
+import type { PromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 
 /**
  * pi-coding-agent's default {@link createAgentSession} streamFn always routes through
@@ -17,7 +18,10 @@ import {
  *
  * Use this by reassigning {@link Agent.streamFunction} after `createAgentSession` returns.
  */
-export function wrapStreamFnForXopcExtensions(originalStreamFn: StreamFn): StreamFn {
+export function wrapStreamFnForXopcExtensions(
+  originalStreamFn: StreamFn,
+  promptCachePolicy?: PromptCachePolicy,
+): StreamFn {
   const extensionStreamFn = createExtensionAwareStreamFn();
 
   return ((model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
@@ -27,7 +31,7 @@ export function wrapStreamFnForXopcExtensions(originalStreamFn: StreamFn): Strea
     return originalStreamFn(
       model,
       preparePromptCacheContext(model, context),
-      withPromptCachePayloadTransform(model, context, options),
+      withPromptCachePayloadTransform(model, context, options, promptCachePolicy),
     );
   }) as StreamFn;
 }

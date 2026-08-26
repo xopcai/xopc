@@ -88,6 +88,7 @@ import { createSkillManageTool } from './skill-manage-tool.js';
 import { createTextToSpeechTool } from './tts-tool.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
+import { sortToolsForPromptCache } from './cache-stability.js';
 import {
   getSessionTaskPlan,
   isXopcDatabaseOpen,
@@ -594,10 +595,10 @@ export class AgentToolsFactory {
       const sandboxMap = buildSandboxToolMap(wrapped);
       const executeTool = createExecuteCodeTool({ getSandboxToolMap: () => sandboxMap });
       const wrappedExecute = wrapToolsWithProtection([executeTool as any], this.deps.toolExecutorConfig);
-      return [...wrapped, ...wrappedExecute];
+      return sortToolsForPromptCache([...wrapped, ...wrappedExecute]);
     }
 
-    return wrapped;
+    return sortToolsForPromptCache(wrapped);
   }
 }
 

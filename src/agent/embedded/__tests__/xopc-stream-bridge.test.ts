@@ -50,7 +50,7 @@ describe('wrapStreamFnForXopcExtensions', () => {
     const [calledModel, calledContext, calledOptions] = original.mock.calls[0]!;
     expect(calledModel).toBe(model);
     expect(calledContext).toEqual(FAKE_CONTEXT);
-    expect(calledOptions).toEqual({ onPayload: expect.any(Function) });
+    expect(calledOptions).toEqual({ cacheRetention: 'none', onPayload: expect.any(Function) });
     await expect(calledOptions.onPayload({}, model)).resolves.toEqual({
       prompt_cache_key: expect.stringMatching(/^xopc-/),
     });
@@ -101,7 +101,6 @@ describe('wrapStreamFnForXopcExtensions', () => {
       timeoutMs: 1000,
       maxRetries: 1,
       metadata: { requestId: 'request-1' },
-      cacheRetention: 'short',
       transport: 'sse',
       signal,
     } as never);
@@ -121,7 +120,6 @@ describe('wrapStreamFnForXopcExtensions', () => {
         timeoutMs: 1000,
         maxRetries: 1,
         metadata: { requestId: 'request-1' },
-        cacheRetention: 'short',
         transport: 'sse',
         signal,
       }),
