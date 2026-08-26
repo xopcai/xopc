@@ -15,6 +15,10 @@ export interface ChatStreamMapperOptions {
 
 type ToolResultEnvelope = { content?: unknown[]; details?: unknown; text?: string };
 
+const MAX_REALTIME_TOOL_RESULT_BYTES = 256 * 1024;
+const MAX_REALTIME_TOOL_RESULT_TEXT_BYTES = 128 * 1024;
+const TOOL_RESULT_TRUNCATION_MARKER = '\n\n[Tool result truncated for realtime delivery. The complete result remains in the session transcript.]';
+
 let lastTaskPlanRevision = 0;
 
 function nextTaskPlanRevision(): number {
@@ -353,7 +357,8 @@ export class ChatStreamMapper {
     const toolCallId = String(event.toolCallId ?? '');
     if (!toolCallId) return [];
     const messageId = this.toolCallToMessageId.get(toolCallId) ?? this.ensureAssistantMessageId();
-    const result = normalizeToolResult(event.result);
+    const fullResult = normalizeToolResult(event.result);
+    const result = boundRealtimeToolResult(fullResult);
     const toolName = String(event.toolName ?? 'unknown');
     const events: ChatStreamEvent[] = [
       this.make('tool_end', {
@@ -361,12 +366,14 @@ export class ChatStreamMapper {
         toolCallId,
         toolName,
         status: event.isError ? 'error' : 'success',
-        activity: resolveToolActivity(toolName, event.isError ? 'failed' : 'completed', result),
+        activity: resolveToolActivity(toolName, event.isError ? 'failed' : 'completed', fullResult),
         result,
-        errorMessage: event.isError ? result?.text : undefined,
+        errorMessage: event.isError ? result?.text ?? extractText(result?.content) : undefined,
       }),
     ];
-    const details = asRecord(result?.details);
+    // Derived semantic events still use the complete in-process result. Only the
+    // realtime `tool_end` copy above is bounded.
+    const details = asRecord(fullResult?.details);
     if (toolName === 'exec_command' && details) {
       events.push(
         this.make('command_completed', {
@@ -585,6 +592,44 @@ function normalizeToolResult(value: unknown): ToolResultEnvelope | undefined {
     details: rec.details,
     text: extractText(rec.content) ?? (typeof rec.text === 'string' ? rec.text : undefined),
   };
+}
+
+function boundRealtimeToolResult(result: ToolResultEnvelope | undefined): ToolResultEnvelope | undefined {
+  if (!result) return result;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(result);
+  } catch {
+    return result;
+  }
+  const originalBytes = Buffer.byteLength(serialized);
+  if (originalBytes <= MAX_REALTIME_TOOL_RESULT_BYTES) return result;
+
+  const sourceText = result.text ?? extractText(result.content) ?? '';
+  const text = `${truncateUtf8(sourceText, MAX_REALTIME_TOOL_RESULT_TEXT_BYTES)}${TOOL_RESULT_TRUNCATION_MARKER}`;
+  return {
+    content: [{ type: 'text', text }],
+    details: {
+      truncated: true,
+      reason: 'realtime_payload_limit',
+      originalBytes,
+    },
+  };
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value) <= maxBytes) return value;
+  let low = 0;
+  let high = value.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(value.slice(0, middle)) <= maxBytes) low = middle;
+    else high = middle - 1;
+  }
+  let end = low;
+  const code = value.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return value.slice(0, Math.max(0, end));
 }
 
 function extractTurnPlan(details: Record<string, unknown>): { explanation?: string; plan: { id?: string; step: string; status: 'pending' | 'in_progress' | 'completed' }[] } | undefined {

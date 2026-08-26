@@ -575,4 +575,34 @@ describe('ChatStreamMapper', () => {
       },
     });
   });
+
+  it('bounds oversized tool results for realtime delivery', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const events = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tc-large',
+      toolName: 'xopc_tool_execute',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: '邮'.repeat(1024 * 1024) }],
+        details: { raw: 'x'.repeat(1024 * 1024) },
+      },
+    });
+
+    expect(Buffer.byteLength(JSON.stringify(events[0]))).toBeLessThan(256 * 1024);
+    expect(events[0]).toMatchObject({
+      type: 'tool_end',
+      payload: {
+        result: {
+          details: {
+            truncated: true,
+            reason: 'realtime_payload_limit',
+            originalBytes: expect.any(Number),
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(events[0])).toContain('Tool result truncated for realtime delivery');
+  });
 });

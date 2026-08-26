@@ -1,0 +1,31 @@
+{
+  "sideChat": {
+    "title": "侧边对话",
+    "paneAria": "侧边对话",
+    "resizeAria": "调整侧边对话宽度",
+    "closeAria": "关闭侧边对话",
+    "newAria": "新建侧边对话",
+    "closePaneAria": "关闭侧边对话面板",
+    "closeConfirmTitle": "关闭侧边对话？",
+    "closeConfirmDescription": "此侧边对话及其中的消息将被永久删除，且无法恢复。确定要关闭吗？",
+    "closeConfirmDontAskAgain": "不再询问",
+    "closeConfirmCancel": "取消",
+    "closeConfirmAction": "关闭侧边对话",
+    "temporaryDescription": "侧边对话是临时的，关闭应用后将自动消失。",
+    "creating": "正在创建…",
+    "emptyDescription": "无需打断主任务，随时在这里提问。",
+    "failed": "侧边对话失败",
+    "errorInvalidRequest": "侧边对话请求无效。",
+    "errorNotFound": "此侧边对话已不可用。",
+    "errorConflict": "此侧边对话正忙，请等待当前回复完成。",
+    "errorLimitReached": "已达到侧边对话数量上限，请关闭一个后重试。",
+    "selectionCount_one": "{{count}} 处选中内容",
+    "selectionCount_other": "{{count}} 处选中内容",
+    "parentPermissionsHint": "沿用主任务的工具与审批策略",
+    "parentPermissions": "主任务权限 · {{model}}",
+    "selectedTextActionsAria": "选中文本操作",
+    "addToChat": "添加到对话",
+    "askInSideChat": "在侧边对话中提问",
+    "selectedText": "所选文本"
+  }
+}

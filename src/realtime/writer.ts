@@ -28,6 +28,11 @@ export class RealtimeSocketWriter {
       return false;
     }
     const item = { data, bytes: Buffer.byteLength(data) };
+    if (item.bytes > MAX_QUEUED_BYTES) {
+      this.socket.close(1009, 'Realtime event exceeds delivery limit');
+      this.close();
+      return false;
+    }
     if (this.queuedBytes + item.bytes > MAX_QUEUED_BYTES) {
       this.socket.close(4413, 'Realtime client is too slow');
       this.close();
