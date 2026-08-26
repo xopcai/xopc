@@ -1,6 +1,5 @@
-# Publish @xopcai/xopc to npm when a version tag is pushed.
-# Uses npm Trusted Publishing (GitHub Actions OIDC); configure the package's
-# trusted publisher for xopcai/xopc and this workflow filename on npmjs.com.
+# Publish @xopcai/xopc to npm and ghcr.io/xopcai/xopc when a version tag is pushed.
+# npm uses Trusted Publishing (GitHub Actions OIDC); GHCR uses GITHUB_TOKEN.
 
 name: npm Publish
 
@@ -61,3 +60,62 @@ jobs:
 
       - name: Publish to npm
         run: pnpm publish --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
+
+  docker:
+    name: Publish Docker image
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker smoke-test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: xopc:release-smoke
+          cache-from: type=gha,scope=xopc-docker
+
+      - name: Run Docker smoke test
+        run: docker run --rm xopc:release-smoke xopc --version
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=xopc-docker
+          cache-to: type=gha,mode=max,scope=xopc-docker

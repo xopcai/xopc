@@ -42,7 +42,8 @@ RUN --mount=type=cache,id=xopc-pnpm-store,target=/pnpm/store,sharing=locked \
     if [ -n "$XOPC_INSTALL_BROWSER" ]; then \
       cp -LR node_modules/playwright-core /tmp/xopc-playwright-core; \
     fi && \
-    pnpm prune --prod \
+    rm -rf node_modules && \
+    pnpm install --prod --frozen-lockfile \
       --config.store-dir=/pnpm/store \
       --config.supportedArchitectures.os=linux \
       --config.supportedArchitectures.cpu="$(node -p 'process.arch')" \
@@ -87,6 +88,7 @@ RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime-assets --chown=node:node /app/dist ./dist
+COPY --from=runtime-assets --chown=node:node /app/.pnpm ./.pnpm
 COPY --from=runtime-assets --chown=node:node /app/node_modules ./node_modules
 COPY --from=runtime-assets --chown=node:node /app/package.json ./package.json
 COPY --from=runtime-assets --chown=node:node /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
