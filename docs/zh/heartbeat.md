@@ -1,74 +1,42 @@
-# 心跳机制
+# Heartbeat 检查
 
-Heartbeat 是网关里的轻量周期检查服务，用于健康检查和主动唤醒相关逻辑。它与自动化分离：自动化负责计划、手动和 webhook 触发的工作；Heartbeat 负责让长期运行的网关状态可观测。
+Heartbeat 可以定期让 Agent 检查一小份清单，并报告值得关注的变化。它适合轻量提醒，不适合严格定时任务或关键监控。
 
-## 概述
+## Heartbeat 还是 Automation？
 
-```
-┌─────────────────┐
-│ Heartbeat       │
-│ Service         │
-└────────┬────────┘
-         │
-         ▼ (every intervalMs)
-┌─────────────────┐
-│ Check Status    │
-│ - Runtime       │
-│ - Memory        │
-│ - Config        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Emit logs /     │
-│ wake checks     │
-└─────────────────┘
+- 周期性“查看并在必要时报告”使用 **Heartbeat**。
+- 时间、重试、运行历史和确定动作很重要时，使用 [Automation](./automations.md)。
+
+## 设置 Heartbeat
+
+1. 打开 **设置 → Heartbeat**。
+2. 为目标 Agent 启用 Heartbeat。
+3. 选择相对保守的间隔。
+4. 添加简短清单，并写明什么情况下需要报告。
+5. 保存并检查第一次结果。
+
+示例：
+
+```md
+- 检查进行中的 Task 是否阻塞或过期。
+- 只报告新的阻塞或需要我决定的事项。
+- 如果没有需要关注的内容，不要发送消息。
 ```
 
-## 配置
+清单应保持简短。范围过宽会增加模型用量，并产生重复通知。
 
-```typescript
-interface HeartbeatConfig {
-  intervalMs: number;
-  enabled: boolean;
-}
-```
+## 通知控制
 
-默认配置：
+决定结果发送到哪里，以及无事项时是否静默。依赖通知前，先在目标 Session 或消息通道测试一次。
 
-```json
-{
-  "heartbeat": {
-    "intervalMs": 300000,
-    "enabled": true
-  }
-}
-```
+## 安全使用
 
-## 使用场景
+- 清单中不要放敏感信息。
+- 避免要求无需确认就修改外部状态。
+- 适合时使用低成本模型。
+- Agent 的数据源或凭据不可用时暂停 Heartbeat。
+- 在线率、安全或紧急告警使用专用监控系统。
 
-- 按固定周期检查网关运行状态。
-- 监控内存和会话压力。
-- 在不依赖用户对话轮次的情况下暴露配置重载或唤醒条件。
+## 故障排查
 
-## 与自动化的关系
-
-| 组件 | 职责 |
-|------|------|
-| **自动化** | 由手动、计划或 webhook 触发，执行 Agent 或工作流动作 |
-| **Heartbeat** | 执行周期健康检查和唤醒相关监控 |
-
-自动化不依赖 Heartbeat 来判断是否到期。自动化服务会自行计算并维护 `nextRunAtMs`；Heartbeat 仍然是独立的健康检查与监控机制。
-
-## 故障排除
-
-**心跳不工作？**
-
-- 确认 `heartbeat.enabled` 为 `true`。
-- 检查 `heartbeat.intervalMs`。
-- 查看网关日志中的 Heartbeat 启动和运行错误。
-
-**触发过于频繁？**
-
-- 增加 `heartbeat.intervalMs`。
-- 检查绑定在 Heartbeat 检查上的唤醒条件。
+检查未运行时，确认 Gateway 服务持续运行、Heartbeat 已启用、Agent 有有效模型，并且等待时间已经超过间隔。从 **设置 → 日志** 查找第一个 Heartbeat 错误。

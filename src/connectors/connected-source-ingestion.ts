@@ -18,49 +18,20 @@ import {
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { scopeForComposioAction } from './composio.js';
 import { getConnectorDefinition } from './catalog.js';
+import { decodeConnectedSourceCursor, encodeConnectedSourceCursor } from './connected-source-cursor.js';
 import { getConnectorInstance } from './instances.js';
 import { normalizeConnectedSourceResult } from './connected-source-normalizers.js';
+import { sanitizeConnectedSourceValue } from './connected-source-sanitization.js';
 
 export const COMPOSIO_CONNECTED_SOURCE_TOOLKITS = new Set([
   'gmail',
   'googlecalendar',
   'googledrive',
-  'googledocs',
-  'googlesheets',
-  'notion',
-  'slack',
   'github',
   'linear',
-  'jira',
-  'outlook',
-  'microsoft_teams',
-  'one_drive',
-  'excel',
 ]);
-const SENSITIVE_KEY_RE = /(?:^|_)(?:api_?key|token|secret|password|passwd|authorization|credential|private_?key)(?:$|_)/i;
-const INLINE_SECRET_PATTERNS = [
-  /\bsk-[A-Za-z0-9_-]{8,}\b/g,
-  /\bghp_[A-Za-z0-9]{20,}\b/g,
-  /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/g,
-  /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g,
-];
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
-function sanitizeSourceValue(value: unknown, depth = 0): unknown {
-  if (depth > 12) return '[MaxDepth]';
-  if (typeof value === 'string') {
-    return INLINE_SECRET_PATTERNS.reduce((text, pattern) => text.replace(pattern, '[REDACTED]'), value);
-  }
-  if (Array.isArray(value)) return value.map((item) => sanitizeSourceValue(item, depth + 1));
-  const record = asRecord(value);
-  if (!record) return value;
-  return Object.fromEntries(Object.entries(record).map(([key, nested]) => [
-    key,
-    SENSITIVE_KEY_RE.test(key) ? '[REDACTED]' : sanitizeSourceValue(nested, depth + 1),
-  ]));
 }
 
 type PersonEntitySignal = {
@@ -85,13 +56,13 @@ function personEntities(record: Record<string, unknown> | null): PersonEntitySig
     const nested = asRecord(value);
     if (!nested) return [];
     const name = boundedPersonValue(nested.name, 160) || boundedPersonValue(nested.displayName, 160);
-    const email = boundedPersonValue(nested.email);
+    const email = boundedPersonValue(nested.email) || boundedPersonValue(nested.emailAddress);
     const username = boundedPersonValue(nested.username, 160);
     return name || email || username
       ? [{ role, name: name || undefined, email: email || undefined, username: username || undefined }]
       : [];
   };
-  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'assignee', 'attendees', 'participants']
+  const entities = ['email', 'from', 'sender', 'author', 'user', 'username', 'owner', 'owners', 'assignee', 'attendees', 'participants']
     .flatMap((key) => {
       const value = record[key];
       return Array.isArray(value)
@@ -122,6 +93,21 @@ function connectionIdentities(identity: Record<string, unknown>): string[] {
     .filter(Boolean))];
 }
 
+function resultPayload(value: unknown): Record<string, unknown> {
+  const root = asRecord(value) ?? {};
+  return asRecord(root.data) ?? root;
+}
+
+function paginationValue(result: unknown, ...keys: string[]): string | undefined {
+  const payload = resultPayload(result);
+  const pagination = asRecord(payload.pagination) ?? asRecord(payload.pageInfo) ?? {};
+  for (const key of keys) {
+    const value = payload[key] ?? pagination[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
 function resultToSourceItems(input: {
   result: unknown;
   sourceInstanceId: string;
@@ -143,8 +129,9 @@ function resultToSourceItems(input: {
     const actorAttributed = entity.metadata.actorAttributed === true
       || input.toolkit === 'gmail'
       || input.toolkit === 'googlecalendar'
-      || (input.toolkit === 'github' && observedIdentities.some((value) => ownerIdentities.includes(value)));
-    const serialized = JSON.stringify(sanitizeSourceValue(entity.value), null, 2);
+      || (['github', 'googledrive'].includes(input.toolkit)
+        && observedIdentities.some((value) => ownerIdentities.includes(value)));
+    const serialized = JSON.stringify(sanitizeConnectedSourceValue(entity.value), null, 2);
     const normalizedText = serialized.length > 8_000 ? `${serialized.slice(0, 8_000)}\n…` : serialized;
     const contentHash = createHash('sha256').update(serialized).digest('hex');
     return {
@@ -174,6 +161,7 @@ function resultToSourceItems(input: {
       retentionClass: 'bounded',
       synthesisPipeline: 'connected_knowledge',
       synthesisStatus: input.streamKind === 'inventory' ? 'ignored' : entity.synthesisStatus,
+      deletedAt: entity.deletedAt,
     };
   });
 }
@@ -197,7 +185,10 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
   }) {}
 
   async pull(pull: KnowledgePullInput): Promise<KnowledgePullResult> {
-    const execution = await this.input.adapter.executeWithPolicy({
+    const cursor = decodeConnectedSourceCursor(pull.cursor);
+    const scanStartedAt = cursor?.scanStartedAt ?? new Date().toISOString();
+    const warnings = pull.cursor && !cursor ? ['Stored connected-source cursor was invalid and was replaced.'] : [];
+    const execute = (cursorValue: string | undefined) => this.input.adapter.executeWithPolicy({
       context: { principalId: 'local-owner', toolkits: [this.input.toolkit] },
       installation: { ...this.input.installation, maxScope: 'read', confirmationPolicy: 'never' },
       connection: this.input.connection,
@@ -210,26 +201,49 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
         curated: true,
         cachedAt: new Date().toISOString(),
       },
-      args: this.input.buildArguments?.(pull) ?? this.input.arguments,
+      args: this.input.buildArguments?.({ ...pull, cursor: cursorValue }) ?? this.input.arguments,
       confirmed: true,
     });
+    let execution;
+    try {
+      execution = await execute(pull.cursor);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.input.toolkit !== 'googlecalendar' || !cursor?.syncToken || !/\b410\b|sync.?token/i.test(message)) throw error;
+      warnings.push('Expired Google Calendar sync token was replaced with a full sync.');
+      execution = await execute(undefined);
+    }
     if (execution.decision !== 'allowed') throw new Error(execution.reason);
+    const items = resultToSourceItems({
+      result: execution.result,
+      sourceInstanceId: pull.instanceId,
+      collectionScope: pull.collectionScope,
+      streamKind: this.input.streamKind,
+      connectorId: this.input.connectorId,
+      connectionId: this.input.connection.id,
+      actionId: this.input.actionId,
+      toolkit: this.input.toolkit,
+      agentId: this.input.agentId,
+      workspaceId: this.input.workspaceId,
+      connectionIdentity: this.input.connection.identity,
+    });
+    const nextPageToken = paginationValue(execution.result, 'nextPageToken', 'next_page_token');
+    const nextSyncToken = paginationValue(execution.result, 'nextSyncToken', 'next_sync_token');
+    const completeSnapshot = this.input.streamKind === 'inventory'
+      && (this.input.toolkit === 'github' || !cursor?.checkpoint);
     return {
-      items: resultToSourceItems({
-        result: execution.result,
-        sourceInstanceId: pull.instanceId,
-        collectionScope: pull.collectionScope,
-        streamKind: this.input.streamKind,
-        connectorId: this.input.connectorId,
-        connectionId: this.input.connection.id,
-        actionId: this.input.actionId,
-        toolkit: this.input.toolkit,
-        agentId: this.input.agentId,
-        workspaceId: this.input.workspaceId,
-        connectionIdentity: this.input.connection.identity,
-      }),
-      nextCursor: new Date().toISOString(),
-      warnings: [],
+      items,
+      nextCursor: nextPageToken
+        ? encodeConnectedSourceCursor({
+            checkpoint: cursor?.checkpoint,
+            scanStartedAt,
+            pageToken: nextPageToken,
+            syncToken: cursor?.syncToken,
+          })
+        : encodeConnectedSourceCursor({ checkpoint: scanStartedAt, ...(nextSyncToken ? { syncToken: nextSyncToken } : {}) }),
+      hasMore: Boolean(nextPageToken),
+      warnings,
+      ...(completeSnapshot ? { snapshotExternalIds: items.map((item) => item.externalId) } : {}),
     };
   }
 }

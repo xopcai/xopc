@@ -1,62 +1,47 @@
-# Project、Task 与 Notes
+# Project、Task 与笔记
 
-xopc 刻意保持产品模型简单：
+工作需要在一次对话之外保持组织时使用这些功能。简短或探索性请求只用聊天即可。
 
-- **Task** 是 xopc 承诺达成并验证的结果。
-- **Project** 是可选的共享上下文，关联相关 Task、会话、文件和活动。
-- **Note / Workspace** 保存长期输入材料与交付产物。
-- **Conversation** 是工作开始、推进和请求用户决定的入口。
-
-首页位于 `#/`，项目位于 `#/projects`，任务详情位于 `#/tasks/:id`。
-
-## 什么时候使用哪个对象
+## 选择合适的位置
 
 | 需求 | 使用 |
 | --- | --- |
-| 提问、探索或完成一个小任务 | Conversation |
-| 持续推进一个结果，并确认是否真正完成 | Task |
-| 多个相关结果共享上下文 | Project |
-| 保存参考材料或产出文件 | Note / Workspace |
-| 重复一个已知的多步骤执行方案 | Workflow，并关联 Task |
-| 按时间或事件运行 | Automation；推进某个结果时关联 Task |
+| 提问或完成一个小请求 | Session |
+| 让一个结果跨时间持续推进 | Task |
+| 为多个相关 Task 共享上下文 | Project |
+| 保存来源材料或产物 | Note 或工作区文件 |
+| 重复确定的步骤 | Workflow |
+| 按计划或事件启动工作 | Automation |
 
-## Task：唯一事实源
+## 创建有用的 Task
 
-一个 Task 持有：
+Task 应回答：
 
-- 目标和可选的 Project 上下文；
-- 验收标准与交付物；
-- 边界与所需授权；
-- 内部状态和派生的用户状态；
-- 下一步和阻塞原因；
-- 执行尝试、运行租约与会话；
-- 验证证据与执行回执。
+- 最终需要得到什么结果？
+- 如何判断已经完成？
+- 范围内和范围外分别是什么？
+- 下一步动作是什么？
+- 当前缺少哪个决定或权限？
 
-面向用户的状态刻意保持为三种：
+不要把每条聊天消息都变成 Task。结果需要跨 Session 保存，或需要多步执行和验证时再创建。
 
-- `running`：xopc 可以继续推进；
-- `needs_user`：确实需要用户提供决定、权限、凭证或事实；
-- `completed`：验收标准已经通过验证。
+## 用 Project 保存共享上下文
 
-Project、Workflow、Automation 和 Conversation 只关联 Task，不维护另一套相互竞争的任务状态。
+Project 用于组织相关 Task、对话、文件和活动。它是上下文，不是第二套任务状态。Project 说明保持简短，把可执行结果放进 Task。
 
-## Project：上下文，不是任务管理器
+## 笔记与工作区文件
 
-Project 可以包含简报、约束、文件、相关会话、Task、工作流运行和活动。它的运营视图从关联 Task 与运行中派生进展和注意事项，因此用户无需维护第二套层级。
+快速保存长期信息使用 Note；需要 Agent 读取、编辑或交付的材料使用工作区文件。文件名应清晰，发送给云端模型前删除敏感信息。
 
-## Home：最小但有用的视图
+## 简单示例
 
-Home 是对现有状态的读取投影，只展示一个有上限的决策队列、正在推进的 Task、最近已验证结果，以及真正需要关注的失败运行。同一个 Task 不会同时以“状态卡”和“决策卡”重复出现。
+准备一次产品发布时：
 
-## 示例
+1. 创建 Project 保存发布背景和参考文件。
+2. 为不同可验证结果创建 Task，例如“发布软件包”和“发送发布公告”。
+3. 为每个 Task 定义完成检查。
+4. 只有步骤会重复时才使用 Workflow。
+5. 只有时间或外部触发重要时才添加 Automation。
+6. 检查结果后再关闭 Task，不要只因为 Agent 运行结束就标记完成。
 
-以版本发布为例：
-
-1. 用户在 Conversation 中说明想要的发布结果。
-2. xopc 创建一个 Task Contract，写清范围、验收标准、交付物和验证方式。
-3. 只有多个 Task 或长期文件需要共享上下文时才创建 Project。
-4. xopc 根据执行需要选择直接工具、Workflow 或 Automation。
-5. Home 只询问 xopc 无法安全代替用户做出的决定。
-6. 只有证据满足验收标准，Task 才进入完成状态。
-
-继续阅读 [Task 闭环](./concepts/loops.md)、[工作流](./workflows.md)、[自动化](./automations.md) 和 [Workspace](./workspace.md)。
+继续阅读 [Task 闭环](./concepts/loops.md)、[Workflow](./workflows.md)和[Automation](./automations.md)。

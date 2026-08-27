@@ -10,6 +10,7 @@ import {
 import type { KnowledgeSourceAdapter, KnowledgeSourceItemInput, KnowledgeSyncRun } from './types.js';
 
 const log = createLogger('KnowledgeIngestion');
+const MAX_PULL_PAGES = 20;
 
 function deletionInputs(instanceId: string, collectionScope: string, snapshotExternalIds: string[] | undefined): KnowledgeSourceItemInput[] {
   if (!snapshotExternalIds) return [];
@@ -113,30 +114,55 @@ export class KnowledgeIngestionService {
     const signal = params.signal ?? controller!.signal;
 
     try {
-      const pulled = await adapter.pull({
-        instanceId: params.instanceId,
-        collectionScope: params.collectionScope,
-        cursor: cursorBefore,
-        windowStart: params.windowStart,
-        signal,
-      });
-      const tombstones = deletionInputs(params.instanceId, params.collectionScope, pulled.snapshotExternalIds);
-      const stored = upsertKnowledgeSourceItems([...pulled.items, ...tombstones]);
-      this.state.setCursor(params.instanceId, params.collectionScope, pulled.nextCursor);
+      const items: KnowledgeSourceItemInput[] = [];
+      const warnings: string[] = [];
+      const snapshotExternalIds: string[] = [];
+      let snapshotComplete = true;
+      let pullCursor = cursorBefore;
+      let cursorAfter = cursorBefore;
+      for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
+        const pulled = await adapter.pull({
+          instanceId: params.instanceId,
+          collectionScope: params.collectionScope,
+          cursor: pullCursor,
+          windowStart: params.windowStart,
+          signal,
+        });
+        items.push(...pulled.items);
+        warnings.push(...pulled.warnings);
+        if (pulled.snapshotExternalIds) snapshotExternalIds.push(...pulled.snapshotExternalIds);
+        else snapshotComplete = false;
+        cursorAfter = pulled.nextCursor;
+        if (!pulled.hasMore) break;
+        if (!pulled.nextCursor || pulled.nextCursor === pullCursor) {
+          throw new Error('Knowledge source returned an invalid pagination cursor.');
+        }
+        if (page === MAX_PULL_PAGES - 1) {
+          throw new Error(`Knowledge source exceeded the ${MAX_PULL_PAGES}-page safety limit.`);
+        }
+        pullCursor = pulled.nextCursor;
+      }
+      const tombstones = deletionInputs(
+        params.instanceId,
+        params.collectionScope,
+        snapshotComplete ? snapshotExternalIds : undefined,
+      );
+      const stored = upsertKnowledgeSourceItems([...items, ...tombstones]);
+      this.state.setCursor(params.instanceId, params.collectionScope, cursorAfter);
       const completed = finishKnowledgeSyncRun({
         runId: run.id,
-        status: pulled.warnings.length > 0 ? 'partial' : 'succeeded',
-        cursorAfter: pulled.nextCursor,
-        itemsSeen: pulled.items.length,
+        status: warnings.length > 0 ? 'partial' : 'succeeded',
+        cursorAfter,
+        itemsSeen: items.length,
         itemsCreated: stored.created,
         itemsUpdated: stored.updated,
-        warnings: pulled.warnings,
+        warnings,
       });
       log.info(
         {
           runId: run.id,
           sourceInstanceId: params.instanceId,
-          itemsSeen: pulled.items.length,
+          itemsSeen: items.length,
           itemsCreated: stored.created,
           itemsUpdated: stored.updated,
           itemsDeleted: tombstones.length,

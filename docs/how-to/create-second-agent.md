@@ -1,37 +1,34 @@
-# How to create a second agent
+# Create a second Agent
 
-Use this when you want a separate agent with its own workspace and model role.
+Create another Agent when it needs a different responsibility, workspace, model, or tool boundary. A different conversation topic only needs a new Session.
 
-## 1. Add the agent
+## In the console
 
-`agents add` requires a workspace path:
+1. Open **Agents** and choose **Add Agent**.
+2. Enter a short ID and a clear display name.
+3. Describe its primary responsibility.
+4. Choose a workspace and model.
+5. Enable only the required tools and Skills.
+6. Save and start a new Chat with that Agent.
+
+Test a read-only task first. Add write, shell, browser, messaging, or external-account access only after the Agent behaves as expected.
+
+## In the terminal
 
 ```bash
-xopc agents add coder --workspace ~/.xopc/workspace/coder --model anthropic/claude-sonnet-4-5
-```
-
-Show the configured agents:
-
-```bash
+xopc agents add coder --workspace ~/.xopc/workspace/coder --model <provider>/<model>
 xopc agents list
 ```
 
-## 2. Use the agent in a session
+Then select the Agent in a new client Session, or follow the installed command help for an explicit Session option.
 
-Session keys use the `agent:{agentId}:...` shape. For a direct topic:
-
-```bash
-xopc agent -s agent:coder:main -m "Review this project structure."
-```
-
-In the TUI:
+## Make it the default
 
 ```bash
-xopc tui -s agent:coder:main
+xopc config set agents.default coder
+xopc config validate
 ```
 
-## 3. Edit capabilities
+This affects new Sessions only. Existing Sessions remain assigned to their original Agent.
 
-The runtime source of truth is `agents.list[]` in `~/.xopc/xopc.json`. Each entry is an Agent Capability Manifest with identity, responsibilities, workspace, model roles, tools, skills, workflows, and boundaries. User understanding and memory are configured once in top-level `userContext` and shared by every agent.
-
-For the field reference, see [Agent manifest](../agent-manifest.md) and [Configuration](../configuration.md).
+For capability decisions and exact fields, see [Agents](../routing-system.md) and [Configuration](../configuration.md).

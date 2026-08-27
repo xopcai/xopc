@@ -67,7 +67,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         unscopedProjectOnly: request.scope?.projectId == null,
         visibleToWorkspaceId: request.scope?.workspaceId,
         unscopedWorkspaceOnly: request.scope?.workspaceId == null,
-        providerId: this.id,
         kinds: request.kinds,
         maxResults: request.maxResults,
         minScore: request.minScore,

@@ -143,9 +143,8 @@ export class SessionInputCoordinator {
         });
       }
 
-      const state = this.publish(sessionKey);
       void this.drain(sessionKey);
-      return { ok: true, effectiveDelivery: 'next', state };
+      return { ok: true, effectiveDelivery: 'next', state: this.publish(sessionKey) };
     });
   }
 

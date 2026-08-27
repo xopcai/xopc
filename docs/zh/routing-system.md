@@ -1,125 +1,68 @@
-# Session 路由
+# Agent
 
-说明入站流量如何映射到 **session key**、**智能体（`agentId`）**，以及跨通道的 **identity link**（身份关联）。
+Agent 是为某类工作配置的具名助手。每个 Agent 可以有独立的角色、工作区、模型、工具、技能和安全边界；按照你的设置，用户拥有的上下文可以在多个 Agent 之间使用。
 
-## Session Key 格式
+## 什么时候创建新 Agent
 
-```
-agent:{agentId}:{rest}
-```
+真正需要能力边界时再创建，例如：
 
-第一段固定为 `agent`，第二段选择 agent manifest，后续路径取决于 scope 与通道。
+- 允许编辑代码仓库的开发 Agent；
+- 可以访问网页和连接器的研究 Agent；
+- 使用独立工作区的个人 Agent；
+- 使用低成本模型处理简单任务的轻量 Agent。
 
-### 示例
+只是开始一个不同话题时，无需新建 Agent，新建一个 [Session](./session.md) 即可。
 
-```
-agent:main:main
-agent:main:telegram:default:direct:123456
-agent:main:telegram:group:-100123456
-agent:main:gateway:direct:chat_abc123
-agent:main:cli:direct:cli
-```
+## 在控制台创建 Agent
 
-## 配置
+<!-- 截图占位：/screenshots/agents.png -->
 
-路由写在 **`~/.xopc/xopc.json`** 中（可用环境变量 `XOPC_CONFIG` 覆盖路径）。请使用 **JSON**，不要使用 YAML。
+1. 打开 **Agent**。
+2. 选择 **添加 Agent**。
+3. 填写清晰的名称和职责。
+4. 选择主要模型和工作区。
+5. 只启用它确实需要的工具和技能。
+6. 保存，然后用该 Agent 开始新对话。
 
-### 智能体与 bindings
+允许写文件、运行命令、发送消息或访问外部账号之前，先用只读请求测试它的行为。
 
-在 `agents.list` 中注册多个智能体。**绑定规则** `bindings` 按 **priority** 从高到低匹配；每条 `match` 中的 **`channel`** 为**精确**通道 id（如 `telegram`、`gateway`），匹配时不区分大小写，**不支持**用 `*` 表示「所有通道」。可按通道分别写规则；若没有任何规则匹配，**默认智能体 id** 为：可选的顶层 **`agents.default`** → 否则 **`agents.list` 中第一个 enabled 的 id** → 否则 **`main`**。
+## 在终端创建 Agent
 
-### 运行时有效配置（effective profile）
-
-对于 `agent:{agentId}:...` session key，运行时会解析 **`agents.list`** 中匹配且 enabled 的 manifest，并应用其 `extends` 声明的 **`agents.capabilityPresets`**。若 `agentId` 不存在或已禁用，则按上面的**默认智能体**解析配置。磁盘上的 `~/.xopc/agents/<id>/` 等路径与上述配置一致解析；**网关/运行时以 `config.json` 为准**。
-
-`match.peerId` 支持简单的 `*` 通配（例如 Telegram 超级群 `-100*`）。
-
-```json
-{
-  "agents": {
-    "default": "main",
-    "capabilityPresets": {},
-    "list": [
-      {
-        "id": "main",
-        "identity": { "name": "Main", "role": "通用助手", "language": "zh-CN", "tone": "direct" },
-        "responsibilities": { "primary": ["帮助用户"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      },
-      {
-        "id": "coder",
-        "identity": { "name": "Coder", "role": "编程助手", "language": "zh-CN", "tone": "direct" },
-        "responsibilities": { "primary": ["帮助处理代码任务"] },
-        "workspace": { "root": "~/.xopc/workspace/coder" },
-        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
-        "tools": { "builtin": { "shell": { "mode": "confirm", "scope": "workspace" } } },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      }
-    ]
-  },
-  "bindings": [
-    {
-      "agentId": "coder",
-      "priority": 100,
-      "match": {
-        "channel": "telegram",
-        "peerId": "-100*"
-      }
-    }
-  ],
-  "session": {
-    "identityLinks": {
-      "alice": ["telegram:123456789", "discord:987654321"]
-    }
-  }
-}
+```bash
+xopc agents add research
+xopc agents list
 ```
 
-### Identity links（跨通道别名）
+命令会创建或更新 Agent 配置，并准备所需目录。要从配置中移除：
 
-`session.identityLinks` 将 **规范名** 映射到 **`channel:peerId`** 别名列表，便于跨通道识别同一用户。`session.dmScope` 等选项见 [配置参考](/zh/configuration)。
-
-## API
-
-### 生成 Session Key
-
-```typescript
-import { buildSessionKey } from '@xopcai/xopc/routing/index.js';
-
-const sessionKey = buildSessionKey({
-  agentId: 'main',
-  source: 'telegram',
-  accountId: 'default',
-  peerKind: 'dm',
-  peerId: '123456',
-});
+```bash
+xopc agents delete research
 ```
 
-### 路由决策
+如果命令提供磁盘清理选项，请仔细阅读确认提示；删除文件与停用 Agent 是不同的操作。
 
-```typescript
-import { resolveRoute } from '@xopcai/xopc/routing/index.js';
+## 选择默认 Agent
 
-const route = resolveRoute({
-  config,
-  channel: 'telegram',
-  accountId: 'default',
-  peerKind: 'dm',
-  peerId: '123456',
-});
+没有明确指定 Agent 的新 Session 会使用默认值：
 
-console.log(route.sessionKey); // 例如 main:telegram:default:dm:123456（受 dmScope 影响）
-console.log(route.agentId); // 无匹配规则时的默认 Agent（例如 main）
+```bash
+xopc config set agents.default research
+xopc config validate
 ```
 
-## 相关文件
+已有 Session 仍属于原 Agent。要使用其它 Agent，请新建对话并明确选择。
 
-- **核心路由** — 会话 key、bindings 与规则求值。  
-- **Telegram** — 启用 Telegram 通道时提供与通道相关的路由钩子。  
+## 设计安全的 Agent
+
+| 设置 | 需要回答的问题 |
+| --- | --- |
+| 职责 | 这个 Agent 应接受或拒绝哪些工作？ |
+| 工作区 | 它可以使用哪些文件？ |
+| 模型 | 哪个模型在质量、速度、隐私和成本之间最合适？ |
+| 工具 | 它可以执行哪些动作？ |
+| 技能 | 它需要哪些可复用指令？ |
+| 边界 | 哪些动作必须先确认？ |
+
+从满足任务所需的最小能力开始，只有验证确有需要后再增加访问权限。
+
+完整示例见[创建第二个 Agent](./how-to/create-second-agent.md)，精确字段见[配置参考](./reference/configuration.md)。

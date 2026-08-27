@@ -452,7 +452,7 @@ function renderTextOrImageBlock(
     }
 
     return (
-      <div key={key} className="markdown-content min-w-0">
+      <div key={key} className="assistant-markdown-content markdown-content min-w-0">
         <ChatMarkdownView
           content={visibleText}
           compact

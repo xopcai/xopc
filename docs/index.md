@@ -3,85 +3,63 @@ layout: home
 
 hero:
   name: xopc
-  text: Turn goals into loops.
-  tagline: "Keep what matters moving. A self-hosted, local-first personal AI runtime connecting models, agents, durable state, workflows, automations, and every surface you use. You own the data, keys, and environment."
+  text: Keep important work moving.
+  tagline: "A local-first AI assistant for conversations, ongoing tasks, repeatable workflows, and the apps you already use. You choose the models and keep control of the environment."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
     alt: xopc
   actions:
     - theme: brand
-      text: Get Started
+      text: Get started
       link: /getting-started
     - theme: alt
       text: View on GitHub
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 🧠 Durable state, not one-shot context
-    details: "Persistent conversations, tasks, projects, notes, workspaces, and run history give long-running work an explicit place to resume and inspect."
-    link: /concepts/loops
-  - title: 🏠 Local-first by default
-    details: "xopc runs on your hardware. Config, workspace files, credentials, and local state live under ~/.xopc/. No mandatory cloud."
-    link: /configuration
-  - title: 🔑 Bring your own keys. Any model.
-    details: "DeepSeek, OpenAI, Anthropic, Google, Ollama, LM Studio, vLLM, Bedrock, Azure — 20+ providers. Run offline or mix cloud and local. Switch models in one config line."
-    link: /models
-  - title: 📡 One runtime, every surface
-    details: "TUI, CLI, browser, desktop, iOS/Android, and messengers connect to the same agents, sessions, and project state."
-    link: /desktop-app
-  - title: 🧩 Explicit agent boundaries
-    details: "Configure identity, model roles, workspace, tool policy, skills, and boundaries per agent; user understanding and memory stay shared across all agents."
-    link: /extensions
-  - title: ⏰ Triggerable automations
-    details: Run agents or workflows on schedules, manually, or from webhooks, with visible run results and failures.
-    link: /automations
-  - title: 🌐 Browser automations
-    details: Teach the assistant a web task once, then run the verified steps again from the console, chat, or a schedule.
-    link: /browser-workflows
-  - title: 🔀 Dynamic workflows
-    details: Fan out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
+  - title: Start as a normal assistant
+    details: Install the desktop app or terminal client, connect one model, and begin Chat. Add advanced features only when you need them.
+    link: /getting-started
+  - title: Keep your data under your control
+    details: Configuration, Sessions, Agent profiles, and workspaces are stored on your machine by default. You choose any cloud services involved.
+    link: /workspace
+  - title: Continue work across devices
+    details: Use the same Agents and Sessions from desktop, terminal, browser, mobile, Telegram, Weixin, and Feishu.
+    link: /channels/
+  - title: Organize ongoing results
+    details: Use Projects and Tasks when work needs an explicit result, current state, blocker, and next action.
+    link: /projects-tasks-notes
+  - title: Repeat proven work
+    details: Build visual Workflows, save browser tasks, and run them manually, on a schedule, or from a Webhook.
     link: /workflows
-  - title: 🤖 Multi-agent routing
-    details: Route different contexts to different agents — each with its own model, workspace, tools, and system prompt.
+  - title: Control capabilities
+    details: Give each Agent deliberate models, tools, Skills, connectors, MCP servers, and confirmation boundaries.
     link: /routing-system
-  - title: 🌐 HTTP/realtime gateway
-    details: REST JSON APIs plus one authenticated realtime WebSocket; the same React console in browser and Electron.
-    link: /gateway
-  - title: 🛠️ Type-safe tools
-    details: TypeBox schemas for built-in and custom tools — web search, browser (Playwright, opt-in), file ops, and more.
-    link: /tools
-  - title: 🎙️ Voice & vision
-    details: STT/TTS where configured (Telegram, gateway). Images — vision plus generation when wired up.
-    link: /voice
 ---
 
 [![xopc desktop app demo](/xopc-desktop.gif)](./desktop-app.md)
 
-## xopc manages a work runtime
+## The shortest path
 
-Most chat products organize everything around one conversation. xopc gives long-running work one state owner and a few connected capabilities:
+1. [Install the desktop app](./desktop-app.md) or follow the [terminal quick start](./first-5-minutes.md).
+2. [Connect one model](./how-to/configure-first-model.md).
+3. Send a test message in Chat.
+4. Add an Agent, channel, Workflow, or remote device only when the first conversation works.
 
-| Object | What it keeps | How it continues |
-| --- | --- | --- |
-| Agent | Identity, responsibilities, model roles, tools, skills, and boundaries | Give each kind of work a deliberate capability envelope; all agents share user context |
-| Session | Transcript, context, and run events | Resume from terminal, web, desktop, mobile, or a messenger |
-| Task / Project | Verified result state, optional shared context, blockers, next actions, and linked activity | Keep work moving without a second task hierarchy |
-| Note / Workspace | Quick inputs, attachments, and durable files | Collect source material and retain reusable context and artifacts |
-| Workflow / Automation | Multi-agent execution, triggers, run state, and results | Execute complex work and run it again on time or on an event |
+## Find the right guide
 
-The point is not that “AI remembers everything automatically.” Task owns work state, execution and triggers are observable, and you can tell where to resume. Read [The Task Loop](./concepts/loops.md).
-
-## Start by what you want
-
-| Goal | Start here |
+| You want to… | Read |
 | --- | --- |
-| I want a private AI assistant on my computer | [PC Desktop App](./desktop-app.md) |
-| I want to understand how xopc stores state, executes work, and triggers follow-up | [The Task Loop](./concepts/loops.md) |
-| I want to organize long-running work with projects, tasks, and notes | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
-| I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](./comparison.md) |
-| I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](./channels/index.md) |
-| I want scheduled reviews, reminders, and summaries | [Automations](./automations.md) |
-| I want the assistant to repeat a task on a website | [Browser automations](./browser-workflows.md) |
-| I want multiple agents for work, code, and personal contexts | [Routing system](./routing-system.md) |
-| I want to extend xopc with tools, channels, or reusable skills | [Skills](./skills.md) and [Extensions](./extensions.md) |
+| Start a conversation and return to it later | [Chat and Sessions](./session.md) |
+| Use different assistants for different work | [Agents](./routing-system.md) |
+| Keep long-running work organized | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
+| Repeat a multi-step process | [Workflows](./workflows.md) |
+| Run something on a schedule | [Automations](./automations.md) |
+| Use xopc from a messaging app | [Channels](./channels/index.md) |
+| Connect external services | [Connectors](./connectors/index.md) |
+| Access xopc away from the host | [Remote access](./remote-access.md) |
+| Understand local storage and backup | [Data and file locations](./workspace.md) |
+| Fix a setup problem | [Troubleshooting](./how-to/diagnose-broken-setup.md) |
+
+New to the product model? Read [The Task Loop](./concepts/loops.md) after the first successful Chat.

@@ -27,6 +27,14 @@ import {
   updateUserProfile,
 } from '../user-context-repository.js';
 import { summarizeUserUnderstandingQuality } from '../user-context-quality-repository.js';
+import {
+  claimNextConnectorLearningJob,
+  enqueueConnectorLearningJob,
+  updateConnectorLearningJob,
+} from '../connector-learning-repository.js';
+import { upsertConnectorConnection, upsertConnectorInstallation } from '../connector-repository.js';
+import { reconcileConnectorAccount } from '../connector-account-repository.js';
+import { upsertUnderstandingSourceGrant } from '../../../user-context/sources/repository.js';
 
 describe('structured user context repository', () => {
   let stateDir: string;
@@ -145,14 +153,48 @@ describe('structured user context repository', () => {
   });
 
   it('computes quality metrics from structured understanding and turn feedback', () => {
+    const now = Date.now();
     createUnderstanding({
       kind: 'preference', canonicalKey: 'preference:quality', status: 'active',
       scope: { type: 'global' }, explicitness: 'explicit', durability: 'durable',
       sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.8,
       statement: 'Prefer concise summaries.', createdBy: 'user', changeReason: 'test',
     });
-    const metrics = summarizeUserUnderstandingQuality();
+    upsertConnectorInstallation({
+      id: 'composio-gmail-local-owner', connectorId: 'composio-gmail', principalId: 'local-owner',
+      enabled: true, allowedAgentIds: ['main'], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [],
+    });
+    upsertConnectorConnection({
+      id: 'gmail-connection', installationId: 'composio-gmail-local-owner', connectorId: 'composio-gmail',
+      provider: 'composio', principalId: 'local-owner', providerConnectionId: 'provider-gmail',
+      identity: { email: 'owner@example.com' }, status: 'active', isDefault: true, metadata: { toolkit: 'gmail' },
+    });
+    const account = reconcileConnectorAccount({
+      connectionId: 'gmail-connection', identityKey: 'gmail:owner@example.com', identity: { email: 'owner@example.com' },
+    });
+    upsertUnderstandingSourceGrant({
+      sourceKey: `connector-account:${account.id}`, adapterId: 'connector:composio-gmail', category: 'mail',
+      platform: 'all', displayName: 'Gmail', accessMode: 'continuous', retentionPolicy: 'bounded_raw',
+      processingPolicy: 'remote_allowed', config: {}, lastCollectedAt: now, nowMs: now,
+    });
+    enqueueConnectorLearningJob({
+      connectorId: 'composio-gmail', accountId: account.id, connectionId: 'gmail-connection',
+      sourceInstanceId: `composio:composio-gmail:${account.id}`, agentId: 'main', mode: 'bootstrap',
+      idempotencyKey: 'quality-bootstrap', nowMs: now,
+    });
+    const job = claimNextConnectorLearningJob(now)!;
+    updateConnectorLearningJob(job.id, { status: 'completed', phase: 'completed', finished: true, nowMs: now + 4_000 });
+
+    const metrics = summarizeUserUnderstandingQuality({ nowMs: now + 4_000 });
     expect(metrics.records).toMatchObject({ total: 1, active: 1, explicit: 1, averageConfidence: 0.8 });
     expect(metrics.decisions).toMatchObject({ total: 1, acceptanceRate: 1 });
+    expect(metrics.quickUnderstanding).toEqual({
+      sourcesAuthorized: 1,
+      sourcesCollected: 1,
+      sourceCoverage: 1,
+      bootstrapJobs: 1,
+      successfulBootstrapRate: 1,
+      medianBootstrapDurationMs: 4_000,
+    });
   });
 });

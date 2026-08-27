@@ -50,7 +50,6 @@ function connectorSourceCategory(toolkit: string): UnderstandingSourceCategory {
   if (toolkit === 'gmail') return 'mail';
   if (toolkit === 'googlecalendar') return 'calendar';
   if (toolkit === 'github' || toolkit === 'linear') return 'code_activity';
-  if (toolkit === 'slack') return 'messages';
   return 'files';
 }
 
@@ -251,7 +250,7 @@ export function startConnectorLearningCoordinator(options: {
     }));
     publish(updateConnectorLearningJob(job.id, { phase: 'deriving' }));
     const understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
-      .process(job.sourceInstanceId, job.connectorId, job.agentId);
+      .process(job.agentId);
     for (const record of understanding.createdRecords.filter((item) => item.kind === 'project_context')) {
       upsertUserFocus({
         canonicalKey: `connector-focus:${job.accountId}:${record.id}`,

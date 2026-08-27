@@ -1,40 +1,28 @@
 ---
-title: "TOOLS.md Template"
-summary: "Workspace template for TOOLS.md"
-read_when:
-  - Setting up a workspace manually
+title: "TOOLS.md 模板"
 ---
 
-# TOOLS.md - Local Notes
+# TOOLS.md：本地工具提示
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+这里只记录 Agent 使用工具时需要知道、并且可以安全进入模型上下文的环境信息。
 
-## What Goes Here
+## 可以记录
 
-Things like:
+- 工作区内常用目录及用途；
+- 项目使用的构建、测试和格式化命令；
+- 设备或服务的非敏感别名；
+- 执行动作前必须遵守的本地约束。
 
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Device nicknames
-- API endpoints
-- Anything environment-specific
+## 不要记录
 
-## Examples
+- 密码、API Key、Token、私钥或恢复码；
+- 可以从标准命令或项目文档直接获得的冗长信息；
+- 已经失效的主机名、账号或路径。
 
-```markdown
-### SSH
+## 示例
 
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
+```md
+- 主代码仓库：`~/develop/example`
+- 修改后运行：`pnpm test`
+- 发布、发送消息和删除数据前必须向用户确认。
 ```
-
-## Why Separate?
-
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes.
-
----
-
-Add whatever helps you do your job. This is your cheat sheet.

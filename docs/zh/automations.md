@@ -1,141 +1,56 @@
 # 自动化
 
-xopc 自动化是持久化的产品级规则，存储在 SQLite（`~/.xopc/xopc.db`）。一个自动化由一个触发器和一个动作组成，记录每次运行，并可执行 Agent 指令、工作流或已保存的[浏览器自动化](browser-workflows.md)。
+Automation 可以手动、按计划或通过 Webhook 启动 Agent、Workflow 或已保存的浏览器任务。每次运行都会保留状态和结果，便于检查实际发生了什么。
 
-在网关控制台打开 `#/automations` 可以创建、暂停、恢复、立即运行、删除和查看自动化。创建使用居中的 modal；页面同时展示下一次运行、最近历史和运行指标。
+## 选择执行内容
 
-## 核心概念
-
-| 概念 | 含义 |
+| 动作 | 适用场景 |
 | --- | --- |
-| 触发器 | 自动化如何开始：手动、计划或 webhook |
-| 动作 | 实际执行内容：Agent 指令、工作流或浏览器自动化 |
-| 运行记录 | 一次执行尝试，包含状态、时间、摘要和错误 |
-| 运行后处理 | 可选的保存到会话或调用 webhook |
-| 可靠性 | 超时、重试、并发和连续失败后停用设置 |
+| Agent 指令 | 每次运行时需要由一个 Agent 理解请求并决定具体做法 |
+| Workflow | 步骤已经明确，需要按既定流程运行 |
+| 浏览器自动化 | 需要重复已经测试过的网站操作 |
 
-## 触发器
+对于规则明确的重复工作，优先选择已发布 Workflow 或已测试浏览器自动化，不要使用范围过宽的 Agent 指令。
 
-计划触发支持单次、固定间隔和 cron 表达式三种形式：
+## 创建 Automation
 
-```ts
-type AutomationSchedule =
-  | { kind: 'once'; at: string }
-  | { kind: 'interval'; everyMs: number; anchorMs?: number }
-  | { kind: 'cron'; expr: string; tz?: string };
+<!-- 截图占位：/screenshots/automation-editor.png -->
 
-type AutomationTrigger =
-  | { kind: 'manual' }
-  | { kind: 'schedule'; schedule: AutomationSchedule }
-  | { kind: 'webhook'; secretId?: string };
-```
+1. 在 Gateway 控制台打开 **Automation**。
+2. 选择 **创建 Automation**。
+3. 使用描述结果的名称，例如“工作日 9:00 计划摘要”。
+4. 选择动作和目标。
+5. 选择触发方式：手动、单次、固定间隔、Cron 或 Webhook。
+6. 依赖日历时间时，明确设置时区。
+7. 设置超时和重试策略。
+8. 保存后先选择 **立即运行** 测试。
 
-精确单次提醒用 `once`，固定频率监控用 `interval`，按日历运行用 `cron`。依赖用户本地时间的 cron 表达式计划应在该 schedule 上显式设置 `tz`。
+第一次运行保持手动。只有结果和副作用都正确后，才启用无人值守计划。
 
-## 动作
+## 监控运行
 
-自动化的动作面保持精简：
+Automation 页面会显示是否启用、下次运行时间、最近结果和连续失败次数。打开一次运行可以查看摘要、关联的 Session 或 Workflow、时间和错误。
 
-```ts
-type AutomationAction =
-  | {
-      kind: 'agent';
-      agentId?: string;
-      instruction: string;
-      workingDirectory?: string;
-      model?: string;
-      timeoutSeconds?: number;
-    }
-  | {
-      kind: 'workflow';
-      workflowId: string;
-      agentId?: string;
-      input?: unknown;
-      goal?: string;
-      timeoutSeconds?: number;
-    }
-  | {
-      kind: 'browser_recipe';
-      recipeId: string;
-      args?: Record<string, unknown>;
-      timeoutSeconds?: number;
-    };
-```
+依赖项、凭据或输入暂时不可用时使用 **暂停**，定义和历史记录仍会保留。只有确定不再需要时才删除。
 
-需要在会话中让 Agent 做事时选择 Agent 动作；需要直接调用已知工作流、不依赖模型判断如何触发时选择工作流动作；需要重复执行已经和助手创建并测试过的网页操作时，选择浏览器自动化。只有已启用的浏览器自动化可以被选择。
+## 让计划更可靠
 
-## 数据模型
+- 确认显示的时区和下次运行时间。
+- 为动作写明成功标准。
+- 设置现实的超时时间。
+- 只对短暂故障有限重试，不要用重试掩盖无效凭据或错误输入。
+- 多次运行会修改同一外部数据时，避免重叠执行。
+- 定期查看失败记录；计划触发不代表执行一定成功。
 
-运行状态保存在自动化行上：
+## Webhook 安全
 
-```ts
-type AutomationState = {
-  nextRunAtMs?: number;
-  runningRunId?: string;
-  lastRunAtMs?: number;
-  lastRunStatus?: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
-  lastError?: string;
-  consecutiveFailures?: number;
-};
-```
+Webhook 地址和密钥都应视为凭据，不要放进公开仓库、截图或日志。在允许动作写文件、发消息或修改已连接服务前，先验证所有外部输入。
 
-SQLite 表：
+## 示例
 
-| 表 | 用途 |
-| --- | --- |
-| `automations` | 自动化定义、触发器、动作、可靠性、运行后处理与状态 |
-| `automation_runs` | 执行历史与结果 |
+- 每个工作日早晨汇总未完成 Task；
+- 每周五运行周复盘 Workflow；
+- 执行已保存的浏览器检查并报告变化；
+- 从另一个受信任服务触发调研 Workflow。
 
-自动化由数据库承载，不通过 `xopc.json` 配置。
-
-## 调度行为
-
-- 启动时会为计划型自动化重新计算 `nextRunAtMs`。
-- 手动和 webhook 自动化只在显式触发时运行。
-- 正在运行的自动化通过 `state.runningRunId` 跟踪。
-- 运行记录会把状态、耗时、摘要、错误、会话 key 与工作流运行 id 写入 SQLite。
-- 网关控制台和 API 都可查看运行历史。
-
-## Gateway API
-
-创建：
-
-```http
-POST /api/automations
-Content-Type: application/json
-
-{
-  "name": "Daily review",
-  "trigger": {
-    "kind": "schedule",
-    "schedule": { "kind": "cron", "expr": "0 9 * * 1-5", "tz": "Asia/Shanghai" }
-  },
-  "action": {
-    "kind": "agent",
-    "instruction": "总结昨天并规划今天。"
-  },
-  "afterRun": { "kind": "saveToSession" },
-  "reliability": { "timeoutSeconds": 1800, "retryCount": 1 }
-}
-```
-
-常用端点：
-
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| GET | `/api/automations` | 列出自动化 |
-| POST | `/api/automations` | 创建自动化 |
-| GET | `/api/automations/metrics` | 读取自动化指标 |
-| GET | `/api/automations/:id` | 读取单个自动化 |
-| PATCH | `/api/automations/:id` | 更新自动化 |
-| DELETE | `/api/automations/:id` | 删除自动化 |
-| POST | `/api/automations/:id/run` | 立即运行 |
-| POST | `/api/automations/:id/pause` | 暂停自动化 |
-| POST | `/api/automations/:id/resume` | 恢复自动化 |
-| GET | `/api/automation-runs` | 列出运行记录 |
-| GET | `/api/automation-runs/:runId` | 读取单次运行 |
-| POST | `/api/automation-runs/:runId/cancel` | 取消运行 |
-
-## Agent 工具
-
-当网关运行时提供自动化服务时，Agent 可以使用 `automation` 工具列出、创建、更新、删除、运行、暂停、恢复自动化，并查看运行历史。工具使用与 API 相同的结构化 payload。
+可重复步骤见[工作流](./workflows.md)，网站操作见[浏览器自动化](./browser-workflows.md)。

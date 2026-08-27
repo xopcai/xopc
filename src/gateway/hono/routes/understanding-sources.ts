@@ -1,5 +1,10 @@
 import type { Hono } from 'hono';
 
+import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
+import {
+  listConnectedContentCandidates,
+  readConnectedContent,
+} from '../../../connectors/content-enrichment.js';
 import {
   deleteUnderstanding,
   getConnectorAccount,
@@ -58,6 +63,24 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
     ok: true,
     grants: listUnderstandingSourceGrants({ includeRevoked: c.req.query('includeRevoked') === 'true' }),
   }));
+
+  authenticated.get('/api/understanding/sources/content-candidates', (c) => {
+    const agentId = resolveDefaultAgentId(deps.service.currentConfig);
+    return c.json({ ok: true, candidates: listConnectedContentCandidates({ agentId }) });
+  });
+
+  authenticated.post('/api/understanding/sources/content-reads', limited, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const sourceItemIds = body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>).sourceItemIds)
+      ? (body as { sourceItemIds: unknown[] }).sourceItemIds.filter((value): value is string => typeof value === 'string')
+      : [];
+    try {
+      const agentId = resolveDefaultAgentId(deps.service.currentConfig);
+      return c.json({ ok: true, result: await readConnectedContent({ sourceItemIds, agentId }) });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
 
   authenticated.delete('/api/understanding/sources/grants/:grantId', limited, (c) => {
     const current = getUnderstandingSourceGrant(c.req.param('grantId'));

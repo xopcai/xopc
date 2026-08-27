@@ -90,6 +90,8 @@ export interface KnowledgePullInput {
 export interface KnowledgePullResult {
   items: KnowledgeSourceItemInput[];
   nextCursor?: string;
+  /** True only when nextCursor is a required continuation page, not a committed checkpoint. */
+  hasMore?: boolean;
   warnings: string[];
   /** All active external ids observed during a complete source snapshot. Omit for partial/incremental-only pulls. */
   snapshotExternalIds?: string[];

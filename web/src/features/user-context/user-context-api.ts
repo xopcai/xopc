@@ -67,6 +67,14 @@ export type UserUnderstandingQuality = {
   records: { total: number; candidate: number; active: number; needsReview: number; agingCandidates: number };
   decisions: { total: number; acceptanceRate: number | null };
   recall: { total: number; helpfulRate: number | null };
+  quickUnderstanding: {
+    sourcesAuthorized: number;
+    sourcesCollected: number;
+    sourceCoverage: number | null;
+    bootstrapJobs: number;
+    successfulBootstrapRate: number | null;
+    medianBootstrapDurationMs: number | null;
+  };
 };
 
 export type ContextConsolidationRun = {
@@ -103,6 +111,15 @@ export type UnderstandingSourceGrant = {
   processingPolicy: 'local_only' | 'remote_allowed';
   lastCollectedAt?: number;
   updatedAt: number;
+};
+
+export type ConnectedContentCandidate = {
+  sourceItemId: string;
+  sourceInstanceId: string;
+  toolkit: 'gmail' | 'googledrive';
+  title: string;
+  occurredAt?: string;
+  mimeType?: string;
 };
 
 export type UserFocus = {
@@ -206,6 +223,22 @@ export function deleteCollaborationRule(id: string): Promise<{ ok: true }> {
 export async function fetchUnderstandingSourceGrants(): Promise<UnderstandingSourceGrant[]> {
   const response = await fetchJson<{ grants: UnderstandingSourceGrant[] }>(apiUrl('/api/understanding/sources/grants'));
   return response.grants;
+}
+
+export async function fetchConnectedContentCandidates(): Promise<ConnectedContentCandidate[]> {
+  const response = await fetchJson<{ candidates: ConnectedContentCandidate[] }>(
+    apiUrl('/api/understanding/sources/content-candidates'),
+  );
+  return response.candidates;
+}
+
+export function readConnectedContent(sourceItemIds: string[]): Promise<{
+  result: { requested: number; completed: number; failed: Array<{ sourceItemId: string; error: string }> };
+}> {
+  return fetchJson(apiUrl('/api/understanding/sources/content-reads'), {
+    method: 'POST',
+    body: JSON.stringify({ sourceItemIds }),
+  });
 }
 
 export function revokeUnderstandingSourceGrant(grantId: string): Promise<{ grant: UnderstandingSourceGrant }> {

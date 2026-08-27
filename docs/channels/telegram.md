@@ -1,118 +1,58 @@
-# Telegram channel
+# Telegram
 
-## Gateway console — IM channels
+Connect a Telegram bot to use an xopc Agent in private chats and groups.
 
-When the gateway is running, the React console includes a dedicated **IM channels** screen:
+## Create the bot
 
-- **Route:** `#/channels` (sidebar: **IM 频道** / *IM channels*).
-- **Requires:** a saved **gateway token** (settings) so the UI can call authenticated APIs.
-- **Supported here:** **Weixin** and **Telegram** only.
+1. In Telegram, open [@BotFather](https://t.me/BotFather).
+2. Send `/newbot` and follow the prompts.
+3. Copy the generated bot token.
+4. Keep the token private; anyone who has it can control the bot account.
 
-## Multi-account configuration
+## Connect it to xopc
 
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "defaults": {
-        "dmPolicy": "pairing",
-        "groupPolicy": "open",
-        "streaming": { "mode": "partial" }
-      },
-      "accounts": {
-        "personal": {
-          "name": "Personal Bot",
-          "botToken": "BOT_TOKEN_1",
-          "dmPolicy": "allowlist",
-          "groupPolicy": "open",
-          "allowFrom": [123456789],
-          "streaming": { "mode": "partial" }
-        },
-        "work": {
-          "name": "Work Bot",
-          "botToken": "BOT_TOKEN_2",
-          "dmPolicy": "disabled",
-          "groupPolicy": "allowlist",
-          "groups": {
-            "-1001234567890": {
-              "requireMention": true,
-              "systemPrompt": "You are a work assistant"
-            }
-          }
-        }
-      }
-    }
-  }
-}
+1. Open **Channels → Telegram** in the Gateway console.
+2. Choose **Configure** and paste the bot token.
+3. Keep the direct-message policy set to **Pairing**.
+4. Disable groups initially, or use a group allowlist with mention required.
+5. Save and wait for the health check to succeed.
+
+Then send the bot a private Telegram message. Approve the displayed pairing code in xopc.
+
+## Terminal setup
+
+```bash
+xopc channels enable telegram
+xopc channels show telegram
+xopc channels pairing approve telegram <code> --account default
 ```
 
-## Access control policies
+Use `xopc channels config` if you need to edit channel JSON from the host.
 
-**DM policies** (`dmPolicy`):
+## Access policies
 
-- **`pairing`** — Unknown senders are blocked from the agent until their **numeric Telegram user id** is allowed. Allow sources: `channels.telegram.accounts.<id>.allowFrom` **and** paired ids in **`~/.xopc/credentials/xopc-telegram-<account>-allowFrom.json`** (override base dir with **`XOPC_CREDENTIALS_DIR`**). First DM receives a **pairing code**; the owner runs **`xopc channels pairing approve --channel telegram --account <id> <CODE>`** on the gateway host. See [DM pairing](./index.md#dm-pairing) and [CLI — channels](../cli.md#channels).
-- **`allowlist`** — Same allow merge, but **no** pairing message; unknown users are dropped.
-- **`open`** — All users can DM.
-- **`disabled`** — DMs off.
+- **Pairing** is best for a personal bot: each new sender must be approved.
+- **Allowlist** silently ignores unknown senders.
+- **Open** should be used only when the bot and its Agent are intentionally public.
+- **Disabled** turns off that conversation type.
 
-`channels.telegram.defaults` supplies defaults for accounts that omit policy, streaming, proxy, API root, and limits. Access lists are account-owned only: put DM ids in `accounts.<id>.allowFrom` and group ids in `accounts.<id>.groupAllowFrom`.
+For groups, require a mention and restrict group IDs whenever the bot has tools or private context.
 
-**Group Policies** (`groupPolicy`):
-- `open` - Allow all groups
-- `allowlist` - Only allow specified groups
-- `disabled` - Disable groups
+## Multiple bots
 
-## Streaming configuration
+You can add separate accounts for personal and work use. Give each account its own token, access policy, and routing. Test one account completely before adding another.
 
-**Stream Modes** (`streaming.mode`):
+## Voice and files
 
-| Mode | Description |
-|------|-------------|
-| `off` | Send complete message at once |
-| `partial` | Stream AI response, show progress for tools |
-| `block` | Coalesced block streaming (updates after min chars / idle window) |
+Telegram can pass supported documents, images, and voice messages to xopc. Voice transcription and spoken replies require separate [voice configuration](../voice.md). File and media limits still apply.
 
-## Get bot token
+## Troubleshooting
 
-1. Open Telegram, search [@BotFather](https://t.me/BotFather)
-2. Send `/newbot` to create a new bot
-3. Follow prompts to set name and username
-4. Copy the generated token
+| Problem | Check |
+| --- | --- |
+| Bot is unhealthy | Token is current and the Gateway can reach Telegram |
+| Private message gets no reply | Pairing is approved and local Chat works |
+| Group gets no reply | Bot is in the group, group policy permits it, and mention requirements are met |
+| Replies stop part way | Streaming mode, Telegram limits, and Gateway logs |
 
-## Voice messages (STT/TTS)
-
-See [Voice Documentation](/voice) for details.
-
-In **Telegram supergroups/groups** where the bot requires an @mention, **voice-only** messages are transcribed *before* mention filtering so spoken bot names (and STT-friendly variants) can count as mentions.
-
-## Reverse proxy configuration
-
-For restricted network environments:
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "defaults": {
-        "apiRoot": "https://your-proxy-domain.com"
-      },
-      "accounts": {
-        "default": {
-          "botToken": "YOUR_BOT_TOKEN"
-        }
-      }
-    }
-  }
-}
-```
-
-Connection is automatically verified on startup.
-
-## Usage limits
-
-- **Groups and private chats only**: Channels (broadcast) not supported
-- **Polling mode**: Uses long polling, ~1-2 second delay
-- **Voice messages**: 60 second limit for STT (Telegram)
-- **TTS text**: limited by `tts.maxTextLength` (schema default 512; configurable)
+Rotate the token in BotFather immediately if it appears in logs, screenshots, or source control.

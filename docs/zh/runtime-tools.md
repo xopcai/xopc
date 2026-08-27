@@ -1,53 +1,50 @@
-# 智能体工具运行时
+# 工具运行环境
 
-xopc 为 Shell、后台任务、stdio MCP 服务和 Skill 依赖统一管理 Node.js 与 Python 环境。它们和运行 xopc 主程序的 Node.js 相互独立。
+一些 Agent 工具、Skill 和本地 MCP 服务需要 Node.js 或 Python。xopc 可以管理隔离运行环境，无需全局安装这些依赖。
 
-## 生命周期
+## 查看状态
 
-- `xopc setup` 和 `xopc onboard` 会初始化策略为 `eager` 的运行时；需要延后或保持离线时可加 `--skip-runtimes`。
-- `on-demand` 运行时在 MCP 或 Skill 首次需要时安装。
-- Shell 与后台任务使用清理过的环境变量，并把受管二进制目录放到 `PATH` 前面。
-- 下载包必须通过校验和验证；解压、探测成功后才切换 active manifest。
-- 修复失败会恢复旧安装；`xopc runtime prune` 不会删除当前 active 版本。
-
-## 命令
+打开 **设置 → 工具运行环境**，或运行：
 
 ```bash
 xopc runtime status
+```
+
+状态会显示 Node.js、Python 和相关辅助程序是否就绪，以及当前版本。
+
+## 安装或修复
+
+```bash
 xopc runtime install node
-xopc runtime install python --version 3.12.11
+xopc runtime install python
 xopc runtime repair python
+```
+
+没有兼容性理由时，使用 Skill 或工具要求的版本。下载会在成为活动版本前验证。
+
+## 删除旧版本
+
+```bash
 xopc runtime prune
 ```
 
-控制台的 **设置 → 工具运行时** 提供状态监察、策略、安装、修复、代理、离线包与清理入口。
+Prune 会移除不再使用的保留版本，不应删除活动环境。磁盘空间重要时请检查命令输出。
 
-## 核心配置
+## 安装策略
 
-`runtimeTools.node` 和 `runtimeTools.python` 支持以下来源策略：
+- **Eager**：设置过程中安装。
+- **On demand**：工具第一次需要时安装。
+- **Disabled**：禁止自动安装，但可以使用已经存在的兼容环境。
 
-- `managed-only`：仅使用 xopc 受管环境；
-- `managed-first`：受管环境优先，失败时检查系统环境；
-- `system-first`：系统环境优先；
-- `system-only`：仅使用系统环境。
+Managed-first 是最简单的默认方式。管理员单独控制运行环境时可使用 system-only。
 
-初始化策略为 `eager`、`on-demand` 或 `disabled`。`disabled` 只禁止自动安装，已经存在且兼容的环境仍可使用。
+## 离线或代理环境
 
-下载来源可设为 `auto`、`website-only` 或 `direct-only`。`auto` 优先使用经过校验的 xopc.ai 制品网关，只在可重试的网络故障时切换官方上游；描述文件异常和校验失败不会降级。
+在工具运行环境设置中配置网络代理或已验证的离线包目录。离线包必须匹配操作系统和 CPU 架构，并包含校验和。
 
-网关同时代理 uv 固定版本对应的 Python Build Standalone 制品。Node.js 与 uv 下载中断后会保留 `.partial` 文件，并在服务端支持 Range 时断点续传。
+## 故障排查
 
-## 离线包
-
-把 `runtimeTools.download.bundleDir` 设置为绝对路径后，安装不会回退到网络。每个压缩包必须有同名 `.sha256` 文件，或在 `SHASUMS256.txt` 中提供校验和。
-
-Node.js 与 uv 使用上游文件名。Python 离线包使用 xopc 约定，例如：
-
-```text
-python-3.12.11-darwin-arm64.tar.gz
-python-3.12.11-darwin-arm64.tar.gz.sha256
-```
-
-压缩包只能有一个顶层目录；Unix 下需包含 `bin/python3` 或 `bin/python`，Windows 下需包含 `python.exe`。
-
-所有内容存放在 `~/.xopc/tools`（或 `XOPC_STATE_DIR/tools`）。Skill 的 npm/uv 依赖安装到确定性的 xopc 私有目录，不再写入机器全局包目录。
+- 下载失败：检查代理、DNS、TLS 拦截和磁盘空间。
+- 校验和失败：丢弃归档并重新下载，不要绕过验证。
+- 工具仍找不到 Python 或 Node.js：重启 Gateway 并检查工具选择的环境。
+- 权限不足：确认 Gateway 服务账号拥有或可写 xopc tools 目录。

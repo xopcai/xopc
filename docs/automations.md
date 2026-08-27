@@ -1,141 +1,56 @@
 # Automations
 
-xopc automations are durable, product-level rules stored in SQLite (`~/.xopc/xopc.db`). An automation combines one trigger with one action, records every run, and can execute an agent instruction, a workflow, or a saved [Browser automation](browser-workflows.md).
+An Automation starts an Agent, Workflow, or saved browser task manually, on a schedule, or from a webhook. Every run keeps its status and result so you can inspect what happened.
 
-Use the Gateway console at `#/automations` to create, pause, resume, run, delete, and inspect automations. The page keeps creation in a centered modal and shows upcoming runs, recent history, and operational metrics in one place.
+## Choose the action
 
-## Concepts
-
-| Concept | Meaning |
+| Action | Use it when |
 | --- | --- |
-| Trigger | How the automation starts: manual, schedule, or webhook |
-| Action | What runs: agent instruction, workflow, or browser automation |
-| Run | One execution attempt with status, timestamps, summary, and errors |
-| After-run | Optional post-run behavior such as saving to session or posting a webhook |
-| Reliability | Timeout, retry, concurrency, and failure-disable settings |
+| Agent instruction | The request is best interpreted at run time by one Agent |
+| Workflow | The steps are already defined and should run predictably |
+| Browser automation | A tested set of website interactions should be repeated |
 
-## Triggers
+For deterministic recurring work, prefer a published Workflow or tested browser automation over a broad Agent instruction.
 
-Scheduled automations support one-time, interval, and cron-expression schedules:
+## Create an Automation
 
-```ts
-type AutomationSchedule =
-  | { kind: 'once'; at: string }
-  | { kind: 'interval'; everyMs: number; anchorMs?: number }
-  | { kind: 'cron'; expr: string; tz?: string };
+<!-- Screenshot placeholder: /screenshots/automation-editor.png -->
 
-type AutomationTrigger =
-  | { kind: 'manual' }
-  | { kind: 'schedule'; schedule: AutomationSchedule }
-  | { kind: 'webhook'; secretId?: string };
-```
+1. Open **Automations** in the Gateway console.
+2. Choose **Create automation**.
+3. Give it a name that describes the result, such as “Weekday 9:00 planning summary”.
+4. Choose the action and target.
+5. Select a trigger: manual, one-time, interval, cron schedule, or webhook.
+6. For a calendar schedule, set the intended time zone explicitly.
+7. Configure timeout and retry behavior.
+8. Save, then choose **Run now** for a test.
 
-Use `once` for exact one-time reminders, `interval` for fixed-frequency monitoring, and `cron` for calendar schedules. Put `tz` on each cron-expression schedule that depends on a human local time.
+Keep the first run manual. Enable an unattended schedule only after the result and side effects are correct.
 
-## Actions
+## Monitor runs
 
-Automations intentionally have a small action surface:
+The Automations page shows whether an item is active, its next run time, recent results, and consecutive failures. Open a run to see the summary, linked Session or Workflow run, timestamps, and error.
 
-```ts
-type AutomationAction =
-  | {
-      kind: 'agent';
-      agentId?: string;
-      instruction: string;
-      workingDirectory?: string;
-      model?: string;
-      timeoutSeconds?: number;
-    }
-  | {
-      kind: 'workflow';
-      workflowId: string;
-      agentId?: string;
-      input?: unknown;
-      goal?: string;
-      timeoutSeconds?: number;
-    }
-  | {
-      kind: 'browser_recipe';
-      recipeId: string;
-      args?: Record<string, unknown>;
-      timeoutSeconds?: number;
-    };
-```
+Use **Pause** when a dependency, credential, or expected input is temporarily unavailable. Pausing preserves the definition and history. Delete only when you no longer need them.
 
-Choose an agent action when the automation should ask an agent to do work in a session. Choose a workflow action when the job should call a known workflow directly without relying on a model to decide the invocation. Choose a browser automation when the action should repeat web steps that you have already created and tested with the assistant. Only enabled browser automations can be selected.
+## Reliable schedules
 
-## Data Model
+- Confirm the displayed time zone and next run time.
+- Give the action a clear success condition.
+- Set a realistic timeout.
+- Use limited retries for transient failures, not for invalid credentials or bad input.
+- Avoid overlapping runs when actions modify the same external data.
+- Review failures regularly; do not assume a schedule guarantees success.
 
-Runtime state is stored on the automation row:
+## Webhook safety
 
-```ts
-type AutomationState = {
-  nextRunAtMs?: number;
-  runningRunId?: string;
-  lastRunAtMs?: number;
-  lastRunStatus?: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
-  lastError?: string;
-  consecutiveFailures?: number;
-};
-```
+Treat a webhook URL and secret as credentials. Do not put them in public repositories, screenshots, or logs. Validate any external input before allowing the action to write files, send messages, or change connected services.
 
-SQLite tables:
+## Examples
 
-| Table | Purpose |
-| --- | --- |
-| `automations` | Automation definitions, triggers, actions, reliability, after-run behavior, and state |
-| `automation_runs` | Execution history and tasks |
+- summarize open Tasks every weekday morning;
+- run a weekly review Workflow each Friday;
+- check a saved browser task and report changes;
+- trigger a research Workflow from another trusted service.
 
-Automations are database-backed. They are not configured through `xopc.json`.
-
-## Scheduler Behavior
-
-- On startup, scheduled automations recompute `nextRunAtMs`.
-- Manual and webhook automations only run when explicitly invoked.
-- Running automations are tracked through `state.runningRunId`.
-- Runs write status, timing, summaries, errors, session keys, and workflow run ids to SQLite.
-- The service exposes history through the Gateway console and API.
-
-## Gateway API
-
-Create:
-
-```http
-POST /api/automations
-Content-Type: application/json
-
-{
-  "name": "Daily review",
-  "trigger": {
-    "kind": "schedule",
-    "schedule": { "kind": "cron", "expr": "0 9 * * 1-5", "tz": "Asia/Shanghai" }
-  },
-  "action": {
-    "kind": "agent",
-    "instruction": "Summarize yesterday and plan today."
-  },
-  "afterRun": { "kind": "saveToSession" },
-  "reliability": { "timeoutSeconds": 1800, "retryCount": 1 }
-}
-```
-
-Common endpoints:
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/automations` | List automations |
-| POST | `/api/automations` | Create automation |
-| GET | `/api/automations/metrics` | Read automation metrics |
-| GET | `/api/automations/:id` | Read one automation |
-| PATCH | `/api/automations/:id` | Update automation |
-| DELETE | `/api/automations/:id` | Delete automation |
-| POST | `/api/automations/:id/run` | Run now |
-| POST | `/api/automations/:id/pause` | Pause automation |
-| POST | `/api/automations/:id/resume` | Resume automation |
-| GET | `/api/automation-runs` | List runs |
-| GET | `/api/automation-runs/:runId` | Read one run |
-| POST | `/api/automation-runs/:runId/cancel` | Cancel a run |
-
-## Agent Tool
-
-When the gateway runtime exposes the automation service, agents can use the `automation` tool to list, create, update, delete, run, pause, resume, and inspect history. The tool uses the same structured payloads as the API.
+For the repeatable steps themselves, see [Workflows](./workflows.md). For website interactions, see [Browser automations](./browser-workflows.md).

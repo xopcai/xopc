@@ -1,69 +1,36 @@
-# Tailscale
+# Access with Tailscale
 
-xopc can auto-configure **Tailscale Serve** (tailnet HTTPS) or **Funnel** (public HTTPS) while the gateway stays on loopback.
+Tailscale Serve lets devices in your Tailnet reach a Gateway that remains bound to the local computer. It is the recommended remote-access method for personal devices.
 
-## Serve (recommended)
+## Set up
 
-```json5
-{
-  gateway: {
-    bind: "loopback",
-    port: 18790,
-    auth: { mode: "token", token: "…" },
-    tailscale: { mode: "serve", resetOnExit: true },
-  },
-}
-```
-
-CLI one-shot:
+1. Install and sign in to Tailscale on the Gateway host and client device.
+2. Confirm both devices appear in the same Tailnet.
+3. Generate a Gateway token.
+4. Start:
 
 ```bash
 xopc gateway --tailscale serve --tailscale-reset-on-exit
 ```
 
-Open: `https://<magicdns>/`
+5. Connect with the Tailscale HTTPS address shown by the command and the Gateway token.
 
-Status:
+Check status:
 
 ```bash
 xopc tailscale status
+xopc gateway health
 ```
 
-## Direct tailnet bind
+## Serve or Funnel?
 
-```json5
-{
-  gateway: {
-    bind: "tailnet",
-    auth: { mode: "token", token: "…" },
-  },
-}
-```
+**Serve** is limited to Tailnet devices and suits normal personal access. **Funnel** creates a public entry point and is much higher risk; do not use it unless you specifically need a public service and have configured strong authentication.
 
-Requires Tailscale connected (`100.x` address).
+## Troubleshooting
 
-## Funnel (public — high risk)
+- Confirm host and client are signed in to the intended Tailnet.
+- Check Tailscale DNS, ACLs, and device status.
+- Keep the Gateway on loopback and use a valid token.
+- Disable another auto-starting tunnel if it conflicts with Tailscale exposure.
 
-```json5
-{
-  gateway: {
-    bind: "loopback",
-    auth: { mode: "password", password: "…" },
-    tailscale: { mode: "funnel" },
-  },
-}
-```
-
-**Required:** `gateway.auth.mode=password`.
-
-## Guards
-
-- Serve/Funnel require `gateway.bind=loopback`
-- Funnel requires password auth
-- `tunnel.autoStart` cannot run while Tailscale exposure is enabled
-
-## Identity auth (browser UI)
-
-When `gateway.auth.allowTailscale` is not `false` and mode is `serve`, the web console static UI may accept Tailscale identity headers verified via `tailscale whois`. **All `/api/*` routes still require the gateway Bearer token.**
-
-See [network.md](../network.md).
+See [Remote access](../remote-access.md) for the complete security checklist.

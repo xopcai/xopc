@@ -211,7 +211,11 @@ function missingAuthConfigMessage(error: unknown, toolkit: string, authConfigId?
 export class ComposioSessionsAdapter {
   private readonly createClient: ClientFactory;
 
-  constructor(options: { resolver?: CredentialResolver; clientFactory?: ClientFactory } = {}) {
+  constructor(options: {
+    resolver?: CredentialResolver;
+    clientFactory?: ClientFactory;
+    fileDownloadDir?: string;
+  } = {}) {
     if (options.clientFactory) {
       this.createClient = options.clientFactory;
       return;
@@ -237,8 +241,9 @@ export class ComposioSessionsAdapter {
         apiKey,
         baseURL: process.env.XOPC_COMPOSIO_BASE_URL?.trim() || undefined,
         allowTracking: false,
-        dangerouslyAllowAutoUploadDownloadFiles: false,
+        dangerouslyAllowAutoUploadDownloadFiles: Boolean(options.fileDownloadDir),
         fileUploadDirs: false,
+        ...(options.fileDownloadDir ? { fileDownloadDir: options.fileDownloadDir } : {}),
         provider: new PiProvider(),
         host: 'xopc',
       }) as unknown as ComposioSessionsClient;

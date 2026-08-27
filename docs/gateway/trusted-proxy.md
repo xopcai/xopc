@@ -1,46 +1,15 @@
-# Trusted proxy auth
+# Trusted identity proxy
 
-Use when an OAuth-aware reverse proxy (Caddy, nginx, Pomerium) terminates TLS and authenticates users.
+Use trusted-proxy authentication only when an existing OAuth-aware reverse proxy already handles TLS and user sign-in. This is an advanced administrator setup.
 
-## Gateway config
+The deployment must ensure that:
 
-```json5
-{
-  gateway: {
-    bind: "loopback",
-    auth: {
-      mode: "trusted-proxy",
-      trustedProxy: {
-        userHeader: "x-forwarded-user",
-        allowLoopback: true,
-      },
-    },
-    trustedProxies: ["127.0.0.1"],
-  },
-}
-```
+- the Gateway trusts only explicitly listed proxy addresses;
+- the public network cannot bypass the proxy and reach the Gateway port;
+- the proxy removes client-supplied identity headers before writing a verified identity;
+- HTTPS, session security, and logout are handled correctly;
+- API and non-browser clients have an explicit authentication path.
 
-## Caddy (sketch)
+Back up configuration and test forged headers, direct-port access, and signed-out requests in an isolated environment. For personal devices, use Tailscale or SSH instead of adding a trusted proxy.
 
-```txt
-gateway.example.com {
-  reverse_proxy 127.0.0.1:18790 {
-    header_up X-Forwarded-User {http.auth.user.id}
-  }
-}
-```
-
-## nginx (sketch)
-
-```nginx
-location / {
-  auth_request /oauth2/auth;
-  auth_request_set $user $upstream_http_x_auth_request_email;
-  proxy_set_header X-Forwarded-User $user;
-  proxy_pass http://127.0.0.1:18790;
-}
-```
-
-Block direct access to port `18790` from the internet; only the proxy should reach the gateway.
-
-See [network.md](../network.md).
+See [Remote access](../remote-access.md) for the decision guide.

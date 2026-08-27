@@ -1,125 +1,70 @@
-# Session Routing
+# Agents
 
-How inbound traffic maps to **session keys**, **agents**, and optional **identity links** across channels.
+An Agent is a named assistant configured for a particular kind of work. Each Agent can have its own role, workspace, model roles, tools, skills, and safety boundaries, while user-owned context can remain available across Agents according to your settings.
 
-## Session Key Format
+## When to create another Agent
 
-```
-agent:{agentId}:{rest}
-```
+Create one when you need a real capability boundary, for example:
 
-The first segment is always `agent`. The second segment selects the agent manifest. The remaining path depends on scope and channel.
+- a coding Agent allowed to edit repositories;
+- a research Agent with web and connector access;
+- a personal Agent that uses a separate workspace;
+- a lightweight Agent that uses a lower-cost model.
 
-### Examples
+Do not create a new Agent only to start a different conversation. A new [Session](./session.md) is enough for that.
 
-```
-agent:main:main
-agent:main:telegram:default:direct:123456
-agent:main:telegram:group:-100123456
-agent:main:gateway:direct:chat_abc123
-agent:main:cli:direct:cli
-```
+## Create an Agent in the console
 
-## Configuration
+<!-- Screenshot placeholder: /screenshots/agents.png -->
 
-Routing is configured in **`~/.xopc/xopc.json`** (override path with `XOPC_CONFIG`). Use JSON — not YAML.
+1. Open **Agents**.
+2. Choose **Add Agent**.
+3. Give it a clear name and responsibility.
+4. Select its primary model and workspace.
+5. Enable only the tools and skills it needs.
+6. Save, then start a new chat with that Agent.
 
-### Agents and bindings
+Test a read-only request before allowing tools that write files, run commands, send messages, or access external accounts.
 
-Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluated in **priority order** (higher `priority` wins first). Each `match` requires an exact **`channel`** id (e.g. `telegram`, `gateway`) — matching is case-insensitive and **does not** support `*` for “all channels”. Use one rule per channel, or rely on the **default agent** when nothing matches: optional top-level **`agents.default`**, else first **enabled** entry in `agents.list`, else `main`.
+## Create an Agent in the terminal
 
-### Effective runtime profile
-
-For a session key `agentId:…`, the agent runtime resolves the matching **enabled** manifest in **`agents.list`** and applies any declared **`agents.capabilityPresets`** from `extends`. If `agentId` is unknown or disabled, resolution falls back to the **default agent** id above. On-disk layout under `~/.xopc/agents/<id>/` follows the same config-driven resolution — gateway behavior is **`config.json`** only.
-
-`match.peerId` supports simple `*` glob patterns (e.g. `-100*` for Telegram supergroups).
-
-```json
-{
-  "agents": {
-    "default": "main",
-    "capabilityPresets": {},
-    "list": [
-      {
-        "id": "main",
-        "identity": { "name": "Main", "role": "General assistant", "language": "en", "tone": "direct" },
-        "responsibilities": { "primary": ["Help the user"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      },
-      {
-        "id": "coder",
-        "identity": { "name": "Coder", "role": "Software assistant", "language": "en", "tone": "direct" },
-        "responsibilities": { "primary": ["Help with code tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/coder" },
-        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
-        "tools": { "builtin": { "shell": { "mode": "confirm", "scope": "workspace" } } },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      }
-    ]
-  },
-  "bindings": [
-    {
-      "agentId": "coder",
-      "priority": 100,
-      "match": {
-        "channel": "telegram",
-        "peerId": "-100*"
-      }
-    }
-  ],
-  "session": {
-    "identityLinks": {
-      "alice": ["telegram:123456789", "discord:987654321"]
-    }
-  }
-}
+```bash
+xopc agents add research
+xopc agents list
 ```
 
-### Identity links (cross-platform aliases)
+The command creates or updates the Agent entry and prepares its directories. To remove an Agent from configuration:
 
-`session.identityLinks` maps a **canonical** id to a list of **`channel:peerId`** aliases so routing can treat the same person across channels consistently. See [Configuration](/configuration) for `session.dmScope` and other session options.
-
-## API
-
-### Generate Session Key
-
-```typescript
-import { buildSessionKey } from '@xopcai/xopc/routing/index.js';
-
-const sessionKey = buildSessionKey({
-  agentId: 'main',
-  source: 'telegram',
-  accountId: 'default',
-  peerKind: 'dm',
-  peerId: '123456',
-});
+```bash
+xopc agents delete research
 ```
 
-### Route Resolution
+Read the confirmation carefully if on-disk cleanup is offered; deleting files is different from disabling an Agent.
 
-```typescript
-import { resolveRoute } from '@xopcai/xopc/routing/index.js';
+## Choose the default Agent
 
-const route = resolveRoute({
-  config,
-  channel: 'telegram',
-  accountId: 'default',
-  peerKind: 'dm',
-  peerId: '123456',
-});
+The default is used for new Sessions that do not name an Agent:
 
-console.log(route.sessionKey); // e.g. main:telegram:default:dm:123456 (depends on dmScope)
-console.log(route.agentId); // default agent when no binding matches (e.g. main)
+```bash
+xopc config set agents.default research
+xopc config validate
 ```
 
-## Related Files
+Existing Sessions remain assigned to their current Agent. To use another Agent, start a new chat and select it explicitly.
 
-- **Core routing** — session keys, bindings, and rule evaluation inside xopc.
-- **Telegram** — contributes channel-specific routing hooks when the Telegram channel is enabled.
+## Design a safe Agent
+
+For each Agent, decide:
+
+| Setting | Question to answer |
+| --- | --- |
+| Responsibility | What work should this Agent accept or decline? |
+| Workspace | Which files may it use? |
+| Models | Which model balances quality, speed, privacy, and cost? |
+| Tools | Which actions can it take? |
+| Skills | Which reusable instructions does it need? |
+| Boundaries | Which actions always require confirmation? |
+
+Begin with the smallest useful capability set. Add access only after the Agent succeeds without it.
+
+For a guided example, see [Create a second Agent](./how-to/create-second-agent.md). Exact configuration fields are listed in [Configuration reference](./reference/configuration.md).

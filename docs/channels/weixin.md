@@ -1,42 +1,37 @@
-# Weixin (WeChat) channel
+# Weixin (WeChat)
 
-## Gateway console — IM channels
+Connect Weixin by scanning a login QR code from the Gateway console. The login credentials are stored on the Gateway host, so perform setup on the xopc instance that will stay running.
 
-When the gateway is running, the React console includes a dedicated **IM channels** screen:
+## Connect
 
-- **Route:** `#/channels` (sidebar: **IM 频道** / *IM channels*).
-- **Requires:** a saved **gateway token** (settings) so the UI can call authenticated APIs.
-- **Supported here:** **Weixin**, **Telegram**, and **Feishu (Lark)** (plus remove/disable flows per card).
+1. Open **Channels → Weixin**.
+2. Choose **Login** or **Configure**.
+3. Scan the QR code with the intended Weixin account.
+4. Confirm the login in Weixin if prompted.
+5. Keep the direct-message policy set to **Pairing**.
+6. Save optional account and streaming settings.
 
-### Weixin login
+After login, send a test message and approve the pairing request in xopc.
 
-- Opens a **QR login** dialog that talks to the gateway:
-  - `POST /api/channels/weixin/login/start` — begin session, returns QR payload.
-  - `GET /api/channels/weixin/login/:sessionKey` — poll until login completes; credentials are written on the **gateway host**.
-- After login, settings reload from `GET /api/config`. Optional **advanced** fields (`dmPolicy`, `streamMode`, allowlists, per-account JSON) are edited in the same dialog and saved with **Save**.
-- Use `xopc channels config` for config edits from the host CLI; QR login is handled by the gateway console flow above.
+## Access policy
 
-## Minimal shape
+Pairing is recommended because an unknown sender must present a one-time code before messages reach the Agent. You can also approve on the Gateway host:
 
-```json
-{
-  "channels": {
-    "weixin": {
-      "enabled": true,
-      "dmPolicy": "pairing",
-      "allowFrom": [],
-      "streamMode": "partial",
-      "historyLimit": 50,
-      "textChunkLimit": 4000,
-      "routeTag": "",
-      "accounts": {}
-    }
-  }
-}
+```bash
+xopc channels pairing approve weixin <code> --account default
 ```
 
-- **`dmPolicy`**: `pairing` | `allowlist` | `open` | `disabled`. With **`pairing`**, unknown senders get a **pairing code** in DM; approve with **`xopc channels pairing approve --channel weixin [--account <id>] <CODE>`** on the host that stores credentials (see [DM pairing](./index.md#dm-pairing)).
-- **`allowFrom`**: ids allowed from config alone. **Paired** users are also stored under **`~/.xopc/weixin/credentials/xopc-weixin-<account>-allowFrom.json`** (merged at runtime; same basename with `-pairing.json` holds pending codes).
-- **`accounts`**: optional per-account overrides (name, `cdnBaseUrl`, `routeTag`, policies, and more).
+Use **Allowlist** for fixed users, **Open** only for an intentionally public assistant, and **Disabled** to block direct messages.
 
-Restart or reload the gateway after changing credentials if your deployment requires it.
+## Multiple accounts
+
+Add account-specific settings only when you need separate Weixin identities or routing. Complete and verify one account first; use clear account names so pairing and logs are easy to interpret.
+
+## Troubleshooting
+
+- QR code expired: close the dialog and start a new login.
+- Login succeeds but messages do not arrive: confirm the same Gateway holds the saved credentials and remains running.
+- Unknown user gets no code: check that direct-message policy is Pairing rather than Allowlist.
+- Reply fails: verify local Chat and inspect the Weixin channel logs.
+
+Do not copy the stored login files to an untrusted machine. Re-login if credentials are revoked or moved to a new Gateway host.
