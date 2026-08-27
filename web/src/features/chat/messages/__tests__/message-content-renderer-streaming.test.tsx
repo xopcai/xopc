@@ -254,6 +254,68 @@ describe('streaming assistant Markdown rendering', () => {
     expect(text.indexOf('runCommand_one')).toBeLessThan(text.indexOf('修改完成。'));
   });
 
+  it('keeps expanded assistant activity in a bounded scroll region', () => {
+    const thinking = { type: 'thinking', text: 'Long reasoning', streaming: false } as const;
+
+    render([thinking], false, false, {
+      blocks: [thinking],
+      active: false,
+      failedCount: 0,
+      hasTool: false,
+      expandedByDefault: false,
+    });
+
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    expect(disclosure).not.toBeNull();
+    act(() => disclosure?.click());
+
+    const activityScroll = container.querySelector<HTMLElement>('.assistant-steps-scroll');
+    expect(activityScroll).not.toBeNull();
+    expect(activityScroll?.classList.contains('overflow-y-auto')).toBe(true);
+    expect(activityScroll?.classList.contains('overscroll-y-contain')).toBe(false);
+    expect(activityScroll?.className).toContain('max-h-[min(60vh,28rem)]');
+
+    container.classList.add('chat-messages');
+    Object.defineProperties(activityScroll, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 300 },
+    });
+    Object.defineProperties(container, {
+      clientHeight: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 1_000 },
+    });
+    const nestedOutput = document.createElement('pre');
+    nestedOutput.style.overflowY = 'auto';
+    Object.defineProperties(nestedOutput, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 130 },
+    });
+    activityScroll?.append(nestedOutput);
+    nestedOutput.scrollTop = 20;
+    activityScroll!.scrollTop = 175;
+    container.scrollTop = 80;
+
+    const wheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 40 });
+    act(() => nestedOutput.dispatchEvent(wheel));
+
+    expect(nestedOutput.scrollTop).toBe(30);
+    expect(activityScroll?.scrollTop).toBe(200);
+    expect(container.scrollTop).toBe(85);
+    expect(wheel.defaultPrevented).toBe(true);
+
+    nestedOutput.scrollTop = 5;
+    activityScroll!.scrollTop = 10;
+    container.scrollTop = 100;
+
+    const reverseWheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -30 });
+    act(() => nestedOutput.dispatchEvent(reverseWheel));
+
+    expect(nestedOutput.scrollTop).toBe(0);
+    expect(activityScroll?.scrollTop).toBe(0);
+    expect(container.scrollTop).toBe(85);
+    expect(reverseWheel.defaultPrevented).toBe(true);
+  });
+
   it('renders punctuation-bound strong text after progressive streaming completes', () => {
     vi.useFakeTimers();
     const text = '前文有"普通引号"，而是**"流式完成后也必须加粗。"**';
