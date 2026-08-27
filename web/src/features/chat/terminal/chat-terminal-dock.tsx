@@ -10,6 +10,7 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
   clampTerminalHeight,
+  selectTerminalTabs,
   TERMINALS_PER_SESSION_MAX,
   useTerminalPanelStore,
 } from '@/stores/terminal-panel-store';
@@ -40,7 +41,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const api = window.electronAPI?.terminal;
   const open = useTerminalPanelStore((state) => Boolean(state.openBySessionKey[sessionKey]));
   const height = useTerminalPanelStore((state) => state.height);
-  const tabs = useTerminalPanelStore((state) => state.tabsBySessionKey[sessionKey] ?? []);
+  const tabs = useTerminalPanelStore((state) => selectTerminalTabs(state.tabsBySessionKey, sessionKey));
   const terminalKey = useTerminalPanelStore((state) => state.activeTabKeyBySessionKey[sessionKey]);
   const closePanel = useTerminalPanelStore((state) => state.close);
   const addTerminal = useTerminalPanelStore((state) => state.addTerminal);

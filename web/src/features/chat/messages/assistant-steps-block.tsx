@@ -258,11 +258,17 @@ export function AssistantStepsBlock({
   ) : null;
 
   return (
-    <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
+    <div
+      className={cn(
+        'my-1 min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30',
+        expanded ? 'w-full' : 'w-fit max-w-full',
+      )}
+    >
       <button
         type="button"
         className={cn(
-          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
+          'grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-x-2 px-3 py-2 text-left',
+          expanded ? 'w-full rounded-t-xl' : 'w-fit max-w-full rounded-xl',
           interaction.transition,
           'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',

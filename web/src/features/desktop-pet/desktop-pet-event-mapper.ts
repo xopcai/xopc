@@ -6,9 +6,14 @@ import {
   toolNarrative,
   type DesktopPetNarrativeLabels,
 } from './desktop-pet-narrative';
+import type { AgentActivityDetailLevel } from '@/features/gateway/agent-run-stream-event-bridge';
 import type { PetFeedback, PetSessionUpdate } from '@/types/electron';
 
-export type AgentStreamDetail = { sessionKey?: string; event?: unknown };
+export type AgentStreamDetail = {
+  sessionKey?: string;
+  event?: unknown;
+  activityDetailLevel?: AgentActivityDetailLevel;
+};
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object'
@@ -123,6 +128,17 @@ export function mapAgentStreamEvent(
       priority: 'low',
     };
   }
+  if (type === 'thinking_delta') {
+    if (detail.activityDetailLevel !== 'stream') return null;
+    return {
+      ...base,
+      state: 'running',
+      phase: 'planning',
+      action: labels.tipThinking,
+      animation: 'prepare',
+      priority: 'low',
+    };
+  }
   if (type === 'tool_start' || type === 'tool_update') {
     const toolName = text(event.toolName) ?? text(payload.toolName) ?? 'tool';
     const semanticRecord = record(payload.activity);
@@ -184,7 +200,7 @@ export function mapAgentStreamEvent(
       feedback,
     };
   }
-  if (type === 'assistant_delta') {
+  if (type === 'assistant_message_start' || type === 'assistant_delta') {
     return {
       ...base,
       state: 'running',
@@ -192,6 +208,16 @@ export function mapAgentStreamEvent(
       action: labels.tipAssistantDelta,
       animation: 'create',
       priority: 'low',
+    };
+  }
+  if (type === 'review_start' || type === 'review_delta') {
+    return {
+      ...base,
+      state: 'running',
+      phase: 'reading',
+      action: labels.tipReview,
+      animation: 'read',
+      priority: 'normal',
     };
   }
   if (type === 'command_output_delta') {
@@ -205,13 +231,18 @@ export function mapAgentStreamEvent(
     };
   }
   if (type === 'assistant_message_end') {
+    const presentation = text(payload.presentation) === 'narration'
+      ? 'narration'
+      : 'answer';
     return {
       ...base,
       state: 'running',
-      phase: 'running',
-      action: labels.tipAssistantDone,
-      animation: 'create',
-      priority: 'normal',
+      phase: presentation === 'narration' ? 'preparing' : 'running',
+      action: presentation === 'narration'
+        ? labels.tipAssistantNarrationDone
+        : labels.tipAssistantAnswerDone,
+      animation: presentation === 'narration' ? 'prepare' : 'create',
+      priority: presentation === 'narration' ? 'low' : 'normal',
       publicSummary,
     };
   }

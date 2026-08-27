@@ -179,7 +179,7 @@ export function taskCopy(language: 'en' | 'zh') {
     approveTask: '确认完成',
     reopenTask: '重新打开',
     moreActions: '更多操作',
-    pauseTask: '暂时暂停',
+    pauseTask: '暂停推进',
     resumeTask: '继续推进',
     cancelTask: '结束事项',
     actionFailed: '操作失败，请重试。',

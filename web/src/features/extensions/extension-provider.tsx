@@ -3,6 +3,7 @@ import useSWR from 'swr';
 
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useContextStore } from '@/stores/context-store';
+import { AGENT_STREAM_EVENT } from '@/features/gateway/agent-run-stream-event-bridge';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useThemeStore } from '@/stores/theme-store';
@@ -80,9 +81,9 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
     const onAgentStreamEvent = (event: Event) => {
       handleAgentStreamEventRef.current(event);
     };
-    window.addEventListener('agent-stream-event', onAgentStreamEvent);
+    window.addEventListener(AGENT_STREAM_EVENT, onAgentStreamEvent);
     return () => {
-      window.removeEventListener('agent-stream-event', onAgentStreamEvent);
+      window.removeEventListener(AGENT_STREAM_EVENT, onAgentStreamEvent);
     };
   }, []);
 

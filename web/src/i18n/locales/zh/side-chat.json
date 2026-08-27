@@ -25,7 +25,7 @@
     "parentPermissions": "主任务权限 · {{model}}",
     "selectedTextActionsAria": "选中文本操作",
     "addToChat": "添加到对话",
-    "askInSideChat": "在侧边对话中提问",
+    "askInSideChat": "侧边提问",
     "selectedText": "所选文本"
   }
 }

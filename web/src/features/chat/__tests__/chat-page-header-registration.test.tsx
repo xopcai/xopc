@@ -138,7 +138,7 @@ describe('ChatPageHeaderRegistration', () => {
     });
   });
 
-  it('removes directory selection after the conversation starts', () => {
+  it('keeps project files available while directory selection is locked', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat/session-1']}>
@@ -157,6 +157,7 @@ describe('ChatPageHeaderRegistration', () => {
                     sessionKey="session-1"
                     workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace={false}
+                    workspaceDisabled
                     onWorkspaceChange={async () => {}}
                   />
                   <HeaderEnd />
@@ -172,6 +173,7 @@ describe('ChatPageHeaderRegistration', () => {
       '[aria-label="Project Files: xopc"]',
     );
     expect(projectFilesButton).not.toBeNull();
+    expect(projectFilesButton?.disabled).toBe(false);
     expect(container.querySelector('[aria-label="Choose folder…"]')).toBeNull();
 
     act(() => projectFilesButton?.click());
