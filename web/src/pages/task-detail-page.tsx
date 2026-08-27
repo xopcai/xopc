@@ -1,7 +1,7 @@
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
+import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
@@ -26,6 +26,7 @@ import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
@@ -115,6 +116,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
+  const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
+  const workspacePanelSessionKey = useWorkspacePanelStore((state) => state.sessionKeyOverride);
+  const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
+  const setSideChatOpen = useSideChatStore((state) => state.setOpen);
   const {
     data: detail,
     error: loadError,
@@ -415,6 +420,11 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     ?? detail.task.delegateAgentId
     ?? detail.task.ownerId;
   const conversationAgent = agents.find((agent) => agent.id === conversationAgentId);
+  const taskWorkspaceOpen = Boolean(
+    conversationSessionKey
+    && workspacePanelOpen
+    && workspacePanelSessionKey === conversationSessionKey,
+  );
   const needsUserAttention = detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
   const acceptanceCriteria = detail.task.contract?.acceptanceCriteria ?? [];
   const verifiedCriteriaCount = acceptanceCriteria.filter((criterion) => verificationByCriterion.get(criterion) === 'passed').length;
@@ -610,7 +620,33 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
               <div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{language === 'zh' ? 'Agent 执行与对话' : 'Agent execution and chat'}</p><p className="mt-0.5 truncate text-xs text-fg-muted">{conversationAgent?.name ?? conversationAgentId ?? copy.unassigned} · {statusLabel}</p></div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">{taskActions}{conversationSessionKey ? <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs"><Link to={taskChatHref(taskId)}><ExternalLink className="size-3.5" />{language === 'zh' ? '全屏' : 'Full screen'}</Link></Button> : null}</div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {taskActions}
+            {conversationSessionKey && presentation !== 'modal' ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={cn('h-8 shrink-0 px-2 text-xs', taskWorkspaceOpen && 'bg-surface-hover text-fg')}
+                  aria-label={language === 'zh' ? '项目文件' : 'Project files'}
+                  aria-pressed={taskWorkspaceOpen}
+                  onClick={() => {
+                    setSideChatOpen(conversationSessionKey, false);
+                    openWorkspacePanelForSession(conversationSessionKey);
+                  }}
+                >
+                  <FolderOpen className="size-3.5" aria-hidden />
+                  {language === 'zh' ? '文件' : 'Files'}
+                </Button>
+                <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs">
+                  <Link to={taskChatHref(taskId)}>
+                    <ExternalLink className="size-3.5" />
+                    {language === 'zh' ? '全屏' : 'Full screen'}
+                  </Link>
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
         {conversationSessionKey ? (
           <div className="min-h-0 flex-1"><ChatPage embedded sessionKey={conversationSessionKey} taskId={taskId} /></div>
@@ -643,9 +679,13 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
   onClose: () => void;
 }) {
   const language = useLocaleStore((state) => state.language);
+  const { data: detail } = useTaskDetail(taskId);
+  const conversationSessionKey = detail?.conversation.activeSessionKey ?? null;
   const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
   const workspacePanelWidth = useWorkspacePanelStore((state) => state.widthPx);
   const workspaceSessionKey = useWorkspacePanelStore((state) => state.sessionKeyOverride);
+  const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
+  const setSideChatOpen = useSideChatStore((state) => state.setOpen);
   const previewPath = useWorkspacePreviewStore((state) => state.path);
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const workspacePanelOffset = workspacePanelOpen ? workspacePanelWidth : 0;
@@ -694,7 +734,37 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
           <header className="flex shrink-0 items-center justify-between gap-3 bg-surface-panel px-5 py-3.5">
             <Dialog.Title className="font-medium text-fg">{language === 'zh' ? '任务详情' : 'Task details'}</Dialog.Title>
             <Dialog.Description className="sr-only">{language === 'zh' ? '查看并操作任务详情' : 'View and manage task details'}</Dialog.Description>
-            <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
+            <div className="flex shrink-0 items-center gap-1">
+              {conversationSessionKey ? (
+                <>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
+                      workspacePanelOpen && workspaceSessionKey === conversationSessionKey && 'bg-surface-hover text-fg',
+                    )}
+                    aria-label={language === 'zh' ? '项目文件' : 'Project files'}
+                    title={language === 'zh' ? '项目文件' : 'Project files'}
+                    aria-pressed={workspacePanelOpen && workspaceSessionKey === conversationSessionKey}
+                    onClick={() => {
+                      setSideChatOpen(conversationSessionKey, false);
+                      openWorkspacePanelForSession(conversationSessionKey);
+                    }}
+                  >
+                    <FolderOpen className="size-4" aria-hidden />
+                  </button>
+                  <Link
+                    to={taskChatHref(taskId)}
+                    className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
+                    aria-label={language === 'zh' ? '全屏打开对话' : 'Open chat full screen'}
+                    title={language === 'zh' ? '全屏打开对话' : 'Open chat full screen'}
+                  >
+                    <ExternalLink className="size-4" aria-hidden />
+                  </Link>
+                </>
+              ) : null}
+              <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
+            </div>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden">
             <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} />
