@@ -27,8 +27,9 @@ import {
   resolveGatewayStartupMode,
   spawnGatewayProcess,
   stopGatewayProcess,
+  registerGatewayConnection,
   registerEmbeddedGatewayRuntime,
-  getEmbeddedGatewayCredential,
+  getGatewayCredential,
   restartEmbeddedGatewayFromSavedConfig,
   waitForGatewayReady,
   type GatewayProcessOptions,
@@ -37,6 +38,7 @@ import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerUnderstandingSourcesIpc } from './ipc/understanding-sources-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
+import { registerTerminalIpc, stopAllTerminals } from './ipc/terminal-ipc.js';
 import {
   getElectronShellLanguage,
   initElectronShellPreferences,
@@ -944,10 +946,13 @@ app.whenReady().then(async () => {
 
   await initElectronShellPreferences();
   const electronUserPaths = getElectronUserPaths();
-  const { fileIpcRoots } = await ensureGatewayConfigForElectron(electronUserPaths);
+  const gatewayConfig = await ensureGatewayConfigForElectron(electronUserPaths);
+  registerGatewayConnection({ port: gatewayConfig.port, token: gatewayConfig.token });
+  const { fileIpcRoots } = gatewayConfig;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerSearchIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerAgentIpc(ipcMain);
+  registerTerminalIpc(ipcMain);
   registerUnderstandingSourcesIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain, {
     onLanguageChanged: (language) => {
@@ -1075,7 +1080,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('gateway:get-credential', (event) => {
     assertTrustedRenderer(event);
-    return getEmbeddedGatewayCredential();
+    return getGatewayCredential();
   });
 
   ipcMain.handle('startup:get-diagnostic', (event) => {
@@ -1215,6 +1220,7 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   stopAllPowerSaveBlockers();
   stopCronDisplayWakeBlocker();
+  stopAllTerminals();
   stopTunnelStatusPolling();
   stopGatewayProcess();
   stopAutoUpdater();

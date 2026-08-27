@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useSearchParams } from 'react-router-dom';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
@@ -13,7 +14,13 @@ import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { AtMentionPicker } from '@/features/chat/palette/at-mention-picker';
 import { CommandPalette } from '@/features/chat/palette/command-palette';
-import { addSkillToAgentAllowlist, fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
+import {
+  addSkillToAgentAllowlist,
+  fetchCommandsCached,
+  getWorkspaceTrust,
+  setWorkspaceTrust,
+  type WorkspaceTrustState,
+} from '@/features/chat/palette/command-palette-api';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
@@ -140,10 +147,50 @@ export const ChatComposer = memo(function ChatComposer({
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [workspaceTrustPrompt, setWorkspaceTrustPrompt] = useState<WorkspaceTrustState | null>(null);
+  const [workspaceTrustDismissedFor, setWorkspaceTrustDismissedFor] = useState<string | null>(null);
+  const [workspaceTrustSaving, setWorkspaceTrustSaving] = useState(false);
   const onSendRef = useRef(onSend);
   const thinkingLevelRef = useRef(thinkingLevel);
   onSendRef.current = onSend;
   thinkingLevelRef.current = thinkingLevel;
+
+  useEffect(() => {
+    if (!sessionKey || workspaceTrustDismissedFor === sessionKey) {
+      setWorkspaceTrustPrompt(null);
+      return;
+    }
+    let cancelled = false;
+    void getWorkspaceTrust(sessionKey)
+      .then((state) => {
+        if (cancelled) return;
+        setWorkspaceTrustPrompt(state.required && !state.trusted && state.decision === null ? state : null);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaceTrustPrompt(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionKey, workspaceTrustDismissedFor]);
+
+  const trustWorkspace = useCallback(() => {
+    if (!sessionKey || workspaceTrustSaving) return;
+    setWorkspaceTrustSaving(true);
+    void setWorkspaceTrust(sessionKey, true)
+      .then(() => {
+        setWorkspaceTrustPrompt(null);
+        showComposerNotification('success', m.chat.commandPalette.workspaceTrustSuccess);
+      })
+      .catch((err) => {
+        showComposerNotification(
+          'error',
+          m.chat.commandPalette.workspaceTrustFailed,
+          { error: err instanceof Error ? err.message : String(err) },
+        );
+      })
+      .finally(() => setWorkspaceTrustSaving(false));
+  }, [m.chat.commandPalette, sessionKey, workspaceTrustSaving]);
 
   const att = useComposerAttachments({ chat: m.chat });
   const onExternalTextReplace = useCallback(() => {
@@ -161,14 +208,14 @@ export const ChatComposer = memo(function ChatComposer({
         reason,
       });
       if (item.availability?.status === 'agent-denied' && window.confirm(`${message}\n\n${m.chat.commandPalette.skillAddToAllowlistConfirm}`)) {
-        void addSkillToAgentAllowlist(currentAgentId, item.name).catch((err) => {
+        void addSkillToAgentAllowlist(currentAgentId, item.name, sessionKey).catch((err) => {
           window.alert(err instanceof Error ? err.message : String(err));
         });
         return;
       }
       window.alert(message);
     },
-    [currentAgentId, m.chat.commandPalette],
+    [currentAgentId, m.chat.commandPalette, sessionKey],
   );
 
   const editor = useComposerEditor({
@@ -654,6 +701,22 @@ export const ChatComposer = memo(function ChatComposer({
         chat={m.chat}
         onClose={() => setReviewOpen(false)}
         onSendCommand={sendReviewCommand}
+      />
+      <ConfirmDialog
+        open={workspaceTrustPrompt !== null}
+        title={m.chat.commandPalette.workspaceTrustTitle}
+        description={interpolate(m.chat.commandPalette.workspaceTrustDescription, {
+          path: workspaceTrustPrompt?.workspacePath ?? '',
+        })}
+        confirmLabel={workspaceTrustSaving
+          ? m.chat.commandPalette.workspaceTrustSaving
+          : m.chat.commandPalette.workspaceTrustConfirm}
+        cancelLabel={m.chat.commandPalette.workspaceTrustCancel}
+        onConfirm={trustWorkspace}
+        onCancel={() => {
+          setWorkspaceTrustPrompt(null);
+          setWorkspaceTrustDismissedFor(sessionKey);
+        }}
       />
     </div>
   );

@@ -1079,6 +1079,21 @@
     "userMessageDeleteConfirmTitle": "Delete conversation round",
     "userMessageDeleteCancel": "Cancel",
     "userMessageDeleteOk": "Delete",
+    "terminal": {
+      "title": "Terminal",
+      "open": "Open terminal",
+      "hide": "Hide terminal",
+      "preparing": "Preparing terminal…",
+      "permissionTitle": "Enable terminal for this conversation?",
+      "permissionBody": "This opens an interactive shell in the conversation workspace. Commands run with your desktop user permissions.",
+      "enable": "Enable terminal",
+      "clear": "Clear display",
+      "share": "Share selected text with the assistant, or recent output when nothing is selected",
+      "start": "Start terminal",
+      "restart": "Restart terminal",
+      "stop": "Stop terminal",
+      "exited": "Process exited with code {{code}}"
+    },
     "commandPalette": {
       "noResults": "No matching commands or skills",
       "placeholder": "Search skills and commands…",
@@ -1095,6 +1110,13 @@
       "skillAgentDeniedReason": "not available to the current agent",
       "skillDisabledReason": "the skill is disabled or requirements are not met",
       "skillAddToAllowlistConfirm": "Make it available to the current agent now?",
+      "workspaceTrustTitle": "Trust this project workspace?",
+      "workspaceTrustDescription": "This project contains local instructions or skills under {{path}}. Trusting it allows XOPC to load those files into the assistant and use their declared capabilities.",
+      "workspaceTrustConfirm": "Trust workspace",
+      "workspaceTrustCancel": "Not now",
+      "workspaceTrustSaving": "Trusting…",
+      "workspaceTrustSuccess": "Project workspace trusted. Local skills are now available.",
+      "workspaceTrustFailed": "Could not trust the project workspace: {{error}}",
       "showGroupedMore": "Show {{count}} more"
     },
     "atMention": {

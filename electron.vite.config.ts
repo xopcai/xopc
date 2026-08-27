@@ -39,7 +39,8 @@ export default defineConfig({
         // from `out/main/chunks/*` fails. Bundled `thread-stream` + `thread-stream-bundle-shim.ts`
         // fixes pino transport worker path (see electron/thread-stream-bundle-shim.ts).
         // `@vscode/ripgrep` resolves a platform optionalDep at import time; packaged apps use extraResources `bin/rg`.
-        external: ['electron', '@vscode/ripgrep'],
+        // `node-pty` must resolve from its real package directory so it can load native binaries and spawn-helper.
+        external: ['electron', '@vscode/ripgrep', 'node-pty'],
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
         },

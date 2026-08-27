@@ -26,6 +26,7 @@ import type {
   AgentSkillAvailabilityPayload,
   SkillCatalogEntry,
   SkillCatalogRuntimeMeta,
+  WorkspaceTrustState,
 } from '../../agent/agent-manager.js';
 import type {
   ManagedSkillListItem,
@@ -170,6 +171,18 @@ export class GatewayMarketplaceService {
 
   getAgentSkillsApi(agentId: string): AgentSkillAvailabilityPayload {
     return this.opts.getAgentService().getAgentSkillAvailability(agentId);
+  }
+
+  getSessionSkillsApi(sessionKey: string): Promise<AgentSkillAvailabilityPayload> {
+    return this.opts.getAgentService().getSessionSkillAvailability(sessionKey);
+  }
+
+  getSessionWorkspaceTrustApi(sessionKey: string): Promise<WorkspaceTrustState> {
+    return this.opts.getAgentService().getSessionWorkspaceTrust(sessionKey);
+  }
+
+  setSessionWorkspaceTrustApi(sessionKey: string, trusted: boolean): Promise<WorkspaceTrustState> {
+    return this.opts.getAgentService().setSessionWorkspaceTrust(sessionKey, trusted);
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {

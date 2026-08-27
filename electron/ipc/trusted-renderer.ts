@@ -1,4 +1,4 @@
-import type { IpcMainInvokeEvent } from 'electron';
+import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 
 import { isEmbeddedGatewayLoopbackUrl } from '../loopback-url.js';
 
@@ -6,7 +6,7 @@ export function isTrustedElectronRendererUrl(raw: string | undefined): boolean {
   return typeof raw === 'string' && isEmbeddedGatewayLoopbackUrl(raw);
 }
 
-export function assertTrustedRenderer(event: IpcMainInvokeEvent): void {
+export function assertTrustedRenderer(event: IpcMainEvent | IpcMainInvokeEvent): void {
   const frameUrl = event.senderFrame?.url;
   const contentsUrl = event.sender.getURL();
   if (isTrustedElectronRendererUrl(frameUrl) || isTrustedElectronRendererUrl(contentsUrl)) {

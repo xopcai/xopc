@@ -45,6 +45,33 @@ export interface ElectronAgentAPI {
   onStream(callback: (chunk: string) => void): void;
 }
 
+export interface ElectronTerminalDescriptor {
+  terminalId: string;
+  sessionKey: string;
+  sessionId: string;
+  cwd: string;
+  replay: string;
+  replaySequence: number;
+  exited: boolean;
+  exitCode?: number;
+  signal?: number;
+}
+
+export interface ElectronTerminalAPI {
+  create(input: {
+    sessionKey: string;
+    sessionId: string;
+    cols: number;
+    rows: number;
+  }): Promise<ElectronTerminalDescriptor>;
+  write(terminalId: string, data: string): void;
+  resize(terminalId: string, cols: number, rows: number): Promise<{ ok: true }>;
+  close(terminalId: string): Promise<{ ok: true }>;
+  onData(callback: (event: { terminalId: string; data: string; sequence: number }) => void): () => void;
+  onExit(callback: (event: { terminalId: string; exitCode: number; signal: number }) => void): () => void;
+  onError(callback: (event: { terminalId?: string; message: string }) => void): () => void;
+}
+
 export interface ElectronStartupAPI {
   onProgress(
     callback: (detail: {
@@ -537,6 +564,7 @@ export interface ElectronAPI {
   file: ElectronFileAPI;
   search: ElectronSearchAPI;
   agent: ElectronAgentAPI;
+  terminal?: ElectronTerminalAPI;
   understandingSources?: ElectronUnderstandingSourcesAPI;
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;

@@ -80,3 +80,6 @@ docs/dependency-violations.html
 
 # Optional local frpc prefetch (scripts/download-frpc-binaries.mjs → ~/.xopc/bin)
 electron/resources/frpc/
+
+
+.agents
