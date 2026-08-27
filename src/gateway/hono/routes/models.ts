@@ -22,6 +22,7 @@ import {
   getAllProviders,
   getProviderAuthState,
   isProviderConfigured,
+  isProviderConfiguredSync,
   PROVIDER_META,
 } from '../../../providers/index.js';
 import {
@@ -61,6 +62,8 @@ import {
 } from '../../image-generation-setup.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
+import { buildCapabilityPlansForConfig } from '../../../capabilities/readiness/index.js';
+import { getXopcCloudCatalogCoordinator } from '../../../providers/xopc-cloud-catalog-coordinator.js';
 
 function readModelsJsonProviderApiKey(providerId: string): string | undefined {
   const { config } = loadModelsJson(getModelsJsonPath());
@@ -112,10 +115,53 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
   const catalogSync = service.getModelCatalogSync();
   const xopcCloudAccount = new XopcCloudAccountService();
 
-  authenticated.get('/api/models/catalog/status', (c) => c.json({
-    ok: true,
-    payload: catalogSync.getStatus(),
-  }));
+  authenticated.get('/api/models/catalog/status', (c) => {
+    const readiness = getXopcCloudCatalogCoordinator().snapshot();
+    return c.json({
+      ok: true,
+      payload: {
+        ...catalogSync.getStatus(),
+        hydratedFromDisk: readiness.source === 'disk',
+        stale: readiness.state === 'stale',
+        fetchedAt: readiness.fetchedAt,
+        catalogVersion: readiness.catalogVersion,
+        lastRefreshError: readiness.error,
+      },
+    });
+  });
+
+  authenticated.get('/api/capabilities/readiness', async (c) => {
+    const auth = await getProviderAuthState('xopc-cloud');
+    const catalog = getXopcCloudCatalogCoordinator().snapshot();
+    const authorized = auth.authStatus === 'connected';
+    const capabilities = buildCapabilityPlansForConfig(service.currentConfig, {
+      providerReady: (providerId) => providerId === 'xopc-cloud'
+        ? authorized
+        : isProviderConfiguredSync(providerId),
+    });
+    const issues = [
+      ...(auth.authStatus === 'not_connected' ? [{ code: 'oauth_not_connected', capability: null }] : []),
+      ...(auth.authStatus === 'expired' ? [{ code: 'oauth_expired_refresh_failed', capability: null }] : []),
+      ...(catalog.state === 'unavailable' ? [{ code: 'catalog_never_loaded', capability: null }] : []),
+      ...(catalog.state === 'stale' ? [{ code: 'catalog_stale', capability: null }] : []),
+      ...Object.values(capabilities)
+        .filter((plan) => authorized && catalog.modelCount > 0 && plan.status === 'unavailable')
+        .map((plan) => ({ code: 'capability_not_published', capability: plan.capability })),
+    ];
+    return c.json({
+      ok: true,
+      payload: {
+        provider: {
+          id: 'xopc-cloud',
+          authorized,
+          authStatus: auth.authStatus,
+          catalog,
+        },
+        capabilities,
+        issues,
+      },
+    });
+  });
 
   authenticated.get('/api/models/catalog', async (c) => {
     const catalog = getModelCatalogStore().load();

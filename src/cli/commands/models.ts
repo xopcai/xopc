@@ -21,6 +21,7 @@ import { getContextWithOpts } from '../context.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
+import { disconnectProvider } from '../../providers/provider-disconnect.js';
 
 const IMAGE_GENERATION_IDS = new Set([
   'gpt-image-2',
@@ -258,7 +259,7 @@ async function runAuthLogin(provider: string, options: ModelsAuthLoginOptions): 
 }
 
 async function runAuthLogout(provider: string): Promise<void> {
-  await new CredentialResolver().deleteProviderCredential(provider);
+  await disconnectProvider(provider);
   console.log(`✅ Credentials removed for ${provider}`);
 }
 

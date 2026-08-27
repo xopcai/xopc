@@ -4,7 +4,11 @@ import { loadModelsJson, type ModelsJsonConfig } from '../config/models-json.js'
 import { getModelCatalogStore, type ModelCatalogStore } from './model-catalog-store.js';
 import { discoverProviderModels, isProviderApiDiscoverable } from './model-discovery.js';
 import { getModelRegistry } from './model-registry.js';
-import { XopcCloudModelSource } from './xopc-cloud-model-source.js';
+import {
+  getXopcCloudCatalogCoordinator,
+  type CatalogReadiness,
+  type XopcCloudCatalogCoordinator,
+} from './xopc-cloud-catalog-coordinator.js';
 
 const log = createLogger('ModelCatalogSync');
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60_000;
@@ -19,9 +23,9 @@ export interface ModelCatalogSyncStatus {
 }
 
 export class ModelCatalogSyncService {
-  private readonly xopcCloud: XopcCloudModelSource;
+  private readonly xopcCloud: Pick<XopcCloudCatalogCoordinator, 'refresh'>;
   private timer: NodeJS.Timeout | null = null;
-  private refreshPromise: Promise<Awaited<ReturnType<XopcCloudModelSource['refresh']>>> | null = null;
+  private refreshPromise: Promise<CatalogReadiness> | null = null;
   private refreshAllPromise: Promise<{ updatedSources: string[] }> | null = null;
   private status: ModelCatalogSyncStatus = { running: false, refreshing: false };
 
@@ -29,7 +33,7 @@ export class ModelCatalogSyncService {
     private readonly options: {
       intervalMs?: number;
       onUpdated?: (modelCount: number) => void;
-      xopcCloud?: XopcCloudModelSource;
+      xopcCloud?: Pick<XopcCloudCatalogCoordinator, 'refresh'>;
       getConfig?: () => Config;
       catalogStore?: ModelCatalogStore;
       loadProviders?: () => ModelsJsonConfig['providers'];
@@ -38,7 +42,7 @@ export class ModelCatalogSyncService {
       getModelCount?: () => number;
     } = {},
   ) {
-    this.xopcCloud = options.xopcCloud ?? new XopcCloudModelSource();
+    this.xopcCloud = options.xopcCloud ?? getXopcCloudCatalogCoordinator();
   }
 
   start(): void {
@@ -67,16 +71,21 @@ export class ModelCatalogSyncService {
     return { ...this.status };
   }
 
-  refreshNow(): Promise<Awaited<ReturnType<XopcCloudModelSource['refresh']>>> {
+  refreshNow(): Promise<CatalogReadiness> {
     if (this.refreshPromise) return this.refreshPromise;
     this.status.refreshing = true;
     this.status.lastAttemptAt = Date.now();
-    this.refreshPromise = this.xopcCloud.refresh()
+    this.refreshPromise = this.xopcCloud.refresh('manual')
       .then((result) => {
-        if (result.status === 'updated') {
+        if (result.state === 'not-authorized') {
+          this.status.lastError = result.error?.message;
+          this.options.onUpdated?.(0);
+        } else if (result.source === 'network' && !result.error) {
           this.status.lastSuccessAt = Date.now();
           this.status.lastError = undefined;
-          this.options.onUpdated?.(result.modelCount ?? 0);
+          this.options.onUpdated?.(result.modelCount);
+        } else if (result.error) {
+          this.status.lastError = result.error.message;
         }
         return result;
       })
@@ -108,7 +117,8 @@ export class ModelCatalogSyncService {
     const sourceErrors: Record<string, string> = {};
     try {
       const cloud = await this.refreshNow();
-      if (cloud.status === 'updated') updatedSources.push('xopc-cloud');
+      if (cloud.source === 'network' && !cloud.error) updatedSources.push('xopc-cloud');
+      if (cloud.error) sourceErrors['xopc-cloud'] = cloud.error.message;
     } catch (err) {
       sourceErrors['xopc-cloud'] = err instanceof Error ? err.message : String(err);
     }

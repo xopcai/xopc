@@ -25,7 +25,6 @@ import {
   updateUserProfile,
 } from '@/features/user-context/user-context-api';
 import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
-import { fetchImageCatalog, type ImageProvider } from '@/features/settings/image-generation-api';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
 import { messages } from '@/i18n/messages';
@@ -36,22 +35,6 @@ interface OnboardingCardProps {
   onComplete: () => void | Promise<void>;
   onDismiss: () => void;
   canDismiss?: boolean;
-}
-
-export function resolveXopcCloudImageDefaults(
-  models: ConfiguredModel[],
-  imageProviders: ImageProvider[],
-): { imageModel?: { primary: string }; imageGenerationModel?: { primary: string } } {
-  const vision = models.find((model) => model.provider === 'xopc-cloud' && model.vision === true);
-  const generation = imageProviders.find((provider) =>
-    provider.id === 'xopc-cloud' && provider.configured && provider.models.length > 0);
-  const generationModel = generation?.models.includes(generation.defaultModel)
-    ? generation.defaultModel
-    : generation?.models[0];
-  return {
-    ...(vision ? { imageModel: { primary: vision.id } } : {}),
-    ...(generationModel ? { imageGenerationModel: { primary: `xopc-cloud/${generationModel}` } } : {}),
-  };
 }
 
 type OnboardingStep = 'callName' | 'collaboration' | 'provider' | 'apiKey';
@@ -322,14 +305,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     }
   };
 
-  const finishSetup = useCallback(async (modelRef: string, providerId: string) => {
+  const finishSetup = useCallback(async (modelRef: string) => {
     const defaults = await fetchGlobalDefaults();
-    const cloudImageDefaults = providerId === 'xopc-cloud'
-      ? resolveXopcCloudImageDefaults(
-          await fetchConfiguredModelsCached(true),
-          await fetchImageCatalog(),
-        )
-      : {};
     await updateGlobalDefaultModels({
       ...defaults.models,
       defaultRole: 'deep',
@@ -337,12 +314,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         ...defaults.models.roles,
         deep: { model: modelRef },
       },
-      ...(!defaults.models.imageModel && cloudImageDefaults.imageModel
-        ? { imageModel: cloudImageDefaults.imageModel }
-        : {}),
-      ...(!defaults.models.imageGenerationModel && cloudImageDefaults.imageGenerationModel
-        ? { imageGenerationModel: cloudImageDefaults.imageGenerationModel }
-        : {}),
     });
     void revalidateGatewayConfig();
     void invalidateConfiguredModelsCache();
@@ -384,7 +355,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           ? '没有找到可用模型，请检查密钥或前往“模型与服务”进行高级配置。'
           : 'No available model was found. Check the key or open Models & services for advanced setup.');
       }
-      await finishSetup(recommendedModel.id, selectedProvider);
+      await finishSetup(recommendedModel.id);
     } catch (cause) {
       dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
     } finally {
@@ -401,7 +372,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           ? 'XOPC Cloud 已连接，但没有找到可用模型，请稍后重试。'
           : 'XOPC Cloud connected, but no available model was found. Try again shortly.');
       }
-      await finishSetup(recommendedModel.id, 'xopc-cloud');
+      await finishSetup(recommendedModel.id);
     } catch (cause) {
       dispatch({
         type: 'patch',

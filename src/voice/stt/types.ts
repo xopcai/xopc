@@ -35,6 +35,8 @@ import type { MediaUnderstandingModelEntry } from '../../media-understanding/typ
 export interface STTConfig {
   enabled: boolean;
   provider: string;
+  /** Runtime-only flag: absent app config enables managed provider selection. */
+  managedAuto?: boolean;
   /** Capability-local model chain (`tools.media.audio.models`). */
   models?: MediaUnderstandingModelEntry[];
   /** Shared model entries merged from `tools.media.models` at runtime. */

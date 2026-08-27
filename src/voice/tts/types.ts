@@ -65,6 +65,8 @@ export interface TTSModelOverrideConfig {
 export interface TTSConfig {
   enabled: boolean;
   provider: TTSProvider;
+  /** Runtime-only flag: absent app config enables managed provider selection. */
+  managedAuto?: boolean;
   /** Trigger mode for automatic voice replies. */
   trigger: TTSAutoMode;
   /** Fallback configuration */
@@ -94,11 +96,11 @@ export interface TTSSummarizationConfig {
 
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
   enabled: true,
-  provider: 'edge',
-  trigger: 'inbound',
+  provider: 'xopc-cloud',
+  trigger: 'off',
   fallback: {
     enabled: true,
-    order: ['openai', 'alibaba', 'minimax', 'edge'],
+    order: ['xopc-cloud', 'openai', 'alibaba', 'minimax', 'edge'],
   },
   maxTextLength: 512, // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: 60000,
@@ -116,6 +118,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
     allowSeed: false,
   },
   providers: {
+    'xopc-cloud': {},
     alibaba: { model: 'qwen-tts', voice: 'Cherry' },
     openai: { model: 'tts-1', voice: 'alloy' },
     edge: {

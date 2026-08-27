@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ModelCatalogStore } from '../model-catalog-store.js';
 import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('XopcCloudModelSource', () => {
@@ -11,25 +10,31 @@ describe('XopcCloudModelSource', () => {
       credentials: { resolveApiKey: async () => null },
     });
 
-    await expect(source.refresh()).resolves.toEqual({
+    await expect(source.fetch()).resolves.toEqual({
       status: 'skipped',
       reason: 'not_configured',
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('atomically replaces the in-memory model snapshot using OAuth bearer auth', async () => {
-    const store = new ModelCatalogStore();
-    const refreshModels = vi.fn();
+  it('fetches and validates an OAuth-authenticated catalog', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer oauth-access');
       return Response.json({
         object: 'list',
+        xopc: {
+          schemaVersion: 2,
+          defaults: { 'image-generation': 'model-b', stt: 'stt-a', tts: 'tts-a', vision: 'missing' },
+        },
         data: [
           {
             id: 'model-b',
             xopc: {
               kind: 'image',
+              stability: 'stable',
+              priority: 100,
+              tier: 'free',
+              bestEffort: false,
               operations: ['images.generate'],
               capabilities: {
                 input: ['text'], output: ['image'], reasoning: false,
@@ -62,28 +67,26 @@ describe('XopcCloudModelSource', () => {
       fetchImpl,
       routerUrl: 'https://router.test/v1/',
       credentials: { resolveApiKey: async () => 'oauth-access' },
-      catalogStore: store,
-      refreshModels,
     });
 
-    await expect(source.refresh()).resolves.toEqual({
-      status: 'updated',
-      modelCount: 4,
-      models: ['model-b', 'model-a', 'stt-a', 'tts-a'],
-    });
-    expect(store.getSource('xopc-cloud')).toMatchObject({
-      providerId: 'xopc-cloud',
-      baseUrl: 'https://router.test/v1',
-      etag: 'catalog-2',
+    await expect(source.fetch()).resolves.toMatchObject({
+      status: 'fetched',
+      source: {
+        providerId: 'xopc-cloud',
+        baseUrl: 'https://router.test/v1',
+        etag: 'catalog-2',
+        recommended: { 'image-generation': 'model-b', stt: 'stt-a', tts: 'tts-a' },
+      },
       models: [
         {
-          id: 'model-b', availability: 'available', kind: 'image', input: ['text'],
+          id: 'model-b', kind: 'image', input: ['text'],
           output: ['image'], operations: ['images.generate'], reasoning: false,
           maxOutputTokens: null,
           imageGeneration: expect.objectContaining({ maxCount: 2, sizes: ['1024x1024'] }),
+          stability: 'stable', priority: 100, tier: 'free', bestEffort: false,
         },
         {
-          id: 'model-a', availability: 'available', kind: 'language', input: ['text'],
+          id: 'model-a', kind: 'language', input: ['text'],
           output: ['text'], operations: ['chat.completions', 'responses'],
           reasoning: false, maxOutputTokens: null,
         },
@@ -97,7 +100,6 @@ describe('XopcCloudModelSource', () => {
         }),
       ],
     });
-    expect(refreshModels).toHaveBeenCalledOnce();
   });
 
   it('preserves structured model service failures', async () => {
@@ -108,7 +110,7 @@ describe('XopcCloudModelSource', () => {
       credentials: { resolveApiKey: async () => 'expired-token' },
     });
 
-    await expect(source.refresh()).rejects.toMatchObject<XopcCloudModelError>({
+    await expect(source.fetch()).rejects.toMatchObject<XopcCloudModelError>({
       name: 'XopcCloudModelError',
       status: 401,
       code: 'invalid_token',
@@ -116,36 +118,15 @@ describe('XopcCloudModelSource', () => {
     });
   });
 
-  it('preserves the last usable snapshot when a successful response is malformed', async () => {
-    const store = new ModelCatalogStore();
-    store.replaceSourceModels('xopc-cloud', {
-      providerId: 'xopc-cloud',
-      baseUrl: 'https://router.test/v1',
-      api: 'openai-completions',
-      etag: 'catalog-1',
-      recommendedModel: 'stable-model',
-      lastSuccessAt: 1,
-    }, [{
-      id: 'stable-model', name: 'Stable Model', input: ['text'], reasoning: false,
-      kind: 'language', output: ['text'], operations: ['chat.completions'],
-      contextWindow: 128_000, maxOutputTokens: null,
-    }]);
-    const refreshModels = vi.fn();
+  it('rejects a malformed successful response before it can be committed', async () => {
     const source = new XopcCloudModelSource({
       fetchImpl: async () => Response.json({ object: 'list' }),
       credentials: { resolveApiKey: async () => 'oauth-access' },
-      catalogStore: store,
-      refreshModels,
     });
 
-    await expect(source.refresh()).rejects.toMatchObject<XopcCloudModelError>({
+    await expect(source.fetch()).rejects.toMatchObject<XopcCloudModelError>({
       status: 200,
       code: 'invalid_response',
     });
-    expect(store.getSource('xopc-cloud')).toMatchObject({
-      etag: 'catalog-1',
-      models: [{ id: 'stable-model', availability: 'available' }],
-    });
-    expect(refreshModels).not.toHaveBeenCalled();
   });
 });

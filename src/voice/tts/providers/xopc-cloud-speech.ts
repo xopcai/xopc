@@ -1,4 +1,5 @@
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
 import { registerSpeechProvider } from '../speech-registry.js';
@@ -13,8 +14,10 @@ interface XopcCloudSpeechConfig extends Record<string, unknown> {
 }
 
 function availableModels() {
-  return getModelCatalogStore().getSource('xopc-cloud')?.models.filter((model) =>
-    model.availability === 'available' && model.kind === 'tts') ?? [];
+  const source = getModelCatalogStore().getSource('xopc-cloud');
+  return source?.models
+    .filter((model) => model.availability === 'available' && model.kind === 'tts')
+    .sort((left, right) => compareCatalogModels(left, right, source.recommended?.tts)) ?? [];
 }
 
 function readConfig(config: SpeechProviderConfig): XopcCloudSpeechConfig {

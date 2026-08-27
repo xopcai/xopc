@@ -173,7 +173,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   {
     id: 'models',
     match: (path) =>
-      startsWithAny(path, ['/api/models', '/api/models-json', '/api/providers']),
+      startsWithAny(path, ['/api/models', '/api/models-json', '/api/providers', '/api/capabilities/readiness']),
     load: async () => {
       const { registerModelsRoutes } = await import('./models.js');
       return { register: registerModelsRoutes };

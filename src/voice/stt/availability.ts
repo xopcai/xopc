@@ -1,29 +1,10 @@
 import type { STTConfig } from './types.js';
-import { getVoiceProviderMetadata } from '../metadata/index.js';
-
-function providerHasConfig(config: STTConfig, providerId: string): boolean {
-  const provider = config.providers?.[providerId];
-  if (provider && Object.keys(provider).length > 0) return true;
-  if ([...(config.models ?? []), ...(config.sharedModels ?? [])].some(
-    (entry) => entry.provider === providerId && entry.capabilities?.includes('audio'),
-  )) return true;
-
-  // OAuth-backed and local providers can be runtime-ready without storing a
-  // credential or model in tools.media.audio.providers.
-  return getVoiceProviderMetadata('stt', providerId)?.diagnostics.requiresApiKey === false;
-}
+import { resolveSTTProviderChain } from './factory.js';
 
 /**
- * Lightweight availability check for channel routing. Do not import the STT
- * factory/provider registry here; channel plugins call this at startup and the
- * provider registry pulls optional SDKs (e.g. openai) into Electron's dynamic
- * extension runtime path.
+ * Runtime-truth availability check shared by channels and the gateway.
  */
 export function isSTTAvailable(config?: STTConfig): boolean {
   if (!config?.enabled) return false;
-  if (providerHasConfig(config, config.provider)) return true;
-  if (config.fallback?.enabled) {
-    return config.fallback.order.some((providerId) => providerHasConfig(config, providerId));
-  }
-  return false;
+  return resolveSTTProviderChain(config).length > 0;
 }

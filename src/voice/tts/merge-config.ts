@@ -32,16 +32,19 @@ function mergeProviderEntries(
 
 export function mergeTtsConfigFromAppConfig(tts: Partial<TTSConfig> | undefined): TTSConfig {
   const p = (tts ?? {}) as Partial<TTSConfig>;
+  const managedAuto = tts === undefined;
   return {
     ...DEFAULT_TTS_CONFIG,
     ...p,
+    managedAuto,
     enabled: p.enabled ?? DEFAULT_TTS_CONFIG.enabled,
     provider: normalizeTtsProvider(p.provider),
     trigger: normalizeTtsTrigger(p.trigger ?? DEFAULT_TTS_CONFIG.trigger),
-    fallback: {
-      ...DEFAULT_TTS_CONFIG.fallback!,
-      ...p.fallback,
-    },
+    fallback: managedAuto
+      ? { ...DEFAULT_TTS_CONFIG.fallback! }
+      : p.fallback
+        ? { ...p.fallback }
+        : { enabled: false, order: [] },
     modelOverrides: {
       ...DEFAULT_TTS_CONFIG.modelOverrides!,
       ...p.modelOverrides,

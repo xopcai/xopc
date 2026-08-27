@@ -5,7 +5,9 @@ import type { Config } from '../../../config/schema.js';
 describe('mergeTtsConfigFromAppConfig', () => {
   it('fills defaults when tts is undefined', () => {
     const merged = mergeTtsConfigFromAppConfig(undefined);
-    expect(merged.provider).toBe('edge');
+    expect(merged.provider).toBe('xopc-cloud');
+    expect(merged.trigger).toBe('off');
+    expect(merged.managedAuto).toBe(true);
     expect(merged.providers?.openai?.model).toBe('tts-1');
     expect(merged.fallback?.order?.length).toBeGreaterThan(0);
   });
@@ -17,6 +19,8 @@ describe('mergeTtsConfigFromAppConfig', () => {
       providers: { alibaba: { model: 'qwen-tts', voice: 'Cherry' } },
     });
     expect(merged.provider).toBe('alibaba');
+    expect(merged.managedAuto).toBe(false);
+    expect(merged.fallback).toEqual({ enabled: false, order: [] });
     expect(merged.providers?.alibaba?.model).toBe('qwen-tts');
   });
 

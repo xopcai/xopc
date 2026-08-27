@@ -29,6 +29,7 @@ import type {
 import { applyImageGenerationModelConfigDefaults } from '../image/image-helpers.js';
 import type { ToolModelConfig } from '../image/tool-model-config.js';
 import { persistToolMedia } from './tool-media.js';
+import { buildCapabilityPlansForConfig } from '../../capabilities/readiness/index.js';
 
 const DEFAULT_COUNT = 1;
 const MAX_COUNT = 9;
@@ -192,18 +193,38 @@ export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config;
     ? getAgentDefaultImageGenerationModelConfig(params.cfg, params.agentId)
     : undefined;
   if (explicit?.primary?.trim()) {
+    const plan = buildCapabilityPlansForConfig(params.cfg!)['image-generation'];
+    const primarySlash = explicit.primary.indexOf('/');
+    const primaryProvider = primarySlash > 0 ? explicit.primary.slice(0, primarySlash) : '';
+    const managed = plan.primary
+      ? [plan.primary, ...plan.fallbacks]
+          .filter((candidate) => explicit.autoProviderFallback || candidate.provider === primaryProvider)
+          .map((candidate) => `${candidate.provider}/${candidate.model}`)
+      : [];
+    const fallbacks = [...new Set([...(explicit.fallbacks ?? []), ...managed])]
+      .filter((ref) => ref !== explicit.primary);
     return {
       primary: explicit.primary.trim(),
-      ...(explicit.fallbacks?.length ? { fallbacks: explicit.fallbacks } : {}),
+      ...(fallbacks.length ? { fallbacks } : {}),
       ...(explicit.timeoutMs ? { timeoutMs: explicit.timeoutMs } : {}),
       ...(explicit.autoProviderFallback ? { autoProviderFallback: true } : {}),
     };
   }
 
-  // Step 2: tool default = enumerate every provider whose isConfigured() is true,
-  // ordered as registered. No more hard-coded openai/dashscope fallback.
+  let planned: ReturnType<typeof buildCapabilityPlansForConfig>['image-generation'] | undefined;
+  if (params.cfg) {
+    try {
+      planned = buildCapabilityPlansForConfig(params.cfg)['image-generation'];
+    } catch {
+      planned = undefined;
+    }
+  }
+  const plannedRefs = planned?.primary
+    ? [planned.primary, ...planned.fallbacks].map((candidate) => `${candidate.provider}/${candidate.model}`)
+    : [];
+
   const providers = listImageGenerationProvidersSummary();
-  const candidates: string[] = [];
+  const candidates: string[] = [...plannedRefs];
   for (const providerSummary of providers) {
     const provider = getImageGenerationProvider(providerSummary.id);
     let configured = false;

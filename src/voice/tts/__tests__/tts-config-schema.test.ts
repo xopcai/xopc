@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { TTSConfigSchema } from '../../../config/schema.js';
 
 describe('TTSConfigSchema', () => {
-  it('defaults to inbound voice replies with the shared 60 second timeout', () => {
+  it('defaults automatic voice replies to off with the shared 60 second timeout', () => {
     const parsed = TTSConfigSchema.parse({});
 
     expect(parsed.enabled).toBe(true);
-    expect(parsed.trigger).toBe('inbound');
+    expect(parsed.trigger).toBe('off');
     expect(parsed.timeoutMs).toBe(60_000);
   });
 

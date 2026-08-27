@@ -9,7 +9,7 @@ import * as extensionMarketplace from '../../../extensions/marketplace.js';
 import { mergeActivationContext } from '../../../extensions/activation-context.js';
 import { ActivationPlanner } from '../../../extensions/activation-planner.js';
 import { getAllModels, getAvailableModels, type Model, type Api } from '../../../providers/index.js';
-import { createOAuthHandler, loadOAuthCredentialsToCache } from '../oauth.js';
+import { createOAuthHandler } from '../oauth.js';
 import { createOAuthAsyncHandler } from '../oauth-async.js';
 import { extensionAssetMimeType } from '../lib/extension-assets.js';
 import { loadExtensionStore, saveExtensionStore } from '../lib/extension-store.js';
@@ -174,9 +174,6 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
 
   // ========== Async OAuth API (/api/auth/oauth-async) ==========
   authenticated.route('/api/auth/oauth-async', createOAuthAsyncHandler(service));
-
-  // Load OAuth credentials from config into cache on startup
-  loadOAuthCredentialsToCache(service);
 
   // ========== Registry API ==========
   
@@ -497,9 +494,6 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     try {
       // Reload config
       await service.reloadConfig();
-      
-      // Reload OAuth credentials from new config
-      loadOAuthCredentialsToCache(service);
       
       const models = getAllModels();
       

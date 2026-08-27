@@ -11,6 +11,7 @@ import { join } from 'path';
 import { listSessions } from './agent/sessions.js';
 import { startInteractiveChat } from './agent/interactive.js';
 import { renderStreamToTerminal } from './agent/stream-renderer.js';
+import { getXopcCloudCatalogCoordinator } from '../../providers/xopc-cloud-catalog-coordinator.js';
 
 const log = createLogger('AgentCommand');
 
@@ -53,6 +54,16 @@ function createAgentCommand(_ctx: CLIContext): Command {
 
       const modelFromConfig = getAgentDefaultModelRef(config);
       const modelId = (options.model?.trim() || modelFromConfig) as string | undefined;
+      if (modelId?.startsWith('xopc-cloud/')) {
+        const readiness = await getXopcCloudCatalogCoordinator().ensure({
+          reason: 'agent-run',
+          network: 'if-empty',
+          timeoutMs: 10_000,
+        });
+        if (readiness.state === 'unavailable' || readiness.state === 'not-authorized') {
+          throw new Error(readiness.error?.message ?? 'XOPC Cloud model catalog is unavailable');
+        }
+      }
       const bus = new MessageBus();
 
       if (ctx.isVerbose) {

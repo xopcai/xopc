@@ -18,6 +18,7 @@ import {
   type OAuthProviderConfig,
 } from '../cli/utils/oauth-providers.js';
 import { getProviderDisplayName } from '../providers/index.js';
+import { getXopcCloudCatalogCoordinator } from '../providers/xopc-cloud-catalog-coordinator.js';
 import { createLogger } from '../utils/logger.js';
 
 import { ExtensionInputDialog } from './components/extension-dialog.js';
@@ -271,6 +272,13 @@ export async function runTuiOAuthLogin(provider: string | undefined, deps: TuiOA
 
     const resolver = new CredentialResolver();
     await resolver.saveOAuthCredentials(selectedProvider, credentials);
+
+    if (selectedProvider === 'xopc-cloud') {
+      const catalog = await getXopcCloudCatalogCoordinator().refresh('oauth');
+      if (catalog.error) {
+        deps.chatLog.addSystem(`Authorization succeeded, but model catalog sync failed: ${catalog.error.message}`);
+      }
+    }
 
     deps.chatLog.addSystem(`OAuth login completed for ${selectedProvider}.`);
   } finally {

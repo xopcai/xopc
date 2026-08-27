@@ -21,6 +21,7 @@ export function mergeSttConfigFromAppConfig(
   return {
     ...DEFAULT_STT_CONFIG,
     ...patch,
+    managedAuto: stt === undefined,
     providers: mergeSttProviders(DEFAULT_STT_CONFIG.providers, patch.providers),
     fallback: { ...DEFAULT_STT_CONFIG.fallback!, ...patch.fallback },
     ...(toolsMedia?.models?.length ? { sharedModels: toolsMedia.models } : {}),

@@ -1,4 +1,5 @@
 import { getModelCatalogStore, type CatalogModel } from '../../../../providers/model-catalog-store.js';
+import { compareCatalogModels } from '../../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../../providers/xopc-cloud-config.js';
 import { createOpenAiImagesProvider } from '../openai-images-provider.js';
@@ -12,7 +13,12 @@ export function buildXopcCloudImageGenerationProvider(): ImageGenerationProvider
   const models = source?.models.filter((model) =>
     model.availability === 'available'
     && model.kind === 'image'
-    && model.operations.includes('images.generate')) ?? [];
+    && model.operations.includes('images.generate'))
+    .sort((left, right) => compareCatalogModels(
+      left,
+      right,
+      source.recommended?.['image-generation'],
+    )) ?? [];
   if (models.length === 0) return undefined;
 
   const modelCapabilities = Object.fromEntries(models.map((model) => [

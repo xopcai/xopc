@@ -13,7 +13,14 @@ import {
 } from '../agent/agent-scope.js';
 import { ENV_VARS, resolveStateDir } from './paths-state.js';
 
-export { ENV_VARS, resolveHomeDir, resolveStateDir, resolveXopcDatabasePath, XOPC_DB_FILENAME } from './paths-state.js';
+export {
+  ENV_VARS,
+  resolveHomeDir,
+  resolveStateDir,
+  resolveXopcCloudCatalogCachePath,
+  resolveXopcDatabasePath,
+  XOPC_DB_FILENAME,
+} from './paths-state.js';
 export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 export {
   resolveAgentWorkspaceDir,
