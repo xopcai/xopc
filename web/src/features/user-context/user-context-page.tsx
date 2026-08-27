@@ -17,14 +17,15 @@ import { fetchConnectorCatalog, fetchConnectorInstances, type ConnectorDefinitio
 import {
   createCollaborationRule, createUnderstanding, deleteCollaborationRule,
   deleteUnderstanding, deleteUserFocus, detectBrowserTimezone, fetchUserContext, fetchUserContextSettings,
-  fetchUnderstandingSourceGrants, fetchUserFocuses,
+  fetchConnectedContentCandidates, fetchUnderstandingSourceGrants, fetchUserFocuses,
+  readConnectedContent,
   refreshUnderstandingSourceGrant,
   revokeUnderstandingSourceGrant,
   updateCollaborationRule, updateUnderstanding, updateUserProfile,
   updateUserFocusStatus,
   updateUserContextSettings,
   type ContextConsolidationRun,
-  type CollaborationRule, type UnderstandingKind, type UserContextResponse,
+  type CollaborationRule, type ConnectedContentCandidate, type UnderstandingKind, type UserContextResponse,
   type UserContextSettings,
   type UnderstandingSourceGrant, type UserFocus, type UserProfile, type UserUnderstanding,
   type UserUnderstandingQuality,
@@ -50,10 +51,11 @@ const copy = {
     rulesHint: 'Explicit instructions for how xopc should collaborate with you. Rules outrank inferred understanding.',
     addRule: 'Add rule', ruleStatement: 'How should xopc work with you?', category: 'Category', disable: 'Disable', enable: 'Enable',
     emptyUnderstanding: 'Nothing here yet. Tell xopc something explicitly, or confirm a suggestion after it learns one.',
-    qualityTitle: 'Learning quality', qualityActive: 'Confirmed', qualityPending: 'Pending review', qualityAcceptance: '30-day acceptance', qualityRecall: 'Helpful recall', qualityNoData: 'Not enough feedback yet',
+    qualityTitle: 'Learning quality', qualityActive: 'Confirmed', qualityPending: 'Pending review', qualityAcceptance: '30-day acceptance', qualityRecall: 'Helpful recall', qualitySourceCoverage: 'Source coverage', qualityBootstrapTime: 'Median first sync', qualityNoData: 'Not enough feedback yet',
     emptyRules: 'No working agreements yet.', sourceExplicit: 'You said this directly', sourceInferred: 'Inferred — may be wrong', sourceObserved: 'Observed across prior work',
     sourcesHint: 'Review every granted source, its access mode, retention, and last collection. Revoking stops future learning.', manageSources: 'Connect another source', authorizedSources: 'Authorized sources', connectorsTitle: 'Connectors', openConnector: 'Open connector', noSources: 'No sources are authorized.', noConnectors: 'No connectors are installed.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke source', revokeHint: 'Revoke this source and remove its derived understanding', confirmRevoke: 'Confirm revoke', revoking: 'Revoking…', revokeDone: 'Source revoked and derived understanding removed.', refresh: 'Update', refreshing: 'Updating…', refreshStarted: 'Update started.', actionFailed: 'Action failed', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only',
     focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.', focusCandidate: 'Suggested', focusActive: 'Active', focusPaused: 'Paused', focusCompleted: 'Completed', confidence: 'Confidence', confidenceHigh: 'High', confidenceMedium: 'Medium', confidenceLow: 'Low',
+    contentReadTitle: 'Optional deeper reading', contentReadHint: 'Metadata identified these recent items. Select up to 5 to explicitly allow one bounded content read; nothing is opened automatically.', readSelected: 'Read selected', reading: 'Reading…', contentReadDone: 'Selected content was read and indexed.',
     dreamingHint: 'A deterministic daily review checks expiry, contradictory evidence, and corroborated candidates. It never auto-activates an inference.', mode: 'Background review', on: 'On — propose for review', off: 'Off', reviewTime: 'Daily review time', evidenceThreshold: 'Supporting evidence required', scanLimit: 'Maximum items per run', lastRun: 'Last review', neverRun: 'Not run yet', runCompleted: 'Completed', runFailed: 'Failed', runRunning: 'Running', runItems: 'items',
     privacyHint: 'Choose how generic memory providers handle sensitive content. Structured user understanding applies stricter rules of its own.', sensitivePolicy: 'Sensitive memory writes', policyDeny: 'Do not store', policyConfirm: 'Ask before storing', policyAllow: 'Store when relevant', privacyWarning: 'Secret and regulated content is never stored as structured user understanding, regardless of this setting.',
     error: 'Could not load your context.', retry: 'Try again',
@@ -73,10 +75,11 @@ const copy = {
     rulesHint: '你明确设定的协作方式。协作约定的优先级高于推断出的理解。',
     addRule: '添加约定', ruleStatement: '希望 xopc 如何与你协作？', category: '类别', disable: '停用', enable: '启用',
     emptyUnderstanding: '还没有内容。你可以直接告诉 xopc，或在它学到建议后进行确认。', emptyRules: '还没有协作约定。',
-    qualityTitle: '学习质量', qualityActive: '已确认', qualityPending: '待审核', qualityAcceptance: '30 天采纳率', qualityRecall: '有效召回', qualityNoData: '反馈数据还不足',
+    qualityTitle: '学习质量', qualityActive: '已确认', qualityPending: '待审核', qualityAcceptance: '30 天采纳率', qualityRecall: '有效召回', qualitySourceCoverage: '来源覆盖率', qualityBootstrapTime: '首次同步中位耗时', qualityNoData: '反馈数据还不足',
     sourceExplicit: '由你直接告知', sourceInferred: '推断内容，可能有误', sourceObserved: '从过往工作中观察到',
     sourcesHint: '查看每项授权的访问方式、保留策略和最近采集时间；撤销后将停止后续学习。', manageSources: '连接其他来源', authorizedSources: '已授权数据来源', connectorsTitle: '连接器', openConnector: '打开连接器', noSources: '尚未授权任何来源。', noConnectors: '尚未安装连接器。', connected: '已连接', unavailable: '需要处理', revoke: '撤销来源', revokeHint: '撤销此来源并删除由它产生的理解', confirmRevoke: '确认撤销', revoking: '正在撤销…', revokeDone: '已撤销来源并删除派生理解。', refresh: '更新', refreshing: '正在更新…', refreshStarted: '更新任务已开始。', actionFailed: '操作失败', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解',
     focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。', focusCandidate: '待确认', focusActive: '进行中', focusPaused: '已暂停', focusCompleted: '已完成', confidence: '置信度', confidenceHigh: '高', confidenceMedium: '中', confidenceLow: '低',
+    contentReadTitle: '可选的深入读取', contentReadHint: '元数据识别出这些近期条目。你可以选择最多 5 项，明确授权一次有界正文读取；系统不会自动打开内容。', readSelected: '读取所选内容', reading: '正在读取…', contentReadDone: '已读取并索引所选内容。',
     dreamingHint: '每天进行一次确定性复核，检查过期、矛盾证据和得到佐证的候选理解；推断内容不会自动生效。', mode: '后台复核', on: '开启并生成待审核项', off: '关闭', reviewTime: '每日复核时间', evidenceThreshold: '所需支持证据数', scanLimit: '每次最多检查', lastRun: '最近一次复核', neverRun: '尚未运行', runCompleted: '已完成', runFailed: '失败', runRunning: '运行中', runItems: '项',
     privacyHint: '选择通用记忆服务如何处理敏感内容；结构化用户理解有独立且更严格的规则。', sensitivePolicy: '敏感记忆写入', policyDeny: '不保存', policyConfirm: '保存前询问', policyAllow: '相关时允许保存', privacyWarning: '无论这里如何设置，秘密和受监管内容都不会保存为结构化用户理解。',
     error: '无法加载用户上下文。', retry: '重试',
@@ -276,6 +279,10 @@ function UnderstandingQualitySummary({ quality, t }: {
     [t.qualityPending, String(quality.records.candidate + quality.records.needsReview)],
     [t.qualityAcceptance, rate(quality.decisions.acceptanceRate)],
     [t.qualityRecall, rate(quality.recall.helpfulRate)],
+    [t.qualitySourceCoverage, rate(quality.quickUnderstanding.sourceCoverage)],
+    [t.qualityBootstrapTime, quality.quickUnderstanding.medianBootstrapDurationMs == null
+      ? t.qualityNoData
+      : `${(quality.quickUnderstanding.medianBootstrapDurationMs / 1_000).toFixed(1)}s`],
   ];
   return <section className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-surface-muted px-3 py-2.5">
     <h2 className="text-xs font-medium text-fg-muted">{t.qualityTitle}</h2>
@@ -374,8 +381,14 @@ async function fetchSourcesPanelData(): Promise<SourcesPanelData> {
 
 function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
   const { data, error, isLoading, mutate } = useSWR<SourcesPanelData>('you-understanding-sources', fetchSourcesPanelData);
+  const { data: contentCandidates = [], mutate: mutateContentCandidates } = useSWR<ConnectedContentCandidate[]>(
+    'you-connected-content-candidates',
+    fetchConnectedContentCandidates,
+  );
   const [runningAction, setRunningAction] = useState<{ grantId: string; kind: 'refresh' | 'revoke' } | null>(null);
   const [confirmingRevoke, setConfirmingRevoke] = useState<string | null>(null);
+  const [selectedContent, setSelectedContent] = useState<string[]>([]);
+  const [readingContent, setReadingContent] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   if (isLoading) return <Skeleton className="h-64 rounded-2xl" />;
   if (error) return <Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty>;
@@ -424,6 +437,25 @@ function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
       setRunningAction(null);
     }
   };
+  const readSelectedContent = async () => {
+    if (!selectedContent.length) return;
+    setReadingContent(true);
+    setFeedback(null);
+    try {
+      const response = await readConnectedContent(selectedContent);
+      if (response.result.failed.length) {
+        setFeedback({ tone: 'error', message: response.result.failed.map((item) => item.error).join('; ') });
+      } else {
+        setFeedback({ tone: 'success', message: t.contentReadDone });
+      }
+      setSelectedContent([]);
+      await mutateContentCandidates();
+    } catch (contentError) {
+      setFeedback({ tone: 'error', message: actionError(contentError) });
+    } finally {
+      setReadingContent(false);
+    }
+  };
   return <div className="space-y-5">
     <div className="flex items-start justify-between gap-4"><p className="max-w-2xl text-sm leading-6 text-fg-muted">{t.sourcesHint}</p><Button asChild variant="primary"><Link to="/connectors?understanding=1&returnTo=%2Fyou%3Ftab%3Dsources">{t.manageSources}<ExternalLink className="size-4" /></Link></Button></div>
     {feedback ? <p role="status" aria-live="polite" className={`rounded-xl px-3 py-2 text-sm ${feedback.tone === 'success' ? 'bg-success-soft text-success' : 'bg-danger/10 text-danger'}`}>{feedback.message}</p> : null}
@@ -437,6 +469,17 @@ function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
         </article>;
       })}</div> : <Empty>{t.noSources}</Empty>}
     </section>
+    {contentCandidates.length ? <section className="space-y-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-sm font-semibold text-fg">{t.contentReadTitle}</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-fg-muted">{t.contentReadHint}</p></div><Button variant="primary" disabled={!selectedContent.length || readingContent} onClick={() => void readSelectedContent()}>{readingContent ? <><Loader2 className="size-4 animate-spin" />{t.reading}</> : `${t.readSelected} · ${selectedContent.length}`}</Button></div>
+      <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-panel">{contentCandidates.map((candidate) => {
+        const checked = selectedContent.includes(candidate.sourceItemId);
+        const selectionFull = selectedContent.length >= 5 && !checked;
+        return <label key={candidate.sourceItemId} className={`flex items-center gap-3 px-4 py-3 ${selectionFull ? 'opacity-50' : 'cursor-pointer hover:bg-surface-hover'}`}>
+          <input type="checkbox" className="size-4 rounded border-edge accent-[var(--color-accent)]" checked={checked} disabled={selectionFull || readingContent} onChange={(event) => setSelectedContent((current) => event.target.checked ? [...current, candidate.sourceItemId] : current.filter((id) => id !== candidate.sourceItemId))} />
+          <div className="min-w-0 flex-1"><p className="truncate text-sm text-fg">{candidate.title}</p><p className="mt-0.5 text-xs text-fg-subtle">{candidate.toolkit === 'gmail' ? 'Gmail' : 'Google Drive'}{candidate.occurredAt ? ` · ${new Date(candidate.occurredAt).toLocaleDateString()}` : ''}</p></div>
+        </label>;
+      })}</div>
+    </section> : null}
     <section className="space-y-2"><h2 className="text-sm font-semibold text-fg">{t.connectorsTitle} · {instances.length}</h2>
       {instances.length ? <div className="grid gap-3 sm:grid-cols-2">{instances.map((instance) => {
         const ready = instance.enabled && (instance.status === 'connected' || instance.connectionStatus === 'connected' || instance.authStatus === 'connected');

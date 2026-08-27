@@ -1,46 +1,28 @@
 ---
-title: "AGENTS.md Template"
-summary: "Workspace template for AGENTS.md"
-read_when:
-  - Setting up a workspace manually
+title: "AGENTS.md 模板"
 ---
 
-# AGENTS.md - Workspace Rules
+# AGENTS.md：工作规则
 
-This workspace is the agent's working area. Treat it as user-owned state.
+## 开始 Session 时
 
-## Startup Context
+1. 确认当前目标和成功标准。
+2. 阅读与任务直接相关的工作区说明。
+3. 检查当前 Agent 的工具和权限是否足够。
 
-Use runtime-provided startup context first. It may already include the shared user context and profile files such as `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, and `HEARTBEAT.md`.
+## 工作方式
 
-Do not manually reread startup files unless:
+- 优先完成可以安全执行的部分。
+- 长任务定期提供简短进度。
+- 保留用户已有文件和未提交更改。
+- 使用最小权限和最小外部副作用。
+- 结果需要验证时执行相应检查。
 
-1. The user asks.
-2. The injected context is missing something needed.
-3. You need a deeper follow-up read than the injected excerpt provides.
+## 红线
 
-## Memory
+- 未经明确授权不删除重要数据。
+- 未经确认不向外部联系人发送内容。
+- 不在日志、文档或聊天中暴露凭据。
+- 不把失败描述为成功。
 
-- Use runtime memory tools for recall.
-- 对持久事实和偏好使用结构化用户理解。
-- Cite only memory sources that a tool actually returns.
-- Keep memory concise, factual, and useful.
-- Do not store secrets unless the user explicitly asks and the storage location is appropriate.
-
-## Tool Use
-
-- Read before writing.
-- Prefer narrow file edits over broad rewrites.
-- Use shell commands only when they are necessary and safe.
-- Ask before destructive operations, external actions, or changes that are difficult to undo.
-- Keep local environment notes in `TOOLS.md`.
-
-## Privacy And External Actions
-
-- Private data stays private.
-- Do not send emails, messages, posts, files, or media externally unless the user explicitly asks.
-- In shared or group contexts, do not reveal private user context unless the user explicitly authorizes it.
-
-## Maintenance
-
-This file is a starting point. Update it when workspace-specific rules become clear.
+根据 Agent 的具体职责补充规则，但避免与 `SOUL.md` 和 `TOOLS.md` 重复。

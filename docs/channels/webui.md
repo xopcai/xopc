@@ -1,28 +1,29 @@
-# Web UI channel
+# Web console
 
-The Web UI is the gateway’s built-in browser chat (static files served together with the gateway).
+The web console provides Chat and xopc settings in a browser. It connects to the Gateway and uses the same Sessions, Agents, and local data as the desktop app.
 
-## Start gateway
+## Open it locally
 
 ```bash
-xopc gateway --port 18790
+xopc gateway
 ```
 
-## Access
+Open the URL printed in the terminal, normally `http://127.0.0.1:18790`. If the page requests a token, reveal it with `xopc config token --show` or generate a new one with `xopc config token --generate`, then save it in the connection settings.
 
-Open `http://localhost:18790` in your browser (or your configured bind address).
+## What you can do
 
-## Features
+- start and resume Chat Sessions;
+- manage Agents, Projects, Tasks, Workflows, and Automations;
+- configure models, tools, channels, connectors, Skills, MCP, and extensions;
+- inspect health, logs, updates, and remote access.
 
-- ✅ Chat via the gateway (durable REST inputs; agent replies stream through `run:<runId>` realtime topics)
-- ✅ Session management (`#/sessions`, sidebar task list)
-- ✅ Settings (models, gateway token, voice, etc.)
-- ✅ Log viewer
-- ✅ Automation management
+## Access from another device
 
-## Sidebar: filter sessions by channel
+The default local address is intentionally available only on the Gateway computer. Do not change it to a public listener without authentication and network protection. Follow [Remote access](../remote-access.md) to choose Tailscale, SSH, LAN, or another protected method.
 
-The sidebar session list can show **Web** / **Telegram** / **Weixin** / **Feishu** sessions:
+## Troubleshooting
 
-- **Web** — lists sessions whose keys are treated as web UI sessions (client-side filter after `GET /api/sessions`).
-- **Other channels** — `GET /api/sessions?channel=<id>` (e.g. `telegram`, `weixin`, `feishu`), matching `SessionMetadata.sourceChannel`.
+- Blank or disconnected page: run `xopc gateway status` and `xopc gateway health`.
+- Unauthorized: confirm the saved Gateway URL and token belong to the same instance.
+- Sessions differ from desktop: the browser may be connected to another Gateway or profile.
+- Live progress stops: reload once, then inspect Gateway logs for realtime connection errors.

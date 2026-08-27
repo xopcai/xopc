@@ -1,42 +1,37 @@
-# 微信（Weixin）通道
+# 微信
 
-## 网关控制台 — 即时通讯
+通过 Gateway 控制台扫描登录二维码连接微信。登录凭据保存在 Gateway 主机上，因此应在将持续运行的 xopc 实例上完成设置。
 
-网关运行时可使用 React 控制台中的 **即时通讯** 专页：
+## 连接
 
-- **路由：** `#/channels`（侧栏 **即时通讯**）。
-- **前提：** 已在设置中保存 **网关访问令牌**，以便调用需鉴权的 API。
-- **当前产品界面：** 可配置 **微信**、**Telegram** 与 **飞书**（含移除/禁用等卡片操作）。
+1. 打开 **消息通道 → 微信**。
+2. 选择 **登录** 或 **配置**。
+3. 使用目标微信账号扫描二维码。
+4. 如果微信要求，在手机上确认登录。
+5. 私聊策略保持为 **配对**。
+6. 保存可选账号和流式设置。
 
-### 微信登录
+登录后发送测试消息，并在 xopc 中批准配对请求。
 
-- 弹窗内 **扫码登录**，与网关交互：
-  - `POST /api/channels/weixin/login/start` — 创建会话并返回二维码载荷。
-  - `GET /api/channels/weixin/login/:sessionKey` — 轮询直至完成；凭据写入 **运行网关的本机**。
-- 登录成功后从 `GET /api/config` 刷新表单。可选 **高级选项**（白名单、`dmPolicy`、`streamMode`、多账号 JSON 等）在同一弹窗内编辑并通过 **保存** 写入配置。
-- 如需在网关主机通过 CLI 修改配置，使用 `xopc channels config`；扫码登录使用上面的网关控制台流程。
+## 访问策略
 
-## 最小配置示例
+推荐使用配对：未知发送者必须提供一次性验证码，消息才会进入 Agent。也可以在 Gateway 主机批准：
 
-```json
-{
-  "channels": {
-    "weixin": {
-      "enabled": true,
-      "dmPolicy": "pairing",
-      "allowFrom": [],
-      "streamMode": "partial",
-      "historyLimit": 50,
-      "textChunkLimit": 4000,
-      "routeTag": "",
-      "accounts": {}
-    }
-  }
-}
+```bash
+xopc channels pairing approve weixin <code> --account default
 ```
 
-- **`dmPolicy`**：`pairing` \| `allowlist` \| `open` \| `disabled`。选 **`pairing`** 时，未在允许列表中的用户会在私聊收到 **配对码**；在保存凭证的主机上执行 **`xopc channels pairing approve --channel weixin [--account <id>] <配对码>`**（见 [DM 私聊配对](./index.md#dm-pairing)）。
-- **`allowFrom`**：配置中直接允许的 wxid / openid。已通过 **`pairing approve`** 写入的 id 在 **`~/.xopc/weixin/credentials/xopc-weixin-<账号>-allowFrom.json`** 中，与配置合并；同目录下 **`xopc-weixin-<账号>-pairing.json`** 保存待审批请求。
-- **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等）。
+固定用户使用 **白名单**；只有有意公开的助手才使用 **开放**；需要阻止私聊时选择 **停用**。
 
-修改凭据后若网关已在运行，请按你的部署方式**重启或热加载**。
+## 多账号
+
+只有需要多个微信身份或不同路由时才增加账号设置。先完整验证一个账号，并使用清晰的账号名称，方便解释配对请求和日志。
+
+## 故障排查
+
+- 二维码过期：关闭对话框并重新开始登录。
+- 登录成功但收不到消息：确认保存凭据的是同一个 Gateway，并且它持续运行。
+- 未知用户没有收到验证码：确认私聊策略是配对而不是白名单。
+- 回复失败：先验证本地聊天，再查看微信通道日志。
+
+不要把已保存登录文件复制到不受信任的电脑。凭据撤销或迁移到新 Gateway 主机后，请重新登录。

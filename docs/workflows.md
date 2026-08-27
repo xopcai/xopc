@@ -1,133 +1,61 @@
-# Visual workflows
+# Workflows
 
-xopc workflows turn repeatable, multi-step work into a visual task plan. Users arrange steps on a canvas, describe changes in natural language, watch each step run, and consume the final result without reading code.
+A Workflow is a reusable visual sequence for multi-step work. Use it when the way work should happen is stable enough to define, inspect, and run again.
 
-The workflow definition is a versioned directed acyclic graph. There is no script format or script execution path.
+## Workflow or Automation?
 
-## Product model
+- A **Workflow** defines how the work happens.
+- An **Automation** defines when something runs.
 
-- A **template** describes how a kind of task should be completed.
-- A **draft** is an unpublished visual edit and is saved automatically.
-- A **revision** is an immutable published version.
-- A **run** executes the exact graph revision captured when it starts.
-- An **automation** decides when a published workflow runs.
+You can run a Workflow manually without an Automation. Add an Automation later when the Workflow should run on a schedule or webhook.
 
-This separation keeps the main experience simple: workflow means “how the work happens”; automation means “when it happens.”
+## Create a Workflow
 
-## Create and edit
+<!-- Screenshot placeholder: /screenshots/workflow-editor.png -->
 
-Open `#/workflows`, choose **Create template**, and start in either of two ways:
+1. Open **Workflows** in the Gateway console.
+2. Choose **Create workflow**.
+3. Describe the desired result and the main steps, or start from a built-in template.
+4. Review the generated visual draft.
+5. Edit step instructions and connections.
+6. Validate and publish the Workflow.
 
-1. Describe the task in natural language. xopc creates a visual draft.
-2. Add and connect steps directly on the canvas.
+Drafts may be incomplete while you edit. Publishing requires one clear input, one result, valid connections, and usable instructions for each AI step.
 
-The editor uses five user-facing step types:
+## Available step types
 
 | Step | Purpose |
-|---|---|
-| Input | Receives the goal and structured input. Every flow has exactly one. |
-| AI task | Gives one focused job to an isolated agent. Independent AI tasks run in parallel. |
-| Decision | Chooses a true or false branch using a simple rule. |
-| Merge | Collects results from active branches. |
-| Result | Produces the final summary and structured output. Every flow has exactly one. |
+| --- | --- |
+| Input | Receives the goal and any structured input |
+| AI task | Gives one focused job to an Agent |
+| Decision | Chooses between two branches using a rule |
+| Merge | Collects results from active branches |
+| Result | Produces the final output |
 
-Select a step to edit its plain-language instructions. Model, tool, schema, and iteration controls belong in advanced settings; they should not dominate normal authoring.
+Independent AI tasks can run at the same time. Keep each AI task narrow enough that its success or failure is easy to inspect.
 
-Drafts auto-save. Publishing validates the complete graph and creates a new revision. If another editor published first, xopc rejects the stale write instead of overwriting it.
+## Test before automating
 
-## Validation
+1. Run the published Workflow with a small, non-sensitive input.
+2. Follow progress on the graph.
+3. Open each failed step and review its input, output, and error.
+4. Edit and publish a new revision.
+5. Run it again before attaching a schedule.
 
-The server reports all known graph problems in one response. A publishable graph must have:
+Each run keeps the published revision it started with, so later edits do not change historical results.
 
-- exactly one Input and one Result;
-- unique node and edge IDs;
-- valid connections with no self-links or cycles;
-- every step reachable from Input;
-- every step able to reach Result;
-- both true and false connections for every Decision;
-- a useful instruction for every AI task.
+## Good Workflow candidates
 
-Invalid intermediate drafts are allowed, because temporarily disconnected nodes are normal while editing. Invalid graphs cannot be published or run.
+- weekly review and planning;
+- research with separate collection and synthesis steps;
+- content drafting with review and revision;
+- repository audit with parallel checks;
+- meeting preparation from several sources.
 
-## Run and inspect
+If the request is different every time and only needs one Agent turn, use Chat instead. If the main need is repeating a browser interaction, use [Browser automations](./browser-workflows.md).
 
-Starting a workflow creates a dedicated workflow session. The run stores a snapshot of the graph and revision, so later edits never change the historical record.
+## Run and monitor
 
-The run view overlays status on the same graph:
+Start a Workflow from the Workflow page, Chat, or an Automation. The run view shows pending, running, completed, skipped, and failed steps. You can cancel an active run and retry after fixing the Workflow or its access.
 
-- pending;
-- running;
-- completed;
-- skipped because another decision branch was selected;
-- failed.
-
-Select a node to inspect its input, output, elapsed time, model/tool details, and errors. Failed runs offer **Edit and repair**, which opens the same workflow graph with a natural-language repair request prefilled.
-
-Independent ready nodes run concurrently. A Decision activates only the selected branch. Merge waits for active predecessors and ignores skipped branches. A run fails when an active AI task fails or the graph cannot progress.
-
-## Start surfaces
-
-| Surface | Behavior |
-|---|---|
-| Workflow center | Pick a template, enter a goal, and follow the live graph. |
-| Chat | The `workflow` tool starts a published template by name. |
-| Automation | A schedule, webhook, or manual trigger starts a published template directly. |
-| REST API | Create and monitor runs without an assistant turn. |
-| TUI / channels | Receive compact progress summaries and final results. |
-
-The workflow tool accepts a definition name and run input only. It does not accept inline executable definitions.
-
-## Built-in templates
-
-Built-ins cover common product scenarios such as repository audit, research, planning, decision support, meeting preparation, weekly review, content creation, and competitive analysis. They use the same graph model and runtime as custom workflows. Copy a built-in to create an editable custom version without changing the original.
-
-## Automations
-
-For recurring work, create an automation and select a published workflow. The automation stores the trigger and reliability policy; the workflow retains the task logic. Automation history links to the workflow run so users can inspect the exact graph, status, and result.
-
-Use an agent-instruction automation only when a model must decide at runtime whether to start a workflow. For deterministic recurring work, direct workflow execution is simpler and easier to audit.
-
-See [Automations](automations.md) for schedules, webhooks, reliability, and run history.
-
-## Storage
-
-Custom definitions are JSON files under `~/.xopc/workflows/`. Revision snapshots and drafts are stored in private subdirectories of the same workflow store. Writes use temporary files plus atomic rename.
-
-Deleting a custom workflow removes its current definition, revision history, and related drafts. Built-ins cannot be deleted.
-
-## REST API
-
-Authenticated routes use the same bearer token as the gateway console.
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/workflows/definitions` | List templates. |
-| `GET` | `/api/workflows/definitions/:id` | Load the current graph. |
-| `POST` | `/api/workflows/definitions/validate` | Validate a graph without publishing. |
-| `POST` | `/api/workflows/definitions/generate` | Generate or revise a graph from natural language. |
-| `POST` | `/api/workflows/definitions` | Publish a graph with `expectedRevision`. |
-| `DELETE` | `/api/workflows/definitions/:id` | Delete a custom template and its history. |
-| `GET` | `/api/workflows/definitions/:id/revisions` | List published revisions. |
-| `GET` | `/api/workflows/definitions/:id/revisions/:revision` | Load one revision. |
-| `POST` | `/api/workflows/definitions/:id/revisions/:revision/restore` | Restore by publishing a new revision. |
-| `GET` | `/api/workflows/drafts` | List visual drafts. |
-| `GET` | `/api/workflows/drafts/:draftId` | Load a draft. |
-| `POST` | `/api/workflows/drafts` | Create or update a draft with optimistic concurrency. |
-| `DELETE` | `/api/workflows/drafts/:draftId` | Discard a draft. |
-| `POST` | `/api/workflows/runs` | Start a run and return its run/session IDs. |
-| `GET` | `/api/workflows/runs` | List runs. |
-| `GET` | `/api/workflows/runs/:runId` | Load the live projected run view. |
-| `POST` | `/api/workflows/runs/:runId/cancel` | Stop an active run. |
-| `POST` | `/api/workflows/runs/:runId/retry` | Start a fresh retry. |
-| `POST` | `/api/workflows/runs/:runId/replay` | Replay selected failed checks or phases. |
-
-## Configuration and limits
-
-Workflow availability and limits come from the selected agent capability manifest. Agent nodes can select a configured model role such as `small` or `large`; unresolved roles fail validation or execution rather than silently changing behavior.
-
-Current operational boundaries:
-
-- workflows are acyclic;
-- nested workflow runs are not available inside agent nodes;
-- cancelled runs restart from the beginning when retried;
-- channel progress varies by channel capability, while the gateway always provides the full node graph.
+Do not grant a Workflow broader tools than its steps require. A schedule does not make an unsafe action safe; review credentials, write access, and external side effects before unattended runs.

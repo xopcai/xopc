@@ -1,4 +1,5 @@
 import type { ConnectorDefinition } from './types.js';
+import { decodeConnectedSourceCursor } from './connected-source-cursor.js';
 
 export type ConnectorIdentityProbe = {
   actionId: string;
@@ -25,20 +26,37 @@ export function buildConnectorLearningArguments(
   input: { cursor?: string; windowStart?: string },
   identity: Record<string, unknown>,
 ): Record<string, unknown> {
+  const cursor = decodeConnectedSourceCursor(input.cursor);
   if (plan.toolkit === 'github' && stream.scope === 'authored-work') {
     const username = typeof identity.username === 'string' ? identity.username.trim() : '';
     if (!username) throw new Error('GitHub activity sync requires the authenticated username.');
     return { ...stream.arguments, q: `author:${username} sort:updated-desc` };
   }
-  if (!input.cursor) return { ...stream.arguments };
   if (plan.toolkit === 'gmail') {
-    const after = Math.floor(Date.parse(input.cursor) / 1_000);
-    return Number.isFinite(after)
-      ? { ...stream.arguments, query: `after:${after} -in:spam -in:trash` }
-      : { ...stream.arguments };
+    const after = cursor?.checkpoint ? Math.floor(Date.parse(cursor.checkpoint) / 1_000) : Number.NaN;
+    return {
+      ...stream.arguments,
+      ...(Number.isFinite(after) ? { query: `after:${after} -in:spam -in:trash` } : {}),
+      ...(cursor?.pageToken ? { page_token: cursor.pageToken } : {}),
+    };
   }
   if (plan.toolkit === 'googlecalendar') {
-    return { ...stream.arguments, time_min: input.cursor };
+    return {
+      ...stream.arguments,
+      ...(cursor?.syncToken ? { sync_token: cursor.syncToken } : {}),
+      ...(cursor?.pageToken ? { page_token: cursor.pageToken } : {}),
+    };
+  }
+  if (plan.toolkit === 'googledrive') {
+    const checkpoint = cursor?.checkpoint && Number.isFinite(Date.parse(cursor.checkpoint))
+      ? cursor.checkpoint
+      : undefined;
+    const baseQuery = typeof stream.arguments.q === 'string' ? stream.arguments.q : '';
+    return {
+      ...stream.arguments,
+      ...(checkpoint ? { q: [baseQuery, `modifiedTime > '${checkpoint}'`].filter(Boolean).join(' and ') } : {}),
+      ...(cursor?.pageToken ? { pageToken: cursor.pageToken } : {}),
+    };
   }
   return { ...stream.arguments };
 }
@@ -57,29 +75,25 @@ const PLANS: Record<string, ConnectorLearningPlan> = {
   googlecalendar: {
     toolkit: 'googlecalendar',
     streams: [{
-      scope: 'events', actionId: 'GOOGLECALENDAR_LIST_EVENTS', kind: 'activity', arguments: { max_results: 200 },
+      scope: 'events', actionId: 'GOOGLECALENDAR_SYNC_EVENTS', kind: 'activity', arguments: { max_results: 500 },
     }],
     bootstrapWindowDays: 90,
     intervalMinutes: 15,
   },
   googledrive: {
     toolkit: 'googledrive',
-    streams: [{ scope: 'files', actionId: 'GOOGLEDRIVE_SEARCH_FILES', kind: 'inventory', arguments: {} }],
+    identityProbe: { actionId: 'GOOGLEDRIVE_GET_ABOUT' },
+    streams: [{
+      scope: 'files', actionId: 'GOOGLEDRIVE_FIND_FILE', kind: 'inventory',
+      arguments: {
+        q: 'trashed = false',
+        orderBy: 'modifiedTime desc',
+        pageSize: 100,
+        fields: 'nextPageToken,files(id,name,mimeType,createdTime,modifiedTime,owners,webViewLink,trashed)',
+      },
+    }],
     bootstrapWindowDays: 90,
     intervalMinutes: 30,
-  },
-  notion: {
-    toolkit: 'notion',
-    streams: [{ scope: 'pages', actionId: 'NOTION_SEARCH', kind: 'inventory', arguments: {} }],
-    bootstrapWindowDays: 90,
-    intervalMinutes: 30,
-  },
-  slack: {
-    toolkit: 'slack',
-    identityProbe: { actionId: 'SLACK_TEST_AUTH' },
-    streams: [{ scope: 'channels', actionId: 'SLACK_LIST_CHANNELS', kind: 'inventory', arguments: {} }],
-    bootstrapWindowDays: 30,
-    intervalMinutes: 15,
   },
   github: {
     toolkit: 'github',

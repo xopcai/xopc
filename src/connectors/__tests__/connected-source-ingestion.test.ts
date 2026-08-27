@@ -8,6 +8,7 @@ import type { Config } from '../../config/schema.js';
 import {
   closeXopcDatabase,
   getMemoryRecord,
+  getKnowledgeSourceCursor,
   listKnowledgeSourceItems,
   listKnowledgeSyncRuns,
   listMemoryEvidence,
@@ -17,8 +18,10 @@ import {
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
+import { decodeConnectedSourceCursor } from '../connected-source-cursor.js';
 import { ingestComposioConnectedSource, ingestLocalFolderSource } from '../connected-source-ingestion.js';
 import { installConnector } from '../install.js';
+import { buildConnectorLearningArguments, getConnectorLearningPlan } from '../learning-recipes.js';
 
 describe('connected source ingestion', () => {
   let stateDir: string;
@@ -132,6 +135,38 @@ describe('connected source ingestion', () => {
     expect(listKnowledgeSourceItems()).toHaveLength(1);
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({ itemsCreated: 0, itemsUpdated: 1 });
     expect(getMemoryRecord(recordId!)?.content).toContain('Quarterly plan approved');
+  });
+
+  it('follows opaque provider pages before committing the source cursor', async () => {
+    const executeWithPolicy = vi.fn()
+      .mockResolvedValueOnce({
+        decision: 'allowed' as const,
+        result: { data: { messages: [{ id: 'mail-page-1', subject: 'Atlas one' }], nextPageToken: 'page-2' } },
+      })
+      .mockResolvedValueOnce({
+        decision: 'allowed' as const,
+        result: { data: { messages: [{ id: 'mail-page-2', subject: 'Atlas two' }] } },
+      });
+    const plan = getConnectorLearningPlan('gmail')!;
+    const stream = plan.streams[0]!;
+    const result = await ingestComposioConnectedSource({
+      config: {} as Config,
+      connectorId: 'composio-gmail',
+      collectionScope: stream.scope,
+      streamKind: stream.kind,
+      actionId: stream.actionId,
+      arguments: stream.arguments,
+      buildArguments: (pull) => buildConnectorLearningArguments(plan, stream, pull, { email: 'work@example.com' }),
+      agentId: 'main',
+      adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
+    });
+
+    expect(result.itemsSeen).toBe(2);
+    expect(executeWithPolicy).toHaveBeenCalledTimes(2);
+    expect(executeWithPolicy.mock.calls[1]?.[0]).toMatchObject({ args: { page_token: 'page-2' } });
+    const cursor = decodeConnectedSourceCursor(getKnowledgeSourceCursor(result.sourceInstanceId, stream.scope));
+    expect(cursor?.checkpoint).toBeTruthy();
+    expect(cursor?.pageToken).toBeUndefined();
   });
 
   it('ignores an empty nested connector result', async () => {
@@ -289,20 +324,23 @@ describe('connected source ingestion', () => {
     });
     const executeWithPolicy = vi.fn(async () => ({
       decision: 'allowed' as const,
-      result: { data: { items: [{
-        id: 'event-1',
-        summary: 'Weekly planning',
-        start: { dateTime: '2026-08-05T09:00:00+08:00' },
-        attendees: [{ email: 'lead@example.com' }],
-      }] } },
+      result: { data: {
+        items: [{
+          id: 'event-1',
+          summary: 'Weekly planning',
+          start: { dateTime: '2026-08-05T09:00:00+08:00' },
+          attendees: [{ email: 'lead@example.com' }],
+        }],
+        nextSyncToken: 'calendar-sync-2',
+      } },
     }));
 
-    await ingestComposioConnectedSource({
+    const result = await ingestComposioConnectedSource({
       config: {} as Config,
       connectorId: 'composio-googlecalendar',
       collectionScope: 'events',
       streamKind: 'activity',
-      actionId: 'GOOGLECALENDAR_LIST_EVENTS',
+      actionId: 'GOOGLECALENDAR_SYNC_EVENTS',
       agentId: 'main',
       adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
     });
@@ -316,6 +354,8 @@ describe('connected source ingestion', () => {
         people: ['lead@example.com'],
       }),
     }));
+    expect(decodeConnectedSourceCursor(getKnowledgeSourceCursor(result.sourceInstanceId, 'events')))
+      .toMatchObject({ syncToken: 'calendar-sync-2' });
   });
 
   it('normalizes Linear issues as work context', async () => {

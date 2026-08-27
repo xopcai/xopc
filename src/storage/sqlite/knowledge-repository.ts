@@ -427,6 +427,7 @@ export function setKnowledgeConsumerWatermark(
 
 export function listKnowledgeSourceItems(options: {
   sourceInstanceId?: string;
+  agentId?: string;
   collectionScope?: string;
   itemType?: string;
   synthesisStatus?: KnowledgeSynthesisStatus;
@@ -442,6 +443,10 @@ export function listKnowledgeSourceItems(options: {
   if (options.sourceInstanceId) {
     where.push('source_instance_id = ?');
     params.push(options.sourceInstanceId);
+  }
+  if (options.agentId) {
+    where.push("json_extract(metadata_json, '$.agentId') = ?");
+    params.push(options.agentId);
   }
   if (options.collectionScope) {
     where.push('collection_scope = ?');

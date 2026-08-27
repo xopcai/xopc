@@ -1,3 +1,3 @@
-# MCP CLI & API
+# MCP 命令
 
-> 此页面已合并到 [MCP 指南](./../zh/mcp.md)。所有 CLI 命令、REST 端点、配置和 UI 细节均在主指南中覆盖。
+MCP 设置和排障见 [MCP 指南](../mcp.md)。当前通过 Gateway 设置或 `mcp.servers` 配置管理服务连接，CLI 没有顶层 `mcp` 命令。

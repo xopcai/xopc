@@ -90,6 +90,47 @@ describe('connected understanding derivation', () => {
     }));
   });
 
+  it('combines a durable project signal across connected sources without embeddings', () => {
+    const observations = deriveConnectedClaimObservations([
+      item('mail-atlas', {
+        sourceInstanceId: 'composio:composio-gmail:work',
+        occurredAt: '2026-08-24T09:00:00.000Z',
+        normalizedText: JSON.stringify({ subject: 'Re: Atlas launch review' }),
+        metadata: {
+          toolkit: 'gmail', observationKind: 'message', actorAttributed: true, logicalEventKey: 'gmail:atlas',
+        },
+      }),
+      item('calendar-atlas', {
+        sourceInstanceId: 'composio:composio-googlecalendar:work',
+        itemType: 'calendar_event',
+        occurredAt: '2026-08-24T10:00:00.000Z',
+        normalizedText: JSON.stringify({ title: 'Atlas launch review' }),
+        metadata: {
+          toolkit: 'googlecalendar', observationKind: 'calendar_event', actorAttributed: true, logicalEventKey: 'calendar:atlas',
+        },
+      }),
+      item('github-atlas', {
+        sourceInstanceId: 'composio:composio-github:work',
+        itemType: 'development_activity',
+        occurredAt: '2026-08-25T09:00:00.000Z',
+        normalizedText: JSON.stringify({ repository: 'xopc/atlas', title: 'Atlas launch review implementation' }),
+        metadata: {
+          toolkit: 'github', observationKind: 'activity', actorAttributed: true,
+          logicalEventKey: 'github:atlas', subjectKey: 'xopc/atlas',
+        },
+      }),
+    ]);
+
+    expect(observations).toContainEqual(expect.objectContaining({
+      class: 'project',
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: 'mail-atlas' }),
+        expect.objectContaining({ id: 'calendar-atlas' }),
+        expect.objectContaining({ id: 'github-atlas' }),
+      ]),
+    }));
+  });
+
   it('never derives understanding from secret source items', () => {
     expect(deriveConnectedClaimObservations([
       item('secret-1', { sensitivity: 'secret', metadata: { personEntities: [{ name: 'Alice' }] } }),

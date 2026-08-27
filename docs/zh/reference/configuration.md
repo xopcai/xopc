@@ -1,64 +1,55 @@
 # 配置参考
 
-当你需要查准确配置位置时使用本页。
+本页用于定位主要配置区域。对于具体安装版本，`xopc config show`、`xopc config get <path>` 和设置界面显示的有效值最准确。
 
-主配置文件默认为 `~/.xopc/xopc.json`，也可通过 `XOPC_CONFIG` 或 `XOPC_CONFIG_PATH` 指定其它路径。
+## 位置与命令
 
-完整字段说明见 [配置](../configuration.md)。任务型设置优先看：
+默认文件：`~/.xopc/xopc.json`。
 
-- [配置第一个模型](../how-to/configure-first-model.md)
-- [接入 Telegram](../how-to/connect-telegram.md)
-- [安全暴露网关](../how-to/expose-gateway-safely.md)
-- [创建第二个 agent](../how-to/create-second-agent.md)
-- [诊断损坏的设置](../how-to/diagnose-broken-setup.md)
-
-## 顶层配置段
-
-| 段 | 用途 |
-| --- | --- |
-| `agents` | Agent manifests、可选 capability presets、默认 agent id |
-| `providers` | LLM provider API key 引用和 provider id |
-| `bindings` | 将入站 channel / peer 路由到 agent |
-| `session` | 会话 scope、identity links、reset 行为 |
-| `channels` | Telegram、微信、飞书和扩展 channel 配置 |
-| `gateway` | HTTP/实时通信 gateway host、port、auth、CORS、远程访问 |
-| `browser` | 浏览器自动化后端、URL 策略、超时 |
-| `tools` | Web search 和其它工具级设置 |
-| `messages` / `tts` | 出站消息和 TTS 设置 |
-| `mcp` | 出站 MCP server registry |
-| `extensions` | 扩展开关和扩展专属配置 |
-
-## Agent 配置
-
-当前 agent 配置是 manifest-first：
-
-```json
-{
-  "agents": {
-    "default": "main",
-    "list": [
-      {
-        "id": "main",
-        "identity": { "name": "Main", "role": "General assistant" },
-        "responsibilities": { "primary": ["Help the user complete tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-v4-flash" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      }
-    ]
-  },
-  "providers": {
-    "deepseek": "${DEEPSEEK_API_KEY}"
-  }
-}
+```bash
+xopc config path
+xopc config show
+xopc config get <dot.path>
+xopc config set <dot.path> <value>
+xopc config unset <dot.path>
+xopc config validate
 ```
 
-当前没有 `agents.defaults` 合并层。可运行的 agent 写在 `agents.list[]`；只有需要复用策略补丁时才使用 `agents.capabilityPresets` 和 `agents.defaultPreset`。
+`XOPC_CONFIG` 或 `XOPC_CONFIG_PATH` 可以选择其它配置文件，状态 Profile 也会改变默认根目录。
+
+## 顶层区域
+
+| 区域 | 控制内容 |
+| --- | --- |
+| `agents` | 默认 Agent、Agent 列表、模型角色、工具、Skill、工作区和边界 |
+| `userContext` | 用户拥有的共享上下文、隐私和召回行为 |
+| `providers` | 模型服务商配置和凭据引用 |
+| `channels` | Telegram、微信、飞书和扩展通道设置 |
+| `gateway` | 端口、监听、认证、远程连接和 Tailscale |
+| `tools` | 搜索、浏览器、媒体、运行环境和其它工具设置 |
+| `messages` | 对外消息和文字转语音行为 |
+| `mcp` | 外部 MCP 服务连接和生命周期 |
+| `extensions` | 扩展启用、停用和扩展配置 |
+| `runtimeTools` | 托管 Node.js 与 Python 环境 |
+| `heartbeat` | 启用后的周期性 Agent 检查 |
+
+Workflow 和 Automation 通常在对应 Gateway 页面管理，不直接写入 `xopc.json`。
+
+## 常用路径覆盖
+
+| 变量 | 用途 |
+| --- | --- |
+| `XOPC_STATE_DIR` | 状态根目录 |
+| `XOPC_CONFIG` / `XOPC_CONFIG_PATH` | 配置文件 |
+| `XOPC_WORKSPACE` | 主工作区覆盖 |
+| `XOPC_CREDENTIALS_DIR` | 凭据目录 |
+| `XOPC_LOG_DIR` | 日志目录 |
+| `XOPC_LOG_LEVEL` | 日志详细程度 |
+
+`OPENAI_API_KEY` 等服务商变量可以通过服务商设置和 `xopc providers schema <provider>` 查看。
+
+## 验证与敏感信息
+
+直接编辑后运行 `xopc config validate`。使用合法 JSON，不要有末尾逗号或重复键。敏感信息优先使用界面或 CLI 凭据命令，分享输出前人工检查。
+
+按任务配置见[配置 xopc](../configuration.md)。
