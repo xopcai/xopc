@@ -2,7 +2,7 @@
   "id": "telegram",
   "name": "Telegram Channel",
   "description": "Bundled Telegram Bot channel (private workspace sources; ships inside @xopcai/xopc dist/)",
-  "version": "0.0.209",
+  "version": "0.0.210",
   "kind": "channel",
   "main": "src/index.js",
   "channels": [
