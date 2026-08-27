@@ -44,7 +44,7 @@ describe('decodeWavToMonoFloat32', () => {
 
   it('rejects container formats that would require an external decoder', () => {
     expect(() => decodeWavToMonoFloat32(Buffer.from('not a wave file'))).toThrow(
-      'requires PCM WAV audio',
+      'Unsupported or corrupt WAV audio',
     );
   });
 });

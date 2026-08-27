@@ -20,6 +20,12 @@ In the Gateway console, open **Settings → Capabilities → Voice**:
 
 The setup is working when the message shows an accurate transcript and the Agent answers the spoken request.
 
+### Audio input contract
+
+Voice uploads use `POST /api/voice/transcriptions` with multipart form data. WAV, WebM/Opus, Ogg/Opus, MP3, and MP4/M4A are accepted. The local provider reads PCM WAV directly and normalizes other containers to mono 16 kHz PCM with `ffmpeg`; install `ffmpeg` on the gateway host when using compressed input with local STT.
+
+Discussion capture keeps the compressed original recording as recoverable evidence and sends speech-aware WAV segments for live text. Segments close on a pause after at least four seconds, are capped at fifteen seconds, and pure silence is skipped. If live text is incomplete, the original is decoded into bounded chunks and transcribed sequentially instead of loading a long recording into one STT request.
+
 ## Configure text-to-speech
 
 1. Enable text-to-speech on the same Voice settings page.
@@ -54,6 +60,8 @@ Use environment variables or the credential controls in the UI; do not put real 
 | Problem | Check |
 | --- | --- |
 | Audio uploads but no transcript appears | STT is enabled, the file format is supported, and the provider credential is valid |
+| Local STT reports that the decoder is unavailable | Install `ffmpeg` on the gateway host, or upload PCM WAV |
+| A long discussion is still finalizing | Keep the gateway running; saved segments and the original recording resume from durable state |
 | Transcript uses the wrong language | Set the provider language when available or choose a more suitable model |
 | Text replies work but audio replies do not | TTS is enabled and its trigger matches the current message |
 | Telegram voice fails | Local Chat voice works first, then check the Telegram channel logs |

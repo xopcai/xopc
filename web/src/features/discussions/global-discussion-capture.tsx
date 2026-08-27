@@ -26,6 +26,7 @@ import {
   saveDiscussionLiveSegment,
 } from './discussion-draft-store';
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
+import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
 import type { DiscussionDetail, DiscussionTranscript } from './discussion-types';
 import { useDiscussionRecorder } from './use-discussion-recorder';
 
@@ -49,59 +50,79 @@ export function GlobalDiscussionCaptureHost() {
   const [backgroundUploading, setBackgroundUploading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [pendingSegmentCount, setPendingSegmentCount] = useState(0);
   const [operationError, setOperationError] = useState<string | null>(null);
   const createPromiseRef = useRef<Promise<DiscussionDetail> | null>(null);
-  const segmentUploadsRef = useRef(new Set<Promise<void>>());
-  const activeSegmentUploadsRef = useRef(0);
-  const segmentUploadWaitersRef = useRef<Array<() => void>>([]);
+  const segmentQueueTargetRef = useRef<{ draftId: string; discussionId: string } | null>(null);
+  const segmentQueueAbortRef = useRef<AbortController | null>(null);
+  const segmentQueuePromiseRef = useRef<Promise<void> | null>(null);
+  const restartSegmentQueueRef = useRef<() => void>(() => {});
 
-  const acquireSegmentUploadSlot = useCallback(async () => {
-    if (activeSegmentUploadsRef.current < 2) {
-      activeSegmentUploadsRef.current += 1;
-      return;
+  const ensureSegmentQueueDrain = useCallback((): Promise<void> => {
+    const existing = segmentQueuePromiseRef.current;
+    if (existing) return existing;
+    const target = segmentQueueTargetRef.current;
+    if (!target) return Promise.resolve();
+    const controller = new AbortController();
+    segmentQueueAbortRef.current = controller;
+    const running = drainDiscussionSegmentUploadQueue(target, {
+      list: listDiscussionLiveSegments,
+      upload: (discussionId, segment) => uploadDiscussionSegment(discussionId, segment.sequence, segment),
+      remove: (draftId, segment) => deleteDiscussionLiveSegment(draftId, segment.sequence),
+      onTranscript: setTranscript,
+      onPendingCount: setPendingSegmentCount,
+    }, controller.signal).finally(() => {
+      if (segmentQueuePromiseRef.current !== running) return;
+      segmentQueuePromiseRef.current = null;
+      if (segmentQueueAbortRef.current === controller) segmentQueueAbortRef.current = null;
+    });
+    segmentQueuePromiseRef.current = running;
+    void running.then(() => {
+      window.setTimeout(() => restartSegmentQueueRef.current(), 0);
+    }).catch((error) => {
+      if (!controller.signal.aborted) {
+        setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+      }
+    });
+    return running;
+  }, []);
+  restartSegmentQueueRef.current = () => {
+    const target = segmentQueueTargetRef.current;
+    if (!target || segmentQueuePromiseRef.current) return;
+    void listDiscussionLiveSegments(target.draftId).then((segments) => {
+      setPendingSegmentCount(segments.length);
+      if (segments.length > 0) void ensureSegmentQueueDrain();
+    });
+  };
+
+  const connectSegmentQueue = useCallback((draftId: string, discussionId: string): Promise<void> => {
+    const current = segmentQueueTargetRef.current;
+    if (current && (current.draftId !== draftId || current.discussionId !== discussionId)) {
+      segmentQueueAbortRef.current?.abort();
+      segmentQueuePromiseRef.current = null;
     }
-    await new Promise<void>((resolve) => segmentUploadWaitersRef.current.push(resolve));
-  }, []);
+    segmentQueueTargetRef.current = { draftId, discussionId };
+    return ensureSegmentQueueDrain();
+  }, [ensureSegmentQueueDrain]);
 
-  const releaseSegmentUploadSlot = useCallback(() => {
-    const next = segmentUploadWaitersRef.current.shift();
-    if (next) next();
-    else activeSegmentUploadsRef.current -= 1;
-  }, []);
+  const flushSegmentQueue = useCallback(async (draftId: string, discussionId: string): Promise<void> => {
+    segmentQueueTargetRef.current = { draftId, discussionId };
+    while (true) {
+      await ensureSegmentQueueDrain();
+      const pending = await listDiscussionLiveSegments(draftId);
+      setPendingSegmentCount(pending.length);
+      if (pending.length === 0) return;
+    }
+  }, [ensureSegmentQueueDrain]);
 
   const uploadLiveSegment = useCallback(async (
     draftId: string,
     segment: { sequence: number; blob: Blob; startedAtMs: number; endedAtMs: number; sha256: string },
   ) => {
     await saveDiscussionLiveSegment({ draftId, ...segment, createdAt: Date.now() });
-    const task = (async () => {
-      await acquireSegmentUploadSlot();
-      try {
-        const created = await createPromiseRef.current;
-        if (!created) throw new Error('Discussion session is unavailable');
-        const next = await uploadDiscussionSegment(created.discussion.id, segment.sequence, segment);
-        await deleteDiscussionLiveSegment(draftId, segment.sequence);
-        setTranscript(next);
-      } finally {
-        releaseSegmentUploadSlot();
-      }
-    })();
-    const tracked = task.catch(() => undefined).finally(() => segmentUploadsRef.current.delete(tracked));
-    segmentUploadsRef.current.add(tracked);
-  }, [acquireSegmentUploadSlot, releaseSegmentUploadSlot]);
-
-  const retryPendingSegments = useCallback(async (draftId: string, discussionId: string) => {
-    const segments = await listDiscussionLiveSegments(draftId);
-    for (const segment of segments) {
-      try {
-        const next = await uploadDiscussionSegment(discussionId, segment.sequence, segment);
-        await deleteDiscussionLiveSegment(draftId, segment.sequence);
-        setTranscript(next);
-      } catch {
-        return;
-      }
-    }
-  }, []);
+    setPendingSegmentCount((count) => count + 1);
+    void ensureSegmentQueueDrain();
+  }, [ensureSegmentQueueDrain]);
 
   const beginRecording = useCallback(async (projectId: string | undefined, policyVersion: number) => {
     setConsentVersion(null);
@@ -127,11 +148,13 @@ export function GlobalDiscussionCaptureHost() {
       const created = await creation;
       setDetail(created);
       await recorder.setServerDiscussionId(created.discussion.id);
-      await retryPendingSegments(draft.id, created.discussion.id);
+      void connectSegmentQueue(draft.id, created.discussion.id);
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
     }
-  }, [copy.saveFailed, recorder, retryPendingSegments, uploadLiveSegment]);
+  }, [connectSegmentQueue, copy.saveFailed, recorder, uploadLiveSegment]);
+
+  useEffect(() => () => segmentQueueAbortRef.current?.abort(), []);
 
   const prepareStart = useCallback(async (projectId?: string) => {
     if (!token || recorder.phase === 'recording' || recorder.phase === 'paused' || finishing) return;
@@ -209,11 +232,15 @@ export function GlobalDiscussionCaptureHost() {
       setVisible(false);
       void (async () => {
         try {
-          await Promise.all(segmentUploadsRef.current);
           const file = await recorder.buildFile();
           if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-          await uploadDiscussionRecording(created.discussion.id, file, stopped.durationMs, setUploadProgress);
+          await Promise.all([
+            flushSegmentQueue(stopped.id, created.discussion.id),
+            uploadDiscussionRecording(created.discussion.id, file, stopped.durationMs, setUploadProgress),
+          ]);
           await recorder.discard(stopped.id);
+          segmentQueueTargetRef.current = null;
+          setPendingSegmentCount(0);
           setBackgroundUploading(false);
         } catch (error) {
           await recorder.markUploadFailed();
@@ -275,7 +302,7 @@ export function GlobalDiscussionCaptureHost() {
         if (created.discussion.status === 'stopping' && !created.discussion.audioAttachmentId) {
           const file = await recorder.buildFile();
           if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-          await retryPendingSegments(candidate.id, created.discussion.id);
+          await flushSegmentQueue(candidate.id, created.discussion.id);
           await uploadDiscussionRecording(created.discussion.id, file, candidate.durationMs, setUploadProgress);
         }
         await recorder.discard(candidate.id);
@@ -292,10 +319,13 @@ export function GlobalDiscussionCaptureHost() {
       const durationMs = Math.max(1_000, candidate.durationMs);
       const stopping = await stopDiscussion(created.discussion.id, lastSequence, durationMs);
       setDetail(stopping);
-      await retryPendingSegments(candidate.id, created.discussion.id);
+      const segmentDrain = flushSegmentQueue(candidate.id, created.discussion.id);
       const file = await recorder.buildFile();
       if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-      await uploadDiscussionRecording(created.discussion.id, file, durationMs, setUploadProgress);
+      await Promise.all([
+        segmentDrain,
+        uploadDiscussionRecording(created.discussion.id, file, durationMs, setUploadProgress),
+      ]);
       await recorder.discard(candidate.id);
     } catch (error) {
       await recorder.markUploadFailed();
@@ -315,7 +345,29 @@ export function GlobalDiscussionCaptureHost() {
   };
 
   if (!visible) {
-    if (backgroundUploading) return null;
+    if (backgroundUploading) {
+      return (
+        <aside className="fixed bottom-5 right-5 z-[125] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-4 shadow-elevated">
+          <p className="text-sm font-medium text-fg">{copy.finalizing}</p>
+          <p className="mt-1 text-xs text-fg-muted">
+            {pendingSegmentCount > 0
+              ? copy.syncingSegments.replace('{{count}}', String(pendingSegmentCount))
+              : copy.saved}
+          </p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-hover">
+            <div className="h-full bg-accent transition-[width]" style={{ width: `${uploadProgress}%` }} />
+          </div>
+          {detail ? (
+            <div className="mt-3 flex justify-end">
+              <Button variant="ghost" onClick={openNote}>
+                <FileText className="size-4" aria-hidden />
+                {copy.openNote}
+              </Button>
+            </div>
+          ) : null}
+        </aside>
+      );
+    }
     const candidate = recorder.recoverableDrafts[0];
     if (!candidate) return null;
     return (
@@ -359,6 +411,7 @@ export function GlobalDiscussionCaptureHost() {
 
   const active = recorder.phase === 'recording' || recorder.phase === 'paused' || recorder.phase === 'requesting_permission';
   const inferredProject = detail?.discussion.projectId && detail.discussion.projectInferenceSource !== 'context';
+  const serverPendingSegments = (transcript?.stats.uploaded ?? 0) + (transcript?.stats.transcribing ?? 0);
 
   return (
     <aside className="fixed bottom-5 right-5 z-[125] flex w-[min(26rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated" aria-label={copy.title}>
@@ -382,7 +435,14 @@ export function GlobalDiscussionCaptureHost() {
       <div className="grid gap-3 px-4 py-4">
         <p className="font-mono text-3xl tabular-nums text-fg">{formatDuration(recorder.elapsedMs)}</p>
         <section className="max-h-40 overflow-y-auto rounded-lg border border-edge bg-surface-subtle p-3">
-          <p className="mb-2 text-xs font-medium text-fg-muted">{copy.liveTranscript}</p>
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-medium text-fg-muted">
+            <span>{copy.liveTranscript}</span>
+            {pendingSegmentCount > 0 ? (
+              <span>{copy.syncingSegments.replace('{{count}}', String(pendingSegmentCount))}</span>
+            ) : serverPendingSegments > 0 ? (
+              <span>{copy.processingSegments.replace('{{count}}', String(serverPendingSegments))}</span>
+            ) : null}
+          </div>
           <p className="whitespace-pre-wrap text-sm leading-6 text-fg">
             {transcript?.text || (recorder.liveTranscriptionAvailable ? copy.waitingTranscript : copy.liveUnavailable)}
           </p>

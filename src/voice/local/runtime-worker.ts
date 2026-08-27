@@ -6,7 +6,6 @@ import { EnvHttpProxyAgent, RetryAgent, setGlobalDispatcher } from 'undici';
 
 import { getLocalVoiceModel, resolveLocalVoiceModelDir } from './models.js';
 import { downloadLocalVoiceModelFiles } from './model-files.js';
-import { createRuntimeDispatcher } from './runtime-dispatcher.js';
 
 type RuntimeRequest = { id: number; method: string; params?: Record<string, unknown> };
 type AsrPipeline = (audio: Float32Array, options?: Record<string, unknown>) => Promise<unknown>;
@@ -306,11 +305,6 @@ async function handle(request: RuntimeRequest): Promise<unknown> {
 }
 
 const lines = createInterface({ input: process.stdin });
-const dispatch = createRuntimeDispatcher<RuntimeRequest>({
-  execute: handle,
-  sendResult: (request, result) => send({ id: request.id, result }),
-  sendError: (request, error) => send({ id: request.id, error: serializeError(error) }),
-});
 lines.on('line', (line) => {
   let request: RuntimeRequest;
   try {
@@ -318,7 +312,10 @@ lines.on('line', (line) => {
   } catch {
     return;
   }
-  dispatch(request);
+  void handle(request).then(
+    (result) => send({ id: request.id, result }),
+    (error: unknown) => send({ id: request.id, error: serializeError(error) }),
+  );
 });
 lines.once('close', () => {
   void networkAgent.close().finally(() => process.exit(0));

@@ -25,7 +25,7 @@ function resampleLinear(input: Float32Array, sourceRate: number, targetRate: num
 
 export function decodeWavToMonoFloat32(buffer: Buffer, targetRate = 16_000): DecodedPcmAudio {
   if (buffer.length < 44 || readChunkId(buffer, 0) !== 'RIFF' || readChunkId(buffer, 8) !== 'WAVE') {
-    throw new Error('Local STT currently requires PCM WAV audio');
+    throw new Error('Unsupported or corrupt WAV audio');
   }
 
   let offset = 12;

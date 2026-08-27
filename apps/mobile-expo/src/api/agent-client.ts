@@ -94,15 +94,17 @@ export async function transcribeVoice(
   mimeType: string,
   options?: { language?: string },
 ): Promise<VoiceTranscribeResult> {
-  const { content } = await readUriAsBase64(uri, 'voice.m4a');
-  const res = await apiFetch('/api/voice/transcribe', {
+  const extension = mimeType.includes('wav') ? 'wav'
+    : mimeType.includes('ogg') ? 'ogg'
+      : mimeType.includes('mpeg') ? 'mp3'
+        : 'm4a';
+  const form = new FormData();
+  form.append('audio', { uri, type: mimeType, name: `voice.${extension}` } as unknown as Blob);
+  if (options?.language) form.append('language', options.language);
+  const res = await apiFetch('/api/voice/transcriptions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      audio: content,
-      mimeType,
-      ...(options?.language ? { language: options.language } : {}),
-    }),
+    body: form,
+    timeoutMs: 60_000,
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
