@@ -17,6 +17,7 @@ const MAX_REPLAY_CHARS = 1_000_000;
 export type TerminalCreateInput = {
   sessionKey: string;
   sessionId: string;
+  terminalKey: string;
   cols: number;
   rows: number;
 };
@@ -25,6 +26,7 @@ export type TerminalDescriptor = {
   terminalId: string;
   sessionKey: string;
   sessionId: string;
+  terminalKey: string;
   cwd: string;
   replay: string;
   replaySequence: number;
@@ -144,8 +146,9 @@ export async function resolveTerminalWorkspace(sessionKey: string, sessionId: st
 
 export class TerminalManager {
   private readonly records = new Map<string, TerminalRecord>();
-  private readonly terminalIdBySessionId = new Map<string, string>();
-  private readonly pendingBySessionId = new Map<string, Promise<TerminalDescriptor>>();
+  private readonly terminalIdByKey = new Map<string, string>();
+  private readonly pendingByKey = new Map<string, Promise<TerminalDescriptor>>();
+  private readonly cancelledKeys = new Set<string>();
   private readonly resolveWorkspace: NonNullable<TerminalManagerOptions['resolveWorkspace']>;
   private readonly spawnPty: NonNullable<TerminalManagerOptions['spawnPty']>;
   private stopped = false;
@@ -159,33 +162,42 @@ export class TerminalManager {
     const input = {
       sessionKey: requireText(raw?.sessionKey, 'sessionKey'),
       sessionId: requireText(raw?.sessionId, 'sessionId'),
+      terminalKey: requireText(raw?.terminalKey, 'terminalKey'),
       cols: terminalSize(raw?.cols, 'cols', 20, 500),
       rows: terminalSize(raw?.rows, 'rows', 5, 300),
     };
     if (this.stopped) throw new Error('Terminal manager is stopped');
-    const existingId = this.terminalIdBySessionId.get(input.sessionId);
+    const key = this.identityKey(input.sessionId, input.terminalKey);
+    const existingId = this.terminalIdByKey.get(key);
     if (existingId) {
       const existing = this.records.get(existingId);
       if (existing) return this.descriptor(existing);
-      this.terminalIdBySessionId.delete(input.sessionId);
+      this.terminalIdByKey.delete(key);
     }
-    const pending = this.pendingBySessionId.get(input.sessionId);
+    const pending = this.pendingByKey.get(key);
     if (pending) return pending;
-    if (this.records.size + this.pendingBySessionId.size >= MAX_TERMINALS) {
+    if (this.records.size + this.pendingByKey.size >= MAX_TERMINALS) {
       throw new Error(`At most ${MAX_TERMINALS} terminals may be open`);
     }
 
-    const creation = this.createNew(owner, input).finally(() => {
-      this.pendingBySessionId.delete(input.sessionId);
+    this.cancelledKeys.delete(key);
+    const creation = this.createNew(owner, input, key).finally(() => {
+      this.pendingByKey.delete(key);
+      this.cancelledKeys.delete(key);
     });
-    this.pendingBySessionId.set(input.sessionId, creation);
+    this.pendingByKey.set(key, creation);
     return creation;
   }
 
-  private async createNew(owner: WebContents, input: TerminalCreateInput): Promise<TerminalDescriptor> {
+  private async createNew(
+    owner: WebContents,
+    input: TerminalCreateInput,
+    key: string,
+  ): Promise<TerminalDescriptor> {
     const cwd = await this.resolveWorkspace(input.sessionKey, input.sessionId);
-    if (this.stopped) throw new Error('Terminal manager is stopped');
+    this.assertCanCreate(key);
     await ensureNodePtySpawnHelper();
+    this.assertCanCreate(key);
     const shell = defaultShell();
     const child = this.spawnPty(shell.file, shell.args, {
       cwd,
@@ -199,6 +211,7 @@ export class TerminalManager {
       terminalId,
       sessionKey: input.sessionKey,
       sessionId: input.sessionId,
+      terminalKey: input.terminalKey,
       cwd,
       replay: '',
       replaySequence: 0,
@@ -207,7 +220,7 @@ export class TerminalManager {
       pty: child,
     };
     this.records.set(terminalId, record);
-    this.terminalIdBySessionId.set(input.sessionId, terminalId);
+    this.terminalIdByKey.set(key, terminalId);
 
     child.onData((data) => {
       record.replaySequence += 1;
@@ -251,8 +264,23 @@ export class TerminalManager {
     const record = this.records.get(terminalIdRaw);
     if (!record) return;
     this.records.delete(terminalIdRaw);
-    this.terminalIdBySessionId.delete(record.sessionId);
+    const key = this.identityKey(record.sessionId, record.terminalKey);
+    if (this.terminalIdByKey.get(key) === terminalIdRaw) {
+      this.terminalIdByKey.delete(key);
+    }
     if (!record.exited) record.pty.kill();
+  }
+
+  dispose(sessionIdRaw: unknown, terminalKeyRaw: unknown): void {
+    const sessionId = requireText(sessionIdRaw, 'sessionId');
+    const terminalKey = requireText(terminalKeyRaw, 'terminalKey');
+    const key = this.identityKey(sessionId, terminalKey);
+    const terminalId = this.terminalIdByKey.get(key);
+    if (terminalId) {
+      this.close(terminalId);
+      return;
+    }
+    if (this.pendingByKey.has(key)) this.cancelledKeys.add(key);
   }
 
   closeAll(): void {
@@ -267,11 +295,21 @@ export class TerminalManager {
     return record;
   }
 
+  private identityKey(sessionId: string, terminalKey: string): string {
+    return `${sessionId}\u0000${terminalKey}`;
+  }
+
+  private assertCanCreate(key: string): void {
+    if (this.stopped) throw new Error('Terminal manager is stopped');
+    if (this.cancelledKeys.has(key)) throw new Error('Terminal creation was cancelled');
+  }
+
   private descriptor(record: TerminalRecord): TerminalDescriptor {
     return {
       terminalId: record.terminalId,
       sessionKey: record.sessionKey,
       sessionId: record.sessionId,
+      terminalKey: record.terminalKey,
       cwd: record.cwd,
       replay: record.replay,
       replaySequence: record.replaySequence,
@@ -311,6 +349,11 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
   ipcMain.handle('terminal:close', (event, terminalId: unknown) => {
     assertTrustedRenderer(event);
     manager.close(terminalId);
+    return { ok: true };
+  });
+  ipcMain.handle('terminal:dispose', (event, sessionId: unknown, terminalKey: unknown) => {
+    assertTrustedRenderer(event);
+    manager.dispose(sessionId, terminalKey);
     return { ok: true };
   });
 }

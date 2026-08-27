@@ -49,6 +49,7 @@ export interface ElectronTerminalDescriptor {
   terminalId: string;
   sessionKey: string;
   sessionId: string;
+  terminalKey: string;
   cwd: string;
   replay: string;
   replaySequence: number;
@@ -61,12 +62,14 @@ export interface ElectronTerminalAPI {
   create(input: {
     sessionKey: string;
     sessionId: string;
+    terminalKey: string;
     cols: number;
     rows: number;
   }): Promise<ElectronTerminalDescriptor>;
   write(terminalId: string, data: string): void;
   resize(terminalId: string, cols: number, rows: number): Promise<{ ok: true }>;
   close(terminalId: string): Promise<{ ok: true }>;
+  dispose(sessionId: string, terminalKey: string): Promise<{ ok: true }>;
   onData(callback: (event: { terminalId: string; data: string; sequence: number }) => void): () => void;
   onExit(callback: (event: { terminalId: string; exitCode: number; signal: number }) => void): () => void;
   onError(callback: (event: { terminalId?: string; message: string }) => void): () => void;
