@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { ChevronDown, Zap } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
@@ -61,7 +61,6 @@ export function ComposerModelConfigControl({
           title={`${modelLabel} · ${effortLabel}`}
           aria-label={`${m.modelConfigLabel}: ${modelLabel}; ${m.thinkingLevelLabel}: ${effortLabel}`}
         >
-          <Zap className="size-3.5 shrink-0 fill-current text-accent-fg" aria-hidden />
           <span className="min-w-0 truncate font-medium">{modelLabel}</span>
           <span className="shrink-0 text-fg-muted">{effortLabel}</span>
           <ChevronDown

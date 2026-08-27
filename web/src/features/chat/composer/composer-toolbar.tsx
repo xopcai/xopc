@@ -1,11 +1,7 @@
 import { Mic, Plus, Send, Square } from 'lucide-react';
 import { memo } from 'react';
 
-import type { Message } from '@/features/chat/messages/messages.types';
-import { ModelContextRing } from '@/features/chat/model/model-context-ring';
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
-import { SessionWorkingDirectoryControl } from '@/features/chat/session/session-working-directory-control';
-import type { SessionManager } from '@/features/chat/session/session-manager';
 import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
 import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
@@ -15,12 +11,9 @@ import { shortcutDisplayKeys } from '@/stores/quick-capture-shortcut-store';
 import { useVoiceInputShortcutStore } from '@/stores/voice-input-shortcut-store';
 
 export interface ComposerToolbarProps {
-  sessionKey: string | null;
-  sessionManager: SessionManager;
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
-  canSelectWorkingDirectory: boolean;
   runBusy: boolean;
   /** Chat message bundle (toolbar labels). */
   chat: MessageBundle['chat'];
@@ -49,18 +42,12 @@ export interface ComposerToolbarProps {
   showModelSelector: boolean;
   onModelChange: (modelId: string) => void;
   modelDisabled: boolean;
-  /** For context-window ring next to the model selector. */
-  contextUsageMessages: readonly Message[];
-  composerDraftChars: number;
 }
 
 export const ComposerToolbar = memo(function ComposerToolbar({
-  sessionKey,
-  sessionManager,
   disabled,
   sending,
   streaming,
-  canSelectWorkingDirectory,
   runBusy,
   chat: m,
   hasDraft,
@@ -81,8 +68,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   showModelSelector,
   onModelChange,
   modelDisabled,
-  contextUsageMessages,
-  composerDraftChars,
 }: ComposerToolbarProps) {
   const voiceShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
   const attachmentsFull = attachmentCount >= maxAttachments;
@@ -102,13 +87,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         'flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle',
       )}
     >
-      <SessionWorkingDirectoryControl
-        sessionKey={sessionKey}
-        sessionMgr={sessionManager}
-        canSelectWorkingDirectory={canSelectWorkingDirectory}
-        disabled={disabled || runBusy}
-      />
-
       <button
         type="button"
         className={cn(
@@ -128,25 +106,16 @@ export const ComposerToolbar = memo(function ComposerToolbar({
 
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {showModelSelector ? (
-          <div className="flex min-w-0 items-center gap-1.5">
-            <ComposerModelConfigControl
-              chat={m}
-              sessionModel={sessionModel}
-              modelDisabled={modelDisabled}
-              onModelChange={onModelChange}
-              thinkingLevel={thinkingLevel}
-              modelSupportsThinking={modelSupportsThinking}
-              thinkingDisabled={disabled || (sending && !streaming)}
-              onThinkingChange={onThinkingChange}
-            />
-            <ModelContextRing
-              sessionModel={sessionModel}
-              messages={contextUsageMessages}
-              draftChars={composerDraftChars}
-              chat={m}
-              disabled={modelDisabled}
-            />
-          </div>
+          <ComposerModelConfigControl
+            chat={m}
+            sessionModel={sessionModel}
+            modelDisabled={modelDisabled}
+            onModelChange={onModelChange}
+            thinkingLevel={thinkingLevel}
+            modelSupportsThinking={modelSupportsThinking}
+            thinkingDisabled={disabled || (sending && !streaming)}
+            onThinkingChange={onThinkingChange}
+          />
         ) : null}
         <div className="flex shrink-0 items-center gap-1">
           {!voiceActive ? (

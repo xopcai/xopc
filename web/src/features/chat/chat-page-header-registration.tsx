@@ -1,4 +1,4 @@
-import { FolderOpen, Plus, SquareTerminal } from 'lucide-react';
+import { Plus, SquareTerminal } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -6,6 +6,7 @@ import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-selector';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { ChatWorkspaceControl } from '@/features/chat/workspace/chat-workspace-control';
 import { matchesTerminalShortcut, terminalShortcutLabel } from '@/features/chat/terminal/terminal-shortcut';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -13,9 +14,7 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
-import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useMediaQuery } from '@/lib/use-media-query';
-import { useSideChatStore } from '@/stores/side-chat-store';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 
 const MAX_MD = '(max-width: 767px)';
@@ -27,6 +26,11 @@ type ChatPageHeaderRegistrationProps = {
   chatAgentId: string;
   onChatAgentChange: (agentId: string) => void;
   chatAgentDisabled: boolean;
+  sessionKey?: string | null;
+  workspacePath?: string | null;
+  canChangeWorkspace?: boolean;
+  workspaceDisabled?: boolean;
+  onWorkspaceChange?: (path: string) => Promise<void>;
 };
 
 /**
@@ -39,16 +43,21 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentId,
   onChatAgentChange,
   chatAgentDisabled,
+  sessionKey,
+  workspacePath,
+  canChangeWorkspace = false,
+  workspaceDisabled = false,
+  onWorkspaceChange,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
-  const { sessionKey } = useParams();
-  const parentSessionKey = sessionKey && sessionKey !== 'new' ? decodeURIComponent(sessionKey) : null;
+  const { sessionKey: routeSessionKey } = useParams();
+  const routedSessionKey = routeSessionKey && routeSessionKey !== 'new'
+    ? decodeURIComponent(routeSessionKey)
+    : null;
+  const activeSessionKey = sessionKey?.trim() || routedSessionKey;
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const workspacePanelOpen = useWorkspacePanelStore((s) => s.open);
-  const toggleWorkspacePanel = useWorkspacePanelStore((s) => s.toggleOpen);
-  const setSideChatOpen = useSideChatStore((s) => s.setOpen);
-  const terminalPanelOpen = useTerminalPanelStore((s) => parentSessionKey ? Boolean(s.openBySessionKey[parentSessionKey]) : false);
+  const terminalPanelOpen = useTerminalPanelStore((s) => activeSessionKey ? Boolean(s.openBySessionKey[activeSessionKey]) : false);
   const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -73,15 +82,15 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   useLayoutEffect(() => () => clearPageHeader(), [clearPageHeader]);
 
   useEffect(() => {
-    if (!parentSessionKey || !window.electronAPI?.terminal) return;
+    if (!activeSessionKey || !window.electronAPI?.terminal) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!matchesTerminalShortcut(event, terminalPlatform)) return;
       event.preventDefault();
-      toggleTerminalPanel(parentSessionKey);
+      toggleTerminalPanel(activeSessionKey);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [parentSessionKey, terminalPlatform, toggleTerminalPanel]);
+  }, [activeSessionKey, terminalPlatform, toggleTerminalPanel]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -136,7 +145,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               />
             </div>
           ) : null}
-          {parentSessionKey && window.electronAPI?.terminal ? (
+          {activeSessionKey && window.electronAPI?.terminal ? (
             <button
               type="button"
               className={cn(
@@ -146,27 +155,20 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               title={`${m.chat.terminal.open} (${terminalShortcut})`}
               aria-label={m.chat.terminal.open}
               aria-pressed={terminalPanelOpen}
-              onClick={() => toggleTerminalPanel(parentSessionKey)}
+              onClick={() => toggleTerminalPanel(activeSessionKey)}
             >
               <SquareTerminal className="size-4" />
             </button>
           ) : null}
-          <button
-            type="button"
-            className={cn(
-              'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-              workspacePanelOpen && 'bg-surface-hover text-fg',
-            )}
-            title={m.workspace.openFiles}
-            aria-label={m.workspace.openFiles}
-            aria-pressed={workspacePanelOpen}
-            onClick={() => {
-              if (!workspacePanelOpen && parentSessionKey) setSideChatOpen(parentSessionKey, false);
-              toggleWorkspacePanel();
-            }}
-          >
-            <FolderOpen className="size-4" />
-          </button>
+          {activeSessionKey && onWorkspaceChange ? (
+            <ChatWorkspaceControl
+              sessionKey={activeSessionKey}
+              workspacePath={workspacePath}
+              canChangeWorkspace={canChangeWorkspace}
+              disabled={workspaceDisabled}
+              onWorkspaceChange={onWorkspaceChange}
+            />
+          ) : null}
         </div>
       ),
     });
@@ -184,13 +186,13 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.terminal.open,
     terminalShortcut,
     m.sidebar.newTask,
-    m.workspace.openFiles,
-    workspacePanelOpen,
     terminalPanelOpen,
-    parentSessionKey,
+    activeSessionKey,
+    workspacePath,
+    canChangeWorkspace,
+    workspaceDisabled,
+    onWorkspaceChange,
     toggleTerminalPanel,
-    toggleWorkspacePanel,
-    setSideChatOpen,
     setPageHeader,
   ]);
 

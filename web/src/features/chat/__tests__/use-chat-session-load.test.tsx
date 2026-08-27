@@ -138,4 +138,66 @@ describe('useChatSessionLoad', () => {
     act(() => root.unmount());
     container.remove();
   });
+
+  it('applies a workspace override and refreshes the effective workspace', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const sessionManager = {
+      patchSessionAgentConfig: vi.fn(async () => {}),
+      loadSessionAgentConfig: vi.fn(async () => ({
+        model: '',
+        thinkingLevel: 'medium',
+        reasoningLevel: 'on',
+        activityDetail: {
+          default: 'on',
+          override: null,
+          effective: 'on',
+          source: 'default' as const,
+        },
+        effectiveWorkspacePath: '/Users/example/projects/next',
+        workingDirectoryLocked: true,
+        workspaceSource: 'session_override' as const,
+      })),
+    } as unknown as SessionManager;
+    let onSessionWorkingDirectoryChange: ((path: string) => Promise<void>) | undefined;
+
+    function Harness() {
+      ({ onSessionWorkingDirectoryChange } = useChatSessionLoad({
+        sessionMgrRef: { current: sessionManager },
+        routeSessionKeyRef: { current: sessionKey },
+        sendingRef: { current: false },
+        streamingRef: { current: false },
+        activeStreamSessionKeyRef: { current: null },
+        loadingSessionRef: { current: false },
+        messagesLenRef: { current: 0 },
+        thinkingSupportGenRef: { current: 0 },
+        navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main',
+        dismissClarifyOnSessionLoad: vi.fn(),
+        detachForNewConversation: vi.fn(),
+        sessionKey,
+        hasMore: false,
+      }));
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+    });
+    await act(async () => {
+      await onSessionWorkingDirectoryChange?.('  /Users/example/projects/next  ');
+    });
+
+    expect(sessionManager.patchSessionAgentConfig).toHaveBeenCalledWith(sessionKey, {
+      workingDirectory: '/Users/example/projects/next',
+    });
+    expect(useChatSessionStore.getState().sessions[sessionKey]).toMatchObject({
+      effectiveWorkspacePath: '/Users/example/projects/next',
+      workspaceSource: 'session_override',
+    });
+
+    act(() => root.unmount());
+    container.remove();
+  });
 });
