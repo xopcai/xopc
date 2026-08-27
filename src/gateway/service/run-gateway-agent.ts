@@ -267,10 +267,10 @@ export async function *runGatewayAgent(
             skipTaskReview: reviewHint?.skipTaskReview ?? false,
             outboundMetadata: {},
           });
-        } catch (goalErr) {
+        } catch (completionErr) {
           log.warn(
-            { err: goalErr, sessionKey },
-            `Session turn complete failed: ${goalErr instanceof Error ? goalErr.message : String(goalErr)}`,
+            { err: completionErr, sessionKey },
+            `Session turn complete failed: ${completionErr instanceof Error ? completionErr.message : String(completionErr)}`,
           );
         }
         agentService.endInboundTurn(sessionKey);

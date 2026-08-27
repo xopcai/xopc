@@ -145,10 +145,11 @@
     },
     "suggestions": {
       "create": "Draft automation",
+      "setup": "Set up",
       "manage": "Manage",
       "coveredTitle": "Already automated",
       "coveredDescription": "Covered by {name}. xopc will handle future matching events.",
-      "noteCreatedTitle": "Automate note follow-up",
+      "noteCreatedTitle": "Auto-organize",
       "noteCreatedDescription": "Have xopc classify new notes and suggest next actions automatically.",
       "noteCreatedPrompt": "When a note is created, run an agent to classify the note, identify useful follow-up actions, and summarize any tasks. Trigger on note.created from notes. Keep it safe: only write a short recommendation unless the user later approves edits.",
       "taskBlockedTitle": "Automate blocker diagnosis",

@@ -30,7 +30,7 @@ describe('resolveExecutionContext', () => {
       metadata: metadata({
         projectId: 'project-1',
         customData: {
-          taskId: 'goal-1',
+          taskId: 'task-1',
           origin: 'task',
           triggerKind: 'retry',
           parentRunId: 'run-0',

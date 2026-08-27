@@ -70,7 +70,7 @@ export function AutomationSuggestionCard({ title, description, prompt, coverage,
           }}
         >
           <Sparkles className="size-3.5" aria-hidden />
-          {labels.create}
+          {labels.setup}
         </Button>
       </section>
     );

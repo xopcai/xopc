@@ -9,7 +9,7 @@ The proactive subsystem is an application layer between domain facts and user at
 ```text
 Domain services                 Proactive core                         User surfaces
 ---------------                 --------------                         -------------
-projects  tasks  goals     ->   event store -> router -> batches  ->  insight history
+projects  tasks           ->   event store -> router -> batches  ->  insight history
 notes  automations              eligibility -> context -> runner      Proactive Inbox
 sessions  connectors            validation -> value policy            digest / push
                                 delivery outbox -> feedback

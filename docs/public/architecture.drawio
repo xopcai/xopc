@@ -60,7 +60,7 @@
         <mxCell id="extensionLoader" value="ExtensionLoader + Registry&lt;br&gt;activation plan, hooks, tools,&lt;br&gt;channel plugins, gateway methods, UI assets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fae8ff;strokeColor=#c026d3;" vertex="1" parent="gatewayGroup">
           <mxGeometry x="370" y="430" width="310" height="86" as="geometry" />
         </mxCell>
-        <mxCell id="gatewaySidecars" value="Gateway services&lt;br&gt;automations, heartbeat, goals,&lt;br&gt;workflows, notes, projects, marketplace" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;" vertex="1" parent="gatewayGroup">
+        <mxCell id="gatewaySidecars" value="Gateway services&lt;br&gt;automations, heartbeat, tasks,&lt;br&gt;workflows, notes, projects, marketplace" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;" vertex="1" parent="gatewayGroup">
           <mxGeometry x="40" y="560" width="310" height="86" as="geometry" />
         </mxCell>
         <mxCell id="sessionIndex" value="SessionIndex + SessionStore&lt;br&gt;session CRUD, transcript APIs,&lt;br&gt;compaction checkpoints and search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffedd5;strokeColor=#ea580c;" vertex="1" parent="gatewayGroup">

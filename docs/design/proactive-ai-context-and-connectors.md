@@ -9,8 +9,8 @@ The first production-shaped vertical slice is implemented:
 
 - per-connection scan and proactive-use policy, scheduled through the existing durable connector-learning jobs;
 - content-free, idempotent source-change events with independent consumer watermarks;
-- authorized and bounded external, goal, note, project, automation, and user-understanding context providers;
-- durable internal product-event bridging for goals, notes, workflows, and sessions;
+- authorized and bounded external, Task, note, Project, automation, and user-understanding context providers;
+- durable internal product-event bridging for Tasks, notes, workflows, and sessions;
 - calendar-derived 24-hour and 2-hour meeting-preparation triggers, with related internal context selected by term overlap;
 - connector policy API and Web controls, plus seven-day content-fingerprint duplicate suppression;
 - reuse of the existing Inbox lifecycle, feedback, decisions, and durable outbox instead of a parallel delivery stack.
@@ -69,7 +69,7 @@ internal domain events ----------+----> scenario batch
 - Connector Learning already provides bootstrap/incremental modes, durable jobs, retry, pause, and self-scheduling.
 - `ProactiveEventService` already normalizes, deduplicates, persists, routes, and aggregates events.
 - Proactive execution already pins scenario/prompt revisions, stores context snapshots, and runs an isolated read-only Agent.
-- Project, task, automation, goal, note, workflow, and session paths already have partial product-event emission points.
+- Project, Task, automation, note, workflow, and session paths already have partial product-event emission points.
 
 ### Gaps to close
 
@@ -99,7 +99,7 @@ src/proactive/context/
     connected-source.ts
     project.ts
     tasks.ts
-    goals.ts
+    internal-objects.ts
     notes.ts
     sessions.ts
     user-understanding.ts
@@ -285,8 +285,10 @@ Initial mappings:
 
 | Product event | Proactive event |
 |---|---|
-| `goal.created` | `goal.created.v1` |
-| `goal.status_changed` | `goal.status_changed.v1` |
+| `task.created.v2` | `task.created.v2` |
+| `task.commanded.v2` | `task.commanded.v2` |
+| `task.phase_changed.v2` | `task.phase_changed.v2` |
+| `task.attention_required.v2` | `task.attention_required.v2` |
 | `note.created` | `note.created.v1` |
 | `note.updated` | `note.updated.v1` |
 | `workflow.run.completed` | `workflow.run_completed.v1` |
@@ -302,7 +304,7 @@ The bridge payload contains identifiers, status transitions, bounded metadata, a
 
 Events are the primary internal path. A low-frequency reconciliation worker protects against imports, migrations, or old write paths that bypass publishers.
 
-Every 6 hours it computes stable hashes for active projects, tasks, goals, scheduled automations, and open judgments. A changed hash publishes `domain.snapshot_changed.v1` with an idempotent key containing domain, subject, and hash.
+Every 6 hours it computes stable hashes for active Projects, Tasks, scheduled automations, and open judgments. A changed hash publishes `domain.snapshot_changed.v1` with an idempotent key containing domain, subject, and hash.
 
 Reconciliation does not invoke a model and does not publish events when hashes are unchanged.
 
@@ -361,11 +363,11 @@ Provider output is saved to the existing proactive context snapshot before model
 MVP providers:
 
 - `ConnectedSourceContextProvider`: knowledge items referenced by source-change events plus bounded related items.
-- `GoalContextProvider`: goal status, acceptance criteria, progress, blockers, and active session.
+- `InternalObjectContextProvider`: Task contract, phase, active wait, priority, and related event evidence.
 - `NoteContextProvider`: title, kind, status, tags, linked project, bounded relevant excerpt.
 - `SessionContextProvider`: recent LLM-safe messages, summaries, decisions, and commitments; it must use the existing session context builder rather than raw transcript parsing.
 - `UserUnderstandingContextProvider`: active claims, preferences, routines, and relationship records relevant to the scenario.
-- `ExecutionStateContextProvider`: automation, workflow, and persistent-goal runs already in flight.
+- `ExecutionStateContextProvider`: automation, workflow, and TaskRun execution already in flight.
 - `AttentionHistoryContextProvider`: prior active/resolved/snoozed insights and feedback for novelty control.
 
 Every external text section is wrapped as untrusted content before reaching the Agent. External text can provide evidence but cannot define instructions, tools, output schemas, or authorization.
@@ -412,7 +414,6 @@ The worker runs every 15 minutes and evaluates only indexed deadlines/windows. I
 calendar.meeting_window_entered.v1
 commitment.due_window_entered.v1
 conversation.response_overdue.v1
-goal.stalled.v1
 ```
 
 Example dedupe keys:
@@ -420,7 +421,6 @@ Example dedupe keys:
 ```text
 temporal:meeting:<item-id>:24h:<event-start>
 temporal:commitment:<fact-id>:due:<due-date>
-temporal:goal:<goal-id>:stalled:<seven-day-bucket>
 ```
 
 Persist the last completed sweep boundary. On restart, scan from the previous boundary to now with a bounded look-back. The worker never uses in-memory timers as the source of truth.
@@ -438,7 +438,7 @@ Context:
 
 - calendar source item;
 - attendees and relationship context;
-- linked project, tasks, goals, notes, and recent decisions;
+- linked Project, Tasks, notes, and recent decisions;
 - recent relevant messages and prior meeting task;
 - existing active judgment for the same meeting.
 
@@ -449,14 +449,14 @@ Aggregation key: calendar external event identity. A content fingerprint prevent
 Triggers:
 
 - commitment fact created/updated;
-- linked goal/task status change;
+- linked Task status change;
 - commitment due window entered.
 
 Context:
 
 - commitment evidence;
 - owner/counterparty relationship;
-- linked task or goal;
+- linked Task;
 - recent execution and communication state.
 
 Hard gate: no explicit or evidence-backed deadline/obligation means no judgment.
@@ -694,7 +694,7 @@ Exit gate: repeated scans and crash recovery produce exactly one durable event p
 ### Increment 2 — internal context resolver
 
 - Extract the current context registry behind the new contract.
-- Add goal, note, session, user-understanding, execution, attention-history, and connected-source providers.
+- Add internal-object, note, session, user-understanding, execution, attention-history, and connected-source providers.
 - Add the durable internal domain bridge and reconciliation hashes.
 - Run existing scenarios against the new resolver without changing their user-visible output.
 

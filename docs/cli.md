@@ -51,6 +51,7 @@ pnpm run dev:gateway     # start gateway with ~/.xopc-dev and info logs
 | `update` | Check for and install xopc updates (extension sync + gateway restart) — see [Updates](./update.md) |
 | `logs` | Manage and query logs |
 | `project` | Manage long-running projects |
+| `runtime` | Manage Node.js and Python tool runtimes used by agents |
 | `config` | View/edit configuration |
 | `image` | Inspect image runtime behavior and provider availability |
 | `models` | List and manage models and model auth |
@@ -88,6 +89,7 @@ Use `xopc <command> --help` for option-level details. This table tracks the comm
 | `update` | No subcommands |
 | `logs` | `list`, `query`, `stats`, `tail`, `clean`, `rotate` |
 | `project` | `list`, `new`, `show`, `update`, `archive`, `attach-session`, `detach-session`, `sessions`, `tasks` |
+| `runtime` | `status`, `install`, `repair`, `prune` |
 | `config` | `get`, `set`, `unset`, `show`, `validate`, `token`, `path` |
 | `image` | `status`, `providers` |
 | `models` | `list`, `status`, `set`, `auth` (`list`, `login`, `paste-api-key`, `logout`) |
