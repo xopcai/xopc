@@ -8,6 +8,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../connection.js';
+import { getSqliteDatabase } from '../transaction.js';
 import {
   createCollaborationRule,
   createContextEvidence,
@@ -124,6 +125,10 @@ describe('structured user context repository', () => {
       runId,
       items: [expect.objectContaining({ objectId: 'understanding-1', decision: 'selected' })],
     });
+    const stored = getSqliteDatabase().prepare('SELECT query FROM context_runs WHERE context_run_id = ?')
+      .get(runId) as { query: string };
+    expect(stored.query).toMatch(/^sha256:[a-f0-9]{24};length=15$/);
+    expect(stored.query).not.toContain('Draft an update');
 
     const repeatedRunId = recordContextRun({
       turnId: 'turn-1', sessionKey: 'agent:main:webchat:dm:1', query: 'Draft a shorter update',

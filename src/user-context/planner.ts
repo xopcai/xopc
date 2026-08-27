@@ -10,11 +10,12 @@ import {
   getUserProfile,
   consumeContextConsent,
   listCollaborationRules,
-  listUnderstandings,
   recordContextRun,
 } from '../storage/sqlite/index.js';
-import type { CollaborationRule, PersonalizationItem, UserContextScope, UserUnderstanding } from './domain.js';
+import type { CollaborationRule, PersonalizationItem, UserUnderstanding } from './domain.js';
 import { listUserFocuses } from './sources/repository.js';
+import { UserUnderstandingRetriever } from './retriever.js';
+import { matchesUserContextScope } from './scope.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 6_000;
 const DEFAULT_MAX_RESULTS = 12;
@@ -35,33 +36,6 @@ export function prependAgentContext(message: AgentMessage, block: string): Agent
     return { ...message, content: copy } as AgentMessage;
   }
   return message;
-}
-
-function scopeMatches(scope: UserContextScope, input: { sessionKey: string; workspaceId: string; projectId?: string }): boolean {
-  if (scope.type === 'global') return true;
-  if (scope.type === 'session') return scope.id === input.sessionKey;
-  if (scope.type === 'workspace') return scope.id === input.workspaceId;
-  return Boolean(input.projectId && scope.id === input.projectId);
-}
-
-function terms(value: string): Set<string> {
-  const normalized = value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  const words = normalized.split(/\s+/).filter((word) => word.length > 1);
-  const cjk = [...normalized.replace(/[^\p{Script=Han}]/gu, '')];
-  for (let index = 0; index < cjk.length - 1; index += 1) words.push(`${cjk[index]}${cjk[index + 1]}`);
-  return new Set(words);
-}
-
-function relevance(query: string, item: UserUnderstanding): number {
-  const queryTerms = terms(query);
-  const itemTerms = terms(item.statement);
-  const shared = [...queryTerms].filter((term) => itemTerms.has(term)).length;
-  const lexical = queryTerms.size ? shared / queryTerms.size : 0;
-  const baseline = item.kind === 'boundary' && item.explicitness === 'explicit'
-    ? 0.8
-    : item.kind === 'preference' && item.explicitness === 'explicit' ? 0.35 : 0;
-  const explicitness = item.explicitness === 'explicit' ? 0.1 : item.explicitness === 'observed' ? 0.05 : 0;
-  return Math.min(1, Math.max(baseline, lexical * 0.75 + item.confidence * 0.15 + explicitness));
 }
 
 function sectionFor(item: UserUnderstanding): PlannedUserContextItem['section'] {
@@ -89,7 +63,7 @@ function rejectionReason(
 ): UserContextRejectionReason | undefined {
   if (item.status === 'needs_review' || item.status === 'stale' || item.status === 'candidate') return 'needs_review';
   if (item.status === 'archived' || item.status === 'rejected') return 'disabled';
-  if (!scopeMatches(item.scope, input)) return 'scope_mismatch';
+  if (!matchesUserContextScope(item.scope, input)) return 'scope_mismatch';
   if (item.validFrom && item.validFrom > now) return 'not_yet_valid';
   if ((item.validTo && item.validTo < now) || (item.expiresAt && item.expiresAt < now)) return 'expired';
   if (item.sensitivity === 'secret' || item.sensitivity === 'regulated') return 'sensitive';
@@ -98,12 +72,14 @@ function rejectionReason(
 }
 
 function ruleMatches(rule: CollaborationRule, input: { sessionKey: string; workspaceId: string; projectId?: string; channel?: string }): boolean {
-  if (rule.status !== 'active' || !scopeMatches(rule.scope, input)) return false;
+  if (rule.status !== 'active' || !matchesUserContextScope(rule.scope, input)) return false;
   const channel = typeof rule.conditions.channel === 'string' ? rule.conditions.channel : undefined;
   return !channel || channel === input.channel;
 }
 
 export class UserContextPlanner {
+  private readonly retriever = new UserUnderstandingRetriever();
+
   plan(params: {
     sessionKey: string;
     workspaceId: string;
@@ -167,11 +143,14 @@ export class UserContextPlanner {
       traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'selected', reason: 'Active collaboration rule', content: rule.statement, sourceLabel: 'Your collaboration rule', rank: index + 1, score: 1, injectedChars: rule.statement.length });
     }
 
-    const ranked = listUnderstandings(['active'])
-      .filter((item) => !excluded.has(item.id))
-      .map((item) => ({ item, score: relevance(query, item) }))
-      .sort((left, right) => right.score - left.score)
-      .slice(0, Math.max(maxResults * 5, 50));
+    const ranked = this.retriever.retrieve({
+      query,
+      sessionKey: params.sessionKey,
+      workspaceId: params.workspaceId,
+      ...(params.projectId ? { projectId: params.projectId } : {}),
+      maxCandidates: Math.max(maxResults * 5, 50),
+    }).filter((result) => !excluded.has(result.understanding.id))
+      .map((result) => ({ item: result.understanding, score: result.score }));
     for (const { item, score } of ranked) {
       if (items.length >= maxResults) {
         rejected.push({ recordId: item.id, reason: 'budget' });

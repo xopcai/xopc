@@ -13,6 +13,12 @@ Generic memory is document-like retrieval data. It may contain project facts, se
 
 Structured user context is governed product state. It is not stored as tagged generic memory and is not projected to Markdown. The runtime reads it through the user-context planner and the `/api/you` resource model.
 
+## Retrieval without embeddings
+
+The local retrieval path does not require an embedding model or a vector index. A shared deterministic query profile extracts normalized terms, CJK bigrams, identifiers, intent hints, time hints, and scope. Generic memory combines exact-identifier matches, SQLite FTS5, and bounded lexical/CJK candidates with reciprocal-rank fusion. Structured user context uses the same text features plus kind, authority, scope, and confidence signals.
+
+Feedback affects ranking only after a minimum sample size and is capped so it cannot override lifecycle, scope, privacy, or consent policy. Incorrect or sensitive generic-memory feedback moves the affected record to `needs_review`; outdated feedback marks it `stale`. Retrieval audit rows store a SHA-256 query fingerprint and character count rather than the raw query text.
+
 ## Structured user context lifecycle
 
 Understanding has an explicit lifecycle:
@@ -37,7 +43,7 @@ For each enabled turn, the planner:
 
 1. Loads the direct user profile, active collaboration rules, and relevant understanding.
 2. Applies channel, scope, lifecycle, validity, sensitivity, conflict, and consent policies.
-3. Ranks eligible understanding against the current task.
+3. Ranks eligible understanding against the current task using deterministic text, intent, authority, scope, and bounded feedback signals.
 4. Enforces count and character budgets.
 5. Injects only the selected subset into the model input.
 6. Records selections and exclusions in `context_runs` and `context_run_items`.

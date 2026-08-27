@@ -329,6 +329,7 @@ export class AgentManager implements AgentInstanceGateway {
   private isUserContextEnabledForSession(sessionKey: string): boolean {
     return Boolean(
       this.config.config?.userContext.enabled
+      && this.config.config.userContext.understanding.enabled
       && getSessionConfig(sessionKey)?.userContextMode !== 'off',
     );
   }
