@@ -1,4 +1,4 @@
-import { Box, Cable, FolderKanban, GitBranch, HeartHandshake, Home, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, Cable, FolderKanban, GitBranch, Home, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -17,7 +17,6 @@ export type NavItem = {
 };
 
 export type BuiltinNavId =
-  | 'builtin:profile'
   | 'builtin:agents'
   | 'builtin:skills'
   | 'builtin:connectors'
@@ -44,7 +43,6 @@ export type BuiltinNavDef = {
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:home', to: '/', Icon: Home },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
-  { id: 'builtin:profile', to: '/you', Icon: HeartHandshake },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
@@ -61,10 +59,10 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
 export const PRIMARY_NAV_IDS = [
   'builtin:home',
   'builtin:projects',
-  'builtin:profile',
+  'builtin:notes',
 ] as const satisfies readonly BuiltinNavId[];
 
-/** Adjustable visible app-row bounds, excluding "New task" and "More apps". */
+/** Adjustable shortcut-row bounds, excluding "New chat" and "More". */
 export const MIN_VISIBLE_NAV_ITEMS = 2;
 export const DEFAULT_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
 export const MAX_VISIBLE_NAV_ITEMS = 4;

@@ -19,11 +19,34 @@ import type { ExtensionUiInfo } from '@/features/extensions/types';
 import {
   BUILTIN_NAV_DEFS,
   reconcileNavOrder,
+  type BuiltinNavId,
   type NavItem,
 } from '@/navigation/sidebar-nav-items';
 
 const DRAG_MIME = 'text/plain';
 const DT_PREFIX = 'xopc-nav:';
+
+type OverflowGroupId = 'work' | 'capabilities' | 'build';
+
+const OVERFLOW_GROUP_BY_BUILTIN: Record<BuiltinNavId, OverflowGroupId> = {
+  'builtin:home': 'work',
+  'builtin:projects': 'work',
+  'builtin:notes': 'work',
+  'builtin:automations': 'work',
+  'builtin:workflows': 'work',
+  'builtin:browserWorkflows': 'work',
+  'builtin:skills': 'capabilities',
+  'builtin:connectors': 'capabilities',
+  'builtin:agents': 'capabilities',
+  'builtin:channels': 'capabilities',
+  'builtin:localApps': 'build',
+  'builtin:extensions': 'build',
+};
+
+function overflowGroupId(item: NavItem): OverflowGroupId {
+  if (item.kind === 'extension') return 'build';
+  return OVERFLOW_GROUP_BY_BUILTIN[item.id as BuiltinNavId] ?? 'build';
+}
 
 function dragPayload(id: string): string {
   return `${DT_PREFIX}${id}`;
@@ -141,7 +164,7 @@ export function SidebarNavItems({
 
   const available = useMemo<NavItem[]>(() => {
     const builtins: NavItem[] = BUILTIN_NAV_DEFS.map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'profile' | 'agents' | 'home' | 'projects' | 'localApps' | 'skills' | 'connectors' | 'automations' | 'browserWorkflows' | 'notes' | 'workflows' | 'channels' | 'extensions';
+      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'home' | 'projects' | 'localApps' | 'skills' | 'connectors' | 'automations' | 'browserWorkflows' | 'notes' | 'workflows' | 'channels' | 'extensions';
       return {
         id: def.id,
         kind: 'builtin',
@@ -162,6 +185,15 @@ export function SidebarNavItems({
     () => [...reconciled.visible, ...reconciled.overflow].map((item) => item.id),
     [reconciled],
   );
+  const overflowGroups = useMemo(() => {
+    const grouped: Record<OverflowGroupId, NavItem[]> = {
+      work: [],
+      capabilities: [],
+      build: [],
+    };
+    for (const item of reconciled.overflow) grouped[overflowGroupId(item)].push(item);
+    return grouped;
+  }, [reconciled.overflow]);
 
   const onDragStart = useCallback((id: string) => (e: DragEvent<HTMLElement>) => {
     e.dataTransfer.setData(DRAG_MIME, dragPayload(id));
@@ -254,6 +286,13 @@ export function SidebarNavItems({
   }
 
   function renderMoreButton(): ReactNode {
+    const groupLabels: Record<OverflowGroupId, string> = {
+      work: m.sidebar.moreGroupWork,
+      capabilities: m.sidebar.moreGroupCapabilities,
+      build: m.sidebar.moreGroupBuild,
+    };
+    const groups: OverflowGroupId[] = ['work', 'capabilities', 'build'];
+
     return (
       <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
         <Popover.Trigger asChild>
@@ -289,50 +328,68 @@ export function SidebarNavItems({
             )}
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            <ul className="flex flex-col gap-0.5" role="list" aria-label={m.sidebar.moreAppsAria}>
-              <li className="contents">
-                <button
-                  type="button"
-                  className={popoverRowClass({ isActive: false }, false, null)}
-                  onClick={() => {
-                    setPopoverOpen(false);
-                    openDiscussionCapture();
-                    onNavigate?.();
-                  }}
-                >
-                  <AudioLines className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-                  <span className="truncate">{m.notes.discussionCapture.title}</span>
-                </button>
-              </li>
-              {reconciled.overflow.map((item) => {
-                const dragging = draggingId === item.id;
-                const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
+            <nav className="flex flex-col gap-1" aria-label={m.sidebar.moreAppsAria}>
+              {groups.map((groupId) => {
+                const items = overflowGroups[groupId];
+                if (items.length === 0 && groupId !== 'work') return null;
                 return (
-                  <li key={item.id} className="contents">
-                    <NavLink
-                      to={item.to}
-                      end={item.to === '/'}
-                      draggable
-                      onDragStart={onDragStart(item.id)}
-                      onDragEnd={onDragEnd}
-                      onDragOver={onRowDragOver(item.id)}
-                      onDrop={onRowDrop(item.id)}
-                      className={(props) => popoverRowClass(props, dragging, dropHint)}
-                      title={item.title ?? item.label}
-                      onMouseEnter={() => onNavIntent(item.to)}
-                      onFocus={() => onNavIntent(item.to)}
-                      onClick={() => {
-                        setPopoverOpen(false);
-                        onNavigate?.();
-                      }}
+                  <section key={groupId} aria-labelledby={`sidebar-more-${groupId}`}>
+                    <h3
+                      id={`sidebar-more-${groupId}`}
+                      className="px-2 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle"
                     >
-                      <NavIcon item={item} />
-                      <span className="truncate">{item.label}</span>
-                    </NavLink>
-                  </li>
+                      {groupLabels[groupId]}
+                    </h3>
+                    <ul className="flex flex-col gap-0.5" role="list">
+                      {groupId === 'work' ? (
+                        <li className="contents">
+                          <button
+                            type="button"
+                            className={popoverRowClass({ isActive: false }, false, null)}
+                            onClick={() => {
+                              setPopoverOpen(false);
+                              openDiscussionCapture();
+                              onNavigate?.();
+                            }}
+                          >
+                            <AudioLines className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+                            <span className="truncate">{m.notes.discussionCapture.title}</span>
+                          </button>
+                        </li>
+                      ) : null}
+                      {items.map((item) => {
+                        const dragging = draggingId === item.id;
+                        const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
+                        return (
+                          <li key={item.id} className="contents">
+                            <NavLink
+                              to={item.to}
+                              end={item.to === '/'}
+                              draggable
+                              onDragStart={onDragStart(item.id)}
+                              onDragEnd={onDragEnd}
+                              onDragOver={onRowDragOver(item.id)}
+                              onDrop={onRowDrop(item.id)}
+                              className={(props) => popoverRowClass(props, dragging, dropHint)}
+                              title={item.title ?? item.label}
+                              onMouseEnter={() => onNavIntent(item.to)}
+                              onFocus={() => onNavIntent(item.to)}
+                              onClick={() => {
+                                setPopoverOpen(false);
+                                onNavigate?.();
+                              }}
+                            >
+                              <NavIcon item={item} />
+                              <span className="truncate">{item.label}</span>
+                            </NavLink>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
                 );
               })}
-            </ul>
+            </nav>
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
