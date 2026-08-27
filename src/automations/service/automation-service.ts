@@ -34,6 +34,8 @@ import {
   listAutomationRuns,
   listAutomationRunsForProductEvent,
   listAutomations,
+  markAllAutomationRunsRead,
+  markAutomationRunRead,
   saveAutomation,
   saveAutomationRun,
   saveAutomations,
@@ -107,7 +109,8 @@ export class AutomationService {
       id: parsed.id?.trim() || randomUUID().slice(0, 12),
       enabled: parsed.enabled ?? true,
       safety: parsed.safety ?? { mode: 'auto_apply' },
-      afterRun: parsed.afterRun ?? { kind: 'none' },
+      conversationMode: parsed.conversationMode ?? 'new_session',
+      notificationPolicy: parsed.notificationPolicy ?? 'attention',
       state: parsed.state ?? {},
       createdAtMs: now,
       updatedAtMs: now,
@@ -233,6 +236,14 @@ export class AutomationService {
 
   async listRunEvents(runId: string): Promise<AutomationRunEvent[]> {
     return listAutomationRunEvents(runId);
+  }
+
+  async markRunRead(runId: string): Promise<boolean> {
+    return markAutomationRunRead(runId);
+  }
+
+  async markAllRunsRead(options?: { projectId?: string }): Promise<number> {
+    return markAllAutomationRunsRead(options);
   }
 
   async cancelRun(runId: string): Promise<boolean> {
@@ -428,7 +439,7 @@ export class AutomationService {
 
     let status: AutomationRunStatus = 'failed';
     let error: string | undefined;
-    let activePhase: 'action' | 'after_run' = 'action';
+    let activePhase: 'action' | 'completion_hook' = 'action';
     try {
       const maxAttempts = Math.max(1, (automation.reliability?.retryCount ?? 0) + 1);
       let task: Awaited<ReturnType<AutomationActionExecutor['execute']>>;
@@ -521,25 +532,25 @@ export class AutomationService {
       }
       if ((status === 'timeout' || status === 'cancelled')) {
         // Cancellation must not start new external work after the action stops.
-      } else if ((automation.safety?.mode ?? 'auto_apply') !== 'auto_apply' && automation.afterRun?.kind === 'webhook') {
-        this.appendRunEvent(run, 'after_run.completed', 'After-run webhook skipped by safety mode', {
+      } else if ((automation.safety?.mode ?? 'auto_apply') !== 'auto_apply' && automation.completionWebhookUrl) {
+        this.appendRunEvent(run, 'completion_hook.completed', 'Completion webhook skipped by safety mode', {
           safety: automation.safety ?? { mode: 'auto_apply' },
         });
-      } else if (automation.afterRun?.kind === 'webhook') {
-        activePhase = 'after_run';
-        run = { ...run, currentPhase: 'after_run' };
+      } else if (automation.completionWebhookUrl) {
+        activePhase = 'completion_hook';
+        run = { ...run, currentPhase: 'completion_hook' };
         saveAutomationRun(run);
-        this.appendRunEvent(run, 'after_run.started', 'Calling after-run webhook', {
-          url: automation.afterRun.url,
+        this.appendRunEvent(run, 'completion_hook.started', 'Calling completion webhook', {
+          url: automation.completionWebhookUrl,
         });
-        await this.postAfterRunWebhook(automation.afterRun.url, run, controller.signal);
-        this.appendRunEvent(run, 'after_run.completed', 'After-run webhook completed');
+        await this.postCompletionWebhook(automation.completionWebhookUrl, run, controller.signal);
+        this.appendRunEvent(run, 'completion_hook.completed', 'Completion webhook completed');
       }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       const deadlineExceeded = run.deadlineAtMs !== undefined && Date.now() >= run.deadlineAtMs;
       status = controller.signal.aborted ? 'cancelled' : deadlineExceeded ? 'timeout' : 'failed';
-      this.appendRunEvent(run, activePhase === 'after_run' ? 'after_run.failed' : 'action.failed', `Automation run ${status}`, {
+      this.appendRunEvent(run, activePhase === 'completion_hook' ? 'completion_hook.failed' : 'action.failed', `Automation run ${status}`, {
         error,
       });
       run = {
@@ -552,7 +563,7 @@ export class AutomationService {
             : status === 'timeout'
               ? 'deadline_exceeded'
               : 'failed',
-          component: activePhase === 'after_run' ? 'automation' : run.termination?.component,
+          component: activePhase === 'completion_hook' ? 'automation' : run.termination?.component,
           cancellationConfirmed: status !== 'cancelled' || controller.signal.aborted,
         },
       };
@@ -710,7 +721,7 @@ export class AutomationService {
     this.armTimer();
   }
 
-  private async postAfterRunWebhook(
+  private async postCompletionWebhook(
     url: string,
     run: AutomationRun,
     signal: AbortSignal,

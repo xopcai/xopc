@@ -20,6 +20,8 @@ function eventAutomation(
       ...(payloadMatch ? { payloadMatch } : {}),
     },
     action: { kind: 'agent', instruction: 'Diagnose blocker' },
+    conversationMode: 'new_session',
+    notificationPolicy: 'attention',
     state: {},
     createdAtMs: 1,
     updatedAtMs: 1,

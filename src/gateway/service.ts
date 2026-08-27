@@ -40,6 +40,7 @@ import {
 } from './tailscale-lifecycle.js';
 import { getExposureManager } from '../remote-access/exposure-manager.js';
 import { sanitizeTunnelConfig } from '../tunnel/tunnel-config.js';
+import { prepareAutomationAgentSession } from './automation-agent-session.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -569,7 +570,11 @@ export class GatewayService {
     this.automationService.setDeps({
       agentService: this._agentService,
       getDefaultAgentId: () => getDefaultAgentId(this.config),
-      getProjectWorkspaceRoot: (projectId) => this.projects.get(projectId)?.workspaceRoot,
+      prepareAgentSession: (input) => prepareAutomationAgentSession(
+        this.sessionIndex.getStore(),
+        this.projects,
+        input,
+      ),
       workflowRunService: this.createWorkflowRunService(),
       browserRecipeService: this.browserRecipes,
       executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
@@ -1030,6 +1035,11 @@ export class GatewayService {
     this.automationService.setDeps({
       agentService: this.agentService,
       getDefaultAgentId: () => getDefaultAgentId(this.config),
+      prepareAgentSession: (input) => prepareAutomationAgentSession(
+        this.sessionIndex.getStore(),
+        this.projects,
+        input,
+      ),
       workflowRunService: this.createWorkflowRunService(),
       browserRecipeService: this.browserRecipes,
       executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
@@ -1837,7 +1847,19 @@ export class GatewayService {
   }
 
   private handleAutomationRunCompleted(run: AutomationRun): void {
-    this.emit('automation.run.completed', { run });
+    void this.automationService.get(run.automationId).then((automation) => {
+      if (!automation) return;
+      const requiresAttention = run.status !== 'succeeded'
+        || (automation.safety?.mode ?? 'auto_apply') !== 'auto_apply';
+      this.emit('automation.run.completed', {
+        run,
+        notificationPolicy: automation.notificationPolicy,
+        requiresAttention,
+        projectId: automation.projectId,
+      });
+    }).catch((err) => {
+      log.warn({ err, automationId: run.automationId, runId: run.id }, 'Automation completion event failed');
+    });
   }
 
   private startAutomationProductEventBridge(): void {

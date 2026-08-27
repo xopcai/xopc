@@ -53,10 +53,9 @@ export type AutomationAction =
       command: TaskCommand;
     };
 
-export type AutomationAfterRun =
-  | { kind: 'none' }
-  | { kind: 'saveToSession' }
-  | { kind: 'webhook'; url: string };
+export type AutomationConversationMode = 'new_session' | 'continuous';
+
+export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 
 export interface AutomationReliability {
   /** Overall run deadline. `timeoutSeconds` remains a read-only legacy fallback. */
@@ -67,7 +66,7 @@ export interface AutomationReliability {
   disableAfterConsecutiveFailures?: number;
 }
 
-export type AutomationRunPhase = 'queued' | 'action' | 'after_run' | 'cancelling' | 'completed';
+export type AutomationRunPhase = 'queued' | 'action' | 'completion_hook' | 'cancelling' | 'completed';
 
 export interface AutomationRunTermination {
   reason: 'completed' | 'failed' | 'user_cancelled' | 'deadline_exceeded';
@@ -100,7 +99,9 @@ export interface Automation {
   trigger: AutomationTrigger;
   action: AutomationAction;
   safety?: AutomationSafetyPolicy;
-  afterRun?: AutomationAfterRun;
+  conversationMode: AutomationConversationMode;
+  notificationPolicy: AutomationNotificationPolicy;
+  completionWebhookUrl?: string;
   reliability?: AutomationReliability;
   state: AutomationState;
   createdAtMs: number;
@@ -143,6 +144,7 @@ export interface AutomationRun {
   leaseExpiresAtMs?: number;
   attemptNumber?: number;
   rootRunId?: string;
+  readAtMs?: number;
 }
 
 export type AutomationRunEventType =
@@ -157,9 +159,9 @@ export type AutomationRunEventType =
   | 'action.retry_scheduled'
   | 'action.completed'
   | 'action.failed'
-  | 'after_run.started'
-  | 'after_run.completed'
-  | 'after_run.failed'
+  | 'completion_hook.started'
+  | 'completion_hook.completed'
+  | 'completion_hook.failed'
   | 'run.completed';
 
 export interface AutomationRunEvent {
@@ -196,6 +198,15 @@ export interface AutomationMetrics {
   };
 }
 
+export interface PrepareAutomationAgentSessionInput {
+  sessionKey: string;
+  projectId?: string;
+  agentId: string;
+  peerId: string;
+  automationId: string;
+  runId: string;
+}
+
 export interface AutomationDeps {
   agentService?: {
     sessionConfig?: {
@@ -215,7 +226,7 @@ export interface AutomationDeps {
     getModelForSession?: (sessionKey: string) => string | undefined;
   };
   getDefaultAgentId?: () => string;
-  getProjectWorkspaceRoot?: (projectId: string) => string | undefined;
+  prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
   workflowRunService?: WorkflowRunServiceLike;
   browserRecipeService?: {
     runAndWait(recipeId: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{

@@ -607,7 +607,8 @@ async function handleAutomation(
     if (projectError) return { ok: false, error: projectError };
     const input = CreateAutomationSchema.parse({
       ...pickDefined(source, [
-        'id', 'name', 'description', 'enabled', 'trigger', 'action', 'safety', 'afterRun', 'reliability', 'state',
+        'id', 'name', 'description', 'enabled', 'trigger', 'action', 'safety', 'conversationMode',
+        'notificationPolicy', 'completionWebhookUrl', 'reliability', 'state',
       ]),
       ...(projectId ? { projectId } : {}),
     });
@@ -621,7 +622,8 @@ async function handleAutomation(
     if (!id) return { ok: false, error: 'automationId is required' };
     const source = automationPayload(args, 'patch');
     const patch = UpdateAutomationSchema.parse(pickDefined(source, [
-      'name', 'description', 'projectId', 'enabled', 'trigger', 'action', 'safety', 'afterRun', 'reliability', 'state',
+      'name', 'description', 'projectId', 'enabled', 'trigger', 'action', 'safety', 'conversationMode',
+      'notificationPolicy', 'completionWebhookUrl', 'reliability', 'state',
     ]));
     const projectError = automationProjectError(patch.projectId, deps);
     if (projectError) return { ok: false, error: projectError };
