@@ -334,7 +334,7 @@
         "ready": "标记就绪",
         "run": "开始推进",
         "resume": "继续推进",
-        "pause": "暂时暂停",
+        "pause": "暂停推进",
         "review": "发起验收",
         "complete": "确认完成",
         "reopen": "重新打开"

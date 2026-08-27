@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import type { TaskChangedEvent } from '@xopcai/gateway-contract';
+
 import type { TaskDetail } from '@/features/tasks/home-api';
 import { hasTaskEditConflict, optimisticallyPatchTask } from '@/features/tasks/task-detail-sync';
-import { taskDetailSWRKey } from '@/features/tasks/use-task-detail';
+import { shouldRefreshTaskDetailFromChange, taskDetailSWRKey } from '@/features/tasks/use-task-detail';
 
 describe('task detail synchronization', () => {
   it('only reports a conflict when both the server and the draft changed the same field', () => {
@@ -38,5 +40,19 @@ describe('task detail synchronization', () => {
   it('keeps task reads available when gateway authentication is disabled', () => {
     expect(taskDetailSWRKey('task-1', undefined)).toEqual(['task-detail', 'task-1', '']);
     expect(taskDetailSWRKey('', undefined)).toBeNull();
+  });
+
+  it('ignores the realtime echo after an optimistic user update reaches the same version', () => {
+    const change: TaskChangedEvent = {
+      taskId: 'task-1',
+      version: 4,
+      changedFields: ['priority'],
+      source: 'user',
+      occurredAt: 1,
+    };
+
+    expect(shouldRefreshTaskDetailFromChange(4, change)).toBe(false);
+    expect(shouldRefreshTaskDetailFromChange(3, change)).toBe(true);
+    expect(shouldRefreshTaskDetailFromChange(4, { ...change, source: 'agent' })).toBe(true);
   });
 });

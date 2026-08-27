@@ -9,6 +9,15 @@ export type TerminalTab = {
   key: string;
 };
 
+const EMPTY_TERMINAL_TABS: TerminalTab[] = [];
+
+export function selectTerminalTabs(
+  tabsBySessionKey: Record<string, TerminalTab[]>,
+  sessionKey: string,
+): TerminalTab[] {
+  return tabsBySessionKey[sessionKey] ?? EMPTY_TERMINAL_TABS;
+}
+
 let terminalKeySequence = 0;
 
 function createTerminalKey(): string {
