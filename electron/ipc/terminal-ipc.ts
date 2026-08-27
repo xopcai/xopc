@@ -346,11 +346,6 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     manager.resize(terminalId, cols, rows);
     return { ok: true };
   });
-  ipcMain.handle('terminal:close', (event, terminalId: unknown) => {
-    assertTrustedRenderer(event);
-    manager.close(terminalId);
-    return { ok: true };
-  });
   ipcMain.handle('terminal:dispose', (event, sessionId: unknown, terminalKey: unknown) => {
     assertTrustedRenderer(event);
     manager.dispose(sessionId, terminalKey);

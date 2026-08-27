@@ -1090,11 +1090,6 @@
       "permissionTitle": "为此对话启用终端？",
       "permissionBody": "这会在当前对话的工作区内打开交互式 Shell，命令将使用你的桌面用户权限运行。",
       "enable": "启用终端",
-      "clear": "清空显示",
-      "share": "将选中文本分享给助手；未选择时分享最近输出",
-      "start": "启动终端",
-      "restart": "重启终端",
-      "stop": "停止终端",
       "exited": "进程已退出，代码 {{code}}"
     },
     "commandPalette": {
