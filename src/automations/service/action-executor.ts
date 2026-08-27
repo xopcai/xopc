@@ -233,21 +233,30 @@ export class AutomationActionExecutor {
     const agentId = normalizeAgentId(
       action.agentId || this.deps.getDefaultAgentId?.() || DEFAULT_AGENT_ID,
     );
+    const peerId = automation.conversationMode === 'continuous'
+      ? automation.id
+      : `${automation.id}-${crypto.randomUUID().slice(0, 8)}`;
     const sessionKey = buildSessionKey({
       agentId,
       source: 'automation',
       accountId: 'default',
       peerKind: 'dm',
-      peerId: `${automation.id}-${crypto.randomUUID().slice(0, 8)}`,
+      peerId,
     });
-    const effectiveWorkingDirectory = action.workingDirectory
-      ?? (automation.projectId ? this.deps.getProjectWorkspaceRoot?.(automation.projectId) : undefined);
 
     await hooks.onRunPatch?.({ sessionKey, currentPhase: 'action' });
+    await this.deps.prepareAgentSession?.({
+      sessionKey,
+      projectId: automation.projectId,
+      agentId,
+      peerId,
+      automationId: automation.id,
+      runId: run.id,
+    });
 
     await agentService.sessionConfig?.applyAutomationWorkingDirectory?.(
       sessionKey,
-      effectiveWorkingDirectory,
+      automation.projectId ? undefined : action.workingDirectory,
     );
     if (agentService.sessionConfig?.applyAutomationModelOverride) {
       const ok = await agentService.sessionConfig.applyAutomationModelOverride(sessionKey, action.model);

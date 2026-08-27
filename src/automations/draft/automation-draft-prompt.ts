@@ -18,8 +18,9 @@ JSON shape:
     "trigger": { "kind": "manual" },
     "action": { "kind": "agent", "instruction": "clear instruction for the agent" },
     "safety": { "mode": "suggest_only" },
-    "afterRun": { "kind": "none" },
-    "reliability": { "timeoutSeconds": 300, "disableAfterConsecutiveFailures": 3 }
+    "conversationMode": "new_session",
+    "notificationPolicy": "attention",
+    "reliability": { "executionTimeoutSeconds": 300, "disableAfterConsecutiveFailures": 3 }
   },
   "explanation": "Short explanation",
   "assumptions": ["..."],
@@ -57,8 +58,9 @@ Rules:
 - Default to safety { "mode": "suggest_only" } unless the user explicitly asks for fully automatic execution.
 - Do not invent destructive actions. For deletion, external sending, or irreversible changes, include a risk and make the instruction ask for confirmation.
 - Use cron for daily/weekly schedules. Use standard 5-field cron.
-- Keep timeoutSeconds between 60 and 1800.
-- afterRun should usually be { "kind": "none" }.
+- Keep executionTimeoutSeconds between 60 and 1800.
+- Use conversationMode "new_session" unless the user explicitly wants each run to continue the same conversation.
+- Use notificationPolicy "attention" unless the user explicitly requests every-run notifications or no notifications.
 - Language for user-facing copy: ${params.language ?? 'en'}.
 
 User request:
@@ -102,7 +104,9 @@ JSON shape:
     "trigger": "optional complete trigger object",
     "action": "optional complete action object",
     "safety": "optional complete safety object",
-    "afterRun": "optional complete afterRun object",
+    "conversationMode": "optional new_session or continuous",
+    "notificationPolicy": "optional attention, all, or none",
+    "completionWebhookUrl": "optional HTTPS URL",
     "reliability": "optional complete reliability object",
     "enabled": true
   },

@@ -99,15 +99,6 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
   }).strict(),
 ]);
 
-export const AutomationAfterRunSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('none') }).strict(),
-  z.object({ kind: z.literal('saveToSession') }).strict(),
-  z.object({
-    kind: z.literal('webhook'),
-    url: nonEmptyString.max(2000),
-  }).strict(),
-]);
-
 export const AutomationReliabilitySchema = z.object({
   executionTimeoutSeconds: z.number().int().min(1).max(86400).optional(),
   timeoutSeconds: z.number().int().min(1).max(86400).optional(),
@@ -138,7 +129,9 @@ export const AutomationSchema = z.object({
   trigger: AutomationTriggerSchema,
   action: AutomationActionSchema,
   safety: AutomationSafetyPolicySchema.optional(),
-  afterRun: AutomationAfterRunSchema.optional(),
+  conversationMode: z.enum(['new_session', 'continuous']).default('new_session'),
+  notificationPolicy: z.enum(['attention', 'all', 'none']).default('attention'),
+  completionWebhookUrl: optionalTrimmedString(2000),
   reliability: AutomationReliabilitySchema.optional(),
   state: AutomationStateSchema.default({}),
   createdAtMs: z.number().int().nonnegative(),

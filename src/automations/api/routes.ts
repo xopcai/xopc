@@ -140,6 +140,19 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
     return c.json({ events });
   });
 
+  authenticated.post('/api/automation-runs/:runId/read', async (c) => {
+    const marked = await service.automationServiceInstance.markRunRead(c.req.param('runId'));
+    if (!marked) return c.json({ error: 'Run not found' }, 404);
+    return c.json({ marked: true });
+  });
+
+  authenticated.post('/api/automation-runs/read-all', async (c) => {
+    const count = await service.automationServiceInstance.markAllRunsRead({
+      projectId: c.req.query('projectId'),
+    });
+    return c.json({ count });
+  });
+
   authenticated.post('/api/automation-runs/:runId/rerun', async (c) => {
     try {
       const run = await service.automationServiceInstance.rerunFromRun(c.req.param('runId'));

@@ -185,7 +185,7 @@ describe('AutomationService', () => {
     expect(completed?.cancelConfirmedAtMs).toBeTypeOf('number');
   });
 
-  it('applies the automation deadline to the after-run webhook', async () => {
+  it('applies the automation deadline to the completion webhook', async () => {
     const fetchMock = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
     }));
@@ -195,7 +195,7 @@ describe('AutomationService', () => {
         name: 'Bounded webhook',
         trigger: { kind: 'manual' },
         action: { kind: 'agent', instruction: 'finish quickly' },
-        afterRun: { kind: 'webhook', url: 'https://example.com/hook' },
+        completionWebhookUrl: 'https://example.com/hook',
         reliability: { executionTimeoutSeconds: 1 },
       });
 
@@ -356,11 +356,12 @@ describe('AutomationService', () => {
     expect((await service.listRunEvents(runId)).map((event) => event.type)).toContain('run.recovered');
   });
 
-  it('uses the project workspace for project-bound automation actions', async () => {
+  it('prepares project-bound agent sessions before applying session overrides', async () => {
     const applyAutomationWorkingDirectory = vi.fn(async () => undefined);
+    const prepareAgentSession = vi.fn(async () => undefined);
     const workflowCalls: unknown[] = [];
     service.setDeps({
-      getProjectWorkspaceRoot: (projectId) => (projectId === 'project-a' ? '/workspace/project-a' : undefined),
+      prepareAgentSession,
       agentService: {
         sessionConfig: {
           applyAutomationWorkingDirectory,
@@ -388,7 +389,15 @@ describe('AutomationService', () => {
       () => service.listRuns({ automationId: agentAutomation.id, limit: 5 }),
       (items) => items.some((item) => item.id === agentRun.id && item.status === 'succeeded'),
     );
-    expect(applyAutomationWorkingDirectory).toHaveBeenCalledWith(expect.any(String), '/workspace/project-a');
+    expect(prepareAgentSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-a',
+      automationId: agentAutomation.id,
+      runId: agentRun.id,
+    }));
+    expect(applyAutomationWorkingDirectory).toHaveBeenCalledWith(expect.any(String), undefined);
+    expect(prepareAgentSession.mock.invocationCallOrder[0]).toBeLessThan(
+      applyAutomationWorkingDirectory.mock.invocationCallOrder[0]!,
+    );
 
     const workflowAutomation = await service.create({
       name: 'Project workflow',
@@ -410,6 +419,32 @@ describe('AutomationService', () => {
       workflowAutomation.id,
     ].sort());
     expect(await service.listRuns({ projectId: 'project-a', limit: 10 })).toHaveLength(2);
+  });
+
+  it('tracks read results and marks them within the selected project', async () => {
+    const first = await service.create({
+      name: 'First project brief',
+      projectId: 'project-a',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'first' },
+    });
+    const second = await service.create({
+      name: 'Second project brief',
+      projectId: 'project-b',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'second' },
+    });
+    const firstRun = await service.runNow(first.id);
+    const secondRun = await service.runNow(second.id);
+    await waitFor(() => service.getRun(firstRun.id), (run) => run?.status === 'succeeded');
+    await waitFor(() => service.getRun(secondRun.id), (run) => run?.status === 'succeeded');
+
+    expect(await service.markRunRead(firstRun.id)).toBe(true);
+    expect((await service.getRun(firstRun.id))?.readAtMs).toBeTypeOf('number');
+    expect((await service.getRun(secondRun.id))?.readAtMs).toBeUndefined();
+
+    expect(await service.markAllRunsRead({ projectId: 'project-b' })).toBe(1);
+    expect((await service.getRun(secondRun.id))?.readAtMs).toBeTypeOf('number');
   });
 
   it('injects suggest-only guardrails into agent automations', async () => {

@@ -44,10 +44,8 @@ export type AutomationAction =
       timeoutSeconds?: number;
     };
 
-export type AutomationAfterRun =
-  | { kind: 'none' }
-  | { kind: 'saveToSession' }
-  | { kind: 'webhook'; url: string };
+export type AutomationConversationMode = 'new_session' | 'continuous';
+export type AutomationNotificationPolicy = 'attention' | 'all' | 'none';
 
 export interface AutomationReliability {
   executionTimeoutSeconds?: number;
@@ -72,7 +70,9 @@ export interface Automation {
   trigger: AutomationTrigger;
   action: AutomationAction;
   safety?: AutomationSafetyPolicy;
-  afterRun?: AutomationAfterRun;
+  conversationMode: AutomationConversationMode;
+  notificationPolicy: AutomationNotificationPolicy;
+  completionWebhookUrl?: string;
   reliability?: AutomationReliability;
   state: {
     nextRunAtMs?: number;
@@ -104,7 +104,7 @@ export interface AutomationRun {
   workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;
-  currentPhase?: 'queued' | 'action' | 'after_run' | 'cancelling' | 'completed';
+  currentPhase?: 'queued' | 'action' | 'completion_hook' | 'cancelling' | 'completed';
   cancelRequestedAtMs?: number;
   cancelConfirmedAtMs?: number;
   termination?: {
@@ -118,6 +118,7 @@ export interface AutomationRun {
   leaseExpiresAtMs?: number;
   attemptNumber?: number;
   rootRunId?: string;
+  readAtMs?: number;
 }
 
 export interface AutomationRunEvent {
@@ -136,9 +137,9 @@ export interface AutomationRunEvent {
     | 'action.retry_scheduled'
     | 'action.completed'
     | 'action.failed'
-    | 'after_run.started'
-    | 'after_run.completed'
-    | 'after_run.failed'
+    | 'completion_hook.started'
+    | 'completion_hook.completed'
+    | 'completion_hook.failed'
     | 'run.completed';
   message: string;
   data?: unknown;
@@ -179,7 +180,9 @@ export interface AutomationInput {
   trigger: AutomationTrigger;
   action: AutomationAction;
   safety?: AutomationSafetyPolicy;
-  afterRun?: AutomationAfterRun;
+  conversationMode?: AutomationConversationMode;
+  notificationPolicy?: AutomationNotificationPolicy;
+  completionWebhookUrl?: string;
   reliability?: AutomationReliability;
 }
 
@@ -284,6 +287,14 @@ export const automationApi = {
     }),
   cancelRun: (runId: string) =>
     fetchJson<{ cancelled: boolean }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/cancel`), {
+      method: 'POST',
+    }),
+  markRunRead: (runId: string) =>
+    fetchJson<{ marked: true }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/read`), {
+      method: 'POST',
+    }),
+  markAllRunsRead: (projectId?: string) =>
+    fetchJson<{ count: number }>(apiUrl(`/api/automation-runs/read-all${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`), {
       method: 'POST',
     }),
 };
