@@ -49,7 +49,7 @@ function fakeOwner() {
 }
 
 describe('TerminalManager', () => {
-  it('creates one PTY per session and forwards data', async () => {
+  it('reuses one PTY for the same terminal key and forwards data', async () => {
     const child = new FakePty();
     const spawnPty = vi.fn(() => child);
     const resolveWorkspace = vi.fn(async () => '/tmp/project');
@@ -59,7 +59,13 @@ describe('TerminalManager', () => {
       spawnPty: spawnPty as never,
     });
 
-    const input = { sessionKey: 'agent:main:webchat:default:direct:one', sessionId: 'session-1', cols: 100, rows: 30 };
+    const input = {
+      sessionKey: 'agent:main:webchat:default:direct:one',
+      sessionId: 'session-1',
+      terminalKey: 'terminal-1',
+      cols: 100,
+      rows: 30,
+    };
     const first = await manager.create(owner as never, input);
     const second = await manager.create(owner as never, input);
 
@@ -83,7 +89,34 @@ describe('TerminalManager', () => {
     expect(replayed.replaySequence).toBe(1);
   });
 
-  it('deduplicates concurrent creation for the same session', async () => {
+  it('creates independent PTYs for different terminal keys in one session', async () => {
+    const children = [new FakePty(), new FakePty()];
+    const spawnPty = vi.fn(() => children.shift()!);
+    const manager = new TerminalManager({
+      resolveWorkspace: async () => '/tmp/project',
+      spawnPty: spawnPty as never,
+    });
+    const baseInput = {
+      sessionKey: 'agent:main:webchat:default:direct:multiple',
+      sessionId: 'session-multiple',
+      cols: 80,
+      rows: 24,
+    };
+
+    const first = await manager.create(fakeOwner() as never, {
+      ...baseInput,
+      terminalKey: 'terminal-1',
+    });
+    const second = await manager.create(fakeOwner() as never, {
+      ...baseInput,
+      terminalKey: 'terminal-2',
+    });
+
+    expect(second.terminalId).not.toBe(first.terminalId);
+    expect(spawnPty).toHaveBeenCalledTimes(2);
+  });
+
+  it('deduplicates concurrent creation for the same terminal key', async () => {
     const child = new FakePty();
     let releaseWorkspace!: (cwd: string) => void;
     const resolveWorkspace = vi.fn(() => new Promise<string>((resolve) => {
@@ -94,6 +127,7 @@ describe('TerminalManager', () => {
     const input = {
       sessionKey: 'agent:main:webchat:default:direct:concurrent',
       sessionId: 'session-concurrent',
+      terminalKey: 'terminal-concurrent',
       cols: 80,
       rows: 24,
     };
@@ -117,6 +151,7 @@ describe('TerminalManager', () => {
     const terminal = await manager.create(owner as never, {
       sessionKey: 'agent:main:webchat:default:direct:two',
       sessionId: 'session-2',
+      terminalKey: 'terminal-2',
       cols: 80,
       rows: 24,
     });
@@ -135,6 +170,7 @@ describe('TerminalManager', () => {
     expect((await manager.create(owner as never, {
       sessionKey: terminal.sessionKey,
       sessionId: terminal.sessionId,
+      terminalKey: terminal.terminalKey,
       cols: 80,
       rows: 24,
     })).exited).toBe(true);
@@ -153,6 +189,7 @@ describe('TerminalManager', () => {
     await manager.create(owner as never, {
       sessionKey: 'agent:main:webchat:default:direct:three',
       sessionId: 'session-3',
+      terminalKey: 'terminal-3',
       cols: 80,
       rows: 24,
     });
@@ -174,6 +211,7 @@ describe('TerminalManager', () => {
     const creation = manager.create(owner as never, {
       sessionKey: 'agent:main:webchat:default:direct:destroyed',
       sessionId: 'session-destroyed',
+      terminalKey: 'terminal-destroyed',
       cols: 80,
       rows: 24,
     });
@@ -194,9 +232,34 @@ describe('TerminalManager', () => {
     await expect(manager.create(fakeOwner() as never, {
       sessionKey: 'session-key',
       sessionId: 'session-id',
+      terminalKey: 'terminal-invalid',
       cols: 1,
       rows: 24,
     })).rejects.toThrow('cols must be an integer');
+    expect(spawnPty).not.toHaveBeenCalled();
+  });
+
+  it('cancels a terminal tab that is closed during creation', async () => {
+    let releaseWorkspace!: (cwd: string) => void;
+    const spawnPty = vi.fn(() => new FakePty());
+    const manager = new TerminalManager({
+      resolveWorkspace: () => new Promise<string>((resolve) => {
+        releaseWorkspace = resolve;
+      }),
+      spawnPty: spawnPty as never,
+    });
+    const creation = manager.create(fakeOwner() as never, {
+      sessionKey: 'agent:main:webchat:default:direct:cancelled',
+      sessionId: 'session-cancelled',
+      terminalKey: 'terminal-cancelled',
+      cols: 80,
+      rows: 24,
+    });
+
+    manager.dispose('session-cancelled', 'terminal-cancelled');
+    releaseWorkspace('/tmp/project');
+
+    await expect(creation).rejects.toThrow('creation was cancelled');
     expect(spawnPty).not.toHaveBeenCalled();
   });
 });
