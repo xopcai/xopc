@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
+import { RouteErrorFallback } from '@/components/errors/app-error-boundary';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { SettingsSheet } from '@/components/shell/settings-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -133,6 +134,7 @@ function SettingsRouteFallback() {
 const router = createHashRouter([
   {
     path: '/desktop-pet',
+    errorElement: <RouteErrorFallback />,
     element: (
       <Suspense fallback={null}>
         <DesktopPetPage />
@@ -143,6 +145,7 @@ const router = createHashRouter([
     // Public share preview — bypasses `AppShell`'s gateway-token gate so any
     // recipient of a share link can render it. Talks only to /s/:token/* APIs.
     path: '/share/:token',
+    errorElement: <RouteErrorFallback />,
     element: (
       <Suspense fallback={<SecondaryRouteFallback />}>
         <SharePreviewPage />
@@ -152,6 +155,7 @@ const router = createHashRouter([
   {
     path: '/',
     element: <AppShell />,
+    errorElement: <RouteErrorFallback />,
     children: [
       {
         index: true,
