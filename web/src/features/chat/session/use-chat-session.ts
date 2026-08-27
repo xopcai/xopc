@@ -84,8 +84,6 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
   const sessionModel = sessionSlice?.model ?? '';
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
   const reasoningLevel = sessionSlice?.reasoningLevel ?? 'on';
-  const activityDetailDefault = sessionSlice?.activityDetailDefault ?? 'on';
-  const activityDetailOverride = sessionSlice?.activityDetailOverride ?? null;
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workingDirectoryLocked = sessionSlice?.workingDirectoryLocked ?? false;
@@ -176,7 +174,6 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     loadMoreMessages,
     onSessionModelChange,
     onSessionThinkingLevelChange,
-    onSessionReasoningLevelChange,
     createNewSession,
   } = useChatSessionLoad({
     sessionMgrRef,
@@ -394,10 +391,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       sessionModel,
       thinkingLevel,
       onSessionThinkingLevelChange,
-      onSessionReasoningLevelChange,
       reasoningLevel,
-      activityDetailDefault,
-      activityDetailOverride,
       modelSupportsThinking,
       effectiveWorkspacePath,
       workingDirectoryLocked,

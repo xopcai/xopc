@@ -8,8 +8,6 @@ export type DefaultSessionMeta = {
   model: string;
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
-  activityDetailDefault: ReasoningLevel;
-  activityDetailOverride: ReasoningLevel | null;
   modelSupportsThinking: boolean;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
@@ -22,8 +20,6 @@ export function defaultSessionMeta(): DefaultSessionMeta {
     model: '',
     thinkingLevel: DEFAULT_THINKING,
     reasoningLevel: DEFAULT_REASONING,
-    activityDetailDefault: DEFAULT_REASONING,
-    activityDetailOverride: null,
     modelSupportsThinking: false,
     effectiveWorkspacePath: '',
     workingDirectoryLocked: false,

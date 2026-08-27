@@ -1302,6 +1302,74 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
+/* Composer model/effort menus: short, directional motion similar to Codex. */
+.xopc-composer-config-popover {
+  --xopc-composer-popover-x: 0px;
+  --xopc-composer-popover-y: 0px;
+  transform-origin: var(--radix-popover-content-transform-origin);
+  will-change: opacity, transform;
+}
+
+.xopc-composer-config-popover[data-side="top"] {
+  --xopc-composer-popover-y: 4px;
+}
+
+.xopc-composer-config-popover[data-side="bottom"] {
+  --xopc-composer-popover-y: -4px;
+}
+
+.xopc-composer-config-popover[data-side="left"] {
+  --xopc-composer-popover-x: 4px;
+}
+
+.xopc-composer-config-popover[data-side="right"] {
+  --xopc-composer-popover-x: -4px;
+}
+
+@keyframes xopc-composer-popover-in {
+  from {
+    opacity: 0;
+    transform: translate3d(
+      var(--xopc-composer-popover-x),
+      var(--xopc-composer-popover-y),
+      0
+    ) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes xopc-composer-popover-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(
+      var(--xopc-composer-popover-x),
+      var(--xopc-composer-popover-y),
+      0
+    ) scale(0.97);
+  }
+}
+
+.xopc-composer-config-popover[data-state="open"] {
+  animation: xopc-composer-popover-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.xopc-composer-config-popover[data-state="closed"] {
+  animation: xopc-composer-popover-out 110ms ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xopc-composer-config-popover {
+    animation: none !important;
+  }
+}
+
 /* Drawer (right-side panel) animations */
 @keyframes xopc-drawer-right-in {
   from {

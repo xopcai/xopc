@@ -21,18 +21,10 @@ export type SessionAgentConfigView = {
 export function patchSessionAgentConfigView(sessionKey: string, cfg: SessionAgentConfigView): void {
   const key = String(sessionKey ?? '').trim();
   if (!key) return;
-  const activityDetailDefault = coerceReasoningLevel(cfg.activityDetail?.default);
-  const activityDetailOverride = cfg.activityDetail?.override == null
-    ? null
-    : coerceReasoningLevel(cfg.activityDetail.override);
   useChatSessionStore.getState().patchSessionMeta(key, {
     model: cfg.model,
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
-    reasoningLevel: coerceReasoningLevel(
-      cfg.activityDetail?.effective ?? cfg.reasoningLevel ?? undefined,
-    ),
-    activityDetailDefault,
-    activityDetailOverride,
+    reasoningLevel: coerceReasoningLevel(cfg.activityDetail?.default ?? cfg.reasoningLevel ?? undefined),
     effectiveWorkspacePath: cfg.effectiveWorkspacePath ?? '',
     workingDirectoryLocked: Boolean(cfg.workingDirectoryLocked),
     workspaceSource: cfg.workspaceSource ?? 'agent_default_root',
