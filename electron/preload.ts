@@ -153,8 +153,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     write: (terminalId: string, data: string) => ipcRenderer.send('terminal:write', terminalId, data),
     resize: (terminalId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', terminalId, cols, rows) as Promise<{ ok: true }>,
-    close: (terminalId: string) =>
-      ipcRenderer.invoke('terminal:close', terminalId) as Promise<{ ok: true }>,
     dispose: (sessionId: string, terminalKey: string) =>
       ipcRenderer.invoke('terminal:dispose', sessionId, terminalKey) as Promise<{ ok: true }>,
     onData: (callback: (event: { terminalId: string; data: string; sequence: number }) => void) => {

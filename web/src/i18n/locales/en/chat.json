@@ -1090,11 +1090,6 @@
       "permissionTitle": "Enable terminal for this conversation?",
       "permissionBody": "This opens an interactive shell in the conversation workspace. Commands run with your desktop user permissions.",
       "enable": "Enable terminal",
-      "clear": "Clear display",
-      "share": "Share selected text with the assistant, or recent output when nothing is selected",
-      "start": "Start terminal",
-      "restart": "Restart terminal",
-      "stop": "Stop terminal",
       "exited": "Process exited with code {{code}}"
     },
     "commandPalette": {
