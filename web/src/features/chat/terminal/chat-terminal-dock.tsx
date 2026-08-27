@@ -1,8 +1,8 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { Check, Eraser, Play, RotateCcw, Share2, Square, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, Eraser, Play, Plus, RotateCcw, Share2, Square, SquareTerminal, X } from 'lucide-react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { resolveSession } from '@/features/sessions/session-api';
@@ -11,8 +11,11 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { shareTerminalOutput } from '@/features/chat/terminal/terminal-output-api';
 import {
   clampTerminalHeight,
+  TERMINALS_PER_SESSION_MAX,
   useTerminalPanelStore,
 } from '@/stores/terminal-panel-store';
+
+import './chat-terminal-dock.css';
 
 type TerminalState = 'connecting' | 'running' | 'stopped' | 'error';
 
@@ -40,7 +43,12 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const api = window.electronAPI?.terminal;
   const open = useTerminalPanelStore((state) => Boolean(state.openBySessionKey[sessionKey]));
   const height = useTerminalPanelStore((state) => state.height);
+  const tabs = useTerminalPanelStore((state) => state.tabsBySessionKey[sessionKey] ?? []);
+  const terminalKey = useTerminalPanelStore((state) => state.activeTabKeyBySessionKey[sessionKey]);
   const closePanel = useTerminalPanelStore((state) => state.close);
+  const addTerminal = useTerminalPanelStore((state) => state.addTerminal);
+  const closeTerminal = useTerminalPanelStore((state) => state.closeTerminal);
+  const setActiveTerminal = useTerminalPanelStore((state) => state.setActiveTerminal);
   const setHeight = useTerminalPanelStore((state) => state.setHeight);
   const approve = useTerminalPanelStore((state) => state.approve);
   const approvedSessionIds = useTerminalPanelStore((state) => state.approvedSessionIds);
@@ -57,14 +65,34 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
+  const [rendered, setRendered] = useState(open);
+  const [entering, setEntering] = useState(open);
+  const [closing, setClosing] = useState(false);
   const approved = sessionId ? Boolean(approvedSessionIds[sessionId]) : false;
+
+  useEffect(() => {
+    if (open) {
+      setRendered(true);
+      setEntering(true);
+      setClosing(false);
+      return;
+    }
+    if (!rendered) return;
+    setEntering(false);
+    setClosing(true);
+    const timer = window.setTimeout(() => {
+      setRendered(false);
+      setClosing(false);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [open, rendered]);
 
   useEffect(() => () => {
     if (sharedTimerRef.current !== null) window.clearTimeout(sharedTimerRef.current);
   }, []);
 
   useEffect(() => {
-    if (!open || !api) {
+    if (!rendered || !api) {
       setSessionId(null);
       return;
     }
@@ -83,10 +111,14 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     return () => {
       cancelled = true;
     };
-  }, [api, open, sessionKey]);
+  }, [api, rendered, sessionKey]);
 
   useEffect(() => {
-    if (!open || !api || !sessionId || !approved || !containerRef.current) return;
+    if (!rendered || !api || !sessionId || !terminalKey || !approved || !containerRef.current) return;
+    setCwd('');
+    setState('connecting');
+    setError(null);
+    outputRef.current = '';
     const terminal = new Terminal({
       cursorBlink: true,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -145,6 +177,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
         const descriptor = await api.create({
           sessionKey,
           sessionId,
+          terminalKey,
           ...terminalDimensions(terminal),
         });
         if (disposed) return;
@@ -189,7 +222,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
       removeError();
       terminal.dispose();
     };
-  }, [api, approved, m.exited, open, sessionId, sessionKey]);
+  }, [api, approved, m.exited, rendered, sessionId, sessionKey, terminalKey]);
 
   const stop = useCallback(async () => {
     const terminalId = terminalIdRef.current;
@@ -224,13 +257,27 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     }
   }, [sessionKey, sharing]);
 
-  if (!api || !open) return null;
+  const closeTerminalTab = useCallback((key: string) => {
+    closeTerminal(sessionKey, key);
+    if (!api || !sessionId) return;
+    void api.dispose(sessionId, key).catch((cause) => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
+  }, [api, closeTerminal, sessionId, sessionKey]);
+
+  if (!api || !rendered) return null;
 
   return (
     <section
-      className="relative flex shrink-0 flex-col border-t border-edge bg-surface-base"
-      style={{ height }}
+      className={`relative flex shrink-0 flex-col overflow-hidden border-t border-edge bg-surface-base ${closing ? 'terminal-dock-exit pointer-events-none' : entering ? 'terminal-dock-enter' : ''}`}
+      style={{
+        height,
+        '--terminal-dock-height': `${height}px`,
+      } as CSSProperties}
       aria-label={m.title}
+      onAnimationEnd={(event) => {
+        if (event.currentTarget === event.target && !closing) setEntering(false);
+      }}
     >
       <div
         className="absolute inset-x-0 top-0 z-10 h-1 cursor-row-resize"
@@ -249,10 +296,52 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
           resizeDragRef.current = null;
         }}
       />
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-edge-subtle px-3">
-        <span className="text-xs font-semibold text-fg">{m.title}</span>
+      <header className="flex h-10 shrink-0 items-center gap-1 border-b border-edge-subtle px-2">
+        <div className="flex min-w-0 max-w-[45%] items-center gap-1 overflow-x-auto" role="tablist" aria-label={m.title}>
+          {tabs.map((tab, index) => {
+            const active = tab.key === terminalKey;
+            return (
+              <div
+                key={tab.key}
+                className={active
+                  ? 'flex h-7 shrink-0 items-center rounded-md bg-surface-hover text-fg'
+                  : 'flex h-7 shrink-0 items-center rounded-md text-fg-muted hover:bg-surface-hover/60 hover:text-fg'}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  className="flex h-full min-w-0 items-center gap-1.5 pl-2 text-xs"
+                  onClick={() => setActiveTerminal(sessionKey, tab.key)}
+                >
+                  <SquareTerminal className="size-3.5 shrink-0" />
+                  <span className="max-w-32 truncate">{m.title} {index + 1}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mr-1 rounded p-1 text-fg-muted hover:bg-surface-panel hover:text-fg"
+                  title={m.closeTab}
+                  aria-label={`${m.closeTab} ${index + 1}`}
+                  onClick={() => closeTerminalTab(tab.key)}
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="rounded p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+          title={m.newTerminal}
+          aria-label={m.newTerminal}
+          disabled={tabs.length >= TERMINALS_PER_SESSION_MAX}
+          onClick={() => addTerminal(sessionKey)}
+        >
+          <Plus className="size-4" />
+        </button>
         {cwd ? <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted" title={cwd}>{cwd}</span> : <span className="flex-1" />}
-        {approved ? (
+        {approved && terminalKey ? (
           <div className="flex items-center gap-0.5">
             <button type="button" className="rounded p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50" title={m.share} disabled={sharing || state === 'connecting'} onClick={() => void share()}>{shared ? <Check className="size-3.5 text-success" /> : <Share2 className="size-3.5" />}</button>
             <button type="button" className="rounded p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg" title={m.clear} onClick={() => terminalRef.current?.clear()}><Eraser className="size-3.5" /></button>
@@ -266,7 +355,15 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
         ) : null}
         <button type="button" className="rounded p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg" title={m.hide} onClick={() => closePanel(sessionKey)}><X className="size-3.5" /></button>
       </header>
-      {!sessionId && state === 'connecting' ? (
+      {!terminalKey ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-fg-muted">
+          <span>{m.noTerminals}</span>
+          <Button variant="secondary" onClick={() => addTerminal(sessionKey)}>
+            <Plus className="size-4" />
+            {m.newTerminal}
+          </Button>
+        </div>
+      ) : !sessionId && state === 'connecting' ? (
         <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">{m.preparing}</div>
       ) : sessionId && !approved ? (
         <div className="flex flex-1 items-center justify-center p-6">
