@@ -181,16 +181,21 @@ export {
   updateSessionStats,
 } from './session-repository.js';
 export {
-  appendCompactionBoundary,
+  appendCompactionBoundaryIfUnchanged,
   appendTranscriptEntry,
   listCompactionBoundaries,
   loadLlmMessagesForSession,
   loadTranscriptHistoryRowsForSession,
   loadTranscriptRows,
   loadTranscriptRowsForSession,
+  loadCompactionSourceSnapshot,
   paginateTranscriptMessages,
   replaceTranscriptRows,
   restoreBeforeCompactionBoundary,
+  searchSessionTranscript,
+  type CompactionSourceSnapshot,
+  type SessionTranscriptRecallMatch,
+  type TranscriptSourceEntry,
 } from './transcript-repository.js';
 export {
   deleteNoteRecord,

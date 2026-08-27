@@ -16,7 +16,7 @@ import {
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import {
   requireXopcDatabase,
-  appendCompactionBoundary,
+  appendCompactionBoundaryIfUnchanged,
   appendTranscriptEntry,
   deleteSessionRecord,
   ensureSessionRecord,
@@ -28,6 +28,7 @@ import {
   listSessionMetadata,
   listSessionsByAgent,
   loadLlmMessagesForSession,
+  loadCompactionSourceSnapshot,
   paginateTranscriptMessages,
   loadTranscriptHistoryRowsForSession,
   loadTranscriptRowsForSession,
@@ -35,6 +36,7 @@ import {
   replaceTranscriptRows,
   resetSessionRecord,
   restoreBeforeCompactionBoundary,
+  searchSessionTranscript,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
@@ -120,6 +122,7 @@ export class SessionStore {
   private window: SlidingWindow;
   private compactor: SessionCompactor;
   private compactionHooks: SessionCompactionHooks = {};
+  private readonly compactionTails = new Map<string, Promise<void>>();
 
   constructor(
     private options: SessionStoreOptions,
@@ -161,6 +164,24 @@ export class SessionStore {
 
   private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {
     return fn();
+  }
+
+  private async runCompactionExclusive<T>(sessionKey: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.compactionTails.get(sessionKey) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.compactionTails.set(sessionKey, current);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (this.compactionTails.get(sessionKey) === current) {
+        this.compactionTails.delete(sessionKey);
+      }
+    }
   }
 
   async initialize(): Promise<void> {
@@ -508,12 +529,13 @@ export class SessionStore {
           plannerVersion: row.plannerVersion,
           summaryModelRef: row.summaryModelRef,
           qualityAudit: row.qualityAudit,
+          handover: row.handover,
+          audit: row.audit,
           summary: row.summary,
           messages: row.messages,
           firstKeptIndex: row.firstKeptIndex,
           tokensBefore: row.tokensBefore,
           tokensAfter: row.tokensAfter,
-          restoredFromCompactionId: row.restoredFromCompactionId,
         });
       }
     }
@@ -706,23 +728,32 @@ export class SessionStore {
 
   async applyCompaction(
     key: string,
-    messages: AgentMessage[],
     result: CompactionResult,
+    expectedSnapshot = loadCompactionSourceSnapshot(key),
   ): Promise<AgentMessage[]> {
-    const compacted = this.compactor.applyCompaction(messages, result);
+    if (!expectedSnapshot) throw new Error(`Session not found: ${key}`);
+    if (!result.compacted || !result.handover || !result.audit) {
+      throw new Error('Cannot persist an incomplete compaction result');
+    }
+    const compacted = result.messages;
     return this.runStoreMutation(async () => {
-      appendCompactionBoundary(key, {
+      const appended = appendCompactionBoundaryIfUnchanged(key, expectedSnapshot, {
         type: 'compaction',
         at: new Date().toISOString(),
-        plannerVersion: result.plannerVersion ?? 2,
+        plannerVersion: 3,
         summaryModelRef: result.summaryModelRef ?? 'unknown',
         qualityAudit: result.qualityAudit ?? 'disabled',
+        handover: result.handover,
+        audit: result.audit,
         summary: result.summary,
         messages: compacted,
         firstKeptIndex: result.firstKeptIndex,
         tokensBefore: result.tokensBefore,
         tokensAfter: result.tokensAfter,
       });
+      if (!appended) {
+        throw new Error(`Session changed while compaction was running: ${key}`);
+      }
       log.info(
         { key, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter, keptMessages: compacted.length },
         'Session compacted',
@@ -740,23 +771,27 @@ export class SessionStore {
     force?: boolean,
     executionOptions?: CompactionExecutionOptions,
   ): Promise<CompactionResult> {
-    const tokenCount = this.estimateTokens(messages);
-    await this.runCompactionHook('before', {
-      sessionKey: key,
-      messageCount: messages.length,
-      tokenCount,
-    });
-    const result = await this.compactor.compact(messages, model, instructions, force, executionOptions);
-    if (result.compacted) {
-      const compacted = await this.applyCompaction(key, messages, result);
-      await this.runCompactionHook('after', {
+    return this.runCompactionExclusive(key, async () => {
+      const snapshot = loadCompactionSourceSnapshot(key);
+      if (!snapshot) throw new Error(`Session not found: ${key}`);
+      const tokenCount = this.estimateTokens(messages);
+      await this.runCompactionHook('before', {
         sessionKey: key,
-        messageCount: compacted.length,
-        tokenCount: result.tokensAfter,
-        compactedCount: Math.max(0, Math.min(messages.length, result.firstKeptIndex)),
+        messageCount: messages.length,
+        tokenCount,
       });
-    }
-    return result;
+      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, executionOptions);
+      if (result.compacted) {
+        const compacted = await this.applyCompaction(key, result, snapshot);
+        await this.runCompactionHook('after', {
+          sessionKey: key,
+          messageCount: compacted.length,
+          tokenCount: result.tokensAfter,
+          compactedCount: Math.max(0, Math.min(messages.length, result.firstKeptIndex)),
+        });
+      }
+      return result;
+    });
   }
 
   async getCompactionStats(key: string) {
@@ -766,6 +801,12 @@ export class SessionStore {
       compactionCount: boundaries.length,
       totalTokensBefore: boundaries.reduce((sum, boundary) => sum + boundary.tokensBefore, 0),
       totalTokensAfter: boundaries.reduce((sum, boundary) => sum + boundary.tokensAfter, 0),
+      auditPassedCount: boundaries.filter((boundary) => boundary.audit.status === 'passed').length,
+      auditDegradedCount: boundaries.filter((boundary) => boundary.audit.status === 'degraded').length,
+      auditMissingItemsFound: boundaries.reduce(
+        (sum, boundary) => sum + boundary.audit.missingItemsFound,
+        0,
+      ),
       lastCompactionAt: boundaries[0]?.createdAt,
     };
   }
@@ -801,6 +842,11 @@ export class SessionStore {
     return this.convertMessages(
       messages.filter((m) => this.extractTextContent(this.messageContent(m)).toLowerCase().includes(q)),
     );
+  }
+
+  recallSession(key: string, query: string, options?: { limit?: number; beforeSeq?: number }) {
+    requireXopcDatabase();
+    return searchSessionTranscript(key, query, options);
   }
 
   async exportSession(key: string, format: ExportFormat): Promise<string> {

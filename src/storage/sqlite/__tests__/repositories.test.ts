@@ -29,12 +29,14 @@ import {
   restoreBeforeCompactionBoundary,
   setSessionConfig,
   appendTranscriptEntry,
-  appendCompactionBoundary,
+  appendCompactionBoundaryIfUnchanged,
+  loadCompactionSourceSnapshot,
   appendMemoryTraceEvent,
   paginateTranscriptMessages,
   listMemoryRecords,
   listMemoryTraceEvents,
   searchMemoryRecords,
+  searchSessionTranscript,
   setMemoryTurnFeedback,
   summarizeMemoryRecallFeedback,
   upsertMemoryRecord,
@@ -377,31 +379,109 @@ describe('sqlite repositories', () => {
     expect(getSessionConfig(SESSION_KEY)?.userContextMode).toBe('enabled');
   });
 
-  it('restores context by appending a logical compaction boundary', () => {
+  it('restores context by truncating the selected compaction boundary and later rows', () => {
     ensureSessionRecord(SESSION_KEY, CWD);
     replaceTranscriptRows(SESSION_KEY, [userMessage('keep'), assistantMessage('me')]);
-    const boundary = appendCompactionBoundary(SESSION_KEY, {
+    const snapshot = loadCompactionSourceSnapshot(SESSION_KEY)!;
+    const boundary = appendCompactionBoundaryIfUnchanged(SESSION_KEY, snapshot, {
       type: 'compaction',
       at: new Date().toISOString(),
-      plannerVersion: 2,
+      plannerVersion: 3,
       summaryModelRef: 'test/model',
       qualityAudit: 'passed',
+      handover: { version: 1, sourceThroughSeq: 2, items: [] },
+      audit: { status: 'passed', mode: 'structural', missingItemsFound: 0, repaired: false },
       summary: 'condensed',
       messages: [userMessage('summary')],
       firstKeptIndex: 2,
       tokensBefore: 100,
       tokensAfter: 10,
     });
+    expect(boundary).not.toBeNull();
     appendTranscriptEntry(SESSION_KEY, userMessage('later'));
 
-    restoreBeforeCompactionBoundary(SESSION_KEY, boundary.entry_id);
+    restoreBeforeCompactionBoundary(SESSION_KEY, boundary!.entry_id);
 
     const llm = loadLlmMessagesForSession(SESSION_KEY);
     expect(llm).toHaveLength(2);
     expect((llm[0] as AgentMessage).content).toBe('keep');
     const boundaries = listCompactionBoundaries(SESSION_KEY);
-    expect(boundaries).toHaveLength(2);
-    expect(boundaries[0]?.restoredFromCompactionId).toBe(boundary.entry_id);
+    expect(boundaries).toHaveLength(0);
+  });
+
+  it('captures transcript source metadata and rejects a stale compaction boundary', () => {
+    ensureSessionRecord(SESSION_KEY, CWD);
+    const first = appendTranscriptEntry(SESSION_KEY, userMessage('first'));
+    const snapshot = loadCompactionSourceSnapshot(SESSION_KEY);
+
+    expect(snapshot).toMatchObject({ lastSeq: 1 });
+    expect(snapshot?.entries[0]).toMatchObject({
+      entryId: first.entry_id,
+      seq: 1,
+      row: { role: 'user', content: 'first' },
+    });
+
+    appendTranscriptEntry(SESSION_KEY, assistantMessage('concurrent'));
+    const stale = appendCompactionBoundaryIfUnchanged(SESSION_KEY, snapshot!, {
+      type: 'compaction',
+      at: new Date().toISOString(),
+      plannerVersion: 3,
+      summaryModelRef: 'test/model',
+      qualityAudit: 'passed',
+      handover: { version: 1, sourceThroughSeq: 1, items: [] },
+      audit: { status: 'passed', mode: 'structural', missingItemsFound: 0, repaired: false },
+      summary: 'stale',
+      messages: [userMessage('summary')],
+      firstKeptIndex: 1,
+      tokensBefore: 10,
+      tokensAfter: 5,
+    });
+
+    expect(stale).toBeNull();
+    expect(listCompactionBoundaries(SESSION_KEY)).toHaveLength(0);
+  });
+
+  it('recalls authoritative raw turns older than a compaction boundary', () => {
+    ensureSessionRecord(SESSION_KEY, CWD);
+    appendTranscriptEntry(SESSION_KEY, userMessage('The exact launch code is ORBIT-7429.'));
+    appendTranscriptEntry(SESSION_KEY, assistantMessage('Acknowledged.'));
+    appendTranscriptEntry(SESSION_KEY, {
+      role: 'assistant',
+      content: [{
+        type: 'toolCall',
+        id: 'tool-1',
+        name: 'deployctl',
+        arguments: { artifact: 'release-candidate-17' },
+      }],
+    } as unknown as AgentMessage);
+    const snapshot = loadCompactionSourceSnapshot(SESSION_KEY)!;
+    appendCompactionBoundaryIfUnchanged(SESSION_KEY, snapshot, {
+      type: 'compaction',
+      at: new Date().toISOString(),
+      plannerVersion: 3,
+      summaryModelRef: 'test/model',
+      qualityAudit: 'passed',
+      handover: { version: 1, sourceThroughSeq: 1, items: [] },
+      audit: { status: 'passed', mode: 'structural', missingItemsFound: 0, repaired: false },
+      summary: 'A launch code was discussed.',
+      messages: [userMessage('summary without the exact code')],
+      firstKeptIndex: 1,
+      tokensBefore: 20,
+      tokensAfter: 5,
+    });
+    appendTranscriptEntry(SESSION_KEY, userMessage('Continue.'));
+
+    const matches = searchSessionTranscript(SESSION_KEY, 'ORBIT-7429');
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      seq: 1,
+      role: 'user',
+      content: 'The exact launch code is ORBIT-7429.',
+    });
+    const toolArgument = searchSessionTranscript(SESSION_KEY, 'release-candidate-17');
+    expect(toolArgument).toHaveLength(1);
+    expect(toolArgument[0]?.content).toContain('deployctl');
   });
 
   it('computes global session stats', () => {
