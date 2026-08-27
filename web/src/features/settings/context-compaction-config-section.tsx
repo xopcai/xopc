@@ -218,6 +218,7 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
       summaryTimeoutMs: t.summaryTimeoutSeconds,
       summaryRetries: t.summaryRetries,
       qualityGuard: t.qualityGuard,
+      gapAudit: t.gapAudit,
       model: t.summaryModel,
       minToolResultKeepChars: t.minToolResultKeepChars,
       maxActiveTranscriptBytes: t.maxActiveTranscriptMb,
@@ -477,6 +478,12 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
             hint={t.qualityGuardHint}
             checked={form.qualityGuard}
             onChange={(qualityGuard) => update({ qualityGuard })}
+          />
+          <CheckSetting
+            label={t.gapAudit}
+            hint={t.gapAuditHint}
+            checked={form.gapAudit}
+            onChange={(gapAudit) => update({ gapAudit })}
           />
         </div>
 

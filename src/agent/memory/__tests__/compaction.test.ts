@@ -7,6 +7,8 @@ vi.mock('../../../providers/model-call.js', async (importOriginal) => {
 });
 
 import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
+import type { XopcTranscriptCompactionEntry } from '../../../session/session-context-for-llm.js';
+import type { TranscriptSourceEntry } from '../../../storage/sqlite/transcript-repository.js';
 import { SessionCompactor } from '../compaction.js';
 
 const model = {
@@ -14,21 +16,6 @@ const model = {
   id: 'summary-model',
   contextWindow: 128_000,
 } as never;
-
-const structuredSummary = `## Decisions
-The user is married, has two children, and is changing jobs.
-## Pending user asks
-None
-## Open TODOs
-None
-## Constraints and rules
-None
-## Exact identifiers
-None
-## Tool operations and results
-None
-## Recent state
-The job change is ongoing.`;
 
 function conversation(): AgentMessage[] {
   return Array.from({ length: 12 }, (_, index) => ({
@@ -40,77 +27,299 @@ function conversation(): AgentMessage[] {
   })) as AgentMessage[];
 }
 
+function sources(rows: AgentMessage[], startSeq = 1): TranscriptSourceEntry[] {
+  return rows.map((row, index) => ({
+    entryId: `entry-${startSeq + index}`,
+    seq: startSeq + index,
+    createdAt: startSeq + index,
+    row,
+  }));
+}
+
+function ledger(seq = 1, text = 'The job change is ongoing.'): string {
+  return JSON.stringify({
+    items: [{
+      kind: 'current_state',
+      text,
+      status: 'active',
+      sourceSeqs: [seq],
+      identifiers: [],
+    }],
+  });
+}
+
+function completion(text: string) {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+  } as never;
+}
+
 describe('SessionCompactor', () => {
   beforeEach(() => {
     vi.mocked(completeWithResolvedCredentials).mockReset();
   });
 
-  it('uses the resolved session model and preserves complete recent turns', async () => {
-    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
-      role: 'assistant',
-      content: [{ type: 'text', text: structuredSummary }],
-    } as never);
+  it('builds a cited handover from raw transcript entries and preserves recent turns', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce(completion(ledger()));
     const compactor = new SessionCompactor({
       minMessagesBeforeCompact: 4,
       keepRecentTokens: 1,
       recentTurnsPreserve: 1,
     });
 
-    const result = await compactor.compact(conversation(), model, undefined, true);
-    const compacted = compactor.applyCompaction(conversation(), result);
+    const result = await compactor.compact(sources(conversation()), model, undefined, true);
 
-    expect(result).toMatchObject({ compacted: true, firstKeptIndex: 10 });
-    expect(compacted).toHaveLength(3);
-    expect(compacted.slice(1).map((message) => message.content)).toEqual(['message-10', 'message-11']);
-    expect(JSON.stringify(compacted[0]?.content)).toContain('<conversation_summary>');
+    expect(result).toMatchObject({ compacted: true, plannerVersion: 3, firstKeptIndex: 10 });
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages.slice(1).map((message) => message.content)).toEqual(['message-10', 'message-11']);
+    expect(JSON.stringify(result.messages[0]?.content)).toContain('<conversation_summary>');
+    expect(result.handover?.items[0]?.sources).toEqual([{ entryId: 'entry-1', seq: 1 }]);
     expect(completeWithResolvedCredentials).toHaveBeenCalledWith(
       model,
       expect.objectContaining({
+        systemPrompt: expect.stringContaining('Return JSON only'),
         messages: [expect.objectContaining({
-          content: expect.stringContaining('I am married, have two children, and am changing jobs.'),
+          content: expect.stringContaining('<record seq="1" entry_id="entry-1">'),
         })],
       }),
       expect.objectContaining({ maxTokens: 2000, reasoning: 'low' }),
     );
   });
 
-  it('does not persist derived droppable context in the compacted snapshot', async () => {
-    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
-      role: 'assistant',
-      content: [{ type: 'text', text: structuredSummary }],
-    } as never);
+  it('preserves old facts across repeated compactions while reading only new raw deltas', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(JSON.stringify({
+        items: [
+          { kind: 'decision', text: 'Keep the existing plan.', status: 'active', sourceSeqs: [1], identifiers: [] },
+          { kind: 'current_state', text: 'New work is underway.', status: 'active', sourceSeqs: [14], identifiers: [] },
+        ],
+      })))
+      .mockResolvedValueOnce(completion(JSON.stringify({
+        items: [
+          { kind: 'decision', text: 'Keep the existing plan.', status: 'active', sourceSeqs: [1], identifiers: [] },
+          { kind: 'current_state', text: 'New work is underway.', status: 'active', sourceSeqs: [14], identifiers: [] },
+          { kind: 'next_action', text: 'Finish the final verification.', status: 'active', sourceSeqs: [19], identifiers: [] },
+        ],
+      })));
+    const original = sources(conversation());
+    const boundary: XopcTranscriptCompactionEntry = {
+      type: 'compaction',
+      at: '2026-08-27T00:00:00.000Z',
+      baseSeq: 12,
+      plannerVersion: 3,
+      summaryModelRef: 'test/model',
+      qualityAudit: 'passed',
+      handover: {
+        version: 1,
+        sourceThroughSeq: 10,
+        items: [{
+          id: 'old-item',
+          kind: 'decision',
+          text: 'Keep the existing plan.',
+          status: 'active',
+          sources: [{ entryId: 'entry-1', seq: 1 }],
+          identifiers: [],
+        }],
+      },
+      audit: { status: 'passed', mode: 'structural', missingItemsFound: 0, repaired: false },
+      summary: 'old summary',
+      messages: [],
+      firstKeptIndex: 10,
+      tokensBefore: 100,
+      tokensAfter: 20,
+    };
+    const entries: TranscriptSourceEntry[] = [
+      ...original,
+      { entryId: 'boundary-13', seq: 13, createdAt: 13, row: boundary },
+      ...sources([
+        { role: 'user', content: 'new work' } as AgentMessage,
+        { role: 'assistant', content: 'started' } as AgentMessage,
+        { role: 'user', content: 'latest question' } as AgentMessage,
+        { role: 'assistant', content: 'latest answer' } as AgentMessage,
+      ], 14),
+    ];
     const compactor = new SessionCompactor({
-      minMessagesBeforeCompact: 4,
       keepRecentTokens: 1,
       recentTurnsPreserve: 1,
+      gapAudit: false,
     });
-    const messages = [
-      ...conversation(),
-      { role: 'user', content: '<coding_context>derived</coding_context>', timestamp: 13, droppable: true },
-    ] as AgentMessage[];
 
-    const result = await compactor.compact(messages, model, undefined, true);
-    const compacted = compactor.applyCompaction(messages, result);
+    const result = await compactor.compact(entries, model, undefined, true);
+    const prompt = String(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[1].messages[0]?.content);
 
-    expect(JSON.stringify(compacted)).not.toContain('<coding_context>');
+    expect(prompt).toContain('Keep the existing plan.');
+    expect(prompt).toContain('<record seq="14"');
+    expect(prompt).not.toContain('<record seq="1"');
+    expect(result.handover?.previousBoundaryId).toBe('boundary-13');
+
+    const secondBoundary: XopcTranscriptCompactionEntry = {
+      type: 'compaction',
+      at: '2026-08-27T01:00:00.000Z',
+      baseSeq: 17,
+      plannerVersion: 3,
+      summaryModelRef: result.summaryModelRef!,
+      qualityAudit: result.qualityAudit!,
+      handover: result.handover!,
+      audit: result.audit!,
+      summary: result.summary,
+      messages: result.messages,
+      firstKeptIndex: result.firstKeptIndex,
+      tokensBefore: result.tokensBefore,
+      tokensAfter: result.tokensAfter,
+    };
+    const thirdPassEntries: TranscriptSourceEntry[] = [
+      ...entries,
+      { entryId: 'boundary-18', seq: 18, createdAt: 18, row: secondBoundary },
+      ...sources([
+        { role: 'user', content: 'final verification' } as AgentMessage,
+        { role: 'assistant', content: 'in progress' } as AgentMessage,
+        { role: 'user', content: 'latest follow-up' } as AgentMessage,
+        { role: 'assistant', content: 'noted' } as AgentMessage,
+      ], 19),
+    ];
+
+    const repeated = await compactor.compact(thirdPassEntries, model, undefined, true);
+    const repeatedPrompt = String(
+      vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[0]?.content,
+    );
+
+    expect(repeatedPrompt).toContain('Keep the existing plan.');
+    expect(repeatedPrompt).toContain('<record seq="19"');
+    expect(repeatedPrompt).not.toContain('<record seq="1"');
+    expect(repeated.summary).toContain('Keep the existing plan.');
+    expect(repeated.summary).toContain('Finish the final verification.');
   });
 
-  it('fails closed when summary generation fails', async () => {
-    vi.mocked(completeWithResolvedCredentials).mockRejectedValueOnce(new Error('model unavailable'));
+  it('repairs invalid JSON or unavailable source citations once', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(ledger(999)))
+      .mockResolvedValueOnce(completion(ledger(1)));
     const compactor = new SessionCompactor({
       minMessagesBeforeCompact: 4,
       keepRecentTokens: 1,
       recentTurnsPreserve: 1,
       summaryRetries: 0,
-      qualityGuard: false,
     });
 
-    await expect(compactor.compact(conversation(), model, undefined, true)).rejects.toThrow(
-      'model unavailable',
-    );
+    const result = await compactor.compact(sources(conversation()), model, undefined, true);
+
+    expect(result.audit).toMatchObject({ status: 'passed', repaired: true });
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[0]?.content)
+      .toContain('Allowed source sequence numbers');
   });
 
-  it('preserves the provider error when a completion returns no content', async () => {
+  it('runs an independent gap audit for risky source records and merges omissions', async () => {
+    const rows = conversation();
+    rows[0] = { role: 'user', content: 'Please update /tmp/release-plan.md before replying.' } as AgentMessage;
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(ledger(1, 'The release plan is being updated.')))
+      .mockResolvedValueOnce(completion(JSON.stringify({
+        items: [
+          {
+            kind: 'current_state',
+            text: 'The release plan is being updated.',
+            status: 'active',
+            sourceSeqs: [1],
+            identifiers: ['/tmp/release-plan.md'],
+          },
+          {
+            kind: 'pending_user_ask',
+            text: 'Update /tmp/release-plan.md before replying.',
+            status: 'active',
+            sourceSeqs: [1],
+            identifiers: ['/tmp/release-plan.md'],
+          },
+        ],
+      })));
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(sources(rows), model, undefined, true);
+
+    expect(result.audit).toMatchObject({
+      status: 'passed',
+      mode: 'risk',
+      missingItemsFound: 1,
+      repaired: true,
+      auditModelRef: 'test/summary-model',
+    });
+    expect(result.summary).toContain('Update /tmp/release-plan.md before replying.');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a valid handover and marks the audit degraded when the second pass fails', async () => {
+    const rows = conversation();
+    rows[0] = { role: 'user', content: 'Inspect /tmp/failure.log.' } as AgentMessage;
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(ledger()))
+      .mockRejectedValueOnce(new Error('auditor unavailable'));
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(sources(rows), model, undefined, true);
+
+    expect(result.compacted).toBe(true);
+    expect(result.audit).toMatchObject({ status: 'degraded', mode: 'risk' });
+    expect(result.summary).toContain('The job change is ongoing.');
+  });
+
+  it('processes every fragment of an oversized record without a middle omission', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockImplementation(async () => completion(ledger(1)));
+    const entries = sources([
+      { role: 'user', content: `start-${'x'.repeat(22_000)}-end` } as AgentMessage,
+      { role: 'assistant', content: 'ack' } as AgentMessage,
+      { role: 'user', content: 'keep this turn' } as AgentMessage,
+      { role: 'assistant', content: 'kept' } as AgentMessage,
+    ]);
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 2,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryChunkTokens: 2_000,
+    });
+
+    const result = await compactor.compact(entries, model, undefined, true);
+    const prompts = vi.mocked(completeWithResolvedCredentials).mock.calls
+      .map((call) => String(call[1].messages[0]?.content));
+
+    expect(result.compacted).toBe(true);
+    expect(prompts.length).toBeGreaterThan(2);
+    expect(prompts.join('')).toContain('start-');
+    expect(prompts.join('')).toContain('-end');
+    expect(prompts.join('')).not.toContain('omitted');
+  });
+
+  it('fails closed and then uses a fallback model when configured', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockRejectedValueOnce(new Error('primary unavailable'))
+      .mockResolvedValueOnce(completion(ledger()));
+    const fallback = { provider: 'fallback', id: 'handover-model', contextWindow: 128_000 } as never;
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(sources(conversation()), model, undefined, true, {
+      fallbackModels: [fallback],
+    });
+
+    expect(result.compacted).toBe(true);
+    expect(result.summaryModelRef).toBe('fallback/handover-model');
+  });
+
+  it('preserves provider errors when generation fails', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
       role: 'assistant',
       content: [],
@@ -126,118 +335,14 @@ describe('SessionCompactor', () => {
       qualityGuard: false,
     });
 
-    await expect(compactor.compact(conversation(), model, undefined, true)).rejects.toThrow(
-      'Compaction model request failed (stopReason=error, rawStopReason=unknown, contentTypes=none, outputTokens=0, reasoningTokens=unknown): OAuth token expired',
+    await expect(compactor.compact(sources(conversation()), model, undefined, true)).rejects.toThrow(
+      'OAuth token expired',
     );
   });
 
-  it('uses a fallback model when the primary summarizer fails', async () => {
-    vi.mocked(completeWithResolvedCredentials)
-      .mockRejectedValueOnce(new Error('primary unavailable'))
-      .mockResolvedValueOnce({
-        role: 'assistant',
-        content: [{ type: 'text', text: structuredSummary }],
-      } as never);
-    const fallback = { provider: 'fallback', id: 'summary-fallback', contextWindow: 128_000 } as never;
-    const compactor = new SessionCompactor({
-      minMessagesBeforeCompact: 4,
-      keepRecentTokens: 1,
-      recentTurnsPreserve: 1,
-      summaryRetries: 0,
-    });
-
-    const result = await compactor.compact(conversation(), model, undefined, true, {
-      fallbackModels: [fallback],
-    });
-
-    expect(result.compacted).toBe(true);
-    expect(completeWithResolvedCredentials).toHaveBeenNthCalledWith(
-      2,
-      fallback,
-      expect.anything(),
-      expect.anything(),
-    );
-  });
-
-  it('repairs a summary that fails the structured quality contract', async () => {
-    vi.mocked(completeWithResolvedCredentials)
-      .mockResolvedValueOnce({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'A short but unstructured summary.' }],
-      } as never)
-      .mockResolvedValueOnce({
-        role: 'assistant',
-        content: [{ type: 'text', text: structuredSummary }],
-      } as never);
-    const compactor = new SessionCompactor({
-      minMessagesBeforeCompact: 4,
-      keepRecentTokens: 1,
-      recentTurnsPreserve: 1,
-      summaryRetries: 0,
-    });
-
-    const result = await compactor.compact(conversation(), model, undefined, true);
-
-    expect(result.summary).toBe(structuredSummary);
-    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1]).toEqual(
-      expect.objectContaining({
-        systemPrompt: expect.stringContaining('durable continuation summary'),
-        messages: [expect.objectContaining({ content: expect.stringContaining('Quality failures:') })],
-      }),
-    );
-    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]).toEqual(
-      expect.objectContaining({ sessionId: 'xopc-compaction-v3' }),
-    );
-  });
-
-  it('deterministically completes the quality contract when model repair remains incomplete', async () => {
-    const incompleteRepair = `## Decisions
-Keep the benchmark results.
-## Pending user asks
-None
-## Open TODOs
-None
-## Constraints and rules
-None
-## Exact identifiers
-None`;
-    vi.mocked(completeWithResolvedCredentials)
-      .mockResolvedValueOnce({
-        role: 'assistant',
-        content: [{ type: 'text', text: incompleteRepair }],
-      } as never)
-      .mockResolvedValueOnce({
-        role: 'assistant',
-        content: [{ type: 'text', text: incompleteRepair }],
-      } as never);
-    const messages = conversation();
-    messages[0] = {
-      role: 'user',
-      content: 'Inspect /run/123/logs before deploying release/1.2.',
-      timestamp: 1,
-    } as AgentMessage;
-    const compactor = new SessionCompactor({
-      minMessagesBeforeCompact: 4,
-      keepRecentTokens: 1,
-      recentTurnsPreserve: 1,
-      summaryRetries: 0,
-    });
-
-    const result = await compactor.compact(messages, model, undefined, true);
-
-    expect(result.summary).toContain('## Tool operations and results\nNone');
-    expect(result.summary).toContain('## Recent state\nNone');
-    expect(result.summary).toContain('- `/run/123/logs`');
-    expect(result.summary).toContain('- `release/1.2`');
-    expect(result.summary).not.toContain('## Exact identifiers\nNone');
-    expect(result.qualityAudit).toBe('passed');
-    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
-  });
-
-  it('refuses to split a single active user/tool turn during forced compaction', async () => {
+  it('refuses to split a single active user and tool turn', async () => {
     const compactor = new SessionCompactor({ minMessagesBeforeCompact: 2 });
-    const messages = [
+    const entries = sources([
       { role: 'user', content: 'Run the tool', timestamp: 1 },
       {
         role: 'assistant',
@@ -252,9 +357,9 @@ None`;
         isError: false,
         timestamp: 3,
       },
-    ] as AgentMessage[];
+    ] as AgentMessage[]);
 
-    const result = await compactor.compact(messages, model, undefined, true);
+    const result = await compactor.compact(entries, model, undefined, true);
 
     expect(result.compacted).toBe(false);
     expect(completeWithResolvedCredentials).not.toHaveBeenCalled();

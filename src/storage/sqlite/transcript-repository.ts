@@ -18,7 +18,29 @@ import {
   type TranscriptEntryRow,
 } from './row-mappers.js';
 import { getCurrentSessionId, readCurrentSessionId } from './session-repository.js';
+import { escapeFts5Query } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+
+export interface TranscriptSourceEntry {
+  entryId: string;
+  seq: number;
+  createdAt: number;
+  row: TranscriptStoredRow;
+}
+
+export interface CompactionSourceSnapshot {
+  sessionId: string;
+  lastSeq: number;
+  entries: TranscriptSourceEntry[];
+}
+
+export interface SessionTranscriptRecallMatch {
+  entryId: string;
+  seq: number;
+  role: string | null;
+  createdAt: number;
+  content: string;
+}
 
 function nextSeq(db: DatabaseSync, sessionId: string): number {
   const row = db
@@ -105,14 +127,18 @@ export function appendTranscriptEntry(
   });
 }
 
-export function appendCompactionBoundary(
+export function appendCompactionBoundaryIfUnchanged(
   sessionKey: string,
+  expected: Pick<CompactionSourceSnapshot, 'sessionId' | 'lastSeq'>,
   row: Omit<XopcTranscriptCompactionEntry, 'baseSeq'>,
-): TranscriptEntryRow {
+): TranscriptEntryRow | null {
   return runSqliteWriteTransaction((db) => {
     const sessionId = readCurrentSessionId(db, sessionKey);
     if (!sessionId) throw new Error(`Session not found: ${sessionKey}`);
-    const boundary = { ...row, baseSeq: nextSeq(db, sessionId) - 1 };
+    if (sessionId !== expected.sessionId) return null;
+    const currentLastSeq = nextSeq(db, sessionId) - 1;
+    if (currentLastSeq !== expected.lastSeq) return null;
+    const boundary = { ...row, baseSeq: expected.lastSeq };
     const inserted = insertEntry(db, { sessionId, sessionKey, row: boundary });
     const now = Date.now();
     db.prepare(
@@ -127,6 +153,91 @@ export function appendCompactionBoundary(
     ).run(boundary.messages.length, boundary.tokensAfter, now, now, now, sessionKey);
     return inserted;
   });
+}
+
+export function loadCompactionSourceSnapshot(sessionKey: string): CompactionSourceSnapshot | null {
+  const db = getSqliteDatabase();
+  const sessionId = getCurrentSessionId(sessionKey);
+  if (!sessionId) return null;
+  const rows = db
+    .prepare(
+      `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
+       FROM transcript_entries
+       WHERE session_id = ?
+       ORDER BY seq ASC`,
+    )
+    .all(sessionId) as TranscriptEntryRow[];
+  return {
+    sessionId,
+    lastSeq: rows.at(-1)?.seq ?? 0,
+    entries: rows.map((entry) => ({
+      entryId: entry.entry_id,
+      seq: entry.seq,
+      createdAt: entry.created_at,
+      row: transcriptEntryRowToStoredRow(entry),
+    })),
+  };
+}
+
+export function searchSessionTranscript(
+  sessionKey: string,
+  query: string,
+  options: { limit?: number; beforeSeq?: number } = {},
+): SessionTranscriptRecallMatch[] {
+  const sessionId = getCurrentSessionId(sessionKey);
+  const normalized = query.trim();
+  if (!sessionId || !normalized) return [];
+  const limit = Math.min(20, Math.max(1, options.limit ?? 8));
+  const beforeSeq = options.beforeSeq ?? Number.MAX_SAFE_INTEGER;
+  const db = getSqliteDatabase();
+  const ftsRows = db
+    .prepare(
+      `SELECT e.entry_id, e.seq, e.role, e.created_at, f.content
+       FROM transcript_fts f
+       JOIN transcript_entries e
+         ON e.session_id = f.session_id AND e.entry_id = f.entry_id
+       WHERE transcript_fts MATCH ?
+         AND f.session_id = ?
+         AND e.entry_kind <> 'compaction'
+         AND e.seq < ?
+       ORDER BY bm25(transcript_fts), e.seq DESC
+       LIMIT ?`,
+    )
+    .all(escapeFts5Query(normalized), sessionId, beforeSeq, limit);
+  const escapedLike = normalized.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+  const literalRows = db
+    .prepare(
+      `SELECT entry_id, seq, role, created_at, payload_json AS content
+       FROM transcript_entries
+       WHERE session_id = ?
+         AND entry_kind <> 'compaction'
+         AND seq < ?
+         AND payload_json LIKE ? ESCAPE '\\'
+       ORDER BY seq DESC
+       LIMIT ?`,
+    )
+    .all(sessionId, beforeSeq, `%${escapedLike}%`, limit);
+  const seen = new Set<string>();
+  return [...ftsRows, ...literalRows]
+    .flatMap((row) => {
+      const result = row as {
+        entry_id: string;
+        seq: number;
+        role: string | null;
+        created_at: number;
+        content: string;
+      };
+      if (seen.has(result.entry_id)) return [];
+      seen.add(result.entry_id);
+      return [{
+        entryId: result.entry_id,
+        seq: result.seq,
+        role: result.role,
+        createdAt: result.created_at,
+        content: result.content,
+      }];
+    })
+    .slice(0, limit);
 }
 
 export function loadTranscriptRowsForSession(sessionKey: string): TranscriptStoredRow[] {
@@ -334,7 +445,7 @@ export function listCompactionBoundaries(sessionKey: string): CompactionBoundary
       tokensBefore: payload.tokensBefore,
       tokensAfter: payload.tokensAfter,
       summaryPreview: payload.summary.slice(0, 500),
-      restoredFromCompactionId: payload.restoredFromCompactionId,
+      audit: payload.audit,
     };
   });
 }
@@ -350,47 +461,42 @@ export function restoreBeforeCompactionBoundary(sessionKey: string, compactionId
       )
       .get(sessionId, compactionId) as { seq: number } | undefined;
     if (!boundary) throw new Error(`Compaction boundary not found: ${compactionId}`);
-    const entries = db
+    const removedEntryIds = db
+      .prepare(
+        `SELECT entry_id
+         FROM transcript_entries
+         WHERE session_id = ? AND seq >= ?`,
+      )
+      .all(sessionId, boundary.seq) as Array<{ entry_id: string }>;
+    for (const entry of removedEntryIds) {
+      db.prepare(`DELETE FROM transcript_fts WHERE entry_id = ?`).run(entry.entry_id);
+    }
+    db.prepare(`DELETE FROM transcript_entries WHERE session_id = ? AND seq >= ?`)
+      .run(sessionId, boundary.seq);
+    const remainingEntries = db
       .prepare(
         `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
          FROM transcript_entries
-         WHERE session_id = ? AND seq < ?
+         WHERE session_id = ?
          ORDER BY seq ASC`,
       )
-      .all(sessionId, boundary.seq) as TranscriptEntryRow[];
-    const restoredMessages = buildSessionContextForLlm(entries.map(transcriptEntryRowToStoredRow));
+      .all(sessionId) as TranscriptEntryRow[];
+    const restoredMessages = buildSessionContextForLlm(remainingEntries.map(transcriptEntryRowToStoredRow));
     if (restoredMessages.length === 0) {
       throw new Error(`No restorable context exists before compaction boundary: ${compactionId}`);
     }
-    const current = db.prepare(`SELECT estimated_tokens FROM sessions WHERE session_key = ?`)
-      .get(sessionKey) as { estimated_tokens: number };
     const tokensAfter = estimateTokensFromMessages(restoredMessages);
-    const baseSeq = nextSeq(db, sessionId) - 1;
-    const row: XopcTranscriptCompactionEntry = {
-      type: 'compaction',
-      at: new Date().toISOString(),
-      baseSeq,
-      plannerVersion: 2,
-      summaryModelRef: 'logical-restore',
-      qualityAudit: 'disabled',
-      summary: `Restored the effective context that existed before compaction boundary ${compactionId}.`,
-      messages: restoredMessages,
-      firstKeptIndex: 0,
-      tokensBefore: current.estimated_tokens,
-      tokensAfter,
-      restoredFromCompactionId: compactionId,
-    };
-    insertEntry(db, { sessionId, sessionKey, row });
+    const compactedCount = remainingEntries.filter((entry) => entry.entry_kind === 'compaction').length;
     const now = Date.now();
     db.prepare(
       `UPDATE sessions SET
         message_count = ?,
         estimated_tokens = ?,
-        compacted_count = compacted_count + 1,
+        compacted_count = ?,
         updated_at = ?,
         last_accessed_at = ?,
         last_interaction_at = ?
       WHERE session_key = ?`,
-    ).run(restoredMessages.length, tokensAfter, now, now, now, sessionKey);
+    ).run(restoredMessages.length, tokensAfter, compactedCount, now, now, now, sessionKey);
   });
 }

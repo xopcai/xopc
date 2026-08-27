@@ -10,6 +10,8 @@ import {
   type CompactionResult,
 } from '../memory/compaction.js';
 import type { SessionStore } from '../../session/store.js';
+import type { XopcTranscriptCompactionEntry } from '../../session/session-context-for-llm.js';
+import type { TranscriptSourceEntry } from '../../storage/sqlite/transcript-repository.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 
 export interface EmbeddedTranscriptRuntime {
@@ -62,6 +64,7 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
 
   private readonly sessionManager: SessionManager;
   private readonly compactor = new SessionCompactor();
+  private readonly compactionRows = new Map<string, XopcTranscriptCompactionEntry>();
   private baselineEntryCount = 0;
 
   constructor(params: {
@@ -112,17 +115,25 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
   }
 
   async compact(
-    messages: AgentMessage[],
+    _messages: AgentMessage[],
     model: Model<Api>,
     instructions?: string,
     force?: boolean,
     options?: CompactionExecutionOptions,
   ): Promise<CompactionResult> {
-    const result = await this.compactor.compact(messages, model, instructions, force, options);
-    if (!result.compacted) return result;
+    const branch = this.sessionManager.getBranch();
+    const sources = branch.flatMap((entry, index): TranscriptSourceEntry[] => {
+      const compaction = this.compactionRows.get(entry.id);
+      if (compaction) {
+        return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(), row: compaction }];
+      }
+      if (entry.type !== 'message') return [];
+      return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(), row: entry.message }];
+    });
+    const result = await this.compactor.compact(sources, model, instructions, force, options);
+    if (!result.compacted || !result.handover || !result.audit) return result;
 
-    const messageEntries = this.sessionManager
-      .getBranch()
+    const messageEntries = branch
       .filter((entry): entry is Extract<typeof entry, { type: 'message' }> => entry.type === 'message');
     const firstKept = messageEntries[result.firstKeptIndex];
     if (!firstKept) return { ...result, compacted: false };
@@ -137,6 +148,24 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
         qualityAudit: result.qualityAudit,
       },
     );
+    const boundary = this.sessionManager.getBranch().at(-1);
+    if (boundary) {
+      this.compactionRows.set(boundary.id, {
+        type: 'compaction',
+        at: new Date().toISOString(),
+        baseSeq: branch.length,
+        plannerVersion: 3,
+        summaryModelRef: result.summaryModelRef ?? 'unknown',
+        qualityAudit: result.qualityAudit ?? 'disabled',
+        handover: result.handover,
+        audit: result.audit,
+        summary: result.summary,
+        messages: result.messages,
+        firstKeptIndex: result.firstKeptIndex,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+      });
+    }
     return result;
   }
 }

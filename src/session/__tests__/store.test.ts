@@ -12,6 +12,22 @@ import {
 } from '../../storage/sqlite/index.js';
 import { SessionStore } from '../store.js';
 
+function compactionResult(messages: any[], summary: string, firstKeptIndex: number, tokensBefore: number, tokensAfter: number) {
+  return {
+    summary,
+    messages: [{ role: 'user' as const, content: summary }, ...messages.slice(firstKeptIndex)],
+    firstKeptIndex,
+    tokensBefore,
+    tokensAfter,
+    compacted: true,
+    plannerVersion: 3 as const,
+    summaryModelRef: 'test/model',
+    qualityAudit: 'passed' as const,
+    handover: { version: 1 as const, sourceThroughSeq: firstKeptIndex, items: [] },
+    audit: { status: 'passed' as const, mode: 'structural' as const, missingItemsFound: 0, repaired: false },
+  };
+}
+
 function directMetadata(agentId: string, source: string, peerId: string) {
   return {
     sourceChannel: source,
@@ -425,14 +441,8 @@ describe('SessionStore', () => {
         timestamp: Date.now() + i,
       }));
       await store.saveMessages(key, msgs);
-      const result = {
-        summary: 'condensed topic',
-        firstKeptIndex: 8,
-        tokensBefore: 9000,
-        tokensAfter: 1200,
-        compacted: true,
-      };
-      await store.applyCompaction(key, msgs, result);
+      const result = compactionResult(msgs, 'condensed topic', 8, 9000, 1200);
+      await store.applyCompaction(key, result);
       const doc = await store.loadTranscriptDocument(key);
       expect(doc?.compactions).toHaveLength(1);
       expect(doc?.compactions?.[0]).toMatchObject({
@@ -443,6 +453,12 @@ describe('SessionStore', () => {
       });
       expect(doc?.messages.filter((row) => (row as { role?: string }).role === 'user')).toHaveLength(12);
       expect(await store.loadMessages(key)).toHaveLength(5);
+      await expect(store.getCompactionStats(key)).resolves.toMatchObject({
+        compactionCount: 1,
+        auditPassedCount: 1,
+        auditDegradedCount: 0,
+        auditMissingItemsFound: 0,
+      });
     });
 
     it('emits unified before and after hooks around a successful compaction', async () => {
@@ -456,11 +472,7 @@ describe('SessionStore', () => {
       const after = vi.fn();
       store.setCompactionHooks({ before, after });
       vi.spyOn((store as any).compactor, 'compact').mockResolvedValue({
-        summary: 'condensed topic',
-        firstKeptIndex: 8,
-        tokensBefore: 9_000,
-        tokensAfter: 1_200,
-        compacted: true,
+        ...compactionResult(messages, 'condensed topic', 8, 9_000, 1_200),
       });
 
       await store.compact(key, messages, { provider: 'test', id: 'model' } as any);
@@ -485,14 +497,8 @@ describe('SessionStore', () => {
         timestamp: Date.now() + i,
       }));
       await store.saveMessages(key, msgs);
-      const result = {
-        summary: 's',
-        firstKeptIndex: 8,
-        tokensBefore: 8000,
-        tokensAfter: 500,
-        compacted: true,
-      };
-      await store.applyCompaction(key, msgs, result);
+      const result = compactionResult(msgs, 's', 8, 8000, 500);
+      await store.applyCompaction(key, result);
 
       const afterCompact = await store.loadMessages(key);
       const displayAfterCompact = await store.get(key);
@@ -524,13 +530,10 @@ describe('SessionStore', () => {
         { role: 'assistant', content: 'a2' },
       ];
       await store.saveMessages(key, messages);
-      await store.applyCompaction(key, messages, {
-        summary: 'includes deleted turn',
-        firstKeptIndex: 6,
-        tokensBefore: 8000,
-        tokensAfter: 500,
-        compacted: true,
-      });
+      await store.applyCompaction(
+        key,
+        compactionResult(messages, 'includes deleted turn', 6, 8000, 500),
+      );
 
       const deleted = await store.deleteUserRound(key, 1);
       const rows = await store.loadTranscriptRows(key);

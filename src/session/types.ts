@@ -1,5 +1,6 @@
 // Session management types
 
+import type { CompactionAudit } from './compaction-types.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 
 export interface Message {
@@ -190,7 +191,7 @@ export interface SessionExport {
   transcriptRows: TranscriptStoredRow[];
 }
 
-/** Append-only context boundary produced by compaction or logical restoration. */
+/** Append-only context boundary produced by compaction. */
 export interface CompactionBoundarySummary {
   id: string;
   seq: number;
@@ -199,5 +200,5 @@ export interface CompactionBoundarySummary {
   tokensBefore: number;
   tokensAfter: number;
   summaryPreview: string;
-  restoredFromCompactionId?: string;
+  audit: CompactionAudit;
 }
