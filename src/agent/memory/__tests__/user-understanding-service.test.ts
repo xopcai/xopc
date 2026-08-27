@@ -6,11 +6,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase, createUnderstanding, getUnderstanding, listUnderstandings,
-  openXopcDatabase, resetXopcDatabaseSingletonForTest,
+  getSqliteDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import {
   extractExplicitUnderstandingCandidates, extractHighSignalUnderstandingCandidates, UserUnderstandingService,
 } from '../understanding/service.js';
+import { inferMemorySensitivity, redactSensitiveMemoryText } from '../sensitivity.js';
 
 const BASE_CANDIDATE = {
   confidence: 0.9,
@@ -124,5 +125,28 @@ describe('UserUnderstandingService', () => {
     ], {});
     expect(result).toMatchObject({ proposed: 3, created: 1, rejected: 2 });
     expect(listUnderstandings()).toHaveLength(1);
+  });
+
+  it('does not persist evidence for a sensitive-only turn', async () => {
+    const result = await new UserUnderstandingService().reviewTurn({
+      userContent: 'Please remember that my bank account is 12345678.',
+      assistantContent: 'Understood.',
+      sessionKey: 'webchat:sensitive',
+      turnId: 'turn-sensitive',
+    });
+
+    expect(result).toMatchObject({ proposed: 1, created: 0, rejected: 1 });
+    expect(result.sourceItemId).toBeUndefined();
+    const row = getSqliteDatabase().prepare('SELECT COUNT(*) AS count FROM context_evidence').get() as { count: number };
+    expect(row.count).toBe(0);
+  });
+
+  it('classifies and redacts regulated identifiers before persistence', () => {
+    const content = 'My bank account is 12345678 and 密码：secret-value';
+    expect(inferMemorySensitivity(content)).toBe('secret');
+    const redacted = redactSensitiveMemoryText(content);
+    expect(redacted).not.toContain('12345678');
+    expect(redacted).not.toContain('secret-value');
+    expect(redacted).toContain('[REDACTED]');
   });
 });

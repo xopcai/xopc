@@ -10,6 +10,7 @@ import { BuiltinMemoryProvider } from '../builtin-provider.js';
 import {
   closeXopcDatabase,
   getUnderstanding,
+  listMemoryTraceEvents,
   listUnderstandingEvidence,
   listUnderstandings,
   openXopcDatabase,
@@ -32,6 +33,25 @@ describe('MemoryManager', () => {
     const ids = mgr.providersList.map((p) => p.id);
     expect(ids).toContain('local');
     expect(mgr.providersList.find((p) => p.id === 'local')?.capabilities.write).toBe(true);
+  });
+
+  it('stores a fingerprint instead of the raw retrieval query in traces', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-memory-trace-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    try {
+      const mgr = new MemoryManager();
+      mgr.addProvider(new StubMemoryProvider());
+      await mgr.search({ query: 'password=hunter2', scope: { sessionKey: 'session-private' } });
+
+      const request = listMemoryTraceEvents({ phase: 'search' })[0]?.request as { query?: string };
+      expect(request.query).toMatch(/^sha256:[a-f0-9]{24};length=16$/);
+      expect(request.query).not.toContain('hunter2');
+    } finally {
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
   });
 
   it('writes proposed memories as candidates outside default recall', async () => {

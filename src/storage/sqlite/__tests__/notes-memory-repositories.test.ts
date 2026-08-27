@@ -126,4 +126,21 @@ describe('sqlite notes and memory repositories', () => {
 
     expect(hits.map((hit) => hit.record.id)).toContain('memory-zh-preference');
   });
+
+  it('prioritizes exact technical identifiers over broad word matches', () => {
+    upsertMemoryRecord({
+      id: 'memory-release-exact', providerId: 'local', kind: 'project_context', sourceAgentId: 'main',
+      workspaceId: '/workspace', content: 'release-42 requires a staged database migration.',
+    });
+    upsertMemoryRecord({
+      id: 'memory-release-general', providerId: 'local', kind: 'project_context', sourceAgentId: 'main',
+      workspaceId: '/workspace', content: 'Releases require verification.',
+    });
+
+    const hits = searchMemoryRecords({
+      workspaceId: '/workspace', query: 'What happened in release-42?', maxResults: 5,
+    });
+
+    expect(hits[0]?.record.id).toBe('memory-release-exact');
+  });
 });

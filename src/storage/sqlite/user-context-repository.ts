@@ -11,6 +11,8 @@ import {
   type UserProfile,
   type UserUnderstanding,
 } from '../../user-context/domain.js';
+import { retrievalQueryAuditValue } from '../../retrieval/audit.js';
+import { buildFts5SearchQuery, fts5RankToScore } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 type UnderstandingRow = {
@@ -226,6 +228,33 @@ export function listUnderstandings(
   const placeholders = statuses.map(() => '?').join(', ');
   return (db.prepare(`${UNDERSTANDING_SELECT} WHERE u.principal_id = ? AND u.status IN (${placeholders}) ORDER BY u.updated_at DESC`)
     .all(principalId, ...statuses) as UnderstandingRow[]).map(understandingFromRow);
+}
+
+export function searchActiveUnderstandings(
+  query: string,
+  limit = 50,
+): Array<{ understanding: UserUnderstanding; score: number }> {
+  const ftsQuery = buildFts5SearchQuery(query);
+  if (!ftsQuery) return [];
+  const boundedLimit = Math.max(1, Math.min(200, Math.floor(limit)));
+  const rows = getSqliteDatabase().prepare(`
+    SELECT u.*, v.statement, v.payload_json, bm25(user_understanding_fts) AS search_rank
+    FROM user_understanding_fts
+    JOIN user_understandings u
+      ON u.understanding_id = user_understanding_fts.understanding_id
+    JOIN user_understanding_versions v
+      ON v.version_id = u.current_version_id
+    WHERE user_understanding_fts MATCH ? AND u.principal_id = ? AND u.status = 'active'
+    ORDER BY search_rank
+    LIMIT ?
+  `).all(ftsQuery, USER_CONTEXT_PRINCIPAL_ID, boundedLimit) as Array<UnderstandingRow & { search_rank: number }>;
+  if (!rows.length) return [];
+  const bestRank = Math.min(...rows.map((row) => row.search_rank));
+  const worstRank = Math.max(...rows.map((row) => row.search_rank));
+  return rows.map((row) => ({
+    understanding: understandingFromRow(row),
+    score: fts5RankToScore(row.search_rank, bestRank, worstRank),
+  }));
 }
 
 export function reviseUnderstanding(
@@ -469,6 +498,7 @@ export function recordContextRun(input: {
   items: PersonalizationItem[];
   principalId?: string;
 }): string {
+  const auditedQuery = retrievalQueryAuditValue(input.query);
   const existing = getSqliteDatabase().prepare('SELECT context_run_id FROM context_runs WHERE turn_id = ?')
     .get(input.turnId) as { context_run_id: string } | undefined;
   const runId = existing?.context_run_id ?? randomUUID();
@@ -476,13 +506,13 @@ export function recordContextRun(input: {
     if (existing) {
       db.prepare(`UPDATE context_runs SET principal_id = ?, session_key = ?, query = ?, budget = ?, duration_ms = ?
         WHERE context_run_id = ?`).run(input.principalId ?? USER_CONTEXT_PRINCIPAL_ID,
-        input.sessionKey, input.query, input.budget, input.durationMs, runId);
+        input.sessionKey, auditedQuery, input.budget, input.durationMs, runId);
       db.prepare('DELETE FROM context_run_items WHERE context_run_id = ?').run(runId);
     } else {
       db.prepare(`INSERT INTO context_runs (
         context_run_id, principal_id, turn_id, session_key, query, budget, duration_ms, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(runId, input.principalId ?? USER_CONTEXT_PRINCIPAL_ID,
-        input.turnId, input.sessionKey, input.query, input.budget, input.durationMs, Date.now());
+        input.turnId, input.sessionKey, auditedQuery, input.budget, input.durationMs, Date.now());
     }
     const insert = db.prepare(`INSERT INTO context_run_items (
       context_run_id, object_type, object_id, version_id, decision, reason, content_snapshot,

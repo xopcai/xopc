@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { appendMemoryTraceEvent, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
+import { retrievalQueryAuditValue } from '../../retrieval/audit.js';
 import { createLogger } from '../../utils/logger.js';
 import type { MemoryRuntime, MemorySource } from '../../agent-runtime/memory-runtime.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
@@ -605,6 +606,7 @@ function writeTargetForRecord(request: MemoryWriteRequest): 'understanding' | 'w
 function sanitizeTraceRequest(request: unknown): unknown {
   if (!request || typeof request !== 'object') return request;
   const copy = { ...(request as Record<string, unknown>) };
+  if (typeof copy.query === 'string') copy.query = retrievalQueryAuditValue(copy.query);
   if (typeof copy.content === 'string' && copy.content.length > 500) {
     copy.content = `${copy.content.slice(0, 500)}…`;
   }

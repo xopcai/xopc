@@ -57,11 +57,11 @@ export class BackgroundReviewCoordinator {
   }
 
   /**
-   * Called before the main `agent.prompt` for a user turn — bumps the memory
+   * Called before the main `agent.prompt` for a user turn — bumps the review
    * counter and arms a review when the cadence interval is hit.
    */
   beginUserTurn(sessionKey: string): void {
-    const cfg = resolveBackgroundReviewSettings(this.opts.getConfig(), sessionKey);
+    const cfg = resolveBackgroundReviewSettings(this.opts.getConfig());
     if (!cfg.enabled) return;
 
     const state = this.ensureState(sessionKey);
@@ -106,7 +106,7 @@ export class BackgroundReviewCoordinator {
   }
 
   private resolveReviewInterval(settings: BackgroundReviewSettings, state: NudgeState): number {
-    if (!settings.adaptiveCadence || !settings.agentId) return settings.reviewIntervalTurns;
+    if (!settings.adaptiveCadence) return settings.reviewIntervalTurns;
     const now = Date.now();
     if (
       state.adaptiveIntervalTurns != null
@@ -121,7 +121,6 @@ export class BackgroundReviewCoordinator {
       state.adaptiveIntervalExpiresAt = now + 5 * 60_000;
       if (decision.slowed) {
         log.debug({
-          agentId: settings.agentId,
           baseIntervalTurns: decision.baseIntervalTurns,
           effectiveIntervalTurns: decision.effectiveIntervalTurns,
           reasons: decision.reasons,
@@ -136,7 +135,7 @@ export class BackgroundReviewCoordinator {
   private async runReviewIfNeeded(ctx: ScheduleReviewContext): Promise<void> {
     const state = this.states.get(ctx.sessionKey);
     if (!state) return;
-    const settings = resolveBackgroundReviewSettings(this.opts.getConfig(), ctx.sessionKey);
+    const settings = resolveBackgroundReviewSettings(this.opts.getConfig());
     if (!settings.enabled) return;
     if (isAssistantTurnAborted(ctx.agent) || isAssistantTurnFailed(ctx.agent)) return;
     if (!ctx.lastAssistantText?.trim()) return;

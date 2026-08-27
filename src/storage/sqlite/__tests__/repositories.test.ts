@@ -663,4 +663,49 @@ describe('sqlite repositories', () => {
     expect(summarizeMemoryRecallFeedback({ sourceAgentId: 'main' }).map((summary) => summary.recordId))
       .not.toContain('research-memory-record');
   });
+
+  it('quarantines memory records after correctness or sensitivity feedback', () => {
+    upsertMemoryRecord({
+      id: 'unsafe-memory', providerId: 'local', kind: 'project_context', sourceAgentId: 'main',
+      content: 'An unverified deployment detail.',
+    });
+    appendMemoryTraceEvent({
+      sourceAgentId: 'main', sessionKey: SESSION_KEY, phase: 'inject', turnId: 'turn-unsafe',
+      providerId: 'local', selectedRecordIds: ['unsafe-memory'],
+    });
+
+    setMemoryTurnFeedback({
+      turnId: 'turn-unsafe', rating: 'not_helpful',
+      records: [{ recordId: 'unsafe-memory', rating: 'incorrect' }],
+    });
+
+    expect(getMemoryRecord('unsafe-memory')?.status).toBe('needs_review');
+    expect(searchMemoryRecords({ query: 'deployment detail', workspaceId: CWD })
+      .map((result) => result.record.id)).not.toContain('unsafe-memory');
+  });
+
+  it('uses repeated record feedback as a bounded retrieval signal', () => {
+    for (const id of ['feedback-helpful', 'feedback-irrelevant']) {
+      upsertMemoryRecord({
+        id, providerId: 'local', kind: 'project_context', sourceAgentId: 'main',
+        workspaceId: CWD, content: 'Alpha release uses the deployment checklist.',
+      });
+    }
+    for (let index = 0; index < 3; index += 1) {
+      for (const [recordId, rating] of [
+        ['feedback-helpful', 'helpful'], ['feedback-irrelevant', 'irrelevant'],
+      ] as const) {
+        const turnId = `turn-${recordId}-${index}`;
+        appendMemoryTraceEvent({
+          sourceAgentId: 'main', sessionKey: SESSION_KEY, phase: 'inject', turnId,
+          providerId: 'local', selectedRecordIds: [recordId],
+        });
+        setMemoryTurnFeedback({ turnId, rating, records: [{ recordId, rating }] });
+      }
+    }
+
+    const results = searchMemoryRecords({ query: 'alpha deployment checklist', workspaceId: CWD });
+    expect(results.findIndex((item) => item.record.id === 'feedback-helpful'))
+      .toBeLessThan(results.findIndex((item) => item.record.id === 'feedback-irrelevant'));
+  });
 });

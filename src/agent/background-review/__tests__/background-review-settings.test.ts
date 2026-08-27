@@ -20,7 +20,7 @@ describe('resolveBackgroundReviewSettings', () => {
     });
   });
 
-  it('enables low-frequency understanding reviews for write-capable memory', () => {
+  it('enables low-frequency understanding reviews independently of generic memory writes', () => {
     expect(resolveBackgroundReviewSettings(config({
       mode: 'confirmWrite',
       sources: ['session'],
@@ -33,7 +33,7 @@ describe('resolveBackgroundReviewSettings', () => {
     });
   });
 
-  it('respects global overrides and memory access mode', () => {
+  it('respects understanding overrides without coupling to generic memory access mode', () => {
     const overridden = resolveBackgroundReviewSettings(config({
       mode: 'auto',
       sources: ['session'],
@@ -48,7 +48,7 @@ describe('resolveBackgroundReviewSettings', () => {
     expect(resolveBackgroundReviewSettings(config({
       mode: 'readOnly',
       sources: ['session'],
-    })).enabled).toBe(false);
+    })).enabled).toBe(true);
     expect(resolveBackgroundReviewSettings(config({
       mode: 'confirmWrite',
       sources: ['session'],
