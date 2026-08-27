@@ -29,17 +29,6 @@ describe('patchSessionAgentConfigView', () => {
     expect(slice?.model).toBe('openai/gpt-4o');
     expect(slice?.thinkingLevel).toBe('high');
     expect(slice?.reasoningLevel).toBe('on');
-    expect(slice?.workingDirectoryLocked).toBe(false);
-  });
-
-  it('writes working directory lock state onto the target session slice', () => {
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
-    patchSessionAgentConfigView(sessionKey, {
-      model: 'openai/gpt-4o',
-      workingDirectoryLocked: true,
-    });
-
-    expect(useChatSessionStore.getState().sessions[sessionKey]?.workingDirectoryLocked).toBe(true);
   });
 
   it('uses explicit session key so metadata survives focused-key lag after /chat/new', () => {

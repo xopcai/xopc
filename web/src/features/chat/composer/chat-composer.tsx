@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
@@ -11,7 +11,6 @@ import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
 import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
-import type { SessionManager } from '@/features/chat/session/session-manager';
 import { AtMentionPicker } from '@/features/chat/palette/at-mention-picker';
 import { CommandPalette } from '@/features/chat/palette/command-palette';
 import {
@@ -24,7 +23,6 @@ import {
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
-import type { Message } from '@/features/chat/messages/messages.types';
 import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome-suggestions';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
@@ -55,8 +53,6 @@ export const ChatComposer = memo(function ChatComposer({
   sending,
   streaming,
   sessionKey,
-  sessionManager,
-  canSelectWorkingDirectory,
   thinkingLevel,
   modelSupportsThinking,
   onThinkingChange,
@@ -81,7 +77,6 @@ export const ChatComposer = memo(function ChatComposer({
   showModelSelector,
   onModelChange,
   modelDisabled,
-  contextUsageMessages,
   onChatAgentChange,
   currentAgentId,
 }: {
@@ -89,17 +84,13 @@ export const ChatComposer = memo(function ChatComposer({
   sending: boolean;
   streaming: boolean;
   sessionKey: string | null;
-  sessionManager: SessionManager;
   welcomeDraftSeed?: { id: number; text: string } | null;
   welcomeSuggestion?: WelcomeSuggestionSelection | null;
   onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
-  canSelectWorkingDirectory: boolean;
   sessionModel: string;
   showModelSelector: boolean;
   onModelChange: (modelId: string) => void;
   modelDisabled: boolean;
-  /** Messages in the active session (for context-window ring). */
-  contextUsageMessages: readonly Message[];
   thinkingLevel: string;
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
@@ -284,8 +275,6 @@ export const ChatComposer = memo(function ChatComposer({
   });
 
   shouldSyncSelectionRef.current = pickers.shouldSyncSelection;
-
-  const composerDraftChars = useMemo(() => editor.value.length, [editor.value]);
 
   const voice = useComposerVoiceInput({
     disabled,
@@ -652,12 +641,9 @@ export const ChatComposer = memo(function ChatComposer({
         </div>
 
         <ComposerToolbar
-          sessionKey={sessionKey}
-          sessionManager={sessionManager}
           disabled={disabled}
           sending={sending}
           streaming={streaming}
-          canSelectWorkingDirectory={canSelectWorkingDirectory}
           runBusy={runBusyState}
           chat={m.chat}
           hasDraft={hasDraft}
@@ -678,8 +664,6 @@ export const ChatComposer = memo(function ChatComposer({
           showModelSelector={showModelSelector}
           onModelChange={onModelChange}
           modelDisabled={modelDisabled}
-          contextUsageMessages={contextUsageMessages}
-          composerDraftChars={composerDraftChars}
         />
       </div>
       <ReviewLauncherDialog
