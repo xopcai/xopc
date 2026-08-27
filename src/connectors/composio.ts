@@ -18,7 +18,10 @@ import {
   connectorDefinitionFromComposioToolkit,
 } from './composio-catalog.js';
 import { connectorIdentityKey } from './connector-identity.js';
-import { ComposioSessionsAdapter } from './composio-sessions.js';
+import {
+  ComposioSessionsAdapter,
+  type ComposioToolkitAuthState,
+} from './composio-sessions.js';
 import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
 import type {
   ConnectorConfirmationPolicy,
@@ -198,6 +201,34 @@ function toolkitFromConnectionMetadata(connection: { id: string; metadata: Recor
 
 function normalizeToolkit(toolkit: string): string {
   return toolkit.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '');
+}
+
+export function getConfiguredComposioAuthConfigs(
+  config: Config | undefined,
+  toolkits: string[],
+): Record<string, string> {
+  const requested = new Set(toolkits.map(normalizeToolkit));
+  return Object.values(config?.connectors?.instances ?? {}).reduce<Record<string, string>>((result, record) => {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return result;
+    const row = record as Record<string, unknown>;
+    const runtime = row.runtime;
+    const marker = row.xopcConnector;
+    if (
+      !runtime || typeof runtime !== 'object' || Array.isArray(runtime)
+      || (runtime as Record<string, unknown>).type !== 'composio'
+      || (runtime as Record<string, unknown>).role !== 'toolkit'
+      || typeof (runtime as Record<string, unknown>).toolkit !== 'string'
+      || !marker || typeof marker !== 'object' || Array.isArray(marker)
+    ) return result;
+    const toolkit = normalizeToolkit((runtime as Record<string, string>).toolkit);
+    if (!requested.has(toolkit)) return result;
+    const configValue = (marker as Record<string, unknown>).config;
+    const authConfigId = configValue && typeof configValue === 'object' && !Array.isArray(configValue)
+      ? (configValue as Record<string, unknown>).authConfigId
+      : undefined;
+    if (typeof authConfigId === 'string' && authConfigId.trim()) result[toolkit] = authConfigId.trim();
+    return result;
+  }, {});
 }
 
 export function toolkitFromComposioSlug(slug: string): string | undefined {
@@ -412,6 +443,13 @@ export async function inspectComposioConnectorHealth(toolkit: string, resolver =
   }
 }
 
+export async function getComposioToolkitAuthState(
+  toolkit: string,
+  resolver = new CredentialResolver(),
+): Promise<ComposioToolkitAuthState> {
+  return new ComposioSessionsAdapter({ resolver }).getToolkitAuthState(normalizeToolkit(toolkit));
+}
+
 function classifyComposioHealthError(error: unknown): {
   code: NonNullable<ComposioConnectorHealth['errorCode']>;
   message: string;
@@ -501,11 +539,17 @@ export async function revokeComposioConnection(id: string, resolver = new Creden
   if (connection.accountId) refreshConnectorAccountCurrent(connection.accountId);
 }
 
-export async function startComposioAuthorize(connectorId: string, toolkit: string, resolver = new CredentialResolver()): Promise<{ toolkit: string; connectUrl: string; connectionId?: string }> {
+export async function startComposioAuthorize(
+  connectorId: string,
+  toolkit: string,
+  resolver = new CredentialResolver(),
+  authConfigId?: string,
+): Promise<{ toolkit: string; connectUrl: string; connectionId?: string }> {
   const normalizedToolkit = normalizeToolkit(toolkit);
   const authorization = await new ComposioSessionsAdapter({ resolver }).authorize({
     principalId: LOCAL_OWNER_PRINCIPAL,
     toolkit: normalizedToolkit,
+    authConfigId,
     installationId: getConnectorInstallation(`${connectorId}-${LOCAL_OWNER_PRINCIPAL}`)?.id,
   });
   if (!authorization.connectUrl) {
@@ -523,6 +567,7 @@ export async function listComposioTools(toolkit: string, config?: Config, resolv
   const session = await new ComposioSessionsAdapter({ resolver }).createSession({
     principalId: LOCAL_OWNER_PRINCIPAL,
     toolkits: [normalizedToolkit],
+    authConfigs: getConfiguredComposioAuthConfigs(config, [normalizedToolkit]),
   });
   const payload = await session.search({
     query: `List the available ${normalizedToolkit} actions and their exact input contracts.`,
@@ -583,7 +628,11 @@ export async function executeComposioTool(params: { slug: string; arguments?: un
     ?? listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL, connectorId })
       .find((candidate) => candidate.status === 'active');
   const result = await new ComposioSessionsAdapter({ resolver }).executeWithPolicy({
-    context: { principalId: LOCAL_OWNER_PRINCIPAL, toolkits: [allowed.toolkit] },
+    context: {
+      principalId: LOCAL_OWNER_PRINCIPAL,
+      toolkits: [allowed.toolkit],
+      authConfigs: getConfiguredComposioAuthConfigs(params.config, [allowed.toolkit]),
+    },
     installation,
     connection,
     action: {

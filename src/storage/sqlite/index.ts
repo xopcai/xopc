@@ -88,6 +88,12 @@ export {
   type SessionInputStatus,
 } from './session-input-repository.js';
 export {
+  replaceLatestSessionTurnAndQueueInput,
+  validateLatestSessionTurnTarget,
+  type ReplaceLatestSessionTurnInput,
+  type ReplaceLatestSessionTurnResult,
+} from './session-turn-replace-repository.js';
+export {
   acknowledgeHomeAttention,
   isHomeAttentionAcknowledged,
   type HomeAttentionSubjectKind,

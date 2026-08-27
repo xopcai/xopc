@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionInputCoordinator } from '../session-input-coordinator.js';
 import {
+  appendTranscriptEntry,
   closeXopcDatabase,
+  ensureSessionRecord,
+  loadTranscriptRowsForSession,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
@@ -116,5 +119,46 @@ describe('SessionInputCoordinator', () => {
     complete({ status: 'ok', summary: 'done' });
     await expect(coordinator.waitForCompletion(sessionKey, 'steer-1')).resolves.toBeUndefined();
     expect(coordinator.snapshot(sessionKey).inputs).toEqual([]);
+  });
+
+  it('runs replacement cleanup before atomically queuing the edited latest turn', async () => {
+    ensureSessionRecord(sessionKey, '/tmp/workspace');
+    appendTranscriptEntry(sessionKey, { role: 'user', content: 'old', turnId: 'turn-1' } as never);
+    appendTranscriptEntry(sessionKey, {
+      role: 'assistant',
+      content: 'partial',
+      turnId: 'turn-1',
+    } as never);
+
+    let complete!: (value: { status: string; summary: string }) => void;
+    const execute = vi.fn(() => new Promise<{ status: string; summary: string }>((resolve) => {
+      complete = resolve;
+    }));
+    const beforeReplace = vi.fn(async () => {});
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute,
+      prepareAttachments: async (_key, attachments) => attachments,
+      steer: async () => false,
+      emit: () => {},
+    });
+
+    const result = await coordinator.replaceLatestTurn({
+      sessionKey,
+      targetTurnId: 'turn-1',
+      clientMessageId: 'edited-client',
+      delivery: 'next',
+      content: 'edited',
+      origin,
+    }, beforeReplace);
+
+    expect(result.ok).toBe(true);
+    expect(beforeReplace).toHaveBeenCalledOnce();
+    expect(loadTranscriptRowsForSession(sessionKey)).toEqual([]);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute.mock.calls[0]?.[0]).toMatchObject({ content: 'edited' });
+
+    complete({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
   });
 });

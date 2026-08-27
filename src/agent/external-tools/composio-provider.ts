@@ -6,6 +6,7 @@ import { connectorArgumentsHash, connectorArgumentsPreview } from '../../connect
 import { getConnectorDefinition } from '../../connectors/catalog.js';
 import { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
 import {
+  getConfiguredComposioAuthConfigs,
   getComposioToolkitScope,
   isComposioActionAllowedByCatalog,
   scopeForComposioAction,
@@ -67,7 +68,7 @@ function connectorPrincipalForSession(sessionKey: string | undefined): {
   };
 }
 
-type InstalledComposioToolkit = { connectorId: string; toolkit: string };
+type InstalledComposioToolkit = { connectorId: string; toolkit: string; authConfigId?: string };
 
 function installedConfigToolkits(config: Config | undefined): InstalledComposioToolkit[] {
   return Object.values(config?.connectors?.instances ?? {}).flatMap((record) => {
@@ -91,6 +92,11 @@ function installedConfigToolkits(config: Config | undefined): InstalledComposioT
     return [{
       connectorId: markerRecord.connectorId,
       toolkit: (runtime as Record<string, string>).toolkit,
+      ...(markerRecord.config && typeof markerRecord.config === 'object' && !Array.isArray(markerRecord.config)
+        && typeof (markerRecord.config as Record<string, unknown>).authConfigId === 'string'
+        && ((markerRecord.config as Record<string, unknown>).authConfigId as string).trim()
+        ? { authConfigId: ((markerRecord.config as Record<string, unknown>).authConfigId as string).trim() }
+        : {}),
     }];
   });
 }
@@ -201,6 +207,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const session = await this.adapter.createSession({
       principalId: available.principalId,
       toolkits,
+      authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), toolkits),
     });
     const result = await session.search({ query, toolkits });
     const schemas = result && typeof result === 'object' && !Array.isArray(result)
@@ -298,6 +305,8 @@ export class ComposioToolProvider implements ExternalToolProvider {
       const authorization = await this.adapter.authorize({
         principalId: available.principalId,
         toolkit,
+        authConfigId: installedConfigToolkits(this.deps.getConfig())
+          .find((item) => item.connectorId === resolved.installation.connectorId)?.authConfigId,
         installationId: resolved.installation.id,
         alias: typeof executionArgs.alias === 'string' ? executionArgs.alias : undefined,
       });
@@ -342,7 +351,11 @@ export class ComposioToolProvider implements ExternalToolProvider {
       if (!confirmed) return textResult('The connector approval is not approved, has expired, or was already used.');
     }
     const result = await this.adapter.executeWithPolicy({
-      context: { principalId: available.principalId, toolkits: [toolkit] },
+      context: {
+        principalId: available.principalId,
+        toolkits: [toolkit],
+        authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), [toolkit]),
+      },
       installation: resolved.installation,
       connection,
       action,

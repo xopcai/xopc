@@ -157,6 +157,7 @@ registerConnectorRuntimeAdapter({
       config,
       definition,
       definition.runtime.role === 'toolkit' ? { scope: 'read' } : {},
+      definition.runtime.role === 'toolkit' ? { config: input.config ?? {} } : {},
     );
     if (definition.runtime.role === 'toolkit' && isXopcDatabaseOpen()) {
       const installationId = `${definition.id}-local-owner`;
@@ -181,6 +182,20 @@ registerConnectorRuntimeAdapter({
     if (definition.runtime.role === 'toolkit' && isXopcDatabaseOpen()) {
       deleteConnectorInstallation(`${definition.id}-local-owner`);
     }
+  },
+  update({ config, definition, input, instanceId }) {
+    if (definition.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') {
+      throw new Error(`Invalid Composio toolkit definition: ${definition.id}`);
+    }
+    const record = config.connectors?.instances?.[instanceId];
+    const marker = record?.xopcConnector;
+    if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
+      throw new Error(`Connector instance not found: ${instanceId}`);
+    }
+    const markerRecord = marker as Record<string, unknown>;
+    if (markerRecord.managed !== true) throw new Error(`Connector instance not found: ${instanceId}`);
+    record.xopcConnector = { ...markerRecord, config: input.config ?? {} };
+    return installedInstance(config, instanceId, definition.id);
   },
 });
 

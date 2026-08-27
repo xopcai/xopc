@@ -3,7 +3,7 @@ import type { Hono } from 'hono';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
-import { submitSessionInput } from './session-input-handler.js';
+import { replaceLatestSessionTurn, submitSessionInput } from './session-input-handler.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, chatRateLimitMiddleware } = deps;
@@ -33,6 +33,12 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
   authenticated.post('/api/sessions/:sessionKey/inputs', chatRateLimitMiddleware, async (c) => {
     const sessionKey = (c.req.param('sessionKey') ?? '').trim();
     return submitSessionInput(c, deps, sessionKey);
+  });
+
+  authenticated.post('/api/sessions/:sessionKey/turns/:turnId/replace', chatRateLimitMiddleware, async (c) => {
+    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+    const turnId = (c.req.param('turnId') ?? '').trim();
+    return replaceLatestSessionTurn(c, deps, sessionKey, turnId);
   });
 
   authenticated.patch('/api/sessions/:sessionKey/inputs/:inputId', chatRateLimitMiddleware, async (c) => {

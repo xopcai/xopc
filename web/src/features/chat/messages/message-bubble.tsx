@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -12,7 +12,10 @@ import type {
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
-import { extractUserMessagePlainText } from '@/features/chat/messages/user-message-plain-text';
+import {
+  extractUserMessagePlainText,
+  messageAttachmentsToWire,
+} from '@/features/chat/messages/user-message-plain-text';
 import { imageBlockToMessageAttachment } from '@/features/chat/messages/assistant-message-artifacts';
 import {
   getAssistantCopyMarkdown,
@@ -84,12 +87,14 @@ export const MessageBubble = memo(function MessageBubble({
   onRetryUserMessageRound,
   userMessageCanRetry = false,
   deleteRoundDisabled = false,
+  onSaveAssistantAsNote,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
   readonly = false,
   density = 'normal',
   suppressAssistantActions = false,
   onEditUserMessage,
+  userMessageCanEdit = true,
   responseFeedbackEnabled = true,
 }: {
   message: Message;
@@ -109,6 +114,8 @@ export const MessageBubble = memo(function MessageBubble({
   userMessageCanRetry?: boolean;
   /** When true, omit delete control (e.g. while sending or streaming). */
   deleteRoundDisabled?: boolean;
+  /** Create a new Note from this assistant reply. */
+  onSaveAssistantAsNote?: (content: string) => Promise<void> | void;
   /** Append this assistant reply back to the source Note for note-bound chat threads. */
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
@@ -117,7 +124,8 @@ export const MessageBubble = memo(function MessageBubble({
   density?: 'normal' | 'compact';
   /** Hide assistant footer actions while the session is receiving live run updates. */
   suppressAssistantActions?: boolean;
-  onEditUserMessage?: (text: string) => void;
+  onEditUserMessage?: (message: Message, messageIndex: number) => void;
+  userMessageCanEdit?: boolean;
   responseFeedbackEnabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -280,8 +288,8 @@ export const MessageBubble = memo(function MessageBubble({
     return extractUserMessagePlainText(message.content);
   }, [isUser, message.content]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
-  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | null>(null);
-  const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | null>(null);
+  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
+  const [assistantActionBusy, setAssistantActionBusy] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
   const [responseFeedback, setResponseFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [responseFeedbackLoaded, setResponseFeedbackLoaded] = useState(false);
   const [responseFeedbackBusy, setResponseFeedbackBusy] = useState(false);
@@ -322,14 +330,29 @@ export const MessageBubble = memo(function MessageBubble({
     });
   }, [copyMarkdown]);
 
+  const handleSaveAssistantAsNote = useCallback(() => {
+    if (!copyMarkdown || !onSaveAssistantAsNote || assistantActionBusy) return;
+    setAssistantActionBusy('create-note');
+    void Promise.resolve(onSaveAssistantAsNote(copyMarkdown))
+      .then(() => {
+        setAssistantActionFeedback('create-note');
+        window.setTimeout(
+          () => setAssistantActionFeedback((f) => (f === 'create-note' ? null : f)),
+          2000,
+        );
+      })
+      .catch(() => undefined)
+      .finally(() => setAssistantActionBusy(null));
+  }, [assistantActionBusy, copyMarkdown, onSaveAssistantAsNote]);
+
   const handleSaveAssistantToSourceNote = useCallback(() => {
     if (!copyMarkdown || !onSaveAssistantToSourceNote || assistantActionBusy) return;
-    setAssistantActionBusy('save-note');
+    setAssistantActionBusy('save-source-note');
     void Promise.resolve(onSaveAssistantToSourceNote(copyMarkdown))
       .then(() => {
-        setAssistantActionFeedback('save-note');
+        setAssistantActionFeedback('save-source-note');
         window.setTimeout(
-          () => setAssistantActionFeedback((f) => (f === 'save-note' ? null : f)),
+          () => setAssistantActionFeedback((f) => (f === 'save-source-note' ? null : f)),
           2000,
         );
       })
@@ -635,9 +658,15 @@ export const MessageBubble = memo(function MessageBubble({
               <button
                 type="button"
                 className={cn(userMessageFooterAction, 'size-8 px-0')}
-                onClick={() => (onEditUserMessage ?? dispatchFillChatComposer)(userCopyText)}
-                disabled={!userCopyText}
-                title={m.chat.userMessageEdit}
+                onClick={() => {
+                  if (onEditUserMessage && messageIndex != null) {
+                    onEditUserMessage(message, messageIndex);
+                    return;
+                  }
+                  dispatchFillChatComposer(userCopyText, messageAttachmentsToWire(message.attachments));
+                }}
+                disabled={(!userCopyText && !message.attachments?.length) || !userMessageCanEdit}
+                title={userMessageCanEdit ? m.chat.userMessageEdit : m.chat.userMessageEditDisabledHint}
                 aria-label={m.chat.userMessageEdit}
               >
                 <Pencil className="size-3.5" strokeWidth={1.75} aria-hidden />
@@ -701,6 +730,22 @@ export const MessageBubble = memo(function MessageBubble({
                 retry: m.chat.messageReadAloudRetry,
               }}
             />
+            {onSaveAssistantAsNote ? (
+              <button
+                type="button"
+                className={messageActionIconButton}
+                onClick={handleSaveAssistantAsNote}
+                disabled={assistantActionBusy !== null}
+                title={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
+                aria-label={assistantActionFeedback === 'create-note' ? m.chat.messageSavedToNote : m.chat.messageSaveToNote}
+              >
+                {assistantActionFeedback === 'create-note' ? (
+                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <FilePlus2 className="size-4" strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+            ) : null}
             {responseFeedbackEnabled && sessionKey && message.timestamp ? (
               <>
                 <button
@@ -788,14 +833,14 @@ export const MessageBubble = memo(function MessageBubble({
                         onClick={handleSaveAssistantToSourceNote}
                         disabled={!copyMarkdown || assistantActionBusy !== null}
                       >
-                        {assistantActionFeedback === 'save-note' ? (
+                        {assistantActionFeedback === 'save-source-note' ? (
                           <Check className="size-4" strokeWidth={1.75} aria-hidden />
                         ) : (
                           <FileText className="size-4" strokeWidth={1.75} aria-hidden />
                         )}
-                        {assistantActionFeedback === 'save-note'
-                          ? m.chat.messageSavedToNote
-                          : m.chat.messageSaveToNote}
+                        {assistantActionFeedback === 'save-source-note'
+                          ? m.chat.messageSavedToSourceNote
+                          : m.chat.messageSaveToSourceNote}
                       </button>
                     </Popover.Close>
                   ) : null}

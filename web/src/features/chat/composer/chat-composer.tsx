@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { useSearchParams } from 'react-router-dom';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
+import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
@@ -22,6 +23,7 @@ import {
 } from '@/features/chat/palette/command-palette-api';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
+import type { FillChatComposerDetail } from '@/features/chat/composer/fill-composer-dispatch';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
 import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome-suggestions';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
@@ -47,6 +49,28 @@ import {
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
+
+function composerAttachmentFromWire(attachment: WireAttachment): Attachment {
+  const mimeType = attachment.mimeType || 'application/octet-stream';
+  const type: Attachment['type'] = attachment.type === 'voice' || mimeType.startsWith('audio/')
+    ? 'voice'
+    : attachment.type === 'pasted_text'
+      ? 'pasted_text'
+      : mimeType.startsWith('image/')
+        ? 'image'
+        : 'document';
+  return {
+    id: attachment.id,
+    type,
+    name: attachment.name || 'file',
+    mimeType,
+    size: attachment.size ?? 0,
+    content: attachment.data ?? '',
+    data: attachment.data,
+    uri: attachment.uri,
+    durationSeconds: attachment.durationSeconds,
+  };
+}
 
 export const ChatComposer = memo(function ChatComposer({
   disabled,
@@ -79,6 +103,8 @@ export const ChatComposer = memo(function ChatComposer({
   modelDisabled,
   onChatAgentChange,
   currentAgentId,
+  editingUserTurnId,
+  onCancelUserMessageEdit,
 }: {
   disabled: boolean;
   sending: boolean;
@@ -117,6 +143,8 @@ export const ChatComposer = memo(function ChatComposer({
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; the matching agent row in `/` palette gets a "current" badge. */
   currentAgentId?: string;
+  editingUserTurnId?: string | null;
+  onCancelUserMessageEdit?: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -176,9 +204,13 @@ export const ChatComposer = memo(function ChatComposer({
   }, [m.chat.commandPalette, sessionKey, workspaceTrustSaving]);
 
   const att = useComposerAttachments({ chat: m.chat });
-  const onExternalTextReplace = useCallback(() => {
+  const onExternalTextReplace = useCallback((detail?: FillChatComposerDetail) => {
+    if (detail?.attachments) {
+      att.setAttachments(detail.attachments.map(composerAttachmentFromWire));
+      return;
+    }
     att.clearAttachments();
-  }, [att.clearAttachments]);
+  }, [att.clearAttachments, att.setAttachments]);
 
   const onUnavailableSkill = useCallback(
     (item: import('@/features/chat/palette/command-palette.types').PaletteItem) => {
@@ -496,6 +528,19 @@ export const ChatComposer = memo(function ChatComposer({
       ) : null}
 
       <ComposerContextNotice />
+
+      {editingUserTurnId ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge-subtle bg-accent-soft/40 px-4 py-2 text-xs text-fg-muted">
+          <span>{m.chat.userMessageEditing}</span>
+          <button
+            type="button"
+            className="font-medium text-accent-fg hover:underline"
+            onClick={onCancelUserMessageEdit}
+          >
+            {m.chat.userMessageEditCancel}
+          </button>
+        </div>
+      ) : null}
 
       {pendingFollowUps.length > 0 ? (
         <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">

@@ -15,6 +15,7 @@ import { listConnectorInstances } from '../instances.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../setup-secrets.js';
 import {
   canUseComposioAction,
+  getConfiguredComposioAuthConfigs,
   getComposioToolkitScope,
   inspectComposioConnectorHealth,
   setComposioToolkitScope,
@@ -200,7 +201,9 @@ describe('connector install and instances', () => {
     const config = {} as Config;
     const resolver = { resolveApiKey: vi.fn().mockResolvedValue('composio_test') } as unknown as CredentialResolver;
 
-    const instance = await installConnector(config, 'composio-gmail', {}, resolver);
+    const instance = await installConnector(config, 'composio-gmail', {
+      config: { authConfigId: 'ac_gmail' },
+    }, resolver);
 
     expect(instance).toMatchObject({
       instanceId: 'composio-gmail',
@@ -210,8 +213,19 @@ describe('connector install and instances', () => {
     expect(config.connectors?.instances?.['composio-gmail']).toMatchObject({
       runtime: { type: 'composio', toolkit: 'gmail', role: 'toolkit' },
       scope: 'read',
-      xopcConnector: { managed: true, connectorId: 'composio-gmail' },
+      xopcConnector: {
+        managed: true,
+        connectorId: 'composio-gmail',
+        config: { authConfigId: 'ac_gmail' },
+      },
     });
+    expect(instance.config).toEqual({ authConfigId: 'ac_gmail' });
+    expect(getConfiguredComposioAuthConfigs(config, ['gmail'])).toEqual({ gmail: 'ac_gmail' });
+    const updated = updateConnectorConfig(config, instance.instanceId, {
+      config: { authConfigId: 'ac_gmail_next' },
+    });
+    expect(updated.config).toEqual({ authConfigId: 'ac_gmail_next' });
+    expect(getConfiguredComposioAuthConfigs(config, ['gmail'])).toEqual({ gmail: 'ac_gmail_next' });
     expect(getComposioToolkitScope(config, 'gmail')).toBe('read');
     expect(canUseComposioAction(config, 'GMAIL_FETCH_EMAILS').ok).toBe(true);
     expect(canUseComposioAction(config, 'GMAIL_SEND_EMAIL').ok).toBe(false);
