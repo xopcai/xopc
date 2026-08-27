@@ -12,6 +12,10 @@ export interface PcmWavRecorderOptions {
   speechThreshold?: number;
 }
 
+export interface PcmFrameCaptureOptions extends PcmWavRecorderOptions {
+  onSamples: (samples: Float32Array) => void;
+}
+
 export function calculateRmsLevel(samples: Float32Array): number {
   if (samples.length === 0) return 0;
   let sumSquares = 0;
@@ -73,66 +77,180 @@ export function encodePcm16Wav(samples: Float32Array, sampleRate = TARGET_SAMPLE
   return buffer;
 }
 
-export class PcmWavRecorder {
-  private readonly chunks: Float32Array[] = [];
-  private readonly context: AudioContext;
-  private readonly source: MediaStreamAudioSourceNode;
-  private readonly processor: ScriptProcessorNode;
-  private readonly mutedOutput: GainNode;
-  private stopped = false;
+const WORKLET_NAME = 'xopc-pcm-capture';
+const WORKLET_SOURCE = `
+  class XopcPcmCaptureProcessor extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this.buffer = new Float32Array(2048);
+      this.offset = 0;
+      this.port.onmessage = (event) => {
+        if (event.data === 'flush') {
+          this.flush();
+          this.port.postMessage({ type: 'flushed' });
+        }
+      };
+    }
+    flush() {
+      if (!this.offset) return;
+      const samples = this.buffer.slice(0, this.offset);
+      this.offset = 0;
+      this.port.postMessage({ type: 'samples', buffer: samples.buffer }, [samples.buffer]);
+    }
+    process(inputs) {
+      const channel = inputs[0] && inputs[0][0];
+      if (!channel) return true;
+      let sourceOffset = 0;
+      while (sourceOffset < channel.length) {
+        const count = Math.min(channel.length - sourceOffset, this.buffer.length - this.offset);
+        this.buffer.set(channel.subarray(sourceOffset, sourceOffset + count), this.offset);
+        this.offset += count;
+        sourceOffset += count;
+        if (this.offset === this.buffer.length) this.flush();
+      }
+      return true;
+    }
+  }
+  registerProcessor('${WORKLET_NAME}', XopcPcmCaptureProcessor);
+`;
 
-  private constructor(stream: MediaStream, options: PcmWavRecorderOptions = {}) {
-    this.context = new AudioContext();
-    this.source = this.context.createMediaStreamSource(stream);
-    this.processor = this.context.createScriptProcessor(4096, 1, 1);
-    this.mutedOutput = this.context.createGain();
-    this.mutedOutput.gain.value = 0;
-    this.processor.onaudioprocess = (event) => {
-      if (this.stopped) return;
-      const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
-      this.chunks.push(chunk);
-      if (options.onAudioLevel) {
-        const level = calculateRmsLevel(chunk);
-        options.onAudioLevel({
+type CaptureMessage =
+  | { type: 'samples'; buffer: ArrayBuffer }
+  | { type: 'flushed' };
+
+/** Shared AudioWorklet PCM source used by short dictation and long discussions. */
+export class PcmFrameCapture {
+  readonly sampleRate: number;
+  private paused = false;
+  private accepting = true;
+  private stopPromise?: Promise<void>;
+  private flushResolve?: () => void;
+
+  private constructor(
+    private readonly context: AudioContext,
+    private readonly source: MediaStreamAudioSourceNode,
+    private readonly node: AudioWorkletNode,
+    private readonly mutedOutput: GainNode,
+    private readonly options: PcmFrameCaptureOptions,
+  ) {
+    this.sampleRate = context.sampleRate;
+    this.node.port.onmessage = (event: MessageEvent<CaptureMessage>) => {
+      if (event.data.type === 'flushed') {
+        this.flushResolve?.();
+        return;
+      }
+      if (!this.accepting || this.paused) return;
+      const samples = new Float32Array(event.data.buffer);
+      this.options.onSamples(samples);
+      if (this.options.onAudioLevel) {
+        const level = calculateRmsLevel(samples);
+        this.options.onAudioLevel({
           level,
-          speaking: level >= (options.speechThreshold ?? 0.015),
+          speaking: level >= (this.options.speechThreshold ?? 0.015),
         });
       }
     };
-    this.source.connect(this.processor);
-    this.processor.connect(this.mutedOutput);
-    this.mutedOutput.connect(this.context.destination);
   }
 
+  static async start(stream: MediaStream, options: PcmFrameCaptureOptions): Promise<PcmFrameCapture> {
+    if (typeof AudioWorkletNode === 'undefined') {
+      throw new Error('PCM audio recording is not supported in this browser');
+    }
+    const context = new AudioContext();
+    const moduleUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
+    try {
+      await context.audioWorklet.addModule(moduleUrl);
+    } catch (error) {
+      await context.close();
+      throw error;
+    } finally {
+      URL.revokeObjectURL(moduleUrl);
+    }
+    const source = context.createMediaStreamSource(stream);
+    const node = new AudioWorkletNode(context, WORKLET_NAME);
+    const mutedOutput = context.createGain();
+    mutedOutput.gain.value = 0;
+    const capture = new PcmFrameCapture(context, source, node, mutedOutput, options);
+    source.connect(node);
+    node.connect(mutedOutput);
+    mutedOutput.connect(context.destination);
+    await context.resume();
+    return capture;
+  }
+
+  pause(): void {
+    this.paused = true;
+  }
+
+  resume(): void {
+    this.paused = false;
+  }
+
+  stop(): Promise<void> {
+    this.stopPromise ??= this.finish();
+    return this.stopPromise;
+  }
+
+  cancel(): void {
+    if (!this.accepting) return;
+    this.accepting = false;
+    this.flushResolve?.();
+    this.flushResolve = undefined;
+    this.disconnect();
+    void this.context.close();
+  }
+
+  private async finish(): Promise<void> {
+    if (!this.accepting) return;
+    await new Promise<void>((resolve) => {
+      this.flushResolve = resolve;
+      this.node.port.postMessage('flush');
+    });
+    this.flushResolve = undefined;
+    if (!this.accepting) return;
+    this.accepting = false;
+    this.disconnect();
+    await this.context.close();
+  }
+
+  private disconnect(): void {
+    this.node.port.onmessage = null;
+    this.source.disconnect();
+    this.node.disconnect();
+    this.mutedOutput.disconnect();
+  }
+}
+
+export class PcmWavRecorder {
+  private stopped = false;
+
+  private constructor(
+    private readonly capture: PcmFrameCapture,
+    private readonly chunks: Float32Array[],
+  ) {}
+
   static async start(stream: MediaStream, options: PcmWavRecorderOptions = {}): Promise<PcmWavRecorder> {
-    const recorder = new PcmWavRecorder(stream, options);
-    await recorder.context.resume();
-    return recorder;
+    const chunks: Float32Array[] = [];
+    const capture = await PcmFrameCapture.start(stream, {
+      ...options,
+      onSamples: (samples) => chunks.push(samples),
+    });
+    return new PcmWavRecorder(capture, chunks);
   }
 
   async stop(): Promise<Blob> {
     if (this.stopped) return new Blob([], { type: 'audio/wav' });
     this.stopped = true;
-    const sourceRate = this.context.sampleRate;
-    this.disconnect();
-    await this.context.close();
+    await this.capture.stop();
     const merged = mergeChunks(this.chunks);
-    const samples = resamplePcm(merged, sourceRate);
+    const samples = resamplePcm(merged, this.capture.sampleRate);
     return new Blob([encodePcm16Wav(samples)], { type: 'audio/wav' });
   }
 
   cancel(): void {
     if (this.stopped) return;
     this.stopped = true;
-    this.disconnect();
-    void this.context.close();
+    this.capture.cancel();
     this.chunks.length = 0;
-  }
-
-  private disconnect(): void {
-    this.processor.onaudioprocess = null;
-    this.source.disconnect();
-    this.processor.disconnect();
-    this.mutedOutput.disconnect();
   }
 }

@@ -20,6 +20,7 @@ import { operatorScopes } from './middleware/scopes.js';
 import {
   createChatRateLimitMiddleware,
   createChannelRateLimitMiddleware,
+  createMediaRateLimitMiddleware,
   createStrictRateLimitMiddleware,
   createTaskRateLimitMiddleware,
   createXopcCloudPollRateLimitMiddleware,
@@ -192,7 +193,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const DEFAULT_API_BODY_MAX = 1 * 1024 * 1024;
   const SKILL_UPLOAD_BODY_MAX = 10 * 1024 * 1024;
   const NOTE_MEDIA_BODY_MAX = 25 * 1024 * 1024;
-  const VOICE_TRANSCRIBE_BODY_MAX = 35 * 1024 * 1024;
+  const VOICE_TRANSCRIBE_BODY_MAX = 26 * 1024 * 1024;
   const SESSION_INPUT_BODY_MAX = maxSessionInputRequestBodyBytes();
 
   const isNoteMediaUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => {
@@ -236,7 +237,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       ? SESSION_INPUT_BODY_MAX
       : c.req.path === '/api/skills/upload'
         ? SKILL_UPLOAD_BODY_MAX
-        : c.req.path === '/api/voice/transcribe' || c.req.path === '/api/voice/transcriptions'
+        : c.req.path === '/api/voice/transcriptions'
           ? VOICE_TRANSCRIBE_BODY_MAX
           : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
             ? NOTE_MEDIA_BODY_MAX
@@ -288,6 +289,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
     }),
   });
+  const mediaRateLimitMiddleware = createMediaRateLimitMiddleware({
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
+  });
   const taskRateLimitMiddleware = createTaskRateLimitMiddleware({
     getTrustedProxyContext: () => ({
       trustedProxies: service.currentConfig.gateway?.trustedProxies,
@@ -311,6 +318,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     service,
     strictRateLimitMiddleware,
     chatRateLimitMiddleware,
+    mediaRateLimitMiddleware,
     taskRateLimitMiddleware,
     xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,

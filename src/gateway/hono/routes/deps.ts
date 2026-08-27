@@ -6,6 +6,7 @@ export interface AuthenticatedRouteDeps {
   service: GatewayService;
   strictRateLimitMiddleware: MiddlewareHandler;
   chatRateLimitMiddleware: MiddlewareHandler;
+  mediaRateLimitMiddleware?: MiddlewareHandler;
   taskRateLimitMiddleware?: MiddlewareHandler;
   xopcCloudPollRateLimitMiddleware: MiddlewareHandler;
   channelRateLimitMiddleware?: MiddlewareHandler;

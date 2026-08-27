@@ -159,6 +159,10 @@ export interface DiscussionMetrics {
   byStatus: Record<DiscussionStatus, number>;
   averageTimeToFirstTranscriptMs: number | null;
   averageTimeToCompleteMs: number | null;
+  totalSegments: number;
+  failedSegments: number;
+  retriedSegments: number;
+  averageSegmentLatencyMs: number | null;
 }
 
 export interface DiscussionDetail {
