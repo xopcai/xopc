@@ -107,7 +107,7 @@ export function SidebarFooter({
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
             <SidebarAppMenu
-              onOpenFullSettings={() => {
+              onNavigate={() => {
                 setOpen(false);
                 onNavigate?.();
               }}

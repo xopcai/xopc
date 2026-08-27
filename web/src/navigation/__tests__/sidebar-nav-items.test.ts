@@ -22,16 +22,16 @@ describe('reconcileNavOrder', () => {
     }));
   });
 
-  it('places home, projects, and the user profile before advanced capabilities', () => {
+  it('places the workbench, projects, and notes before advanced capabilities', () => {
     expect(PRIMARY_NAV_IDS).toEqual([
       'builtin:home',
       'builtin:projects',
-      'builtin:profile',
+      'builtin:notes',
     ]);
     expect(BUILTIN_NAV_DEFS.slice(0, DEFAULT_VISIBLE_NAV_ITEMS)).toEqual([
       expect.objectContaining({ id: 'builtin:home', to: '/' }),
       expect.objectContaining({ id: 'builtin:projects', to: '/projects' }),
-      expect.objectContaining({ id: 'builtin:profile', to: '/you' }),
+      expect.objectContaining({ id: 'builtin:notes', to: '/notes' }),
     ]);
   });
 
@@ -39,7 +39,6 @@ describe('reconcileNavOrder', () => {
     expect(BUILTIN_NAV_DEFS.map((item) => item.id)).toEqual([
       'builtin:home',
       'builtin:projects',
-      'builtin:profile',
       'builtin:notes',
       'builtin:automations',
       'builtin:skills',
@@ -54,33 +53,33 @@ describe('reconcileNavOrder', () => {
   });
 
   it('preserves the available order when nothing is stored', () => {
-    const available = [item('builtin:home'), item('builtin:profile')];
+    const available = [item('builtin:home'), item('builtin:notes')];
     const out = reconcileNavOrder(available, []);
     expect(out.hasOverflow).toBe(false);
     expect(out.visible.map((i) => i.id)).toEqual([
       'builtin:home',
-      'builtin:profile',
+      'builtin:notes',
     ]);
     expect(out.overflow).toEqual([]);
   });
 
   it('honors stored customization for draggable product destinations', () => {
-    const available = [item('builtin:home'), item('builtin:profile')];
-    const stored = ['builtin:profile', 'builtin:home'];
+    const available = [item('builtin:home'), item('builtin:notes')];
+    const stored = ['builtin:notes', 'builtin:home'];
     const out = reconcileNavOrder(available, stored);
-    expect(out.visible.map((i) => i.id)).toEqual(['builtin:profile', 'builtin:home']);
+    expect(out.visible.map((i) => i.id)).toEqual(['builtin:notes', 'builtin:home']);
   });
 
-  it('keeps Work, Projects, and You visible by default', () => {
+  it('keeps Workbench, Projects, and Notes visible by default', () => {
     const available = [
       item('builtin:home'),
       item('builtin:projects'),
-      item('builtin:profile'),
       item('builtin:notes'),
+      item('builtin:automations'),
     ];
     const out = reconcileNavOrder(available, []);
-    expect(out.visible.map((i) => i.id)).toEqual(['builtin:home', 'builtin:projects', 'builtin:profile']);
-    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:notes']);
+    expect(out.visible.map((i) => i.id)).toEqual(['builtin:home', 'builtin:projects', 'builtin:notes']);
+    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:automations']);
   });
 
   it('appends new items that are not yet in the stored order', () => {
