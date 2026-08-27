@@ -125,6 +125,7 @@ install:
 2. **Agents Workspace 兼容源** - 使用通用 agents 目录的项目技能
    - 位置：`<workspace>/.agents/skills/`
    - 仅在工作区受信任后以只读方式加载
+   - 网关控制台的项目对话会在加载本地指令与技能前请求信任，并将决定持久化到 `~/.xopc/trust.json`
 
 3. **XOPC Global** - 由 XOPC 管理的全局技能
    - 位置：`~/.xopc/skills/`

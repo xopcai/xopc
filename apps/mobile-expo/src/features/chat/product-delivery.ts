@@ -8,39 +8,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import type { ToolUseContent } from './messages.types';
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
-
-function parseResult(result: unknown): { details: unknown; text: string } {
-  const direct = asRecord(result);
-  if (direct && ('details' in direct || 'content' in direct)) {
-    const content = Array.isArray(direct.content)
-      ? direct.content
-        .map((item) => asRecord(item))
-        .filter((item) => item?.type === 'text' && typeof item.text === 'string')
-        .map((item) => item!.text as string)
-        .join('\n')
-      : '';
-    return { details: direct.details, text: content };
-  }
-  if (typeof result === 'string') {
-    try {
-      const parsed = JSON.parse(result) as unknown;
-      const record = asRecord(parsed);
-      if (record && ('details' in record || 'content' in record)) {
-        return parseResult(record);
-      }
-    } catch {
-      // A plain historical tool-result string.
-    }
-    return { details: null, text: result };
-  }
-  return { details: null, text: '' };
-}
+import { asRecord, parseToolResult } from './parse-tool-result';
 
 function fromRecord(value: unknown): ProductDeliveryEnvelope | null {
   const record = asRecord(value);
@@ -52,7 +20,7 @@ function fromRecord(value: unknown): ProductDeliveryEnvelope | null {
 export function extractMobileProductDelivery(block: ToolUseContent): ProductDeliveryEnvelope | null {
   const live = fromRecord(block.details);
   if (live) return live;
-  const parsed = parseResult(block.result);
+  const parsed = parseToolResult(block.result);
   return fromRecord(parsed.details)
     ?? parseProductDeliveryText(parsed.text)
     ?? fromRecord(block.result);

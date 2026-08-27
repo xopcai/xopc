@@ -5,11 +5,11 @@ import { buildAssistantTurnViewModel } from '../assistant-turn-view-model';
 describe('buildAssistantTurnViewModel', () => {
   it('keeps tool activity but hides thinking in concise mode', () => {
     const view = buildAssistantTurnViewModel({
-      content: [
+      message: { role: 'assistant', content: [
         { type: 'thinking', text: 'private analysis' },
         { type: 'tool_use', id: 'tool-1', name: 'read_file', status: 'done' },
         { type: 'text', text: 'Done.', presentation: 'answer' },
-      ],
+      ] },
       isStreaming: false,
       reasoningLevel: 'off',
     });
@@ -23,7 +23,7 @@ describe('buildAssistantTurnViewModel', () => {
 
   it('auto-expands only stream detail before the final answer starts', () => {
     const reasoning = buildAssistantTurnViewModel({
-      content: [{ type: 'thinking', text: 'working', streaming: true }],
+      message: { role: 'assistant', content: [{ type: 'thinking', text: 'working', streaming: true }] },
       isStreaming: true,
       reasoningLevel: 'stream',
     });
@@ -31,10 +31,10 @@ describe('buildAssistantTurnViewModel', () => {
     expect(reasoning.showStreamingCursor).toBe(false);
 
     const answering = buildAssistantTurnViewModel({
-      content: [
+      message: { role: 'assistant', content: [
         { type: 'thinking', text: 'working', streaming: false },
         { type: 'text', text: 'Final answer', presentation: 'answer' },
-      ],
+      ] },
       isStreaming: true,
       reasoningLevel: 'stream',
     });
@@ -42,10 +42,31 @@ describe('buildAssistantTurnViewModel', () => {
     expect(answering.showStreamingCursor).toBe(true);
 
     const normal = buildAssistantTurnViewModel({
-      content: [{ type: 'thinking', text: 'working', streaming: true }],
+      message: { role: 'assistant', content: [{ type: 'thinking', text: 'working', streaming: true }] },
       isStreaming: true,
       reasoningLevel: 'on',
     });
     expect(normal.activity.expandedByDefault).toBe(false);
+  });
+
+  it('includes message attachments in the assistant deliverables projection', () => {
+    const view = buildAssistantTurnViewModel({
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Attached.', presentation: 'answer' }],
+        attachments: [{
+          name: 'analysis.csv',
+          type: 'document',
+          mimeType: 'text/csv',
+          uri: 'media://outbound/analysis.csv',
+        }],
+      },
+      isStreaming: false,
+      reasoningLevel: 'on',
+    });
+
+    expect(view.deliverables.attachments).toEqual([
+      expect.objectContaining({ name: 'analysis.csv' }),
+    ]);
   });
 });

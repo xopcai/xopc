@@ -66,6 +66,7 @@ import {
   type AgentSkillAvailabilityPayload,
   type SkillCatalogEntry,
   type SkillCatalogSnapshot,
+  type WorkspaceTrustState,
 } from './agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentCapabilityCatalogEntry } from './capabilities/index.js';
@@ -631,6 +632,21 @@ export class AgentService {
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     return this.agentManager.getAgentSkillAvailability(agentId);
+  }
+
+  async getSessionSkillAvailability(sessionKey: string): Promise<AgentSkillAvailabilityPayload> {
+    await this.sessionHydrator.workspace(sessionKey);
+    return this.agentManager.getSessionSkillAvailability(sessionKey);
+  }
+
+  async getSessionWorkspaceTrust(sessionKey: string): Promise<WorkspaceTrustState> {
+    await this.sessionHydrator.workspace(sessionKey);
+    return this.agentManager.getSessionWorkspaceTrust(sessionKey);
+  }
+
+  async setSessionWorkspaceTrust(sessionKey: string, trusted: boolean): Promise<WorkspaceTrustState> {
+    await this.sessionHydrator.workspace(sessionKey);
+    return this.agentManager.setSessionWorkspaceTrust(sessionKey, trusted);
   }
 
   getCapabilityCatalog(sessionKey?: string): AgentCapabilityCatalogEntry[] {
