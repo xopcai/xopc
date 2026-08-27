@@ -8,6 +8,8 @@
  */
 
 import { createLogger } from '../../utils/logger.js';
+import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
+import { compareCatalogModels } from '../../providers/model-catalog-ranking.js';
 
 import './providers/index.js'; // side-effect: register built-in STT providers
 import { resolveModelEntries } from '../../media-understanding/resolve-entries.js';
@@ -106,6 +108,8 @@ export function resolveSTTProviderOrder(
     return order;
   }
 
+  if (!config.managedAuto) return [primary];
+
   const configured = sortAudioProvidersByAutoPriority(listMediaUnderstandingProviders()).filter(
     (providerId) => resolveSTTProviderConfig(providerId, config) !== null,
   );
@@ -136,7 +140,34 @@ function resolveModelEntryChain(config: STTConfig): AudioProviderResolvedConfig[
       chain.push(resolved);
     }
   }
+  if (chain.some((entry) => entry.id === 'xopc-cloud')) {
+    appendManagedCloudModels(chain, config);
+  }
   return chain;
+}
+
+function appendManagedCloudModels(
+  chain: AudioProviderResolvedConfig[],
+  config: STTConfig,
+): void {
+  const seen = new Set(chain
+    .filter((entry) => entry.id === 'xopc-cloud' && entry.model)
+    .map((entry) => entry.model));
+  const source = getModelCatalogStore().getSource('xopc-cloud');
+  const models = [...(source?.models ?? [])]
+    .sort((left, right) => compareCatalogModels(left, right, source?.recommended?.stt));
+  for (const model of models) {
+    if (
+      model.availability !== 'available'
+      || model.kind !== 'stt'
+      || !model.operations.includes('audio.transcription')
+      || seen.has(model.id)
+    ) continue;
+    const resolved = resolveSTTProviderConfig('xopc-cloud', config, {
+      provider: 'xopc-cloud', model: model.id, capabilities: ['audio'],
+    });
+    if (resolved) chain.push(resolved);
+  }
 }
 
 /** Build the full chain of resolved provider configs in priority order. */
@@ -153,6 +184,10 @@ export function resolveSTTProviderChain(config: STTConfig): AudioProviderResolve
   const order = resolveSTTProviderOrder(config.provider, config.fallback, config);
   const chain: AudioProviderResolvedConfig[] = [];
   for (const providerId of order) {
+    if (providerId === 'xopc-cloud') {
+      appendManagedCloudModels(chain, config);
+      continue;
+    }
     const resolved = resolveSTTProviderConfig(providerId, config);
     if (resolved) {
       chain.push(resolved);

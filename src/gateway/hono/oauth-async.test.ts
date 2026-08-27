@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { GatewayService } from '../service.js';
+import { ConfigSchema } from '../../config/schema.js';
 import {
+  buildOAuthCompletionReadiness,
   normalizeDesktopOAuthReturnPath,
   refreshModelCatalogAfterOAuth,
   resolveOAuthLoginMethodPreference,
@@ -72,6 +74,26 @@ describe('refreshModelCatalogAfterOAuth', () => {
 
     await expect(
       refreshModelCatalogAfterOAuth('xopc-cloud', serviceWith(refreshNow)),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatchObject({
+      state: 'unavailable',
+      error: { code: 'refresh_failed', message: 'rate limited', retryable: true },
+    });
+  });
+});
+
+describe('buildOAuthCompletionReadiness', () => {
+  it('marks authorization as connected-degraded when catalog setup fails', () => {
+    const readiness = buildOAuthCompletionReadiness(ConfigSchema.parse({}), {
+      state: 'unavailable',
+      source: 'none',
+      modelCount: 0,
+      error: { code: 'refresh_failed', message: 'offline', retryable: true },
+    });
+
+    expect(readiness).toMatchObject({
+      authorized: true,
+      state: 'connected-degraded',
+      catalog: { state: 'unavailable' },
+    });
   });
 });

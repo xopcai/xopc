@@ -19,6 +19,7 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
 import { getOAuthProvider, getSupportedOAuthProviders } from '../utils/oauth-providers.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
+import { disconnectProvider } from '../../providers/provider-disconnect.js';
 
 const log = createLogger('AuthCommand');
 
@@ -109,7 +110,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 				return;
 			}
 			
-			await new CredentialResolver().deleteProviderCredential(provider);
+			await disconnectProvider(provider);
 			log.info(`All credentials removed for provider: ${provider}`);
 		});
 
@@ -155,7 +156,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 				return;
 			}
 			
-			await new CredentialResolver().deleteProviderCredential(provider);
+			await disconnectProvider(provider);
 			log.info(`Logged out from provider: ${provider}`);
 		});
 
@@ -216,7 +217,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			for (const profile of profiles) providers.add(profile.provider);
 			for (const token of oauthTokens) providers.add(token.provider);
 			for (const provider of providers) {
-				await resolver.deleteProviderCredential(provider);
+				await disconnectProvider(provider);
 			}
 			
 			log.info('All authentication credentials cleared.');
