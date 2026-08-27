@@ -57,7 +57,7 @@ and \`create_update\`.
 Project statuses: \`planned\`, \`active\`, \`paused\`, \`completed\`, \`cancelled\`,
 \`archived\`. Health values: \`unknown\`, \`on_track\`, \`at_risk\`, \`off_track\`.
 
-A Project defines a bounded goal. Its durable planning fields are \`outcome\`,
+A Project defines bounded shared context for related work. Its durable planning fields are \`outcome\`,
 \`successCriteria\`, \`scope\`, \`nonGoals\`, \`ownerId\`, \`targetAt\`, and \`health\`.
 Use \`brief\` for a concise description and \`instructions\` for durable operating guidance.
 

@@ -327,7 +327,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Agent manifests are managed at `/agents` and `/agents/:agentId`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/capabilities/{models|image|voice|search}`, `/settings/heartbeat`, `/settings/sessions`, `/settings/logs`, plus top-level `/automations`, `/skills`, `/channels`, `/connectors`, `/extensions`, `/goals`, `/workflows`. Removed agent-defaults routes (`#/settings/agent-defaults`, `#/settings/agent-browser`) redirect to `/agents`.
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Agent manifests are managed at `/agents` and `/agents/:agentId`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/capabilities/{models|image|voice|search}`, `/settings/heartbeat`, `/settings/sessions`, `/settings/logs`, plus top-level `/tasks`, `/projects`, `/automations`, `/skills`, `/channels`, `/connectors`, `/extensions`, `/workflows`. Removed agent-defaults routes (`#/settings/agent-defaults`, `#/settings/agent-browser`) redirect to `/agents`.
 
 **Gateway integration:**
 

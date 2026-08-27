@@ -46,7 +46,7 @@ Completing profile and model setup proves that xopc is configured, but it does n
 - how much background to explain;
 - which files matter;
 - whether the assistant can understand ongoing work;
-- how Projects, sessions, workspaces, goals, and work items relate.
+- how Projects, Tasks, sessions, and workspaces relate.
 
 Generic starter prompts reduce visual emptiness but do not remove this context-assembly burden. The product needs a first-run path that demonstrates continuity with the user's real work.
 
@@ -77,7 +77,7 @@ The onboarding is successful when the user selects a suggestion and continues th
 - Running arbitrary shell commands during discovery.
 - Diagnosing or fixing the project before the user chooses a suggestion.
 - Guaranteeing that a folder is a software repository.
-- Replacing the Projects, sessions, goals, work items, or welcome-suggestion models.
+- Replacing the Projects, Tasks, sessions, or welcome-suggestion models.
 - Running an OS-wide filesystem watcher or background full-disk index. Incremental checks are explicit and limited to approved sources.
 - Making a remote browser capable of reading the browser device's local filesystem.
 
@@ -786,7 +786,7 @@ The discovery analyzer cannot:
 - install dependencies;
 - access the network except through the configured model call;
 - call channels or external connectors;
-- create goals, work items, automations, or workflows;
+- create Tasks, automations, or workflows;
 - continue acting after the result is produced.
 
 ## Activity and Audit
@@ -893,7 +893,7 @@ Phase 2 requires a separate privacy review and is not enabled implicitly by Phas
 - User-controlled re-analysis from a Project.
 - Change-aware snapshots.
 - Optional suggestion refresh after meaningful activity.
-- Explicit links to Goals and Work Items.
+- Explicit links to Tasks.
 
 Continuous monitoring remains opt-in and requires its own lifecycle and resource controls.
 

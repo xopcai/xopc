@@ -40,7 +40,7 @@ function task(patch: Partial<ProjectTask>): ProjectTask {
 }
 
 describe('buildProjectLoopOverview', () => {
-  it('summarizes next actions, stale goals, failed workflows, and timeline', () => {
+  it('summarizes next actions, stale Tasks, failed workflows, and timeline', () => {
     const overview = buildProjectLoopOverview({
       project,
       nowMs: now,

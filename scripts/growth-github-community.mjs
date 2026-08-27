@@ -16,7 +16,7 @@ const discussionDrafts = [
     title: 'Show and tell: how are you using xopc?',
     body: `Thanks for trying xopc.
 
-xopc is a local-first Goal Loop OS for long-term AI work across terminal, web, desktop, mobile app, and messengers.
+xopc is a local-first Task Loop OS for long-term AI work across terminal, web, desktop, mobile app, and messengers.
 
 This thread is for sharing:
 
@@ -36,12 +36,12 @@ If xopc is useful or the direction feels worth supporting, a GitHub star helps m
   },
   {
     categoryCandidates: ['Ideas', 'General'],
-    title: 'Roadmap: local-first goal loops across terminal, web, desktop, mobile app, and messengers',
+    title: 'Roadmap: local-first task loops across terminal, web, desktop, mobile app, and messengers',
     body: `This is the launch-week roadmap discussion for xopc.
 
 The product direction:
 
-> xopc is a local-first Goal Loop OS: one AI assistant that keeps long-term goals moving across terminal, web, desktop, mobile app, and messengers.
+> xopc is a local-first Task Loop OS: one AI assistant that keeps durable Tasks moving across terminal, web, desktop, mobile app, and messengers.
 
 Current focus:
 

@@ -22,6 +22,7 @@ export type NoteCardProps = {
     unpin: string;
     archive: string;
     delete: string;
+    actions: string;
     imageNote: string;
     noText: string;
   };
@@ -44,13 +45,17 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
       role="button"
       tabIndex={0}
       onClick={() => onPress(note.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onPress(note.id); }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onPress(note.id);
+      }}
       className={cn(
         'group relative flex cursor-pointer flex-col gap-2 overflow-hidden rounded-lg px-3 py-2.5',
         'transition-colors duration-150 ease-out',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-rail',
         selected
-          ? 'bg-surface-panel hover:bg-surface-panel'
+          ? 'bg-surface-active hover:bg-surface-active'
           : 'bg-transparent hover:bg-surface-panel/70',
       )}
       aria-current={selected ? 'true' : undefined}
@@ -87,8 +92,9 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
             <button
               type="button"
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 rounded-md p-1 text-fg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-panel focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              aria-label="Actions"
+              className="shrink-0 rounded-md p-1 text-fg-muted opacity-100 transition-opacity hover:bg-surface-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
+              aria-label={labels.actions}
+              title={labels.actions}
             >
               <MoreVertical className="size-4" />
             </button>

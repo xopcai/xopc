@@ -17,12 +17,12 @@ Open Home at `#/`, Projects at `#/projects`, or a Task at `#/tasks/:id`.
 | Keep a result moving and know whether it is truly done | Task |
 | Share context across several related results | Project |
 | Preserve reference material or produced files | Note / Workspace |
-| Repeat a known multi-step execution plan | Workflow, linked to an Task |
-| Run on a schedule or event | Automation, linked to an Task when it advances one |
+| Repeat a known multi-step execution plan | Workflow, linked to a Task |
+| Run on a schedule or event | Automation, linked to a Task when it advances one |
 
 ## Task: one source of truth
 
-An Task owns:
+A Task owns:
 
 - objective and optional project context;
 - acceptance criteria and deliverables;
@@ -38,7 +38,7 @@ The user-facing state is intentionally small:
 - `needs_user`: a concrete user decision, permission, credential, or fact is required;
 - `completed`: the acceptance criteria have been verified.
 
-Projects, workflows, automations, and conversations link to an Task. They do not maintain a competing task status.
+Projects, workflows, automations, and conversations link to a Task. They do not maintain a competing task status.
 
 ## Project: context, not task management
 

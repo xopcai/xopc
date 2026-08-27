@@ -121,7 +121,7 @@
 
     <rect x="380" y="660" width="310" height="86" rx="8" class="gray" />
     <text x="535" y="686" text-anchor="middle" class="box-title">Gateway services</text>
-    <text x="535" y="706" text-anchor="middle" class="box-text">automations, heartbeat, goals</text>
+    <text x="535" y="706" text-anchor="middle" class="box-text">automations, heartbeat, tasks</text>
     <text x="535" y="723" text-anchor="middle" class="box-text">workflows, notes, projects, marketplace</text>
 
     <rect x="730" y="660" width="290" height="86" rx="8" class="orange" />
