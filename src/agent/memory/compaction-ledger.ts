@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import {
   HANDOVER_ITEM_KINDS,
-  type CompactionAudit,
   type CompactionHandover,
   type CompactionHandoverItem,
   type HandoverItemKind,
