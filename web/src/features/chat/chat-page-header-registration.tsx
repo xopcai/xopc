@@ -6,6 +6,7 @@ import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-selector';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { matchesTerminalShortcut, terminalShortcutLabel } from '@/features/chat/terminal/terminal-shortcut';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
@@ -52,6 +53,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const terminalPlatform = window.electronAPI?.platform;
+  const terminalShortcut = terminalShortcutLabel(terminalPlatform);
 
   const isMobileLayout = useMediaQuery(MAX_MD);
   const chromeLayout = resolveShellChromeLayout({
@@ -72,13 +75,13 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   useEffect(() => {
     if (!parentSessionKey || !window.electronAPI?.terminal) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || event.metaKey || event.altKey || event.key !== '`') return;
+      if (!matchesTerminalShortcut(event, terminalPlatform)) return;
       event.preventDefault();
       toggleTerminalPanel(parentSessionKey);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [parentSessionKey, toggleTerminalPanel]);
+  }, [parentSessionKey, terminalPlatform, toggleTerminalPanel]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -140,7 +143,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
                 'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
                 terminalPanelOpen && 'bg-surface-hover text-fg',
               )}
-              title={`${m.chat.terminal.open} (Ctrl+\`)`}
+              title={`${m.chat.terminal.open} (${terminalShortcut})`}
               aria-label={m.chat.terminal.open}
               aria-pressed={terminalPanelOpen}
               onClick={() => toggleTerminalPanel(parentSessionKey)}
@@ -179,6 +182,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
     m.chat.terminal.open,
+    terminalShortcut,
     m.sidebar.newTask,
     m.workspace.openFiles,
     workspacePanelOpen,
