@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { HomeFocusItem } from '../../../query/home';
-import { rankHomeContinueCandidates, selectHomeFocusItem } from '../home-presentation';
+import { mobileRouteForHomeHref, rankHomeContinueCandidates } from '../home-presentation';
 
 describe('home presentation', () => {
   it('prefers recently used content over background work and removes the focused item', () => {
@@ -15,22 +14,11 @@ describe('home presentation', () => {
     expect(ranked).toEqual(['session', 'workflow']);
   });
 
-  it('never lets a pin hide an operational alert', () => {
-    const items = [
-      { id: 'decision:1', kind: 'decision', pinnable: false },
-      { id: 'task:1', kind: 'running', pinnable: true },
-    ] as HomeFocusItem[];
-
-    expect(selectHomeFocusItem(items, 'task:1')?.id).toBe('decision:1');
-    expect(selectHomeFocusItem(items, 'decision:1')?.id).toBe('decision:1');
-  });
-
-  it('uses a valid pin when no operational alert is present', () => {
-    const items = [
-      { id: 'result:1', kind: 'result', pinnable: true },
-      { id: 'task:1', kind: 'running', pinnable: true },
-    ] as HomeFocusItem[];
-
-    expect(selectHomeFocusItem(items, 'task:1')?.id).toBe('task:1');
+  it('maps every home target to its concrete native destination', () => {
+    expect(mobileRouteForHomeHref('/tasks/task-1')).toBe('/tasks/task-1');
+    expect(mobileRouteForHomeHref('/workflows?runId=run-1')).toBe('/workflows/runs/run-1');
+    expect(mobileRouteForHomeHref('/automations?automation=morning')).toBe('/automation/morning');
+    expect(mobileRouteForHomeHref('/automations?automation=morning&run=run-1')).toBe('/automation/runs/run-1');
+    expect(mobileRouteForHomeHref('/notes?status=inbox')).toBe('/inbox');
   });
 });

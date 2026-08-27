@@ -112,9 +112,12 @@ export const HomeActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('open'),
     label: z.string(),
-    target: z.enum(['work', 'task', 'workflow_run', 'automation', 'session', 'inbox', 'inbox_judgment']),
-    targetId: z.string().optional(),
-    sessionKey: z.string().optional(),
+    href: z.string(),
+  }),
+  z.object({
+    type: z.literal('review_judgment'),
+    label: z.string(),
+    itemId: z.string(),
   }),
   z.object({
     type: z.literal('connector_decision'),
@@ -148,10 +151,15 @@ export const HomeFocusItemSchema = z.object({
   summary: z.string(),
   statusLabel: z.string().optional(),
   updatedAt: z.number(),
-  pinnable: z.boolean().default(true),
   openAction: HomeActionSchema.optional(),
   primaryAction: HomeActionSchema.optional(),
   secondaryActions: z.array(HomeActionSchema).max(2).default([]),
+});
+
+export const HomeRecentTaskSchema = z.object({
+  taskId: z.string(),
+  taskTitle: z.string(),
+  receipt: TaskRunReceiptSchema,
 });
 
 export const HomeResponseSchema = z.object({
@@ -193,7 +201,7 @@ export const HomeResponseSchema = z.object({
   tasks: z.object({
     running: z.array(TaskSchema),
   }).default({ running: [] }),
-  recentTasks: z.array(TaskRunReceiptSchema).default([]),
+  recentTasks: z.array(HomeRecentTaskSchema).default([]),
 });
 
 export const TaskValueMetricsSchema = z.object({
@@ -223,6 +231,7 @@ export type HomeChat = z.infer<typeof HomeChatSchema>;
 export type HomeBriefingWin = z.infer<typeof HomeBriefingWinSchema>;
 export type HomeAction = z.infer<typeof HomeActionSchema>;
 export type HomeFocusItem = z.infer<typeof HomeFocusItemSchema>;
+export type HomeRecentTask = z.infer<typeof HomeRecentTaskSchema>;
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 export type TaskValueMetrics = z.infer<typeof TaskValueMetricsSchema>;
 
