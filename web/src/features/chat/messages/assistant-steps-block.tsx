@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
   CheckCircle2,
@@ -55,6 +55,7 @@ import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
 import { ProductDeliveryCard } from '@/features/chat/product-delivery/product-delivery-card';
 import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
+import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/wheel-scroll-chain';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
@@ -330,6 +331,7 @@ export function AssistantStepsBlock({
             cardLabels={cardLabels}
             sessionKey={sessionKey}
             workflowOptions={workflowOptions}
+            className="assistant-steps-scroll max-h-[min(60vh,28rem)] overflow-y-auto pr-1 [scrollbar-gutter:stable]"
           />
         </div>
       ) : null}
@@ -375,12 +377,29 @@ export function AssistantStepsTimeline({
   sessionKey?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
-  if (blocks.length === 0) {
+  const scrollRegionRef = useRef<HTMLDivElement>(null);
+  const hasBlocks = blocks.length > 0;
+
+  useEffect(() => {
+    const scrollRegion = scrollRegionRef.current;
+    if (!scrollRegion) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      routeWheelThroughVerticalScrollChain(event, scrollRegion);
+    };
+    scrollRegion.addEventListener('wheel', handleWheel, { passive: false });
+    return () => scrollRegion.removeEventListener('wheel', handleWheel);
+  }, [hasBlocks]);
+
+  if (!hasBlocks) {
     return null;
   }
 
   return (
-    <div className={cn('min-w-0 overflow-x-hidden', className)}>
+    <div
+      ref={scrollRegionRef}
+      className={cn('min-w-0 overflow-x-hidden', className)}
+    >
       <div className="min-w-0 space-y-2.5">
         {blocks.map((b, i) => (
           <StepRow
