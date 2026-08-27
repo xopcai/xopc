@@ -1,3 +1,5 @@
+import { ModelCatalogPersistence } from './model-catalog-persistence.js';
+
 export interface CatalogModel {
   id: string;
   name: string;
@@ -9,6 +11,10 @@ export interface CatalogModel {
   reasoning: boolean;
   contextWindow: number;
   maxOutputTokens: number | null;
+  stability?: 'stable' | 'preview' | 'deprecated';
+  priority?: number;
+  tier?: string;
+  bestEffort?: boolean;
   imageGeneration?: {
     maxCount: number;
     sizes: string[];
@@ -46,6 +52,7 @@ export interface CatalogSource {
   api: 'openai-completions' | 'openai-responses';
   etag: string | null;
   recommendedModel: string | null;
+  recommended?: Partial<Record<'vision' | 'image-generation' | 'stt' | 'tts', string>>;
   lastSuccessAt: number;
   models: CatalogModel[];
 }
@@ -54,10 +61,13 @@ export interface ModelCatalogSnapshot {
   sources: Record<string, CatalogSource>;
 }
 
+export type CatalogSourceOrigin = 'memory' | 'disk' | 'network';
+
 export type AvailableCatalogModel = Omit<CatalogModel, 'availability'>;
 
 export class ModelCatalogStore {
   private sources: Record<string, CatalogSource> = {};
+  private origins: Record<string, CatalogSourceOrigin> = {};
 
   load(): ModelCatalogSnapshot {
     return {
@@ -72,14 +82,25 @@ export class ModelCatalogStore {
     return source ? this.cloneSource(source) : undefined;
   }
 
-  saveSource(sourceId: string, source: CatalogSource): void {
+  getSourceOrigin(sourceId: string): CatalogSourceOrigin | undefined {
+    return this.origins[sourceId];
+  }
+
+  saveSource(
+    sourceId: string,
+    source: CatalogSource,
+    origin: CatalogSourceOrigin = 'memory',
+  ): void {
     this.sources = { ...this.sources, [sourceId]: this.cloneSource(source) };
+    this.origins = { ...this.origins, [sourceId]: origin };
   }
 
   removeSource(sourceId: string): boolean {
     if (!this.sources[sourceId]) return false;
     const { [sourceId]: _removed, ...sources } = this.sources;
+    const { [sourceId]: _removedOrigin, ...origins } = this.origins;
     this.sources = sources;
+    this.origins = origins;
     return true;
   }
 
@@ -87,6 +108,7 @@ export class ModelCatalogStore {
     sourceId: string,
     source: Omit<CatalogSource, 'models'>,
     models: AvailableCatalogModel[],
+    origin: CatalogSourceOrigin = 'memory',
   ): { addedCount: number; unavailableCount: number } {
     const previous = this.getSource(sourceId);
     const nextIds = new Set(models.map((model) => model.id));
@@ -102,7 +124,7 @@ export class ModelCatalogStore {
         ...models.map((model) => ({ ...model, availability: 'available' as const })),
         ...unavailable,
       ],
-    });
+    }, origin);
     return {
       addedCount: models.filter((model) => !previousAvailableIds.has(model.id)).length,
       unavailableCount: unavailable.length,
@@ -135,12 +157,20 @@ export class ModelCatalogStore {
 }
 
 let globalModelCatalogStore: ModelCatalogStore | undefined;
+let globalCatalogHydrated = false;
 
 export function getModelCatalogStore(): ModelCatalogStore {
   globalModelCatalogStore ??= new ModelCatalogStore();
+  if (!globalCatalogHydrated) {
+    globalCatalogHydrated = true;
+    // Synchronous hydration keeps every process entry point safe before its first registry read.
+    const source = new ModelCatalogPersistence().loadSync();
+    if (source) globalModelCatalogStore.saveSource('xopc-cloud', source, 'disk');
+  }
   return globalModelCatalogStore;
 }
 
-export function resetModelCatalogStore(): void {
+export function resetModelCatalogStore(options: { rehydrate?: boolean } = {}): void {
   globalModelCatalogStore = undefined;
+  if (options.rehydrate) globalCatalogHydrated = false;
 }

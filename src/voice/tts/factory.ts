@@ -11,6 +11,8 @@
  */
 
 import { createLogger } from '../../utils/logger.js';
+import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
+import { compareCatalogModels } from '../../providers/model-catalog-ranking.js';
 
 import './providers/index.js'; // side-effect: register built-in providers
 import { buildTtsResolveRawConfig } from './config-slice.js';
@@ -35,6 +37,7 @@ export interface ResolvedSpeechProvider {
 export function resolveSpeechProvider(
   providerId: TTSProvider,
   config: TTSConfig,
+  providerOverride?: Record<string, unknown>,
 ): ResolvedSpeechProvider | null {
   const plugin = getSpeechProvider(providerId);
   if (!plugin) {
@@ -42,6 +45,12 @@ export function resolveSpeechProvider(
     return null;
   }
   const rawConfig = buildTtsResolveRawConfig(providerId, config);
+  if (providerOverride) {
+    rawConfig[providerId] = {
+      ...((rawConfig[providerId] as Record<string, unknown> | undefined) ?? {}),
+      ...providerOverride,
+    };
+  }
   const timeoutMs = config.timeoutMs ?? 30_000;
   // SpeechProviderResolveConfigContext requires `cfg: Config` but this entry
   // point only holds a TTSConfig slice. Cast through unknown — built-in
@@ -79,6 +88,8 @@ export function resolveProviderOrder(
     return order;
   }
 
+  if (!config.managedAuto) return [primary];
+
   const configured = listSpeechProviders()
     .map((plugin) => {
       const resolved = resolveSpeechProvider(plugin.id, config);
@@ -112,6 +123,27 @@ export function resolveSpeechProviderChain(config: TTSConfig): ResolvedSpeechPro
   const order = resolveProviderOrder(config.provider, config.fallback, config);
   const chain: ResolvedSpeechProvider[] = [];
   for (const providerId of order) {
+    if (providerId === 'xopc-cloud') {
+      const configuredModel = typeof config.providers?.['xopc-cloud']?.model === 'string'
+        ? config.providers['xopc-cloud'].model
+        : undefined;
+      const source = getModelCatalogStore().getSource('xopc-cloud');
+      const models = source?.models
+        .filter((model) => model.availability === 'available'
+          && model.kind === 'tts'
+          && model.operations.includes('audio.speech')
+          && Boolean(model.tts?.defaultVoice))
+        .sort((left, right) => {
+          if (left.id === configuredModel) return -1;
+          if (right.id === configuredModel) return 1;
+          return compareCatalogModels(left, right, source.recommended?.tts);
+        }) ?? [];
+      for (const model of models) {
+        const resolved = resolveSpeechProvider(providerId, config, { model: model.id });
+        if (resolved) chain.push(resolved);
+      }
+      continue;
+    }
     const resolved = resolveSpeechProvider(providerId, config);
     if (resolved) {
       chain.push(resolved);

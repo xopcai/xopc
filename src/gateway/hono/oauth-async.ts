@@ -9,6 +9,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
+import type { Config } from '../../config/schema.js';
 import { 
   type OAuthProviderInterface, 
   type OAuthLoginCallbacks,
@@ -19,22 +20,56 @@ import { CredentialResolver } from '../../auth/credentials.js';
 import { isLoopbackHost } from '../host.js';
 import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { createLogger } from '../../utils/logger.js';
+import { buildCapabilityPlansForConfig, type CapabilityId } from '../../capabilities/readiness/index.js';
+import type { CatalogReadiness } from '../../providers/xopc-cloud-catalog-coordinator.js';
 
 const log = createLogger('OAuthAsync');
+
+export interface OAuthCompletionReadiness {
+  authorized: true;
+  state: 'connected' | 'connected-degraded';
+  catalog: CatalogReadiness;
+  capabilities: Record<CapabilityId, 'ready' | 'unavailable' | 'disabled'>;
+}
+
+export function buildOAuthCompletionReadiness(
+  config: Config,
+  catalog: CatalogReadiness,
+): OAuthCompletionReadiness {
+  const plans = buildCapabilityPlansForConfig(config);
+  const capabilities = Object.fromEntries(Object.entries(plans).map(([capability, plan]) => [
+    capability,
+    plan.status === 'disabled' ? 'disabled' : plan.status === 'unavailable' ? 'unavailable' : 'ready',
+  ])) as OAuthCompletionReadiness['capabilities'];
+  const degraded = Boolean(catalog.error)
+    || Object.values(capabilities).some((status) => status === 'unavailable');
+  return {
+    authorized: true,
+    state: degraded ? 'connected-degraded' : 'connected',
+    catalog,
+    capabilities,
+  };
+}
 
 export async function refreshModelCatalogAfterOAuth(
   provider: string,
   service: Pick<GatewayService, 'getModelCatalogSync'>,
-): Promise<void> {
-  if (provider !== 'xopc-cloud') return;
+): Promise<CatalogReadiness | undefined> {
+  if (provider !== 'xopc-cloud') return undefined;
   try {
-    await service.getModelCatalogSync().refreshNow();
+    return await service.getModelCatalogSync().refreshNow();
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log.warn(
       { err, provider, errorMessage },
       `OAuth completed, but the model catalog could not be refreshed: ${errorMessage}`,
     );
+    return {
+      state: 'unavailable',
+      source: 'none',
+      modelCount: 0,
+      error: { code: 'refresh_failed', message: errorMessage, retryable: true },
+    };
   }
 }
 
@@ -80,6 +115,7 @@ interface OAuthSession {
   abortController?: AbortController;
   manualCodeResolve?: (code: string) => void;
   manualCodeReject?: (error: Error) => void;
+  readiness?: OAuthCompletionReadiness;
 }
 
 // In-memory session store (could be moved to Redis for production)
@@ -277,6 +313,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
         verificationUri: session.verificationUri,
         message: session.message,
         error: session.error,
+        readiness: session.readiness,
         expiresAt: session.expiresAt,
       } 
     });
@@ -457,20 +494,22 @@ async function runOAuthFlow(
   try {
     const credentials = await oauthProvider.login(callbacks);
     
-    // Save credentials to cache and persist them as first-class OAuth credentials.
-    setOAuthCredentialsToCache(session.provider, credentials);
-
     const resolver = new CredentialResolver();
     await resolver.saveOAuthCredentials(session.provider, credentials);
 
     session.message = session.provider === 'xopc-cloud'
       ? 'OAuth login successful. Syncing available models...'
       : 'OAuth login successful';
-    await refreshModelCatalogAfterOAuth(session.provider, service);
+    const catalog = await refreshModelCatalogAfterOAuth(session.provider, service);
+    if (catalog && session.provider === 'xopc-cloud') {
+      session.readiness = buildOAuthCompletionReadiness(service.currentConfig, catalog);
+    }
 
     session.status = 'completed';
     session.credentials = credentials;
-    session.message = 'OAuth login successful';
+    session.message = session.readiness?.state === 'connected-degraded'
+      ? `OAuth login successful, but capability setup is degraded${catalog?.error ? `: ${catalog.error.message}` : ''}`
+      : 'OAuth login successful';
     
     log.info({ sessionId: session.id, provider: session.provider }, 'OAuth login completed');
   } catch (err) {
@@ -487,19 +526,4 @@ async function runOAuthFlow(
     session.manualCodeResolve = undefined;
     session.manualCodeReject = undefined;
   }
-}
-
-// Simple in-memory cache for OAuth credentials
-const oauthCredentialsCache: Map<string, OAuthCredentials> = new Map();
-
-export function getOAuthCredentialsFromCache(provider: string): OAuthCredentials | undefined {
-  return oauthCredentialsCache.get(provider);
-}
-
-export function setOAuthCredentialsToCache(provider: string, creds: OAuthCredentials): void {
-  oauthCredentialsCache.set(provider, creds);
-}
-
-export function deleteOAuthCredentialsFromCache(provider: string): void {
-  oauthCredentialsCache.delete(provider);
 }

@@ -3,6 +3,10 @@ import { input, select } from '@inquirer/prompts';
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from '../../auth/index.js';
 import { CredentialResolver } from '../../auth/credentials.js';
 import { createLogger } from '../../utils/logger.js';
+import {
+  getXopcCloudCatalogCoordinator,
+  type CatalogReadiness,
+} from '../../providers/xopc-cloud-catalog-coordinator.js';
 
 import { getOAuthProvider, type OAuthProviderConfig } from './oauth-providers.js';
 
@@ -17,6 +21,7 @@ export interface RunCliOAuthLoginResult {
   provider: string;
   credentials: OAuthCredentials;
   expires?: number;
+  catalog?: CatalogReadiness;
 }
 
 async function openBrowser(url: string): Promise<void> {
@@ -91,5 +96,14 @@ export async function runCliOAuthLogin(options: RunCliOAuthLoginOptions): Promis
   const resolver = new CredentialResolver();
   await resolver.saveOAuthCredentials(options.provider, credentials);
 
-  return { provider: options.provider, credentials, expires: credentials.expires };
+  let catalog: CatalogReadiness | undefined;
+  if (options.provider === 'xopc-cloud') {
+    options.onProgress?.('Syncing XOPC Cloud model catalog...');
+    catalog = await getXopcCloudCatalogCoordinator().refresh('oauth');
+    if (catalog.error) {
+      options.onProgress?.(`Authorization succeeded, but model catalog sync failed: ${catalog.error.message}`);
+    }
+  }
+
+  return { provider: options.provider, credentials, expires: credentials.expires, catalog };
 }

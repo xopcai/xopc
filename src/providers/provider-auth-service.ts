@@ -57,6 +57,10 @@ export class ProviderAuthService {
     return await this.resolver.resolveApiKey(providerId);
   }
 
+  invalidate(): void {
+    this.runtime = undefined;
+  }
+
   private getRuntime(): Promise<ModelRuntime> {
     this.runtime ??= this.runtimeFactory(this.credentials).catch((error) => {
       this.runtime = undefined;

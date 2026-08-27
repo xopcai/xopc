@@ -78,6 +78,7 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/models-json/validate')?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-json/reload')?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/models-json/test-api-key')?.id).toBe('models');
+    expect(findAuthenticatedLazyRouteBundle('/api/capabilities/readiness')?.id).toBe('models');
   });
 
   it('has unique bundle ids', () => {

@@ -7,8 +7,9 @@ const mocks = vi.hoisted(() => {
   const sessionIndexInitialize = vi.fn(async () => undefined);
   const sessionIndexGetStore = vi.fn(() => ({}));
   const cloudModelRefresh = vi.fn(async () => ({
-    status: 'skipped' as const,
-    reason: 'not_configured' as const,
+    state: 'not-authorized' as const,
+    source: 'none' as const,
+    modelCount: 0,
   }));
   const agentService = vi.fn(function MockAgentService() {
     return {
@@ -68,10 +69,10 @@ vi.mock('../../../storage/sqlite/index.js', () => ({
   openXopcDatabase: vi.fn(),
 }));
 
-vi.mock('../../../providers/xopc-cloud-model-source.js', () => ({
-  XopcCloudModelSource: class {
-    refresh = mocks.cloudModelRefresh;
-  },
+vi.mock('../../../providers/xopc-cloud-catalog-coordinator.js', () => ({
+  getXopcCloudCatalogCoordinator: () => ({
+    ensure: mocks.cloudModelRefresh,
+  }),
 }));
 
 import { EmbeddedBackend } from '../embedded-backend.js';
@@ -125,9 +126,9 @@ describe('EmbeddedBackend', () => {
     mocks.cloudModelRefresh.mockImplementationOnce(async () => {
       expect(mocks.agentService).not.toHaveBeenCalled();
       return {
-        status: 'updated',
+        state: 'ready',
+        source: 'network',
         modelCount: 1,
-        models: ['deepseek-v4-flash'],
       };
     });
     const backend = new EmbeddedBackend({ config: {} as never });

@@ -42,8 +42,10 @@ import {
   sortModelsForPicker,
   sortProvidersForPicker,
 } from '../../../providers/presentation.js';
-import { getModelCatalogStore, type ModelCatalogStore } from '../../../providers/model-catalog-store.js';
-import { XopcCloudModelSource } from '../../../providers/xopc-cloud-model-source.js';
+import {
+  getXopcCloudCatalogCoordinator,
+  type XopcCloudCatalogCoordinator,
+} from '../../../providers/xopc-cloud-catalog-coordinator.js';
 import { getOAuthProvider } from '../../utils/oauth-providers.js';
 import { runCliOAuthLogin } from '../../utils/oauth-login.js';
 import type { CLIContext } from '../../registry.js';
@@ -52,46 +54,10 @@ import { colors } from '../../utils/colors.js';
 type ModelChoice = { value: string; name: string; description?: string };
 type CustomApiKind = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
 
-export function defaultXopcCloudImageModel(
-  catalogStore: ModelCatalogStore = getModelCatalogStore(),
-): string | undefined {
-  const model = catalogStore.getSource('xopc-cloud')?.models.find((entry) =>
-    entry.availability === 'available'
-    && entry.kind === 'image'
-    && entry.operations.includes('images.generate'));
-  return model ? `xopc-cloud/${model.id}` : undefined;
-}
-
-export function defaultXopcCloudVisionModel(
-  catalogStore: ModelCatalogStore = getModelCatalogStore(),
-): string | undefined {
-  const model = catalogStore.getSource('xopc-cloud')?.models.find((entry) =>
-    entry.availability === 'available'
-    && entry.kind === 'language'
-    && entry.input.includes('image')
-    && (entry.operations.includes('chat.completions') || entry.operations.includes('responses')));
-  return model ? `xopc-cloud/${model.id}` : undefined;
-}
-
-export function defaultXopcCloudAudioModels(
-  catalogStore: ModelCatalogStore = getModelCatalogStore(),
-): { stt?: string; tts?: { model: string; voice: string; maxCharacters: number } } {
-  const models = catalogStore.getSource('xopc-cloud')?.models.filter((entry) => entry.availability === 'available') ?? [];
-  const stt = models.find((entry) => entry.kind === 'stt');
-  const tts = models.find((entry) => entry.kind === 'tts' && entry.tts?.defaultVoice);
-  return {
-    ...(stt ? { stt: stt.id } : {}),
-    ...(tts?.tts?.defaultVoice ? { tts: { model: tts.id, voice: tts.tts.defaultVoice, maxCharacters: tts.tts.maxCharacters } } : {}),
-  };
-}
-
 export function setPrimaryModel(
   config: Config,
   workspacePath: string,
   modelRef: string,
-  defaultImageGenerationModel?: string,
-  defaultAudioModels?: { stt?: string; tts?: { model: string; voice: string; maxCharacters: number } },
-  defaultVisionModel?: string,
 ): Config {
   const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
   const index = config.agents.list.findIndex((entry) => entry.id === id);
@@ -112,54 +78,12 @@ export function setPrimaryModel(
       ...currentModels,
       defaultRole: 'deep',
       roles: { ...currentModels?.roles, deep: { model: modelRef } },
-      ...(!currentModels?.imageModel && defaultVisionModel
-        ? { imageModel: { primary: defaultVisionModel } }
-        : {}),
-      ...(!currentModels?.imageGenerationModel && defaultImageGenerationModel
-        ? { imageGenerationModel: { primary: defaultImageGenerationModel } }
-        : {}),
     },
   });
   if (prep.ok === false) {
     throw new Error(prep.error);
   }
-  let configured = prep.data.nextConfig;
-  if (defaultAudioModels?.stt && !configured.tools.media?.audio) {
-    configured = {
-      ...configured,
-      tools: {
-        ...configured.tools,
-        media: {
-          ...configured.tools.media,
-          audio: {
-            enabled: true,
-            provider: 'xopc-cloud',
-            models: [{ provider: 'xopc-cloud', model: defaultAudioModels.stt, capabilities: ['audio'] }],
-            providers: { 'xopc-cloud': { model: defaultAudioModels.stt } },
-            fallback: { enabled: false, order: [] },
-          },
-        },
-      },
-    };
-  }
-  if (defaultAudioModels?.tts && !configured.messages?.tts) {
-    configured = {
-      ...configured,
-      messages: {
-        ...configured.messages,
-        tts: {
-          enabled: true,
-          provider: 'xopc-cloud',
-          trigger: 'off',
-          fallback: { enabled: false, order: [] },
-          maxTextLength: defaultAudioModels.tts.maxCharacters,
-          timeoutMs: 60_000,
-          providers: { 'xopc-cloud': { model: defaultAudioModels.tts.model, voice: defaultAudioModels.tts.voice } },
-        },
-      },
-    };
-  }
-  return configured;
+  return prep.data.nextConfig;
 }
 
 function formatRecommended(provider: string): string | undefined {
@@ -216,14 +140,17 @@ function getModelsForProvider(provider: string): ModelChoice[] {
 export async function refreshOnboardModelCatalogIfNeeded(
   provider: string,
   hasCatalogModels: boolean,
-  source?: Pick<XopcCloudModelSource, 'refresh'>,
+  coordinator: Pick<XopcCloudCatalogCoordinator, 'refresh'> = getXopcCloudCatalogCoordinator(),
 ): Promise<void> {
   if (provider !== 'xopc-cloud' || hasCatalogModels) return;
 
   console.log('\n→ Loading models from XOPC Model Service...');
-  const result = await (source ?? new XopcCloudModelSource()).refresh();
-  if (result.status === 'skipped') {
+  const result = await coordinator.refresh('oauth');
+  if (result.state === 'not-authorized') {
     throw new Error('XOPC Model Service credentials are unavailable after OAuth login. Please sign in again.');
+  }
+  if (result.error || result.modelCount === 0) {
+    throw new Error(result.error?.message ?? 'XOPC Model Service did not publish any models for this account.');
   }
   console.log(colors.green(`✓ Loaded ${result.modelCount} models`));
 }
@@ -653,12 +580,5 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
   });
 
   console.log('\n✅ Model configured:', model);
-  const imageModel = provider === 'xopc-cloud' ? defaultXopcCloudImageModel() : undefined;
-  const visionModel = provider === 'xopc-cloud' ? defaultXopcCloudVisionModel() : undefined;
-  const audioModels = provider === 'xopc-cloud' ? defaultXopcCloudAudioModels() : undefined;
-  if (visionModel) console.log('✅ Image understanding configured:', visionModel);
-  if (imageModel) console.log('✅ Image generation configured:', imageModel);
-  if (audioModels?.stt) console.log('✅ Speech recognition configured:', audioModels.stt);
-  if (audioModels?.tts) console.log('✅ Speech synthesis configured:', audioModels.tts.model);
-  return setPrimaryModel(config, ctx.workspacePath, model, imageModel, audioModels, visionModel);
+  return setPrimaryModel(config, ctx.workspacePath, model);
 }

@@ -9,34 +9,20 @@ import type { GatewayService } from '../service.js';
 import { 
   type OAuthProviderInterface, 
   type OAuthLoginCallbacks,
-  type OAuthCredentials 
 } from '../../auth/oauth/types.js';
 import { getOAuthProviderInterfaces } from '../../auth/oauth/registry.js';
 import { CredentialResolver } from '../../auth/credentials.js';
 import { getProviderAuthState, isProviderConfigured } from '../../providers/index.js';
+import { disconnectProvider } from '../../providers/provider-disconnect.js';
+import {
+  buildOAuthCompletionReadiness,
+  refreshModelCatalogAfterOAuth,
+} from './oauth-async.js';
 
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = getOAuthProviderInterfaces();
 
-// Simple in-memory cache for OAuth credentials
-const oauthCredentialsCache: Map<string, OAuthCredentials> = new Map();
-
-function getOAuthCredentialsFromCache(provider: string): OAuthCredentials | undefined {
-  return oauthCredentialsCache.get(provider);
-}
-
-function setOAuthCredentialsToCache(provider: string, creds: OAuthCredentials): void {
-  oauthCredentialsCache.set(provider, creds);
-}
-
-function deleteOAuthCredentialsFromCache(provider: string): void {
-  oauthCredentialsCache.delete(provider);
-}
-
-/** No-op: OAuth tokens live on disk under auth paths; cache is populated during login. */
-export function loadOAuthCredentialsToCache(_service: GatewayService): void {}
-
-export function createOAuthHandler(_service: GatewayService) {
+export function createOAuthHandler(service: GatewayService) {
   const oauth = new Hono();
 
   /**
@@ -96,17 +82,22 @@ export function createOAuthHandler(_service: GatewayService) {
       };
 
       const credentials = await oauthProvider.login(callbacks);
-      setOAuthCredentialsToCache(provider, credentials);
-
       const resolver = new CredentialResolver();
       await resolver.saveOAuthCredentials(provider, credentials);
+      const catalog = await refreshModelCatalogAfterOAuth(provider, service);
+      const readiness = catalog
+        ? buildOAuthCompletionReadiness(service.currentConfig, catalog)
+        : undefined;
+      service.emit('provider.auth.changed', { provider, connected: true });
 
       return c.json({ 
         ok: true, 
         payload: { 
           success: true,
           provider,
-          message: 'OAuth login successful',
+          message: readiness?.state === 'connected-degraded'
+            ? 'OAuth login successful, but capability setup is degraded'
+            : 'OAuth login successful',
           expires: credentials.expires,
           authUrl: authResult?.url,
           deviceCode: authResult?.deviceCode,
@@ -114,6 +105,8 @@ export function createOAuthHandler(_service: GatewayService) {
           instructions: authResult?.instructions,
           usesCallbackServer: oauthProvider.usesCallbackServer ?? false,
           manualCodeRequested,
+          catalog,
+          readiness,
         } 
       });
     } catch (err) {
@@ -130,17 +123,16 @@ export function createOAuthHandler(_service: GatewayService) {
    */
   oauth.get('/:provider', async (c) => {
     const provider = c.req.param('provider');
-    const credentials = getOAuthCredentialsFromCache(provider);
     const authState = await getProviderAuthState(provider);
     const configured = await isProviderConfigured(provider);
 
     return c.json({ 
       ok: true, 
       payload: { 
-        configured: configured || !!credentials,
+        configured,
         authMode: authState.authMode,
         authStatus: authState.authStatus,
-        expiresAt: authState.expiresAt ?? credentials?.expires,
+        expiresAt: authState.expiresAt,
       } 
     });
   });
@@ -151,10 +143,11 @@ export function createOAuthHandler(_service: GatewayService) {
    */
   oauth.delete('/:provider', async (c) => {
     const provider = c.req.param('provider');
-    
-    deleteOAuthCredentialsFromCache(provider);
-    const resolver = new CredentialResolver();
-    await resolver.deleteProviderCredential(provider);
+    await disconnectProvider(provider);
+    service.emit('provider.auth.changed', { provider, connected: false });
+    if (provider === 'xopc-cloud') {
+      service.emit('model-catalog.updated', { modelCount: 0 });
+    }
 
     return c.json({ ok: true, payload: { disconnected: provider } });
   });

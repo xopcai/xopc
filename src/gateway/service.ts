@@ -49,6 +49,7 @@ import { resolveEffectiveGatewayPort } from './host.js';
 import { buckets, isGatewayStrictSecurityEnabled } from './rate-limit/index.js';
 import { prewarmModelRegistry } from '../providers/index.js';
 import { ModelCatalogSyncService } from '../providers/model-catalog-sync-service.js';
+import { getXopcCloudCatalogCoordinator } from '../providers/xopc-cloud-catalog-coordinator.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import { subscribeToLogs } from '../utils/logger/log-stream.js';
@@ -929,6 +930,28 @@ export class GatewayService {
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
+
+    const catalogCoordinator = getXopcCloudCatalogCoordinator();
+    const catalog = await trace.measure('model-catalog.hydrate', () => catalogCoordinator.hydrate());
+    const defaultModel = getAgentDefaultModelRef(this.config);
+    if (defaultModel?.startsWith('xopc-cloud/') && catalog.source === 'none') {
+      const readiness = await trace.measure('model-catalog.initial-refresh', () =>
+        catalogCoordinator.ensure({
+          reason: 'startup',
+          network: 'if-empty',
+          timeoutMs: 10_000,
+        }));
+      if (readiness.error) {
+        log.warn(
+          {
+            provider: 'xopc-cloud',
+            phase: 'catalog_refresh',
+            errorMessage: readiness.error.message,
+          },
+          `Initial XOPC Cloud catalog refresh failed: ${readiness.error.message}`,
+        );
+      }
+    }
 
     registerClarifyBridge(this.agentRunner.getClarifyBridge());
 

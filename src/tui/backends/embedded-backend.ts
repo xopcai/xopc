@@ -55,6 +55,7 @@ import { ChatStreamMapper } from '../../gateway/chat-stream/mapper.js';
 import { collectTuiStartupResources } from '../tui-startup-resources.js';
 import { fuzzySearchWorkspaceFiles } from '../../gateway/workspace-file-search.js';
 import { inferSuggestedProjectDefaultAgentId, ProjectService } from '../../projects/index.js';
+import { getXopcCloudCatalogCoordinator } from '../../providers/xopc-cloud-catalog-coordinator.js';
 
 const log = createLogger('TUI:Embedded');
 
@@ -188,14 +189,16 @@ export class EmbeddedBackend implements TuiBackend {
 
   private async refreshXopcCloudModels(): Promise<void> {
     try {
-      const { XopcCloudModelSource } = await import('../../providers/xopc-cloud-model-source.js');
-      const result = await new XopcCloudModelSource().refresh();
-      if (result.status === 'updated') {
-        log.info(
-          { modelCount: result.modelCount },
-          `XOPC Cloud model catalog refreshed: ${result.modelCount} models`,
-        );
-      }
+      const readiness = await getXopcCloudCatalogCoordinator().ensure({
+        reason: 'agent-run',
+        network: 'if-empty',
+        timeoutMs: 10_000,
+      });
+      if (!readiness.error) return;
+      log.warn(
+        { errorMessage: readiness.error.message, phase: 'model_catalog_refresh' },
+        `XOPC Cloud model catalog refresh failed: ${readiness.error.message}`,
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn(
