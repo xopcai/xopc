@@ -1,6 +1,6 @@
 {
   "projectsPage": {
-    "title": "Home",
+    "title": "Workbench",
     "summary": "{{count}} projects · ongoing work grouped across chats and tasks",
     "searchPlaceholder": "Search projects",
     "create": "Create",
