@@ -34,8 +34,6 @@ import {
   unpinProject,
   type Project,
 } from '@/features/projects/api';
-import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
-import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {
   deleteSession,
   fetchSidebarChatList,
@@ -121,7 +119,6 @@ function rowShellClass(isActive: boolean): string {
 function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean }) {
   return (
     <div className={cn('flex items-center gap-2 p-1.5', indented && 'pl-7')}>
-      <Skeleton className="size-6 shrink-0 animate-none rounded-lg" />
       <div className="min-w-0 flex-1">
         <Skeleton className="h-3 w-4/5 animate-none" />
         <Skeleton className="mt-1.5 h-2.5 w-2/5 animate-none" />
@@ -167,8 +164,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sess,
   clipboard,
   defaultUnnamedTitle,
-  sessionAgentId,
-  sessionAgentAvatar,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -182,8 +177,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sess: ReturnType<typeof messages>['sessions'];
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
-  sessionAgentId: string;
-  sessionAgentAvatar?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
@@ -225,45 +218,12 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         )}
         title={title}
         onClick={() => onNavigate?.()}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onRequestRename(session.key);
+        }}
       >
-        <span className="relative shrink-0">
-          <AgentAvatarDisplay
-            agentId={sessionAgentId}
-            avatar={sessionAgentAvatar}
-            size={24}
-            className="size-6 shrink-0 ring-1 ring-edge/60 dark:ring-edge"
-          />
-          {agentRunActive ? (
-            <span
-              className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-2.5 items-center justify-center"
-              title={sb.taskSessionAgentRunning}
-              aria-label={sb.taskSessionAgentRunning}
-            >
-              <span className="absolute size-full animate-ping rounded-full bg-accent/70" aria-hidden />
-              <span
-                className="relative size-2 rounded-full bg-accent shadow-sm ring-2 ring-surface-panel dark:ring-surface-base"
-                aria-hidden
-              />
-            </span>
-          ) : runPresence?.unread ? (
-            <span
-              className={cn(
-                'pointer-events-none absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full shadow-sm ring-2 ring-surface-panel dark:ring-surface-base',
-                runPresence.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500',
-              )}
-              title={
-                runPresence.status === 'failed'
-                  ? sb.taskSessionAgentFailed
-                  : sb.taskSessionAgentCompleted
-              }
-              aria-label={
-                runPresence.status === 'failed'
-                  ? sb.taskSessionAgentFailed
-                  : sb.taskSessionAgentCompleted
-              }
-            />
-          ) : null}
-        </span>
         {showSourceChannelIcon ? (
           <>
             <span
@@ -275,11 +235,38 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             >
               <SessionChannelIcon sourceChannel={session.sourceChannel} className="size-3.5" />
             </span>
-            <span className="min-w-0 max-w-[8.5rem] truncate">{title}</span>
+            <span className="min-w-0 flex-1 truncate">{title}</span>
           </>
         ) : (
-          <span className="min-w-0 max-w-[10rem] truncate">{title}</span>
+          <span className="min-w-0 flex-1 truncate">{title}</span>
         )}
+        {agentRunActive ? (
+          <span
+            className="pointer-events-none relative flex size-2.5 shrink-0 items-center justify-center"
+            title={sb.taskSessionAgentRunning}
+            aria-label={sb.taskSessionAgentRunning}
+          >
+            <span className="absolute size-full animate-ping rounded-full bg-accent/70" aria-hidden />
+            <span className="relative size-2 rounded-full bg-accent shadow-sm" aria-hidden />
+          </span>
+        ) : runPresence?.unread ? (
+          <span
+            className={cn(
+              'pointer-events-none size-2.5 shrink-0 rounded-full shadow-sm',
+              runPresence.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500',
+            )}
+            title={
+              runPresence.status === 'failed'
+                ? sb.taskSessionAgentFailed
+                : sb.taskSessionAgentCompleted
+            }
+            aria-label={
+              runPresence.status === 'failed'
+                ? sb.taskSessionAgentFailed
+                : sb.taskSessionAgentCompleted
+            }
+          />
+        ) : null}
       </Link>
       <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
         <Popover.Trigger asChild>
@@ -517,8 +504,6 @@ function SidebarProjectSection({
   sess,
   clipboard,
   defaultUnnamedTitle,
-  defaultAgentId,
-  agentItems,
   excludedSessionKeys,
 }: {
   group: ProjectSidebarGroup;
@@ -540,8 +525,6 @@ function SidebarProjectSection({
   sess: ReturnType<typeof messages>['sessions'];
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
-  defaultAgentId: string;
-  agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
   /** Sessions rendered in the dedicated pinned section stay out of their project list. */
   excludedSessionKeys?: ReadonlySet<string>;
 }) {
@@ -597,27 +580,22 @@ function SidebarProjectSection({
 
       {!isCollapsed ? (
         <div className="ml-3 flex flex-col gap-0.5">
-          {visibleSessions.map((session) => {
-            const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
-            return (
-              <SidebarTaskRow
-                key={session.key}
-                session={session}
-                isActive={activeSessionKey === session.key}
-                showSourceChannelIcon={!isWebSession(session)}
-                onNavigate={onNavigate}
-                mutate={mutate}
-                onRequestRename={onRequestRename}
-                onRequestDelete={onRequestDelete}
-                sb={sb}
-                sess={sess}
-                clipboard={clipboard}
-                defaultUnnamedTitle={defaultUnnamedTitle}
-                sessionAgentId={sessionAgentId}
-                sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-              />
-            );
-          })}
+          {visibleSessions.map((session) => (
+            <SidebarTaskRow
+              key={session.key}
+              session={session}
+              isActive={activeSessionKey === session.key}
+              showSourceChannelIcon={!isWebSession(session)}
+              onNavigate={onNavigate}
+              mutate={mutate}
+              onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
+              sb={sb}
+              sess={sess}
+              clipboard={clipboard}
+              defaultUnnamedTitle={defaultUnnamedTitle}
+            />
+          ))}
           {canToggleSessionLimit ? (
             <button
               type="button"
@@ -664,8 +642,6 @@ function SidebarInboxSection({
   sess,
   clipboard,
   defaultUnnamedTitle,
-  defaultAgentId,
-  agentItems,
   excludedSessionKeys,
 }: {
   sessions: SessionMetadata[];
@@ -684,8 +660,6 @@ function SidebarInboxSection({
   sess: ReturnType<typeof messages>['sessions'];
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
-  defaultAgentId: string;
-  agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
   /** Sessions rendered in the dedicated pinned section stay out of the inbox. */
   excludedSessionKeys?: ReadonlySet<string>;
 }) {
@@ -728,27 +702,22 @@ function SidebarInboxSection({
         </button>
       </div>
       <div className={cn('ml-3 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
-        {unpinnedSessions.map((session) => {
-          const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
-          return (
-            <SidebarTaskRow
-              key={session.key}
-              session={session}
-              isActive={activeSessionKey === session.key}
-              showSourceChannelIcon={!isWebSession(session)}
-              onNavigate={onNavigate}
-              mutate={mutate}
-              onRequestRename={onRequestRename}
-              onRequestDelete={onRequestDelete}
-              sb={sb}
-              sess={sess}
-              clipboard={clipboard}
-              defaultUnnamedTitle={defaultUnnamedTitle}
-              sessionAgentId={sessionAgentId}
-              sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-            />
-          );
-        })}
+        {unpinnedSessions.map((session) => (
+          <SidebarTaskRow
+            key={session.key}
+            session={session}
+            isActive={activeSessionKey === session.key}
+            showSourceChannelIcon={!isWebSession(session)}
+            onNavigate={onNavigate}
+            mutate={mutate}
+            onRequestRename={onRequestRename}
+            onRequestDelete={onRequestDelete}
+            sb={sb}
+            sess={sess}
+            clipboard={clipboard}
+            defaultUnnamedTitle={defaultUnnamedTitle}
+          />
+        ))}
         {hasMore ? (
           <button
             type="button"
@@ -781,8 +750,6 @@ function SidebarPinnedSection({
   sess,
   clipboard,
   defaultUnnamedTitle,
-  defaultAgentId,
-  agentItems,
 }: {
   sessions: SessionMetadata[];
   activeSessionKey?: string;
@@ -794,8 +761,6 @@ function SidebarPinnedSection({
   sess: ReturnType<typeof messages>['sessions'];
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
-  defaultAgentId: string;
-  agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
 }) {
   if (sessions.length === 0) return null;
 
@@ -805,27 +770,22 @@ function SidebarPinnedSection({
         {sess.pinnedSessions}
       </h2>
       <div className="flex flex-col gap-0.5">
-        {sessions.map((session) => {
-          const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
-          return (
-            <SidebarTaskRow
-              key={session.key}
-              session={session}
-              isActive={activeSessionKey === session.key}
-              showSourceChannelIcon={!isWebSession(session)}
-              onNavigate={onNavigate}
-              mutate={mutate}
-              onRequestRename={onRequestRename}
-              onRequestDelete={onRequestDelete}
-              sb={sb}
-              sess={sess}
-              clipboard={clipboard}
-              defaultUnnamedTitle={defaultUnnamedTitle}
-              sessionAgentId={sessionAgentId}
-              sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-            />
-          );
-        })}
+        {sessions.map((session) => (
+          <SidebarTaskRow
+            key={session.key}
+            session={session}
+            isActive={activeSessionKey === session.key}
+            showSourceChannelIcon={!isWebSession(session)}
+            onNavigate={onNavigate}
+            mutate={mutate}
+            onRequestRename={onRequestRename}
+            onRequestDelete={onRequestDelete}
+            sb={sb}
+            sess={sess}
+            clipboard={clipboard}
+            defaultUnnamedTitle={defaultUnnamedTitle}
+          />
+        ))}
       </div>
     </section>
   );
@@ -845,7 +805,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     { revalidateOnFocus: false },
   );
   const defaultAgentId = chatAgents?.defaultId ?? 'main';
-  const agentItems = chatAgents?.items ?? [];
 
   useEffect(() => {
     const onConfigReload = () => void mutateChatAgents();
@@ -1288,8 +1247,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               sess={sess}
               clipboard={m.clipboard}
               defaultUnnamedTitle={m.chat.newSession}
-              defaultAgentId={defaultAgentId}
-              agentItems={agentItems}
             />
             {projectGroups.length > 0 ? (
               <div className="pb-1">
@@ -1334,8 +1291,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                         sess={sess}
                         clipboard={m.clipboard}
                         defaultUnnamedTitle={m.chat.newSession}
-                        defaultAgentId={defaultAgentId}
-                        agentItems={agentItems}
                         excludedSessionKeys={pinnedSessionKeys}
                       />
                     ))
@@ -1363,8 +1318,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               sess={sess}
               clipboard={m.clipboard}
               defaultUnnamedTitle={m.chat.newSession}
-              defaultAgentId={defaultAgentId}
-              agentItems={agentItems}
               excludedSessionKeys={pinnedSessionKeys}
             />
           </div>
