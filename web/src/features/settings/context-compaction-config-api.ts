@@ -14,6 +14,7 @@ export type ContextCompactionConfigState = {
   summaryTimeoutMs: number;
   summaryRetries: number;
   qualityGuard: boolean;
+  gapAudit: boolean;
   model?: string;
   minToolResultKeepChars: number;
   maxActiveTranscriptBytes: number;
@@ -32,6 +33,7 @@ export const DEFAULT_CONTEXT_COMPACTION_CONFIG: ContextCompactionConfigState = {
   summaryTimeoutMs: 180_000,
   summaryRetries: 2,
   qualityGuard: true,
+  gapAudit: true,
   minToolResultKeepChars: 1_000,
   maxActiveTranscriptBytes: 2_000_000,
   postCompactionSections: ['Session Startup', 'Red Lines'],
@@ -93,6 +95,7 @@ export function normalizeContextCompactionFromConfig(config: unknown): ContextCo
     summaryTimeoutMs: boundedInteger(raw.summaryTimeoutMs, defaults.summaryTimeoutMs, 1_000, 600_000),
     summaryRetries: boundedInteger(raw.summaryRetries, defaults.summaryRetries, 0, 5),
     qualityGuard: typeof raw.qualityGuard === 'boolean' ? raw.qualityGuard : defaults.qualityGuard,
+    gapAudit: typeof raw.gapAudit === 'boolean' ? raw.gapAudit : defaults.gapAudit,
     ...(model ? { model } : {}),
     minToolResultKeepChars: boundedInteger(
       raw.minToolResultKeepChars,

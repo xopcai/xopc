@@ -11,7 +11,9 @@ export function buildMemorySection(params: {
   }
   const hasMemoryTools =
     params.availableTools.has('memory_search') ||
-    params.availableTools.has('memory_get');
+    params.availableTools.has('memory_get') ||
+    params.availableTools.has('session_recall') ||
+    params.availableTools.has('session_search');
   if (!hasMemoryTools && !params.hasProfileMemory) {
     return '';
   }
@@ -33,6 +35,11 @@ export function buildMemorySection(params: {
       `${toolLines.length + 1}. For **other chat sessions** / cross-session history, use \`session_search\` with keywords (or omit \`query\` to list recent sessions)`,
     );
   }
+  if (params.availableTools.has('session_recall')) {
+    toolLines.push(
+      `${toolLines.length + 1}. When the current session summary lacks an exact fact, path, ID, date, decision, or tool result, use session_recall to search its authoritative raw transcript`,
+    );
+  }
   if (params.availableTools.has('memory_get')) {
     toolLines.push(`${toolLines.length + 1}. Use \`memory_get\` only for record ids returned by \`memory_search\``);
   }
@@ -50,7 +57,8 @@ export function buildMemorySection(params: {
     '',
     '### Memory Sources',
     '',
-    '- **Session history:** use `session_search` when available for other chats and prior turns.',
+    '- **Current session:** use `session_recall` for exact raw turns, including history older than compaction.',
+    '- **Other sessions:** use `session_search` for cross-session history.',
     '- **Workspace memory:** cite only record ids returned by `memory_search` / `memory_get`.',
     '',
     '### Writing to Memory',

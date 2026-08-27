@@ -33,6 +33,7 @@ export {
   type MemoryToolOptions,
 } from './memory-tool.js';
 export { createSessionSearchTool } from './session-search-tool.js';
+export { createSessionRecallTool, type SessionRecallToolDeps } from './session-recall-tool.js';
 
 // Grep and Find tools
 export {

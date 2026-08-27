@@ -210,6 +210,15 @@ describe('buildSystemPrompt memory gating', () => {
     expect(prompt).toContain('memory_search');
   });
 
+  it('routes exact compacted history lookup to session_recall', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      toolNames: ['session_recall', 'session_search'],
+    });
+    expect(prompt).toContain('authoritative raw transcript');
+    expect(prompt).toContain('Current session');
+    expect(prompt).toContain('Other sessions');
+  });
+
   it('does not instruct agents to invent dated memory markdown files', () => {
     const prompt = buildSystemPrompt('/ws', {
       toolNames: ['memory_search', 'memory_get', 'session_search'],

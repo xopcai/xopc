@@ -39,6 +39,7 @@ import {
   isShareToolAvailable,
   createMemorySearchTool,
   createMemoryGetTool,
+  createSessionRecallTool,
   createTodoTool,
   createUpdatePlanTool,
   createSessionStatusTool,
@@ -446,6 +447,14 @@ export class AgentToolsFactory {
                   ? { sessionKey: this.deps.getCurrentContext!()!.sessionKey }
                   : {}),
               }),
+            }),
+          ]
+        : []),
+      ...(this.deps.getSessionStore
+        ? [
+            createSessionRecallTool({
+              getSessionStore: this.deps.getSessionStore,
+              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
             }),
           ]
         : []),
