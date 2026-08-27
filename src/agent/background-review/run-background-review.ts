@@ -133,7 +133,6 @@ async function runUnderstandingReview(params: RunBackgroundReviewParams): Promis
   const candidates = parseUnderstandingCandidates(lastAssistantText(reviewAgent));
   const projectId = getSessionMetadata(sessionKey)?.projectId;
   await memoryManager.applyUnderstandingCandidates(candidates, {
-    agentId: settings.agentId,
     sessionKey,
     ...(projectId ? { projectId } : {}),
     sourceText: 'Background review of the current session transcript',

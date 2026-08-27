@@ -2,7 +2,6 @@ import type { Config } from '../../config/schema.js';
 
 export interface BackgroundReviewSettings {
   enabled: boolean;
-  agentId?: string;
   adaptiveCadence: boolean;
   reviewIntervalTurns: number;
   maxHistoryMessages: number;
@@ -19,14 +18,12 @@ const DEFAULT_SETTINGS: BackgroundReviewSettings = {
 
 export function resolveBackgroundReviewSettings(
   config: Config | undefined,
-  _sessionKey?: string,
 ): BackgroundReviewSettings {
   if (!config) return DEFAULT_SETTINGS;
 
-  const { memory, understanding } = config.userContext;
-  const writeCapable = memory.mode === 'confirmWrite' || memory.mode === 'auto';
+  const { understanding } = config.userContext;
   return {
-    enabled: config.userContext.enabled && writeCapable && understanding.enabled,
+    enabled: config.userContext.enabled && understanding.enabled,
     adaptiveCadence: understanding.adaptiveCadence,
     reviewIntervalTurns: understanding.reviewIntervalTurns,
     maxHistoryMessages: understanding.maxHistoryMessages,

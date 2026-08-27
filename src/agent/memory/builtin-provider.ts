@@ -35,7 +35,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     update: true,
     delete: true,
     keywordSearch: true,
-    semanticSearch: true,
+    semanticSearch: false,
     hybridSearch: true,
     citations: true,
     sync: false,

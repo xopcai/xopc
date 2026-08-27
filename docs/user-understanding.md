@@ -22,12 +22,14 @@ For every enabled user turn:
 
 1. Read the structured profile, active collaboration rules, and understanding candidates.
 2. Apply status, scope, validity, sensitivity, conflict, consent, relevance, count, and character-budget filters.
-3. Persist every selection or rejection in `context_runs` and `context_run_items`.
+3. Persist every selection or rejection in `context_runs` and `context_run_items`; the run stores a query fingerprint rather than raw query text.
 4. Inject only the selected subset into the model message.
 5. After the answer, capture explicit “remember” statements and durable review candidates with linked evidence.
 6. Attribute user feedback and explicit corrections to the exact prior turn and understanding version.
 
 Secret and regulated candidates are never persisted as understanding. Rejected understanding creates a suppression so the same canonical statement is not repeatedly relearned.
+
+Relevance retrieval is deterministic and embedding-free: SQLite FTS5 and shared lexical/CJK/identifier features produce candidates, then kind, explicitness, confidence, scope, and bounded repeated feedback refine their order. Policy filters remain authoritative and cannot be bypassed by ranking feedback.
 
 ## API
 

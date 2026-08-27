@@ -64,8 +64,8 @@ export class UserContextCoordinator {
       consentRequests: [],
       estimatedTokens: 0,
     });
-    const config = this.options.getConfig();
     if (!this.options.isEnabledForSession(sessionKey)) return empty();
+    const config = this.options.getConfig();
     if (!isPrivateSession(sessionKey)) return empty();
     const userQuery = extractAgentUserPlainText(userMessage);
     const taskContext = assembleTaskContext(sessionKey, userQuery);

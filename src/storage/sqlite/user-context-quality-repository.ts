@@ -28,6 +28,35 @@ export type UserUnderstandingQualityMetrics = {
   };
 };
 
+export type UnderstandingFeedbackSummary = {
+  understandingId: string;
+  helpful: number;
+  irrelevant: number;
+  total: number;
+};
+
+export function summarizeUnderstandingFeedback(understandingIds: string[]): UnderstandingFeedbackSummary[] {
+  const ids = [...new Set(understandingIds.filter(Boolean))].slice(0, 1_000);
+  if (!ids.length) return [];
+  const rows = getSqliteDatabase().prepare(`
+    SELECT object_id, rating, COUNT(*) AS count
+    FROM context_feedback
+    WHERE object_type = 'understanding' AND object_id IN (${ids.map(() => '?').join(', ')})
+    GROUP BY object_id, rating
+  `).all(...ids) as Array<{ object_id: string; rating: string; count: number }>;
+  const summaries = new Map<string, UnderstandingFeedbackSummary>();
+  for (const row of rows) {
+    const current = summaries.get(row.object_id) ?? {
+      understandingId: row.object_id, helpful: 0, irrelevant: 0, total: 0,
+    };
+    if (row.rating === 'helpful') current.helpful += row.count;
+    if (row.rating === 'irrelevant') current.irrelevant += row.count;
+    current.total += row.count;
+    summaries.set(row.object_id, current);
+  }
+  return [...summaries.values()];
+}
+
 function rate(numerator: number, denominator: number): number | null {
   return denominator > 0 ? Math.round((numerator / denominator) * 10_000) / 10_000 : null;
 }
