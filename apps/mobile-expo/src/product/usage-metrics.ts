@@ -5,7 +5,6 @@ export type UsageEventName =
   | 'home_continue_opened'
   | 'home_focus_opened'
   | 'home_focus_action_completed'
-  | 'home_focus_pinned'
   | 'capture_started'
   | 'capture_completed'
   | 'ask_ai_started'

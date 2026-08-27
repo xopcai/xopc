@@ -1,7 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { Task, TaskRunReceipt } from '@xopcai/gateway-contract';
+import type { HomeAction, HomeFocusItem } from '@xopcai/gateway-contract';
 import {
   CalendarClock,
+  ChevronRight,
   CircleAlert,
   CircleCheck,
   MessageCircle,
@@ -14,7 +15,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WorkbenchActivity } from '@/features/activity/workbench-activity';
 import {
   acknowledgeWorkAttention,
   decideAgentJudgment,
@@ -24,13 +24,11 @@ import {
   retryWorkAttention,
   createTask,
   transitionAgentJudgment,
-  type HomeAttention,
-  type HomeChat,
   type HomeDecision,
   type HomeResponse,
 } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
-import { modalizeTaskDetailHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -51,110 +49,155 @@ function CountBadge({ children }: { children: string }) {
   return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
 }
 
-function TaskCard({ task, statusLabel, backgroundPath }: { task: Task; statusLabel: string; backgroundPath: string }) {
-  return (
-    <Link
-      to={taskDetailModalHref(backgroundPath, task.id)}
-      className="group flex items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="min-w-0">
-        <h3 className="line-clamp-2 text-sm font-semibold text-fg">{task.title}</h3>
-        <p className="mt-2 text-xs text-fg-subtle">{formatTime(task.updatedAt, '')}</p>
-      </div>
-      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-        {statusLabel}
-      </span>
-    </Link>
-  );
-}
-
-function TaskRunReceiptCard({ receipt, evidenceLabel, remainingLabel }: {
-  receipt: TaskRunReceipt;
-  evidenceLabel: string;
-  remainingLabel: string;
-}) {
-  return (
-    <div className="block rounded-xl border border-edge-subtle px-3 py-3">
-      <div className="flex items-start gap-2">
-        <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-fg">{receipt.summary}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{receipt.summary}</p>
-          <p className="mt-2 text-[11px] text-fg-subtle">
-            {receipt.evidence.length} {evidenceLabel}
-            {receipt.remainingWork.length > 0 ? ` · ${receipt.remainingWork.length} ${remainingLabel}` : ''}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function HomeSkeleton() {
   return (
     <div className="space-y-5" aria-busy>
       <Skeleton className="h-20 rounded-2xl" />
-      <Skeleton className="h-72 rounded-2xl" />
-      <Skeleton className="h-44 rounded-2xl" />
+      <Skeleton className="h-40 rounded-2xl" />
+      <Skeleton className="h-52 rounded-2xl" />
     </div>
   );
 }
 
-function ChatCard({ chat, statusLabel }: { chat: HomeChat; statusLabel: string }) {
+type HomeActionRunner = (action: HomeAction, itemId: string) => void;
+
+function focusIcon(kind: HomeFocusItem['kind']) {
+  if (kind === 'decision' || kind === 'failure') return <CircleAlert className="size-4" aria-hidden />;
+  if (kind === 'result') return <CircleCheck className="size-4" aria-hidden />;
+  if (kind === 'scheduled') return <CalendarClock className="size-4" aria-hidden />;
+  return <Sparkles className="size-4" aria-hidden />;
+}
+
+function actionNeedsDedicatedButton(action: HomeAction | undefined): action is HomeAction {
+  return Boolean(action && action.type !== 'open' && action.type !== 'review_judgment');
+}
+
+function FocusHero({
+  item,
+  kindLabel,
+  busy,
+  onAction,
+}: {
+  item: HomeFocusItem;
+  kindLabel: string;
+  busy: boolean;
+  onAction: HomeActionRunner;
+}) {
   return (
-    <Link
-      to={`/chat/${encodeURIComponent(chat.key)}`}
-      className="group block rounded-xl border border-edge-subtle bg-surface-panel p-4 transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 truncate text-sm font-semibold text-fg">{chat.name}</h3>
-        <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{statusLabel}</span>
+    <section className="rounded-2xl border border-edge-subtle bg-surface-base p-4 shadow-surface sm:p-5">
+      <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+        <span className={item.kind === 'decision' || item.kind === 'failure' ? 'text-warning' : 'text-accent'}>
+          {focusIcon(item.kind)}
+        </span>
+        <span>{kindLabel}</span>
       </div>
-      <p className="mt-2 text-xs text-fg-subtle">{formatTime(chat.updatedAt, '')}</p>
-    </Link>
+      <button
+        type="button"
+        className="mt-3 block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        disabled={!item.openAction}
+        onClick={() => item.openAction && onAction(item.openAction, item.id)}
+      >
+        <span className="flex items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-base font-semibold leading-6 text-fg">{item.title}</span>
+            <span className="mt-1 block line-clamp-2 text-sm leading-5 text-fg-muted">{item.summary}</span>
+          </span>
+          {item.statusLabel ? (
+            <span className="shrink-0 rounded-full bg-surface-muted px-2 py-1 text-[11px] font-medium text-fg-muted">
+              {item.statusLabel}
+            </span>
+          ) : null}
+        </span>
+      </button>
+      {item.primaryAction || item.secondaryActions.length > 0 ? (
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-3">
+          {item.secondaryActions.map((action) => (
+            <Button key={`${action.type}:${action.label}`} type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onAction(action, item.id)}>
+              {action.label}
+            </Button>
+          ))}
+          {item.primaryAction ? (
+            <Button type="button" variant="primary" className="h-8 px-3" disabled={busy} onClick={() => onAction(item.primaryAction!, item.id)}>
+              {item.primaryAction.label}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
-function DecisionCard({
-  item,
-  href,
-  kindLabel,
-  reasonLabel,
-  approveLabel,
-  denyLabel,
-  busy,
-  onRespond,
-}: {
-  item: HomeDecision;
-  href: string;
-  kindLabel: string;
-  reasonLabel: string;
-  approveLabel: string;
-  denyLabel: string;
-  busy: boolean;
-  onRespond: (decision: 'approve' | 'deny') => void;
-}) {
+function FocusRow({ item, busy, onAction }: { item: HomeFocusItem; busy: boolean; onAction: HomeActionRunner }) {
+  const quickAction = actionNeedsDedicatedButton(item.primaryAction) ? item.primaryAction : undefined;
   return (
-    <article className="rounded-xl border border-warning/35 bg-warning-soft/25 p-3.5 transition-colors hover:bg-warning-soft/40">
-      <Link to={href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
-          <p className="mt-1 truncate text-xs text-fg-subtle">{item.projectName || kindLabel}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-surface-panel/80 px-2 py-0.5 text-[11px] font-medium text-fg-muted">
-          {reasonLabel}
+    <article className="flex min-h-16 items-center gap-3 px-3 py-2.5 sm:px-4">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        disabled={!item.openAction}
+        onClick={() => item.openAction && onAction(item.openAction, item.id)}
+      >
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-fg-muted">
+          {focusIcon(item.kind)}
         </span>
-      </div>
-      {item.detail ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">{item.detail}</p> : null}
-      </Link>
-      {item.response ? (
-        <div className="mt-3 flex justify-end gap-2 border-t border-warning/20 pt-3">
-          <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onRespond('deny')}>{denyLabel}</Button>
-          <Button type="button" variant="primary" className="h-8 px-2" disabled={busy} onClick={() => onRespond('approve')}>{approveLabel}</Button>
-        </div>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-fg">{item.title}</span>
+          <span className="mt-0.5 block truncate text-xs text-fg-muted">{item.summary}</span>
+        </span>
+        {item.statusLabel ? <span className="max-w-32 shrink-0 truncate text-xs text-fg-subtle">{item.statusLabel}</span> : null}
+        {item.openAction ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden /> : null}
+      </button>
+      {quickAction ? (
+        <Button type="button" variant="secondary" className="h-8 shrink-0 px-2.5 text-xs" disabled={busy} onClick={() => onAction(quickAction, item.id)}>
+          {quickAction.label}
+        </Button>
       ) : null}
     </article>
+  );
+}
+
+function FocusSection({
+  title,
+  items,
+  total,
+  viewAllHref,
+  viewAllLabel,
+  showLessLabel,
+  busyItemId,
+  onAction,
+}: {
+  title: string;
+  items: HomeFocusItem[];
+  total: number;
+  viewAllHref?: string;
+  viewAllLabel: string;
+  showLessLabel: string;
+  busyItemId: string | null;
+  onAction: HomeActionRunner;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (items.length === 0) return null;
+  const visibleItems = expanded ? items : items.slice(0, 3);
+  const canExpandInline = !viewAllHref && items.length > visibleItems.length;
+  const showViewAllLink = Boolean(viewAllHref && total > visibleItems.length);
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          <CountBadge>{total.toLocaleString()}</CountBadge>
+        </div>
+        {showViewAllLink ? <Link to={viewAllHref!} className="text-xs font-medium text-accent">{viewAllLabel}</Link> : null}
+        {canExpandInline || expanded ? (
+          <button type="button" className="text-xs font-medium text-accent" onClick={() => setExpanded((value) => !value)}>
+            {expanded ? showLessLabel : viewAllLabel}
+          </button>
+        ) : null}
+      </div>
+      <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface">
+        {visibleItems.map((item) => <FocusRow key={item.id} item={item} busy={busyItemId === item.id} onAction={onAction} />)}
+      </div>
+    </section>
   );
 }
 
@@ -216,49 +259,6 @@ function AgentJudgmentCard({
   );
 }
 
-function AttentionCard({
-  item,
-  href,
-  statusLabel,
-  retryLabel,
-  viewLabel,
-  acknowledgeLabel,
-  busy,
-  onView,
-  onRetry,
-  onAcknowledge,
-}: {
-  item: HomeAttention;
-  href: string;
-  statusLabel: string;
-  retryLabel: string;
-  viewLabel: string;
-  acknowledgeLabel: string;
-  busy: boolean;
-  onView: () => void;
-  onRetry: () => void;
-  onAcknowledge: () => void;
-}) {
-  return (
-    <article className="rounded-xl border border-danger/25 bg-danger-soft/35 p-3.5">
-      <Link to={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="min-w-0 truncate text-sm font-semibold text-fg">{item.title}</h3>
-          <span className="shrink-0 rounded-full bg-surface-panel/80 px-2 py-0.5 text-[11px] font-medium text-danger">
-            {statusLabel}
-          </span>
-        </div>
-        <p className="mt-2 text-xs leading-5 text-fg-muted">{item.detail}</p>
-      </Link>
-      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-danger/15 pt-3">
-        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onAcknowledge}>{acknowledgeLabel}</Button>
-        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onView}>{viewLabel}</Button>
-        <Button type="button" variant="primary" className="h-8 px-2" disabled={busy} onClick={onRetry}>{retryLabel}</Button>
-      </div>
-    </article>
-  );
-}
-
 export function HomePage() {
   const language = useLocaleStore((state) => state.language);
   const msg = messages(language);
@@ -278,7 +278,8 @@ export function HomePage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
-  const [busyAttentionId, setBusyAttentionId] = useState<string | null>(null);
+  const [busyFocusItemId, setBusyFocusItemId] = useState<string | null>(null);
+  const [reviewDecision, setReviewDecision] = useState<HomeDecision | null>(null);
 
   const load = useCallback(async (showSkeleton = false) => {
     if (showSkeleton) setLoading(true);
@@ -317,9 +318,6 @@ export function HomePage() {
       if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
     };
   }, [load]);
-
-  const needsYou = useMemo(() => home?.decisions ?? [], [home]);
-  const attention = useMemo(() => home?.attention ?? [], [home]);
 
   const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -367,20 +365,6 @@ export function HomePage() {
     </Button>
   ), [copy.newWork]);
 
-  const respondToDecision = useCallback(async (item: HomeDecision, decision: 'approve' | 'deny') => {
-    if (!item.response) return;
-    setBusyDecisionId(item.id);
-    setLoadError(null);
-    try {
-      await respondToWorkDecision(item.response, decision);
-      await load();
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyDecisionId(null);
-    }
-  }, [load]);
-
   const handleJudgmentAction = useCallback(async (item: HomeDecision, action: () => Promise<unknown>) => {
     setBusyDecisionId(item.id);
     setLoadError(null);
@@ -389,21 +373,83 @@ export function HomePage() {
     finally { setBusyDecisionId(null); }
   }, [load]);
 
-  const performAttentionAction = useCallback(async (
-    item: HomeAttention,
-    action: (target: Pick<HomeAttention, 'kind' | 'runId'>) => Promise<unknown>,
-  ) => {
-    setBusyAttentionId(item.id);
-    setLoadError(null);
-    try {
-      await action({ kind: item.kind, runId: item.runId });
-      await load();
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyAttentionId(null);
+  const runFocusAction = useCallback<HomeActionRunner>((action, itemId) => {
+    if (action.type === 'open') {
+      navigate(action.href);
+      return;
     }
-  }, [load]);
+    if (action.type === 'ask_ai') {
+      navigate('/chat/new');
+      return;
+    }
+    if (action.type === 'review_judgment') {
+      const decision = home?.decisions.find((item) => item.judgment?.inboxItemId === action.itemId);
+      if (decision) setReviewDecision(decision);
+      return;
+    }
+    setBusyFocusItemId(itemId);
+    setLoadError(null);
+    void (async () => {
+      try {
+        if (action.type === 'connector_decision') {
+          await respondToWorkDecision(
+            { kind: 'connector_approval', approvalId: action.approvalId },
+            action.decision,
+          );
+        } else if (action.type === 'retry_run') {
+          await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
+        } else if (action.type === 'acknowledge_run') {
+          await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
+        }
+        await load();
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyFocusItemId(null);
+      }
+    })();
+  }, [home?.decisions, load, navigate]);
+
+  const focusView = useMemo(() => {
+    const items = home?.focusItems ?? [];
+    const primary = items[0] ?? null;
+    const remaining = primary ? items.filter((item) => item.id !== primary.id) : items;
+    const select = (kinds: HomeFocusItem['kind'][]) => remaining.filter((item) => kinds.includes(item.kind));
+    const primaryKind = primary?.kind;
+    return {
+      primary,
+      needs: {
+        items: select(['decision', 'failure']),
+        total: Math.max(0, (home?.decisions.length ?? 0) + (home?.attention.length ?? 0) - (primaryKind === 'decision' || primaryKind === 'failure' ? 1 : 0)),
+      },
+      running: {
+        items: select(['running']),
+        total: Math.max(0, (home?.tasks.running.length ?? 0) + (home?.workflowRuns.active.length ?? 0) - (primaryKind === 'running' ? 1 : 0)),
+      },
+      scheduled: {
+        items: select(['scheduled']),
+        total: Math.max(0, (home?.upcomingAutomations.length ?? 0) - (primaryKind === 'scheduled' ? 1 : 0)),
+      },
+      results: {
+        items: select(['result']),
+        total: Math.max(0, (home?.recentTasks.length ?? 0) + (home?.briefing.wins.length ?? 0) - (primaryKind === 'result' ? 1 : 0)),
+      },
+    };
+  }, [home]);
+
+  const primaryKindLabel = focusView.primary
+    ? focusView.primary.kind === 'decision'
+      ? copy.needsAttention
+      : focusView.primary.kind === 'failure'
+        ? copy.runAttention
+        : focusView.primary.kind === 'running'
+          ? t.home.continueTitle
+          : focusView.primary.kind === 'result'
+            ? t.home.completed
+            : focusView.primary.kind === 'scheduled'
+              ? t.home.scheduled
+              : t.home.primaryFocus
+    : t.home.primaryFocus;
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -498,6 +544,35 @@ export function HomePage() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      <Dialog.Root open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open) setReviewDecision(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
+              <Dialog.Title className="text-sm font-semibold text-fg">{copy.needsAttention}</Dialog.Title>
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost" className="size-8 p-0" title={t.cancel} aria-label={t.cancel}>
+                  <X className="size-4" aria-hidden />
+                </Button>
+              </Dialog.Close>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {reviewDecision?.judgment ? (
+                <AgentJudgmentCard
+                  item={reviewDecision}
+                  labels={copy}
+                  busy={busyDecisionId === reviewDecision.id}
+                  onDecide={(choice) => void handleJudgmentAction(reviewDecision, () => decideAgentJudgment(reviewDecision.judgment!.inboxItemId, choice))}
+                  onSnooze={() => void handleJudgmentAction(reviewDecision, () => transitionAgentJudgment(reviewDecision.judgment!.inboxItemId, 'snoozed'))}
+                  onDismiss={() => void handleJudgmentAction(reviewDecision, () => transitionAgentJudgment(reviewDecision.judgment!.inboxItemId, 'resolved'))}
+                  onInstruct={(instruction) => void handleJudgmentAction(reviewDecision, () => instructAgentJudgment(reviewDecision.judgment!.inboxItemId, instruction))}
+                />
+              ) : null}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       {loadError ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
           <span>{loadError}</span>
@@ -524,147 +599,41 @@ export function HomePage() {
             ) : null}
           </section>
 
-          {home.tasks.running.length === 0
-            && home.workflowRuns.active.length === 0
-            && home.decisions.length === 0
-            && home.attention.length === 0
-            && home.chats.running.length === 0
-            && home.chats.recent.length === 0
-            && home.upcomingAutomations.length === 0 ? (
-            <section className="rounded-2xl border border-dashed border-edge p-8 text-center">
-              <MessageCircle className="mx-auto size-6 text-accent" aria-hidden />
-              <h2 className="mt-3 text-sm font-semibold text-fg">{t.home.emptyTitle}</h2>
-              <p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-fg-muted">{t.home.emptyBody}</p>
-              <div className="mt-4 flex justify-center gap-2">
-                <Button type="button" variant="primary" onClick={() => navigate('/chat/new')}>{t.home.startChat}</Button>
-                <Button type="button" variant="secondary" onClick={() => setCreateOpen(true)}>{copy.newWork}</Button>
-              </div>
-            </section>
+          {focusView.primary ? (
+            <FocusHero
+              item={focusView.primary}
+              kindLabel={primaryKindLabel}
+              busy={busyFocusItemId === focusView.primary.id}
+              onAction={runFocusAction}
+            />
           ) : null}
 
-          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-            <div className="min-w-0 space-y-6">
-              {attention.length > 0 ? (
-                <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                  <div className="flex items-center gap-2">
-                    <CircleAlert className="size-4 text-danger" aria-hidden />
-                    <h2 className="text-base font-semibold text-fg">{copy.runAttention}</h2>
-                    <CountBadge>{attention.length.toLocaleString()}</CountBadge>
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    {attention.map((item) => (
-                      <AttentionCard
-                        key={item.id}
-                        item={item}
-                        href={modalizeTaskDetailHref(backgroundPath, item.href)}
-                        statusLabel={item.reason === 'run_timeout' ? t.home.attentionTimeout : t.home.attentionFailed}
-                        retryLabel={t.home.attentionRetry}
-                        viewLabel={t.home.attentionView}
-                        acknowledgeLabel={t.home.attentionAcknowledge}
-                        busy={busyAttentionId === item.id}
-                        onView={() => navigate(modalizeTaskDetailHref(backgroundPath, item.href))}
-                        onRetry={() => void performAttentionAction(item, retryWorkAttention)}
-                        onAcknowledge={() => void performAttentionAction(item, acknowledgeWorkAttention)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+          <div className="space-y-5">
+            <FocusSection title={copy.needsAttention} items={focusView.needs.items} total={focusView.needs.total} viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
+            <FocusSection title={t.home.continueTitle} items={focusView.running.items} total={focusView.running.total} viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
+            <FocusSection title={t.home.scheduled} items={focusView.scheduled.items} total={focusView.scheduled.total} viewAllHref="/automations" viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
+            <FocusSection title={t.home.completed} items={focusView.results.items} total={focusView.results.total} viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
 
-              {needsYou.length > 0 ? (
-                <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                  <div className="flex items-center gap-2"><CircleAlert className="size-4 text-warning" aria-hidden /><h2 className="text-base font-semibold text-fg">{copy.needsAttention}</h2><CountBadge>{needsYou.length.toLocaleString()}</CountBadge></div>
-                  <div className="mt-4 space-y-2">
-                    {needsYou.map((item) => item.kind === 'agent_judgment' && item.judgment ? (
-                      <AgentJudgmentCard
-                        key={item.id}
-                        item={item}
-                        labels={copy}
-                        busy={busyDecisionId === item.id}
-                        onDecide={(choice) => void handleJudgmentAction(item, () => decideAgentJudgment(item.judgment!.inboxItemId, choice))}
-                        onSnooze={() => void handleJudgmentAction(item, () => transitionAgentJudgment(item.judgment!.inboxItemId, 'snoozed'))}
-                        onDismiss={() => void handleJudgmentAction(item, () => transitionAgentJudgment(item.judgment!.inboxItemId, 'resolved'))}
-                        onInstruct={(instruction) => void handleJudgmentAction(item, () => instructAgentJudgment(item.judgment!.inboxItemId, instruction))}
-                      />
-                    ) : (
-                      <DecisionCard
-                        key={item.id}
-                        item={item}
-                        href={modalizeTaskDetailHref(backgroundPath, item.href)}
-                        kindLabel={t.home.decisionKinds[item.kind]}
-                        reasonLabel={t.home.decisionReasons[item.reason]}
-                        approveLabel={t.home.approve}
-                        denyLabel={t.home.deny}
-                        busy={busyDecisionId === item.id}
-                        onRespond={(decision) => void respondToDecision(item, decision)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : (
-                <p className="flex items-center gap-2 text-sm text-fg-muted">
-                  <span className="flex size-5 items-center justify-center rounded-full bg-success-soft text-xs text-success" aria-hidden>✓</span>
-                  {t.home.nothingNeedsYou}
-                </p>
-              )}
-
-              <section className="rounded-2xl bg-surface-base p-5 shadow-surface">
-                <div className="flex items-center gap-2"><Sparkles className="size-4 text-accent" aria-hidden /><h2 className="text-base font-semibold text-fg">{copy.running}</h2><CountBadge>{home.tasks.running.length.toLocaleString()}</CountBadge></div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {home.tasks.running.map((item) => <TaskCard key={item.id} task={item} statusLabel={copy.taskStatuses.running} backgroundPath={backgroundPath} />)}
-                  {home.tasks.running.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-fg-muted">{copy.emptyRunning}</p>
-                  ) : null}
+            {home.chats.recent.length > 0 ? (
+              <section>
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <MessageCircle className="size-4 text-fg-muted" aria-hidden />
+                  <h2 className="text-sm font-semibold text-fg">{copy.recent}</h2>
+                </div>
+                <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface">
+                  {home.chats.recent.slice(0, 3).map((chat) => (
+                    <Link key={chat.key} to={`/chat/${encodeURIComponent(chat.key)}`} className="flex min-h-16 items-center gap-3 px-3 py-2.5 hover:bg-surface-hover/55 sm:px-4">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-fg-muted"><MessageCircle className="size-4" aria-hidden /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-fg">{chat.name}</span>
+                        <span className="mt-0.5 block text-xs text-fg-subtle">{formatTime(chat.updatedAt, '')}</span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                    </Link>
+                  ))}
                 </div>
               </section>
-
-              {home.chats.recent.length > 0 ? <section className="rounded-2xl bg-surface-base p-5 shadow-surface"><div className="flex items-center gap-2"><h2 className="text-base font-semibold text-fg">{copy.recent}</h2></div><div className="mt-4 grid gap-3 sm:grid-cols-2">{home.chats.recent.slice(0, 6).map((chat) => <ChatCard key={chat.key} chat={chat} statusLabel={copy.openChat} />)}</div></section> : null}
-            </div>
-
-            <aside className="min-w-0 space-y-4" aria-label={t.home.nowTitle}>
-              <div className="px-1">
-                <h2 className="text-base font-semibold text-fg">{t.home.nowTitle}</h2>
-              </div>
-              {home.upcomingAutomations.length > 0 ? (
-                <section className="rounded-2xl bg-surface-base p-4 shadow-surface">
-                  <div className="flex items-center gap-2"><CalendarClock className="size-4 text-fg-subtle" aria-hidden /><h3 className="text-sm font-semibold text-fg">{t.home.scheduled}</h3></div>
-                  <div className="mt-2 divide-y divide-edge-subtle">{home.upcomingAutomations.slice(0, 3).map((automation) => (
-                    <Link key={automation.id} to="/automations" className="flex items-center justify-between gap-3 rounded-lg px-1 py-3 text-sm hover:bg-surface-hover/55">
-                      <span className="min-w-0 truncate text-fg">{automation.name || automation.action}</span>
-                      <time className="shrink-0 text-xs text-fg-subtle">{formatTime(automation.nextRunAt, t.never)}</time>
-                    </Link>
-                  ))}</div>
-                </section>
-              ) : null}
-              {home.recentTasks.length > 0 ? (
-                <section className="rounded-2xl bg-surface-base p-4 shadow-surface">
-                  <div className="flex items-center gap-2">
-                    <CircleCheck className="size-4 text-success" aria-hidden />
-                    <h3 className="text-sm font-semibold text-fg">{copy.recentTasks}</h3>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {home.recentTasks.slice(0, 3).map((receipt) => (
-                      <TaskRunReceiptCard
-                        key={receipt.runId}
-                        receipt={receipt}
-                        evidenceLabel={copy.evidenceCount}
-                        remainingLabel={copy.remainingCount}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              <WorkbenchActivity />
-              {home.briefing.wins.length > 0 ? (
-                <Link
-                  to={home.briefing.wins[0].href}
-                  className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 text-sm text-fg-muted hover:bg-surface-hover/55 hover:text-fg"
-                >
-                  <span>{interpolate(t.home.completedSummary, { count: home.briefing.wins.length })}</span>
-                  <span className="shrink-0 text-xs font-medium text-accent">{t.home.viewLatestResult} →</span>
-                </Link>
-              ) : null}
-            </aside>
+            ) : null}
           </div>
 
         </>

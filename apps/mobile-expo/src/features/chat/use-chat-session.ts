@@ -70,6 +70,7 @@ import { requestMobileRealtimeReconnect } from '../gateway/use-gateway-realtime'
 import { readPendingSessionInput } from '../gateway/session-input-outbox';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
+import { formatMobileAgentRunError } from './agent-run-error';
 
 const STREAMING_RENDER_THROTTLE_MS = 100;
 const QUEUED_MESSAGE_DISPLAY_DELAY_MS = 20_000;
@@ -579,7 +580,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         setClarifyPrompt(null);
         setClarifySubmitError(null);
         setClarifySubmitting(false);
-        setSnackMsg(msg);
+        setSnackMsg(formatMobileAgentRunError(msg, {
+          modelQuotaExhausted: m.chat.modelQuotaExhausted,
+          platformTokenLimitExceeded: m.chat.platformTokenLimitExceeded,
+        }));
         setAwaitingSessionRefresh(false);
         invalidateSession();
       },
@@ -596,6 +600,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     awaitingSessionRefresh,
     clearQueuedDisplayTimer,
     setOptimisticDeliveryState,
+    m.chat.modelQuotaExhausted,
+    m.chat.platformTokenLimitExceeded,
   ]);
 
   // ── Send ─────────────────────────────────────────────────

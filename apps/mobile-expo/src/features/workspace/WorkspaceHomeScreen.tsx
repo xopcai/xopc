@@ -40,8 +40,7 @@ import {
 } from '../../theme';
 import { resolveNoteListTitle } from '../notes/note-title';
 import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
-import { readPinnedHomeFocusId, writePinnedHomeFocusId } from './home-focus-preference';
-import { rankHomeContinueCandidates, selectHomeFocusItem } from './home-presentation';
+import { mobileRouteForHomeHref, rankHomeContinueCandidates } from './home-presentation';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
 import { useOptionalWorkspaceTransition } from './workspace-transition-context';
@@ -89,7 +88,7 @@ function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessage
   });
 }
 
-type RemoteHomeAction = Exclude<HomeAction, { type: 'open' | 'ask_ai' }>;
+type RemoteHomeAction = Exclude<HomeAction, { type: 'open' | 'ask_ai' | 'review_judgment' }>;
 
 export function WorkspaceHomeScreen() {
   const router = useRouter();
@@ -108,7 +107,6 @@ export function WorkspaceHomeScreen() {
   } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [pinnedFocusId, setPinnedFocusId] = useState(readPinnedHomeFocusId);
   const homeReadyRecorded = useRef(false);
 
   useHomeChatPrefetch(configured);
@@ -154,17 +152,12 @@ export function WorkspaceHomeScreen() {
     openNoteDetail(router, note.id);
   }, [router]);
 
-  const primaryFocus = useMemo(
-    () => selectHomeFocusItem(home?.focusItems ?? [], pinnedFocusId),
-    [home?.focusItems, pinnedFocusId],
+  const primaryFocus = home?.focusItems[0];
+  const remainingFocusItems = useMemo(
+    () => primaryFocus ? (home?.focusItems ?? []).filter((item) => item.id !== primaryFocus.id) : [],
+    [home?.focusItems, primaryFocus],
   );
-
-  useEffect(() => {
-    if (!pinnedFocusId || !home) return;
-    if (home.focusItems.some((item) => item.id === pinnedFocusId && item.pinnable)) return;
-    writePinnedHomeFocusId(null);
-    setPinnedFocusId(null);
-  }, [home, pinnedFocusId]);
+  const focusedIds = useMemo(() => new Set((home?.focusItems ?? []).map((item) => item.id)), [home?.focusItems]);
 
   const continueItems = useMemo<ContinueItem[]>(() => {
     const workflowItems = (home?.workflowRuns.active ?? []).map((run) => ({
@@ -220,17 +213,10 @@ export function WorkspaceHomeScreen() {
       },
     }));
     return rankHomeContinueCandidates(
-      [...workflowItems, ...taskItems, ...sessionItems, ...noteItems],
+      [...workflowItems, ...taskItems, ...sessionItems, ...noteItems].filter((item) => !focusedIds.has(item.id)),
       primaryFocus?.id,
     ).slice(0, 3);
-  }, [handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.chats.running, home?.tasks.running, home?.workflowRuns.active, homeNotes, m.sessions.untitled, primaryFocus?.id, router]);
-
-  const toggleFocusPin = useCallback((item: HomeFocusItem) => {
-    const nextId = pinnedFocusId === item.id ? null : item.id;
-    writePinnedHomeFocusId(nextId);
-    setPinnedFocusId(nextId);
-    recordUsageEvent('home_focus_pinned');
-  }, [pinnedFocusId]);
+  }, [focusedIds, handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.chats.running, home?.tasks.running, home?.workflowRuns.active, homeNotes, m.sessions.untitled, primaryFocus?.id, router]);
 
   const remoteActionMutation = useMutation({
     mutationFn: async (action: RemoteHomeAction) => {
@@ -272,14 +258,10 @@ export function WorkspaceHomeScreen() {
       openAskAi();
     } else if (action.type === 'open') {
       recordUsageEvent('home_focus_opened');
-      if (action.target === 'work') router.push('/tasks');
-      else if (action.target === 'task' && action.targetId) router.push(`/tasks/${action.targetId}`);
-      else if (action.target === 'workflow_run' && action.targetId) router.push(`/workflows/runs/${action.targetId}`);
-      else if (action.target === 'automation' && action.targetId) router.push(`/automation/runs/${action.targetId}`);
-      else if (action.target === 'automation') router.push('/automation');
-      else if (action.target === 'session' && action.sessionKey) router.push(`/chat/${action.sessionKey}`);
-      else if (action.target === 'inbox') router.push('/inbox');
-      else if (action.target === 'inbox_judgment' && action.targetId) router.push({ pathname: '/inbox', params: { item: action.targetId } });
+      router.push(mobileRouteForHomeHref(action.href) as never);
+    } else if (action.type === 'review_judgment') {
+      recordUsageEvent('home_focus_opened');
+      router.push({ pathname: '/inbox', params: { item: action.itemId } });
     } else {
       remoteActionMutation.mutate(action);
     }
@@ -362,11 +344,15 @@ export function WorkspaceHomeScreen() {
             ) : null}
             <HomeFocusCard
               item={primaryFocus ?? home.focusItems[0]}
-              remainingCount={Math.max(0, home.focusItems.length - 1)}
               pending={remoteActionMutation.isPending}
-              pinned={primaryFocus?.id === pinnedFocusId}
               onAction={runHomeAction}
-              onTogglePin={toggleFocusPin}
+            />
+            <HomeFocusSections
+              items={remainingFocusItems}
+              scheduledTotal={Math.max(0, home.upcomingAutomations.length - (primaryFocus?.kind === 'scheduled' ? 1 : 0))}
+              pending={remoteActionMutation.isPending}
+              onAction={runHomeAction}
+              onViewSchedules={() => router.push('/automation')}
             />
             <ContinueSection items={continueItems} />
             <LibrarySection
@@ -464,31 +450,19 @@ function focusIcon(kind: HomeFocusItem['kind']): string {
 
 function HomeFocusCard({
   item,
-  remainingCount,
   pending,
-  pinned,
   onAction,
-  onTogglePin,
 }: {
   item: HomeFocusItem;
-  remainingCount: number;
   pending: boolean;
-  pinned: boolean;
   onAction: (action: HomeAction) => void;
-  onTogglePin: (item: HomeFocusItem) => void;
 }) {
   const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
   const openAction = item.openAction;
   const body = (
     <>
       <Text style={[styles.focusTitle, { color: colors.text.primary }]}>{item.title}</Text>
       <Text style={[styles.focusSummary, { color: colors.text.secondary }]}>{item.summary}</Text>
-      {remainingCount > 0 ? (
-        <Text style={[styles.focusRemaining, { color: colors.text.tertiary }]}>
-          {t(hm.moreFocusItems, { count: remainingCount })}
-        </Text>
-      ) : null}
     </>
   );
   const actions = [item.primaryAction, ...item.secondaryActions].filter((action): action is HomeAction => Boolean(action));
@@ -507,16 +481,6 @@ function HomeFocusCard({
             <Text style={[styles.focusStatus, { color: colors.accent.primary, backgroundColor: colors.accent.soft }]}>
               {item.statusLabel}
             </Text>
-          ) : null}
-          {item.pinnable ? (
-            <Pressable
-              style={styles.focusPinButton}
-              onPress={() => onTogglePin(item)}
-              accessibilityRole="button"
-              accessibilityLabel={pinned ? hm.unpinFocus : hm.pinFocus}
-            >
-              <Icon source={pinned ? 'pin' : 'pin-outline'} size={19} color={pinned ? colors.accent.primary : colors.text.tertiary} />
-            </Pressable>
           ) : null}
         </View>
       </View>
@@ -538,6 +502,145 @@ function HomeFocusCard({
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function HomeFocusSections({
+  items,
+  scheduledTotal,
+  pending,
+  onAction,
+  onViewSchedules,
+}: {
+  items: HomeFocusItem[];
+  scheduledTotal: number;
+  pending: boolean;
+  onAction: (action: HomeAction) => void;
+  onViewSchedules: () => void;
+}) {
+  const { homePage: hm } = useMessages();
+  const needs = items.filter((item) => item.kind === 'decision' || item.kind === 'failure');
+  const running = items.filter((item) => item.kind === 'running');
+  const scheduled = items.filter((item) => item.kind === 'scheduled');
+  const results = items.filter((item) => item.kind === 'result');
+  return (
+    <>
+      <HomeFocusList title={hm.sectionAttention} items={needs} pending={pending} onAction={onAction} />
+      <HomeFocusList title={hm.sectionTasksRunning} items={running} pending={pending} onAction={onAction} />
+      <HomeFocusList
+        title={hm.sectionScheduled}
+        items={scheduled}
+        total={scheduledTotal}
+        pending={pending}
+        onAction={onAction}
+        onViewAll={scheduledTotal > scheduled.length ? onViewSchedules : undefined}
+      />
+      <HomeFocusList title={hm.sectionRecentTasks} items={results} pending={pending} onAction={onAction} />
+    </>
+  );
+}
+
+function HomeFocusList({
+  title,
+  items,
+  total = items.length,
+  pending,
+  onAction,
+  onViewAll,
+}: {
+  title: string;
+  items: HomeFocusItem[];
+  total?: number;
+  pending: boolean;
+  onAction: (action: HomeAction) => void;
+  onViewAll?: () => void;
+}) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  const [expanded, setExpanded] = useState(false);
+  if (items.length === 0) return null;
+  const visibleItems = expanded ? items : items.slice(0, 3);
+  const canExpand = !onViewAll && items.length > visibleItems.length;
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeadingRow}>
+        <View style={styles.sectionHeadingCopy}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{title}</Text>
+          <Text style={[styles.sectionCount, { color: colors.text.tertiary, backgroundColor: colors.surface.grouped }]}>{total}</Text>
+        </View>
+        {onViewAll ? (
+          <Pressable onPress={onViewAll} accessibilityRole="button">
+            <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>{hm.viewAll}</Text>
+          </Pressable>
+        ) : canExpand || expanded ? (
+          <Pressable onPress={() => setExpanded((value) => !value)} accessibilityRole="button">
+            <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>{expanded ? hm.showLess : hm.viewAll}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {visibleItems.map((item, index) => (
+          <HomeFocusRow
+            key={item.id}
+            item={item}
+            pending={pending}
+            last={index === visibleItems.length - 1}
+            onAction={onAction}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function HomeFocusRow({
+  item,
+  pending,
+  last,
+  onAction,
+}: {
+  item: HomeFocusItem;
+  pending: boolean;
+  last: boolean;
+  onAction: (action: HomeAction) => void;
+}) {
+  const { colors } = useTheme();
+  const quickAction = item.primaryAction?.type !== 'open' && item.primaryAction?.type !== 'review_judgment'
+    ? item.primaryAction
+    : undefined;
+  return (
+    <View style={styles.focusListRow}>
+      <Pressable
+        style={styles.focusListMain}
+        onPress={() => item.openAction && onAction(item.openAction)}
+        disabled={!item.openAction}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !item.openAction }}
+      >
+        <View style={[styles.rowIcon, { backgroundColor: colors.surface.grouped }]}>
+          <Icon source={focusIcon(item.kind)} size={18} color={item.kind === 'failure' ? colors.semantic.error : colors.accent.primary} />
+        </View>
+        <View style={styles.rowCopy}>
+          <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+          <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>
+            {item.statusLabel ? `${item.summary} · ${item.statusLabel}` : item.summary}
+          </Text>
+        </View>
+        {item.openAction ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
+      </Pressable>
+      {quickAction ? (
+        <Pressable
+          style={[styles.rowAction, { backgroundColor: colors.accent.soft }]}
+          onPress={() => onAction(quickAction)}
+          disabled={pending}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: pending, busy: pending }}
+        >
+          <Text style={[styles.rowActionText, { color: colors.accent.primary }]}>{quickAction.label}</Text>
+        </Pressable>
+      ) : null}
+      {!last ? <View style={[styles.focusRowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
     </View>
   );
 }
@@ -755,12 +858,14 @@ const styles = StyleSheet.create({
   focusTitle: { ...typography.title, marginBottom: spacing.xs },
   focusSummary: { ...typography.body },
   focusStatus: { ...typography.caption, fontWeight: '600', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.sm },
-  focusPinButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -spacing.sm, marginTop: -spacing.sm },
-  focusRemaining: { ...typography.caption, marginTop: spacing.sm },
   focusActions: { flexDirection: 'row', gap: spacing.sm },
   focusButton: { minHeight: 44, flex: 1, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingHorizontal: spacing.md },
   focusButtonText: { ...typography.ui, fontWeight: '600' },
   section: { gap: spacing.md },
+  sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionHeadingCopy: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionCount: { ...typography.caption, minWidth: 22, paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderRadius: radii.full, textAlign: 'center' },
+  sectionLink: { ...typography.caption, fontWeight: '600' },
   sectionBody: { borderRadius: radii.lg, overflow: 'hidden' },
   sectionTitle: { ...typography.heading },
   groupedList: { borderRadius: radii.lg, overflow: 'hidden' },
@@ -769,6 +874,12 @@ const styles = StyleSheet.create({
   rowTitle: { ...typography.ui, fontWeight: '600' },
   rowSubtitle: { ...typography.caption },
   rowDivider: { position: 'absolute', left: 52, right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
+  focusListRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md },
+  focusListMain: { minWidth: 0, flex: 1, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  rowIcon: { width: 32, height: 32, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
+  rowAction: { minHeight: 36, maxWidth: 96, justifyContent: 'center', borderRadius: radii.md, paddingHorizontal: spacing.sm, marginLeft: spacing.sm },
+  rowActionText: { ...typography.caption, fontWeight: '600' },
+  focusRowDivider: { position: 'absolute', left: 56, right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
   libraryRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   libraryLabel: { ...typography.ui, flex: 1 },
   libraryValue: { ...typography.label },

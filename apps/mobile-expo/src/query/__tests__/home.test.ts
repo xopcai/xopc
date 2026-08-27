@@ -18,7 +18,6 @@ function currentGatewayHomeResponse() {
       title: 'What would you like to move forward?',
       summary: 'Hand me the outcome you want.',
       updatedAt: 1,
-      pinnable: false,
       primaryAction: { type: 'ask_ai', label: 'Ask an agent' },
       secondaryActions: [],
     }],
