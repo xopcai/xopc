@@ -39,10 +39,20 @@ function classifyFailureReason(reason: string | undefined): STTProviderFailureRe
   if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('aborted')) {
     return 'timeout';
   }
-  if (lower.includes('unsupported') || lower.includes('format')) {
+  if (lower.includes('unsupported') || lower.includes('format') || lower.includes('audio decoder')) {
     return 'unsupported_format';
   }
   return 'provider_error';
+}
+
+export class STTTranscriptionError extends Error {
+  constructor(
+    message: string,
+    readonly reasonCode: STTProviderFailureReason,
+  ) {
+    super(message);
+    this.name = 'STTTranscriptionError';
+  }
 }
 
 function toAttempt(attempt: MediaUnderstandingModelDecision): STTProviderAttempt {
@@ -95,8 +105,11 @@ export async function transcribe(
 
   if (!attachmentDecision?.chosen) {
     log.error({ attempts, attemptedProviders }, 'All STT providers failed');
-    const lastError = attempts.find((a) => a.task === 'failed')?.error;
-    throw new Error(lastError ?? 'All STT providers failed');
+    const lastFailure = attempts.findLast((attempt) => attempt.task === 'failed');
+    throw new STTTranscriptionError(
+      lastFailure?.error ?? 'All STT providers failed',
+      lastFailure?.reasonCode ?? 'unknown',
+    );
   }
 
   const chosen = attachmentDecision.chosen;
@@ -111,7 +124,8 @@ export async function transcribe(
   return {
     text: output.text,
     provider: chosen.provider ?? 'unknown',
-    ...(chosen.model ? { language: options?.language } : {}),
+    ...(output.durationSeconds !== undefined ? { duration: output.durationSeconds } : {}),
+    ...(output.language || options?.language ? { language: output.language ?? options?.language } : {}),
     attempts,
     ...(fallbackFrom ? { fallbackFrom } : {}),
     attemptedProviders,

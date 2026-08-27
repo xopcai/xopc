@@ -21,7 +21,12 @@ describe('runAudioTranscription', () => {
       async transcribeAudio(req) {
         captured = req;
         await new Promise((resolve) => setTimeout(resolve, 15));
-        return { text: 'hello', model: 'test-model' };
+        return {
+          text: 'hello',
+          model: 'test-model',
+          language: 'en',
+          durationSeconds: 2.5,
+        };
       },
     });
     const controller = new AbortController();
@@ -44,5 +49,6 @@ describe('runAudioTranscription', () => {
     expect(captured?.mime).toBe('audio/webm;codecs=opus');
     expect(captured?.signal).toBe(controller.signal);
     expect(result.decision.attachments[0]?.chosen?.latencyMs).toBeGreaterThanOrEqual(10);
+    expect(result.outputs[0]).toMatchObject({ language: 'en', durationSeconds: 2.5 });
   });
 });

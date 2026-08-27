@@ -91,6 +91,14 @@ export function createChatRateLimitMiddleware(deps: StrictRateLimitDeps) {
   });
 }
 
+export function createMediaRateLimitMiddleware(deps: StrictRateLimitDeps) {
+  return createClientRateLimitMiddleware(deps, {
+    limiter: () => buckets.mediaApi(),
+    exceededMessage: 'Media API rate limit exceeded',
+    reason: 'media_rate_limit_exceeded',
+  });
+}
+
 export function createTaskRateLimitMiddleware(deps: StrictRateLimitDeps) {
   return createClientRateLimitMiddleware(deps, {
     limiter: () => buckets.taskApi(),

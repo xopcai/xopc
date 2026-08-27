@@ -11,6 +11,7 @@ import type { STTConfig, STTOptions, STTResult } from './types.js';
 import { transcribe } from './transcribe-core.js';
 
 export { transcribe } from './transcribe-core.js';
+export { STTTranscriptionError } from './transcribe-core.js';
 export { isSTTAvailable } from './availability.js';
 export { mergeSttConfigFromAppConfig } from './config.js';
 

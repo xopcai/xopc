@@ -117,7 +117,12 @@ function orderProviders(
 function pickMethod(
   provider: MediaUnderstandingProvider,
   capability: MediaCapability,
-): ((req: never) => Promise<{ text: string; model?: string }>) | undefined {
+): ((req: never) => Promise<{
+  text: string;
+  model?: string;
+  language?: string;
+  durationSeconds?: number;
+}>) | undefined {
   if (capability === 'audio') {
     return provider.transcribeAudio as (
       req: AudioTranscriptionRequest,
@@ -201,9 +206,12 @@ export async function runCapability(
       try {
         // We narrow `method` by capability above; cast through `unknown` to keep
         // a single call site without per-capability ceremony.
-        const callResult = await (method as (req: unknown) => Promise<{ text: string; model?: string }>)(
-          request,
-        );
+        const callResult = await (method as (req: unknown) => Promise<{
+          text: string;
+          model?: string;
+          language?: string;
+          durationSeconds?: number;
+        }>)(request);
         const text = callResult.text?.trim() ?? '';
         if (!text) {
           attempts.push({
@@ -230,6 +238,10 @@ export async function runCapability(
           text,
           provider: provider.id,
           model: callResult.model,
+          ...(callResult.language ? { language: callResult.language } : {}),
+          ...(callResult.durationSeconds !== undefined
+            ? { durationSeconds: callResult.durationSeconds }
+            : {}),
         });
         break;
       } catch (error) {

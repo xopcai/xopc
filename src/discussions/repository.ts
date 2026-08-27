@@ -220,6 +220,17 @@ export function getDiscussionMetrics(): DiscussionMetrics {
       WHERE s.discussion_id = d.id AND s.status = 'confirmed') - d.recording_started_at) first_ms,
     AVG(CASE WHEN d.completed_at IS NOT NULL THEN d.completed_at - d.recording_started_at END) complete_ms
     FROM discussion_captures d`).get() as { first_ms: number | null; complete_ms: number | null };
+  const segmentMetrics = db.prepare(`SELECT
+    COUNT(*) total,
+    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) failed,
+    SUM(CASE WHEN attempt_count > 1 THEN 1 ELSE 0 END) retried,
+    AVG(CASE WHEN status = 'confirmed' THEN updated_at - created_at END) latency_ms
+    FROM discussion_transcript_segments`).get() as {
+      total: number;
+      failed: number | null;
+      retried: number | null;
+      latency_ms: number | null;
+    };
   const byStatus = Object.fromEntries(DISCUSSION_STATUSES.map((status) => [status, 0])) as Record<DiscussionStatus, number>;
   for (const row of rows) byStatus[row.status] = row.count;
   return {
@@ -227,6 +238,12 @@ export function getDiscussionMetrics(): DiscussionMetrics {
     byStatus,
     averageTimeToFirstTranscriptMs: timing.first_ms == null ? null : Math.max(0, Math.round(timing.first_ms)),
     averageTimeToCompleteMs: timing.complete_ms == null ? null : Math.max(0, Math.round(timing.complete_ms)),
+    totalSegments: segmentMetrics.total,
+    failedSegments: segmentMetrics.failed ?? 0,
+    retriedSegments: segmentMetrics.retried ?? 0,
+    averageSegmentLatencyMs: segmentMetrics.latency_ms == null
+      ? null
+      : Math.max(0, Math.round(segmentMetrics.latency_ms)),
   };
 }
 

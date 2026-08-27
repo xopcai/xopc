@@ -1,6 +1,5 @@
 /**
- * Voice routes — POST /api/voice/transcriptions (multipart) and legacy
- * POST /api/voice/transcribe (JSON/base64).
+ * Voice routes — POST /api/voice/transcriptions (multipart).
  *
  * The endpoints share one execution path that:
  *   1. Runs the configured STT provider and fallback chain
@@ -16,7 +15,12 @@ import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
-import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../../../voice/stt/index.js';
+import {
+  isSTTAvailable,
+  mergeSttConfigFromAppConfig,
+  STTTranscriptionError,
+  transcribe,
+} from '../../../voice/stt/index.js';
 import { isTTSAvailable, mergeTtsConfigFromAppConfig, speak } from '../../../voice/tts/index.js';
 import { listTtsProvidersForApi } from '../../../voice/tts/list-providers.js';
 import { resolveSpeechProvider } from '../../../voice/tts/factory.js';
@@ -552,6 +556,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
           ...(detectedLanguage ? { language: detectedLanguage } : {}),
           provider: result.provider,
           attempts: result.attempts,
+          ...(result.duration !== undefined ? { durationSeconds: result.duration } : {}),
           latencyMs: Date.now() - startedAt,
         },
       });
@@ -560,7 +565,18 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       if (!c.req.raw.signal.aborted) {
         log.error({ err: error, mimeType: input.mimeType, fileName: input.fileName }, `Voice transcription failed: ${msg}`);
       }
-      return c.json({ ok: false, error: { message: `Transcription failed: ${msg}` } }, 502);
+      if (error instanceof STTTranscriptionError) {
+        const status = error.reasonCode === 'unsupported_format'
+          ? 415
+          : error.reasonCode === 'timeout'
+            ? 504
+            : 502;
+        return c.json({
+          ok: false,
+          error: { code: error.reasonCode, message: `Transcription failed: ${msg}` },
+        }, status);
+      }
+      return c.json({ ok: false, error: { code: 'provider_error', message: `Transcription failed: ${msg}` } }, 502);
     }
   };
 
@@ -595,35 +611,4 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     });
   });
 
-  /** Legacy JSON/base64 endpoint retained for mobile and external clients. */
-  authenticated.post('/api/voice/transcribe', strictRateLimitMiddleware, async (c) => {
-    let body: { audio?: unknown; mimeType?: unknown; language?: unknown; fileName?: unknown } = {};
-    try {
-      body = (await c.req.json()) as typeof body;
-    } catch {
-      return c.json({ ok: false, error: { message: 'Invalid JSON body' } }, 400);
-    }
-    if (typeof body.audio !== 'string' || !body.audio.trim()) {
-      return c.json({ ok: false, error: { message: 'Missing required field: audio (base64)' } }, 400);
-    }
-    if (typeof body.mimeType !== 'string' || !body.mimeType.trim()) {
-      return c.json({ ok: false, error: { message: 'Missing required field: mimeType' } }, 400);
-    }
-    const encoded = body.audio.replace(/\s/g, '');
-    if (encoded.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
-      return c.json({ ok: false, error: { message: 'Invalid base64 audio data' } }, 400);
-    }
-    const language = typeof body.language === 'string' && body.language.trim()
-      ? body.language.trim()
-      : undefined;
-    const fileName = typeof body.fileName === 'string' && body.fileName.trim()
-      ? body.fileName.trim()
-      : `audio-${Date.now()}`;
-    return runTranscription(c, {
-      audioBuffer: Buffer.from(encoded, 'base64'),
-      mimeType: body.mimeType.trim(),
-      fileName,
-      ...(language ? { language } : {}),
-    });
-  });
 }

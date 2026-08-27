@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-
 import type { Config } from '../config/schema.js';
 import type { NotesService } from '../notes/service.js';
 import { createLogger } from '../utils/logger.js';
 import { isSTTAvailable, mergeSttConfigFromAppConfig, transcribe } from '../voice/stt/index.js';
+import { forEachNormalizedAudioSegment } from '../voice/audio/normalize.js';
 
 import {
   getDiscussionCapture,
@@ -12,7 +11,7 @@ import {
   listDiscussionTranscriptSegments,
   updateDiscussionCapture,
 } from './repository.js';
-import { assembleDiscussionTranscript } from './transcript.js';
+import { appendTranscriptWithoutOverlap, assembleDiscussionTranscript } from './transcript.js';
 import type { DiscussionCapture } from './types.js';
 
 const log = createLogger('DiscussionSealer');
@@ -22,7 +21,7 @@ export interface DiscussionSealerDeps {
   notes: NotesService;
   getConfig: () => Config;
   transcribeRecording?: (
-    buffer: Buffer,
+    filePath: string,
     capture: DiscussionCapture,
     signal?: AbortSignal,
   ) => Promise<{ text: string; language?: string }>;
@@ -114,15 +113,21 @@ export class DiscussionSealer {
   private async transcribeFullRecording(capture: DiscussionCapture): Promise<{ text: string; language?: string }> {
     const attachment = await this.deps.notes.getAttachmentPath(capture.noteId, capture.audioAttachmentId!);
     if (!attachment) throw new Error('Discussion audio file is missing');
-    const buffer = await readFile(attachment.filePath);
-    if (this.deps.transcribeRecording) return this.deps.transcribeRecording(buffer, capture);
+    if (this.deps.transcribeRecording) return this.deps.transcribeRecording(attachment.filePath, capture);
     const config = this.deps.getConfig();
     const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
     if (!isSTTAvailable(sttConfig)) throw new Error('STT is not configured');
-    return transcribe(buffer, sttConfig, {
-      mime: attachment.mimeType || capture.mimeType,
-      fileName: attachment.fileName,
+    let text = '';
+    let language: string | undefined;
+    await forEachNormalizedAudioSegment({ filePath: attachment.filePath }, async (buffer, index) => {
+      const result = await transcribe(buffer, sttConfig, {
+        mime: 'audio/wav',
+        fileName: `discussion-recovery-${index}.wav`,
+      });
+      text = appendTranscriptWithoutOverlap(text, result.text);
+      language ??= result.language;
     });
+    return { text, ...(language ? { language } : {}) };
   }
 
   private fail(

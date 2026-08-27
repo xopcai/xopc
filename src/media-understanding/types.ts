@@ -81,6 +81,8 @@ export interface MediaUnderstandingOutput {
   text: string;
   provider: string;
   model?: string;
+  language?: string;
+  durationSeconds?: number;
 }
 
 export interface MediaUnderstandingModelDecision {

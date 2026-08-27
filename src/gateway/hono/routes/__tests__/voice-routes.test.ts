@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../../config/schema.js';
+import { STTTranscriptionError } from '../../../../voice/stt/index.js';
 
 const { transcribe, syncVoiceLanguage } = vi.hoisted(() => ({
   transcribe: vi.fn(),
@@ -22,6 +23,7 @@ function createApp() {
     audio: {
       enabled: true,
       provider: 'openai',
+      duration: 1.25,
       providers: { openai: { apiKey: 'test' } },
     },
   };
@@ -66,23 +68,21 @@ describe('voice transcription routes', () => {
     });
   });
 
-  it('keeps the legacy JSON/base64 endpoint compatible', async () => {
-    const res = await createApp().request('/api/voice/transcribe', {
+  it('returns a stable client error for unsupported audio', async () => {
+    transcribe.mockRejectedValueOnce(new STTTranscriptionError('Unsupported audio codec', 'unsupported_format'));
+    const form = new FormData();
+    form.append('audio', new File(['invalid'], 'sample.webm', { type: 'audio/webm' }));
+
+    const res = await createApp().request('/api/voice/transcriptions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        audio: Buffer.from('audio').toString('base64'),
-        mimeType: 'audio/ogg',
-        fileName: 'legacy.ogg',
-      }),
+      body: form,
     });
 
-    expect(res.status).toBe(200);
-    expect(transcribe).toHaveBeenCalledWith(
-      expect.any(Buffer),
-      expect.any(Object),
-      expect.objectContaining({ mime: 'audio/ogg', fileName: 'legacy.ogg' }),
-    );
+    expect(res.status).toBe(415);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'unsupported_format' },
+    });
   });
 
   it('syncs the product language through the gateway policy', async () => {

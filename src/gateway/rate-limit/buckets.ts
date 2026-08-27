@@ -73,6 +73,7 @@ class BucketRegistry {
 
   private strictApiLimiter?: RateLimiter;
   private chatApiLimiter?: RateLimiter;
+  private mediaApiLimiter?: RateLimiter;
   private taskApiLimiter?: RateLimiter;
   private xopcCloudPollLimiter?: RateLimiter;
   private channelApiLimiter?: RateLimiter;
@@ -115,6 +116,14 @@ class BucketRegistry {
       this.chatApiLimiter = new RateLimiter({ maxRequests: 180, windowMs: 60_000 });
     }
     return this.chatApiLimiter;
+  }
+
+  /** Durable media chunk uploads — 300 req / 60 s per client IP. */
+  mediaApi(): RateLimiter {
+    if (!this.mediaApiLimiter) {
+      this.mediaApiLimiter = new RateLimiter({ maxRequests: 300, windowMs: 60_000 });
+    }
+    return this.mediaApiLimiter;
   }
 
   /** Interactive task and board mutations — 300 req / 60 s per client IP. */
@@ -190,6 +199,7 @@ class BucketRegistry {
     this.authFailureLimiter?.destroy();
     this.strictApiLimiter?.destroy();
     this.chatApiLimiter?.destroy();
+    this.mediaApiLimiter?.destroy();
     this.taskApiLimiter?.destroy();
     this.xopcCloudPollLimiter?.destroy();
     this.channelApiLimiter?.destroy();
@@ -200,6 +210,7 @@ class BucketRegistry {
     this.authFailureLimiter = undefined;
     this.strictApiLimiter = undefined;
     this.chatApiLimiter = undefined;
+    this.mediaApiLimiter = undefined;
     this.taskApiLimiter = undefined;
     this.xopcCloudPollLimiter = undefined;
     this.channelApiLimiter = undefined;
@@ -215,6 +226,7 @@ class BucketRegistry {
     this.authFailureLimiter?.resetForTests();
     this.strictApiLimiter?.resetForTests();
     this.chatApiLimiter?.resetForTests();
+    this.mediaApiLimiter?.resetForTests();
     this.taskApiLimiter?.resetForTests();
     this.xopcCloudPollLimiter?.resetForTests();
     this.channelApiLimiter?.resetForTests();

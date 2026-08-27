@@ -1,7 +1,16 @@
-import { encodePcm16Wav, resamplePcm } from '@/features/chat/composer/pcm-wav-recorder';
+import {
+  calculateRmsLevel,
+  encodePcm16Wav,
+  PcmFrameCapture,
+  resamplePcm,
+} from '@/features/chat/composer/pcm-wav-recorder';
 
-const SEGMENT_SECONDS = 8;
-const OVERLAP_SECONDS = 0.75;
+const MIN_SEGMENT_SECONDS = 4;
+const MAX_SEGMENT_SECONDS = 15;
+const TRAILING_SILENCE_SECONDS = 0.6;
+const MAX_SPLIT_OVERLAP_SECONDS = 0.5;
+const MIN_FINAL_SECONDS = 0.5;
+const SPEECH_THRESHOLD = 0.015;
 
 export interface LivePcmSegment {
   sequence: number;
@@ -9,6 +18,13 @@ export interface LivePcmSegment {
   startedAtMs: number;
   endedAtMs: number;
   sha256: string;
+}
+
+export interface BufferedPcmSegment {
+  sequence: number;
+  samples: Float32Array;
+  startedAtMs: number;
+  endedAtMs: number;
 }
 
 function merge(chunks: Float32Array[]): Float32Array {
@@ -27,134 +43,173 @@ async function sha256(blob: Blob): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
-export class LivePcmSegmenter {
-  private readonly chunks: Float32Array[] = [];
+/** Pure speech-aware segment accumulator. It is independent from browser media APIs and easy to stress-test. */
+export class PcmSegmentAccumulator {
+  private chunks: Float32Array[] = [];
   private bufferedSamples = 0;
+  private segmentStartSample = 0;
   private sequence = 0;
-  private lastEndMs = 0;
-  private paused = false;
+  private silenceSamples = 0;
+  private hasSpeech = false;
+
+  constructor(private readonly sampleRate: number) {}
+
+  add(samples: Float32Array): BufferedPcmSegment[] {
+    if (samples.length === 0) return [];
+    this.chunks.push(samples);
+    this.bufferedSamples += samples.length;
+    if (calculateRmsLevel(samples) >= SPEECH_THRESHOLD) {
+      this.hasSpeech = true;
+      this.silenceSamples = 0;
+    } else {
+      this.silenceSamples += samples.length;
+    }
+
+    const maxSamples = this.sampleRate * MAX_SEGMENT_SECONDS;
+    if (this.bufferedSamples >= maxSamples) {
+      if (!this.hasSpeech) {
+        this.discardBuffered();
+        return [];
+      }
+      return [this.emit('max')];
+    }
+    const reachedPause = this.hasSpeech
+      && this.bufferedSamples >= this.sampleRate * MIN_SEGMENT_SECONDS
+      && this.silenceSamples >= this.sampleRate * TRAILING_SILENCE_SECONDS;
+    return reachedPause ? [this.emit('silence')] : [];
+  }
+
+  finish(): BufferedPcmSegment[] {
+    if (!this.hasSpeech || this.bufferedSamples < this.sampleRate * MIN_FINAL_SECONDS) {
+      this.discardBuffered();
+      return [];
+    }
+    return [this.emit('final')];
+  }
+
+  cancel(): void {
+    this.chunks = [];
+    this.bufferedSamples = 0;
+  }
+
+  get lastSequence(): number {
+    return this.sequence - 1;
+  }
+
+  private emit(reason: 'silence' | 'max' | 'final'): BufferedPcmSegment {
+    const merged = merge(this.chunks);
+    const take = reason === 'max'
+      ? Math.min(merged.length, this.sampleRate * MAX_SEGMENT_SECONDS)
+      : merged.length;
+    const samples = merged.slice(0, take);
+    const overlap = reason === 'max'
+      ? Math.min(take, this.sampleRate * MAX_SPLIT_OVERLAP_SECONDS)
+      : 0;
+    const remainder = merged.slice(take - overlap);
+    const startedAtMs = Math.round((this.segmentStartSample / this.sampleRate) * 1_000);
+    const endedAtMs = Math.round(((this.segmentStartSample + take) / this.sampleRate) * 1_000);
+    const segment = { sequence: this.sequence++, samples, startedAtMs, endedAtMs };
+
+    this.segmentStartSample += take - overlap;
+    this.chunks = remainder.length ? [remainder] : [];
+    this.bufferedSamples = remainder.length;
+    this.hasSpeech = remainder.length > 0 && calculateRmsLevel(remainder) >= SPEECH_THRESHOLD;
+    this.silenceSamples = this.hasSpeech ? 0 : remainder.length;
+    return segment;
+  }
+
+  private discardBuffered(): void {
+    this.segmentStartSample += this.bufferedSamples;
+    this.chunks = [];
+    this.bufferedSamples = 0;
+    this.silenceSamples = 0;
+    this.hasSpeech = false;
+  }
+}
+
+type EmitState = {
+  pending: Set<Promise<void>>;
+  error?: unknown;
+};
+
+export class LivePcmSegmenter {
   private stopped = false;
-  private readonly pendingEmits = new Set<Promise<void>>();
-  private emitError: unknown;
 
   private constructor(
-    private readonly context: AudioContext,
-    private readonly source: MediaStreamAudioSourceNode,
-    private readonly node: AudioWorkletNode,
-    private readonly mutedOutput: GainNode,
+    private readonly capture: PcmFrameCapture,
+    private readonly accumulator: PcmSegmentAccumulator,
+    private readonly emitState: EmitState,
     private readonly onSegment: (segment: LivePcmSegment) => Promise<void> | void,
-  ) {
-    this.node.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-      if (this.paused || this.stopped) return;
-      const chunk = new Float32Array(event.data);
-      this.chunks.push(chunk);
-      this.bufferedSamples += chunk.length;
-      this.flushCompleteSegments();
-    };
-  }
+  ) {}
 
   static async start(
     stream: MediaStream,
     onSegment: (segment: LivePcmSegment) => Promise<void> | void,
   ): Promise<LivePcmSegmenter> {
-    if (!window.AudioWorkletNode) throw new Error('Live transcription is not supported in this browser');
-    const context = new AudioContext();
-    const workletSource = `
-      class XopcDiscussionPcmProcessor extends AudioWorkletProcessor {
-        process(inputs) {
-          const channel = inputs[0] && inputs[0][0];
-          if (channel && channel.length) {
-            const copy = new Float32Array(channel);
-            this.port.postMessage(copy.buffer, [copy.buffer]);
-          }
-          return true;
+    const emitState: EmitState = { pending: new Set() };
+    let segmenter: LivePcmSegmenter | undefined;
+    const earlySamples: Float32Array[] = [];
+    const capture = await PcmFrameCapture.start(stream, {
+      onSamples: (samples) => {
+        if (!segmenter) {
+          earlySamples.push(samples);
+          return;
         }
-      }
-      registerProcessor('xopc-discussion-pcm', XopcDiscussionPcmProcessor);
-    `;
-    const moduleUrl = URL.createObjectURL(new Blob([workletSource], { type: 'text/javascript' }));
-    try {
-      await context.audioWorklet.addModule(moduleUrl);
-    } finally {
-      URL.revokeObjectURL(moduleUrl);
+        for (const segment of segmenter.accumulator.add(samples)) segmenter.emit(segment);
+      },
+    });
+    segmenter = new LivePcmSegmenter(
+      capture,
+      new PcmSegmentAccumulator(capture.sampleRate),
+      emitState,
+      onSegment,
+    );
+    for (const samples of earlySamples) {
+      for (const segment of segmenter.accumulator.add(samples)) segmenter.emit(segment);
     }
-    const source = context.createMediaStreamSource(stream);
-    const node = new AudioWorkletNode(context, 'xopc-discussion-pcm');
-    const mutedOutput = context.createGain();
-    mutedOutput.gain.value = 0;
-    source.connect(node);
-    node.connect(mutedOutput);
-    mutedOutput.connect(context.destination);
-    await context.resume();
-    return new LivePcmSegmenter(context, source, node, mutedOutput, onSegment);
+    return segmenter;
   }
 
   pause(): void {
-    this.paused = true;
+    this.capture.pause();
   }
 
   resume(): void {
-    this.paused = false;
+    this.capture.resume();
   }
 
   async stop(): Promise<number> {
-    if (this.stopped) return this.sequence - 1;
+    if (this.stopped) return this.accumulator.lastSequence;
     this.stopped = true;
-    this.disconnect();
-    await this.context.close();
-    if (this.bufferedSamples >= this.context.sampleRate / 2) this.emitBuffered(true);
-    await Promise.all(this.pendingEmits);
-    if (this.emitError) throw this.emitError;
-    return this.sequence - 1;
+    await this.capture.stop();
+    for (const segment of this.accumulator.finish()) this.emit(segment);
+    await Promise.all(this.emitState.pending);
+    if (this.emitState.error) throw this.emitState.error;
+    return this.accumulator.lastSequence;
   }
 
   cancel(): void {
     if (this.stopped) return;
     this.stopped = true;
-    this.disconnect();
-    void this.context.close();
-    this.chunks.length = 0;
-    this.bufferedSamples = 0;
+    this.capture.cancel();
+    this.accumulator.cancel();
   }
 
-  private flushCompleteSegments(): void {
-    const segmentSamples = this.context.sampleRate * SEGMENT_SECONDS;
-    while (this.bufferedSamples >= segmentSamples) this.emitBuffered(false);
-  }
-
-  private emitBuffered(final: boolean): void {
-    const sampleRate = this.context.sampleRate;
-    const segmentSamples = sampleRate * SEGMENT_SECONDS;
-    const overlapSamples = sampleRate * OVERLAP_SECONDS;
-    const merged = merge(this.chunks);
-    const take = final ? merged.length : segmentSamples;
-    const samples = merged.slice(0, take);
-    const retainFrom = final ? merged.length : Math.max(0, take - overlapSamples);
-    const remainder = merged.slice(retainFrom);
-    this.chunks.length = 0;
-    if (remainder.length > 0) this.chunks.push(remainder);
-    this.bufferedSamples = remainder.length;
-
-    const durationMs = Math.round((samples.length / sampleRate) * 1_000);
-    const startedAtMs = this.sequence === 0 ? 0 : Math.max(0, this.lastEndMs - OVERLAP_SECONDS * 1_000);
-    const endedAtMs = startedAtMs + durationMs;
-    this.lastEndMs = endedAtMs;
-    const sequence = this.sequence++;
-    const resampled = resamplePcm(samples, sampleRate);
+  private emit(segment: BufferedPcmSegment): void {
+    const resampled = resamplePcm(segment.samples, this.capture.sampleRate);
     const blob = new Blob([encodePcm16Wav(resampled)], { type: 'audio/wav' });
     const pending = (async () => {
-      await this.onSegment({ sequence, blob, startedAtMs, endedAtMs, sha256: await sha256(blob) });
+      await this.onSegment({
+        sequence: segment.sequence,
+        blob,
+        startedAtMs: segment.startedAtMs,
+        endedAtMs: segment.endedAtMs,
+        sha256: await sha256(blob),
+      });
     })().catch((error: unknown) => {
-      this.emitError ??= error;
+      this.emitState.error ??= error;
     });
-    this.pendingEmits.add(pending);
-    void pending.then(() => this.pendingEmits.delete(pending));
-  }
-
-  private disconnect(): void {
-    this.node.port.onmessage = null;
-    this.source.disconnect();
-    this.node.disconnect();
-    this.mutedOutput.disconnect();
+    this.emitState.pending.add(pending);
+    void pending.then(() => this.emitState.pending.delete(pending));
   }
 }

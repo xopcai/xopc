@@ -75,7 +75,13 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit)
     const serverMessage =
       typeof errorBody.error === 'string' ? errorBody.error : errorBody.error?.message;
     const msg = formatApiHttpError(res.status, res.statusText, serverMessage);
-    throw Object.assign(new Error(msg), { status: res.status, body: errorBody });
+    const retryAfterHeader = res.headers.get('Retry-After');
+    const retryAfter = retryAfterHeader == null ? Number.NaN : Number(retryAfterHeader);
+    throw Object.assign(new Error(msg), {
+      status: res.status,
+      body: errorBody,
+      ...(Number.isFinite(retryAfter) && retryAfter >= 0 ? { retryAfterMs: retryAfter * 1_000 } : {}),
+    });
   }
   return res.json() as Promise<T>;
 }

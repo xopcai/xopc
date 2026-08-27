@@ -7,7 +7,7 @@ import {
 } from '../language-profile.js';
 
 describe('voice language profile', () => {
-  it('enables local STT and Edge TTS with Chinese defaults', () => {
+  it('enables local STT with Chinese defaults without implicitly enabling TTS', () => {
     const config = ConfigSchema.parse({});
 
     expect(initializeVoiceDefaults(config, 'zh')).toBe(true);
@@ -19,18 +19,13 @@ describe('voice language profile', () => {
         'xopc-local': { model: 'sensevoice-small', language: 'auto' },
       },
     });
-    expect(config.messages?.tts).toMatchObject({
-      enabled: true,
-      provider: 'edge',
-      trigger: 'inbound',
-      providers: {
-        edge: { enabled: true, voice: 'zh-CN-XiaoxiaoNeural', lang: 'zh-CN' },
-      },
-    });
+    expect(config.messages?.tts).toBeUndefined();
   });
 
   it('follows English only while language mode is automatic', () => {
-    const config = ConfigSchema.parse({});
+    const config = ConfigSchema.parse({
+      messages: { tts: { provider: 'edge' } },
+    });
     initializeVoiceDefaults(config, 'zh');
 
     expect(applyAutomaticVoiceLanguage(config, 'en')).toBe(true);
@@ -42,8 +37,9 @@ describe('voice language profile', () => {
     expect(config.messages?.tts?.providers?.edge?.voice).toBe('en-US-MichelleNeural');
   });
 
-  it('preserves explicit disabled states and legacy manual voices', () => {
+  it('preserves explicit disabled states and manual voices', () => {
     const config = ConfigSchema.parse({
+      voice: { languageMode: 'manual', language: 'en' },
       tools: { media: { audio: { enabled: false } } },
       messages: {
         tts: {

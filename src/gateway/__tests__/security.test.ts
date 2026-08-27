@@ -472,22 +472,18 @@ describe('Gateway Security Fixes', () => {
       expect(json.maxSize).toBe('25MB');
     });
 
-    it('should allow larger voice transcription payloads through the API body limit', async () => {
+    it('should allow multipart voice transcription payloads through the API body limit', async () => {
       const service = createMockService();
       const app = createHonoApp({ service, token: 'test' });
-      const body = JSON.stringify({
-        audio: Buffer.alloc(2 * 1024 * 1024).toString('base64'),
-        mimeType: 'audio/mp4',
-      });
 
-      const res = await app.request('/api/voice/transcribe', {
+      const res = await app.request('/api/voice/transcriptions', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'multipart/form-data; boundary=xopc',
           Authorization: 'Bearer test',
-          'Content-Length': String(Buffer.byteLength(body)),
+          'Content-Length': String(2 * 1024 * 1024),
         },
-        body,
+        body: 'x',
       });
 
       expect(res.status).not.toBe(413);
@@ -497,19 +493,19 @@ describe('Gateway Security Fixes', () => {
       const service = createMockService();
       const app = createHonoApp({ service, token: 'test' });
 
-      const res = await app.request('/api/voice/transcribe', {
+      const res = await app.request('/api/voice/transcriptions', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'multipart/form-data; boundary=xopc',
           Authorization: 'Bearer test',
-          'Content-Length': String(36 * 1024 * 1024),
+          'Content-Length': String(27 * 1024 * 1024),
         },
         body: '{}',
       });
 
       expect(res.status).toBe(413);
       const json = await res.json();
-      expect(json.maxSize).toBe('35MB');
+      expect(json.maxSize).toBe('26MB');
     });
   });
 
