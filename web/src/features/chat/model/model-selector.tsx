@@ -107,7 +107,7 @@ export function ModelSelector({
   /** When false, trigger shows model name only (dropdown rows still include provider). */
   showProviderInTrigger?: boolean;
   /** Radix popover placement — use `top` when the trigger sits near the viewport bottom (e.g. chat composer). */
-  contentSide?: 'top' | 'bottom';
+  contentSide?: 'top' | 'bottom' | 'left' | 'right';
   contentAlign?: 'start' | 'center' | 'end';
   /** Merged onto the trigger button (e.g. full width in wide forms). */
   className?: string;
@@ -143,7 +143,11 @@ export function ModelSelector({
     [models, capabilitiesFilter, valueTrimmed],
   );
 
-  const filtered = useMemo(() => modelsMatchingQuery(pickerModels, query), [pickerModels, query]);
+  const showSearch = pickerModels.length > 10;
+  const filtered = useMemo(
+    () => modelsMatchingQuery(pickerModels, showSearch ? query : ''),
+    [pickerModels, query, showSearch],
+  );
   const selected = useMemo(
     () => models.find((m) => m.id === value) ?? pickerModels.find((m) => m.id === value),
     [models, pickerModels, value],
@@ -191,16 +195,18 @@ export function ModelSelector({
           align={contentAlign}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <input
-            type="search"
-            className={cn(
-              'mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled dark:bg-surface-hover/40',
-              formControlBorderFocusClass,
-            )}
-            placeholder={searchPlaceholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          {showSearch ? (
+            <input
+              type="search"
+              className={cn(
+                'mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled dark:bg-surface-hover/40',
+                formControlBorderFocusClass,
+              )}
+              placeholder={searchPlaceholder}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          ) : null}
           <div className="max-h-60 overflow-auto">
             {error ? (
               <div className="p-2 text-xs text-red-600 dark:text-red-400">

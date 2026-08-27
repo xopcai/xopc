@@ -199,8 +199,6 @@ export class SessionManager {
     patch: {
       thinkingLevel?: string;
       model?: string | null;
-      activityDetailLevel?: string | null;
-      reasoningLevel?: string | null;
       workingDirectory?: string;
     },
   ): Promise<void> {

@@ -11,7 +11,7 @@ describe('patchSessionAgentConfigView', () => {
     useChatSessionStore.setState({ sessions: {} });
   });
 
-  it('writes model metadata onto the target session slice', () => {
+  it('uses the global activity detail level instead of a session override', () => {
     useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
     patchSessionAgentConfigView(sessionKey, {
       model: 'openai/gpt-4o',
@@ -28,9 +28,7 @@ describe('patchSessionAgentConfigView', () => {
     const slice = useChatSessionStore.getState().sessions[sessionKey];
     expect(slice?.model).toBe('openai/gpt-4o');
     expect(slice?.thinkingLevel).toBe('high');
-    expect(slice?.reasoningLevel).toBe('off');
-    expect(slice?.activityDetailDefault).toBe('on');
-    expect(slice?.activityDetailOverride).toBe('off');
+    expect(slice?.reasoningLevel).toBe('on');
     expect(slice?.workingDirectoryLocked).toBe(false);
   });
 

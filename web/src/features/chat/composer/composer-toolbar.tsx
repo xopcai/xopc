@@ -1,26 +1,18 @@
-import * as Popover from '@radix-ui/react-popover';
-import { Activity, Ban, File as FileIcon, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
-import { memo, useState } from 'react';
+import { Mic, Plus, Send, Square } from 'lucide-react';
+import { memo } from 'react';
 
-import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
+import type { Message } from '@/features/chat/messages/messages.types';
 import { ModelContextRing } from '@/features/chat/model/model-context-ring';
-import { ModelSelector } from '@/features/chat/model/model-selector';
+import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session/session-working-directory-control';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-import type { ThinkingLevel } from '@/features/chat/composer/composer.types';
 import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
 import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { APP_PORTALED_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import type { MessageBundle } from '@/i18n/messages';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 import { shortcutDisplayKeys } from '@/stores/quick-capture-shortcut-store';
 import { useVoiceInputShortcutStore } from '@/stores/voice-input-shortcut-store';
-
-function thinkingIcon(level: ThinkingLevel) {
-  return level === 'off' ? Ban : Sparkles;
-}
 
 export interface ComposerToolbarProps {
   sessionKey: string | null;
@@ -44,10 +36,6 @@ export interface ComposerToolbarProps {
   thinkingLevel: string;
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
-  reasoningLevel: ReasoningLevel;
-  activityDetailDefault: ReasoningLevel;
-  activityDetailOverride: ReasoningLevel | null;
-  onReasoningChange: (level: ReasoningLevel | null) => void;
 
   voiceActive: boolean;
   voiceReadiness: VoiceReadiness;
@@ -83,10 +71,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   thinkingLevel,
   modelSupportsThinking,
   onThinkingChange,
-  reasoningLevel,
-  activityDetailDefault,
-  activityDetailOverride,
-  onReasoningChange,
   voiceActive,
   voiceReadiness,
   onStartVoiceInput,
@@ -101,8 +85,6 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   composerDraftChars,
 }: ComposerToolbarProps) {
   const voiceShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
   const attachmentsFull = attachmentCount >= maxAttachments;
   const attachTitle = attachmentsFull
     ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
@@ -127,144 +109,36 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         disabled={disabled || runBusy}
       />
 
-      <Popover.Root open={moreOpen} onOpenChange={setMoreOpen}>
-        <Popover.Trigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
-              interaction.transition,
-              interaction.press,
-              interaction.focusRingPanel,
-            )}
-            title={m.moreActions}
-            aria-label={m.moreActions}
-            aria-expanded={moreOpen}
-          >
-            <Plus className="size-4" />
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            className={cn(
-              APP_PORTALED_POPOVER_Z,
-              'min-w-[12rem] rounded-xl border border-edge bg-surface-panel p-1.5 shadow-popover dark:border-edge',
-            )}
-            side="top"
-            align="start"
-            sideOffset={8}
-            collisionPadding={12}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
-            <div className="flex flex-col gap-0.5">
-              <button
-                type="button"
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-fg',
-                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  'disabled:cursor-not-allowed disabled:opacity-50',
-                )}
-                disabled={attachmentsFull || disabled || runBusy}
-                title={attachTitle}
-                onClick={() => {
-                  onPickFiles();
-                  setMoreOpen(false);
-                }}
-              >
-                <FileIcon className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                <span className="min-w-0 flex-1 truncate">{m.attachFile}</span>
-                <span className="shrink-0 text-xs text-fg-subtle">
-                  {attachmentCount}/{maxAttachments}
-                </span>
-              </button>
-
-              <label
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
-                  'hover:bg-surface-hover',
-                )}
-                title={
-                  modelSupportsThinking
-                    ? `${m.thinkingLevelLabel}: ${m.thinkingLevels[thinkingLevel as ThinkingLevel] ?? thinkingLevel}`
-                    : m.thinkingUnsupported
-                }
-              >
-                <ThinkingIcon className="size-4 shrink-0 text-accent-fg" aria-hidden />
-                <span className="shrink-0 text-fg-muted">{m.thinkingLevelLabel}</span>
-                {modelSupportsThinking ? (
-                  <Select
-                    className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    value={thinkingLevel}
-                    disabled={disabled || (sending && !streaming)}
-                    onChange={(event) => onThinkingChange(event.target.value)}
-                  >
-                    {(Object.keys(m.thinkingLevels) as ThinkingLevel[]).map((level) => (
-                      <SelectOption key={level} value={level}>
-                        {m.thinkingLevels[level]}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : (
-                  <span className="min-w-0 flex-1 truncate text-right text-xs text-fg-disabled">
-                    {m.thinkingUnsupported}
-                  </span>
-                )}
-              </label>
-              <label
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-fg',
-                  'hover:bg-surface-hover',
-                )}
-                title={`${m.activityDetailLabel}: ${m.activityDetailLevels[reasoningLevel]}`}
-              >
-                <Activity className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                <span className="shrink-0 text-fg-muted">{m.activityDetailLabel}</span>
-                <Select
-                  className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  value={activityDetailOverride ?? 'default'}
-                  disabled={disabled}
-                  onChange={(event) => onReasoningChange(
-                    event.target.value === 'default'
-                      ? null
-                      : event.target.value as ReasoningLevel,
-                  )}
-                >
-                  <SelectOption value="default">
-                    {m.activityDetailUseDefault.replace(
-                      '{{level}}',
-                      m.activityDetailLevels[activityDetailDefault],
-                    )}
-                  </SelectOption>
-                  {(Object.keys(m.activityDetailLevels) as ReasoningLevel[]).map((level) => (
-                    <SelectOption key={level} value={level}>
-                      {m.activityDetailLevels[level]}
-                    </SelectOption>
-                  ))}
-                </Select>
-              </label>
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+      <button
+        type="button"
+        className={cn(
+          'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+          interaction.transition,
+          interaction.press,
+          interaction.focusRingPanel,
+          'disabled:cursor-not-allowed disabled:opacity-50',
+        )}
+        disabled={attachmentsFull || disabled || runBusy}
+        title={attachTitle}
+        aria-label={attachTitle}
+        onClick={onPickFiles}
+      >
+        <Plus className="size-4" />
+      </button>
 
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {showModelSelector ? (
           <div className="flex min-w-0 items-center gap-1.5">
-            <div className="min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0">
-              <ModelSelector
-                value={sessionModel}
-                disabled={modelDisabled}
-                placeholder={m.modelPlaceholder}
-                searchPlaceholder={m.modelSearchPlaceholder}
-                noMatches={m.modelNoMatches}
-                compact
-                showProviderInTrigger={false}
-                contentSide="top"
-                contentAlign="end"
-                showProviderSettingsFooter
-                onChange={onModelChange}
-              />
-            </div>
+            <ComposerModelConfigControl
+              chat={m}
+              sessionModel={sessionModel}
+              modelDisabled={modelDisabled}
+              onModelChange={onModelChange}
+              thinkingLevel={thinkingLevel}
+              modelSupportsThinking={modelSupportsThinking}
+              thinkingDisabled={disabled || (sending && !streaming)}
+              onThinkingChange={onThinkingChange}
+            />
             <ModelContextRing
               sessionModel={sessionModel}
               messages={contextUsageMessages}

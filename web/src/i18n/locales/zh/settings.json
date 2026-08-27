@@ -1079,9 +1079,9 @@
     "showDesktopPet": "显示宠物",
     "hideDesktopPet": "隐藏宠物",
     "aboutApp": "关于",
-    "activityDetailDefaultTitle": "AI 执行动态默认值",
-    "activityDetailDefaultDescription": "设置新对话默认如何展示分析过程与工具执行。",
-    "activityDetailDefaultHint": "对话内单独选择后，会覆盖此默认值。",
+    "activityDetailDefaultTitle": "AI 执行动态",
+    "activityDetailDefaultDescription": "设置所有对话如何展示分析过程与工具执行。",
+    "activityDetailDefaultHint": "此设置全局应用于所有网页对话。",
     "activityDetailSaving": "保存中…",
     "activityDetailSaveError": "无法保存执行动态默认值。",
     "activityDetailLevels": {

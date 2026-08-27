@@ -6,6 +6,7 @@
     "needToken": "请先保存网关访问令牌后再对话。",
     "loading": "加载对话中…",
     "model": "当前会话模型",
+    "modelConfigLabel": "模型",
     "modelPlaceholder": "选择模型…",
     "agent": "智能体",
     "agentPlaceholder": "选择智能体…",
@@ -565,14 +566,7 @@
     "sessionNotFoundBody": "这个会话可能已被删除或重置。你可以新建对话继续处理。",
     "sessionNotFoundCta": "新建对话",
     "messageMoreActions": "更多操作",
-    "activityDetailLabel": "执行动态",
-    "activityDetailUseDefault": "跟随默认（{{level}}）",
-    "activityDetailLevels": {
-      "off": "简洁",
-      "on": "收起 · 完成后可展开",
-      "stream": "实时 · 执行时展开"
-    },
-    "thinkingLevelLabel": "思考深度",
+    "thinkingLevelLabel": "推理",
     "thinkingUnsupported": "当前模型不支持",
     "thinkingLevels": {
       "off": "关闭",
