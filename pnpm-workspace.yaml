@@ -40,6 +40,7 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  node-pty: true
   onnxruntime-node: true
   protobufjs: true
   sharp: false

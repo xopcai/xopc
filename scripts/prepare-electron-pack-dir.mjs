@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildMinimalElectronPackageJson } from './electron-runtime-externals.mjs';
+import { prepareNodePtyPackage, resolveNodePtyPackage } from './prepare-node-pty.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const packDir = join(tmpdir(), 'xopc-electron-pack');
@@ -56,6 +57,15 @@ function installRuntimeDeps(packDirPath, target) {
   if ((r.status ?? 1) !== 0) {
     throw new Error(`[prepare-electron-pack-dir] pnpm install failed in ${packDirPath}`);
   }
+}
+
+function stageNodePtyRuntime(repoRoot, packDirPath, target) {
+  const destination = join(packDirPath, 'node_modules', 'node-pty');
+  if (target.platform === process.platform && target.arch === process.arch) {
+    rmSync(destination, { recursive: true, force: true });
+    cpSync(resolveNodePtyPackage(repoRoot), destination, { recursive: true, dereference: true });
+  }
+  prepareNodePtyPackage(destination, target);
 }
 
 function removeDirectoryChildrenExcept(dir, keep) {
@@ -149,6 +159,7 @@ export function prepareElectronPackDir(
   writeFileSync(join(packDir, 'package.json'), `${JSON.stringify(minimalPkg, null, 2)}\n`);
 
   installRuntimeDeps(packDir, target);
+  stageNodePtyRuntime(repoRoot, packDir, target);
   pruneElectronRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
   stageVoiceHotkeyHelper(repoRoot, packDir, target);

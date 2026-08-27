@@ -147,6 +147,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
       );
     },
   },
+  terminal: {
+    create: (input: { sessionKey: string; sessionId: string; cols: number; rows: number }) =>
+      ipcRenderer.invoke('terminal:create', input),
+    write: (terminalId: string, data: string) => ipcRenderer.send('terminal:write', terminalId, data),
+    resize: (terminalId: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:resize', terminalId, cols, rows) as Promise<{ ok: true }>,
+    close: (terminalId: string) =>
+      ipcRenderer.invoke('terminal:close', terminalId) as Promise<{ ok: true }>,
+    onData: (callback: (event: { terminalId: string; data: string; sequence: number }) => void) => {
+      const handler = (_: unknown, event: { terminalId: string; data: string; sequence: number }) => callback(event);
+      ipcRenderer.on('terminal:data', handler);
+      return () => ipcRenderer.removeListener('terminal:data', handler);
+    },
+    onExit: (callback: (event: { terminalId: string; exitCode: number; signal: number }) => void) => {
+      const handler = (_: unknown, event: { terminalId: string; exitCode: number; signal: number }) => callback(event);
+      ipcRenderer.on('terminal:exit', handler);
+      return () => ipcRenderer.removeListener('terminal:exit', handler);
+    },
+    onError: (callback: (event: { terminalId?: string; message: string }) => void) => {
+      const handler = (_: unknown, event: { terminalId?: string; message: string }) => callback(event);
+      ipcRenderer.on('terminal:error', handler);
+      return () => ipcRenderer.removeListener('terminal:error', handler);
+    },
+  },
   understandingSources: {
     catalog: () => ipcRenderer.invoke('understanding-sources:catalog'),
     collect: (sourceIds: string[]) => ipcRenderer.invoke('understanding-sources:collect', sourceIds),

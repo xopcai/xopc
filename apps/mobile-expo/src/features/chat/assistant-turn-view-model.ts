@@ -1,5 +1,7 @@
 import { resolveStepBlocksForRender } from './assistant-steps-summary';
+import { collectAssistantDeliverables } from './assistant-deliverables';
 import type {
+  Message,
   MessageContent,
   ReasoningLevel,
   ThinkingContent,
@@ -24,11 +26,11 @@ function hasAssistantAnswerText(content: MessageContent[]): boolean {
 
 /** Mobile projection of the WebUI assistant turn presentation rules. */
 export function buildAssistantTurnViewModel({
-  content,
+  message,
   isStreaming,
   reasoningLevel,
 }: {
-  content: MessageContent[];
+  message: Message;
   isStreaming: boolean;
   reasoningLevel: ReasoningLevel;
 }): {
@@ -36,7 +38,9 @@ export function buildAssistantTurnViewModel({
   activity: AssistantActivityPresentation;
   answerStarted: boolean;
   showStreamingCursor: boolean;
+  deliverables: ReturnType<typeof collectAssistantDeliverables>;
 } {
+  const content = message.content;
   const displayContent = reasoningLevel === 'off'
     ? content.filter((block) => block.type !== 'thinking')
     : content;
@@ -66,5 +70,6 @@ export function buildAssistantTurnViewModel({
     },
     answerStarted,
     showStreamingCursor: isStreaming && (activityBlocks.length === 0 || answerStarted),
+    deliverables: collectAssistantDeliverables(message, isStreaming),
   };
 }

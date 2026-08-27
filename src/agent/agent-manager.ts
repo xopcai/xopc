@@ -131,6 +131,7 @@ export interface AgentSkillAvailabilityEntry extends SkillCatalogEntry {
 
 export interface AgentSkillAvailabilityPayload {
   agentId: string;
+  workspacePath: string;
   version: string;
   loadedAt: number;
   diagnostics: SkillDiagnostic[];
@@ -139,6 +140,13 @@ export interface AgentSkillAvailabilityPayload {
   agentAllowlist?: string[];
   effectiveAllowlist?: string[];
   skills: AgentSkillAvailabilityEntry[];
+}
+
+export interface WorkspaceTrustState {
+  workspacePath: string;
+  required: boolean;
+  decision: boolean | null;
+  trusted: boolean;
 }
 
 export interface AgentManagerConfig {
@@ -793,16 +801,18 @@ export class AgentManager implements AgentInstanceGateway {
     };
   }
 
-  getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
+  private buildAgentSkillAvailability(
+    profile: EffectiveAgentProfile,
+    workspaceDir: string,
+  ): AgentSkillAvailabilityPayload {
     const cfg = this.config.config!;
     const entry = Array.isArray(cfg.agents?.list)
-      ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
+      ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === profile.agentId.toLowerCase())
       : undefined;
-    const profile = resolveEffectiveAgentProfile(cfg, agentId);
-    const rt = this.workspaceRuntimes.getOrCreate(profile.resolvedWorkspacePath, profile.agentId);
+    const rt = this.workspaceRuntimes.getOrCreate(workspaceDir, profile.agentId);
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
-    const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(profile.resolvedWorkspacePath));
+    const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
     const allow = profile.skillsAllowlist === undefined ? undefined : new Set(profile.skillsAllowlist.map((s) => s.toLowerCase()));
 
     const skills = rt.skillManager.getSkills().map((s) => {
@@ -824,7 +834,7 @@ export class AgentManager implements AgentInstanceGateway {
           skillsConfig,
           lock,
           workspaceLock,
-          profile.resolvedWorkspacePath,
+          workspaceDir,
         ),
         availableForCurrentAgent: unavailableReason === null,
         unavailableReason,
@@ -833,6 +843,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     return {
       agentId: profile.agentId,
+      workspacePath: workspaceDir,
       version: rt.skillManager.getVersion(),
       loadedAt: rt.skillManager.getLoadedAt(),
       diagnostics: rt.skillManager.getDiagnostics(),
@@ -841,6 +852,38 @@ export class AgentManager implements AgentInstanceGateway {
       ...(profile.skillsAllowlist !== undefined ? { effectiveAllowlist: [...profile.skillsAllowlist] } : {}),
       skills,
     };
+  }
+
+  getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
+    const profile = resolveEffectiveAgentProfile(this.config.config!, agentId);
+    return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath);
+  }
+
+  getSessionSkillAvailability(sessionKey: string): AgentSkillAvailabilityPayload {
+    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
+    return this.buildAgentSkillAvailability(profile, this.getResolvedWorkspaceForSession(sessionKey));
+  }
+
+  getSessionWorkspaceTrust(sessionKey: string): WorkspaceTrustState {
+    const workspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+    const required = hasTrustRequiringProjectResources(workspacePath);
+    const decision = required ? this.projectTrustStore.get(workspacePath) : null;
+    return {
+      workspacePath,
+      required,
+      decision,
+      trusted: required && this.isProjectWorkspaceTrusted(workspacePath),
+    };
+  }
+
+  setSessionWorkspaceTrust(sessionKey: string, trusted: boolean): WorkspaceTrustState {
+    const workspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+    if (!hasTrustRequiringProjectResources(workspacePath)) {
+      return { workspacePath, required: false, decision: null, trusted: false };
+    }
+    this.projectTrustStore.set(workspacePath, trusted);
+    this.refreshSkillsAfterTrustChange();
+    return this.getSessionWorkspaceTrust(sessionKey);
   }
 
   /**

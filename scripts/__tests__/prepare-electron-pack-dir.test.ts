@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -89,6 +89,13 @@ describe('prepare-electron-pack-dir', () => {
       ),
     ).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/sherpa-onnx-node'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/node-pty'))).toBe(true);
+    if (process.platform === 'darwin') {
+      accessSync(
+        join(packDir, 'node_modules/node-pty/prebuilds', `darwin-${process.arch}`, 'spawn-helper'),
+        constants.X_OK,
+      );
+    }
     expect(existsSync(join(packDir, 'node_modules/onnxruntime-node/bin/napi-v3'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
     expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);

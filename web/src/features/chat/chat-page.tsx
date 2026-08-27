@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -60,6 +60,11 @@ import { showActivity } from '@/stores/activity-store';
 import { Button } from '@/components/ui/button';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { peekComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
+
+const ChatTerminalDock = lazy(async () => {
+  const module = await import('@/features/chat/terminal/chat-terminal-dock');
+  return { default: module.ChatTerminalDock };
+});
 
 type PendingSourceNoteSave = {
   sourceNoteId: string;
@@ -1132,6 +1137,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
             </div>
           </div>
         </div>
+        {!embedded && chatSessionKey && window.electronAPI?.terminal ? (
+          <Suspense fallback={null}>
+            <ChatTerminalDock key={chatSessionKey} sessionKey={chatSessionKey} />
+          </Suspense>
+        ) : null}
       </div>
 
       <Dialog.Root

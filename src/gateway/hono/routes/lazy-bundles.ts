@@ -195,6 +195,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
         '/api/review',
         '/api/skills',
         '/api/chat/skills',
+        '/api/chat/workspace-trust',
         '/api/chat/capabilities',
       ]),
     load: async () => {

@@ -9,7 +9,12 @@ vi.mock('electron', () => ({
   },
 }));
 
-import { resolveGatewayStartupMode } from '../gateway-process.js';
+import {
+  getGatewayConnection,
+  getGatewayCredential,
+  registerGatewayConnection,
+  resolveGatewayStartupMode,
+} from '../gateway-process.js';
 
 const servers: Server[] = [];
 
@@ -89,5 +94,14 @@ describe('resolveGatewayStartupMode', () => {
     await expect(
       resolveGatewayStartupMode({ port, token: 'configured-token', bindHost: '127.0.0.1' }),
     ).rejects.toThrow(`Gateway port ${port} is already in use`);
+  });
+});
+
+describe('gateway connection', () => {
+  it('stores connection details independently from gateway process ownership', () => {
+    registerGatewayConnection({ port: 18790, token: 'dev-token' });
+
+    expect(getGatewayConnection()).toEqual({ port: 18790, token: 'dev-token' });
+    expect(getGatewayCredential()).toBe('dev-token');
   });
 });

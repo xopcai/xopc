@@ -125,6 +125,7 @@ Skills can be loaded from these locations:
 2. **Agents workspace compatibility** - Project-provided skills using the common agents layout
    - Location: `<workspace>/.agents/skills/`
    - Loaded read-only only after the workspace is trusted
+   - Project chats in the gateway console request trust before loading local instructions and skills; the decision is persisted in `~/.xopc/trust.json`
 
 3. **XOPC global** - XOPC-managed global skills
    - Location: `~/.xopc/skills/`

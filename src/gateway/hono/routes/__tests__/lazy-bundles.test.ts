@@ -65,6 +65,10 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/tools/web/reveal-search-api-key')?.id).toBe('config');
   });
 
+  it('routes session workspace trust to the commands and skills bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/chat/workspace-trust')?.id).toBe('commands-skills');
+  });
+
   it('routes models-json config endpoints to the models bundle', () => {
     // /api/models-json is `/api/models` + `-json`, not `/api/models/...`,
     // so the prefix matcher needs an explicit entry. Without it the

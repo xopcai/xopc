@@ -1,4 +1,4 @@
-import type { ImageContent, MessageContent } from './messages.types';
+import type { ImageContent } from './messages.types';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 
 export type ImageSource = {
@@ -86,46 +86,4 @@ export function imageContentToSource(
   }
 
   return null;
-}
-
-export function extractGeneratedImageSources(
-  content: MessageContent[],
-  ctx: ImageRenderContext,
-): ImageSource[] {
-  const imageSources: ImageSource[] = [];
-  const seen = new Set<string>();
-
-  for (const block of content) {
-    if (block.type !== 'tool_use' || block.name !== 'image_generate' || block.status !== 'done') {
-      continue;
-    }
-
-    const resultText = typeof block.result === 'string'
-      ? block.result
-      : block.result != null
-        ? JSON.stringify(block.result)
-        : '';
-    const matches = resultText.match(
-      /(?:^|[\s"'`])(?:Saved:\s*)?([^\s"'`]+media\/generated\/[^\s"'`]+\.(?:png|jpe?g|webp|gif|bmp|svg))/gi,
-    ) ?? [];
-
-    for (const match of matches) {
-      const cleaned = match
-        .replace(/^\s*(Saved:\s*)?/i, '')
-        .replace(/^["'`]/, '')
-        .replace(/["'`,.;:)]+$/, '')
-        .trim();
-      const workspacePath = normalizeGeneratedWorkspacePath(cleaned);
-      if (!workspacePath || seen.has(workspacePath)) {
-        continue;
-      }
-      seen.add(workspacePath);
-      imageSources.push({
-        uri: ctx.apiUrl(buildGatewayRawFilePath(workspacePath, ctx.sessionKey)),
-        headers: ctx.token ? { Authorization: `Bearer ${ctx.token}` } : undefined,
-      });
-    }
-  }
-
-  return imageSources;
 }
