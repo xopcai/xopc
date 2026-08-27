@@ -10,7 +10,6 @@ export type DefaultSessionMeta = {
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
   effectiveWorkspacePath: string;
-  workingDirectoryLocked: boolean;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
 };
 
@@ -22,7 +21,6 @@ export function defaultSessionMeta(): DefaultSessionMeta {
     reasoningLevel: DEFAULT_REASONING,
     modelSupportsThinking: false,
     effectiveWorkspacePath: '',
-    workingDirectoryLocked: false,
     workspaceSource: 'agent_default_root',
   };
 }

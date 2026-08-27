@@ -32,7 +32,6 @@ export function useChatSessionWindowEvents(opts: {
         effective: string;
         source: 'session' | 'default';
       };
-      workingDirectoryLocked?: boolean;
     },
   ) => void;
 }): void {

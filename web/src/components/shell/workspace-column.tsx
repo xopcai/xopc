@@ -1,4 +1,4 @@
-import { FileText, Search, X } from 'lucide-react';
+import { FileText, Folder, Search, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ import {
 } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { folderDisplayName } from '@/features/fs/directory-path-utils';
 import {
   downloadBinaryFile,
   downloadTextFile,
@@ -81,6 +82,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     [chatSessionKey, workspaceAgentId],
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
+  const workspaceRootLabel = workspaceRoot ? folderDisplayName(workspaceRoot) : m.workspace.title;
 
   const handleFileDragStart = useCallback(
     (event: DragEvent<HTMLButtonElement>, entry: { name: string; path: string }) => {
@@ -362,8 +364,15 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
             />
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
               <h2 className="sr-only">{m.workspace.title}</h2>
-              <WorkspaceOpenLocationMenu workspacePath={workspaceRoot ?? ''} />
+              <div
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-fg"
+                title={workspaceRoot ?? undefined}
+              >
+                <Folder className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                <span className="truncate">{workspaceRootLabel}</span>
+              </div>
               <div className="ml-auto flex shrink-0 items-center gap-1">
+                <WorkspaceOpenLocationMenu workspacePath={workspaceRoot ?? ''} />
                 <Button
                   type="button"
                   variant="ghost"
