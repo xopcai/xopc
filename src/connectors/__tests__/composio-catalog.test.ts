@@ -72,7 +72,7 @@ describe('Composio agent-ready catalog', () => {
 
   it('marks only connectors with implemented learning plans as personal context', () => {
     for (const slug of [
-      'gmail', 'googlecalendar', 'googledrive', 'notion', 'slack', 'github', 'linear',
+      'gmail', 'googlecalendar', 'googledrive', 'github', 'linear',
     ]) {
       const definition = connectorDefinitionFromComposioToolkit({
         slug,
@@ -81,6 +81,10 @@ describe('Composio agent-ready catalog', () => {
         connected: false,
       });
       expect(definition.capabilities).toEqual(expect.arrayContaining(['context', 'memory_source']));
+    }
+    for (const slug of ['notion', 'slack']) {
+      const definition = connectorDefinitionFromComposioToolkit({ slug, name: slug, isNoAuth: false, connected: false });
+      expect(definition.capabilities).not.toContain('memory_source');
     }
     const outlook = connectorDefinitionFromComposioToolkit({
       slug: 'outlook', name: 'Outlook', isNoAuth: false, connected: false,

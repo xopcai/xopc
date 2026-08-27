@@ -15,6 +15,14 @@ describe('connector identity', () => {
     expect(connectorIdentityKey('slack', { workspaceId: 'T123' })).toBeUndefined();
   });
 
+  it('normalizes Google Drive ownership identity from the about response', () => {
+    const identity = normalizeConnectorIdentity('googledrive', {
+      data: { user: { emailAddress: 'owner@example.com', displayName: 'Owner' } },
+    });
+    expect(identity).toEqual({ email: 'owner@example.com', displayName: 'Owner' });
+    expect(connectorIdentityKey('googledrive', identity)).toBe('googledrive:owner@example.com');
+  });
+
   it('preserves probed identity when Composio later returns sparse connection data', () => {
     expect(mergeConnectorIdentity(
       'slack',

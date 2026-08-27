@@ -5,6 +5,7 @@ export type ConnectedSourceEntity = {
   itemType: string;
   occurredAt?: string;
   sourceUpdatedAt?: string;
+  deletedAt?: string;
   value: Record<string, unknown>;
   metadata: Record<string, unknown>;
   synthesisStatus: KnowledgeSynthesisStatus;
@@ -90,11 +91,13 @@ function normalizeCalendar(result: unknown): ConnectedSourceEntity[] {
     const externalId = text(event, 'id', 'eventId', 'event_id');
     if (!externalId) return [];
     const occurredAt = time(event.start ?? event.startTime ?? event.start_time);
+    const sourceUpdatedAt = time(event.updated ?? event.updatedAt ?? event.updated_at);
     return [{
       externalId,
       itemType: 'calendar_event',
       occurredAt,
-      sourceUpdatedAt: time(event.updated ?? event.updatedAt ?? event.updated_at),
+      sourceUpdatedAt,
+      ...(event.status === 'cancelled' ? { deletedAt: sourceUpdatedAt ?? new Date().toISOString() } : {}),
       value: compact({
         id: externalId,
         title: text(event, 'summary', 'title', 'name'),
@@ -110,6 +113,35 @@ function normalizeCalendar(result: unknown): ConnectedSourceEntity[] {
         logicalEventKey: `googlecalendar:event:${externalId}`,
       },
       synthesisStatus: 'pending' as const,
+    }];
+  });
+}
+
+function normalizeGoogleDrive(result: unknown): ConnectedSourceEntity[] {
+  return rows(payload(result), 'files', 'items').flatMap((file) => {
+    const externalId = text(file, 'id', 'fileId', 'file_id');
+    const name = text(file, 'name', 'title');
+    if (!externalId || !name || file.trashed === true) return [];
+    const modifiedAt = time(file.modifiedTime ?? file.modified_time ?? file.modifiedDate);
+    return [{
+      externalId,
+      itemType: 'cloud_document',
+      occurredAt: modifiedAt ?? time(file.createdTime ?? file.created_time ?? file.createdDate),
+      sourceUpdatedAt: modifiedAt,
+      value: compact({
+        id: externalId,
+        title: name,
+        mimeType: text(file, 'mimeType', 'mime_type'),
+        modifiedAt,
+        owners: file.owners,
+        webViewLink: text(file, 'webViewLink', 'web_view_link'),
+      }),
+      metadata: {
+        observationKind: 'document_metadata',
+        logicalEventKey: `googledrive:file:${externalId}`,
+        mimeType: text(file, 'mimeType', 'mime_type'),
+      },
+      synthesisStatus: 'ignored' as const,
     }];
   });
 }
@@ -217,8 +249,9 @@ export function normalizeConnectedSourceResult(input: {
 }): ConnectedSourceEntity[] {
   if (input.toolkit === 'gmail') return normalizeGmail(input.result);
   if (input.toolkit === 'googlecalendar') return normalizeCalendar(input.result);
+  if (input.toolkit === 'googledrive') return normalizeGoogleDrive(input.result);
   if (input.toolkit === 'github') return normalizeGitHub(input.result, input.actionId);
-  if (input.toolkit === 'linear' || input.toolkit === 'jira') {
+  if (input.toolkit === 'linear') {
     return normalizeExternalTasks(input.result, input.toolkit);
   }
   return [];

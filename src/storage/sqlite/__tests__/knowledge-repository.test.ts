@@ -133,6 +133,21 @@ describe('knowledge repository', () => {
       ]));
   });
 
+  it('filters source items by owning agent before applying the result limit', () => {
+    upsertKnowledgeSourceItems([
+      {
+        sourceInstanceId: 'gmail:shared', collectionScope: 'messages', externalId: 'main-1',
+        itemType: 'email', contentHash: 'main-1', metadata: { agentId: 'main' },
+      },
+      {
+        sourceInstanceId: 'gmail:shared', collectionScope: 'messages', externalId: 'helper-1',
+        itemType: 'email', contentHash: 'helper-1', metadata: { agentId: 'helper' },
+      },
+    ]);
+
+    expect(listKnowledgeSourceItems({ agentId: 'main', limit: 1 }).map((item) => item.externalId)).toEqual(['main-1']);
+  });
+
   it('claims synthesis work with leases, retries, and ownership checks', () => {
     const [first, second] = upsertKnowledgeSourceItems([
       {

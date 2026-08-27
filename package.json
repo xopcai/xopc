@@ -60,6 +60,7 @@
     "dev:gateway": "sh -c 'mkdir -p \"$HOME/.xopc-dev\" && XOPC_STATE_DIR=\"$HOME/.xopc-dev\" XOPC_CONFIG_PATH=\"$HOME/.xopc-dev/xopc.json\" XOPC_CONFIG=\"$HOME/.xopc-dev/xopc.json\" XOPC_LOG_DIR=\"$HOME/.xopc-dev/logs\" XOPC_LOG_LEVEL=info tsx src/cli/bin.ts gateway \"$@\"' --",
     "start": "node dist/src/cli/bin.js",
     "test": "vitest run src extensions/telegram/src extensions/feishu/src extensions/weixin/src",
+    "test:quick-understanding": "XOPC_LOG_LEVEL=fatal vitest run src/work-discovery/__tests__/evaluation.test.ts src/user-context/sources/__tests__/activity-clustering.test.ts src/knowledge/__tests__/quick-understanding.e2e.test.ts src/connectors/__tests__/content-enrichment.test.ts src/connectors/__tests__/connected-source-ingestion.test.ts",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
     "test:skills:all": "npm run test:skills && npm run test:skills:regression",

@@ -1,18 +1,16 @@
-# 5分钟快速入门
+# 终端快速开始
 
-这篇文档帮你用最短终端路径从「在 GitHub 上看到 xopc」到「本地开聊」。
+这是从全新安装到第一次终端对话的最短路径。
 
-对大多数用户来说，[PC 桌面端](./desktop-app.md) 是最省心的开始方式：安装应用，在界面里完成模型设置，然后直接在内置控制台聊天。偏终端，或当前平台暂时没有桌面发布包时，再按本文流程走。
+## 1. 安装 xopc
 
-## 1. 安装
-
-macOS、Linux、WSL2、Termux：
+macOS、Linux、WSL2 或 Termux：
 
 ```bash
 curl -fsSL https://xopc.ai/install.sh | bash
 ```
 
-如果已经有 Node.js 22+：
+如果已经安装 Node.js 22 或更高版本：
 
 ```bash
 npm install -g @xopcai/xopc
@@ -24,62 +22,56 @@ Windows PowerShell：
 iex (irm https://xopc.ai/install.ps1)
 ```
 
-## 2. 先只配置模型
+确认命令可用：
+
+```bash
+xopc --version
+```
+
+## 2. 连接一个模型
+
+运行简化设置向导：
 
 ```bash
 xopc onboard --quick
 ```
 
-`--quick` 是最短配置流程：选择模型服务商并保存凭据。网关、频道、技能和额外 agent 都可以之后再配。
+选择一个服务商，输入凭据，然后选择模型。Gateway、消息通道、技能和额外 Agent 都可以稍后配置。
 
-你可以使用云端模型 API Key，也可以配置 Ollama、LM Studio、vLLM 等本地或自部署模型服务。
-
-## 3. 启动本地 TUI
+## 3. 开始聊天
 
 ```bash
 xopc
 ```
 
-这会直接打开本地终端界面，等同于 `xopc tui`，不需要先启动网关。
-
-你应该看到一个全屏终端聊天界面。如果它立刻退出，先运行 `xopc doctor`，再用 `xopc models status` 检查模型状态。
-
-## 4. 完成一次可继续的任务
-
-xopc 不要求你先搭一套复杂流程。先在当前 Session 中完成一个真实任务，并留下可继续的状态。
-
-粘贴这句：
+发送一条测试消息：
 
 ```text
-我要推进这个项目：<一句话描述>。请先帮我澄清目标和成功标准，再基于当前信息完成可以立即执行的部分。结束前请总结已完成事项、未决问题和下一步。
+请回复“xopc 已就绪”，并告诉我你正在使用哪个模型。
 ```
 
-观察重点：
+按照 TUI 帮助中显示的按键退出。Session 会自动保存，之后可以用 `xopc resume` 恢复。
 
-- 当前 Session 会保留对话与工具运行上下文，本地状态和配置默认保存在 `~/.xopc/`。
-- 如果它只是一次临时任务，到这里已经足够。
-- 如果需要跨多次会话持续推进，让 xopc 创建 Task；只有多个 Task 需要共享上下文时才增加 Project。
-- 如果需要长期材料或重复执行，再增加 Notes / Workspace、Workflow 或 Automation；不需要第一天全部配置好。
+## 4. 尝试一个真实任务
 
-## 5. 只增加真正需要的部件
+给出结果清晰的请求，例如：
 
-本地聊天跑通后，只在真正有用的地方继续扩展：
+```text
+帮我规划这一周。只询问必要信息，给出可执行的安排，最后列出最重要的三个下一步。
+```
 
-| 下一步 | 什么时候加 | 从哪里开始 |
-| --- | --- | --- |
-| 持续推进一个结果 | 状态和下一步需要跨会话保存 | 在 Gateway 控制台使用 Home 与 Tasks |
-| 随手记录材料 | 想法和进展经常不在终端里发生 | 使用 Web / 手机端 Notes，支持文字、语音和附件 |
-| 引入外部信号 | 工作已经分散在别的入口或系统里 | 使用频道、gateway API、扩展或 MCP |
-| 自动跟进 | 复盘、摘要、提醒会重复发生 | 使用 [自动化](./automations.md) 和 [工作流](./workflows.md) |
+任务需要时，助手可以使用已启用的工具和工作区。缺少权限或凭据时，它应先向你确认。
 
-常用入口：
+## 如果没有成功
 
-| 入口 | 命令 | 适合 |
-| --- | --- | --- |
-| PC 桌面端 | GitHub Releases | 最省心的开始方式；原生应用 + 内嵌 gateway |
-| CLI | `xopc agent -i` | 最小终端聊天 |
-| 网页控制台 | `xopc gateway` | 在浏览器中聊天、改设置、看日志 |
-| 手机端 | [移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + 网关扫码配对 | 不在电脑前也能记录文字、语音、图片、附件和项目进展；Agent 仍运行在你的电脑或本地环境里，见 [手机端 App](./mobile-app.md) |
-| 即时通讯 | 启动网关后打开 `频道` 页面 | Telegram、微信、飞书/Lark |
+```bash
+xopc models status
+xopc doctor
+xopc logs tail
+```
 
-完整说明见 [快速开始](./getting-started.md)。要理解 Conversation、Task、Project、Workflow 与 Automation 如何协作，继续看 [Task 闭环](./concepts/loops.md)。
+- 没有配置服务商：查看[配置模型](./how-to/configure-first-model.md)。
+- 找不到 `xopc` 命令：打开新终端，并确认安装程序已将 xopc 加入 `PATH`。
+- 模型拒绝请求：检查密钥、模型名、账号余额和网络连接。
+
+下一步可以阅读[聊天与会话](./session.md)，或者运行 `xopc gateway` 打开浏览器控制台。

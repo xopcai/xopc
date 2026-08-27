@@ -1,6 +1,10 @@
 import type { UnderstandingCandidate, UnderstandingReviewResult } from '../agent/memory/understanding/types.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
 import {
+  clusterUnderstandingSignals,
+  type UnderstandingSignal,
+} from '../user-context/sources/signal-clustering.js';
+import {
   listKnowledgeSourceItems,
 } from '../storage/sqlite/index.js';
 import type { KnowledgeSourceItem } from './types.js';
@@ -22,6 +26,58 @@ function eventTime(item: KnowledgeSourceItem): number | undefined {
   if (!item.occurredAt) return undefined;
   const value = Date.parse(item.occurredAt);
   return Number.isFinite(value) ? value : undefined;
+}
+
+function normalizedRecord(item: KnowledgeSourceItem): Record<string, unknown> {
+  if (!item.normalizedText) return {};
+  try {
+    const value = JSON.parse(item.normalizedText) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function textField(record: Record<string, unknown>, ...fields: string[]): string | undefined {
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = value as Record<string, unknown>;
+      for (const nestedField of ['name', 'full_name', 'fullName', 'title']) {
+        const nestedValue = nested[nestedField];
+        if (typeof nestedValue === 'string' && nestedValue.trim()) return nestedValue.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizeConversationTitle(value: string): string {
+  return value.replace(/^(?:(?:re|fwd?|回复|转发)\s*[:：]\s*)+/i, '').trim();
+}
+
+function projectSignal(item: KnowledgeSourceItem): UnderstandingSignal | undefined {
+  if (item.metadata.actorAttributed !== true) return undefined;
+  const observationKind = item.metadata.observationKind;
+  if (!['activity', 'message', 'calendar_event', 'external_task', 'document_metadata'].includes(String(observationKind))) {
+    return undefined;
+  }
+  const record = normalizedRecord(item);
+  const title = textField(record, 'subject', 'title', 'repository', 'project', 'fullName', 'full_name', 'name');
+  const subjectKey = typeof item.metadata.subjectKey === 'string' && item.metadata.subjectKey.trim()
+    ? item.metadata.subjectKey.trim()
+    : undefined;
+  const displayTitle = title ? normalizeConversationTitle(title) : subjectKey;
+  if (!displayTitle) return undefined;
+  return {
+    evidenceRef: item.id,
+    sourceId: item.sourceInstanceId,
+    title: displayTitle,
+    group: typeof item.metadata.toolkit === 'string' ? item.metadata.toolkit : undefined,
+    subjectKey,
+    occurredAt: eventTime(item),
+  };
 }
 
 function recent(items: KnowledgeSourceItem[], days: number): KnowledgeSourceItem[] {
@@ -107,30 +163,28 @@ function routineObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
 }
 
 function projectObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
-  const grouped = new Map<string, { label: string; events: Map<string, KnowledgeSourceItem> }>();
-  for (const item of recent(items, 60)) {
-    if (item.metadata.observationKind !== 'activity' || item.metadata.actorAttributed !== true) continue;
-    const subject = typeof item.metadata.subjectKey === 'string' ? item.metadata.subjectKey.trim() : '';
-    if (!subject) continue;
-    const entry = grouped.get(subject.toLowerCase()) ?? { label: subject, events: new Map<string, KnowledgeSourceItem>() };
-    const events = entry.events;
-    const eventKey = logicalEventKey(item)!;
-    if (!events.has(eventKey)) events.set(eventKey, item);
-    grouped.set(subject.toLowerCase(), entry);
-  }
-  return [...grouped.entries()]
-    .sort((left, right) => right[1].events.size - left[1].events.size)
-    .slice(0, 8)
-    .map(([, entry]) => {
-      const { label: subject, events } = entry;
-      return {
-        class: 'project' as const,
-        key: `project:${subject.toLocaleLowerCase()}`,
-        value: { label: subject },
+  const recentItems = recent(items, 60);
+  const byId = new Map(recentItems.map((item) => [item.id, item]));
+  const signals = recentItems.map(projectSignal).filter((signal): signal is UnderstandingSignal => Boolean(signal));
+  return clusterUnderstandingSignals(signals)
+    .flatMap((cluster): ClaimObservation[] => {
+      const events = new Map<string, KnowledgeSourceItem>();
+      for (const signal of cluster.signals) {
+        const item = byId.get(signal.evidenceRef);
+        const eventKey = item && logicalEventKey(item);
+        if (item && eventKey && !events.has(eventKey)) events.set(eventKey, item);
+      }
+      if (![...events.values()].some((item) => item.itemType !== 'calendar_event')) return [];
+      return [{
+        class: 'project',
+        key: `project:${cluster.key}`,
+        value: { label: cluster.title },
         items: [...events.values()],
         windowDays: 60,
-      };
-    });
+      }];
+    })
+    .sort((left, right) => right.items.length - left.items.length)
+    .slice(0, 8);
 }
 
 export function deriveConnectedClaimObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
@@ -184,15 +238,15 @@ export function renderConnectedObservation(observation: ClaimObservation): Under
 export class ConnectedUnderstandingPipeline {
   constructor(private readonly memoryManager: MemoryManager) {}
 
-  async process(sourceInstanceId: string, connectorId: string, agentId: string): Promise<UnderstandingReviewResult> {
-    void agentId;
-    const items = listKnowledgeSourceItems({ sourceInstanceId, includeDeleted: false, limit: 500 });
+  async process(agentId: string): Promise<UnderstandingReviewResult> {
+    const items = listKnowledgeSourceItems({ agentId, includeDeleted: false, limit: 500 });
     const observations = deriveConnectedClaimObservations(items);
     const totals: UnderstandingReviewResult = {
       proposed: observations.length, created: 0, deduplicated: 0, rejected: 0, createdRecords: [],
     };
     for (const observation of observations) {
       if (!isDurableObservation(observation)) continue;
+      const sourceInstanceIds = [...new Set(observation.items.map((item) => item.sourceInstanceId))];
       const result = await this.memoryManager.applyUnderstandingCandidates([renderConnectedObservation(observation)], {
         sourceItemIds: observation.items.map((item) => item.id).slice(0, 20),
         sourceText: JSON.stringify({
@@ -200,7 +254,10 @@ export class ConnectedUnderstandingPipeline {
           activeDays: new Set(observation.items.map((item) => item.occurredAt?.slice(0, 10))).size,
           windowDays: observation.windowDays,
         }),
-        source: { provider: connectorId, sourceInstanceId },
+        source: {
+          provider: 'connected-sources',
+          ...(sourceInstanceIds.length === 1 ? { sourceInstanceId: sourceInstanceIds[0] } : {}),
+        },
         reviewSource: 'background',
       });
       totals.created += result.created;

@@ -31,6 +31,7 @@ const { ingestComposioConnectedSource } = vi.hoisted(() => ({
 vi.mock('../connected-source-ingestion.js', () => ({ ingestComposioConnectedSource }));
 
 import { startConnectorLearningCoordinator } from '../learning-coordinator.js';
+import { encodeConnectedSourceCursor } from '../connected-source-cursor.js';
 import { buildConnectorLearningArguments, getConnectorLearningPlan } from '../learning-recipes.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
 
@@ -109,11 +110,30 @@ describe('connector learning coordinator', () => {
     expect(buildConnectorLearningArguments(
       plan,
       plan.streams[0]!,
-      { cursor: '2026-08-01T00:00:00.000Z' },
+      { cursor: encodeConnectedSourceCursor({ checkpoint: '2026-08-01T00:00:00.000Z', pageToken: 'gmail-page-2' }) },
       { email: 'owner@example.com' },
     )).toMatchObject({
       query: `after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
+      page_token: 'gmail-page-2',
     });
+  });
+
+  it('uses provider sync and page tokens without mixing calendar time filters', () => {
+    const plan = getConnectorLearningPlan('googlecalendar')!;
+    expect(buildConnectorLearningArguments(
+      plan,
+      plan.streams[0]!,
+      { cursor: encodeConnectedSourceCursor({ syncToken: 'calendar-sync', pageToken: 'calendar-page-2' }) },
+      {},
+    )).toEqual({ max_results: 500, sync_token: 'calendar-sync', page_token: 'calendar-page-2' });
+  });
+
+  it('advertises learning only for sources with implemented normalizers', () => {
+    expect(getConnectorLearningPlan('googledrive')).toMatchObject({
+      streams: [expect.objectContaining({ actionId: 'GOOGLEDRIVE_FIND_FILE', kind: 'inventory' })],
+    });
+    expect(getConnectorLearningPlan('notion')).toBeUndefined();
+    expect(getConnectorLearningPlan('slack')).toBeUndefined();
   });
 
   it('honors per-connection scan enablement and interval', async () => {

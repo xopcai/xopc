@@ -1,100 +1,64 @@
-# Getting Started
+# Get started with xopc
 
-Use this page as the full map: what runs, setup modes, surfaces, and where to go next.
+xopc gives you one locally operated AI assistant across desktop, terminal, browser, mobile, and messaging apps. To get a working first conversation, install one client, connect one model, and send a test message.
 
-If you have not tried xopc yet, start with the **[PC Desktop app](./desktop-app.md)** for the friendliest path, or **[First 5 Minutes](./first-5-minutes.md)** for a terminal-first path — both cover the actual install commands step by step.
+## Choose how to start
 
-Your first run needs only **model → agent → conversation**. xopc creates an Task when work must survive across sessions. Add a Project only for shared context, Notes / Workspace for durable material, and a Workflow / Automation when execution repeats or is event-driven. See [The Task Loop](./concepts/loops.md) for the complete model.
-
-## What xopc runs
-
-xopc is one package with several surfaces:
-
-| Surface | Entry point | Requires gateway |
-| --- | --- | --- |
-| CLI one-shot | `xopc agent -m "..."` | No |
-| Interactive CLI | `xopc agent -i` | No |
-| Local TUI | `xopc` or `xopc tui` | No |
-| PC Desktop app | GitHub Releases | Bundled gateway |
-| Gateway console | `xopc gateway`, then open the printed URL | Yes |
-| Gateway TUI | `xopc tui --gateway` or `xopc tui --url ...` | Yes |
-| Channels | Telegram, Weixin, Feishu/Lark configs under `channels.*` | Yes |
-
-## Requirements
-
-- Node.js **22** or newer for the CLI package.
-- Docker Desktop, or Docker Engine with Compose, when using the official container image.
-- At least one model provider key, local model server, or configured OpenAI-compatible endpoint.
-- `pnpm` only when building from this repository.
-
-## Setup modes
-
-| Goal | Command | Notes |
-| --- | --- | --- |
-| Fast local trial | `xopc onboard --quick` | Model credentials only; skips gateway and channels |
-| Guided first run | Web console onboarding or `xopc onboard` | Model first, optional personal profile, then chat |
-| Create base files | `xopc setup` | Creates config/workspace skeleton only |
-| Configure a model later | `xopc providers set-key <provider>` and `xopc models set <provider>/<model>` | See [Configure your first model](./how-to/configure-first-model.md) |
-
-Configuration is stored in `~/.xopc/xopc.json` by default. Override it with `XOPC_CONFIG` or `XOPC_CONFIG_PATH`.
-
-## Choose the next surface
-
-| Need | Start here |
+| If you prefer… | Start with |
 | --- | --- |
-| Easiest first run | [PC Desktop app](./desktop-app.md) |
-| Fastest terminal first run | [First 5 Minutes](./first-5-minutes.md) |
-| Self-host with a container | [Install with Docker](./docker.md) |
-| Browser chat, settings, logs | [Gateway](./gateway.md) |
-| Telegram bot | [Connect Telegram](./how-to/connect-telegram.md) |
-| Mobile access | [Mobile app](./mobile-app.md) and [Remote access](./remote-access.md) |
-| Another dedicated agent | [Create a second agent](./how-to/create-second-agent.md) |
-| Gateway on another device | [Expose the gateway safely](./how-to/expose-gateway-safely.md) |
-| Broken setup | [Diagnose setup issues](./how-to/diagnose-broken-setup.md) |
+| A normal desktop application | [Desktop app](./desktop-app.md) |
+| A terminal | [Terminal quick start](./first-5-minutes.md) |
+| A self-hosted container | [Docker](./docker.md) |
 
-## Core paths
+The desktop app is the simplest choice for most people. The terminal and Docker installations use the same configuration and can be added later.
 
-| Topic | Page |
-| --- | --- |
-| CLI commands | [CLI](./cli.md) |
-| TUI behavior | [Terminal UI](./tui.md) |
-| Configuration fields | [Configuration](./configuration.md) and [Configuration reference](./reference/configuration.md) |
-| Models and providers | [Models](./models.md) |
-| Channels | [Channels](./channels/index.md) |
-| Tools | [Tools](./tools.md) |
-| Skills | [Skills](./skills.md) |
-| Extensions | [Extensions](./extensions.md) |
-| Session routing | [Routing system](./routing-system.md) |
-| Projects, tasks, and notes | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
+## What you need
 
-## Development from source
+- A supported model account and its API key, or a local model server such as Ollama.
+- Node.js 22 or newer only when installing the command-line package.
+- Docker only when choosing the container installation.
+
+You do not need to configure channels, tools, extra Agents, or remote access before the first chat.
+
+## Your first successful setup
+
+1. Install and open xopc using one of the options above.
+2. Add one model provider. In the desktop or web console, follow the model setup screen. In a terminal, run `xopc onboard --quick`.
+3. Open **Chat** or run `xopc`.
+4. Send: `Reply with “xopc is ready” and tell me which model you are using.`
+
+The setup is complete when the assistant replies without a credential or connection error.
+
+If it does not, run `xopc doctor` and continue with [Troubleshooting](./how-to/diagnose-broken-setup.md).
+
+## Learn the main parts as you need them
+
+| Part | What it is for | Guide |
+| --- | --- | --- |
+| Session | A conversation you can return to from any connected client | [Chat and sessions](./session.md) |
+| Agent | A named assistant with its own role, model choices, tools, and workspace | [Agents](./routing-system.md) |
+| Project and Task | Long-running work with an explicit result, status, and next action | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
+| Workflow | A reusable sequence for multi-step work | [Workflows](./workflows.md) |
+| Automation | A schedule, webhook, or manual trigger that starts work | [Automations](./automations.md) |
+| Channel | Telegram, Weixin, or Feishu access to the same assistant | [Channels](./channels/index.md) |
+
+You can use xopc as a normal chat assistant without creating Projects, Workflows, or Automations. Add them only when work needs to continue or repeat.
+
+## Recommended next steps
+
+1. Read [Models and providers](./models.md) before adding a second model.
+2. Review [Data and file locations](./workspace.md) so you know what is stored locally.
+3. Configure [remote access](./remote-access.md) only if another device must reach the Gateway.
+4. Connect a [channel](./channels/index.md) after local chat works.
+
+## Where configuration lives
+
+The default xopc state directory is `~/.xopc/`. The main configuration file is `~/.xopc/xopc.json`. Use these commands instead of finding the file manually:
 
 ```bash
-git clone https://github.com/xopcai/xopc.git
-cd xopc
-pnpm install
-pnpm run dev -- --help
-pnpm run dev:init        # optional: create isolated ~/.xopc-dev state
-pnpm run dev:gateway     # gateway from source using ~/.xopc-dev and info logs
-pnpm run build
+xopc config path
+xopc config validate
+xopc config show
 ```
 
-Use `pnpm run dev:gateway -- --port 18791` (or another option after `--`) if your normal gateway is already using the default port.
-
-Common checks:
-
-```bash
-pnpm test
-pnpm run typecheck
-pnpm run docs:build
-```
-
-## Troubleshooting
-
-| Symptom | Check |
-| --- | --- |
-| Config does not load | `xopc config validate` |
-| Model calls fail | `xopc models status` and provider credentials |
-| Gateway does not respond | `xopc gateway status` and `xopc gateway health` |
-| Channel does not reply | `xopc channels show <channel>` and gateway logs |
-| Unknown local failure | `xopc doctor`, then `xopc logs tail` |
+`config show` masks sensitive values. Never paste API keys, Gateway tokens, or bot tokens into an issue or screenshot.

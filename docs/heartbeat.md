@@ -1,74 +1,42 @@
-# Heartbeat Mechanism
+# Heartbeat checks
 
-Heartbeat is a lightweight gateway service for periodic health checks and proactive wake logic. It is separate from automations: automations own scheduled/manual/webhook work, while heartbeat keeps long-running gateway state observable.
+Heartbeat lets xopc periodically ask an Agent to review a small checklist and report useful changes. Use it for lightweight awareness, not for exact-time jobs or critical monitoring.
 
-## Overview
+## Heartbeat or Automation?
 
-```
-┌─────────────────┐
-│ Heartbeat       │
-│ Service         │
-└────────┬────────┘
-         │
-         ▼ (every intervalMs)
-┌─────────────────┐
-│ Check Status    │
-│ - Runtime       │
-│ - Memory        │
-│ - Config        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Emit logs /     │
-│ wake checks     │
-└─────────────────┘
+- Use **Heartbeat** for periodic “look around and report if needed” checks.
+- Use an [Automation](./automations.md) when timing, retries, run history, and a defined action matter.
+
+## Set up a heartbeat
+
+1. Open **Settings → Heartbeat**.
+2. Enable Heartbeat for the intended Agent.
+3. Choose a conservative interval.
+4. Add a short checklist with clear conditions for reporting.
+5. Save and review the first result.
+
+Example checklist:
+
+```md
+- Check whether any active Task is blocked or overdue.
+- Report only new blockers or decisions I need to make.
+- If nothing needs attention, do not send a message.
 ```
 
-## Configuration
+Keep the checklist small. Broad prompts consume more model usage and can produce repetitive notifications.
 
-```typescript
-interface HeartbeatConfig {
-  intervalMs: number;
-  enabled: boolean;
-}
-```
+## Control notifications
 
-Default configuration:
+Decide where results should appear and whether a quiet result should be suppressed. Test delivery in the target Session or channel before relying on it.
 
-```json
-{
-  "heartbeat": {
-    "intervalMs": 300000,
-    "enabled": true
-  }
-}
-```
+## Safe use
 
-## Use Cases
-
-- Check gateway runtime health on a steady cadence.
-- Monitor memory and session pressure.
-- Surface configuration reload or wake conditions without coupling them to user turns.
-
-## Relationship with Automations
-
-| Component | Responsibility |
-|-----------|----------------|
-| **Automations** | Execute agent or workflow actions from manual, scheduled, or webhook triggers |
-| **Heartbeat** | Run periodic health checks and wake-related monitoring |
-
-Automations do not depend on heartbeat to become due. The automation service computes and tracks its own `nextRunAtMs`; heartbeat remains a separate health and monitoring mechanism.
+- Do not put secrets in the checklist.
+- Avoid instructions that make external changes without confirmation.
+- Use a low-cost model when appropriate.
+- Pause Heartbeat when the Agent's data source or credential is unavailable.
+- Use dedicated monitoring software for uptime, security, or emergency alerts.
 
 ## Troubleshooting
 
-**Heartbeat not working?**
-
-- Confirm `heartbeat.enabled` is `true`.
-- Check `heartbeat.intervalMs`.
-- Check gateway logs for heartbeat service startup and runtime errors.
-
-**Triggering too frequently?**
-
-- Increase `heartbeat.intervalMs`.
-- Review any wake condition tied to heartbeat checks.
+If checks do not run, confirm the Gateway service is continuously running, Heartbeat is enabled, the Agent has a valid model, and the interval has elapsed. Inspect **Settings → Logs** for the first Heartbeat error.

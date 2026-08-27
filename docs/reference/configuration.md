@@ -1,64 +1,55 @@
 # Configuration reference
 
-Use this page when you need exact locations for xopc configuration.
+This page maps the main configuration areas. For a specific installed version, `xopc config show`, `xopc config get <path>`, and the settings UI are the authoritative view of effective values.
 
-The main configuration file is `~/.xopc/xopc.json` unless `XOPC_CONFIG` or `XOPC_CONFIG_PATH` points elsewhere.
+## Locations and commands
 
-For the full field reference, see [Configuration](../configuration.md). For task-oriented setup, prefer:
+Default file: `~/.xopc/xopc.json`.
 
-- [Configure your first model](../how-to/configure-first-model.md)
-- [Connect Telegram](../how-to/connect-telegram.md)
-- [Expose the gateway safely](../how-to/expose-gateway-safely.md)
-- [Create a second agent](../how-to/create-second-agent.md)
-- [Diagnose a broken setup](../how-to/diagnose-broken-setup.md)
-
-## Top-level sections
-
-| Section | Purpose |
-| --- | --- |
-| `agents` | Agent manifests, optional capability presets, default agent id |
-| `providers` | LLM provider API key references and provider ids |
-| `bindings` | Route inbound channels/peers to agents |
-| `session` | Session scope, identity links, reset behavior |
-| `channels` | Telegram, Weixin, Feishu, and extension channel config |
-| `gateway` | HTTP/realtime gateway host, port, auth, CORS, remote access |
-| `browser` | Browser automation backend, URL policy, timeout behavior |
-| `tools` | Web search and other tool-level settings |
-| `messages` / `tts` | Outbound message and text-to-speech settings |
-| `mcp` | Outbound MCP server registry |
-| `extensions` | Extension enable/disable and extension-specific config |
-
-## Agent configuration
-
-Current agent configuration is manifest-first:
-
-```json
-{
-  "agents": {
-    "default": "main",
-    "list": [
-      {
-        "id": "main",
-        "identity": { "name": "Main", "role": "General assistant" },
-        "responsibilities": { "primary": ["Help the user complete tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-v4-flash" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      }
-    ]
-  },
-  "providers": {
-    "deepseek": "${DEEPSEEK_API_KEY}"
-  }
-}
+```bash
+xopc config path
+xopc config show
+xopc config get <dot.path>
+xopc config set <dot.path> <value>
+xopc config unset <dot.path>
+xopc config validate
 ```
 
-There is no `agents.defaults` merge layer. Put runnable agents in `agents.list[]`. Use `agents.capabilityPresets` and `agents.defaultPreset` only when you want reusable policy patches.
+`XOPC_CONFIG` or `XOPC_CONFIG_PATH` can select another configuration file. State profiles can also change the default root.
+
+## Top-level areas
+
+| Section | Controls |
+| --- | --- |
+| `agents` | Default Agent, Agent list, model roles, tools, Skills, workspace, and boundaries |
+| `userContext` | Shared user-owned context, privacy, and recall behavior |
+| `providers` | Model provider configuration and credential references |
+| `channels` | Telegram, Weixin, Feishu, and extension channel settings |
+| `gateway` | Port, binding, authentication, remote connection, and Tailscale behavior |
+| `tools` | Search, browser, media, runtime, and other tool settings |
+| `messages` | Outbound message and text-to-speech behavior |
+| `mcp` | External MCP server connections and lifecycle settings |
+| `extensions` | Extension enable/disable and extension-specific configuration |
+| `runtimeTools` | Managed Node.js and Python runtimes |
+| `heartbeat` | Periodic Agent checks when enabled |
+
+Workflows and Automations are normally managed in their own Gateway pages rather than written directly into `xopc.json`.
+
+## Common path overrides
+
+| Variable | Purpose |
+| --- | --- |
+| `XOPC_STATE_DIR` | State root |
+| `XOPC_CONFIG` / `XOPC_CONFIG_PATH` | Configuration file |
+| `XOPC_WORKSPACE` | Primary workspace override |
+| `XOPC_CREDENTIALS_DIR` | Credential directory |
+| `XOPC_LOG_DIR` | Log directory |
+| `XOPC_LOG_LEVEL` | Log verbosity |
+
+Provider-specific variables such as `OPENAI_API_KEY` are shown by provider setup and `xopc providers schema <provider>`.
+
+## Validation and secrets
+
+Run `xopc config validate` after direct edits. Use JSON syntax: no trailing commas or duplicate keys. Prefer UI or CLI credential commands for secrets, and review any output before sharing it.
+
+Task-oriented instructions are in [Configure xopc](../configuration.md).

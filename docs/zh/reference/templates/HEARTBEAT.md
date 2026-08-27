@@ -1,26 +1,21 @@
 ---
-title: "HEARTBEAT.md Template"
-summary: "Periodic checks template for agents"
-read_when:
-  - Configuring heartbeat behavior
+title: "HEARTBEAT.md 模板"
 ---
 
-# HEARTBEAT.md - Periodic Checks
+# HEARTBEAT.md：周期检查
 
-Edit this file to define what you check during heartbeat polls.
+Heartbeat 清单应简短，只报告真正需要用户关注的变化。
 
-Keep it small to limit token burn.
+## 示例清单
 
-## Example Checklist
+- 检查进行中的 Task 是否出现新阻塞。
+- 检查今天是否有即将到期、且还没有下一步的事项。
+- 只报告新的风险、需要决定的事项或已经验证的完成结果。
+- 如果没有需要关注的内容，保持静默。
 
-- [ ] Check email for urgent messages
-- [ ] Check calendar for upcoming events (< 2h)
-- [ ] Check any notifications/mentions
+## 当前重点
 
-## Current Focus
+- 在这里填写最多三项短期重点。
+- 重点结束后及时删除，避免重复通知。
 
-_(What should you be tracking right now?)_
-
----
-
-**Remember:** If nothing needs attention, just reply `HEARTBEAT_OK`.
+不要用 Heartbeat 代替严格定时 Automation、系统在线监控或紧急告警。

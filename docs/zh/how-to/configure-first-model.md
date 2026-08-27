@@ -1,62 +1,62 @@
-# 如何配置第一个模型
+# 配置第一个模型
 
-当 xopc 已安装、但 agent 还不能调用模型时使用本页。
+先连接一个模型服务商并验证真实回复，再启用 xopc 的其它功能。
 
-## 1. 保存 provider key
+## 选择服务商
 
-API key 类型 provider 使用：
+已经拥有账号或 API Key，并希望直接使用托管模型时，选择云端服务商。希望请求留在自己的电脑上，并且能够自行运行模型时，选择 Ollama 或其它本地模型服务。
+
+支持的认证方式和本地服务配置见[模型与服务商](../models.md)。
+
+## 使用桌面或网页控制台
+
+<!-- 截图占位：/screenshots/model-setup.png -->
+
+1. 打开模型设置提示，或进入 **设置 → 能力 → 模型**。
+2. 选择服务商。
+3. 使用 OAuth 登录，或者输入页面要求的 API Key。
+4. 选择默认模型。
+5. 保存，然后打开 **聊天** 发送测试消息。
+
+聊天可以正常回复，并且模型页面显示服务商已配置，就表示连接成功。
+
+## 使用终端
+
+引导式配置：
 
 ```bash
-xopc providers set-key deepseek
+xopc onboard --quick
 ```
 
-命令会提示输入 key，终端不回显。脚本中也可以显式传入：
+手动配置时，先保存凭据，再选择模型：
 
 ```bash
-xopc providers set-key deepseek --key "$DEEPSEEK_API_KEY"
-```
-
-检查凭据状态：
-
-```bash
-xopc providers list
-```
-
-## 2. 选择模型
-
-列出模型：
-
-```bash
-xopc models list --provider deepseek
-```
-
-设置默认模型：
-
-```bash
-xopc models set deepseek/deepseek-v4-flash
-```
-
-检查结果：
-
-```bash
+xopc providers set-key <provider>
+xopc models list --provider <provider>
+xopc models set <provider>/<model>
 xopc models status
 ```
 
-## 3. 本地试聊
+支持浏览器登录的服务商可以运行：
 
 ```bash
-xopc
+xopc models auth login --provider <provider>
 ```
 
-如果模型调用失败：
+密钥输入提示不会回显内容。在共享电脑上避免使用 `--key` 参数，因为命令历史或进程工具可能暴露它。
+
+## 验证
 
 ```bash
-xopc doctor
-xopc logs tail
+xopc agent -m "请回复‘xopc 已就绪’，并说明当前模型。"
 ```
 
-## 说明
+如果失败，按以下顺序检查：
 
-- `xopc onboard --quick` 是同一流程的交互式向导。
-- 支持 OAuth 的 provider 也可通过 `xopc models auth login --provider <id>` 管理。
-- 主配置文件仍是 `~/.xopc/xopc.json`；凭据可能通过 auth profile 存储，而不是直接写 raw key。
+1. `xopc providers list` 是否显示服务商已配置。
+2. `xopc models status` 是否显示预期的默认模型。
+3. 当前账号是否有该模型的权限、额度或余额。
+4. 网络是否可以访问服务商。
+5. `xopc logs tail` 中是否有认证失败或找不到模型的错误。
+
+凭据可能保存在认证配置中，而不是直接写进 `xopc.json`。请使用 xopc 命令或界面更新，不要把真实密钥复制进配置示例。

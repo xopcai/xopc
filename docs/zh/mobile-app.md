@@ -1,90 +1,41 @@
-# 手机端 App
+# 手机端
 
-Android/iOS 正式构建、签名凭据和 TestFlight 发布步骤见[移动端构建与发布手册](../mobile-build-release.md)。
+手机端连接持续运行在电脑或服务器上的 Gateway。它适合离开主机时聊天、记录内容和查看进行中的工作。
 
-如果你想在 iOS 或 Android 上继续使用同一个 xopc 助手，可以使用 **[xopc 移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)**。
+## 连接前
 
-移动端 App 是 Expo / React Native 网关客户端，现在维护在当前仓库的 `apps/mobile-expo` 目录。它不会替代网关，也不会变成另一个云端账号：它连接到已经运行的 xopc 网关，可通过局域网、FRP、Tailscale 或你自己的 HTTPS 反向代理访问，并使用同一套网关 Bearer token / 配对流程。
+1. 确认 Gateway 和本地聊天正常。
+2. 选择受保护的远程访问方式，优先 Tailscale。
+3. 生成或获取 Gateway Token。
+4. 保持主机在线，并让 Gateway 服务持续运行。
 
-可以把它理解成你自己的 Agent 的私有远程入口。xopc 仍然运行在你的电脑或自托管环境里；手机负责让你不在键盘前时也能继续对话，或把文字、语音、图片和附件快速记入 Notes。长期上下文仍然留在你的 xopc 运行环境里。
+## 连接
 
-## 最短路径
+<!-- 截图占位：/screenshots/mobile-connect.png -->
 
-1. 启动网关：
+1. 在桌面或网页控制台打开 **设置 → 远程访问**。
+2. 准备受保护的 Gateway URL 和 Token，或使用可用的配对流程。
+3. 在手机端添加 Gateway。
+4. 验证健康或状态页面。
+5. 先打开一个已知 Session，再开始新聊天。
 
-```bash
-xopc gateway
-```
+手机应显示与主机相同的 Agent 和 Session。否则很可能连接了另一个 Gateway 或 Profile。
 
-2. 选择手机如何访问网关：
+## 安全
 
-| 场景 | 推荐路径 |
+- 不要使用未加密的公网 HTTP 地址。
+- 不要通过聊天或邮件发送 Gateway Token。
+- 使用手机锁屏；手机丢失后撤销访问。
+- 优先私有网络，不要直接使用公网隧道。
+- Token 意外泄露后立即轮换。
+
+## 故障排查
+
+| 问题 | 检查内容 |
 | --- | --- |
-| 手机和网关在同一 Wi-Fi | 局域网网关 URL |
-| 离开本地网络，需要临时公网 URL | FRP 公网隧道 |
-| 你有自己的域名和 TLS 证书 | 反向代理 |
-| 所有设备都在 Tailscale | Tailscale Serve |
+| 无法访问 Gateway | 主机在线、服务运行、私有网络或隧道已连接 |
+| 未授权 | URL 和 Token 属于同一个 Gateway |
+| Session 不一致 | 手机连接的是目标主机和 Profile |
+| 消息一直等待 | 主机上的模型正常，实时连接没有被阻止 |
 
-3. 打开 **Gateway 控制台 → 设置 → 远程访问**。
-4. 使用 **手机端配对（Mobile app pairing）** 扫码，或复制配对链接。
-5. 打开移动端 App，在设置里确认网关地址和 token。
-
-## Gateway 访问方式
-
-### 局域网
-
-手机和网关主机在同一 Wi-Fi 时使用局域网。
-
-- Gateway 可能需要绑定到局域网 IP 或 `0.0.0.0`。
-- 使用 token 认证和本地防火墙。
-- Android 独立构建需要允许 HTTP 明文访问；移动端 App 已在原生构建配置里启用。
-- iOS 独立构建需要本地网络权限；首次访问时请允许 iOS 弹出的 xopc 本地网络权限。
-
-### FRP 公网隧道
-
-离开本地网络或 tailnet，需要临时 HTTPS URL 时使用公网隧道。
-
-- 打开 **远程访问 → 公网访问**。
-- 启动隧道并等待公网 URL。
-- 扫描 **移动端配对** QR。
-- 不再需要远程访问时停止隧道。
-
-公网隧道风险较高：持有公网 URL 或配对二维码的人，如果同时拿到 Bearer token，就可能访问你的网关。
-
-### 反向代理
-
-已有 HTTPS 域名时使用，例如 `https://gateway.example.com`。
-
-- 反向代理终止 TLS，并转发到本机回环地址上的网关。
-- Gateway 仍然使用自己的 Bearer token 鉴权。
-- 移动端需要系统信任的 TLS 证书；app 路径不支持自签证书。
-- 每一层反代都必须转发 `/api/realtime/v1/ws` 的 WebSocket Upgrade；请使用[远程访问](./remote-access.md#reverse-proxy)中的 nginx 模板和验证命令。
-
-## 构建移动端 App
-
-手机端 App 位于当前仓库的 `apps/mobile-expo` 目录：
-
-```bash
-git clone https://github.com/xopcai/xopc.git
-cd xopc
-pnpm install
-pnpm run dev:mobile
-```
-
-仓库根目录里的常用命令：
-
-| 命令 | 用途 |
-| --- | --- |
-| `pnpm run dev:mobile` | Expo dev server |
-| `pnpm run android:mobile` / `pnpm run ios:mobile` | 开发构建 |
-| `pnpm -C apps/mobile-expo run android:release` | Android release APK |
-| `pnpm run mobile:typecheck` | TypeScript 检查 |
-| `pnpm run mobile:test:stream` | Agent stream client 测试 |
-
-`react-native-mmkv` 使用原生代码。Expo Go 可用内存存储兜底运行，但持久化设置需要 development build 或 standalone build。
-
-## 更多
-
-- [移动端 App 源码](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)
-- [远程访问](./remote-access.md)
-- [FRP 隧道安全](../tunnel-security.md)（英文）
+网络排障见[远程访问](./remote-access.md)。

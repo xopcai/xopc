@@ -1,21 +1,13 @@
-# Releases
+# Release channels
 
-All xopc releases are published on GitHub.
+Stable releases, notes, and desktop installers are published on [GitHub Releases](https://github.com/xopcai/xopc/releases). The command-line package history is available on [npm](https://www.npmjs.com/package/@xopcai/xopc).
 
-| Link | What you get |
-| --- | --- |
-| [All releases](https://github.com/xopcai/xopc/releases) | Changelogs, downloads, and release notes for every version |
-| [Latest release](https://github.com/xopcai/xopc/releases/latest) | The most recent stable version |
-| [npm](https://www.npmjs.com/package/@xopcai/xopc) | CLI package version history |
+## Choose a version
 
-## Update xopc
+- Use the latest stable release for normal installations.
+- Pin an exact version for servers, Docker, and other unattended systems.
+- Use preview or prerelease builds only when you are prepared to report problems and restore a backup.
 
-```bash
-# npm global install
-npm update -g @xopcai/xopc
+Before changing channels or moving across several versions, read the intervening release notes for migrations, new permissions, and extension compatibility.
 
-# or re-run the installer
-curl -fsSL https://xopc.ai/install.sh | bash
-```
-
-See [Updates](./update.md) for gateway update instructions and rolling back versions.
+See [Update xopc](./update.md) for commands and post-update checks.

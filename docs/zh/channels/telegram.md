@@ -1,118 +1,58 @@
-# Telegram 通道
+# Telegram
 
-## 网关控制台 — 即时通讯
+连接 Telegram Bot 后，可以在私聊和群组中使用 xopc Agent。
 
-网关运行时可使用 React 控制台中的 **即时通讯** 专页：
+## 创建机器人
 
-- **路由：** `#/channels`（侧栏 **即时通讯**）。
-- **前提：** 已在设置中保存 **网关访问令牌**，以便调用需鉴权的 API。
-- **当前产品界面：** 仅配置 **微信** 与 **Telegram**。
+1. 在 Telegram 中打开 [@BotFather](https://t.me/BotFather)。
+2. 发送 `/newbot` 并按提示操作。
+3. 复制生成的 Bot Token。
+4. 私密保存 Token；任何拥有它的人都可以控制机器人账号。
 
-## 多账户配置
+## 连接到 xopc
 
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "defaults": {
-        "dmPolicy": "pairing",
-        "groupPolicy": "open",
-        "streaming": { "mode": "partial" }
-      },
-      "accounts": {
-        "personal": {
-          "name": "Personal Bot",
-          "botToken": "BOT_TOKEN_1",
-          "dmPolicy": "allowlist",
-          "groupPolicy": "open",
-          "allowFrom": [123456789],
-          "streaming": { "mode": "partial" }
-        },
-        "work": {
-          "name": "Work Bot",
-          "botToken": "BOT_TOKEN_2",
-          "dmPolicy": "disabled",
-          "groupPolicy": "allowlist",
-          "groups": {
-            "-1001234567890": {
-              "requireMention": true,
-              "systemPrompt": "You are a work assistant"
-            }
-          }
-        }
-      }
-    }
-  }
-}
+1. 在 Gateway 控制台打开 **消息通道 → Telegram**。
+2. 选择 **配置**，粘贴 Bot Token。
+3. 私聊策略保持为 **配对**。
+4. 初始先停用群聊，或使用群白名单并要求提及。
+5. 保存并等待健康检查成功。
+
+然后给机器人发送 Telegram 私聊消息，并在 xopc 中批准显示的配对码。
+
+## 终端设置
+
+```bash
+xopc channels enable telegram
+xopc channels show telegram
+xopc channels pairing approve telegram <code> --account default
 ```
 
-## 访问控制策略
+需要在主机编辑通道 JSON 时使用 `xopc channels config`。
 
-**DM 策略**（`dmPolicy`）：
+## 访问策略
 
-- **`pairing`** — 未在允许列表中的用户 **不会** 进入智能体。允许来源：`channels.telegram.accounts.<账号>.allowFrom`，以及 **`~/.xopc/credentials/xopc-telegram-<账号>-allowFrom.json`** 里已批准的 id（可用 **`XOPC_CREDENTIALS_DIR`** 覆盖目录）。首次私聊会收到 **配对码**；管理员在网关所在机执行 **`xopc channels pairing approve --channel telegram --account <账号> <配对码>`**。详见 [DM 私聊配对](./index.md#dm-pairing) 与 [CLI — channels](../cli.md#channels)。
-- **`allowlist`** — 同样合并配置与凭证文件中的 id，但 **不** 发配对码；未命中则丢弃。
-- **`open`** — 任意用户可私聊。
-- **`disabled`** — 关闭私聊。
+- **配对** 适合个人机器人：每个新发送者都需要批准。
+- **白名单** 会静默忽略未知发送者。
+- **开放** 只适用于有意公开的机器人和 Agent。
+- **停用** 会关闭对应会话类型。
 
-`channels.telegram.defaults` 为账号提供策略、流式输出、代理、API 根地址和限制等默认值。访问列表只属于账号：私聊 id 写入 `accounts.<账号>.allowFrom`，群聊 id 写入 `accounts.<账号>.groupAllowFrom`。
+机器人拥有工具或私人上下文时，群聊应要求提及并限制群 ID。
 
-**群组策略** (`groupPolicy`)：
-- `open` - 允许所有群
-- `allowlist` - 仅允许指定群
-- `disabled` - 禁用群
+## 多个机器人
 
-## 流式输出
+可以分别添加个人和工作账号。每个账号使用独立 Token、访问策略和路由。先完整测试一个账号，再添加下一个。
 
-**Stream 模式** (`streaming.mode`)：
+## 语音与文件
 
-| 模式 | 说明 |
-|------|------|
-| `off` | 一次性发送完整消息 |
-| `partial` | 流式发送 AI 回复，并展示工具进度 |
-| `block` | 更完整的流式（含更多更新） |
+Telegram 可以把受支持的文档、图片和语音消息交给 xopc。语音转写和语音回复需要单独配置[语音能力](../voice.md)。文件和媒体仍受大小限制。
 
-## 获取 Bot Token
+## 故障排查
 
-1. 打开 Telegram，搜索 [@BotFather](https://t.me/BotFather)
-2. 发送 `/newbot` 创建机器人
-3. 按提示设置名称与用户名
-4. 复制生成的 Token
+| 问题 | 检查内容 |
+| --- | --- |
+| 机器人状态异常 | Token 有效，Gateway 可以访问 Telegram |
+| 私聊没有回复 | 配对已批准，并且本地聊天正常 |
+| 群聊没有回复 | 机器人已进群、群策略允许、满足提及要求 |
+| 回复中途停止 | 流式模式、Telegram 限制和 Gateway 日志 |
 
-## 语音消息（STT/TTS）
-
-详情见 [语音（STT/TTS）](/zh/voice)。
-
-在需要 @mention 的 Telegram 群/超级群中，**纯语音**消息会在 mention 过滤前先做转写，这样“口播 bot 名称”（以及更适合 STT 的别名）也能触发。
-
-## 反向代理配置
-
-在受限网络环境下可设置自定义 API 根地址：
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "defaults": {
-        "apiRoot": "https://your-proxy-domain.com"
-      },
-      "accounts": {
-        "default": {
-          "botToken": "YOUR_BOT_TOKEN"
-        }
-      }
-    }
-  }
-}
-```
-
-启动时会自动验证连接。
-
-## 使用限制
-
-- **仅群/私聊**：不支持广播频道（Channel）
-- **轮询模式**：使用 long polling，约 1-2 秒延迟
-- **语音消息**：STT 60 秒限制（Telegram）
-- **TTS 文本**：受 `tts.maxTextLength` 限制（schema 默认 512；可配置）
+Token 一旦出现在日志、截图或源码中，立即在 BotFather 中轮换。

@@ -1,37 +1,34 @@
-# 如何创建第二个 agent
+# 创建第二个 Agent
 
-当你需要一个独立工作区和模型角色的 agent 时使用本页。
+另一个助手需要不同职责、工作区、模型或工具边界时，创建新 Agent。只是聊天主题不同，只需新建 Session。
 
-## 1. 添加 agent
+## 在控制台中
 
-`agents add` 必须提供 workspace 路径：
+1. 打开 **Agent**，选择 **添加 Agent**。
+2. 填写简短 ID 和清晰名称。
+3. 描述主要职责。
+4. 选择工作区和模型。
+5. 只启用需要的工具和 Skill。
+6. 保存，并使用该 Agent 开始新聊天。
+
+先测试只读任务。Agent 行为符合预期后，再添加写入、Shell、浏览器、消息发送或外部账号访问。
+
+## 在终端中
 
 ```bash
-xopc agents add coder --workspace ~/.xopc/workspace/coder --model anthropic/claude-sonnet-4-5
-```
-
-查看已配置 agent：
-
-```bash
+xopc agents add coder --workspace ~/.xopc/workspace/coder --model <provider>/<model>
 xopc agents list
 ```
 
-## 2. 在会话中使用这个 agent
+然后在新客户端 Session 中选择该 Agent；需要显式 Session 参数时，以已安装命令的 `--help` 为准。
 
-Session key 使用 `agent:{agentId}:...` 形状。直接话题可用：
-
-```bash
-xopc agent -s agent:coder:main -m "Review this project structure."
-```
-
-TUI：
+## 设为默认 Agent
 
 ```bash
-xopc tui -s agent:coder:main
+xopc config set agents.default coder
+xopc config validate
 ```
 
-## 3. 编辑能力
+只影响新 Session，已有 Session 仍属于原 Agent。
 
-运行时来源是 `~/.xopc/xopc.json` 的 `agents.list[]`。每条都是 Agent Capability Manifest，包含 identity、responsibilities、workspace、model roles、tools、skills、workflows 和 boundaries。用户理解与记忆只在顶层 `userContext` 配置一次，并由所有 Agent 共享。
-
-字段说明见 [Agent manifest](/agent-manifest) 和 [配置参考](../configuration.md)。
+能力选择和精确字段见 [Agent](../routing-system.md)与[配置](../configuration.md)。

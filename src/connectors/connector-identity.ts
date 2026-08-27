@@ -32,6 +32,13 @@ export function normalizeConnectorIdentity(toolkit: string, result: unknown): Co
   if (toolkit === 'gmail') {
     return { email: text(row, ['emailAddress', 'email']) };
   }
+  if (toolkit === 'googledrive') {
+    const user = object(row.user);
+    return {
+      email: text(user, ['emailAddress', 'email']) ?? text(row, ['emailAddress', 'email']),
+      displayName: text(user, ['displayName', 'name']),
+    };
+  }
   if (toolkit === 'slack') {
     return {
       enterpriseId: text(row, ['enterprise_id', 'enterpriseId']),
@@ -57,9 +64,9 @@ export function connectorIdentityKey(
     const enterpriseId = text(identity, ['enterpriseId', 'enterprise_id']) ?? '-';
     return `slack:${enterpriseId}:${workspaceId}:${subjectId}`;
   }
-  if (normalizedToolkit === 'gmail') {
+  if (normalizedToolkit === 'gmail' || normalizedToolkit === 'googledrive') {
     const email = text(identity, ['email']);
-    return email ? `gmail:${email.toLowerCase()}` : undefined;
+    return email ? `${normalizedToolkit}:${email.toLowerCase()}` : undefined;
   }
   if (normalizedToolkit === 'github') {
     const username = text(identity, ['username']);
@@ -74,7 +81,7 @@ export function mergeConnectorIdentity(
   incoming: Record<string, unknown>,
 ): Record<string, unknown> {
   const normalizedToolkit = toolkit.trim().toLowerCase();
-  if (!['gmail', 'github', 'slack'].includes(normalizedToolkit)) {
+  if (!['gmail', 'googledrive', 'github', 'slack'].includes(normalizedToolkit)) {
     return { ...current, ...incoming };
   }
   const normalized = Object.fromEntries(Object.entries(normalizeConnectorIdentity(normalizedToolkit, incoming))
