@@ -6,7 +6,7 @@
       "xopc-mobile",
       "xopc"
     ],
-    "version": "0.0.4",
+    "version": "0.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -43,7 +43,7 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.CAMERA"
       ],
-      "versionCode": 4,
+      "versionCode": 5,
       "package": "ai.xopc.xopc"
     },
     "plugins": [
