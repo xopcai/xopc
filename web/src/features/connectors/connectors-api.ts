@@ -324,6 +324,22 @@ export type ComposioConnectorHealth = {
   errorCode?: 'missing_credential' | 'unauthorized' | 'forbidden' | 'network' | 'timeout' | 'provider_error';
 };
 
+export type ComposioAuthConfigOption = {
+  id: string;
+  name: string;
+  status: 'ENABLED' | 'DISABLED';
+  authScheme?: string;
+  isComposioManaged: boolean;
+  isEnabledForToolRouter: boolean;
+};
+
+export type ComposioToolkitAuthState = {
+  toolkit: string;
+  managedAuthAvailable: boolean;
+  requiresCustomAuthConfig: boolean;
+  authConfigs: ComposioAuthConfigOption[];
+};
+
 export type ComposioTool = {
   slug: string;
   name?: string;
@@ -533,6 +549,13 @@ export async function listComposioConnections(): Promise<ComposioConnection[]> {
     apiUrl('/api/connectors/composio/connections'),
   );
   return requirePayload(response, 'Could not load Composio connections.').connections;
+}
+
+export async function getComposioToolkitAuthState(toolkit: string): Promise<ComposioToolkitAuthState> {
+  const response = await fetchJson<ApiEnvelope<{ auth: ComposioToolkitAuthState }>>(
+    apiUrl(`/api/connectors/composio/${encodeURIComponent(toolkit)}/auth-configs`),
+  );
+  return requirePayload(response, 'Could not load Composio auth configs.').auth;
 }
 
 export async function waitForActiveComposioConnection(

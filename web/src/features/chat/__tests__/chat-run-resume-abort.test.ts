@@ -205,6 +205,20 @@ describe('MessageSender terminal state', () => {
     );
   });
 
+  it('submits edited messages through the turn replacement endpoint', async () => {
+    const sender = new MessageSender();
+    vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({
+      payload: { sessionKey, state: { inputs: [] } },
+    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+
+    await sender.send('edited', sessionKey, undefined, 'medium', undefined, undefined, 'turn-old');
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/turns/turn-old/replace`),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
   it.each(['send', 'resume'] as const)(
     'marks the %s stream idle before notifying sidebar listeners',
     async (method) => {

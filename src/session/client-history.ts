@@ -5,6 +5,7 @@ import { buildTranscriptOutline } from './transcript-outline.js';
 /** Transcript row for TUI and HTTP clients (flattened from persisted session messages). */
 export interface ClientHistoryMessage {
   id?: string;
+  turnId?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   displayIndex?: number;
@@ -193,6 +194,9 @@ export function messagesToClientHistory(
       const text = flattenMessageContent(m.content);
       out.push({
         role: m.role,
+        ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
+          ? { turnId: (m as unknown as { turnId: string }).turnId }
+          : {}),
         content: text,
         ...(m.media?.length ? { media: m.media } : {}),
         timestamp: parseTimestamp(m.timestamp),
@@ -208,6 +212,9 @@ export function messagesToClientHistory(
       );
       out.push({
         role: 'assistant',
+        ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
+          ? { turnId: (m as unknown as { turnId: string }).turnId }
+          : {}),
         content: text,
         timestamp: parseTimestamp(m.timestamp),
         toolCalls,
@@ -221,6 +228,7 @@ export function messagesToClientHistory(
 type HistoryMessageRow = {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   content?: string | unknown[];
+  turnId?: string;
   media?: Message['media'];
   timestamp?: string | number;
   tool_call_id?: string;
@@ -604,6 +612,7 @@ export function transcriptRowsToClientHistory(
     if (messageRow.role === 'user' || messageRow.role === 'system') {
       out.push({
         id,
+        ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
         role: messageRow.role,
         kind: 'message',
         content: flattenMessageContent(messageRow.content ?? ''),
@@ -617,6 +626,7 @@ export function transcriptRowsToClientHistory(
     const rawContent = rawAssistantContent(messageRow.content);
     out.push({
       id,
+      ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
       role: 'assistant',
       kind: 'message',
       content: flattenMessageContent(messageRow.content ?? ''),

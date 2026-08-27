@@ -730,6 +730,10 @@ export class GatewayService {
     return this.agentRunner.submitSessionInput(...args);
   }
 
+  replaceLatestSessionTurn(...args: Parameters<GatewayAgentRunner['replaceLatestSessionTurn']>) {
+    return this.agentRunner.replaceLatestSessionTurn(...args);
+  }
+
   getSessionInputState(...args: Parameters<GatewayAgentRunner['getSessionInputState']>) {
     return this.agentRunner.getSessionInputState(...args);
   }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { MessageList } from '@/features/chat/messages/message-list';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -26,6 +27,7 @@ import {
   useSideChatStore,
 } from '@/stores/side-chat-store';
 import { cn } from '@/lib/cn';
+import { quickCapture } from '@/features/notes/notes-api';
 import {
   abortSideChat,
   answerSideChatClarification,
@@ -450,6 +452,18 @@ export function SideChatConversation({
     });
   }, []);
 
+  const saveAssistantAsNote = useCallback(async (content: string) => {
+    try {
+      const note = await quickCapture(content.trim(), 'web');
+      showComposerNotification('success', m.chat.messageSavedToNote, undefined, {
+        href: `/notes/${encodeURIComponent(note.id)}`,
+      });
+    } catch (cause) {
+      showComposerNotification('error', cause instanceof Error ? cause.message : m.notes.quickCaptureFailed);
+      throw cause;
+    }
+  }, [m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="relative min-h-0 flex-1">
@@ -469,7 +483,8 @@ export function SideChatConversation({
               reasoningLevel="on"
               registerListContentRef={registerListContentRef}
               deleteRoundDisabled={running}
-              onEditUserMessage={editUserMessage}
+              onSaveAssistantAsNote={saveAssistantAsNote}
+              onEditUserMessage={(message) => editUserMessage(userMessageText(message))}
               responseFeedbackEnabled={false}
             />
           ) : (

@@ -5,6 +5,18 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  it('preserves turn ids used by edit-and-resend', () => {
+    const rows = [
+      { role: 'user', content: 'hello', turnId: 'turn-1' },
+      { role: 'assistant', content: 'hi', turnId: 'turn-1' },
+    ] as never[];
+
+    expect(transcriptRowsToClientHistory(rows)).toMatchObject([
+      { role: 'user', turnId: 'turn-1' },
+      { role: 'assistant', turnId: 'turn-1' },
+    ]);
+  });
+
   const imageMedia = {
     id: 'photo---id.png',
     bucket: 'inbound',
