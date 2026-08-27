@@ -1,5 +1,16 @@
 import { memo, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChevronDown, Loader2, XCircle } from 'lucide-react';
+import {
+  BookOpen,
+  CheckCircle2,
+  ChevronDown,
+  FilePenLine,
+  FolderOpen,
+  Globe2,
+  Loader2,
+  Search,
+  SquareTerminal,
+  XCircle,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -68,8 +79,33 @@ const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusI
   if (failed) {
     return <XCircle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden />;
   }
-  return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />;
+  return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />;
 });
+
+function CompletedToolIcon({ kind }: { kind: ActionKind }) {
+  const className = 'size-4 text-fg-muted';
+  switch (kind) {
+    case 'webSearch':
+    case 'memorySearch':
+    case 'codeSearch':
+    case 'search':
+      return <Search className={className} aria-hidden />;
+    case 'runCommand':
+      return <SquareTerminal className={className} aria-hidden />;
+    case 'readFile':
+      return <BookOpen className={className} aria-hidden />;
+    case 'editFile':
+    case 'writeFile':
+      return <FilePenLine className={className} aria-hidden />;
+    case 'listDir':
+      return <FolderOpen className={className} aria-hidden />;
+    case 'openUrl':
+    case 'fetchUrl':
+      return <Globe2 className={className} aria-hidden />;
+    case 'other':
+      return <CheckCircle2 className={className} aria-hidden />;
+  }
+}
 
 /**
  * Live step-round duration ticks locally so parent re-renders (stream tokens, etc.) do not
@@ -182,9 +218,7 @@ export function AssistantStepsBlock({
         String(failedCount),
       )}`;
     }
-    return activity.hasTool
-      ? `${stepLabels.activityCompleted} · ${detail}`
-      : stepLabels.activityAnalysisComplete;
+    return activity.hasTool ? detail : stepLabels.activityAnalysisComplete;
   }, [
     anyActive,
     visibleBlocks,
@@ -260,36 +294,35 @@ export function AssistantStepsBlock({
   return (
     <div
       className={cn(
-        'my-1 min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30',
+        'my-1 min-w-0',
         expanded ? 'w-full' : 'w-fit max-w-full',
       )}
     >
       <button
         type="button"
         className={cn(
-          'grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-x-2 px-3 py-2 text-left',
-          expanded ? 'w-full rounded-t-xl' : 'w-fit max-w-full rounded-xl',
+          'flex w-fit max-w-full min-w-0 items-start gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
           interaction.transition,
-          'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
+          'hover:bg-surface-hover/70 hover:text-fg dark:hover:bg-surface-hover/40',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
         onClick={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
         aria-expanded={expanded}
       >
         <AssistantStepsHeaderStatusIcon active={anyActive} failed={failedCount > 0} />
-        <div className="min-w-0">
-          <span className="inline-flex max-w-full flex-wrap items-baseline rounded-md bg-accent-soft/70 px-2 py-0.5 text-xs font-medium text-fg dark:bg-accent-soft/40">
+        <div className="min-w-0 flex-1">
+          <span className="inline-flex max-w-full flex-wrap items-baseline">
             {headerMain}
           </span>
         </div>
-        <span className="flex items-start justify-end">{headerDurationRight}</span>
+        <span className="flex shrink-0 items-start justify-end">{headerDurationRight}</span>
         <ChevronDown
           className={cn('mt-0.5 size-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
           aria-hidden
         />
       </button>
       {expanded ? (
-        <div className="border-t border-edge-subtle/90 px-3 pb-3 pt-2 dark:border-edge-subtle">
+        <div className="mt-1 w-full min-w-0 pb-1 pl-1">
           <AssistantStepsTimeline
             blocks={visibleBlocks}
             toolLabels={toolLabels}
@@ -348,7 +381,7 @@ export function AssistantStepsTimeline({
 
   return (
     <div className={cn('min-w-0 overflow-x-hidden', className)}>
-      <div className="ml-1 min-w-0 space-y-3 border-l border-edge-subtle pl-3 dark:border-edge-subtle">
+      <div className="min-w-0 space-y-2.5">
         {blocks.map((b, i) => (
           <StepRow
             key={b.type === 'tool_use' ? b.id : `thinking-${i}`}
@@ -490,11 +523,11 @@ function StepRow({
           {streaming ? (
             <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
           ) : (
-            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+            <CheckCircle2 className="size-4 text-fg-muted" aria-hidden />
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-1">
-          <span className="inline-flex max-w-full min-w-0 break-words rounded-md bg-accent-soft/60 px-1.5 py-0.5 text-xs font-medium text-fg [overflow-wrap:anywhere] dark:bg-accent-soft/35">
+          <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
             {streaming ? stepLabels.thoughtsStreaming : stepLabels.thoughts}
           </span>
           {showRawToolData && text ? (
@@ -591,12 +624,12 @@ function StepRow({
         ) : isError ? (
           <XCircle className="size-4 text-red-600 dark:text-red-400" aria-hidden />
         ) : (
-          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+          <CompletedToolIcon kind={kind} />
         )}
       </div>
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="inline-flex max-w-full min-w-0 break-words rounded-md bg-accent-soft/60 px-1.5 py-0.5 text-xs font-medium text-fg [overflow-wrap:anywhere] dark:bg-accent-soft/35">
+          <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
             {title}
           </span>
           {isStreaming ? (
@@ -634,7 +667,7 @@ function StepRow({
         ) : null}
         {renderProductDelivery ? <ProductDeliveryCard delivery={renderProductDelivery} /> : null}
         {!hasCard && detailLine ? (
-          <p className="min-w-0 rounded-md bg-accent-soft/40 px-1.5 py-1 text-xs break-words text-fg-muted [overflow-wrap:anywhere] dark:bg-accent-soft/25">
+          <p className="min-w-0 break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
             {detailLine}
           </p>
         ) : null}
