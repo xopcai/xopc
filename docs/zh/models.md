@@ -227,7 +227,9 @@ export DEEPSEEK_API_KEY="sk-..."
 私网和回环地址默认阻止。若需要连接可信的本地服务，只列出精确主机名或 IP：
 
 ```json
-"network": { "allowedHosts": ["127.0.0.1", "image-server.lan"] }
+{
+  "network": { "allowedHosts": ["127.0.0.1", "image-server.lan"] }
+}
 ```
 
 网关将 OpenAI Images JSON 响应限制为 64 MiB，单张解码图片限制为 32 MiB，单次响应全部图片合计限制为 64 MiB。可在 **设置 → 能力 → 图片** 中添加服务、管理凭据、执行一次真实生成测试，并把模型分配给 Agent。`xopc doctor` 会报告非法定义、被阻止的私网端点和缺失凭据。

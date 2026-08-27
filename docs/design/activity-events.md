@@ -2,7 +2,7 @@
 
 ## Goal
 
-Activity events provide a product-facing history of meaningful changes across XOPC objects. They are not debug logs and they are not the canonical state store. Object stores such as projects, notes, tasks, sessions, goals, workflows, and automations remain authoritative for current state.
+Activity events provide a product-facing history of meaningful changes across XOPC objects. They are not debug logs and they are not the canonical state store. Object stores such as projects, notes, tasks, sessions, workflows, and automations remain authoritative for current state.
 
 The system should answer:
 
@@ -20,7 +20,7 @@ Shows all timeline-worthy activity across the workspace. Useful for recent chang
 
 ### Object Activity
 
-Shows activity for a single object, such as a note, project, task, goal, session, workflow run, or automation.
+Shows activity for a single object, such as a note, project, task, session, workflow run, or automation.
 
 ### Project Activity
 
@@ -110,7 +110,6 @@ interface ActivityObjectRef {
     | 'note'
     | 'task'
     | 'session'
-    | 'goal'
     | 'workflow_run'
     | 'automation';
   id: string;
@@ -223,12 +222,10 @@ Avoid weak relations such as `mentions` until the UI can explain them well.
 | `session.detached_from_project` | timeline | `sessionKey`, `projectId` |
 | `session.renamed` | audit | `from`, `to` |
 
-### Goal, Workflow, Automation
+### Workflow and Automation
 
 | Type | Visibility | Payload |
 |------|------------|---------|
-| `goal.created` | timeline | `title`, `status`, `priority?` |
-| `goal.status_changed` | timeline | `from`, `to` |
 | `workflow_run.started` | timeline | `definitionId`, `runId` |
 | `workflow_run.completed` | timeline | `runId`, `status` |
 | `automation.run_started` | timeline | `automationId`, `trigger` |

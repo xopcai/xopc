@@ -224,7 +224,7 @@ A local-app Project adds an App section containing:
 - release history;
 - rollback action.
 
-The Project remains the canonical place for source, agent sessions, goals, decisions, and file inspection.
+The Project remains the canonical place for source, agent sessions, related Tasks, decisions, and file inspection.
 
 ### App Page
 
@@ -387,4 +387,3 @@ The following should be resolved during detailed design without blocking the Pha
 - Exact first-release UI SDK permission subset.
 - The icon-generation policy and fallback icon behavior.
 - Whether uninstalling an app retains its namespaced data indefinitely or offers an explicit delete-data action.
-

@@ -145,10 +145,11 @@
     },
     "suggestions": {
       "create": "生成自动化草案",
+      "setup": "设置",
       "manage": "管理",
       "coveredTitle": "已设置自动化",
       "coveredDescription": "已由「{name}」处理。后续匹配事件会自动运行。",
-      "noteCreatedTitle": "自动跟进笔记",
+      "noteCreatedTitle": "自动整理",
       "noteCreatedDescription": "创建新笔记后，让 xopc 自动分类并建议下一步行动。",
       "noteCreatedPrompt": "当创建新笔记时，运行智能体对笔记分类、识别有用的后续行动，并总结可能的任务。触发条件使用 notes 来源的 note.created 事件。保持安全：默认只输出简短建议，除非用户后续确认，否则不要自动改写笔记。",
       "taskBlockedTitle": "自动诊断阻塞",

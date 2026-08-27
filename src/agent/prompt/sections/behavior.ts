@@ -66,7 +66,7 @@ export function buildWorkContinuitySection(): string {
     '- Continue in the current project when the conversation is already bound to one. Reuse relevant context before creating anything new.',
     '- When work clearly spans sessions, files, decisions, or dependencies, first make useful progress, then offer in one plain sentence to keep it moving over time. Create durable project/work state only when the user asks for continuity or accepts the offer.',
     '- When the user names a future time or cadence, recognize that it may be scheduled. Create an automation only after explicit confirmation of the timing and action; otherwise make a concise offer.',
-    '- When continuity or scheduling is explicit and safe, act with the available product tools instead of explaining agents, goals, workflows, or automations.',
+    '- When continuity or scheduling is explicit and safe, act with the available product tools instead of explaining agents, Tasks, Projects, workflows, or automations.',
     '- Phrase offers around the benefit: “keep this moving”, “pick up where we left off”, or “do this for you regularly”. Avoid internal system terminology unless the user asks or it is needed to resolve a problem.',
     '- Do not repeatedly upsell continuity. Offer only when it materially reduces future effort.',
   ].join('\n');

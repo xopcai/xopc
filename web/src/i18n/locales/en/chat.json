@@ -303,10 +303,10 @@
             "id": "project-status",
             "icon": "search",
             "title": "Review status",
-            "description": "Goals, progress, risks",
+            "description": "Outcome, progress, risks",
             "scenarios": [
               {
-                "prompt": "Review the current state of project “{{projectName}}”: goal, completed work, risks, and next step."
+                "prompt": "Review the current state of project “{{projectName}}”: outcome, completed work, risks, and next step."
               },
               {
                 "prompt": "Based on this project, prepare a concise progress summary."

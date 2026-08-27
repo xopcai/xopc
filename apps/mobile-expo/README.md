@@ -125,7 +125,7 @@ Run `pnpm -C apps/mobile-expo exec expo prebuild --clean` after changing `app.js
 
 The app uses Expo Push Service for task alerts. Once a paired gateway is configured, enable **Task notifications** in the app settings. The app requests permission only from that explicit action, registers its Expo token with the gateway, and opens the related chat or automation when an alert is tapped.
 
-The gateway stores device registrations in its local SQLite database and sends alerts for goals that need input or are blocked, plus failed automations. Completion alerts are disabled by default and can be enabled through the device preferences API.
+The gateway stores device registrations in its local SQLite database and sends alerts for Tasks that need input or are blocked, plus failed automations. Task-completion alerts are disabled by default and can be enabled through the device preferences API.
 
 Before distributing a build, complete these account-side steps (do not commit credentials or credential files):
 

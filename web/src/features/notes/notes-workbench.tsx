@@ -1,15 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {
-  Archive,
   Bookmark,
   CheckSquare,
-  Clock3,
   Image,
-  Inbox,
-  Layers3,
   Mic,
   PanelLeft,
-  Pin,
   Plus,
   Search,
   StickyNote,
@@ -92,8 +87,6 @@ function writeStoredNotesListWidth(storageKey: string, width: number): void {
 type LibraryView = {
   id: string;
   label: string;
-  description: string;
-  icon: typeof StickyNote;
   patch: Pick<NotesUi, 'statusFilter' | 'kindFilter' | 'pinnedOnly'>;
 };
 
@@ -253,7 +246,8 @@ export function NotesWorkbench({
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-  const noteCountLabel = total > 0 ? n.noteCount.replace('{{count}}', String(total)) : null;
+  const noteCountLabel = n.noteCount.replace('{{count}}', String(total));
+  const listMeta = !showLibrary && total === 0 && listDescription ? listDescription : noteCountLabel;
   const searchDialogTitle = n.searchDialogTitle;
   const closeSearchLabel = n.searchClose;
   const clearSearchLabel = n.searchClear;
@@ -315,64 +309,46 @@ export function NotesWorkbench({
     {
       id: 'recent',
       label: n.viewRecent,
-      description: n.viewRecentDescription,
-      icon: Clock3,
       patch: { statusFilter: 'all', kindFilter: 'all', pinnedOnly: false },
     },
     {
       id: 'inbox',
       label: n.filterInbox,
-      description: n.viewInboxDescription,
-      icon: Inbox,
       patch: { statusFilter: 'inbox', kindFilter: 'all', pinnedOnly: false },
     },
     {
       id: 'pinned',
       label: n.pinned,
-      description: n.viewPinnedDescription,
-      icon: Pin,
       patch: { statusFilter: 'all', kindFilter: 'all', pinnedOnly: true },
     },
     {
       id: 'tasks',
       label: n.viewTasks,
-      description: n.viewTasksDescription,
-      icon: CheckSquare,
       patch: { statusFilter: 'all', kindFilter: 'todo', pinnedOnly: false },
     },
     {
       id: 'voice',
       label: n.kindVoice,
-      description: n.viewVoiceDescription,
-      icon: Mic,
       patch: { statusFilter: 'all', kindFilter: 'voice', pinnedOnly: false },
     },
     {
       id: 'media',
       label: n.kindMedia,
-      description: n.viewMediaDescription,
-      icon: Image,
       patch: { statusFilter: 'all', kindFilter: 'media', pinnedOnly: false },
     },
     {
       id: 'bookmarks',
       label: n.kindBookmark,
-      description: n.viewBookmarksDescription,
-      icon: Bookmark,
       patch: { statusFilter: 'all', kindFilter: 'bookmark', pinnedOnly: false },
     },
     {
       id: 'processed',
       label: n.filterProcessed,
-      description: n.viewProcessedDescription,
-      icon: Layers3,
       patch: { statusFilter: 'processed', kindFilter: 'all', pinnedOnly: false },
     },
     {
       id: 'archive',
       label: n.filterArchived,
-      description: n.viewArchiveDescription,
-      icon: Archive,
       patch: { statusFilter: 'archived', kindFilter: 'all', pinnedOnly: false },
     },
   ], [
@@ -383,34 +359,28 @@ export function NotesWorkbench({
     n.kindMedia,
     n.kindVoice,
     n.pinned,
-    n.viewArchiveDescription,
-    n.viewBookmarksDescription,
-    n.viewInboxDescription,
-    n.viewMediaDescription,
-    n.viewPinnedDescription,
-    n.viewProcessedDescription,
     n.viewRecent,
-    n.viewRecentDescription,
     n.viewTasks,
-    n.viewTasksDescription,
-    n.viewVoiceDescription,
   ]);
 
   const activeLibraryView = libraryViews.find((view) => sameView(ui, view)) ?? libraryViews[0];
   const effectiveListTitle = listTitle ?? activeLibraryView.label;
-  const effectiveListDescription = listDescription ?? activeLibraryView.description;
 
   const handleCapture = useCallback(
-    async (text: string, opts?: { navigate?: boolean }) => {
-      const note = projectId
-        ? await createNote({ markdown: text, kind: 'thought', projectId, channel: 'web' })
-        : await quickCapture(text, 'web');
-      await mutate();
-      if (opts?.navigate !== false) {
+    async (text: string) => {
+      setActionError(null);
+      try {
+        const note = projectId
+          ? await createNote({ markdown: text, kind: 'thought', projectId, channel: 'web' })
+          : await quickCapture(text, 'web');
+        await mutate();
         navigate(notePath(basePath, note.id));
+      } catch (err) {
+        setActionError(`${n.quickCaptureFailed}: ${err instanceof Error ? err.message : n.quickCaptureFailedHint}`);
+        throw err;
       }
     },
-    [basePath, mutate, navigate, projectId],
+    [basePath, mutate, n.quickCaptureFailed, n.quickCaptureFailedHint, navigate, projectId],
   );
 
   const handleCreateBlankNote = useCallback(async () => {
@@ -465,6 +435,10 @@ export function NotesWorkbench({
     },
     [mutate, n.voiceUploadFailed, n.voiceUploadFailedHint],
   );
+
+  const handleVoiceError = useCallback(() => {
+    setActionError(`${n.voiceCaptureFailed}: ${n.voiceCaptureFailedHint}`);
+  }, [n.voiceCaptureFailed, n.voiceCaptureFailedHint]);
 
   const handlePin = useCallback(
     async (id: string, pinned: boolean) => {
@@ -637,7 +611,7 @@ export function NotesWorkbench({
         <div className="shrink-0 border-b border-edge-subtle p-3">
           {actionError ? <p className="mb-3 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{actionError}</p> : null}
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {showLibrary ? (
                 <Select
                   value={activeLibraryView.id}
@@ -645,7 +619,7 @@ export function NotesWorkbench({
                     const next = libraryViews.find((view) => view.id === event.target.value);
                     if (next) dispatch({ type: 'patch', patch: next.patch });
                   }}
-                  className="-ml-1 block max-w-44 truncate rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-fg transition-colors hover:border-edge hover:bg-surface-base focus:border-accent focus:bg-surface-base focus:outline-none focus:ring-1 focus:ring-accent"
+                  className="-ml-1 h-7 w-full max-w-44 rounded-lg border border-transparent bg-transparent px-2 text-sm font-semibold text-fg transition-colors hover:border-edge hover:bg-surface-base focus:border-accent focus:bg-surface-base focus:outline-none focus:ring-1 focus:ring-accent"
                   aria-label={n.libraryTitle}
                 >
                   {libraryViews.map((view) => (
@@ -656,7 +630,7 @@ export function NotesWorkbench({
                 <h2 className="truncate text-sm font-semibold text-fg">{effectiveListTitle}</h2>
               )}
               <p className="truncate text-xs text-fg-muted">
-                {noteCountLabel ?? effectiveListDescription}
+                {listMeta}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -684,6 +658,7 @@ export function NotesWorkbench({
                 onClick={() => setSearchOpen(true)}
                 className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 aria-label={n.searchDialogTitle}
+                title={n.searchDialogTitle}
               >
                 <Search className="size-4" aria-hidden />
               </button>
@@ -699,9 +674,11 @@ export function NotesWorkbench({
               ))}
             </div>
           ) : notes.length === 0 ? (
-            <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-2 px-6 py-16 text-center">
-              <StickyNote className="size-8 text-fg-muted" />
-              <p className="text-sm font-medium text-fg-muted">
+            <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+              <span className="mb-1 inline-flex size-12 items-center justify-center rounded-xl border border-edge-subtle bg-surface-base text-fg-muted">
+                <StickyNote className="size-6" aria-hidden />
+              </span>
+              <p className="text-sm font-semibold text-fg">
                 {selectedNoteId && !selectedNoteInCurrentList ? n.noteOutsideCurrentView : (emptyText ?? n.noNotes)}
               </p>
               {selectedNoteId && !selectedNoteInCurrentList ? null : (
@@ -740,6 +717,7 @@ export function NotesWorkbench({
                         unpin: n.unpin,
                         archive: n.archive,
                         delete: n.delete,
+                        actions: n.noteActions,
                         imageNote: n.imageNote,
                         noText: n.noText,
                       }}
@@ -754,10 +732,15 @@ export function NotesWorkbench({
         <div className="shrink-0 border-t border-edge-subtle p-3">
           <QuickCaptureBar
             placeholder={n.quickCapturePlaceholder}
-            sendLabel={n.send}
+            submitLabel={n.quickCaptureSubmit}
+            actionsLabel={n.quickCaptureActions}
+            imageLabel={n.quickCaptureImage}
+            voiceLabel={n.quickCaptureVoice}
+            stopRecordingLabel={n.stopRecording}
             onCapture={handleCapture}
             onImagePick={allowMediaCapture ? handleImagePick : undefined}
             onVoiceCapture={allowMediaCapture ? handleVoiceCapture : undefined}
+            onVoiceError={handleVoiceError}
             recordingLabel={n.recording}
             discussionCaptureLabel={n.discussionCapture.title}
             onDiscussionCapture={() => openDiscussionCapture(projectId)}

@@ -88,16 +88,6 @@ module.exports = {
     },
 
     {
-      name: 'no-goals-to-agent-service',
-      severity: 'error',
-      comment:
-        'src/agent/goals/* (PersistentGoalService and helpers) must NOT depend on ' +
-        'AgentService — PersistentGoalService is injected with what it needs.',
-      from: { path: '^src/agent/goals/' },
-      to: { path: '^src/agent/service\\.ts$' },
-    },
-
-    {
       name: 'no-memory-to-agent-service',
       severity: 'error',
       comment:
@@ -283,7 +273,7 @@ module.exports = {
       severity: 'error',
       comment:
         'src/agent/lifecycle/* must not import from higher-level agent subsystems ' +
-        '(inbound, orchestration, messaging, tools, session/*, embedded, goals, ' +
+        '(inbound, orchestration, messaging, tools, session/*, embedded, ' +
         'memory, mcp, skills). Lifecycle is the foundation those layers build on.',
       from: { path: '^src/agent/lifecycle/' },
       to: {
@@ -294,7 +284,6 @@ module.exports = {
           '^src/agent/tools/',
           '^src/agent/session/',
           '^src/agent/embedded/',
-          '^src/agent/goals/',
           '^src/agent/memory/',
           '^src/agent/mcp/',
           '^src/agent/skills/',

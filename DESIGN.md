@@ -60,7 +60,7 @@ Implementation cues:
 - Blue indicates direction, focus, and primary action.
 - Indigo and cyan are intelligence accents, not backgrounds.
 - Progress appears as continuous state, not celebration.
-- Cards describe goals, state, momentum, next action, and health.
+- Cards describe the task objective, state, momentum, next action, and health.
 
 ---
 
@@ -206,7 +206,7 @@ Never use bounce, elastic, cartoon-like motion, or animation that delays the tas
 
 A primary work object card. It should answer:
 
-- Goal
+- Objective
 - Current state
 - Momentum
 - Next action

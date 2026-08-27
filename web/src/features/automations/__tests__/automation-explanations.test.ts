@@ -11,7 +11,7 @@ function eventAutomation(
 ): Automation {
   return {
     id: 'automation-1',
-    name: 'Blocked goal helper',
+    name: 'Blocked Task helper',
     enabled: true,
     trigger: {
       kind: 'event',
@@ -33,15 +33,15 @@ describe('automation explanations', () => {
     expect(matchesCoverage(eventAutomation(), {
       eventType: 'task.attention_required.v2',
       source: 'tasks',
-      eventPayload: { taskId: 'goal-1', reason: 'blocked' },
+      eventPayload: { taskId: 'task-1', reason: 'blocked' },
     })).toBe(true);
   });
 
   it('does not treat object-specific payload filters as covering another object', () => {
-    expect(matchesCoverage(eventAutomation({ taskId: 'goal-2', reason: 'blocked' }), {
+    expect(matchesCoverage(eventAutomation({ taskId: 'task-2', reason: 'blocked' }), {
       eventType: 'task.attention_required.v2',
       source: 'tasks',
-      eventPayload: { taskId: 'goal-1', reason: 'blocked' },
+      eventPayload: { taskId: 'task-1', reason: 'blocked' },
     })).toBe(false);
   });
 
@@ -50,7 +50,7 @@ describe('automation explanations', () => {
     const run: AutomationRun = {
       id: 'run-1',
       automationId: 'automation-1',
-      automationName: 'Blocked goal helper',
+      automationName: 'Blocked Task helper',
       status: 'queued',
       triggerSnapshot: {
         kind: 'event',
@@ -72,7 +72,7 @@ describe('automation explanations', () => {
         event: {
           type: 'task.attention_required.v2',
           source: 'tasks',
-          payload: { taskId: 'goal-1', reason: 'blocked' },
+          payload: { taskId: 'task-1', reason: 'blocked' },
         },
       },
       createdAtMs: 1,

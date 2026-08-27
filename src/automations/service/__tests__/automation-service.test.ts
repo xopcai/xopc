@@ -452,7 +452,7 @@ describe('AutomationService', () => {
       name: 'Safe helper',
       trigger: { kind: 'manual' },
       safety: { mode: 'suggest_only' },
-      action: { kind: 'agent', instruction: 'Review the blocked goal.' },
+      action: { kind: 'agent', instruction: 'Review the blocked Task.' },
     });
 
     const queued = await service.runNow(automation.id);
@@ -499,14 +499,14 @@ describe('AutomationService', () => {
 
   it('runs automations from matching product events', async () => {
     const automation = await service.create({
-      name: 'Goal stalled helper',
+      name: 'Task stalled helper',
       trigger: {
         kind: 'event',
         eventType: 'task.attention_required.v2',
         source: 'tasks',
         payloadMatch: { reason: 'blocked' },
       },
-      action: { kind: 'agent', instruction: 'analyze the blocked goal' },
+      action: { kind: 'agent', instruction: 'analyze the blocked Task' },
     });
 
     const ignored = await service.triggerEvent({
@@ -519,7 +519,7 @@ describe('AutomationService', () => {
     const started = await service.triggerEvent({
       type: 'task.attention_required.v2',
       source: 'tasks',
-      payload: { reason: 'blocked', taskId: 'goal-1' },
+      payload: { reason: 'blocked', taskId: 'task-1' },
     });
     expect(started).toHaveLength(1);
 
@@ -527,7 +527,7 @@ describe('AutomationService', () => {
       () => service.listRuns({ automationId: automation.id, limit: 5 }),
       (items) => items.some((item) => item.id === started[0]!.id && item.status === 'succeeded'),
     );
-    expect(runs.find((item) => item.id === started[0]!.id)?.summary).toBe('done: analyze the blocked goal');
+    expect(runs.find((item) => item.id === started[0]!.id)?.summary).toBe('done: analyze the blocked Task');
 
     const events = await service.listRunEvents(started[0]!.id);
     expect(events[0]).toMatchObject({
@@ -539,7 +539,7 @@ describe('AutomationService', () => {
       eventType: 'task.attention_required.v2',
       source: 'tasks',
       payloadKey: 'taskId',
-      payloadValue: 'goal-1',
+      payloadValue: 'task-1',
     });
     expect(productRuns).toHaveLength(1);
     expect(productRuns[0]!.run.id).toBe(started[0]!.id);
@@ -557,7 +557,7 @@ describe('AutomationService', () => {
       eventType: 'task.attention_required.v2',
       source: 'tasks',
       payloadKey: 'taskId',
-      payloadValue: 'goal-1',
+      payloadValue: 'task-1',
     });
     expect(productRunsAfterRerun.map((item) => item.run.id)).toContain(rerun.id);
   });

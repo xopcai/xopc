@@ -23,7 +23,7 @@ The product is successful when it reduces monitoring work without creating a new
 
 ## Product principles
 
-1. **One event vocabulary.** Projects, tasks, goals, automations, sessions, notes, and connectors publish the same immutable event envelope. A domain never selects a prompt or sends a proactive notification.
+1. **One event vocabulary.** Projects, tasks, automations, sessions, notes, and connectors publish the same immutable event envelope. A domain never selects a prompt or sends a proactive notification.
 2. **Scenarios own meaning.** A scenario defines which event patterns matter, what context can be read, which prompt revision runs, the expected output, and how much value is required for delivery.
 3. **Prompts are configurable but authority is not.** Users can tune analysis intent and delivery preferences for each scenario. They cannot use prompt text to expand data access, tools, budgets, or side-effect permissions.
 4. **Evidence before recommendation.** Every non-empty insight references source facts and separates observation, inference, recommendation, and requested decision.
