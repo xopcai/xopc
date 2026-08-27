@@ -1,6 +1,6 @@
 {
   "projectsPage": {
-    "title": "首页",
+    "title": "工作台",
     "summary": "{{count}} 个项目 · 集中查看跨会话和任务的持续推进",
     "searchPlaceholder": "搜索项目",
     "create": "创建",

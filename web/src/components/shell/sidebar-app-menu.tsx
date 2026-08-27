@@ -4,6 +4,7 @@ import {
   ChevronRight,
   ExternalLink,
   Globe,
+  HeartHandshake,
   Info,
   Palette,
   PawPrint,
@@ -68,10 +69,10 @@ function OptionRow({
 }
 
 export function SidebarAppMenu({
-  onOpenFullSettings,
+  onNavigate,
   onAboutClick,
 }: {
-  onOpenFullSettings?: () => void;
+  onNavigate?: () => void;
   /** Open About dialog; parent should close the app menu popover when handling this. */
   onAboutClick?: () => void;
 }) {
@@ -262,6 +263,17 @@ export function SidebarAppMenu({
         </button>
       ) : null}
 
+      <Link
+        to="/you"
+        className={rowClass}
+        onMouseEnter={() => setOpenFlyout(null)}
+        onFocus={() => setOpenFlyout(null)}
+        onClick={() => onNavigate?.()}
+      >
+        <HeartHandshake className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+        <span className="min-w-0 flex-1">{m.nav.profile}</span>
+      </Link>
+
       <div className="my-2 h-px bg-edge-subtle" role="separator" />
 
       <button
@@ -296,7 +308,7 @@ export function SidebarAppMenu({
         )}
         onMouseEnter={() => setOpenFlyout(null)}
         onFocus={() => setOpenFlyout(null)}
-        onClick={() => onOpenFullSettings?.()}
+        onClick={() => onNavigate?.()}
       >
         <Settings className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
         <span className="min-w-0 flex-1">{a.openFullPreferences}</span>
