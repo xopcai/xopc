@@ -30,9 +30,12 @@ export const MessageList = memo(function MessageList({
   onDeleteRound,
   onRetryUserMessageRound,
   deleteRoundDisabled,
+  onSaveAssistantAsNote,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
   onEditUserMessage,
+  editLatestUserOnly = false,
+  editRequiresTurnId = false,
   responseFeedbackEnabled,
 }: {
   messages: Message[];
@@ -53,9 +56,12 @@ export const MessageList = memo(function MessageList({
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
   deleteRoundDisabled?: boolean;
+  onSaveAssistantAsNote?: (content: string) => Promise<void> | void;
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
-  onEditUserMessage?: (text: string) => void;
+  onEditUserMessage?: (message: Message, messageIndex: number) => void;
+  editLatestUserOnly?: boolean;
+  editRequiresTurnId?: boolean;
   responseFeedbackEnabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -122,12 +128,16 @@ export const MessageList = memo(function MessageList({
               // Streaming is only relevant to the active user round. Passing this
               // session-wide flag to every historical row defeats MessageBubble's memo.
               deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
+              onSaveAssistantAsNote={onSaveAssistantAsNote}
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
               // Do not unmount action footers from every prior assistant message
               // when a new reply starts; only the live row has no actions.
               suppressAssistantActions={isStreamRow}
               onEditUserMessage={onEditUserMessage}
+              userMessageCanEdit={
+                (!editLatestUserOnly || isLastUserRow) && (!editRequiresTurnId || Boolean(msg.turnId))
+              }
               responseFeedbackEnabled={responseFeedbackEnabled}
             />
           </div>

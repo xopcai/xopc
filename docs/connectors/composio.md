@@ -21,6 +21,8 @@ The Composio runtime is included with xopc; no additional npm packages are requi
 3. Open the installed connector, choose **Connect OAuth**, and finish authorization in the new tab.
 4. Return to xopc and refresh. Give accounts recognizable aliases, select the default account, choose the maximum read/write/admin scope, and limit access to specific agents when needed.
 
+Some toolkits, including X (Twitter), do not provide Composio managed authentication. Create a custom Auth Config in the same Composio project, enable it for Tool Router, then select it while installing the connector or from the installed connector panel. xopc stores the non-secret Auth Config ID with the connector and sends it explicitly in every Composio Session that uses that toolkit. OAuth client secrets remain in Composio and the Composio project API key remains in xopc's credential store.
+
 Toolkit installation is rejected until the Composio project API key is available from the credential store or `XOPC_COMPOSIO_API_KEY` / `COMPOSIO_API_KEY`.
 
 Composio participates in the shared external-tool gateway. Agents use `xopc_tool_search`,

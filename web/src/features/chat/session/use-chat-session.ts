@@ -59,6 +59,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       content: string,
       attachments?: PendingFollowUp['attachments'],
       levelOverride?: string,
+      replaceTurnId?: string,
     ) => Promise<void>
   >(async () => {});
 
@@ -214,7 +215,15 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     return true;
   }, [routeSessionKeyRef]);
 
-  const { tryResumeAgentRun, sendMessage, interruptAndSend, abort, deleteMessageRound, retryUserMessageRound } =
+  const {
+    tryResumeAgentRun,
+    sendMessage,
+    replaceLatestUserTurn,
+    interruptAndSend,
+    abort,
+    deleteMessageRound,
+    retryUserMessageRound,
+  } =
     useChatSessionStreaming({
       sessionKey: focusedSessionKey,
       taskId: options?.taskId,
@@ -416,6 +425,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       progress,
       taskPlan,
       sendMessage,
+      replaceLatestUserTurn,
       abort,
       interruptAndSend,
       deleteMessageRound,

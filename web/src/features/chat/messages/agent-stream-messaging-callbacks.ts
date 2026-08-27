@@ -130,6 +130,13 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onStreamStart: (turnId) => {
       markChatRunRunning(chatId);
       beforeAssistantDelta();
+      store().updateSessionMessages(chatId, (messages) => {
+        const lastUserIndex = messages.findLastIndex((message) => message.role === 'user');
+        if (lastUserIndex < 0 || messages[lastUserIndex]?.turnId === turnId) return messages;
+        const next = [...messages];
+        next[lastUserIndex] = { ...messages[lastUserIndex], turnId };
+        return next;
+      });
       store().mutateSessionStreaming(chatId, (message) => {
         message.turnId = turnId;
       });

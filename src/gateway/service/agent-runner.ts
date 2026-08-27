@@ -31,7 +31,11 @@ import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import { createLogger } from '../../utils/logger.js';
-import { SessionInputCoordinator, type SubmitSessionInput } from './session-input-coordinator.js';
+import {
+  SessionInputCoordinator,
+  type ReplaceLatestTurnInput,
+  type SubmitSessionInput,
+} from './session-input-coordinator.js';
 
 const log = createLogger('Gateway:AgentRunner');
 
@@ -201,6 +205,18 @@ export class GatewayAgentRunner {
 
   submitSessionInput(input: SubmitSessionInput) {
     return this.inputs.submit(input);
+  }
+
+  replaceLatestSessionTurn(input: ReplaceLatestTurnInput) {
+    return this.inputs.replaceLatestTurn(input, async () => {
+      const activeRunId = this.activeWebchatRunBySession.get(input.sessionKey)
+        ?? this.inputs.snapshot(input.sessionKey).activeRunId;
+      if (activeRunId) await this.abortAgentRun(activeRunId);
+
+      const { evictEmbeddedSessionRunner } = await import('../../agent/embedded/session-runner.js');
+      evictEmbeddedSessionRunner(input.sessionKey, 'gateway_user_turn_replaced');
+      this.opts.getAgentService().evictSessionAgent(input.sessionKey);
+    });
   }
 
   getSessionInputState(sessionKey: string) {

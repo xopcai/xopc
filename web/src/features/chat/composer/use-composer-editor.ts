@@ -17,7 +17,7 @@ export interface UseComposerEditorOptions {
   /** Fills the editor when user picks a welcome scenario. */
   welcomeDraftSeed?: { id: number; text: string } | null;
   /** Run before full text replacement (welcome, fill) — e.g. clear attachments. */
-  onExternalTextReplace?: () => void;
+  onExternalTextReplace?: (detail?: FillChatComposerDetail) => void;
   /**
    * Parent sets each render: `palette.open || atPicker.open || atRange != null`
    * so selection-driven cursor state stays in sync when pickers are open.
@@ -185,8 +185,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
   useEffect(() => {
     const handler = (e: Event) => {
       const d = (e as CustomEvent<FillChatComposerDetail>).detail;
-      if (typeof d?.text !== 'string' || d.text.length === 0) return;
-      onExternalTextReplace?.();
+      if (typeof d?.text !== 'string') return;
+      onExternalTextReplace?.(d);
       resetEditor({ nextText: d.text, focus: true });
     };
     window.addEventListener(FILL_CHAT_COMPOSER_EVENT, handler);

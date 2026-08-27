@@ -46,6 +46,16 @@ describe('userMessageFromStreamPayload', () => {
     expect(msg?.attachments?.[0]?.uri).toBe('media://inbound/x.png');
   });
 
+  it('preserves the server turn id for edit-and-resend', () => {
+    const msg = userMessageFromStreamPayload({
+      turnId: 'turn-1',
+      timestamp: 42,
+      content: 'caption',
+    });
+
+    expect(msg?.turnId).toBe('turn-1');
+  });
+
   it('parses user_transcript text shortcut', () => {
     const msg = userMessageFromStreamPayload({ text: 'voice line', timestamp: 9 });
     expect(msg?.content[0]).toEqual({ type: 'text', text: 'voice line' });

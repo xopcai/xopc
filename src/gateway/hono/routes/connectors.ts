@@ -11,6 +11,7 @@ import {
   executeComposioTool,
   configureComposioApiKey,
   getComposioInstallationPolicy,
+  getComposioToolkitAuthState,
   getComposioToolkitScope,
   listComposioConnections,
   inspectComposioConnectorHealth,
@@ -305,6 +306,17 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
+  authenticated.get('/api/connectors/composio/:toolkit/auth-configs', async (c) => {
+    try {
+      return c.json({
+        ok: true,
+        payload: { auth: await getComposioToolkitAuthState(c.req.param('toolkit')) },
+      });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
   authenticated.get('/api/connectors/composio/:toolkit/scope', async (c) => {
     const toolkit = c.req.param('toolkit');
     return c.json({ ok: true, payload: { toolkit, scope: getComposioToolkitScope(service.currentConfig as Config, toolkit) } });
@@ -484,7 +496,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: false, error: `Unknown connector: ${connectorId}` }, 404);
     }
     try {
-      const authorization = await startConnectorAuthorization(connector);
+      const authorization = await startConnectorAuthorization(connector, service.currentConfig as Config);
       return c.json({ ok: true, payload: { authorization } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);

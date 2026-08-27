@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
+import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { ChatProjectScopeBar } from '@/features/chat/scope/chat-project-scope-bar';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
@@ -18,6 +19,11 @@ import {
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
 import { MessageList } from '@/features/chat/messages/message-list';
+import type { Message } from '@/features/chat/messages/messages.types';
+import {
+  extractUserMessagePlainText,
+  messageAttachmentsToWire,
+} from '@/features/chat/messages/user-message-plain-text';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
@@ -48,7 +54,7 @@ import { ProductAutomationFeedback } from '@/features/automations/product-automa
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
-import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
+import { appendNoteContent, createTaskNote, getNote, quickCapture } from '@/features/notes/notes-api';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
@@ -75,6 +81,10 @@ type PendingSourceNoteSave = {
 type SourceNoteSaveDraft = {
   heading: string;
   content: string;
+};
+
+type EditingUserTurn = {
+  turnId: string;
 };
 
 function welcomePromptWasUsed(original: string, sent: string): boolean {
@@ -118,6 +128,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
+  const [editingUserTurn, setEditingUserTurn] = useState<EditingUserTurn | null>(null);
 
   const taskId = boundTaskId?.trim() || null;
   const { data: taskDetail } = useTaskDetail(taskId ?? '');
@@ -641,10 +652,37 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         });
       }
       pendingWelcomeSelectionRef.current = null;
+      if (editingUserTurn) {
+        setEditingUserTurn(null);
+        return stream.replaceLatestUserTurn(
+          editingUserTurn.turnId,
+          args[0],
+          args[1],
+          args[2],
+        );
+      }
       return stream.sendMessage(...args);
     },
-    [agents.displayAgentId, stream.sendMessage],
+    [agents.displayAgentId, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage],
   );
+
+  const handleEditUserMessage = useCallback((message: Message) => {
+    if (!message.turnId) return;
+    setEditingUserTurn({ turnId: message.turnId });
+    dispatchFillChatComposer(
+      extractUserMessagePlainText(message.content),
+      messageAttachmentsToWire(message.attachments),
+    );
+  }, []);
+
+  const handleCancelUserMessageEdit = useCallback(() => {
+    setEditingUserTurn(null);
+    dispatchFillChatComposer('');
+  }, []);
+
+  useEffect(() => {
+    setEditingUserTurn(null);
+  }, [session.sessionKey]);
 
   useEffect(() => {
     if (!autoSendQuery || !draftQuery.trim()) return;
@@ -754,6 +792,18 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     },
     [language, m.chat.sourceNoteAppendHeading, m.chat.sourceNoteAppendSourceLine, sourceNoteId],
   );
+
+  const handleSaveAssistantAsNote = useCallback(async (content: string) => {
+    try {
+      const note = await quickCapture(content.trim(), 'web');
+      showComposerNotification('success', m.chat.messageSavedToNote, undefined, {
+        href: `/notes/${encodeURIComponent(note.id)}`,
+      });
+    } catch (err) {
+      showComposerNotification('error', err instanceof Error ? err.message : m.notes.quickCaptureFailed);
+      throw err;
+    }
+  }, [m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
 
   const handleConfirmSourceNoteSave = useCallback(async () => {
     const pending = pendingSourceNoteSaveRef.current;
@@ -1041,6 +1091,10 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                     onDeleteRound={taskId ? undefined : stream.deleteMessageRound}
                     onRetryUserMessageRound={taskId ? undefined : stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
+                    onEditUserMessage={taskId ? undefined : handleEditUserMessage}
+                    editLatestUserOnly
+                    editRequiresTurnId
+                    onSaveAssistantAsNote={handleSaveAssistantAsNote}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
                   />
@@ -1097,6 +1151,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
                 onSend={handleComposerSend}
+                editingUserTurnId={editingUserTurn?.turnId}
+                onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={followUp.addPendingFollowUp}
                 onSteeringInterrupt={(text, atts) => void stream.interruptAndSend(text, atts)}

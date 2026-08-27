@@ -16,6 +16,7 @@ export function userMessageFromStreamPayload(parsed: Record<string, unknown>): M
     const [msg] = sessionWireToUiMessages([
       {
         role: 'user',
+        turnId: typeof parsed.turnId === 'string' ? parsed.turnId : undefined,
         content: parsed.content,
         media: parsed.media,
         attachments: parsed.attachments,
@@ -34,6 +35,7 @@ export function userMessageFromStreamPayload(parsed: Record<string, unknown>): M
 
   return {
     role: 'user',
+    turnId: typeof parsed.turnId === 'string' ? parsed.turnId : undefined,
     content: text ? [{ type: 'text', text }] : [],
     attachments: media,
     timestamp,
