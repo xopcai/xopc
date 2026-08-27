@@ -20,6 +20,8 @@ function automation(overrides: Partial<Automation> = {}): Automation {
     enabled: true,
     trigger: { kind: 'schedule', schedule: { kind: 'interval', everyMs: 86_400_000 } },
     action: { kind: 'agent', instruction: 'Prepare a brief' },
+    conversationMode: 'new_session',
+    notificationPolicy: 'attention',
     state: {},
     createdAtMs: 1,
     updatedAtMs: 1,

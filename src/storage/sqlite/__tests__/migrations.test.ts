@@ -213,6 +213,82 @@ describe('SQLite migrations', () => {
     }
   });
 
+  it('upgrades automation delivery settings and historical completion events from v120', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    setSchemaVersion(db, 120);
+    db.exec(`
+      CREATE TABLE automations (
+        automation_id TEXT PRIMARY KEY,
+        after_run_json TEXT
+      );
+      CREATE TABLE automation_runs (
+        run_id TEXT PRIMARY KEY,
+        current_phase TEXT,
+        created_at_ms INTEGER NOT NULL
+      );
+      CREATE TABLE automation_run_events (
+        event_id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL
+      );
+      INSERT INTO automations VALUES ('automation-1', '{"kind":"webhook","url":"https://example.com/hook"}');
+      INSERT INTO automation_runs VALUES ('run-1', 'after_run', 1);
+      INSERT INTO automation_run_events VALUES ('event-1', 'after_run.started', 'After-run webhook started');
+    `);
+    expect(applyPendingMigrations(db, { targetVersion: 121 })).toBe(121);
+    expect(db.prepare(`SELECT completion_webhook_url FROM automations`).get()).toEqual({
+      completion_webhook_url: 'https://example.com/hook',
+    });
+    expect((db.prepare(`PRAGMA table_info(automations)`).all() as Array<{ name: string }>).map((column) => column.name))
+      .not.toContain('after_run_json');
+    expect(db.prepare(`SELECT current_phase, read_at_ms FROM automation_runs`).get()).toEqual({
+      current_phase: 'completion_hook',
+      read_at_ms: null,
+    });
+    expect(db.prepare(`SELECT type, message FROM automation_run_events`).get()).toEqual({
+      type: 'completion_hook.started',
+      message: 'Completion webhook started',
+    });
+  });
+
+  it('backfills project ownership for existing automation sessions from v121', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    setSchemaVersion(db, 121);
+    db.exec(`
+      CREATE TABLE automations (
+        automation_id TEXT PRIMARY KEY,
+        project_id TEXT
+      );
+      CREATE TABLE automation_runs (
+        run_id TEXT PRIMARY KEY,
+        automation_id TEXT NOT NULL,
+        session_key TEXT,
+        created_at_ms INTEGER NOT NULL
+      );
+      CREATE TABLE sessions (
+        session_key TEXT PRIMARY KEY,
+        project_id TEXT
+      );
+      INSERT INTO automations VALUES
+        ('automation-1', 'project-a'),
+        ('automation-2', 'project-a');
+      INSERT INTO automation_runs VALUES
+        ('run-1', 'automation-1', 'session-unassigned', 1),
+        ('run-2', 'automation-2', 'session-user-assigned', 2);
+      INSERT INTO sessions VALUES
+        ('session-unassigned', NULL),
+        ('session-user-assigned', 'project-b');
+    `);
+
+    expect(applyPendingMigrations(db, { targetVersion: 122 })).toBe(122);
+    expect(db.prepare(`SELECT session_key, project_id FROM sessions ORDER BY session_key`).all()).toEqual([
+      { session_key: 'session-unassigned', project_id: 'project-a' },
+      { session_key: 'session-user-assigned', project_id: 'project-b' },
+    ]);
+  });
+
   it('upgrades v116 personal-context evidence to the unified source type', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);

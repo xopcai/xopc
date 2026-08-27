@@ -19,20 +19,24 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
   it('maps failed and successful automation runs to the activity stream', () => {
     const failed = mobileNotificationEventFromGatewayEvent('automation.run.completed', {
       run: { id: 'run-1', automationId: 'automation-1', automationName: 'Nightly backup', status: 'failed' },
+      notificationPolicy: 'attention',
+      requiresAttention: true,
     });
     const succeeded = mobileNotificationEventFromGatewayEvent('automation.run.completed', {
       run: { id: 'run-2', automationId: 'automation-1', automationName: 'Nightly backup', status: 'succeeded' },
+      notificationPolicy: 'all',
+      requiresAttention: false,
     });
 
     expect(failed).toMatchObject({
       type: 'automation.failed',
       priority: 'high',
-      deepLink: '/automation',
+      deepLink: '/automations?automation=automation-1&run=run-1',
     });
     expect(succeeded).toMatchObject({
       type: 'automation.completed',
       priority: 'normal',
-      deepLink: '/automation',
+      deepLink: '/automations?automation=automation-1&run=run-2',
     });
   });
 
@@ -57,8 +61,13 @@ describe('mobileNotificationEventFromGatewayEvent', () => {
       to: 'active',
     })).toBeNull();
     expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {
-      silent: true,
+      notificationPolicy: 'none',
       run: { id: 'run-2', automationId: 'automation-1', automationName: 'Silent run', status: 'succeeded' },
+    })).toBeNull();
+    expect(mobileNotificationEventFromGatewayEvent('automation.run.completed', {
+      notificationPolicy: 'attention',
+      requiresAttention: false,
+      run: { id: 'run-3', automationId: 'automation-1', automationName: 'Routine run', status: 'succeeded' },
     })).toBeNull();
   });
 });

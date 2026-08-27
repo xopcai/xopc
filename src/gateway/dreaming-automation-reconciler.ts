@@ -53,7 +53,8 @@ export async function reconcileDreamingAutomations(params: {
     trigger,
     action,
     safety: { mode: 'auto_apply' as const },
-    afterRun: { kind: 'none' as const },
+    conversationMode: 'continuous' as const,
+    notificationPolicy: 'none' as const,
     reliability: { disableAfterConsecutiveFailures: 3 },
   };
   if (!current) {
@@ -67,7 +68,8 @@ export async function reconcileDreamingAutomations(params: {
     || JSON.stringify(current.trigger) !== JSON.stringify(trigger)
     || JSON.stringify(current.action) !== JSON.stringify(action)
     || current.safety?.mode !== 'auto_apply'
-    || current.afterRun?.kind !== 'none'
+    || current.conversationMode !== 'continuous'
+    || current.notificationPolicy !== 'none'
     || current.reliability?.disableAfterConsecutiveFailures !== 3;
   if (needsUpdate) {
     await params.automationService.update(USER_CONTEXT_CONSOLIDATION_AUTOMATION_ID, next);

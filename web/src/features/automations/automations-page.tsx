@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TimePicker } from '@/components/ui/time-picker';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { fetchProjects, type Project } from '@/features/projects/api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -58,6 +59,8 @@ import {
   type AutomationRun,
   type AutomationRunEvent,
   type AutomationSafetyMode,
+  type AutomationConversationMode,
+  type AutomationNotificationPolicy,
 } from './automation-api';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import {
@@ -85,7 +88,7 @@ import {
 } from './automation-form';
 
 type CreateMode = 'blank' | 'draft';
-type AutomationFilter = 'all' | 'active' | 'paused' | 'attention' | 'system';
+type AutomationFilter = 'all' | 'active' | 'paused' | 'system';
 type AutomationsMessages = MessageBundle['automations'];
 type CronMessages = MessageBundle['cron'];
 type RunEventLabels = AutomationsMessages['events'];
@@ -229,7 +232,6 @@ export function AutomationsPage() {
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [searchParams, setSearchParams] = useSearchParams();
   const runParam = searchParams.get('run')?.trim() ?? '';
-  const runsView = searchParams.get('view') === 'runs';
   const automationParam = searchParams.get('automation')?.trim() ?? '';
   const draftParam = searchParams.get('draft')?.trim() ?? '';
   const actionParam = searchParams.get('action')?.trim() ?? '';
@@ -251,6 +253,9 @@ export function AutomationsPage() {
   const [draft, setDraft] = useState<AutomationDraft | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
   const [draftApproved, setDraftApproved] = useState(false);
+  const [draftProjectId, setDraftProjectId] = useState(projectIdParam);
+  const [draftConversationMode, setDraftConversationMode] = useState<AutomationConversationMode>('new_session');
+  const [draftNotificationPolicy, setDraftNotificationPolicy] = useState<AutomationNotificationPolicy>('attention');
   const [repairDraft, setRepairDraft] = useState<AutomationRepairDraft | null>(null);
   const [repairLoading, setRepairLoading] = useState(false);
   const [repairApproved, setRepairApproved] = useState(false);
@@ -275,6 +280,7 @@ export function AutomationsPage() {
   const workflowDefinitionsSwr = useSWR('automation-workflow-definitions', listWorkflowDefinitions);
   const browserWorkflowsSwr = useSWR('automation-browser-workflows', () => browserWorkflowApi.list());
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
+  const projectsSwr = useSWR('automation-projects', () => fetchProjects({ sortBy: 'name', sortOrder: 'asc', limit: 200 }));
   const initialLoading =
     (automationsSwr.isLoading && !automationsSwr.data) ||
     (runsSwr.isLoading && !runsSwr.data);
@@ -316,15 +322,14 @@ export function AutomationsPage() {
     [runs, selectedAutomationId],
   );
   const runEvents = runEventsSwr.data?.events ?? [];
-  const attentionAutomationsCount = useMemo(
-    () => userAutomations.filter((automation) => automationNeedsAttention(automation, userRuns)).length,
-    [userAutomations, userRuns],
+  const unreadRuns = useMemo(
+    () => userRuns.filter((run) => !isActiveRun(run) && run.readAtMs == null),
+    [userRuns],
   );
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const filteredAutomations = useMemo(() => (filter === 'system' ? systemAutomations : userAutomations).filter((automation) => {
     if (filter === 'active' && !automation.enabled) return false;
     if (filter === 'paused' && automation.enabled) return false;
-    if (filter === 'attention' && !automationNeedsAttention(automation, userRuns)) return false;
     if (!normalizedSearch) return true;
     return [
       automation.name,
@@ -339,6 +344,7 @@ export function AutomationsPage() {
     [browserWorkflowsSwr.data],
   );
   const agentOptions = chatAgentsSwr.data?.items ?? [];
+  const projects = projectsSwr.data?.items ?? [];
   const selectedWorkflow = useMemo(
     () => workflowDefinitions.find((workflow) => workflow.id === form.workflowId.trim()) ?? null,
     [form.workflowId, workflowDefinitions],
@@ -363,8 +369,7 @@ export function AutomationsPage() {
       ? !workflowSelectionInvalid && !workflowInputInvalid
       : form.actionMode === 'browser_recipe'
         ? selectedBrowserWorkflow !== null && browserWorkflowInputsComplete(selectedBrowserWorkflow, form.browserWorkflowInputs)
-        : Boolean(form.instruction.trim())) &&
-    (form.afterRunMode !== 'webhook' || Boolean(form.webhookUrl.trim()));
+        : Boolean(form.instruction.trim()));
   const templates = useMemo(
     () => [
       {
@@ -424,19 +429,35 @@ export function AutomationsPage() {
     await Promise.all([automationsSwr.mutate(), runsSwr.mutate(), runEventsSwr.mutate()]);
   }, [automationsSwr.mutate, runEventsSwr.mutate, runsSwr.mutate]);
 
+  const selectProject = useCallback((projectId: string) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (projectId) next.set('projectId', projectId);
+      else next.delete('projectId');
+      next.delete('automation');
+      next.delete('run');
+      return next;
+    });
+    setSelectedAutomationId(null);
+    setSelectedRunId(null);
+  }, [setSearchParams]);
+
   const openCreate = useCallback((mode: CreateMode) => {
     setEditingAutomationId(null);
     setEditingDraft(false);
     setCreateMode(mode);
     setCreateOpen(true);
     if (mode === 'blank') {
-      setForm(initialForm);
+      setForm({ ...initialForm, projectId: projectIdParam });
       return;
     }
     setDraftPrompt('');
     setDraft(null);
     setDraftApproved(false);
-  }, []);
+    setDraftProjectId(projectIdParam);
+    setDraftConversationMode('new_session');
+    setDraftNotificationPolicy('attention');
+  }, [projectIdParam]);
 
   const openAutomationEditor = useCallback((automation: Automation) => {
     setForm(formFromAutomation(automation, workflowDefinitions));
@@ -449,11 +470,16 @@ export function AutomationsPage() {
 
   const openDraftEditor = useCallback(() => {
     if (!draft) return;
-    setForm(formFromAutomation(draft.automation, workflowDefinitions));
+    setForm({
+      ...formFromAutomation(draft.automation, workflowDefinitions),
+      projectId: draftProjectId,
+      conversationMode: draftConversationMode,
+      notificationPolicy: draftNotificationPolicy,
+    });
     setEditingAutomationId(null);
     setEditingDraft(true);
     setCreateMode('blank');
-  }, [draft, workflowDefinitions]);
+  }, [draft, draftConversationMode, draftNotificationPolicy, draftProjectId, workflowDefinitions]);
 
   const refreshNow = useCallback(async () => {
     setRefreshBusy(true);
@@ -467,12 +493,6 @@ export function AutomationsPage() {
       setRefreshBusy(false);
     }
   }, [labels.feedback.actionFailed, reload]);
-
-  useEffect(() => {
-    if (!runParam) return;
-    setSelectedRunId(runParam);
-    setRunDetailOpen(true);
-  }, [runParam]);
 
   useEffect(() => {
     if (!automationParam) return;
@@ -505,6 +525,7 @@ export function AutomationsPage() {
     setDraftPrompt(draftParam);
     setDraft(null);
     setDraftApproved(false);
+    setDraftProjectId(projectIdParam);
     setCreateMode('draft');
     setCreateOpen(true);
     setSearchParams((prev) => {
@@ -527,9 +548,24 @@ export function AutomationsPage() {
       .finally(() => {
         setDraftLoading(false);
       });
-  }, [autogenerateDraft, draftParam, language, setSearchParams]);
+  }, [autogenerateDraft, draftParam, language, projectIdParam, setSearchParams]);
+
+  const markRunRead = useCallback((runId: string) => {
+    const run = runs.find((item) => item.id === runId);
+    if (!run || isActiveRun(run) || run.readAtMs != null) return;
+    const readAtMs = Date.now();
+    void runsSwr.mutate((current) => current ? {
+      ...current,
+      runs: current.runs.map((run) => run.id === runId ? { ...run, readAtMs } : run),
+    } : current, false);
+    void automationApi.markRunRead(runId).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+      void runsSwr.mutate();
+    });
+  }, [runs, runsSwr.mutate]);
 
   const selectRun = useCallback((runId: string) => {
+    markRunRead(runId);
     setSelectedRunId(runId);
     setRunDetailOpen(true);
     setSearchParams((prev) => {
@@ -537,7 +573,20 @@ export function AutomationsPage() {
       next.set('run', runId);
       return next;
     }, { replace: true });
-  }, [setSearchParams]);
+  }, [markRunRead, setSearchParams]);
+
+  const openAutomationDetails = useCallback((automationId: string) => {
+    setSelectedAutomationId(automationId);
+    const latestRun = runs.find((run) => run.automationId === automationId);
+    if (latestRun && latestRun.readAtMs == null && !isActiveRun(latestRun)) markRunRead(latestRun.id);
+  }, [markRunRead, runs]);
+
+  useEffect(() => {
+    if (!runParam) return;
+    markRunRead(runParam);
+    setSelectedRunId(runParam);
+    setRunDetailOpen(true);
+  }, [markRunRead, runParam]);
 
   useEffect(() => {
     setRepairDraft(null);
@@ -553,6 +602,9 @@ export function AutomationsPage() {
         const automation = buildInput(form, selectedWorkflow);
         const { simulation } = await automationApi.simulate(automation);
         setDraft({ ...draft, automation, simulation });
+        setDraftProjectId(form.projectId);
+        setDraftConversationMode(form.conversationMode);
+        setDraftNotificationPolicy(form.notificationPolicy);
         setDraftApproved(false);
         setEditingDraft(false);
         setCreateMode('draft');
@@ -577,14 +629,13 @@ export function AutomationsPage() {
       return;
     }
     try {
-      const { automation } = await automationApi.create({
-        ...buildInput(form, selectedWorkflow),
-        ...(projectIdParam ? { projectId: projectIdParam } : {}),
-      });
+      const input = buildInput(form, selectedWorkflow);
+      const { automation } = await automationApi.create(input);
       setForm(initialForm);
       setCreateOpen(false);
       setFilter('all');
       setSearchQuery('');
+      selectProject(automation.projectId ?? '');
       await reload();
       setSelectedAutomationId(automation.id);
     } catch (err) {
@@ -609,6 +660,10 @@ export function AutomationsPage() {
     }
   }
 
+  async function markAllRead() {
+    await mutateAutomation('runs:read-all', () => automationApi.markAllRunsRead(projectIdParam || undefined));
+  }
+
   async function generateDraft() {
     const prompt = draftPrompt.trim();
     if (!prompt) return;
@@ -628,10 +683,13 @@ export function AutomationsPage() {
   async function publishDraft() {
     if (!draft) return;
     let createdId = '';
+    let createdProjectId = '';
     const published = await mutateAutomation('draft:publish', async () => {
       const { automation } = await automationApi.create({
         ...draft.automation,
-        ...(projectIdParam ? { projectId: projectIdParam } : {}),
+        ...(draftProjectId ? { projectId: draftProjectId } : { projectId: undefined }),
+        conversationMode: draftConversationMode,
+        notificationPolicy: draftNotificationPolicy,
       });
       setDraft(null);
       setDraftPrompt('');
@@ -640,8 +698,43 @@ export function AutomationsPage() {
       setFilter('all');
       setSearchQuery('');
       createdId = automation.id;
+      createdProjectId = automation.projectId ?? '';
     });
-    if (published && createdId) setSelectedAutomationId(createdId);
+    if (published && createdId) {
+      selectProject(createdProjectId);
+      setSelectedAutomationId(createdId);
+    }
+  }
+
+  async function testDraft() {
+    if (!draft) return;
+    let createdId = '';
+    let createdProjectId = '';
+    let runId = '';
+    const tested = await mutateAutomation('draft:test', async () => {
+      const { automation } = await automationApi.create({
+        ...draft.automation,
+        ...(draftProjectId ? { projectId: draftProjectId } : { projectId: undefined }),
+        conversationMode: draftConversationMode,
+        notificationPolicy: draftNotificationPolicy,
+        enabled: false,
+      });
+      const { run } = await automationApi.runNow(automation.id);
+      createdId = automation.id;
+      createdProjectId = automation.projectId ?? '';
+      runId = run.id;
+      setDraft(null);
+      setDraftPrompt('');
+      setDraftApproved(false);
+      setCreateOpen(false);
+      setFilter('all');
+      setSearchQuery('');
+    });
+    if (tested && createdId && runId) {
+      selectProject(createdProjectId);
+      setSelectedAutomationId(createdId);
+      selectRun(runId);
+    }
   }
 
   async function generateRepairDraft(run: AutomationRun) {
@@ -672,25 +765,13 @@ export function AutomationsPage() {
     () => (
       <div className="flex items-center gap-2">
         <RefreshButton className="size-9 shrink-0 p-0" loading={refreshBusy} label={labels.refresh} onClick={refreshNow} />
-        <Button
-          variant="secondary"
-          onClick={() => setSearchParams((previous) => {
-            const next = new URLSearchParams(previous);
-            if (runsView) next.delete('view');
-            else next.set('view', 'runs');
-            return next;
-          })}
-        >
-          <Activity className="size-4" />
-          {runsView ? labels.dashboard.backToAutomations : labels.dashboard.allRuns}
-        </Button>
         <Button variant="primary" onClick={() => openCreate('draft')}>
           <Plus className="size-4" />
           {labels.new}
         </Button>
       </div>
     ),
-    [labels.dashboard.allRuns, labels.dashboard.backToAutomations, labels.new, labels.refresh, openCreate, refreshBusy, refreshNow, runsView, setSearchParams],
+    [labels.new, labels.refresh, openCreate, refreshBusy, refreshNow],
   );
 
   useLayoutEffect(() => {
@@ -718,21 +799,22 @@ export function AutomationsPage() {
 
         {initialLoading ? (
           <AutomationsPageSkeleton />
-        ) : runsView ? (
-          <GlobalRunsCenter
-            runs={runs}
-            labels={labels}
-            cronLabels={cronLabels}
-            language={language}
-            busyAction={busyAction}
-            onSelectRun={selectRun}
-            onAction={mutateAutomation}
-          />
         ) : (
           <section className="grid min-h-0 items-start gap-4 xl:grid-cols-[20rem_minmax(0,1fr)]">
             <aside className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
               <div className="border-b border-edge-subtle p-3">
-                <label className="flex items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg-muted focus-within:border-accent">
+                <Select
+                  aria-label={labels.filters.project}
+                  className={inputClass}
+                  value={projectIdParam}
+                  onChange={(event) => selectProject(event.target.value)}
+                >
+                  <SelectOption value="">{labels.filters.allProjects}</SelectOption>
+                  {projects.map((project) => (
+                    <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>
+                  ))}
+                </Select>
+                <label className="mt-2 flex items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg-muted focus-within:border-accent">
                   <Search className="size-4 shrink-0" aria-hidden />
                   <input
                     className="min-w-0 flex-1 bg-transparent text-fg outline-none placeholder:text-fg-subtle"
@@ -741,13 +823,11 @@ export function AutomationsPage() {
                     placeholder={labels.filters.search}
                   />
                 </label>
-                <nav className="mt-3 flex flex-wrap gap-1" aria-label={labels.filters.status}>
+                <nav className="mt-3 flex items-center gap-1" aria-label={labels.filters.status}>
                   {([
                     { id: 'all' as const, label: labels.filters.all },
                     { id: 'active' as const, label: labels.filters.active },
                     { id: 'paused' as const, label: labels.paused },
-                    { id: 'attention' as const, label: labels.dashboard.needsAttention, count: attentionAutomationsCount },
-                    { id: 'system' as const, label: labels.system.title, count: systemAutomations.length },
                   ]).map((item) => (
                     <button
                       type="button"
@@ -758,10 +838,43 @@ export function AutomationsPage() {
                       )}
                       onClick={() => setFilter(item.id)}
                     >
-                      {item.label}{item.count ? ` ${item.count}` : ''}
+                      {item.label}
                     </button>
                   ))}
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button type="button" className={cn(
+                        'ml-auto rounded-md p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg',
+                        filter === 'system' && 'bg-surface-hover text-fg',
+                      )} aria-label={labels.system.title}>
+                        <MoreHorizontal className="size-4" />
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content align="end" className="z-70 min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                        <DropdownMenu.Item
+                          className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover"
+                          onSelect={() => setFilter('system')}
+                        >
+                          {labels.system.title} {systemAutomations.length}
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
                 </nav>
+                {unreadRuns.length > 0 && filter !== 'system' ? (
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-accent/8 px-2.5 py-1.5 text-xs text-accent-fg">
+                    <span>{labels.filters.unread} · {unreadRuns.length}</span>
+                    <button
+                      type="button"
+                      className="font-medium hover:underline"
+                      disabled={busyAction === 'runs:read-all'}
+                      onClick={() => void markAllRead()}
+                    >
+                      {labels.filters.markAllRead}
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <AutomationList
                 automations={filteredAutomations}
@@ -770,7 +883,7 @@ export function AutomationsPage() {
                 cronLabels={cronLabels}
                 language={language}
                 selectedAutomationId={selectedAutomationId}
-                onOpenDetails={setSelectedAutomationId}
+                onOpenDetails={openAutomationDetails}
               />
             </aside>
             {selectedAutomation ? (
@@ -780,6 +893,7 @@ export function AutomationsPage() {
                 labels={labels}
                 cronLabels={cronLabels}
                 language={language}
+                projects={projects}
                 busyAction={busyAction}
                 onEdit={openAutomationEditor}
                 onSelectRun={selectRun}
@@ -830,22 +944,36 @@ export function AutomationsPage() {
                   loading={draftLoading}
                   approved={draftApproved}
                   publishBusy={busyAction === 'draft:publish'}
+                  testBusy={busyAction === 'draft:test'}
                   templates={templates}
+                  projects={projects}
+                  projectId={draftProjectId}
+                  conversationMode={draftConversationMode}
+                  notificationPolicy={draftNotificationPolicy}
                   onPromptChange={setDraftPrompt}
                   onGenerate={generateDraft}
                   onEdit={openDraftEditor}
                   onPublish={publishDraft}
+                  onTest={testDraft}
+                  onProjectChange={setDraftProjectId}
+                  onConversationModeChange={setDraftConversationMode}
+                  onNotificationPolicyChange={setDraftNotificationPolicy}
                   onApprovedChange={setDraftApproved}
                   onDiscard={() => {
                     setDraft(null);
                     setDraftApproved(false);
                   }}
                   onTemplateSelect={(templateForm) => {
-                    setForm(templateForm);
+                    setForm({ ...templateForm, projectId: draftProjectId });
                     setCreateMode('blank');
                   }}
                   onOpenAdvanced={() => {
-                    setForm(initialForm);
+                    setForm({
+                      ...initialForm,
+                      projectId: draftProjectId,
+                      conversationMode: draftConversationMode,
+                      notificationPolicy: draftNotificationPolicy,
+                    });
                     setCreateMode('blank');
                   }}
                 />
@@ -856,6 +984,7 @@ export function AutomationsPage() {
                   form={form}
                   labels={labels}
                   setForm={setForm}
+                  projects={projects}
                   workflowDefinitions={workflowDefinitions}
                   selectedWorkflow={selectedWorkflow}
                   workflowsLoading={workflowDefinitionsSwr.isLoading}
@@ -956,11 +1085,20 @@ function DraftPanel({
   loading,
   approved,
   publishBusy = false,
+  testBusy = false,
   templates,
+  projects,
+  projectId,
+  conversationMode,
+  notificationPolicy,
   onPromptChange,
   onGenerate,
   onEdit,
   onPublish,
+  onTest,
+  onProjectChange,
+  onConversationModeChange,
+  onNotificationPolicyChange,
   onApprovedChange,
   onDiscard,
   onTemplateSelect,
@@ -972,11 +1110,20 @@ function DraftPanel({
   loading: boolean;
   approved: boolean;
   publishBusy?: boolean;
+  testBusy?: boolean;
   templates: AutomationTemplate[];
+  projects: Project[];
+  projectId: string;
+  conversationMode: AutomationConversationMode;
+  notificationPolicy: AutomationNotificationPolicy;
   onPromptChange: (value: string) => void;
   onGenerate: () => void;
   onEdit: () => void;
   onPublish: () => void;
+  onTest: () => void;
+  onProjectChange: (value: string) => void;
+  onConversationModeChange: (value: AutomationConversationMode) => void;
+  onNotificationPolicyChange: (value: AutomationNotificationPolicy) => void;
   onApprovedChange: (value: boolean) => void;
   onDiscard: () => void;
   onTemplateSelect: (form: FormState) => void;
@@ -1004,6 +1151,27 @@ function DraftPanel({
         onChange={(event) => onPromptChange(event.target.value)}
         placeholder={labels.draft.placeholder}
       />
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <Field label={labels.draft.project}>
+          <Select className={inputClass} value={projectId} onChange={(event) => onProjectChange(event.target.value)}>
+            <SelectOption value="">{labels.draft.noProject}</SelectOption>
+            {projects.map((project) => <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>)}
+          </Select>
+        </Field>
+        <Field label={labels.draft.conversation}>
+          <Select className={inputClass} value={conversationMode} onChange={(event) => onConversationModeChange(event.target.value as AutomationConversationMode)}>
+            <SelectOption value="new_session">{labels.draft.newConversation}</SelectOption>
+            <SelectOption value="continuous">{labels.draft.continuousConversation}</SelectOption>
+          </Select>
+        </Field>
+        <Field label={labels.draft.notifications}>
+          <Select className={inputClass} value={notificationPolicy} onChange={(event) => onNotificationPolicyChange(event.target.value as AutomationNotificationPolicy)}>
+            <SelectOption value="attention">{labels.draft.notifyAttention}</SelectOption>
+            <SelectOption value="all">{labels.draft.notifyAll}</SelectOption>
+            <SelectOption value="none">{labels.draft.notifyNone}</SelectOption>
+          </Select>
+        </Field>
+      </div>
       {!draft ? (
         <div className="mt-5 border-t border-edge-subtle pt-4">
           <div className="flex items-center justify-between gap-3">
@@ -1065,6 +1233,10 @@ function DraftPanel({
               <Button variant="secondary" onClick={onEdit}>
                 <Pencil className="size-4" />
                 {labels.draft.edit}
+              </Button>
+              <Button variant="secondary" onClick={onTest} disabled={testBusy || publishBusy || (requiresApproval && !approved)}>
+                <Play className="size-4" />
+                {testBusy ? labels.draft.testing : labels.draft.testOnce}
               </Button>
               <Button variant="primary" onClick={onPublish} disabled={publishBusy || (requiresApproval && !approved)}>
                 {publishBusy ? labels.feedback.working : labels.draft.publish}
@@ -1138,15 +1310,22 @@ function AutomationList({
                       : 'bg-fg-subtle',
               )} />
               <span className="truncate text-sm font-medium text-fg">{automation.name}</span>
+              {latestRunForAutomation && latestRunForAutomation.readAtMs == null && !isActiveRun(latestRunForAutomation) ? (
+                <span className="ml-auto size-2 shrink-0 rounded-full bg-blue-500">
+                  <span className="sr-only">{labels.filters.unread}</span>
+                </span>
+              ) : null}
             </div>
             <div className="mt-1 truncate pl-4 text-xs text-fg-muted">
               {automationTriggerLabel(automation.trigger, labels, cronLabels, language)}
             </div>
             <div className="mt-1 flex min-w-0 items-center justify-between gap-2 pl-4 text-xs text-fg-subtle">
-              <span className="truncate">
-                {automation.enabled
-                  ? `${labels.next}: ${formatDate(automation.state.nextRunAtMs, labels, language)}`
-                  : labels.paused}
+              <span className={cn('truncate', latestRunForAutomation?.error && 'text-red-700 dark:text-red-300')}>
+                {latestRunForAutomation
+                  ? latestRunForAutomation.error || latestRunForAutomation.summary || labels.status[latestRunForAutomation.status]
+                  : automation.enabled
+                    ? `${labels.next}: ${formatDate(automation.state.nextRunAtMs, labels, language)}`
+                    : labels.paused}
               </span>
               {latestRunForAutomation?.status ? (
                 <span className={cn('shrink-0 rounded-full px-1.5 py-0.5', statusClass(latestRunForAutomation.status))}>
@@ -1158,68 +1337,6 @@ function AutomationList({
         );
       })}
     </div>
-  );
-}
-
-function GlobalRunsCenter({
-  runs,
-  labels,
-  cronLabels,
-  language,
-  busyAction,
-  onSelectRun,
-  onAction,
-}: {
-  runs: AutomationRun[];
-  labels: AutomationsMessages;
-  cronLabels: CronMessages;
-  language: StoredLanguage;
-  busyAction: string | null;
-  onSelectRun: (runId: string) => void;
-  onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
-}) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
-      <header className="flex items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold text-fg">{labels.dashboard.allRuns}</h2>
-          <p className="mt-1 text-sm text-fg-muted">{labels.dashboard.runCenterDescription}</p>
-        </div>
-        <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{runs.length}</span>
-      </header>
-      {runs.length === 0 ? (
-        <EmptyState icon={<Activity className="size-5" />} title={labels.empty.runs} />
-      ) : (
-        <div className="divide-y divide-edge-subtle">
-          {runs.map((run) => (
-            <div key={run.id} className="flex items-start gap-3 px-4 py-3 hover:bg-surface-hover">
-              <button type="button" className="min-w-0 flex-1 text-left outline-none" onClick={() => onSelectRun(run.id)}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-fg">{run.automationName}</span>
-                  <span className={cn('rounded-full px-2 py-0.5 text-xs', statusClass(run.status))}>{labels.status[run.status]}</span>
-                  <span className="text-xs text-fg-subtle">{formatDate(run.createdAtMs, labels, language)}</span>
-                </div>
-                <p className={cn('mt-1 line-clamp-2 text-sm text-fg-muted', run.error && 'text-red-700 dark:text-red-300')}>
-                  {run.error || run.summary || (isActiveRun(run) ? labels.runDetail.resultPending : labels.runDetail.noResult)}
-                </p>
-                <p className="mt-1 text-xs text-fg-subtle">
-                  {run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
-                </p>
-              </button>
-              {isActiveRun(run) ? (
-                <Button
-                  variant="ghost"
-                  disabled={busyAction !== null}
-                  onClick={() => void onAction(`run:${run.id}:cancel`, () => automationApi.cancelRun(run.id), labels.dashboard.cancelled)}
-                >
-                  {busyAction === `run:${run.id}:cancel` ? labels.feedback.working : labels.cancel}
-                </Button>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -1244,12 +1361,12 @@ function runEventLabel(event: AutomationRunEvent, labels: AutomationsMessages): 
       return actionKind ? eventLabels.actionCompleted.replace('{kind}', actionKind) : eventLabels.actionCompletedFallback;
     case 'action.failed':
       return actionKind ? eventLabels.actionFailed.replace('{kind}', actionKind) : eventLabels.actionFailedFallback;
-    case 'after_run.started':
-      return eventLabels.afterRunStarted;
-    case 'after_run.completed':
-      return eventLabels.afterRunCompleted;
-    case 'after_run.failed':
-      return eventLabels.afterRunFailed;
+    case 'completion_hook.started':
+      return eventLabels.completionHookStarted;
+    case 'completion_hook.completed':
+      return eventLabels.completionHookCompleted;
+    case 'completion_hook.failed':
+      return eventLabels.completionHookFailed;
     case 'run.completed':
       return status ? eventLabels.runCompleted.replace('{status}', status) : eventLabels.runCompletedFallback;
     default:
@@ -1516,6 +1633,7 @@ function AutomationDetails({
   labels,
   cronLabels,
   language,
+  projects,
   busyAction,
   onEdit,
   onSelectRun,
@@ -1526,6 +1644,7 @@ function AutomationDetails({
   labels: AutomationsMessages;
   cronLabels: CronMessages;
   language: StoredLanguage;
+  projects: Project[];
   busyAction: string | null;
   onEdit: (automation: Automation) => void;
   onSelectRun: (runId: string) => void;
@@ -1613,7 +1732,7 @@ function AutomationDetails({
         </section>
 
         <div className="grid items-start gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
-          <AutomationOverview automation={automation} labels={labels} cronLabels={cronLabels} language={language} />
+          <AutomationOverview automation={automation} labels={labels} cronLabels={cronLabels} language={language} projects={projects} />
           <section className="min-w-0">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -1660,11 +1779,13 @@ function AutomationOverview({
   labels,
   cronLabels,
   language,
+  projects,
 }: {
   automation: Automation;
   labels: AutomationsMessages;
   cronLabels: CronMessages;
   language: StoredLanguage;
+  projects: Project[];
 }) {
   const mode = safetyMode(automation);
   const nextRun = automationNextRunLabel(automation, labels, language);
@@ -1730,6 +1851,25 @@ function AutomationOverview({
           label={labels.info.permission}
           value={labels.safety[mode]}
           description={safetyDescription(mode, labels)}
+        />
+        <OverviewItem
+          icon={<GitBranch className="size-4" aria-hidden />}
+          label={labels.info.project}
+          value={projects.find((project) => project.id === automation.projectId)?.name ?? labels.info.noProject}
+        />
+        <OverviewItem
+          icon={<MessageCircle className="size-4" aria-hidden />}
+          label={labels.info.conversation}
+          value={automation.conversationMode === 'continuous' ? labels.info.continuousConversation : labels.info.newConversation}
+        />
+        <OverviewItem
+          icon={<CircleAlert className="size-4" aria-hidden />}
+          label={labels.info.notifications}
+          value={automation.notificationPolicy === 'all'
+            ? labels.info.notifyAll
+            : automation.notificationPolicy === 'none'
+              ? labels.info.notifyNone
+              : labels.info.notifyAttention}
         />
         <OverviewItem
           icon={<Activity className="size-4" aria-hidden />}
@@ -1842,6 +1982,7 @@ function AutomationForm({
   form,
   labels,
   setForm,
+  projects,
   workflowDefinitions,
   selectedWorkflow,
   workflowsLoading,
@@ -1855,6 +1996,7 @@ function AutomationForm({
   form: FormState;
   labels: AutomationsMessages;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  projects: Project[];
   workflowDefinitions: WorkflowDefinition[];
   selectedWorkflow: WorkflowDefinition | null;
   workflowsLoading: boolean;
@@ -1907,6 +2049,12 @@ function AutomationForm({
         </Field>
         <Field label={labels.form.description}>
           <input className={inputClass} value={form.description} onChange={(e) => update({ description: e.target.value })} />
+        </Field>
+        <Field label={labels.form.project}>
+          <Select className={inputClass} value={form.projectId} onChange={(event) => update({ projectId: event.target.value })}>
+            <SelectOption value="">{labels.form.noProject}</SelectOption>
+            {projects.map((project) => <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>)}
+          </Select>
         </Field>
         <Section title={labels.form.trigger} />
         <Select className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
@@ -2205,12 +2353,7 @@ function AutomationForm({
             value={form.safetyMode}
             onChange={(e) => {
               const safetyMode = e.target.value as AutomationSafetyMode;
-              update({
-                safetyMode,
-                ...(safetyMode !== 'auto_apply' && form.afterRunMode === 'webhook'
-                  ? { afterRunMode: 'none' as const, webhookUrl: '' }
-                  : {}),
-              });
+              update({ safetyMode });
             }}
           >
             <SelectOption value="suggest_only">{labels.safety.suggest_only}</SelectOption>
@@ -2226,15 +2369,23 @@ function AutomationForm({
           </p>
         </Field></> : null}
 
-        <Section title={labels.form.afterRun} />
-        <Select className={inputClass} value={form.afterRunMode} onChange={(e) => update({ afterRunMode: e.target.value as FormState['afterRunMode'] })}>
-          <SelectOption value="none">{labels.afterRun.none}</SelectOption>
-          <SelectOption value="saveToSession">{labels.afterRun.saveToSession}</SelectOption>
-          <SelectOption value="webhook" disabled={form.safetyMode !== 'auto_apply'}>{labels.afterRun.webhook}</SelectOption>
-        </Select>
-        {form.afterRunMode === 'webhook' ? (
-          <Field label={labels.form.webhookUrl}>
-            <input className={inputClass} value={form.webhookUrl} onChange={(e) => update({ webhookUrl: e.target.value })} />
+        <Section title={labels.form.results} />
+        <Field label={labels.form.conversation}>
+          <Select className={inputClass} value={form.conversationMode} onChange={(e) => update({ conversationMode: e.target.value as FormState['conversationMode'] })}>
+            <SelectOption value="new_session">{labels.form.newConversation}</SelectOption>
+            <SelectOption value="continuous">{labels.form.continuousConversation}</SelectOption>
+          </Select>
+        </Field>
+        <Field label={labels.form.notifications}>
+          <Select className={inputClass} value={form.notificationPolicy} onChange={(e) => update({ notificationPolicy: e.target.value as FormState['notificationPolicy'] })}>
+            <SelectOption value="attention">{labels.form.notifyAttention}</SelectOption>
+            <SelectOption value="all">{labels.form.notifyAll}</SelectOption>
+            <SelectOption value="none">{labels.form.notifyNone}</SelectOption>
+          </Select>
+        </Field>
+        {form.safetyMode === 'auto_apply' ? (
+          <Field label={labels.form.completionWebhook}>
+            <input className={inputClass} value={form.completionWebhookUrl} onChange={(e) => update({ completionWebhookUrl: e.target.value })} />
           </Field>
         ) : null}
 

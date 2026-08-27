@@ -8,7 +8,9 @@ import type { WorkflowRunSetupValue } from '@/features/workflows/workflow-run-se
 import {
   type Automation,
   type AutomationAction,
+  type AutomationConversationMode,
   type AutomationInput,
+  type AutomationNotificationPolicy,
   type AutomationSafetyMode,
   type AutomationTrigger,
 } from './automation-api';
@@ -36,6 +38,7 @@ export type ActionMode = 'agent' | 'workflow' | 'browser_recipe';
 export interface FormState {
   name: string;
   description: string;
+  projectId: string;
   triggerMode: TriggerMode;
   time: string;
   weekday: string;
@@ -58,14 +61,16 @@ export interface FormState {
   browserWorkflowInputs: Record<string, unknown>;
   safetyMode: AutomationSafetyMode;
   timeoutSeconds: string;
-  afterRunMode: 'none' | 'saveToSession' | 'webhook';
-  webhookUrl: string;
+  conversationMode: AutomationConversationMode;
+  notificationPolicy: AutomationNotificationPolicy;
+  completionWebhookUrl: string;
   disableAfterFailures: string;
 }
 
 export const initialForm: FormState = {
   name: '',
   description: '',
+  projectId: '',
   triggerMode: 'daily',
   time: '09:00',
   weekday: '1',
@@ -94,8 +99,9 @@ export const initialForm: FormState = {
   browserWorkflowInputs: {},
   safetyMode: 'suggest_only',
   timeoutSeconds: '1800',
-  afterRunMode: 'none',
-  webhookUrl: '',
+  conversationMode: 'new_session',
+  notificationPolicy: 'attention',
+  completionWebhookUrl: '',
   disableAfterFailures: '3',
 };
 
@@ -201,7 +207,6 @@ export function buildInput(
   );
   const workflowGoal = form.workflowInput.goal.trim() || form.workflowGoal.trim();
   const safetyMode = form.actionMode === 'browser_recipe' ? 'auto_apply' : form.safetyMode;
-  const afterRunMode = safetyMode === 'auto_apply' ? form.afterRunMode : 'none';
   let action: AutomationAction;
   if (form.actionMode === 'workflow') {
     action = {
@@ -246,13 +251,15 @@ export function buildInput(
     ...(form.description.trim()
       ? { description: form.description.trim() }
       : {}),
+    ...(form.projectId.trim() ? { projectId: form.projectId.trim() } : {}),
     trigger,
     action,
     safety: { mode: safetyMode },
-    afterRun:
-      afterRunMode === 'webhook'
-        ? { kind: 'webhook', url: form.webhookUrl.trim() }
-        : { kind: afterRunMode },
+    conversationMode: form.conversationMode,
+    notificationPolicy: form.notificationPolicy,
+    ...(safetyMode === 'auto_apply' && form.completionWebhookUrl.trim()
+      ? { completionWebhookUrl: form.completionWebhookUrl.trim() }
+      : {}),
     reliability: {
       executionTimeoutSeconds: Math.max(
         1,
@@ -426,7 +433,6 @@ export function formFromAutomation(
       : null;
   const workflowInput =
     action.kind === 'workflow' ? workflowInputRecord(action.input) : {};
-  const afterRun = automation.afterRun ?? { kind: 'none' as const };
   const timeoutSeconds =
     automation.reliability?.executionTimeoutSeconds
     ?? action.timeoutSeconds
@@ -438,6 +444,7 @@ export function formFromAutomation(
     ...triggerState,
     name: automation.name,
     description: automation.description ?? '',
+    projectId: automation.projectId ?? '',
     actionMode: action.kind,
     agentId: action.kind === 'browser_recipe' ? '' : (action.agentId ?? ''),
     instruction: action.kind === 'agent' ? action.instruction : '',
@@ -463,8 +470,9 @@ export function formFromAutomation(
     workflowInputValid: true,
     safetyMode: automation.safety?.mode ?? 'auto_apply',
     timeoutSeconds: String(timeoutSeconds),
-    afterRunMode: afterRun.kind,
-    webhookUrl: afterRun.kind === 'webhook' ? afterRun.url : '',
+    conversationMode: automation.conversationMode ?? 'new_session',
+    notificationPolicy: automation.notificationPolicy ?? 'attention',
+    completionWebhookUrl: automation.completionWebhookUrl ?? '',
     disableAfterFailures: String(
       automation.reliability?.disableAfterConsecutiveFailures ?? 3,
     ),
@@ -521,6 +529,8 @@ export function buildAutomationEditInput(
   return {
     ...input,
     description: form.description.trim(),
+    projectId: form.projectId.trim(),
+    completionWebhookUrl: form.completionWebhookUrl.trim(),
     trigger,
     action,
     reliability: {
