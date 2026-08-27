@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: 🧠 持续状态，而非一次性上下文
-    details: "持久会话、项目、目标、笔记、工作区与运行记录各有明确归属，长期工作可以恢复、检查和继续。"
+    details: "持久会话、Task、Project、笔记、工作区与运行记录各有明确归属，长期工作可以恢复、检查和继续。"
     link: /zh/concepts/loops
   - title: 🏠 默认本地优先
     details: "xopc 运行在你自己的硬件上。配置、工作区文件、凭据和本地状态默认都在 ~/.xopc/。没有强制云端。"

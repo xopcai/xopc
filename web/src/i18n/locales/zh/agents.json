@@ -333,8 +333,6 @@
       "maxRequestsPerTurnDesc": "单条用户消息内大模型重试/请求尝试上限（默认 50）。",
       "maxToolFailuresPerTurn": "每轮最大工具失败次数",
       "maxToolFailuresPerTurnDesc": "连续工具错误达到该值后放弃（默认 3）。",
-      "goalsCheckLink": "目标检查 → 目标推进规则",
-      "goalsCheckLinkHint": "清单检查默认值在「设置 → 自动化 → 目标推进规则」中配置。",
       "cardSessionSearchTitle": "会话搜索（转写）",
       "cardSessionSearchSubtitle": "session_search 工具中用于历史会话摘要的模型。",
       "sessionSearchSummaryModel": "摘要模型",

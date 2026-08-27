@@ -1,20 +1,26 @@
-import { AudioLines, Image, Mic, Send, Square } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { AudioLines, Image, Mic, Plus, Send, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
 export type QuickCaptureBarProps = {
   placeholder: string;
-  sendLabel: string;
-  onCapture: (text: string, opts?: { navigate?: boolean }) => Promise<void>;
+  submitLabel: string;
+  actionsLabel: string;
+  imageLabel: string;
+  voiceLabel: string;
+  stopRecordingLabel: string;
+  recordingLabel: string;
+  discussionCaptureLabel: string;
+  onCapture: (text: string) => Promise<void>;
   onImagePick?: () => void;
   /** Record audio and upload when stopped. */
   onVoiceCapture?: (file: File, durationSec: number) => Promise<void>;
-  recordingLabel?: string;
+  onVoiceError?: () => void;
   imageDisabled?: boolean;
   voiceDisabled?: boolean;
   onDiscussionCapture?: () => void;
-  discussionCaptureLabel?: string;
 };
 
 const MAX_RECORDING_MS = 30_000;
@@ -27,15 +33,20 @@ function pickAudioMimeType(): string | undefined {
 
 export function QuickCaptureBar({
   placeholder,
-  sendLabel,
+  submitLabel,
+  actionsLabel,
+  imageLabel,
+  voiceLabel,
+  stopRecordingLabel,
   onCapture,
   onImagePick,
   onVoiceCapture,
-  recordingLabel = 'Recording…',
+  onVoiceError,
+  recordingLabel,
   imageDisabled = false,
   voiceDisabled = false,
   onDiscussionCapture,
-  discussionCaptureLabel = 'Record discussion',
+  discussionCaptureLabel,
 }: QuickCaptureBarProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -104,13 +115,16 @@ export function QuickCaptureBar({
 
   const startRecording = useCallback(async () => {
     if (!onVoiceCapture || voiceBusy || recording) return;
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      onVoiceError?.();
+      return;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mimeType = pickAudioMimeType();
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      streamRef.current = stream;
       recorderRef.current = recorder;
       chunksRef.current = [];
       startedAtRef.current = Date.now();
@@ -130,24 +144,17 @@ export function QuickCaptureBar({
       }, MAX_RECORDING_MS);
     } catch {
       cleanupRecording();
+      onVoiceError?.();
     }
-  }, [cleanupRecording, onVoiceCapture, recording, stopRecording, voiceBusy]);
+  }, [cleanupRecording, onVoiceCapture, onVoiceError, recording, stopRecording, voiceBusy]);
 
-  const handleVoiceClick = useCallback(() => {
-    if (recording) {
-      void stopRecording();
-      return;
-    }
-    void startRecording();
-  }, [recording, startRecording, stopRecording]);
-
-  const handleSubmit = useCallback(async (opts?: { navigate?: boolean }) => {
+  const handleSubmit = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     setSending(true);
     setText('');
     try {
-      await onCapture(trimmed, opts);
+      await onCapture(trimmed);
     } catch {
       setText(trimmed);
     } finally {
@@ -162,15 +169,12 @@ export function QuickCaptureBar({
         e.preventDefault();
         void handleSubmit();
       }
-      if (e.key === 'Enter' && e.shiftKey) {
-        e.preventDefault();
-        void handleSubmit({ navigate: false });
-      }
     },
     [handleSubmit],
   );
 
   const busy = sending || voiceBusy;
+  const hasCaptureActions = Boolean(onImagePick || onVoiceCapture || onDiscussionCapture);
 
   return (
     <div
@@ -179,46 +183,72 @@ export function QuickCaptureBar({
         'focus-within:border-accent focus-within:ring-1 focus-within:ring-accent',
         recording && 'border-danger ring-1 ring-danger/40',
       )}
+      aria-busy={busy}
     >
-      {onImagePick && (
+      {recording ? (
         <button
           type="button"
-          onClick={onImagePick}
-          disabled={busy || imageDisabled || recording}
-          className="shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="Image"
+          onClick={() => void stopRecording()}
+          disabled={voiceBusy}
+          className="shrink-0 rounded-lg bg-danger-soft p-2 text-danger transition-colors hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={stopRecordingLabel}
+          title={stopRecordingLabel}
+          aria-pressed="true"
         >
-          <Image className="size-4" />
+          <Square className="size-4 fill-current" aria-hidden />
         </button>
-      )}
-      {onVoiceCapture && (
-        <button
-          type="button"
-          onClick={handleVoiceClick}
-          disabled={busy || voiceDisabled || sending}
-          className={cn(
-            'shrink-0 rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-            recording
-              ? 'bg-danger-soft text-danger hover:bg-danger-soft'
-              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-          )}
-          aria-label={recording ? 'Stop recording' : 'Voice'}
-          aria-pressed={recording}
-        >
-          {recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}
-        </button>
-      )}
-      {onDiscussionCapture && !recording ? (
-        <button
-          type="button"
-          onClick={onDiscussionCapture}
-          disabled={busy}
-          className="shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label={discussionCaptureLabel}
-          title={discussionCaptureLabel}
-        >
-          <AudioLines className="size-4" aria-hidden />
-        </button>
+      ) : hasCaptureActions ? (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              disabled={busy}
+              className="shrink-0 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={actionsLabel}
+              title={actionsLabel}
+            >
+              <Plus className="size-4" aria-hidden />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="z-50 min-w-44 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+            >
+              {onImagePick ? (
+                <DropdownMenu.Item
+                  disabled={imageDisabled}
+                  onSelect={onImagePick}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                >
+                  <Image className="size-4 text-fg-muted" aria-hidden />
+                  {imageLabel}
+                </DropdownMenu.Item>
+              ) : null}
+              {onVoiceCapture ? (
+                <DropdownMenu.Item
+                  disabled={voiceDisabled}
+                  onSelect={() => void startRecording()}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                >
+                  <Mic className="size-4 text-fg-muted" aria-hidden />
+                  {voiceLabel}
+                </DropdownMenu.Item>
+              ) : null}
+              {onDiscussionCapture ? (
+                <DropdownMenu.Item
+                  onSelect={onDiscussionCapture}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
+                >
+                  <AudioLines className="size-4 text-fg-muted" aria-hidden />
+                  {discussionCaptureLabel}
+                </DropdownMenu.Item>
+              ) : null}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       ) : null}
       {recording ? (
         <span className="min-w-0 flex-1 truncate py-1.5 text-sm text-danger">
@@ -231,25 +261,27 @@ export function QuickCaptureBar({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          aria-label={placeholder}
           rows={1}
           disabled={busy}
-          className="min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-60"
+          className="max-h-28 min-h-8 flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-5 text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-60"
           style={{ fieldSizing: 'content' }}
         />
       )}
       <button
         type="button"
         disabled={!text.trim() || busy || recording}
-        onClick={(e) => void handleSubmit({ navigate: !e.shiftKey })}
-        aria-label={sendLabel}
+        onClick={() => void handleSubmit()}
+        aria-label={submitLabel}
+        title={submitLabel}
         className={cn(
           'shrink-0 rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
           text.trim() && !busy && !recording
-            ? 'text-accent hover:bg-accent-soft'
+            ? 'bg-accent text-white hover:bg-accent-hover'
             : 'text-fg-disabled',
         )}
       >
-        <Send className="size-4" />
+        <Send className="size-4" aria-hidden />
       </button>
     </div>
   );

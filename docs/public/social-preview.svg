@@ -47,7 +47,7 @@
     <circle cx="46" cy="21" r="6" fill="#facc15"/>
     <circle cx="68" cy="21" r="6" fill="#4ade80"/>
     <text x="24" y="82" fill="#38bdf8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18">$ xopc tui</text>
-    <text x="24" y="126" fill="#e2e8f0" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">Goal: ship the project</text>
+    <text x="24" y="126" fill="#e2e8f0" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">Task: ship the project</text>
     <text x="24" y="163" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">1. keep direction</text>
     <text x="24" y="196" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">2. move next action</text>
     <text x="24" y="229" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">3. capture feedback</text>

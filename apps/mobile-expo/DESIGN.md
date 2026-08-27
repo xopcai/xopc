@@ -97,7 +97,7 @@ Chat is a **focus mode**, closer to a calm writing surface than a messaging feed
 
 - The header contains back, the session name, and at most one visible high-value action. Agent, model, and gateway context live in a compact contextual menu/sheet rather than a cluster of permanent controls.
 - Conversation content uses a single readable column. User input has a quiet tinted surface; assistant output is primarily unboxed text with separation by spacing and a subtle provenance label when required.
-- Tool activity, thinking, goals, and artifacts are progressively disclosed. Default to a one-line live status and let people expand details; never make the transcript a stack of status cards.
+- Tool activity, thinking, Tasks, and artifacts are progressively disclosed. Default to a one-line live status and let people expand details; never make the transcript a stack of status cards.
 - The composer is a raised bottom material with a solid editable interior. It is visibly connected to the conversation through a soft shadow and top border, not a large opaque panel.
 - Suggested follow-ups appear after a completed answer, as 1–3 text actions, and disappear once the person types. They must not push the composer off screen.
 - Streaming uses a restrained breathing status or subtle line reveal, not animated dots that compete with content.
@@ -299,7 +299,7 @@ Choose the lightest structure that communicates the data.
 |---|---|---|
 | Plain list | Notes, sessions, files, search results | White/solid page or grouped base; row divider; title + one preview/meta line |
 | Grouped list | Settings, library shortcuts, compact choices | Shared panel; 1px internal dividers; only outer corners rounded |
-| Featured card | Continue item, task summary, goal mission | One content-rich object with elevated surface; no adjacent duplicate cards |
+| Featured card | Continue item, Task summary, Task objective | One content-rich object with elevated surface; no adjacent duplicate cards |
 | Timeline / transcript | Chat, activity | Vertical rhythm and date/context separators; messages are not all boxed |
 | Action grid | Only 2–4 genuinely equal visual destinations | Large enough tap target, one label; never used as a substitute for information architecture |
 

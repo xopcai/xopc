@@ -13,7 +13,7 @@ describe('bundled capability packs', () => {
     const byName = new Map(result.skills.map((skill) => [skill.name, skill]));
 
     expect([...byName.keys()]).toEqual(expect.arrayContaining([
-      'define-goal',
+      'define-task',
       'pdf',
       'docx',
       'pptx',
@@ -24,6 +24,10 @@ describe('bundled capability packs', () => {
       'read_file',
       'write_file',
       'exec_command',
+    ]);
+    expect(byName.get('define-task')?.toolConditions?.requiresTools).toEqual([
+      'xopc_use',
+      'tool_manual',
     ]);
     expect(byName.get('algorithmic-art')?.toolConditions?.requiresTools).toEqual([
       'write_file',
@@ -48,7 +52,7 @@ describe('bundled capability packs', () => {
       'documents/pptx/scripts/render_pptx.py',
       'creative/algorithmic-art/templates/viewer.html',
       'creative/algorithmic-art/templates/generator-template.js',
-      'engineering/define-goal/references/objective-rubric.md',
+      'engineering/define-task/references/task-contract-rubric.md',
     ];
 
     for (const resource of resources) {

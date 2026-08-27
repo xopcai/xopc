@@ -10,7 +10,7 @@ describe('automation draft validator', () => {
   it('parses generated automation JSON and simulates safety notes', () => {
     const draft = parseGeneratedAutomationDraft(JSON.stringify({
       automation: {
-        name: 'Blocked goal helper',
+        name: 'Blocked Task helper',
         trigger: {
           kind: 'event',
           eventType: 'task.attention_required.v2',
@@ -19,15 +19,15 @@ describe('automation draft validator', () => {
         },
         action: {
           kind: 'agent',
-          instruction: 'Analyze why the goal is blocked and suggest next steps.',
+          instruction: 'Analyze why the Task is blocked and suggest next steps.',
           timeoutSeconds: 300,
         },
         conversationMode: 'new_session',
         notificationPolicy: 'attention',
         reliability: { executionTimeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
       },
-      explanation: 'Runs when a goal becomes blocked.',
-      assumptions: ['Goal events include status.'],
+      explanation: 'Runs when a Task becomes blocked.',
+      assumptions: ['Task events include status.'],
       risks: [],
     }));
 

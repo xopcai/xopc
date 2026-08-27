@@ -125,7 +125,7 @@ pnpm run android:mobile
 
 App 通过 Expo Push Service 发送任务提醒。完成 gateway 配对后，在 App 设置中开启**任务通知**；仅在这次显式操作时请求系统权限，并把 Expo token 注册到 gateway。点击通知会打开对应聊天或自动化页面。
 
-Gateway 会在本地 SQLite 中保存设备注册信息，并为“目标需要输入”“目标阻塞”和自动化失败发送提醒。完成类提醒默认关闭，可通过设备偏好 API 开启。
+Gateway 会在本地 SQLite 中保存设备注册信息，并为“Task 需要输入”“Task 阻塞”和自动化失败发送提醒。Task 完成提醒默认关闭，可通过设备偏好 API 开启。
 
 发布构建前，请在各平台账号中完成以下配置（不要提交凭据或凭据文件）：
 

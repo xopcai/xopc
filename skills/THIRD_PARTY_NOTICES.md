@@ -4,7 +4,7 @@ The skills in this directory are maintained as part of xopc.
 
 ## 2026-07 built-in capability packs
 
-- `engineering/define-goal` and `creative/algorithmic-art` were designed after reviewing
+- `engineering/define-task` and `creative/algorithmic-art` were designed after reviewing
   Apache-2.0-licensed reference material supplied during product planning. Their instructions and
   assets in this repository were written independently for xopc; no reference files or branding
   are redistributed here.

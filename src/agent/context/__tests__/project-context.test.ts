@@ -47,7 +47,7 @@ function task(patch: Partial<ProjectTaskContext> = {}): ProjectTaskContext {
 }
 
 describe('formatActiveProjectContextForPrompt', () => {
-  it('formats project metadata, goals, and recent sessions', () => {
+  it('formats project metadata, active Tasks, and recent sessions', () => {
     const text = formatActiveProjectContextForPrompt({
       project,
       workspacePath: '/tmp/xopc',
@@ -79,7 +79,7 @@ describe('formatActiveProjectContextForPrompt', () => {
     expect(text).toContain('- session_summary | updated=2026-07-06T01:00:00.000Z | Decided to keep Project separate from Agent and Model.');
   });
 
-  it('uses explicit empty markers when there are no goals or sessions', () => {
+  it('uses explicit empty markers when there are no active Tasks or sessions', () => {
     const text = formatActiveProjectContextForPrompt({
       project: { ...project, brief: undefined, instructions: undefined },
       activeTasks: [],

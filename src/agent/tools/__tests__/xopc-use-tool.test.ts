@@ -188,7 +188,7 @@ describe('xopc_use tool', () => {
     expect(result.match.created).toBe(false);
   });
 
-  it('operates project goals, milestones, and immutable updates', async () => {
+  it('operates project planning fields, milestones, and immutable updates', async () => {
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
       getCurrentSessionKey: () => SESSION_KEY,

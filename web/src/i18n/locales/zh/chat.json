@@ -303,10 +303,10 @@
             "id": "project-status",
             "icon": "search",
             "title": "梳理项目状态",
-            "description": "目标、进展、风险",
+            "description": "结果、进展、风险",
             "scenarios": [
               {
-                "prompt": "帮我梳理项目「{{projectName}}」的当前状态：目标、已完成、风险和下一步。"
+                "prompt": "帮我梳理项目「{{projectName}}」的当前状态：预期结果、已完成、风险和下一步。"
               },
               {
                 "prompt": "基于这个项目，帮我整理一份简短的进展摘要。"

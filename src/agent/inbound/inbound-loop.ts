@@ -69,7 +69,7 @@ export interface InboundLoopConfig {
   setupSessionEventHandling: (sessionKey: string) => void;
   /** Per-session config hydration (workspace + model override) before a turn runs. */
   sessionHydrator: SessionHydrator;
-  /** Returns the visible last assistant text used for outbound + persistent-goal hook. */
+  /** Returns the visible last assistant text used for outbound delivery. */
   getLastAssistantPlainText: (sessionKey: string) => string;
   /** Pre-turn auto-compaction (only used by system messages). */
   /** Fire-and-forget auto-title (no-ops for cron/heartbeat keys). */
