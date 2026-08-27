@@ -8,6 +8,13 @@
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import {
+  isCompactionAudit,
+  isCompactionHandover,
+  type CompactionAudit,
+  type CompactionHandover,
+} from './compaction-types.js';
+
 /** Persisted-only row: never sent to the model as a chat message. */
 export interface XopcTranscriptContextEntry {
   kind: 'context';
@@ -82,15 +89,16 @@ export interface XopcTranscriptCompactionEntry {
   type: 'compaction';
   at: string;
   baseSeq: number;
-  plannerVersion: number;
+  plannerVersion: 3;
   summaryModelRef: string;
   qualityAudit: 'passed' | 'disabled';
+  handover: CompactionHandover;
+  audit: CompactionAudit;
   summary: string;
   messages: AgentMessage[];
   firstKeptIndex: number;
   tokensBefore: number;
   tokensAfter: number;
-  restoredFromCompactionId?: string;
 }
 
 /** Persisted label change for a transcript entry. */
@@ -184,11 +192,12 @@ export function isTranscriptCompactionEntry(x: unknown): x is XopcTranscriptComp
     && typeof row.at === 'string'
     && typeof row.baseSeq === 'number'
     && Number.isInteger(row.baseSeq)
-    && typeof row.plannerVersion === 'number'
-    && Number.isInteger(row.plannerVersion)
+    && row.plannerVersion === 3
     && typeof row.summaryModelRef === 'string'
     && (row.qualityAudit === 'passed' || row.qualityAudit === 'disabled')
     && typeof row.summary === 'string'
+    && isCompactionHandover(row.handover)
+    && isCompactionAudit(row.audit)
     && Array.isArray(row.messages)
     && typeof row.firstKeptIndex === 'number'
     && typeof row.tokensBefore === 'number'

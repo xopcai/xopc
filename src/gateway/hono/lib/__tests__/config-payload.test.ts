@@ -161,6 +161,7 @@ describe('buildSafeWebConfigPayload', () => {
       summaryTimeoutMs: 90_000,
       summaryRetries: 1,
       qualityGuard: false,
+      gapAudit: true,
       model: 'openai/gpt-5',
       minToolResultKeepChars: 800,
       maxActiveTranscriptBytes: 3_000_000,
