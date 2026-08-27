@@ -9,12 +9,20 @@ export function taskDetailSWRKey(taskId: string, token: string | undefined): rea
   return taskId ? ['task-detail', taskId, token ?? ''] : null;
 }
 
+export function shouldRefreshTaskDetailFromChange(
+  currentVersion: number | undefined,
+  change: TaskChangedEvent,
+): boolean {
+  return change.source !== 'user' || currentVersion === undefined || change.version > currentVersion;
+}
+
 export function useTaskDetail(taskId: string) {
   const token = useGatewayStore((state) => state.token);
   const [lastChange, setLastChange] = useState<TaskChangedEvent | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
   const [conversationError, setConversationError] = useState<unknown>(null);
   const ensureMarkerRef = useRef('');
+  const currentVersionRef = useRef<number | undefined>(undefined);
   const swr = useSWR(
     taskDetailSWRKey(taskId, token),
     () => fetchTask(taskId),
@@ -29,6 +37,7 @@ export function useTaskDetail(taskId: string) {
         : 0,
     },
   );
+  currentVersionRef.current = swr.data?.task.version;
 
   useEffect(() => {
     setLastChange(null);
@@ -64,6 +73,7 @@ export function useTaskDetail(taskId: string) {
     const onTaskChanged = (event: Event) => {
       const parsed = TaskChangedEventSchema.safeParse((event as CustomEvent<unknown>).detail);
       if (!parsed.success || parsed.data.taskId !== taskId) return;
+      if (!shouldRefreshTaskDetailFromChange(currentVersionRef.current, parsed.data)) return;
       setLastChange(parsed.data);
       refresh();
     };

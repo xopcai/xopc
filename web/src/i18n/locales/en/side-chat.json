@@ -25,7 +25,7 @@
     "parentPermissions": "Parent permissions · {{model}}",
     "selectedTextActionsAria": "Selected text actions",
     "addToChat": "Add to chat",
-    "askInSideChat": "Ask in side chat",
+    "askInSideChat": "Side chat",
     "selectedText": "Selected text"
   }
 }

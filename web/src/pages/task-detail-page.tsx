@@ -2,7 +2,7 @@ import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPr
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,113 @@ function dueAtFromInput(value: string): number | null {
   return value ? new Date(`${value}T23:59:59.999`).getTime() : null;
 }
 
+const TASK_PHASES: TaskPhase[] = ['backlog', 'ready', 'active', 'review', 'closed'];
+const TASK_PRIORITIES: TaskPriority[] = ['low', 'normal', 'high', 'critical'];
+
+const TaskPhaseField = memo(function TaskPhaseField({
+  value,
+  disabled,
+  canMove,
+  canApprove,
+  canReopen,
+  language,
+  label,
+  onChange,
+}: {
+  value: TaskPhase;
+  disabled: boolean;
+  canMove: boolean;
+  canApprove: boolean;
+  canReopen: boolean;
+  language: 'en' | 'zh';
+  label: string;
+  onChange: (phase: TaskPhase) => void;
+}) {
+  const optionDisabled = (phase: TaskPhase) => phase !== value && (
+    phase === 'closed' ? !canApprove : value === 'closed' ? !canReopen : !canMove
+  );
+  return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value as TaskPhase)}>{TASK_PHASES.map((phase) => <SelectOption key={phase} value={phase} disabled={optionDisabled(phase)}>{phaseLabel(phase, language)}</SelectOption>)}</Select></label>;
+});
+
+const TaskPriorityField = memo(function TaskPriorityField({
+  value,
+  disabled,
+  label,
+  labels,
+  onChange,
+}: {
+  value: TaskPriority;
+  disabled: boolean;
+  label: string;
+  labels: Record<TaskPriority, string>;
+  onChange: (priority: TaskPriority) => void;
+}) {
+  return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value as TaskPriority)}>{TASK_PRIORITIES.map((priority) => <SelectOption key={priority} value={priority}>{labels[priority]}</SelectOption>)}</Select></label>;
+});
+
+const TaskDueDateField = memo(function TaskDueDateField({
+  value,
+  disabled,
+  label,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+}) {
+  return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><DatePicker disabled={disabled} value={value} onChange={onChange} ariaLabel={label} /></label>;
+});
+
+const TaskExecutorField = memo(function TaskExecutorField({
+  value,
+  disabled,
+  label,
+  unassignedLabel,
+  agents,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  label: string;
+  unassignedLabel: string;
+  agents: ChatAgentOption[];
+  onChange: (agentId: string) => void;
+}) {
+  return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}><SelectOption value="" disabled>{unassignedLabel}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}</Select></label>;
+});
+
+const TaskDependenciesField = memo(function TaskDependenciesField({
+  candidates,
+  selected,
+  disabled,
+  labels,
+  onChange,
+}: {
+  candidates: DependencyCandidate[];
+  selected: TaskDetail['dependencies'];
+  disabled: boolean;
+  labels: {
+    link: string;
+    linked: string;
+    searchPlaceholder: string;
+    noMatches: string;
+    noCandidates: string;
+    remove: string;
+  };
+  onChange: (taskIds: string[]) => void;
+}) {
+  return <DependencyPicker borderless candidates={candidates} selectedIds={selected.map((task) => task.id)} disabled={disabled} onChange={onChange} labels={labels} />;
+}, (previous, next) => (
+  previous.disabled === next.disabled
+  && previous.labels === next.labels
+  && previous.onChange === next.onChange
+  && previous.candidates.length === next.candidates.length
+  && previous.candidates.every((candidate, index) => candidate.id === next.candidates[index]?.id && candidate.title === next.candidates[index]?.title)
+  && previous.selected.length === next.selected.length
+  && previous.selected.every((task, index) => task.id === next.selected[index]?.id && task.title === next.selected[index]?.title)
+));
+
 const TASK_CHAT_PANEL_STORAGE_KEY = 'xopc.taskDetail.chatPanelPercent';
 const DEFAULT_TASK_CHAT_PANEL_PERCENT = 42;
 
@@ -76,6 +183,7 @@ function readTaskChatPanelPercent(): number {
 type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
 type VerificationStatus = 'passed' | 'failed' | 'unverified';
 type TaskEditConflict = 'title' | 'description' | null;
+type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies';
 
 function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
@@ -129,7 +237,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     conversationError,
   } = useTaskDetail(taskId);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [pendingOperations, setPendingOperations] = useState<ReadonlySet<TaskPendingOperation>>(() => new Set());
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
   const [projectName, setProjectName] = useState<string | null>(null);
   const [agents, setAgents] = useState<ChatAgentOption[]>([]);
@@ -146,8 +254,17 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const titleEditBaseRef = useRef<TaskEditBase | null>(null);
   const descriptionEditBaseRef = useRef<TaskEditBase | null>(null);
   const projectNameProjectIdRef = useRef<string | null>(null);
+  const detailRef = useRef<TaskDetail | undefined>(detail);
   const [editConflict, setEditConflict] = useState<TaskEditConflict>(null);
   const [recentChange, setRecentChange] = useState<TaskChangedEvent | null>(null);
+  const dependencyPickerLabels = useMemo(() => ({
+    link: copy.linkDependencies,
+    linked: copy.linkedDependencies,
+    searchPlaceholder: copy.dependencySearchPlaceholder,
+    noMatches: copy.noDependencyMatches,
+    noCandidates: copy.noDependencyCandidates,
+    remove: copy.removeDependency,
+  }), [copy.dependencySearchPlaceholder, copy.linkDependencies, copy.linkedDependencies, copy.noDependencyCandidates, copy.noDependencyMatches, copy.removeDependency]);
   const dependencySignature = detail?.dependencies
     .map((dependency) => `${dependency.id}:${dependency.title}`)
     .join('\u0000') ?? '';
@@ -156,6 +273,16 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     '/',
     ['/projects', '/chat', '/notes', '/tasks'],
   ), [searchParams]);
+  detailRef.current = detail;
+
+  const setOperationPending = useCallback((operation: TaskPendingOperation, pending: boolean) => {
+    setPendingOperations((current) => {
+      const next = new Set(current);
+      if (pending) next.add(operation);
+      else next.delete(operation);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     setError(null);
@@ -208,27 +335,32 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     return () => { active = false; };
   }, [dependencySignature, detail?.task.projectId, taskId]);
 
-  const execute = async (command: TaskCommand) => {
-    if (!detail) return;
-    setBusy(true);
+  const execute = useCallback(async (command: TaskCommand, operation: TaskPendingOperation = 'command') => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail) return;
+    setOperationPending(operation, true);
     setError(null);
     try {
-      await mutateDetail(await commandTask(taskId, command, detail.task.version), { revalidate: false });
+      await mutateDetail(await commandTask(taskId, command, currentDetail.task.version), { revalidate: false });
     } catch {
       setError(copy.actionFailed);
     } finally {
-      setBusy(false);
+      setOperationPending(operation, false);
     }
-  };
+  }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
 
-  const savePatch = async (patch: Omit<TaskPatchRequest, 'expectedVersion'>): Promise<boolean> => {
-    if (!detail) return false;
-    setBusy(true);
+  const savePatch = useCallback(async (
+    patch: Omit<TaskPatchRequest, 'expectedVersion'>,
+    operation?: TaskPendingOperation,
+  ): Promise<boolean> => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail) return false;
+    if (operation) setOperationPending(operation, true);
     setError(null);
     try {
-      const request = updateTask(taskId, patch, detail.task.version);
+      const request = updateTask(taskId, patch, currentDetail.task.version);
       await mutateDetail(request, {
-        optimisticData: optimisticallyPatchTask(detail, patch),
+        optimisticData: optimisticallyPatchTask(currentDetail, patch),
         populateCache: true,
         revalidate: false,
         rollbackOnError: true,
@@ -238,9 +370,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       setError(copy.actionFailed);
       return false;
     } finally {
-      setBusy(false);
+      if (operation) setOperationPending(operation, false);
     }
-  };
+  }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
 
   const saveTitleOnBlur = async () => {
     if (!detail) return;
@@ -292,18 +424,27 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     }
   };
 
-  const changePhase = async (phase: TaskPhase) => {
-    if (!detail || phase === detail.task.phase) return;
-    if (detail.task.phase === 'closed') {
-      await execute({ type: 'reopen', phase: phase === 'closed' ? 'ready' : phase });
+  const changePhase = useCallback(async (phase: TaskPhase) => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail || phase === currentDetail.task.phase) return;
+    if (currentDetail.task.phase === 'closed') {
+      await execute({ type: 'reopen', phase: phase === 'closed' ? 'ready' : phase }, 'phase');
       return;
     }
     if (phase === 'closed') {
-      await execute({ type: 'close', resolution: 'done' });
+      await execute({ type: 'close', resolution: 'done' }, 'phase');
       return;
     }
-    await execute({ type: 'move', phase });
-  };
+    await execute({ type: 'move', phase }, 'phase');
+  }, [execute]);
+
+  const changePriority = useCallback((priority: TaskPriority) => {
+    void savePatch({ priority }, 'priority');
+  }, [savePatch]);
+
+  const changeDueDate = useCallback((value: string) => {
+    void savePatch({ dueAt: dueAtFromInput(value) }, 'dueAt');
+  }, [savePatch]);
 
   const commitChatPanelPercent = useCallback((percent: number) => {
     setChatPanelPercent(percent);
@@ -361,34 +502,36 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     window.addEventListener('pointercancel', onDone);
   }, [chatPanelPercent, commitChatPanelPercent]);
 
-  const saveDependencies = async (dependsOnTaskIds: string[]) => {
-    if (!detail) return;
-    setBusy(true);
+  const saveDependencies = useCallback(async (dependsOnTaskIds: string[]) => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail) return;
+    setOperationPending('dependencies', true);
     setError(null);
     try {
       await mutateDetail(
-        await updateTaskDependencies(taskId, dependsOnTaskIds, detail.task.version),
+        await updateTaskDependencies(taskId, dependsOnTaskIds, currentDetail.task.version),
         { revalidate: false },
       );
     } catch {
       setError(copy.dependencyUpdateFailed);
     } finally {
-      setBusy(false);
+      setOperationPending('dependencies', false);
     }
-  };
+  }, [copy.dependencyUpdateFailed, mutateDetail, setOperationPending, taskId]);
 
-  const switchExecutor = async (toAgentId: string) => {
-    if (!detail || !toAgentId || toAgentId === detail.conversation.currentExecutorAgentId) return;
-    setBusy(true);
+  const switchExecutor = useCallback(async (toAgentId: string) => {
+    const currentDetail = detailRef.current;
+    if (!currentDetail || !toAgentId || toAgentId === currentDetail.conversation.currentExecutorAgentId) return;
+    setOperationPending('delegateAgentId', true);
     setError(null);
     try {
-      await mutateDetail(await handoffTask(taskId, toAgentId, detail.task.version), { revalidate: false });
+      await mutateDetail(await handoffTask(taskId, toAgentId, currentDetail.task.version), { revalidate: false });
     } catch {
       setError(copy.actionFailed);
     } finally {
-      setBusy(false);
+      setOperationPending('delegateAgentId', false);
     }
-  };
+  }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
 
   useLayoutEffect(() => {
     if (presentation === 'modal') return;
@@ -441,18 +584,16 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     : withReturnTo(`/tasks/${relatedTaskId}`, returnPath);
 
   const canMovePhase = detail.allowedCommands.includes('move');
-  const phaseDisabled = (phase: TaskPhase) => phase !== detail.task.phase && (
-    phase === 'closed' ? !canApprove : detail.task.phase === 'closed' ? !canReopen : !canMovePhase
-  );
+  const commandPending = pendingOperations.has('command');
   const taskActions = (
     <div className="flex flex-wrap gap-2">
-      {canSchedule ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
-      {pausedWait ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
-      {!activeWait && canStart && conversationAgentId ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
-      {canApprove ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
-      {canReopen ? <Button variant="primary" disabled={busy} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
-      {!activeWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={busy} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
-      {detail.task.phase !== 'closed' ? <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="size-9 p-0" disabled={busy} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"><DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void execute({ type: 'close', resolution: 'cancelled' })}>{copy.cancelTask}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root> : null}
+      {canSchedule ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
+      {pausedWait ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
+      {!activeWait && canStart && conversationAgentId ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
+      {canApprove ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
+      {canReopen ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
+      {!activeWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
+      {detail.task.phase !== 'closed' ? <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"><DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void execute({ type: 'close', resolution: 'cancelled' })}>{copy.cancelTask}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root> : null}
     </div>
   );
 
@@ -573,10 +714,10 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
           <section className={cn('rounded-xl bg-surface-subtle p-4', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
             <h2 className="font-medium text-fg">{copy.taskProperties}</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.taskPhase}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.phase} disabled={busy} onChange={(event) => void changePhase(event.target.value as TaskPhase)}>{(['backlog', 'ready', 'active', 'review', 'closed'] as TaskPhase[]).map((phase) => <SelectOption key={phase} value={phase} disabled={phaseDisabled(phase)}>{phaseLabel(phase, language)}</SelectOption>)}</Select></label>
-              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.priority}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.task.priority} disabled={busy} onChange={(event) => void savePatch({ priority: event.target.value as TaskPriority })}>{(['low', 'normal', 'high', 'critical'] as TaskPriority[]).map((priority) => <SelectOption key={priority} value={priority}>{copy.priorityLabels[priority]}</SelectOption>)}</Select></label>
-              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.dueDate}</span><DatePicker disabled={busy} value={dateInputValue(detail.task.dueAt)} onChange={(value) => void savePatch({ dueAt: dueAtFromInput(value) })} ariaLabel={copy.dueDate} /></label>
-              <label className="grid gap-1.5 text-xs text-fg-muted"><span>{copy.executorLabel}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={detail.conversation.currentExecutorAgentId ?? ''} disabled={busy} onChange={(event) => void switchExecutor(event.target.value)}><SelectOption value="" disabled>{copy.unassigned}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}</Select></label>
+              <TaskPhaseField value={detail.task.phase} disabled={pendingOperations.has('phase')} canMove={canMovePhase} canApprove={canApprove} canReopen={canReopen} language={language} label={copy.taskPhase} onChange={changePhase} />
+              <TaskPriorityField value={detail.task.priority} disabled={pendingOperations.has('priority')} label={copy.priority} labels={copy.priorityLabels} onChange={changePriority} />
+              <TaskDueDateField value={dateInputValue(detail.task.dueAt)} disabled={pendingOperations.has('dueAt')} label={copy.dueDate} onChange={changeDueDate} />
+              <TaskExecutorField value={detail.conversation.currentExecutorAgentId ?? ''} disabled={pendingOperations.has('delegateAgentId')} label={copy.executorLabel} unassignedLabel={copy.unassigned} agents={agents} onChange={switchExecutor} />
               {projectName ? <div className="grid gap-1 text-xs text-fg-muted"><span>{copy.projectLabel}</span><span className="flex items-center gap-1.5 rounded-lg bg-surface-hover px-3 py-2 text-sm text-fg"><FolderKanban className="size-3.5" />{projectName}</span></div> : null}
             </div>
             <div className="mt-4 rounded-lg bg-surface-hover p-3 text-xs leading-5 text-fg-subtle"><p>{statusLabel}</p><p>{statusDescription}</p><p className="mt-2">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</p></div>
@@ -587,7 +728,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
             <div className="mt-4 space-y-4">
               <div>
                 <p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>
-                <DependencyPicker borderless candidates={dependencyCandidates} selectedIds={detail.dependencies.map((task) => task.id)} disabled={busy} onChange={(dependsOnTaskIds) => void saveDependencies(dependsOnTaskIds)} labels={{ link: copy.linkDependencies, linked: copy.linkedDependencies, searchPlaceholder: copy.dependencySearchPlaceholder, noMatches: copy.noDependencyMatches, noCandidates: copy.noDependencyCandidates, remove: copy.removeDependency }} />
+                <TaskDependenciesField candidates={dependencyCandidates} selected={detail.dependencies} disabled={pendingOperations.has('dependencies')} labels={dependencyPickerLabels} onChange={saveDependencies} />
               </div>
               <div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.length > 0 ? <div className="space-y-1.5">{detail.dependents.map((task) => <Link key={task.id} to={taskHref(task.id)} className="block rounded-lg bg-surface-hover p-2.5 text-sm text-accent hover:underline">{task.title}</Link>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependents}</p>}</div>
             </div>

@@ -11,9 +11,12 @@ export type DesktopPetNarrativeLabels = FriendlyToolTitleLabels & {
   tipProgress: string;
   tipValidate: string;
   tipWaiting: string;
+  tipThinking: string;
   tipAssistantDelta: string;
   tipCommandDelta: string;
-  tipAssistantDone: string;
+  tipAssistantNarrationDone: string;
+  tipAssistantAnswerDone: string;
+  tipReview: string;
   tipComplete: string;
   tipError: string;
   targetSuffix: string;

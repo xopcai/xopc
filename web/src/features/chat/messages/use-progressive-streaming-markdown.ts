@@ -19,9 +19,11 @@ export function useProgressiveStreamingMarkdown(
   animateInitialContent = false,
   onComplete?: () => void,
 ): string {
-  const [visibleContent, setVisibleContent] = useState(
-    () => streaming || animateInitialContent ? '' : content,
-  );
+  // The first render is a snapshot, not a delta. This matters when opening a
+  // session that already has an active (or just-completed) response: replaying
+  // the accumulated text from an empty string makes history look live-streamed.
+  // Later additions still use the progressive scheduler below.
+  const [visibleContent, setVisibleContent] = useState(() => content);
   const pendingContentRef = useRef(content);
   const visibleContentRef = useRef(visibleContent);
   const timerRef = useRef<number | null>(null);

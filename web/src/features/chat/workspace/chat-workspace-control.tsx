@@ -57,12 +57,10 @@ export function ChatWorkspaceControl({
       <div className="flex min-w-0 items-center gap-0.5">
         <button
           type="button"
-          disabled={disabled}
           className={cn(
             'inline-flex h-8 min-w-0 max-w-44 items-center gap-1.5 rounded-lg px-2 text-fg-muted transition-colors',
             'hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             workspacePanelOpen && 'bg-surface-hover text-fg',
-            disabled && 'cursor-not-allowed opacity-50',
           )}
           title={normalizedPath || workspaceName}
           aria-label={`${m.workspace.openFiles}: ${workspaceName}`}

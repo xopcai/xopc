@@ -119,7 +119,7 @@ export function SideChatSelectionLauncher() {
         }}
       >
         <Plus className="size-3.5 shrink-0" />
-        <span>{m.addToChat}</span>
+        <span className="whitespace-nowrap">{m.addToChat}</span>
       </button>
       <button
         type="button"
@@ -138,7 +138,7 @@ export function SideChatSelectionLauncher() {
         }}
       >
         <MessageSquarePlus className="size-3.5 shrink-0" />
-        <span>{m.askInSideChat}</span>
+        <span className="whitespace-nowrap">{m.askInSideChat}</span>
       </button>
     </div>
   );

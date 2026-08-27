@@ -25,9 +25,12 @@ const labels: DesktopPetNarrativeLabels = {
   tipProgress: 'I am still moving this forward{{progress}}.',
   tipValidate: 'I am checking the last step{{progress}}.',
   tipWaiting: 'This needs your call.',
+  tipThinking: 'I am working through the details.',
   tipAssistantDelta: 'I am shaping the answer.',
   tipCommandDelta: 'The command has new output.',
-  tipAssistantDone: 'I have the main points and am wrapping up.',
+  tipAssistantNarrationDone: 'I shared an update and am continuing.',
+  tipAssistantAnswerDone: 'I have the main points and am wrapping up.',
+  tipReview: 'I am reviewing the details.',
   tipComplete: 'Done. The result is back in this chat.',
   tipError: 'This step needs attention.',
   targetSuffix: ': {{detail}}',
@@ -77,6 +80,58 @@ describe('desktop pet narrative', () => {
       action: 'The command has new output.',
     });
     expect(update).not.toHaveProperty('outputTail');
+  });
+
+  it('maps pending, narration, and answer text segments to distinct behavior', () => {
+    const base = { sessionKey: 'agent:main:webchat:test' };
+    const pending = mapAgentStreamEvent(
+      { ...base, event: { type: 'assistant_message_start', payload: { messageId: 'm1' } } },
+      1,
+      'Fix tests',
+      labels,
+    );
+    const narration = mapAgentStreamEvent(
+      { ...base, event: { type: 'assistant_message_end', payload: { messageId: 'm1', presentation: 'narration' } } },
+      2,
+      'Fix tests',
+      labels,
+    );
+    const answer = mapAgentStreamEvent(
+      { ...base, event: { type: 'assistant_message_end', payload: { messageId: 'm2', presentation: 'answer' } } },
+      3,
+      'Fix tests',
+      labels,
+    );
+
+    expect(pending).toMatchObject({ animation: 'create', phase: 'running', priority: 'low' });
+    expect(narration).toMatchObject({
+      animation: 'prepare',
+      phase: 'preparing',
+      action: 'I shared an update and am continuing.',
+    });
+    expect(answer).toMatchObject({
+      animation: 'create',
+      phase: 'running',
+      action: 'I have the main points and am wrapping up.',
+    });
+  });
+
+  it('only mirrors live thinking in realtime activity-detail mode', () => {
+    const event = { type: 'thinking_delta', payload: { delta: 'private reasoning' } };
+    const mapAt = (activityDetailLevel: 'off' | 'on' | 'stream') => mapAgentStreamEvent(
+      { sessionKey: 'agent:main:webchat:test', event, activityDetailLevel },
+      1,
+      'Fix tests',
+      labels,
+    );
+
+    expect(mapAt('off')).toBeNull();
+    expect(mapAt('on')).toBeNull();
+    expect(mapAt('stream')).toMatchObject({
+      animation: 'prepare',
+      phase: 'planning',
+      action: 'I am working through the details.',
+    });
   });
 
   it('does not append progress counts when the tip already contains them', () => {
