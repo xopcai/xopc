@@ -232,6 +232,7 @@
     "eslint": "^10.4.0",
     "jsdom": "^29.1.1",
     "onnxruntime-common": "1.21.0",
+    "node-pty": "1.1.0",
     "playwright-core": "^1.60.0",
     "sherpa-onnx-node": "1.13.4",
     "svgo": "4.0.2",

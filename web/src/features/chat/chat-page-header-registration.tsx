@@ -1,5 +1,5 @@
-import { FolderOpen, Plus } from 'lucide-react';
-import { memo, useLayoutEffect } from 'react';
+import { FolderOpen, Plus, SquareTerminal } from 'lucide-react';
+import { memo, useEffect, useLayoutEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -15,6 +15,7 @@ import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useSideChatStore } from '@/stores/side-chat-store';
+import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -46,6 +47,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const workspacePanelOpen = useWorkspacePanelStore((s) => s.open);
   const toggleWorkspacePanel = useWorkspacePanelStore((s) => s.toggleOpen);
   const setSideChatOpen = useSideChatStore((s) => s.setOpen);
+  const terminalPanelOpen = useTerminalPanelStore((s) => parentSessionKey ? Boolean(s.openBySessionKey[parentSessionKey]) : false);
+  const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -65,6 +68,17 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   // actually leaves; clearing during an in-place replacement visibly remounts
   // the shell chrome.
   useLayoutEffect(() => () => clearPageHeader(), [clearPageHeader]);
+
+  useEffect(() => {
+    if (!parentSessionKey || !window.electronAPI?.terminal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.metaKey || event.altKey || event.key !== '`') return;
+      event.preventDefault();
+      toggleTerminalPanel(parentSessionKey);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [parentSessionKey, toggleTerminalPanel]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -119,6 +133,21 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               />
             </div>
           ) : null}
+          {parentSessionKey && window.electronAPI?.terminal ? (
+            <button
+              type="button"
+              className={cn(
+                'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                terminalPanelOpen && 'bg-surface-hover text-fg',
+              )}
+              title={`${m.chat.terminal.open} (Ctrl+\`)`}
+              aria-label={m.chat.terminal.open}
+              aria-pressed={terminalPanelOpen}
+              onClick={() => toggleTerminalPanel(parentSessionKey)}
+            >
+              <SquareTerminal className="size-4" />
+            </button>
+          ) : null}
           <button
             type="button"
             className={cn(
@@ -149,10 +178,13 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentPlaceholder,
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
+    m.chat.terminal.open,
     m.sidebar.newTask,
     m.workspace.openFiles,
     workspacePanelOpen,
+    terminalPanelOpen,
     parentSessionKey,
+    toggleTerminalPanel,
     toggleWorkspacePanel,
     setSideChatOpen,
     setPageHeader,

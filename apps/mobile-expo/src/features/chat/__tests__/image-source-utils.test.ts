@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildGatewayRawFilePath,
-  extractGeneratedImageSources,
   imageContentToSource,
   normalizeGeneratedWorkspacePath,
 } from '../image-source-utils';
-import type { MessageContent } from '../messages.types';
 
 const ctx = {
   apiUrl: (path: string) => `http://gateway.test${path}`,
@@ -47,26 +45,6 @@ describe('image-source-utils', () => {
   it('normalizes absolute generated file paths to workspace-relative paths', () => {
     expect(normalizeGeneratedWorkspacePath('/Users/me/.xopc/workspace/media/generated/cat.png'))
       .toBe('media/generated/cat.png');
-  });
-
-  it('extracts generated image paths from image_generate tool results', () => {
-    const content: MessageContent[] = [
-      {
-        type: 'tool_use',
-        id: 'tool-1',
-        name: 'image_generate',
-        input: {},
-        status: 'done',
-        result: 'Generated 1 image(s).\nSaved: /tmp/workspace/media/generated/cat.png',
-      },
-    ];
-
-    expect(extractGeneratedImageSources(content, ctx)).toEqual([
-      {
-        uri: 'http://gateway.test/api/workspace/editor/raw?path=media%2Fgenerated%2Fcat.png&sessionKey=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_1',
-        headers: { Authorization: 'Bearer token-1' },
-      },
-    ]);
   });
 
   it('builds raw file paths with session scope', () => {

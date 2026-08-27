@@ -1079,6 +1079,21 @@
     "userMessageDeleteConfirmTitle": "删除本轮对话",
     "userMessageDeleteCancel": "取消",
     "userMessageDeleteOk": "删除",
+    "terminal": {
+      "title": "终端",
+      "open": "打开终端",
+      "hide": "隐藏终端",
+      "preparing": "正在准备终端…",
+      "permissionTitle": "为此对话启用终端？",
+      "permissionBody": "这会在当前对话的工作区内打开交互式 Shell，命令将使用你的桌面用户权限运行。",
+      "enable": "启用终端",
+      "clear": "清空显示",
+      "share": "将选中文本分享给助手；未选择时分享最近输出",
+      "start": "启动终端",
+      "restart": "重启终端",
+      "stop": "停止终端",
+      "exited": "进程已退出，代码 {{code}}"
+    },
     "commandPalette": {
       "noResults": "没有匹配的命令或技能",
       "placeholder": "搜索技能与命令…",
@@ -1095,6 +1110,13 @@
       "skillAgentDeniedReason": "当前智能体不可用",
       "skillDisabledReason": "技能已禁用或依赖不满足",
       "skillAddToAllowlistConfirm": "是否现在让当前智能体可用此技能？",
+      "workspaceTrustTitle": "信任这个项目工作区？",
+      "workspaceTrustDescription": "此项目在 {{path}} 下包含本地指令或技能。信任后，XOPC 可以将这些文件加载给智能体，并使用其中声明的能力。",
+      "workspaceTrustConfirm": "信任工作区",
+      "workspaceTrustCancel": "暂不",
+      "workspaceTrustSaving": "正在信任…",
+      "workspaceTrustSuccess": "项目工作区已受信任，本地技能现在可用。",
+      "workspaceTrustFailed": "无法信任项目工作区：{{error}}",
       "showGroupedMore": "显示另外 {{count}} 条"
     },
     "atMention": {

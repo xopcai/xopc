@@ -74,7 +74,6 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   blocks,
   isMessageStreaming,
   expandedByDefault,
-  sessionKey,
 }: {
   /** Consecutive thinking + tool_use content blocks. */
   blocks: Array<ThinkingContent | ToolUseContent>;
@@ -82,7 +81,6 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   isMessageStreaming: boolean;
   /** Mirrors WebUI's resolved activity-detail expansion rule. */
   expandedByDefault: boolean;
-  sessionKey?: string | null;
 }) {
   const m = useMessages();
   const language = usePreferencesStore((s) => s.language);
@@ -279,9 +277,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
                   key={`tool-${block.id || i}`}
                   block={block}
                   inline
-                  sessionKey={sessionKey}
                   labels={stepLabels}
-                  showWorkspaceArtifacts={!isMessageStreaming}
                 />
               );
             })}

@@ -198,7 +198,12 @@ function clampPaletteIndex(index: number, length: number): number {
 export function useCommandPalette(
   value: string,
   cursor: number,
-  options?: { suppress?: boolean; isComposing?: boolean; currentAgentId?: string },
+  options?: {
+    suppress?: boolean;
+    isComposing?: boolean;
+    currentAgentId?: string;
+    sessionKey?: string | null;
+  },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [skillsVersion, setSkillsVersion] = useState(0);
@@ -244,7 +249,7 @@ export function useCommandPalette(
     async () => {
       const [commands, skillsPayload, agentsPayload] = await Promise.all([
         fetchCommandsCached(),
-        getChatSkillsCached(options?.currentAgentId),
+        getChatSkillsCached(options?.currentAgentId, options?.sessionKey),
         fetchChatAgents().catch(() => null),
       ]);
       const commandItems: PaletteItem[] = commands.map((c) => ({
@@ -284,7 +289,7 @@ export function useCommandPalette(
           : [];
       return [...skillItems, ...commandItems, ...agentItems];
     },
-    [language, options?.currentAgentId, skillsVersion],
+    [language, options?.currentAgentId, options?.sessionKey, skillsVersion],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
   );
   const allItems = itemsResource.data;

@@ -21,6 +21,7 @@ import {
 } from './workspace-api';
 
 type ResolvedArtifact = ExtractedFilePath & { refInfo: WorkspaceFileReference };
+type ArtifactResolution = ExtractedFilePath & { refInfo: WorkspaceFileReference | null };
 type VisiblePath = ResolvedArtifact & { rel: string };
 
 function normalizeRel(path: string): string {
@@ -177,7 +178,7 @@ export function WorkspaceArtifactStrip({
   const apiUrl = useGatewayStore((s) => s.apiUrl);
   const token = useGatewayStore((s) => s.token);
   const m = useMessages();
-  const [resolved, setResolved] = useState<ResolvedArtifact[] | null>(null);
+  const [resolved, setResolved] = useState<ArtifactResolution[] | null>(null);
   const [active, setActive] = useState<PreviewableFile | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareAutoRequest | null>(null);
 
@@ -189,15 +190,17 @@ export function WorkspaceArtifactStrip({
     }
     setResolved(null);
     void (async () => {
-      const next: ResolvedArtifact[] = [];
-      for (const p of paths) {
-        const refInfo = await resolveWorkspaceFileReference(p.workspaceRelativePath || p.absolutePath, {
-          sessionKey,
-        });
-        if (refInfo) {
-          next.push({ ...p, refInfo });
+      const next = await Promise.all(paths.map(async (path): Promise<ArtifactResolution> => {
+        try {
+          const refInfo = await resolveWorkspaceFileReference(
+            path.workspaceRelativePath || path.absolutePath,
+            { sessionKey },
+          );
+          return { ...path, refInfo };
+        } catch {
+          return { ...path, refInfo: null };
         }
-      }
+      }));
       if (!cancelled) setResolved(next);
     })();
     return () => {
@@ -205,7 +208,16 @@ export function WorkspaceArtifactStrip({
     };
   }, [paths, sessionKey]);
 
-  const visible = resolved ?? [];
+  const visible = useMemo(
+    () => (resolved ?? []).filter(
+      (path): path is ResolvedArtifact => path.refInfo !== null,
+    ),
+    [resolved],
+  );
+  const unresolved = useMemo(
+    () => (resolved ?? []).filter((path) => path.refInfo === null),
+    [resolved],
+  );
   const workspacePaths = useMemo(
     () =>
       visible
@@ -218,13 +230,22 @@ export function WorkspaceArtifactStrip({
   const otherPaths = useMemo(() => workspacePaths.filter((p) => !isImageMimeType(p.mimeType)), [workspacePaths]);
   const nonWorkspacePaths = useMemo(() => visible.filter((p) => p.refInfo.scope !== 'workspace'), [visible]);
 
-  if (!paths.length || resolved === null || visible.length === 0) return null;
+  if (!paths.length) return null;
 
   const border = colors.border.default;
   const chipBg = colors.surface.input;
   const textColor = colors.text.primary;
   const muted = colors.text.secondary;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  if (resolved === null) {
+    return (
+      <View style={[styles.loadingChip, { backgroundColor: chipBg }]}>
+        <View style={[styles.loadingIcon, { backgroundColor: border }]} />
+        <View style={[styles.loadingText, { backgroundColor: border }]} />
+      </View>
+    );
+  }
 
   return (
     <>
@@ -296,6 +317,19 @@ export function WorkspaceArtifactStrip({
             warning={colors.semantic.warning}
           />
         ))}
+        {unresolved.map((path, index) => (
+          <View
+            key={artifactRowKey(path, index)}
+            style={[styles.chip, { borderColor: border, backgroundColor: chipBg }]}
+          >
+            <View style={styles.chipBody}>
+              <Icon source="file-outline" size={16} color={muted} />
+              <Text style={[styles.chipText, { color: textColor }]} numberOfLines={1}>
+                {path.fileName}
+              </Text>
+            </View>
+          </View>
+        ))}
       </View>
       <FilePreviewModal
         visible={Boolean(active)}
@@ -317,6 +351,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  loadingChip: {
+    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    opacity: 0.55,
+  },
+  loadingText: {
+    width: 112,
+    height: 10,
+    borderRadius: 5,
+    opacity: 0.55,
   },
   thumb: {
     width: 80,

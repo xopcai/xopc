@@ -9,19 +9,13 @@ import { StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
 import { AssistantStepsBlock } from './AssistantStepsBlock';
+import { AssistantDeliverablesCard } from './AssistantDeliverablesCard';
 import { AttachmentRenderer } from './AttachmentRenderer';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import { MarkdownView } from './MarkdownView';
-import { WorkspaceArtifactStrip } from './WorkspaceArtifactStrip';
-import {
-  collectAssistantWorkspaceOutputPaths,
-  filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
-  imageContentBlocksToAttachments,
-} from './assistant-message-artifacts';
 import { extractMarkdownCodeBlocks } from './extract-markdown-code';
 import { MessageActionsBar, type MessageAction } from './MessageActionsBar';
 import type {
-  ImageContent,
   Message,
   MessageContent,
   ProgressState,
@@ -205,7 +199,6 @@ function renderAssistantContent(
             blocks={activity.blocks}
             isMessageStreaming={isStreaming}
             expandedByDefault={activity.expandedByDefault}
-            sessionKey={sessionKey}
           />,
         );
         activityRendered = true;
@@ -313,9 +306,9 @@ export const MessageBubble = memo(function MessageBubble({
   const contentBlocks = message.content ?? [];
   const assistantTurnView = useMemo(
     () => isAssistant
-      ? buildAssistantTurnViewModel({ content: contentBlocks, isStreaming, reasoningLevel })
+      ? buildAssistantTurnViewModel({ message, isStreaming, reasoningLevel })
       : null,
-    [contentBlocks, isAssistant, isStreaming, reasoningLevel],
+    [isAssistant, isStreaming, message, reasoningLevel],
   );
 
   const userText = useMemo(
@@ -335,26 +328,14 @@ export const MessageBubble = memo(function MessageBubble({
     [assistantTurnView?.displayContent, isAssistant, contentBlocks],
   );
 
-  const assistantWorkspacePaths = useMemo(
-    () => (isAssistant ? collectAssistantWorkspaceOutputPaths(contentBlocks) : []),
-    [isAssistant, contentBlocks],
+  const showAssistantDeliverables = Boolean(
+    assistantTurnView && (
+      assistantTurnView.deliverables.awaiting
+      || assistantTurnView.deliverables.workspacePaths.length > 0
+      || assistantTurnView.deliverables.attachments.length > 0
+      || assistantTurnView.deliverables.productDeliveries.length > 0
+    ),
   );
-
-  const assistantImageBlocks = useMemo(
-    () =>
-      isAssistant
-        ? contentBlocks.filter((b): b is ImageContent => b.type === 'image' && Boolean(b.source?.data))
-        : [],
-    [isAssistant, contentBlocks],
-  );
-
-  const assistantImageAttachments = useMemo(
-    () => (isAssistant ? imageContentBlocksToAttachments(assistantImageBlocks) : []),
-    [isAssistant, assistantImageBlocks],
-  );
-
-  const showAssistantArtifacts =
-    isAssistant && !isStreaming && (assistantWorkspacePaths.length > 0 || assistantImageAttachments.length > 0);
 
   const stepsActive = Boolean(assistantTurnView?.activity.active);
   const progressForMeta = reasoningLevel === 'off'
@@ -371,11 +352,6 @@ export const MessageBubble = memo(function MessageBubble({
     !progressForMeta?.message &&
     !stepsActive &&
     !contentBlocks.some((b) => b.type === 'thinking' && b.streaming);
-
-  const attachmentsForBubble = useMemo(() => {
-    if (!isAssistant) return message.attachments;
-    return filterAssistantAttachmentsDedupedAgainstWorkspacePaths(message.attachments, assistantWorkspacePaths);
-  }, [isAssistant, message.attachments, assistantWorkspacePaths]);
 
   const showMeta =
     Boolean(message.timestamp) ||
@@ -615,8 +591,8 @@ export const MessageBubble = memo(function MessageBubble({
                 {userText}
               </Text>
             ) : null}
-            {attachmentsForBubble?.length ? (
-              <AttachmentRenderer attachments={attachmentsForBubble} sessionKey={sessionKey} compact />
+            {message.attachments?.length ? (
+              <AttachmentRenderer attachments={message.attachments} sessionKey={sessionKey} compact />
             ) : null}
           </View>
           <MessageActionsBar actions={userActions} align="right" />
@@ -626,7 +602,6 @@ export const MessageBubble = memo(function MessageBubble({
           <View
             style={[
               chatLayout.assistantBubble,
-              showAssistantArtifacts ? styles.markdownAboveArtifacts : null,
               {
                 backgroundColor: isDark
                   ? chatColors.assistantBgDark
@@ -640,49 +615,21 @@ export const MessageBubble = memo(function MessageBubble({
               assistantTurnView?.activity ?? { blocks: [], active: false, expandedByDefault: false },
               Boolean(assistantTurnView?.showStreamingCursor),
               sessionKey,
-              showAssistantArtifacts,
+              showAssistantDeliverables,
             )}
-
-            {attachmentsForBubble?.length ? (
-              <AttachmentRenderer attachments={attachmentsForBubble} sessionKey={sessionKey} />
-            ) : null}
           </View>
 
-          {showAssistantArtifacts ? (
-            <View
-              style={[
-                styles.artifactCard,
-                {
-                  backgroundColor: colors.surface.panel,
-	                  borderColor: colors.border.default,
-                },
-              ]}
-            >
-	              <Text style={[styles.artifactTitle, { color: colors.text.secondary }]}>
-                {m.chat.messageArtifactsHeading}
-              </Text>
-              <View style={styles.artifactBody}>
-                {assistantWorkspacePaths.length > 0 ? (
-                  <WorkspaceArtifactStrip paths={assistantWorkspacePaths} sessionKey={sessionKey} />
-                ) : null}
-                {assistantImageAttachments.length > 0 ? (
-                  <AttachmentRenderer attachments={assistantImageAttachments} sessionKey={sessionKey} compact />
-                ) : null}
-              </View>
-            </View>
+          {showAssistantDeliverables && assistantTurnView ? (
+            <AssistantDeliverablesCard
+              deliverables={assistantTurnView.deliverables}
+              sessionKey={sessionKey}
+            />
           ) : null}
 
           <MessageActionsBar actions={assistantActions} align="left" />
         </View>
       )}
 
-      {/* Usage badge */}
-      {!isUser && message.usage?.totalTokens ? (
-        <Text variant="labelSmall" style={styles.usage}>
-          {message.usage.totalTokens.toLocaleString()} tokens
-          {typeof message.usage.cost === 'number' ? ` · $${message.usage.cost.toFixed(4)}` : ''}
-        </Text>
-      ) : null}
     </View>
   );
 });
@@ -731,31 +678,6 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 1,
     opacity: 0.7,
-  },
-  markdownAboveArtifacts: {
-    paddingBottom: 4,
-  },
-  artifactCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 10,
-    gap: 8,
-  },
-  artifactTitle: {
-    ...typography.micro,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  artifactBody: {
-    gap: 8,
-  },
-  usage: {
-    color: chatColors.timestamp,
-    ...typography.micro,
-    marginTop: 4,
-    paddingHorizontal: 2,
   },
   reviewCard: {
     borderWidth: StyleSheet.hairlineWidth,

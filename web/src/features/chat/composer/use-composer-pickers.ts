@@ -104,6 +104,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     suppress: atRangeRaw != null,
     isComposing,
     currentAgentId,
+    sessionKey,
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
     sessionKey,

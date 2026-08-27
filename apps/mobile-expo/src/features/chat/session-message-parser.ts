@@ -9,6 +9,7 @@
  */
 import type { InfiniteData } from '@tanstack/react-query';
 import type { Message, MessageAttachment, MessageContent } from './messages.types';
+import { dedupeAttachments, mergeWireAttachments } from './wire-attachments';
 import {
   applyStripToUserContent,
   extractAttachmentsFromUserContent,
@@ -43,7 +44,8 @@ export type WireContentBlock = {
   args?: unknown;
   arguments?: unknown;
   function?: { name?: string; arguments?: unknown };
-  result?: string;
+  result?: unknown;
+  details?: unknown;
   status?: string;
 };
 
@@ -59,10 +61,18 @@ export type WireMessage = {
   metadata?: unknown;
   usage?: unknown;
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
-  toolCalls?: Array<{ id?: string; name: string; args?: Record<string, unknown> }>;
+  toolCalls?: Array<{
+    id?: string;
+    name: string;
+    args?: unknown;
+    result?: unknown;
+    isError?: boolean;
+    details?: unknown;
+  }>;
   tool_call_id?: string;
   toolCallId?: string;
   isError?: boolean;
+  details?: unknown;
   ttsAudio?: unknown;
   tts_audio?: unknown;
   tts?: unknown;
@@ -261,13 +271,19 @@ export function parseContentBlock(b: Record<string, unknown>): MessageContent | 
     return wireImageBlockToContent(block);
   }
   if (t === 'tool_use' || t === 'tool_call' || t === 'toolCall') {
+    const status = block.status === 'error'
+      ? 'error'
+      : block.status === 'done' || block.result !== undefined
+        ? 'done'
+        : 'running';
     return {
       type: 'tool_use',
       id: String(block.id ?? `tool-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
       name: String(block.name ?? block.function?.name ?? 'tool'),
       input: block.input ?? block.args ?? block.arguments ?? block.function?.arguments,
-      status: (block.status === 'running' || block.status === 'error') ? block.status : 'done' as const,
+      status,
       result: block.result,
+      details: block.details,
     };
   }
   return { type: 'text', text: String(block.text ?? '') };
@@ -350,10 +366,29 @@ function buildAssistantContent(m: WireMessage): MessageContent[] {
 
   // Pi format: top-level toolCalls array
   if (Array.isArray(m.toolCalls)) {
-    for (const call of m.toolCalls) {
-      const id = call.id ?? `tc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      if (blocks.some((b) => b.type === 'tool_use' && b.id === id)) continue;
-      blocks.push({ type: 'tool_use', id, name: call.name || 'tool', input: call.args, status: 'running' });
+    for (let index = 0; index < m.toolCalls.length; index += 1) {
+      const call = m.toolCalls[index];
+      const id = call.id ?? `tool-call-${index}-${call.name || 'tool'}`;
+      const hasResult = call.result !== undefined;
+      const existing = blocks.find(
+        (block): block is Extract<MessageContent, { type: 'tool_use' }> =>
+          block.type === 'tool_use' && block.id === id,
+      );
+      if (existing) {
+        existing.status = hasResult ? (call.isError ? 'error' : 'done') : existing.status;
+        if (hasResult) existing.result = call.result;
+        if (call.details !== undefined) existing.details = call.details;
+        continue;
+      }
+      blocks.push({
+        type: 'tool_use',
+        id,
+        name: call.name || 'tool',
+        input: call.args,
+        status: hasResult ? (call.isError ? 'error' : 'done') : 'running',
+        result: hasResult ? call.result : undefined,
+        details: call.details,
+      });
     }
   }
 
@@ -486,6 +521,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
     if (block) {
       block.status = isError ? 'error' : 'done';
       block.result = text;
+      block.details = m.details;
       return;
     }
   }
@@ -498,6 +534,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
   if (running.length === 1) {
     running[0].status = isError ? 'error' : 'done';
     running[0].result = text;
+    running[0].details = m.details;
   }
 }
 
@@ -578,6 +615,9 @@ function mergeConsecutiveAssistantMessages(messages: Message[]): Message[] {
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       const mergedUsage = normalizeWireUsage(m.usage);
       if (mergedUsage) prev.usage = mergedUsage;
+      if (m.attachments?.length) {
+        prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);
+      }
     } else {
       out.push({ ...m, content: [...m.content] });
     }
@@ -623,27 +663,6 @@ function parseTimestamp(raw: string | number | undefined): number | undefined {
     return Number.isNaN(t) ? undefined : t;
   }
   return undefined;
-}
-
-function normalizeAttachments(raw: unknown): MessageAttachment[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const out = raw
-    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
-    .map((item): MessageAttachment => ({
-      id: typeof item.id === 'string' ? item.id : undefined,
-      name: typeof item.name === 'string' ? item.name : undefined,
-      type: typeof item.type === 'string' ? item.type : undefined,
-      mimeType: typeof item.mimeType === 'string' ? item.mimeType : undefined,
-      size: typeof item.size === 'number' ? item.size : undefined,
-      content: typeof item.content === 'string' ? item.content : undefined,
-      data: typeof item.data === 'string' ? item.data : undefined,
-      preview: typeof item.preview === 'string' ? item.preview : undefined,
-      extractedText: typeof item.extractedText === 'string' ? item.extractedText : undefined,
-      uri: typeof item.uri === 'string' ? item.uri : undefined,
-      workspaceRelativePath: typeof item.workspaceRelativePath === 'string' ? item.workspaceRelativePath : undefined,
-      durationSeconds: typeof item.durationSeconds === 'number' ? item.durationSeconds : undefined,
-    }));
-  return out.length ? out : undefined;
 }
 
 function isAudioAttachment(att: MessageAttachment): boolean {
@@ -717,7 +736,7 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
     if (role === 'user' || role === 'user-with-attachments') {
       const roleTyped = role as Message['role'];
       const fromContent = extractAttachmentsFromUserContent(m.content);
-      const attachments = mergeUserAttachments(normalizeAttachments(m.attachments ?? m.media), fromContent);
+      const attachments = mergeUserAttachments(mergeWireAttachments(m.attachments, m.media), fromContent);
       out.push({
         id: wireMessageId(m),
         role: roleTyped,
@@ -729,7 +748,7 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
     }
 
     if (role === 'assistant') {
-      const attachments = normalizeAttachments(m.attachments ?? m.media);
+      const attachments = mergeWireAttachments(m.attachments, m.media);
       const content = appendAudioAttachments(buildAssistantContent(m), attachments);
       out.push({
         id: wireMessageId(m),

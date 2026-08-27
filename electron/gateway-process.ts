@@ -20,13 +20,24 @@ let gatewayExitHandler: ((code: number | null, signal: string | null) => void) |
 
 type EmbeddedGatewayRuntime = GatewayProcessOptions & { authToken: string };
 let embeddedGatewayRuntime: EmbeddedGatewayRuntime | null = null;
+type GatewayConnection = { port: number; token: string };
+let gatewayConnection: GatewayConnection | null = null;
+
+export function registerGatewayConnection(connection: GatewayConnection): void {
+  gatewayConnection = connection;
+}
 
 export function registerEmbeddedGatewayRuntime(runtime: EmbeddedGatewayRuntime): void {
   embeddedGatewayRuntime = runtime;
+  registerGatewayConnection({ port: runtime.port, token: runtime.authToken });
 }
 
-export function getEmbeddedGatewayCredential(): string | undefined {
-  return embeddedGatewayRuntime?.authToken;
+export function getGatewayCredential(): string | undefined {
+  return gatewayConnection?.token;
+}
+
+export function getGatewayConnection(): GatewayConnection | undefined {
+  return gatewayConnection ?? undefined;
 }
 
 export function isEmbeddedGatewayRegistered(): boolean {
@@ -344,6 +355,7 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
   const child = spawnGatewayProcess(opts);
   const readyPort = await waitForGatewayReady(port, token, child);
   embeddedGatewayRuntime = { ...opts, port: readyPort, authToken: token };
+  registerGatewayConnection({ port: readyPort, token });
   return { port: readyPort, token };
 }
 

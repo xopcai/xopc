@@ -18,6 +18,7 @@ describe('electron-runtime-externals', () => {
       '@huggingface/transformers',
       'onnxruntime-common',
       'sherpa-onnx-node',
+      'node-pty',
     ]);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('playwright-core');
@@ -37,6 +38,7 @@ describe('electron-runtime-externals', () => {
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
+        'node-pty': '1.1.0',
       },
       devDependencies: {
         vitest: '^4.0.0',
@@ -48,6 +50,7 @@ describe('electron-runtime-externals', () => {
       '@huggingface/transformers',
       'onnxruntime-common',
       'sherpa-onnx-node',
+      'node-pty',
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
@@ -65,6 +68,7 @@ describe('electron-runtime-externals', () => {
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
+        'node-pty': '1.1.0',
       },
     });
     expect(minimal.dependencies).toEqual({
@@ -73,6 +77,7 @@ describe('electron-runtime-externals', () => {
       '@huggingface/transformers': '3.8.1',
       'onnxruntime-common': '1.21.0',
       'sherpa-onnx-node': '1.13.4',
+      'node-pty': '1.1.0',
     });
   });
 
@@ -88,6 +93,7 @@ describe('electron-runtime-externals', () => {
           '@huggingface/transformers': '3.8.1',
           'onnxruntime-common': '1.21.0',
           'sherpa-onnx-node': '1.13.4',
+          'node-pty': '1.1.0',
         },
       },
       repoRoot,
@@ -98,6 +104,7 @@ describe('electron-runtime-externals', () => {
       '@huggingface/transformers': resolveInstalledPackageVersion(repoRoot, '@huggingface/transformers'),
       'onnxruntime-common': resolveInstalledPackageVersion(repoRoot, 'onnxruntime-common'),
       'sherpa-onnx-node': resolveInstalledPackageVersion(repoRoot, 'sherpa-onnx-node'),
+      'node-pty': resolveInstalledPackageVersion(repoRoot, 'node-pty'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
   });
@@ -138,6 +145,7 @@ describe('electron-runtime-externals', () => {
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
+        'node-pty': '1.1.0',
       },
       devDependencies: {
         electron: '^41.7.1',

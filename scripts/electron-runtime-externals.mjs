@@ -20,6 +20,7 @@ export const ELECTRON_PACKAGED_DEPENDENCIES = [
   '@huggingface/transformers',
   'onnxruntime-common',
   'sherpa-onnx-node',
+  'node-pty',
 ];
 
 /** @param {string} repoRoot */

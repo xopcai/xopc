@@ -90,6 +90,8 @@ export type MessageAttachment = {
   localUri?: string;
   workspaceRelativePath?: string;
   durationSeconds?: number;
+  bucket?: string;
+  path?: string;
 };
 
 export interface Message {

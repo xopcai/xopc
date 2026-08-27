@@ -9,21 +9,16 @@ import { memo, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 
-import { TOOL_NAMES_WITH_WORKSPACE_OUTPUT } from './assistant-message-artifacts';
 import type { ToolUseContent } from './messages.types';
 import { chatColors } from './styles';
 import { useTheme } from '../../theme';
 import { getFriendlyToolTitle } from './tool-friendly-title';
 import { formatParamsJson, getKeyDetailLine } from './tool-input-preview';
-import { extractFilePathsFromToolResult } from './tool-result-file-paths';
 import { WebSearchToolResultLinks } from './WebSearchToolResultLinks';
 import {
   extractWebSearchLinksFromToolResult,
   isWebSearchToolName,
 } from './web-search-tool-result-links';
-import { WorkspaceArtifactStrip } from './WorkspaceArtifactStrip';
-import { ProductDeliveryCard } from './ProductDeliveryCard';
-import { extractMobileProductDelivery } from './product-delivery';
 
 export type ToolUseBlockLabels = {
   searchedWeb: string;
@@ -90,16 +85,12 @@ function formatToolDisplayText(block: ToolUseContent): string {
 export const ToolUseBlock = memo(function ToolUseBlock({
   block,
   inline,
-  sessionKey,
   labels,
-  showWorkspaceArtifacts = true,
 }: {
   block: ToolUseContent;
   /** When true, renders as a compact row inside AssistantStepsBlock. */
   inline?: boolean;
-  sessionKey?: string | null;
   labels?: ToolUseBlockLabels;
-  showWorkspaceArtifacts?: boolean;
 }) {
   const { colors, isDark } = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -136,7 +127,6 @@ export const ToolUseBlock = memo(function ToolUseBlock({
   const detailLine = getKeyDetailLine(block.input);
 
   const resultText = useMemo(() => formatToolDisplayText(block), [block]);
-  const productDelivery = useMemo(() => extractMobileProductDelivery(block), [block]);
   const resultPreview = resultText.length > 200 ? resultText.slice(0, 200) + '…' : resultText;
 
   let outputPreview = resultText;
@@ -150,19 +140,6 @@ export const ToolUseBlock = memo(function ToolUseBlock({
 
   const paramsJson = block.input !== undefined ? formatParamsJson(block.input) : '';
 
-  const extractedFilePaths = useMemo(() => {
-    if (block.status === 'running' || block.status === 'error') {
-      return [];
-    }
-    if (!TOOL_NAMES_WITH_WORKSPACE_OUTPUT.has(block.name)) {
-      return [];
-    }
-    if (!resultText.trim()) {
-      return [];
-    }
-    return extractFilePathsFromToolResult(resultText);
-  }, [block.name, block.status, resultText]);
-
   const webSearchLinks = useMemo(() => {
     if (block.status === 'running' || block.status === 'error') {
       return [];
@@ -172,13 +149,6 @@ export const ToolUseBlock = memo(function ToolUseBlock({
     }
     return extractWebSearchLinksFromToolResult(resultText);
   }, [block.name, block.status, resultText]);
-
-  const fileLinks =
-    showWorkspaceArtifacts && extractedFilePaths.length > 0 ? (
-      <View style={styles.fileLinks}>
-        <WorkspaceArtifactStrip paths={extractedFilePaths} sessionKey={sessionKey} />
-      </View>
-    ) : null;
 
   // ── Inline mode: compact row for AssistantStepsBlock timeline ──
   if (inline) {
@@ -221,7 +191,6 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {detailLine}
             </Text>
           ) : null}
-          {productDelivery ? <ProductDeliveryCard delivery={productDelivery} sessionKey={sessionKey} /> : null}
           {isError && resultText ? (
             <Text
               variant="bodySmall"
@@ -231,7 +200,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {resultText}
             </Text>
           ) : null}
-          {!isRunning && !productDelivery ? (
+          {!isRunning ? (
             <Pressable
               style={inlineStyles.detailsToggle}
               onPress={() => setDetailsExpanded((v) => !v)}
@@ -292,14 +261,13 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               }}
             />
           ) : null}
-          {fileLinks}
         </View>
       </View>
     );
   }
 
   // ── Standalone mode: card with left border accent (original behaviour) ──
-  const hasResult = block.result != null && !productDelivery;
+  const hasResult = block.result != null;
 
   return (
     <View
@@ -339,7 +307,6 @@ export const ToolUseBlock = memo(function ToolUseBlock({
           />
         ) : null}
       </Pressable>
-      {productDelivery ? <ProductDeliveryCard delivery={productDelivery} sessionKey={sessionKey} /> : null}
       {expanded && resultText ? (
         <View style={styles.resultContainer}>
           <Text
@@ -352,7 +319,6 @@ export const ToolUseBlock = memo(function ToolUseBlock({
           >
             {resultPreview}
           </Text>
-          {fileLinks}
         </View>
       ) : null}
     </View>
@@ -469,8 +435,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     fontFamily: 'monospace',
-  },
-  fileLinks: {
-    marginTop: 8,
   },
 });

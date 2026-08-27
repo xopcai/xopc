@@ -104,9 +104,36 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
 
   // ========== Skills (managed global skills under ~/.xopc/skills) ==========
 
-  authenticated.get('/api/chat/skills', (c) => {
+  authenticated.get('/api/chat/skills', async (c) => {
+    const sessionKey = c.req.query('sessionKey')?.trim();
     const agentId = c.req.query('agentId')?.trim() || service.getConfig().agents?.default || 'main';
-    const payload = service.marketplace.getAgentSkillsApi(agentId);
+    const payload = sessionKey
+      ? await service.marketplace.getSessionSkillsApi(sessionKey)
+      : service.marketplace.getAgentSkillsApi(agentId);
+    return c.json({ ok: true, payload });
+  });
+
+  authenticated.get('/api/chat/workspace-trust', async (c) => {
+    const sessionKey = c.req.query('sessionKey')?.trim();
+    if (!sessionKey) {
+      return c.json({ ok: false, error: 'Missing sessionKey' }, 400);
+    }
+    const payload = await service.marketplace.getSessionWorkspaceTrustApi(sessionKey);
+    return c.json({ ok: true, payload });
+  });
+
+  authenticated.patch('/api/chat/workspace-trust', async (c) => {
+    let body: { sessionKey?: unknown; trusted?: unknown };
+    try {
+      body = (await c.req.json()) as { sessionKey?: unknown; trusted?: unknown };
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
+    if (!sessionKey || typeof body.trusted !== 'boolean') {
+      return c.json({ ok: false, error: 'Expected { sessionKey: string, trusted: boolean }' }, 400);
+    }
+    const payload = await service.marketplace.setSessionWorkspaceTrustApi(sessionKey, body.trusted);
     return c.json({ ok: true, payload });
   });
 
