@@ -12,6 +12,8 @@ describe('terminal panel store', () => {
     useTerminalPanelStore.setState({
       openBySessionKey: {},
       approvedSessionIds: {},
+      tabsBySessionKey: {},
+      activeTabKeyBySessionKey: {},
       height: 300,
     });
   });
@@ -19,9 +21,38 @@ describe('terminal panel store', () => {
   it('tracks panel visibility per session', () => {
     useTerminalPanelStore.getState().toggle('session-a');
     expect(useTerminalPanelStore.getState().openBySessionKey).toEqual({ 'session-a': true });
+    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toHaveLength(1);
 
     useTerminalPanelStore.getState().close('session-a');
     expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(false);
+  });
+
+  it('adds, switches, and closes independent terminal tabs', () => {
+    useTerminalPanelStore.getState().toggle('session-a');
+    const first = useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']!;
+    const second = useTerminalPanelStore.getState().addTerminal('session-a');
+
+    expect(second).not.toBe(first);
+    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toHaveLength(2);
+    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBe(second);
+
+    useTerminalPanelStore.getState().setActiveTerminal('session-a', first);
+    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBe(first);
+
+    useTerminalPanelStore.getState().closeTerminal('session-a', first);
+    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([{ key: second }]);
+    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBe(second);
+  });
+
+  it('keeps the panel open when its final terminal tab is closed', () => {
+    useTerminalPanelStore.getState().toggle('session-a');
+    const terminalKey = useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']!;
+
+    useTerminalPanelStore.getState().closeTerminal('session-a', terminalKey);
+
+    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([]);
+    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBeUndefined();
+    expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(true);
   });
 
   it('tracks approval per concrete session id', () => {
