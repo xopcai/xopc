@@ -82,7 +82,6 @@ export function useChatSessionLoad(deps: {
           thinkingLevel: cfg.thinkingLevel,
           reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
           effectiveWorkspacePath: cfg.effectiveWorkspacePath,
-          workingDirectoryLocked: cfg.workingDirectoryLocked,
           workspaceSource: cfg.workspaceSource,
         });
         void refreshModelThinkingSupport(cfg.model);
@@ -200,7 +199,6 @@ export function useChatSessionLoad(deps: {
               thinkingLevel: cfg.thinkingLevel,
               reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
               effectiveWorkspacePath: cfg.effectiveWorkspacePath,
-              workingDirectoryLocked: cfg.workingDirectoryLocked,
               workspaceSource: cfg.workspaceSource,
             });
             void refreshModelThinkingSupport(cfg.model);
@@ -326,6 +324,23 @@ export function useChatSessionLoad(deps: {
     },
     [sessionKey, sessionMgrRef],
   );
+  const onSessionWorkingDirectoryChange = useCallback(
+    async (path: string) => {
+      const nextPath = path.trim();
+      if (!sessionKey || !nextPath) return;
+      try {
+        store().setShellError(null);
+        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, {
+          workingDirectory: nextPath,
+        });
+        await applySessionAgentConfig(sessionKey);
+      } catch (error) {
+        store().setShellError(error instanceof Error ? error.message : 'Failed to update working directory');
+        throw error;
+      }
+    },
+    [applySessionAgentConfig, sessionKey, sessionMgrRef],
+  );
   const createNewSession = useCallback(
     async (opts?: { forceNew?: boolean; projectId?: string | null }) => {
       dismissClarifyOnSessionLoad();
@@ -366,6 +381,7 @@ export function useChatSessionLoad(deps: {
     loadMoreMessages,
     onSessionModelChange,
     onSessionThinkingLevelChange,
+    onSessionWorkingDirectoryChange,
     createNewSession,
   };
 }

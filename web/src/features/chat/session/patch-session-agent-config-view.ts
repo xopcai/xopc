@@ -13,7 +13,6 @@ export type SessionAgentConfigView = {
     source: 'session' | 'default';
   };
   effectiveWorkspacePath?: string | null;
-  workingDirectoryLocked?: boolean;
   workspaceSource?: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
 };
 
@@ -26,7 +25,6 @@ export function patchSessionAgentConfigView(sessionKey: string, cfg: SessionAgen
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
     reasoningLevel: coerceReasoningLevel(cfg.activityDetail?.default ?? cfg.reasoningLevel ?? undefined),
     effectiveWorkspacePath: cfg.effectiveWorkspacePath ?? '',
-    workingDirectoryLocked: Boolean(cfg.workingDirectoryLocked),
     workspaceSource: cfg.workspaceSource ?? 'agent_default_root',
   });
 }

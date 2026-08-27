@@ -47,7 +47,6 @@ export function useChatSessionInit(opts: {
         source: 'session' | 'default';
       };
       effectiveWorkspacePath?: string | null;
-      workingDirectoryLocked?: boolean;
     },
   ) => void;
   patchInitUi: (patch: { loading?: boolean; error?: string | null }) => void;

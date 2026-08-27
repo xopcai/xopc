@@ -468,21 +468,12 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     },
     [session.createNewSession],
   );
-
-  const canSelectWorkingDirectory = useMemo(
-    () =>
-      Boolean(session.sessionKey) &&
-      !session.showSessionLoading &&
-      !session.sessionRoutePending &&
-      !session.workingDirectoryLocked &&
-      msgSlice.items.length === 0,
-    [
-      session.sessionKey,
-      session.showSessionLoading,
-      session.sessionRoutePending,
-      session.workingDirectoryLocked,
-      msgSlice.items.length,
-    ],
+  const canChangeWorkingDirectory = Boolean(
+    session.sessionKey &&
+    !session.showSessionLoading &&
+    !session.sessionRoutePending &&
+    session.workspaceSource !== 'project' &&
+    msgSlice.items.length === 0,
   );
 
   const setWorkspaceEditorAgentId = useWorkspaceEditorAgentStore((s) => s.setAgentId);
@@ -889,6 +880,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={isSessionTransitioning}
+        sessionKey={session.sessionKey}
+        workspacePath={session.effectiveWorkspacePath}
+        canChangeWorkspace={canChangeWorkingDirectory}
+        workspaceDisabled={isSessionTransitioning || stream.sending || stream.streaming}
+        onWorkspaceChange={session.onSessionWorkingDirectoryChange}
       /> : null}
 
       <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat)+8rem)]')}>
@@ -1094,11 +1090,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 sending={stream.sending}
                 streaming={stream.streaming}
                 sessionKey={session.sessionKey}
-                sessionManager={session.sessionManager}
                 welcomeDraftSeed={welcomeDraftSeed}
                 welcomeSuggestion={compactWelcomeLayout ? primaryWelcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
-                canSelectWorkingDirectory={canSelectWorkingDirectory}
                 thinkingLevel={session.thinkingLevel}
                 modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
@@ -1124,7 +1118,6 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 modelDisabled={
                   isSessionTransitioning || stream.streaming
                 }
-                contextUsageMessages={msgSlice.items}
                 onChatAgentChange={
                   !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
