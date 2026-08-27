@@ -1079,9 +1079,9 @@
     "showDesktopPet": "Show pet",
     "hideDesktopPet": "Hide pet",
     "aboutApp": "About",
-    "activityDetailDefaultTitle": "Default AI activity detail",
-    "activityDetailDefaultDescription": "Choose how new conversations present analysis and tool execution.",
-    "activityDetailDefaultHint": "A conversation-specific choice overrides this default.",
+    "activityDetailDefaultTitle": "AI activity detail",
+    "activityDetailDefaultDescription": "Choose how conversations present analysis and tool execution.",
+    "activityDetailDefaultHint": "This setting applies globally to all web conversations.",
     "activityDetailSaving": "Saving…",
     "activityDetailSaveError": "Could not save the activity detail default.",
     "activityDetailLevels": {

@@ -6,6 +6,7 @@
     "needToken": "Save a gateway token to chat.",
     "loading": "Loading conversation…",
     "model": "Session model",
+    "modelConfigLabel": "Model",
     "modelPlaceholder": "Select a model…",
     "agent": "Agent",
     "agentPlaceholder": "Select an agent…",
@@ -565,14 +566,7 @@
     "sessionNotFoundBody": "This conversation may have been deleted or reset. Start a new conversation to continue.",
     "sessionNotFoundCta": "Start new conversation",
     "messageMoreActions": "More actions",
-    "activityDetailLabel": "Activity",
-    "activityDetailUseDefault": "Use default ({{level}})",
-    "activityDetailLevels": {
-      "off": "Concise",
-      "on": "Collapsed · expandable",
-      "stream": "Live · auto-expanded"
-    },
-    "thinkingLevelLabel": "Thinking",
+    "thinkingLevelLabel": "Effort",
     "thinkingUnsupported": "Not supported by this model",
     "thinkingLevels": {
       "off": "Off",

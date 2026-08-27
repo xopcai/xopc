@@ -1,11 +1,7 @@
 import { useCallback, useRef, type RefObject } from 'react';
 
 import type { SessionInfo } from '@/features/chat/chat.types';
-import {
-  type Message,
-  type ReasoningLevel,
-  coerceReasoningLevel,
-} from '@/features/chat/messages/messages.types';
+import { type Message, coerceReasoningLevel } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
@@ -84,9 +80,7 @@ export function useChatSessionLoad(deps: {
         store().patchSessionMeta(key, {
           model: cfg.model,
           thinkingLevel: cfg.thinkingLevel,
-          reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
-          activityDetailDefault: cfg.activityDetail.default,
-          activityDetailOverride: cfg.activityDetail.override,
+          reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
           effectiveWorkspacePath: cfg.effectiveWorkspacePath,
           workingDirectoryLocked: cfg.workingDirectoryLocked,
           workspaceSource: cfg.workspaceSource,
@@ -204,9 +198,7 @@ export function useChatSessionLoad(deps: {
             store().patchSessionMeta(k, {
               model: cfg.model,
               thinkingLevel: cfg.thinkingLevel,
-              reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
-              activityDetailDefault: cfg.activityDetail.default,
-              activityDetailOverride: cfg.activityDetail.override,
+              reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
               effectiveWorkspacePath: cfg.effectiveWorkspacePath,
               workingDirectoryLocked: cfg.workingDirectoryLocked,
               workspaceSource: cfg.workspaceSource,
@@ -334,33 +326,6 @@ export function useChatSessionLoad(deps: {
     },
     [sessionKey, sessionMgrRef],
   );
-  const onSessionReasoningLevelChange = useCallback(
-    async (level: ReasoningLevel | null) => {
-      if (!sessionKey) return;
-      const previous = store().sessions[sessionKey];
-      const effectiveLevel = level ?? previous?.activityDetailDefault ?? 'on';
-      try {
-        store().setShellError(null);
-        store().patchSessionMeta(sessionKey, {
-          reasoningLevel: effectiveLevel,
-          activityDetailOverride: level,
-        });
-        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, {
-          activityDetailLevel: level,
-        });
-      } catch (e) {
-        if (previous) {
-          store().patchSessionMeta(sessionKey, {
-            reasoningLevel: previous.reasoningLevel,
-            activityDetailOverride: previous.activityDetailOverride,
-          });
-        }
-        store().setShellError(e instanceof Error ? e.message : 'Failed to update activity detail');
-      }
-    },
-    [sessionKey, sessionMgrRef],
-  );
-
   const createNewSession = useCallback(
     async (opts?: { forceNew?: boolean; projectId?: string | null }) => {
       dismissClarifyOnSessionLoad();
@@ -401,7 +366,6 @@ export function useChatSessionLoad(deps: {
     loadMoreMessages,
     onSessionModelChange,
     onSessionThinkingLevelChange,
-    onSessionReasoningLevelChange,
     createNewSession,
   };
 }
