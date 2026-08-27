@@ -4,6 +4,10 @@ import {
   buildAgentRunNotification,
   parseAgentRunEndedEvent,
 } from '@/features/notifications/agent-run-notification';
+import {
+  buildAutomationRunNotification,
+  parseAutomationRunCompletedEvent,
+} from '@/features/notifications/automation-run-notification';
 import { deliverBrowserNotification } from '@/features/notifications/browser-notification-delivery';
 import { deliverElectronNotification } from '@/features/notifications/electron-notification-delivery';
 import { showActivity } from '@/stores/activity-store';
@@ -31,6 +35,23 @@ export function AgentRunNotificationCoordinator() {
     };
 
     window.addEventListener('agent-run-ended', onRunEnded);
+    const onAutomationRunCompleted = (raw: Event) => {
+      const event = parseAutomationRunCompletedEvent((raw as CustomEvent<unknown>).detail);
+      if (!event) return;
+      const notification = buildAutomationRunNotification(event, language);
+      if (!notification) return;
+      showActivity({
+        tone: notification.status === 'success' ? 'success' : 'error',
+        title: notification.title,
+        message: notification.body,
+        source: 'automation',
+        href: notification.route,
+        dedupeKey: notification.id,
+      });
+      void deliverElectronNotification(notification);
+      void deliverBrowserNotification(notification);
+    };
+    window.addEventListener('automation-run-completed', onAutomationRunCompleted);
     const onServiceWorkerMessage = (raw: MessageEvent<unknown>) => {
       const message = raw.data as { type?: unknown; route?: unknown } | null;
       if (message?.type !== 'xopc:notification-click' || typeof message.route !== 'string') return;
@@ -39,6 +60,7 @@ export function AgentRunNotificationCoordinator() {
     navigator.serviceWorker?.addEventListener('message', onServiceWorkerMessage);
     return () => {
       window.removeEventListener('agent-run-ended', onRunEnded);
+      window.removeEventListener('automation-run-completed', onAutomationRunCompleted);
       navigator.serviceWorker?.removeEventListener('message', onServiceWorkerMessage);
     };
   }, [language]);

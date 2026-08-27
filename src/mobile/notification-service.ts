@@ -65,20 +65,27 @@ function taskEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdA
 
 function automationEvent(payload: unknown): Omit<MobileActivityEvent, 'id' | 'createdAt'> | null {
   if (!payload || typeof payload !== 'object') return null;
-  if ((payload as { silent?: unknown }).silent === true) return null;
-  const run = (payload as { run?: AutomationRun }).run;
+  const event = payload as {
+    run?: AutomationRun;
+    notificationPolicy?: 'attention' | 'all' | 'none';
+    requiresAttention?: boolean;
+  };
+  if (event.notificationPolicy === 'none') return null;
+  if (event.notificationPolicy === 'attention' && event.requiresAttention !== true) return null;
+  const run = event.run;
   if (!run || (run.status !== 'failed' && run.status !== 'timeout' && run.status !== 'succeeded')) return null;
   const type: MobileNotificationEventType = run.status === 'succeeded'
     ? 'automation.completed'
     : 'automation.failed';
+  const route = `/automations?automation=${encodeURIComponent(run.automationId)}&run=${encodeURIComponent(run.id)}`;
   return {
     type,
     entity: { kind: 'automation', id: run.automationId },
     priority: type === 'automation.failed' ? 'high' : 'normal',
     title: type === 'automation.failed' ? 'Automation failed' : 'Automation completed',
     body: run.automationName.slice(0, 120),
-    deepLink: '/automation',
-    payload: { route: '/automation', automationId: run.automationId, runId: run.id, eventType: type },
+    deepLink: route,
+    payload: { route, automationId: run.automationId, runId: run.id, eventType: type },
   };
 }
 

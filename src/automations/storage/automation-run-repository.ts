@@ -31,6 +31,7 @@ type AutomationRunRow = {
   lease_expires_at_ms: number | null;
   attempt_number: number;
   root_run_id: string | null;
+  read_at_ms: number | null;
 };
 
 type AutomationRunEventRow = {
@@ -71,6 +72,7 @@ function rowToRun(row: AutomationRunRow): AutomationRun {
     leaseExpiresAtMs: row.lease_expires_at_ms ?? undefined,
     attemptNumber: row.attempt_number,
     rootRunId: row.root_run_id ?? undefined,
+    readAtMs: row.read_at_ms ?? undefined,
   };
 }
 
@@ -130,8 +132,8 @@ export function saveAutomationRun(run: AutomationRun): void {
         duration_ms, summary, error, session_key, workflow_run_id, model,
         deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
         termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
-        attempt_number, root_run_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        attempt_number, root_run_id, read_at_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       run.id,
       run.automationId,
@@ -159,6 +161,7 @@ export function saveAutomationRun(run: AutomationRun): void {
       run.leaseExpiresAtMs ?? null,
       run.attemptNumber ?? 1,
       run.rootRunId ?? run.id,
+      run.readAtMs ?? null,
     );
     trimRuns(db, run.automationId);
   });
@@ -199,7 +202,7 @@ export function getAutomationRun(runId: string): AutomationRun | null {
               duration_ms, summary, error, session_key, workflow_run_id, model,
               deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
               termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
-              attempt_number, root_run_id
+              attempt_number, root_run_id, read_at_ms
        FROM automation_runs
        WHERE run_id = ?`,
     )
@@ -219,7 +222,7 @@ export function listAutomationRuns(options?: {
                        duration_ms, summary, error, session_key, workflow_run_id, model,
                        deadline_at_ms, current_phase, cancel_requested_at_ms, cancel_confirmed_at_ms,
                        termination_json, heartbeat_at_ms, lease_owner, lease_expires_at_ms,
-                       attempt_number, root_run_id
+                       attempt_number, root_run_id, read_at_ms
                 FROM automation_runs`;
   let rows: unknown[];
   if (options?.automationId) {
@@ -231,7 +234,7 @@ export function listAutomationRuns(options?: {
               r.duration_ms, r.summary, r.error, r.session_key, r.workflow_run_id, r.model,
               r.deadline_at_ms, r.current_phase, r.cancel_requested_at_ms, r.cancel_confirmed_at_ms,
               r.termination_json, r.heartbeat_at_ms, r.lease_owner, r.lease_expires_at_ms,
-              r.attempt_number, r.root_run_id
+              r.attempt_number, r.root_run_id, r.read_at_ms
        FROM automation_runs r
        JOIN automations a ON a.automation_id = r.automation_id
        WHERE a.project_id = ?
@@ -274,7 +277,7 @@ export function listAutomationRunsForProductEvent(options: {
               r.duration_ms, r.summary, r.error, r.session_key, r.workflow_run_id, r.model,
               r.deadline_at_ms, r.current_phase, r.cancel_requested_at_ms, r.cancel_confirmed_at_ms,
               r.termination_json, r.heartbeat_at_ms, r.lease_owner, r.lease_expires_at_ms,
-              r.attempt_number, r.root_run_id,
+              r.attempt_number, r.root_run_id, r.read_at_ms,
               e.event_id, e.run_id AS event_run_id, e.automation_id AS event_automation_id,
               e.type AS event_type, e.message AS event_message, e.data_json AS event_data_json,
               e.created_at_ms AS event_created_at_ms
@@ -313,4 +316,28 @@ export function deleteAutomationRunsForAutomation(automationId: string): void {
     db.prepare(`DELETE FROM automation_run_events WHERE automation_id = ?`).run(automationId);
     db.prepare(`DELETE FROM automation_runs WHERE automation_id = ?`).run(automationId);
   });
+}
+
+export function markAutomationRunRead(runId: string, readAtMs = Date.now()): boolean {
+  const result = getSqliteDatabase()
+    .prepare(`UPDATE automation_runs SET read_at_ms = ? WHERE run_id = ? AND ended_at_ms IS NOT NULL`)
+    .run(readAtMs, runId);
+  return result.changes > 0;
+}
+
+export function markAllAutomationRunsRead(options?: { projectId?: string; readAtMs?: number }): number {
+  const projectId = options?.projectId?.trim();
+  const result = getSqliteDatabase()
+    .prepare(projectId
+      ? `UPDATE automation_runs
+         SET read_at_ms = ?
+         WHERE read_at_ms IS NULL
+           AND ended_at_ms IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM automations a
+             WHERE a.automation_id = automation_runs.automation_id AND a.project_id = ?
+           )`
+      : `UPDATE automation_runs SET read_at_ms = ? WHERE read_at_ms IS NULL AND ended_at_ms IS NOT NULL`)
+    .run(options?.readAtMs ?? Date.now(), ...(projectId ? [projectId] : []));
+  return Number(result.changes);
 }

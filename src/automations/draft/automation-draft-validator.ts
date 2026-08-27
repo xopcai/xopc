@@ -86,8 +86,8 @@ export function simulateAutomation(input: CreateAutomationInput): AutomationSimu
   if (automation.action.kind === 'agent' && /delete|remove|send|post|publish|付款|删除|发送|发布/i.test(automation.action.instruction)) {
     requiredConfirmations.push('Agent instruction may perform an external or destructive action.');
   }
-  if (automation.afterRun?.kind === 'webhook') {
-    safetyNotes.push('After-run webhook will call an external URL after each run.');
+  if (automation.completionWebhookUrl) {
+    safetyNotes.push('The completion webhook will call an external URL after each run.');
     requiredConfirmations.push('External webhook call should be reviewed before publishing.');
   }
   const safetyMode = automation.safety?.mode ?? 'auto_apply';
@@ -138,7 +138,7 @@ function summarizeAction(action: CreateAutomationInput['action']): string {
 
 function repairPatchNeedsApproval(patch: UpdateAutomationInput): boolean {
   if (patch.safety?.mode === 'auto_apply') return true;
-  if (patch.afterRun?.kind === 'webhook') return true;
+  if (patch.completionWebhookUrl) return true;
   if (patch.trigger?.kind === 'webhook') return true;
   if (patch.action?.kind === 'agent') {
     return /delete|remove|send|post|publish|付款|删除|发送|发布/i.test(patch.action.instruction);

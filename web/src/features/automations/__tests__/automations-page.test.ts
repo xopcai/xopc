@@ -43,7 +43,8 @@ describe('automation buildInput', () => {
       trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 17 * * 5' } },
       action: { kind: 'agent', instruction: 'Write my weekly report.', timeoutSeconds: 300 },
       safety: { mode: 'suggest_only' },
-      afterRun: { kind: 'none' },
+      conversationMode: 'new_session',
+      notificationPolicy: 'attention',
       reliability: { timeoutSeconds: 300, disableAfterConsecutiveFailures: 3 },
     };
 
@@ -58,6 +59,7 @@ describe('automation buildInput', () => {
       id: 'automation-1',
       name: 'Custom event review',
       description: 'Review selected Telegram messages.',
+      projectId: 'project-1',
       enabled: true,
       trigger: {
         kind: 'event',
@@ -74,7 +76,8 @@ describe('automation buildInput', () => {
         timeoutSeconds: 600,
       },
       safety: { mode: 'ask_before_apply' },
-      afterRun: { kind: 'saveToSession' },
+      conversationMode: 'continuous',
+      notificationPolicy: 'all',
       reliability: {
         timeoutSeconds: 600,
         retryCount: 2,
@@ -90,6 +93,7 @@ describe('automation buildInput', () => {
       ...form,
       name: 'Telegram review',
       description: '',
+      projectId: '',
       agentId: '',
     }, null);
 
@@ -105,12 +109,35 @@ describe('automation buildInput', () => {
       model: 'openai/gpt-5',
     });
     expect(edited.description).toBe('');
+    expect(edited.projectId).toBe('');
     expect(edited.action.kind === 'agent' ? edited.action.agentId : undefined).toBeUndefined();
     expect(edited.reliability).toMatchObject({ retryCount: 2, maxConcurrentRuns: 4 });
   });
 
+  it('includes the selected project and delivery preferences', () => {
+    const input = buildInput({
+      ...initialForm,
+      name: 'Project brief',
+      projectId: 'project-1',
+      triggerMode: 'manual',
+      instruction: 'Summarize project progress.',
+      safetyMode: 'auto_apply',
+      conversationMode: 'continuous',
+      notificationPolicy: 'all',
+      completionWebhookUrl: 'https://example.com/completed',
+    }, null);
+
+    expect(input).toMatchObject({
+      projectId: 'project-1',
+      conversationMode: 'continuous',
+      notificationPolicy: 'all',
+      completionWebhookUrl: 'https://example.com/completed',
+    });
+  });
+
   it('includes structured workflow input when creating a workflow automation', () => {
     const input = buildInput({
+      ...initialForm,
       name: 'Morning report',
       description: '',
       triggerMode: 'daily',
@@ -141,9 +168,6 @@ describe('automation buildInput', () => {
       browserWorkflowInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
-      afterRunMode: 'none',
-      webhookUrl: '',
-      disableAfterFailures: '3',
     }, workflow);
 
     expect(input.action).toMatchObject({
@@ -177,8 +201,9 @@ describe('automation buildInput', () => {
     expect(input.reliability?.executionTimeoutSeconds).toBe(1800);
   });
 
-  it('suppresses after-run webhooks outside auto-apply mode', () => {
+  it('suppresses completion webhooks outside auto-apply mode', () => {
     const input = buildInput({
+      ...initialForm,
       name: 'Safe report',
       description: '',
       triggerMode: 'manual',
@@ -203,17 +228,16 @@ describe('automation buildInput', () => {
       browserWorkflowInputs: {},
       safetyMode: 'ask_before_apply',
       timeoutSeconds: '300',
-      afterRunMode: 'webhook',
-      webhookUrl: 'https://example.com/hook',
-      disableAfterFailures: '3',
+      completionWebhookUrl: 'https://example.com/hook',
     }, null);
 
     expect(input.safety).toEqual({ mode: 'ask_before_apply' });
-    expect(input.afterRun).toEqual({ kind: 'none' });
+    expect(input.completionWebhookUrl).toBeUndefined();
   });
 
   it('converts the selected interval unit without asking for minutes', () => {
     const input = buildInput({
+      ...initialForm,
       name: 'Interval report',
       description: '',
       triggerMode: 'interval',
@@ -238,9 +262,6 @@ describe('automation buildInput', () => {
       browserWorkflowInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
-      afterRunMode: 'none',
-      webhookUrl: '',
-      disableAfterFailures: '3',
     }, null);
 
     expect(input.trigger).toEqual({
