@@ -1,5 +1,5 @@
-// Block-level renderers used by MessageBubble. Assistant activity is collected
-// into one turn-level disclosure instead of fragmenting the reply around text.
+// Block-level renderers used by MessageBubble. Contiguous assistant activity is
+// grouped into disclosures while narration stays in its original turn order.
 
 import {
   useCallback,
@@ -21,6 +21,8 @@ import type {
   ImageContent,
   MessageContent,
   ReviewContent,
+  ThinkingContent,
+  ToolUseContent,
 } from '@/features/chat/messages/messages.types';
 import type { MemoryActivityLabels } from '@/features/chat/messages/memory-activity';
 import type {
@@ -51,10 +53,8 @@ import {
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
-import {
-  assistantTextForDisplay,
-  isAssistantNarration,
-} from '@/features/chat/messages/assistant-text-presentation';
+import { getActivityTiming } from '@/features/chat/messages/activity-timing';
+import { assistantTextForDisplay } from '@/features/chat/messages/assistant-text-presentation';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -505,6 +505,33 @@ function renderTextOrImageBlock(
   return null;
 }
 
+function activitySegmentPresentation(
+  blocks: Array<ThinkingContent | ToolUseContent>,
+  parent: AssistantTurnActivityPresentation,
+): AssistantTurnActivityPresentation {
+  const tools = blocks.filter(
+    (block): block is ToolUseContent => block.type === 'tool_use',
+  );
+  const active = parent.active && blocks.some(
+    (block) =>
+      (block.type === 'thinking' && Boolean(block.streaming))
+      || (block.type === 'tool_use'
+        && (block.status === 'running' || block.activity?.status === 'running')),
+  );
+  const failedCount = tools.filter(
+    (tool) => tool.status === 'error' || tool.activity?.status === 'failed',
+  ).length;
+
+  return {
+    blocks,
+    active,
+    failedCount,
+    hasTool: tools.length > 0,
+    expandedByDefault: parent.expandedByDefault && active,
+    ...getActivityTiming(blocks),
+  };
+}
+
 export function ChunkedContent({
   content,
   isUser,
@@ -572,24 +599,38 @@ export function ChunkedContent({
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
   const activityBlocks = isUser ? [] : (assistantActivity?.blocks ?? []);
-  let activityRendered = false;
-  let narrationRendered = false;
+  const visibleToolIds = new Set(
+    activityBlocks
+      .filter((block): block is ToolUseContent => block.type === 'tool_use')
+      .map((block) => block.id),
+  );
+  const showThinkingActivity = activityBlocks.some((block) => block.type === 'thinking');
+  let activityOrdinal = 0;
   let i = 0;
   let imageOrdinal = 0;
   while (i < renderContent.length) {
     const b = renderContent[i];
 
     if (b.type === 'thinking' || b.type === 'tool_use') {
-      if (
-        !isUser &&
-        assistantActivity &&
-        !activityRendered &&
-        activityBlocks.length > 0
-      ) {
+      const segment: Array<ThinkingContent | ToolUseContent> = [];
+      while (i < renderContent.length) {
+        const activityBlock = renderContent[i];
+        if (activityBlock.type !== 'thinking' && activityBlock.type !== 'tool_use') break;
+        if (
+          (activityBlock.type === 'tool_use' && visibleToolIds.has(activityBlock.id))
+          || (activityBlock.type === 'thinking'
+            && showThinkingActivity
+            && (Boolean(activityBlock.text?.trim()) || Boolean(activityBlock.streaming)))
+        ) {
+          segment.push(activityBlock);
+        }
+        i++;
+      }
+      if (!isUser && assistantActivity && segment.length > 0) {
         nodes.push(
           <AssistantStepsBlock
-            key="turn-activity"
-            activity={assistantActivity}
+            key={`turn-activity-${activityOrdinal}`}
+            activity={activitySegmentPresentation(segment, assistantActivity)}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
             clusterLabels={clusterLabels}
@@ -598,21 +639,9 @@ export function ChunkedContent({
             workflowOptions={workflowOptions}
           />,
         );
-        activityRendered = true;
+        activityOrdinal++;
       }
-      i++;
     } else {
-      if (
-        !isUser
-        && b.type === 'text'
-        && isAssistantNarration(b)
-      ) {
-        if (narrationRendered) {
-          i++;
-          continue;
-        }
-        narrationRendered = true;
-      }
       const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;
       const el = renderTextOrImageBlock(
         b,

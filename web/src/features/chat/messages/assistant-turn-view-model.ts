@@ -72,10 +72,12 @@ export function buildAssistantTurnViewModel({
   isStreaming: boolean;
   reasoningLevel: ReasoningLevel;
 }): AssistantTurnViewModel {
-  const displayContent =
-    reasoningLevel === 'off'
-      ? (message.content ?? []).filter((block) => block.type !== 'thinking')
-      : (message.content ?? []);
+  const displayContent = (message.content ?? []).filter((block) => {
+    if (reasoningLevel !== 'off') return true;
+    if (block.type === 'thinking') return false;
+    return block.type !== 'text'
+      || (block.presentation !== 'pending' && block.presentation !== 'narration');
+  });
   const flowContent = displayContent.filter((block) => block.type !== 'image');
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
   const activityBlocks = reasoningLevel === 'off'
