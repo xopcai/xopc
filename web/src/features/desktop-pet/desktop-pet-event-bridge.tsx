@@ -7,6 +7,7 @@ import {
   mapAgentStreamEvent,
   type AgentStreamDetail,
 } from "@/features/desktop-pet/desktop-pet-event-mapper";
+import { AGENT_STREAM_EVENT } from "@/features/gateway/agent-run-stream-event-bridge";
 import { messages } from "@/i18n/messages";
 import { isElectron } from "@/lib/electron-env";
 import { apiFetch } from "@/lib/fetch";
@@ -34,9 +35,12 @@ function petNarrativeLabels(t: ReturnType<typeof messages>["desktopPet"]): Deskt
     tipProgress: t.tipProgress,
     tipValidate: t.tipValidate,
     tipWaiting: t.tipWaiting,
+    tipThinking: t.tipThinking,
     tipAssistantDelta: t.tipAssistantDelta,
     tipCommandDelta: t.tipCommandDelta,
-    tipAssistantDone: t.tipAssistantDone,
+    tipAssistantNarrationDone: t.tipAssistantNarrationDone,
+    tipAssistantAnswerDone: t.tipAssistantAnswerDone,
+    tipReview: t.tipReview,
     tipComplete: t.tipComplete,
     tipError: t.tipError,
     targetSuffix: t.tipTargetSuffix,
@@ -48,42 +52,68 @@ export function DesktopPetEventBridge() {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).desktopPet;
   const sequenceRef = useRef(new Map<string, number>());
-  const titleRef = useRef(new Map<string, Promise<string | undefined>>());
+  const titleRef = useRef(new Map<string, string>());
+  const titleLoadingRef = useRef(new Set<string>());
   const pendingRef = useRef(new Map<string, PetSessionUpdate>());
+  const lastSentRef = useRef(new Map<string, PetSessionUpdate>());
   const timerRef = useRef<number | null>(null);
   useEffect(() => {
     const pet = window.electronAPI?.pet;
     if (!isElectron() || !pet) return;
+    const send = (update: PetSessionUpdate) => {
+      lastSentRef.current.set(update.sessionKey, update);
+      void pet.sendEvent(update).catch(() => {});
+    };
     const flush = () => {
       timerRef.current = null;
-      for (const update of pendingRef.current.values()) void pet.sendEvent(update);
+      for (const update of pendingRef.current.values()) send(update);
       pendingRef.current.clear();
     };
     const titleFor = (sessionKey: string) => {
       const cached = titleRef.current.get(sessionKey);
-      if (cached) return cached;
-      const pending = apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`))
-        .then(async (response) => response.ok ? (await response.json() as { session?: { name?: string } }).session?.name?.trim() : undefined)
-        .catch(() => undefined);
-      void pending.then((title) => {
-        if (title) titleRef.current.set(sessionKey, Promise.resolve(title));
-      });
-      return pending;
+      if (!cached && !titleLoadingRef.current.has(sessionKey)) {
+        titleLoadingRef.current.add(sessionKey);
+        void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`))
+          .then(async (response) => response.ok ? (await response.json() as { session?: { name?: string } }).session?.name?.trim() : undefined)
+          .then((title) => {
+            if (title) titleRef.current.set(sessionKey, title);
+          })
+          .catch(() => undefined)
+          .finally(() => titleLoadingRef.current.delete(sessionKey));
+      }
+      return cached ?? t.fallbackSessionLabel;
     };
-    const onStream = async (event: Event) => {
+    const onStream = (event: Event) => {
       const detail = (event as CustomEvent<AgentStreamDetail>).detail;
       if (!detail.sessionKey) return;
-      const sessionLabel = (await titleFor(detail.sessionKey)) ?? t.fallbackSessionLabel;
+      const sessionLabel = titleFor(detail.sessionKey);
       const next = (sequenceRef.current.get(detail.sessionKey ?? "") ?? 0) + 1;
       const update = mapAgentStreamEvent(detail, next, sessionLabel, petNarrativeLabels(t));
       if (!update) return;
       sequenceRef.current.set(update.sessionKey, next);
+      const baseline = pendingRef.current.get(update.sessionKey) ?? lastSentRef.current.get(update.sessionKey);
+      const terminal = update.state === "error" || update.state === "waiting" || update.state === "success";
+      const animationChanged = !baseline
+        || baseline.runId !== update.runId
+        || baseline.state !== update.state
+        || baseline.phase !== update.phase
+        || baseline.animation !== update.animation
+        || baseline.action !== update.action;
+      if (terminal || animationChanged) {
+        pendingRef.current.delete(update.sessionKey);
+        send(update);
+        return;
+      }
       pendingRef.current.set(update.sessionKey, update);
-      if (update.state === "error" || update.state === "waiting" || update.state === "success") flush();
-      else if (timerRef.current === null) timerRef.current = window.setTimeout(flush, 500);
+      if (timerRef.current === null) timerRef.current = window.setTimeout(flush, 500);
     };
-    window.addEventListener("agent-stream-event", onStream);
-    return () => { window.removeEventListener("agent-stream-event", onStream); if (timerRef.current !== null) window.clearTimeout(timerRef.current); };
+    window.addEventListener(AGENT_STREAM_EVENT, onStream);
+    return () => {
+      window.removeEventListener(AGENT_STREAM_EVENT, onStream);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+      pendingRef.current.clear();
+    };
   }, [t]);
   return null;
 }

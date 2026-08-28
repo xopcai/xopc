@@ -1029,7 +1029,7 @@ export const zh: MessageBundle = {
     taskReceiptsEmpty: '还没有执行回执。',
     taskLoadFailed: '无法加载这个任务。',
     taskRun: '开始推进',
-    taskPause: '暂时暂停',
+    taskPause: '暂停推进',
     taskResume: '继续推进',
     taskContinueInChat: '回到对话继续',
     taskCancel: '结束事项',

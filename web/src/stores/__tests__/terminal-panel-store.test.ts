@@ -4,6 +4,7 @@ import {
   TERMINAL_HEIGHT_MAX,
   TERMINAL_HEIGHT_MIN,
   clampTerminalHeight,
+  selectTerminalTabs,
   useTerminalPanelStore,
 } from '@/stores/terminal-panel-store';
 
@@ -25,6 +26,17 @@ describe('terminal panel store', () => {
 
     useTerminalPanelStore.getState().close('session-a');
     expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(false);
+  });
+
+  it('returns a stable empty tab snapshot for sessions without terminals', () => {
+    const tabsBySessionKey = useTerminalPanelStore.getState().tabsBySessionKey;
+
+    expect(selectTerminalTabs(tabsBySessionKey, 'missing-a')).toBe(
+      selectTerminalTabs(tabsBySessionKey, 'missing-a'),
+    );
+    expect(selectTerminalTabs(tabsBySessionKey, 'missing-a')).toBe(
+      selectTerminalTabs(tabsBySessionKey, 'missing-b'),
+    );
   });
 
   it('adds, switches, and closes independent terminal tabs', () => {

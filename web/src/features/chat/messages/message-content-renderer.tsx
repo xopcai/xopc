@@ -288,8 +288,8 @@ function ChatMarkdownView({
   animateInitialContent?: boolean;
   onProgressiveRenderComplete?: () => void;
 }) {
-  // Reveal bounded chunks at an adaptive cadence so fast providers remain
-  // perceptible without forcing one render per raw delta.
+  // Reveal incoming deltas at an adaptive cadence without replaying the
+  // current snapshot when this view first mounts.
   const generatedMetricsKey = useId();
   const metricsKey = `assistant-markdown-${generatedMetricsKey}`;
   const streamingContent = useProgressiveStreamingMarkdown(

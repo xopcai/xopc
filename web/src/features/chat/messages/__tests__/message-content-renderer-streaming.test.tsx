@@ -138,27 +138,21 @@ describe('streaming assistant Markdown rendering', () => {
     vi.useFakeTimers();
     render([{ type: 'text', text: 'First' }], true);
 
-    expect(container.textContent?.trim()).toBe('');
-    act(() => vi.advanceTimersByTime(48));
     expect(container.textContent?.trim()).toBe('First');
 
     render([{ type: 'text', text: 'First update' }], true);
 
     expect(container.textContent?.trim()).toBe('First');
-    act(() => vi.advanceTimersByTime(32));
+    act(() => vi.advanceTimersByTime(48));
     expect(container.textContent?.trim()).toBe('First updat');
     act(() => vi.advanceTimersByTime(32));
     expect(container.textContent?.trim()).toBe('First update');
   });
 
-  it('animates a completed response that did not render before run_end', () => {
+  it('renders a completed response immediately when the session view mounts', () => {
     vi.useFakeTimers();
     render([{ type: 'text', text: 'abcdefghijkl' }], false, true);
 
-    expect(container.textContent?.trim()).toBe('');
-    act(() => vi.advanceTimersByTime(48));
-    expect(container.textContent?.trim()).toBe('abcdef');
-    act(() => vi.advanceTimersByTime(32));
     expect(container.textContent?.trim()).toBe('abcdefghijkl');
   });
 
