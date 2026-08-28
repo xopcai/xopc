@@ -23,5 +23,7 @@ export function redactSensitiveMemoryText(content: string): string {
     .replace(/\b(api[_-]?key|access[_-]?key|token|password|secret|credential|private[_-]?key|bearer)\b\s*[:=]?\s*[^\s,;]+/gi, '$1=[REDACTED]')
     .replace(/(密钥|密码|令牌|私钥)\s*[：:=]?\s*[^\s，；]+/g, '$1=[REDACTED]')
     .replace(/\b(?:sk|gh[opsu]|xox[abprs])-[a-z0-9_-]{8,}\b/gi, '[REDACTED TOKEN]')
-    .replace(/\bAKIA[A-Z0-9]{12,}\b/g, '[REDACTED ACCESS KEY]');
+    .replace(/\bAKIA[A-Z0-9]{12,}\b/g, '[REDACTED ACCESS KEY]')
+    .replace(/\b(ssn|social security|bank account|credit card|medical record)\b(?:\s+(?:is|number))?\s*[:=]?\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .replace(/(身份证|银行卡|信用卡|医疗记录)\s*(?:是|号码)?\s*[：:=]?\s*[^\s，；]+/g, '$1=[REDACTED]');
 }

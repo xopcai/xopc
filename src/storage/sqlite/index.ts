@@ -40,7 +40,9 @@ export {
   type ContextConsolidationRun,
 } from './context-consolidation-repository.js';
 export {
+  summarizeUnderstandingFeedback,
   summarizeUserUnderstandingQuality,
+  type UnderstandingFeedbackSummary,
   type UserUnderstandingQualityMetrics,
 } from './user-context-quality-repository.js';
 export {
@@ -67,6 +69,7 @@ export {
   rejectUnderstanding,
   reviseCollaborationRule,
   reviseUnderstanding,
+  searchActiveUnderstandings,
   setCollaborationRuleStatus,
   setUnderstandingStatus,
   updateUserProfile,

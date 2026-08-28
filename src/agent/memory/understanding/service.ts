@@ -129,16 +129,25 @@ export class UserUnderstandingService {
     if (candidates.length === 0) {
       return { proposed: 0, created: 0, deduplicated: 0, rejected: 0, createdRecords: [] };
     }
+    const safeCandidates = candidates.filter((candidate) => {
+      const content = normalizeContent(candidate.content);
+      const sensitivity = effectiveSensitivity(candidate.sensitivity, content);
+      return sensitivity !== 'secret' && sensitivity !== 'regulated';
+    });
+    if (!safeCandidates.length) {
+      return { proposed: candidates.length, created: 0, deduplicated: 0, rejected: candidates.length, createdRecords: [] };
+    }
     const evidence = createContextEvidence({
       sourceType: 'conversation',
       sourceRef: params.sessionKey
         ? `session:${params.sessionKey}:turn:${params.turnId ?? 'unknown'}`
         : `turn:${params.turnId ?? 'unknown'}`,
-      redactedExcerpt: redactSensitiveMemoryText(params.userContent).slice(0, MAX_CANDIDATE_CHARS),
+      redactedExcerpt: redactSensitiveMemoryText(safeCandidates.map((candidate) => candidate.content).join('\n'))
+        .slice(0, MAX_CANDIDATE_CHARS),
       trustLevel: 'owner',
       observedAt: Date.now(),
     });
-    const result = await this.applyCandidates(candidates, {
+    const result = await this.applyCandidates(safeCandidates, {
       sessionKey: params.sessionKey,
       workspaceId: params.workspaceId,
       projectId: params.projectId,
@@ -146,7 +155,12 @@ export class UserUnderstandingService {
       reviewSource: 'turn',
       supersedesRecordIds: params.correctionTargetRecordIds,
     });
-    return { ...result, sourceItemId: evidence.id };
+    return {
+      ...result,
+      proposed: candidates.length,
+      rejected: result.rejected + candidates.length - safeCandidates.length,
+      sourceItemId: evidence.id,
+    };
   }
 
   async applyCandidates(candidates: UnderstandingCandidate[], context: {
@@ -163,9 +177,26 @@ export class UserUnderstandingService {
   }): Promise<Omit<UnderstandingReviewResult, 'sourceItemId'>> {
     let created = 0;
     let deduplicated = 0;
-    let rejected = 0;
     const createdRecords: UnderstandingReviewResult['createdRecords'] = [];
     const correctionTarget = context.supersedesRecordIds?.length === 1 ? context.supersedesRecordIds[0] : undefined;
+    const considered = candidates.slice(0, 10);
+    const prepared = considered.map((candidate) => {
+      const content = normalizeContent(candidate.content);
+      const sensitivity = effectiveSensitivity(candidate.sensitivity, content);
+      const scope = scopeForCandidate(candidate, context);
+      const key = candidate.canonicalKey ?? canonicalUnderstandingKey(candidate.kind, content);
+      return { candidate, content, sensitivity, scope, key };
+    });
+    const eligible = prepared.filter(({ candidate, content, sensitivity, scope, key }) =>
+      content.length >= 4
+      && candidate.confidence >= 0.55
+      && sensitivity !== 'secret'
+      && sensitivity !== 'regulated'
+      && !isUnderstandingSuppressed(key, scope));
+    let rejected = candidates.length - eligible.length;
+    if (!eligible.length) {
+      return { proposed: candidates.length, created, deduplicated, rejected, createdRecords };
+    }
     const evidenceIds = [...new Set(context.evidenceIds ?? [])];
     const sourceItemIds = [context.sourceItemId, ...(context.sourceItemIds ?? [])]
       .filter((value): value is string => Boolean(value));
@@ -181,16 +212,7 @@ export class UserUnderstandingService {
       evidenceIds.push(evidence.id);
     }
 
-    for (const candidate of candidates.slice(0, 10)) {
-      const content = normalizeContent(candidate.content);
-      const sensitivity = effectiveSensitivity(candidate.sensitivity, content);
-      const scope = scopeForCandidate(candidate, context);
-      const key = candidate.canonicalKey ?? canonicalUnderstandingKey(candidate.kind, content);
-      if (content.length < 4 || candidate.confidence < 0.55 || sensitivity === 'secret'
-        || sensitivity === 'regulated' || isUnderstandingSuppressed(key, scope)) {
-        rejected += 1;
-        continue;
-      }
+    for (const { candidate, content, sensitivity, scope, key } of eligible) {
       const duplicate = findDuplicateUnderstanding(listUnderstandings(), {
         kind: candidate.kind,
         statement: content,

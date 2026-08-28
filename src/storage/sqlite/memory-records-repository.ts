@@ -11,7 +11,10 @@ import type {
   MemorySignal,
   MemoryStatus,
 } from '../../agent/memory/types.js';
-import { buildFts5SearchQuery, fts5RankToScore, memoryLexicalSimilarity, memoryVectorSimilarity } from './fts.js';
+import { fuseRankedCandidates } from '../../retrieval/candidateFusion.js';
+import { buildRetrievalQueryProfile } from '../../retrieval/queryProfile.js';
+import { normalizeRetrievalText, retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
+import { buildFts5SearchQuery } from './fts.js';
 import { LOCAL_USER_ID } from '../../user-context/owner.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import {
@@ -285,6 +288,13 @@ export interface MemoryRecallFeedbackSummary {
   total: number;
   averageScore: number | null;
   lastFeedbackAt?: string;
+}
+
+function memoryFeedbackAdjustment(summary: MemoryRecallFeedbackSummary | undefined): number {
+  if (!summary || summary.total < 3) return 0;
+  const helpfulRate = (summary.helpful + 1) / (summary.total + 2);
+  const relevancePenalty = summary.irrelevant >= 3 ? 0.05 : 0;
+  return Math.max(-0.1, Math.min(0.05, (helpfulRate - 0.5) * 0.1 - relevancePenalty));
 }
 
 
@@ -652,7 +662,16 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
 }
 
 export function searchMemoryRecords(options: SearchMemoryRecordsOptions): MemorySearchResult[] {
-  const query = buildFts5SearchQuery(options.query);
+  const profile = buildRetrievalQueryProfile(options.query, {
+    ...(options.visibleToSessionKey ? { sessionKey: options.visibleToSessionKey } : {}),
+    ...(options.visibleToWorkspaceId ?? options.workspaceId
+      ? { workspaceId: options.visibleToWorkspaceId ?? options.workspaceId }
+      : {}),
+    ...(options.visibleToProjectId ?? options.projectId
+      ? { projectId: options.visibleToProjectId ?? options.projectId }
+      : {}),
+  });
+  const query = buildFts5SearchQuery(profile.normalized);
   if (!query) return [];
 
   const filters: string[] = ['memory_records_fts MATCH ?'];
@@ -705,6 +724,7 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
 
   const maxResults = Math.max(1, Math.min(50, options.maxResults ?? 5));
   const minScore = options.minScore ?? 0;
+  const candidateLimit = Math.max(50, Math.min(200, maxResults * 10));
   const rows = getSqliteDatabase()
     .prepare(
       `SELECT
@@ -716,7 +736,7 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
        ORDER BY rank
        LIMIT ?`,
     )
-    .all(...params, maxResults * 3) as MemoryRecordSearchRow[];
+    .all(...params, candidateLimit) as MemoryRecordSearchRow[];
 
   const candidateRecords = listMemoryRecords({
       providerId: options.providerId,
@@ -735,39 +755,49 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
       statuses.includes(record.status ?? 'active')
       && (!options.kinds?.length || options.kinds.includes(record.kind)),
     );
-  const byId = new Map<string, MemorySearchResult>();
   const candidateById = new Map(candidateRecords.map((record) => [record.id, record]));
   const missingRows = rows.filter((row) => !candidateById.has(row.record_id));
   const missingEvidence = listMemoryEvidenceForRecords(missingRows.map((row) => row.record_id));
-  if (rows.length > 0) {
-    const bestRank = Math.min(...rows.map((row) => row.rank));
-    const worstRank = Math.max(...rows.map((row) => row.rank));
-    for (const row of rows) {
-      const record = candidateById.get(row.record_id)
-        ?? rowToRecord(row, missingEvidence.get(row.record_id) ?? []);
-      byId.set(record.id, {
-        record,
-        score: fts5RankToScore(row.rank, bestRank, worstRank) * 0.65,
-        snippet: record.content,
-        citation: {
-          providerId: row.provider_id,
-          recordId: row.record_id,
-          path: record.source.path,
-          lineStart: record.source.lineStart,
-          lineEnd: record.source.lineEnd,
-          createdAt: record.createdAt,
-        },
-      });
-    }
+  const recordById = new Map(candidateRecords.map((record) => [record.id, record]));
+  for (const row of missingRows) {
+    recordById.set(row.record_id, rowToRecord(row, missingEvidence.get(row.record_id) ?? []));
   }
-  for (const record of candidateRecords) {
-    const vector = memoryVectorSimilarity(options.query, record.content);
-    const lexical = memoryLexicalSimilarity(options.query, record.content);
-    const existing = byId.get(record.id);
-    const score = existing
-      ? Math.min(1, existing.score + vector * 0.25 + lexical * 0.1)
-      : Math.max(vector, lexical);
-    byId.set(record.id, existing ? { ...existing, score } : {
+
+  const lexical = candidateRecords
+    .map((record) => ({ id: record.id, score: retrievalLexicalSimilarity(profile.normalized, record.content) }))
+    .filter((result) => result.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, candidateLimit);
+  const exact = profile.identifiers.length
+    ? candidateRecords.map((record) => {
+        const content = normalizeRetrievalText(record.content);
+        return {
+          id: record.id,
+          matches: profile.identifiers.filter((identifier) => content.includes(identifier)).length,
+        };
+      }).filter((result) => result.matches > 0)
+        .sort((left, right) => right.matches - left.matches)
+        .slice(0, candidateLimit)
+    : [];
+  const fused = fuseRankedCandidates([
+    { weight: 1.4, ids: exact.map((result) => result.id) },
+    { weight: 1, ids: rows.map((row) => row.record_id) },
+    { weight: 0.8, ids: lexical.map((result) => result.id) },
+  ]);
+  const feedback = new Map(summarizeMemoryRecallFeedback({ limit: 1_000 })
+    .map((summary) => [summary.recordId, summary]));
+
+  return [...fused.entries()]
+    .map(([id, fusionScore]): MemorySearchResult | null => {
+      const record = recordById.get(id);
+      if (!record) return null;
+      const kindBonus = profile.intentKinds.includes(record.kind) ? 0.08 : 0;
+      const authorityBonus = record.explicitness === 'explicit' ? 0.03 : 0;
+      const score = Math.max(0, Math.min(1,
+        fusionScore * 0.85 + kindBonus + authorityBonus + record.importance * 0.04
+          + memoryFeedbackAdjustment(feedback.get(record.id)),
+      ));
+      return {
         record,
         score,
         snippet: record.content,
@@ -779,9 +809,9 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
           lineEnd: record.source.lineEnd,
           createdAt: record.createdAt,
         },
-      });
-  }
-  return [...byId.values()]
+      };
+    })
+    .filter((result): result is MemorySearchResult => Boolean(result))
     .filter((result) => result.score >= minScore)
     .sort((left, right) => right.score - left.score)
     .slice(0, maxResults);
@@ -1048,6 +1078,13 @@ export function setMemoryTurnFeedback(input: SetMemoryTurnFeedbackInput): Memory
         item.note?.trim().slice(0, 2000) || null,
         source, nowMs, nowMs,
       );
+      if (item.rating === 'incorrect' || item.rating === 'sensitive') {
+        db.prepare("UPDATE memory_records SET status = 'needs_review', updated_at = ? WHERE record_id = ?")
+          .run(nowMs, item.recordId);
+      } else if (item.rating === 'outdated') {
+        db.prepare("UPDATE memory_records SET status = 'stale', updated_at = ? WHERE record_id = ?")
+          .run(nowMs, item.recordId);
+      }
     }
   });
   return memoryTraceRowToPayload(trace);
