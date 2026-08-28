@@ -118,6 +118,8 @@ describe('home focus items', () => {
       activeWorkflowRuns: [],
       runningTasks: [],
       wins: [],
+      scheduled: [],
+      recentTasks: [],
       inboxCount: 0,
       nowMs: 400,
     });
@@ -140,6 +142,8 @@ describe('home focus items', () => {
       activeWorkflowRuns: [],
       runningTasks: [],
       wins: [],
+      scheduled: [],
+      recentTasks: [],
       inboxCount: 0,
       nowMs: 500,
     });
@@ -159,6 +163,8 @@ describe('home focus items', () => {
       activeWorkflowRuns: [],
       runningTasks: [],
       wins: [],
+      scheduled: [],
+      recentTasks: [],
       inboxCount: 3,
       nowMs: 600,
     });
@@ -166,7 +172,30 @@ describe('home focus items', () => {
     expect(items[0]).toMatchObject({
       id: 'suggestion:organize-inbox',
       title: '整理收件箱 · 3',
-      primaryAction: { type: 'open', target: 'inbox' },
+      primaryAction: { type: 'open', href: '/notes?status=inbox' },
     });
+  });
+
+  it('keeps every scheduled item independently addressable', () => {
+    const items = buildHomeFocusItems({
+      locale: 'en',
+      decisions: [],
+      attention: [],
+      activeWorkflowRuns: [],
+      runningTasks: [],
+      wins: [],
+      scheduled: [
+        { id: 'morning', trigger: '0 8 * * *', action: 'agent:main', nextRunAt: '2026-08-29T00:00:00.000Z' },
+        { id: 'evening', trigger: '0 18 * * *', action: 'agent:main', nextRunAt: '2026-08-29T10:00:00.000Z' },
+      ],
+      recentTasks: [],
+      inboxCount: 0,
+      nowMs: 500,
+    });
+
+    expect(items.map((item) => item.primaryAction)).toEqual([
+      { type: 'open', label: 'View schedule', href: '/automations?automation=morning' },
+      { type: 'open', label: 'View schedule', href: '/automations?automation=evening' },
+    ]);
   });
 });

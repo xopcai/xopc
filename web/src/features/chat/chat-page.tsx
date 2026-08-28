@@ -13,7 +13,7 @@ import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotl
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatRealtimeStatus } from '@/features/chat/agent-selection/chat-realtime-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
-import { TaskSessionBanner } from '@/features/chat/task/task-session-banner';
+import { TaskSessionBanner, TaskSessionScopeBar } from '@/features/chat/task/task-session-banner';
 import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
@@ -947,6 +947,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
             returnTo={pathname}
           />
         ) : null}
+        {!embedded && taskId ? <TaskSessionScopeBar taskId={taskId} /> : null}
         {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
         agents.displayAgentId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
@@ -1041,7 +1042,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                       <AgentRunErrorBanner errorText={stream.error} />
                     </div>
                   ) : null}
-                  {!embedded && taskId ? <TaskSessionBanner taskId={taskId} /> : null}
+                  {!embedded && taskId ? (
+                    <div className="hidden md:block">
+                      <TaskSessionBanner taskId={taskId} />
+                    </div>
+                  ) : null}
                   {workflowRunLinks.length > 0 ? (
                     <div className="mb-6 flex flex-col gap-3">
                       {workflowRunLinks.map((link) => (
