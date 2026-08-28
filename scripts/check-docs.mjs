@@ -19,7 +19,10 @@ function markdownFilesFromGit() {
   return output
     .split('\n')
     .filter(Boolean)
-    .filter((file) => existsSync(join(root, file)));
+    .filter((file) => existsSync(join(root, file)))
+    // The public docs check validates user-facing pages. Internal RFCs, ADRs,
+    // and archived implementation references are not part of the VitePress site.
+    .filter((file) => !file.startsWith('docs/design/') && !file.startsWith('docs/adr/'));
 }
 
 function findJsonBlocks(markdown) {

@@ -15,6 +15,7 @@ import {
   listUnderstandings,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 
 describe('MemoryManager', () => {
@@ -33,6 +34,38 @@ describe('MemoryManager', () => {
     const ids = mgr.providersList.map((p) => p.id);
     expect(ids).toContain('local');
     expect(mgr.providersList.find((p) => p.id === 'local')?.capabilities.write).toBe(true);
+  });
+
+  it('searches every record stored in the local SQLite knowledge store', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-connected-memory-search-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    try {
+      upsertMemoryRecord({
+        providerId: 'connected-knowledge',
+        kind: 'workspace_fact',
+        sourceAgentId: 'main',
+        workspaceId: stateDir,
+        content: 'The Atlas launch review is scheduled for Tuesday.',
+        source: { provider: 'composio-googlecalendar' },
+        status: 'active',
+        sensitivity: 'personal',
+      });
+      const mgr = new MemoryManager();
+      mgr.addProvider(new BuiltinMemoryProvider());
+
+      const results = await mgr.search({
+        query: 'Atlas launch review',
+        scope: { agentId: 'main', workspaceId: stateDir },
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0]?.record.providerId).toBe('connected-knowledge');
+    } finally {
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
   });
 
   it('stores a fingerprint instead of the raw retrieval query in traces', async () => {

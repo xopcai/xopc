@@ -1,62 +1,62 @@
-# How to configure your first model
+# Configure your first model
 
-Use this when xopc is installed but the agent cannot call a model yet.
+Connect one model provider and verify a real reply before enabling any other xopc feature.
 
-## 1. Save a provider key
+## Choose a provider
 
-Use `providers set-key` for API-key providers:
+Use a cloud provider when you want a managed model and already have an account or API key. Use Ollama or another local server when you want requests to stay on your own machine and can run the model yourself.
+
+See [Models and providers](../models.md) for supported authentication methods and local server guidance.
+
+## Using the desktop or web console
+
+<!-- Screenshot placeholder: /screenshots/model-setup.png -->
+
+1. Open the model setup prompt, or go to **Settings → Capabilities → Models**.
+2. Choose a provider.
+3. Sign in with OAuth or enter the requested API key.
+4. Select the default model.
+5. Save, then open **Chat** and send a test message.
+
+The provider is ready when Chat returns a normal reply and the model page shows the provider as configured.
+
+## Using the terminal
+
+The guided option is:
 
 ```bash
-xopc providers set-key deepseek
+xopc onboard --quick
 ```
 
-The command prompts for the key without echoing it. You can also pass a key explicitly when scripting:
+To configure it manually, save a credential and select a model:
 
 ```bash
-xopc providers set-key deepseek --key "$DEEPSEEK_API_KEY"
-```
-
-Check credential status:
-
-```bash
-xopc providers list
-```
-
-## 2. Pick a model
-
-List models:
-
-```bash
-xopc models list --provider deepseek
-```
-
-Set the default model:
-
-```bash
-xopc models set deepseek/deepseek-v4-flash
-```
-
-Check the result:
-
-```bash
+xopc providers set-key <provider>
+xopc models list --provider <provider>
+xopc models set <provider>/<model>
 xopc models status
 ```
 
-## 3. Try a local chat
+For a provider with browser sign-in:
 
 ```bash
-xopc
+xopc models auth login --provider <provider>
 ```
 
-If the model call fails, run:
+The key prompt hides what you type. Avoid `--key` on shared computers because command history and process tools may expose its value.
+
+## Verify
 
 ```bash
-xopc doctor
-xopc logs tail
+xopc agent -m "Reply with 'xopc is ready' and identify your model."
 ```
 
-## Notes
+If it fails, check in this order:
 
-- `xopc onboard --quick` is the guided path for the same setup.
-- OAuth-capable providers can also be managed through `xopc models auth login --provider <id>`.
-- The configuration file remains `~/.xopc/xopc.json`; credentials may be stored through auth profiles rather than as raw keys in the JSON file.
+1. `xopc providers list` shows the provider as configured.
+2. `xopc models status` shows the intended default model.
+3. The account can use that model and has available quota or balance.
+4. Your network can reach the provider.
+5. `xopc logs tail` contains no authentication or model-not-found error.
+
+Credentials may be stored in an auth profile rather than directly in `xopc.json`. Use xopc commands or the UI to update them instead of copying secret values into the configuration file.

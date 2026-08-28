@@ -1,86 +1,64 @@
 # Channels
 
-xopc can connect assistants to **Telegram**, **Weixin (WeChat)**, **Feishu (Lark)**, and the **gateway Web chat**. Other channel types may appear if you install extensions that register them.
+Channels let people talk to an xopc Agent from another application. Configure them only after local Chat and the Gateway work.
 
-All channel settings live under the **`channels`** object in `~/.xopc/xopc.json` (or the file pointed to by `XOPC_CONFIG`).
+## Available channels
 
-## Overview
+| Channel | Setup | Guide |
+| --- | --- | --- |
+| Telegram | Bot token | [Telegram](./telegram.md) |
+| Weixin (WeChat) | QR login | [Weixin](./weixin.md) |
+| Feishu / Lark | QR app setup or app credentials | [Feishu](./feishu.md) |
+| Web console | Gateway URL and token | [Web console](./webui.md) |
 
-| Channel | Status | Features |
-|---------|--------|----------|
-| **Telegram** | ✅ | Bot token or multi-account JSON, streaming, voice, documents |
-| **Weixin (WeChat)** | ✅ | QR login on the gateway host, DM policies, optional per-account JSON |
-| **Feishu (Lark)** | ✅ | Socket Mode / Webhook, cards, doc/wiki/drive tools (opt-in); QR app setup in gateway console |
-| **Web UI** | ✅ | Gateway console chat (browser), same HTTP API as other clients |
+Extensions may add more channel types.
 
-## Pages
+## Before you connect
 
-- [Telegram](./telegram.md)
-- [Weixin (WeChat)](./weixin.md)
-- [Feishu (Lark)](./feishu.md)
-- [Web UI](./webui.md)
+1. Confirm that local Chat can reach the model.
+2. Keep the Gateway running continuously.
+3. Decide who may send direct messages and group messages.
+4. Start with pairing or an allowlist rather than open access.
+5. Decide which Agent will receive the channel's Sessions.
 
-## Extensions and channels
+## Configure and check status
 
-Third-party channel types from extensions also use `channels.<id>` blocks when their README says so.
+<!-- Screenshot placeholder: /screenshots/channels.png -->
 
-Configure **`channels.telegram`**, **`channels.weixin`**, **`channels.feishu`**, etc., as needed; the gateway loads matching plugins from config. To **block** a specific extension id, add it under **`extensions.disabled`**.
-
-For how extension loading interacts with other CLI commands, see [Extensions — When extensions load](../extensions.md#when-extensions-load).
-
-## DM pairing {#dm-pairing}
-
-For **Telegram**, **Feishu**, and **Weixin**, when **`dmPolicy`** is **`pairing`**, private chats are allowed only if the sender appears in the **merged allow list**:
-
-1. **`allowFrom`** in `xopc.json` (Telegram: `channels.telegram.accounts.<id>.allowFrom`; Feishu/Weixin: their documented channel/account allow list), plus
-2. **Paired users** persisted on disk (JSON files under the credentials directory).
-
-If the sender is not allowed, the bot sends a **one-time pairing code** and instructions to run:
+Use the **Channels** page in the Gateway console. In a terminal:
 
 ```bash
-xopc channels pairing approve --channel <telegram|feishu|weixin> [--account <id>] <CODE>
+xopc channels list
+xopc channels show <channel>
+xopc channels enable <channel>
+xopc gateway health
 ```
 
-See **[CLI — channels](../cli.md#channels)**. Run the approve command on the **same machine** that holds the credential files (typically the gateway host).
+## Direct-message access
 
-### Gateway console (Web UI)
+| Policy | Behavior |
+| --- | --- |
+| Pairing | Unknown users receive a code that the owner must approve |
+| Allowlist | Only listed users can send messages; others are ignored |
+| Open | Anyone can send messages |
+| Disabled | Direct messages are blocked |
 
-You can approve, revoke, and monitor pending requests in the gateway console without the CLI:
+Pairing is the recommended starting policy. Approve a code in the Channel settings or on the Gateway host:
 
-1. Open **Settings → Channels** (`#/settings/channels` in the hash router).
-2. Configure the channel (Telegram token, Weixin QR login, or Feishu app credentials) and set **`dmPolicy`** to **`pairing`**.
-3. When a user DMs the bot, pending requests appear in the channel settings dialog (Telegram) or **Advanced** section (Weixin / Feishu).
-4. **Approve** with the 8-character code, or use **Quick approve** after verifying the user id matches someone who messaged the bot.
-5. Hub cards show a pending badge; the list refreshes through the gateway realtime connection when new or repeat pairing DMs arrive.
+```bash
+xopc channels pairing approve <channel> <code> --account <account>
+```
 
-REST endpoints (require gateway bearer token):
+Verify the sender identity before approval. An approved channel user can send content to the configured Agent and model.
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/api/channels/pairing?channel=&account=` | Pending list + paired allowFrom (config + credentials) |
-| `GET` | `/api/channels/pairing/summary` | Per-channel pending / stale / at-capacity counts |
-| `POST` | `/api/channels/pairing/approve` | Approve by pairing code |
-| `POST` | `/api/channels/pairing/approve-sender` | Quick approve by sender id |
-| `DELETE` | `/api/channels/pairing/paired` | Revoke a credential allowFrom entry |
-| `DELETE` | `/api/channels/pairing/pending` | Dismiss a pending request without approving |
+## Group access
 
-Summary and doctor checks only count **enabled** channels whose effective `dmPolicy` is **`pairing`** (account-level overrides included).
+Use an allowlist for private groups. When supported, require a mention so the bot does not respond to every message. Test in one group before adding the bot to others.
 
-**Credential files** (override directory with **`XOPC_CREDENTIALS_DIR`**):
+## Troubleshooting
 
-| Channel | Allowlist store | Pending requests |
-|---------|-----------------|------------------|
-| Telegram | `$DIR/xopc-telegram-<account>-allowFrom.json` | `$DIR/xopc-telegram-<account>-pairing.json` |
-| Feishu | `$DIR/xopc-feishu-<account>-allowFrom.json` | `$DIR/xopc-feishu-<account>-pairing.json` |
-
-Default **`$DIR`** is **`~/.xopc/credentials`**.
-
-**Weixin** uses **`~/.xopc/weixin/credentials/`** (same `XOPC_CREDENTIALS_DIR` override if set): `xopc-weixin-<account>-allowFrom.json` and `xopc-weixin-<account>-pairing.json`.
-
-**`allowlist`** DM policy does **not** send a pairing code; unknown senders are dropped. **`open`** allows everyone; **`disabled`** blocks DMs.
-
-**Feishu gateway QR (scan-to-create):** the scanner’s **`open_id`** is written into **`channels.feishu.allowFrom`** automatically so they can chat immediately under default **`pairing`**.
-
-## Gateway startup order
-
-When you run **`xopc gateway`**, Telegram / Weixin / Feishu may **`start()`** only **after** HTTP is listening, so misconfigured API roots or slow `getMe` do not block the Web console. See [Gateway — Channel startup and HTTP listen order](../gateway.md#channel-startup-and-http-listen-order) and [Configuration — Channel connect defer](../configuration.md#channel-connect-defer).
+- Local Chat fails: fix the model first.
+- Channel shows unhealthy: check its credential and Gateway logs.
+- Bot receives nothing: review platform event settings, group permissions, and access policy.
+- Messages go to the wrong Agent: check the channel's routing or default Agent.
+- Configuration changed but behavior did not: restart the Gateway.

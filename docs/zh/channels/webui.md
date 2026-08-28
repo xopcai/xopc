@@ -1,28 +1,29 @@
-# 网页（Web UI）通道
+# 网页控制台
 
-Web UI 是网关自带的浏览器聊天（静态文件随网关一起提供）。
+网页控制台在浏览器中提供聊天和 xopc 设置。它连接 Gateway，并与桌面应用使用相同的 Session、Agent 和本地数据。
 
-## 启动网关
+## 本地打开
 
 ```bash
-xopc gateway --port 18790
+xopc gateway
 ```
 
-## 访问
+打开终端显示的地址，通常是 `http://127.0.0.1:18790`。页面要求 Token 时，使用 `xopc config token --show` 显示现有值，或用 `xopc config token --generate` 生成新值，然后保存在连接设置中。
 
-在浏览器打开 `http://localhost:18790`（或你的自定义监听地址）。
+## 可以做什么
 
-## 功能
+- 开始和恢复聊天 Session；
+- 管理 Agent、Project、Task、Workflow 和 Automation；
+- 配置模型、工具、消息通道、连接器、Skill、MCP 和扩展；
+- 查看健康状态、日志、更新和远程访问。
 
-- ✅ 通过网关聊天（REST 持久化输入；agent 回复通过 `run:<runId>` 实时 topic 返回）
-- ✅ 会话管理（`#/sessions`）
-- ✅ 设置（模型、网关 Token、语音等）
-- ✅ 日志查看
-- ✅ 自动化管理
+## 从其它设备访问
 
-## 侧栏：按通道过滤会话
+默认本地地址有意只允许 Gateway 电脑访问。不要在没有认证和网络保护的情况下改成公网监听。按照[远程访问](../remote-access.md)选择 Tailscale、SSH、局域网或其它受保护方式。
 
-侧栏会话列表可显示 **网页** / **Telegram** / **微信** / **飞书** 会话：
+## 故障排查
 
-- **网页** — 前端在 `GET /api/sessions` 返回结果上做客户端过滤。
-- **其它通道** — `GET /api/sessions?channel=<id>`（如 `telegram`、`weixin`、`feishu`），匹配 `SessionMetadata.sourceChannel`。
+- 页面空白或断开：运行 `xopc gateway status` 和 `xopc gateway health`。
+- 未授权：确认保存的 Gateway 地址和 Token 属于同一个实例。
+- Session 与桌面端不同：浏览器可能连接了另一个 Gateway 或 Profile。
+- 实时进度停止：先刷新一次，再从 Gateway 日志查找实时连接错误。

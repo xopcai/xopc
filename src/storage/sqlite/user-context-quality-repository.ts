@@ -26,6 +26,14 @@ export type UserUnderstandingQualityMetrics = {
     irrelevant: number;
     helpfulRate: number | null;
   };
+  quickUnderstanding: {
+    sourcesAuthorized: number;
+    sourcesCollected: number;
+    sourceCoverage: number | null;
+    bootstrapJobs: number;
+    successfulBootstrapRate: number | null;
+    medianBootstrapDurationMs: number | null;
+  };
 };
 
 export type UnderstandingFeedbackSummary = {
@@ -59,6 +67,15 @@ export function summarizeUnderstandingFeedback(understandingIds: string[]): Unde
 
 function rate(numerator: number, denominator: number): number | null {
   return denominator > 0 ? Math.round((numerator / denominator) * 10_000) / 10_000 : null;
+}
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = values.toSorted((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]!
+    : Math.round((sorted[middle - 1]! + sorted[middle]!) / 2);
 }
 
 export function summarizeUserUnderstandingQuality(options: {
@@ -114,11 +131,30 @@ export function summarizeUserUnderstandingQuality(options: {
     helpfulRate: null,
   };
   recall.helpfulRate = rate(recall.helpful, recall.total);
+  const sourceRows = db.prepare(`SELECT last_collected_at
+    FROM understanding_source_grants WHERE status = 'active'`).all() as Array<{ last_collected_at: number | null }>;
+  const bootstrapRows = db.prepare(`SELECT status, started_at, finished_at
+    FROM connector_learning_jobs WHERE mode = 'bootstrap' AND created_at >= ?`)
+    .all(sinceMs) as Array<{ status: string; started_at: number | null; finished_at: number | null }>;
+  const completedBootstraps = bootstrapRows.filter((row) => row.status === 'completed');
+  const bootstrapDurations = completedBootstraps.flatMap((row) => (
+    row.started_at !== null && row.finished_at !== null && row.finished_at >= row.started_at
+      ? [row.finished_at - row.started_at]
+      : []
+  ));
   return {
     windowDays,
     since: new Date(sinceMs).toISOString(),
     records,
     decisions: { total: recentDecisions.length, acceptanceRate: rate(accepted, recentDecisions.length) },
     recall,
+    quickUnderstanding: {
+      sourcesAuthorized: sourceRows.length,
+      sourcesCollected: sourceRows.filter((row) => row.last_collected_at !== null).length,
+      sourceCoverage: rate(sourceRows.filter((row) => row.last_collected_at !== null).length, sourceRows.length),
+      bootstrapJobs: bootstrapRows.length,
+      successfulBootstrapRate: rate(completedBootstraps.length, bootstrapRows.length),
+      medianBootstrapDurationMs: median(bootstrapDurations),
+    },
   };
 }

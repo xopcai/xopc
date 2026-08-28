@@ -153,6 +153,10 @@ describe('SessionInputCoordinator', () => {
     }, beforeReplace);
 
     expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`Replacement failed: ${result.code}`);
+    expect(result.state.activeRunId).toBeTruthy();
+    expect(result.state.inputs.find((input) => input.id === result.state.activeInputId))
+      .toMatchObject({ clientMessageId: 'edited-client', status: 'running' });
     expect(beforeReplace).toHaveBeenCalledOnce();
     expect(loadTranscriptRowsForSession(sessionKey)).toEqual([]);
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());

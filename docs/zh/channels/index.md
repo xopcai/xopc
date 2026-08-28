@@ -1,84 +1,64 @@
-# 频道
+# 消息通道
 
-xopc 可将助手接到 **Telegram**、**微信**、**飞书（Feishu / Lark）** 以及 **网关自带的网页对话**。若还装了第三方扩展，还可能出现其它 **`channels.<id>`** 配置块。
+消息通道让用户从其它应用与 xopc Agent 对话。请先确认本地聊天和 Gateway 正常，再配置通道。
 
-所有频道相关设置都在 **`~/.xopc/xopc.json`**（或由 **`XOPC_CONFIG`** 指向的文件）的 **`channels`** 下。
+## 可用通道
 
-## 概览
+| 通道 | 设置方式 | 指南 |
+| --- | --- | --- |
+| Telegram | Bot Token | [Telegram](./telegram.md) |
+| 微信 | 扫码登录 | [微信](./weixin.md) |
+| 飞书 / Lark | 扫码创建应用或手动填写应用凭据 | [飞书](./feishu.md) |
+| 网页控制台 | Gateway 地址和 Token | [网页控制台](./webui.md) |
 
-| 频道 | 状态 | 功能 |
-|------|------|------|
-| **Telegram** | ✅ | Bot Token 或多账号 JSON、流式、语音、文档 |
-| **微信（Weixin）** | ✅ | 在网关所在机扫码登录、私聊策略、可选按账号 JSON |
-| **飞书（Feishu / Lark）** | ✅ | Socket Mode / Webhook、卡片、文档/知识库/云盘工具（可选开）；控制台支持扫码创建应用 |
-| **网页（Web UI）** | ✅ | 网关控制台里内嵌聊天，与其它客户端共用 HTTP API |
+扩展可以添加其它通道类型。
 
-## 各频道文档
+## 连接前准备
 
-- [Telegram](./telegram.md)
-- [微信（Weixin）](./weixin.md)
-- [飞书（Feishu / Lark）](./feishu.md)
-- [网页（Web UI）](./webui.md)
+1. 确认本地聊天可以调用模型。
+2. 让 Gateway 持续运行。
+3. 决定谁可以发送私聊和群聊消息。
+4. 从配对或白名单开始，不要默认开放。
+5. 决定通道 Session 由哪个 Agent 处理。
 
-## 扩展与频道
+## 配置与状态
 
-其它频道若由扩展提供，同样使用 **`channels.<id>`**，字段以扩展文档为准。
+<!-- 截图占位：/screenshots/channels.png -->
 
-按需配置 **`channels.telegram`**、**`channels.weixin`**、**`channels.feishu`** 等，保存后由网关加载。若要 **禁用** 某个扩展 id，写入 **`extensions.disabled`**。
-
-扩展与 CLI 的加载关系见 [扩展系统 — 何时加载扩展](../extensions.md#何时加载扩展)。
-
-## DM 私聊配对 {#dm-pairing}
-
-**Telegram、飞书、微信** 在 **`dmPolicy` 为 `pairing`** 时，私聊是否放行由 **合并后的允许列表** 决定：
-
-1. 配置文件 **`xopc.json`** 里的 **`allowFrom`**（Telegram：`channels.telegram.accounts.<账号>.allowFrom`；飞书/微信按各自文档使用通道或账号 allowlist）；
-2. 磁盘上 **已配对用户** 的 JSON 凭证（与配置在运行时合并）。
-
-若发送方不在允许列表中，机器人会回复 **一次性配对码**，并提示管理员在本机执行：
+使用 Gateway 控制台的 **消息通道** 页面。终端中：
 
 ```bash
-xopc channels pairing approve --channel <telegram|feishu|weixin> [--account <id>] <配对码>
+xopc channels list
+xopc channels show <channel>
+xopc channels enable <channel>
+xopc gateway health
 ```
 
-命令说明见 **[CLI — channels](../cli.md#channels)**。请在 **存有凭证文件的主机**（一般为网关所在机）上执行 `approve`。
+## 私聊访问策略
 
-### 网关控制台（Web UI）
+| 策略 | 行为 |
+| --- | --- |
+| 配对 | 未知用户收到验证码，需要所有者批准 |
+| 白名单 | 只有名单内用户可以发消息，其它人被忽略 |
+| 开放 | 所有人都可以发消息 |
+| 停用 | 阻止私聊 |
 
-无需 CLI，可在网关控制台审批、撤销并查看待配对请求：
+推荐从配对开始。在通道设置中批准，或在 Gateway 主机运行：
 
-1. 打开 **设置 → IM 频道**（hash 路由 `#/settings/channels`）。
-2. 完成频道配置（Telegram Token、微信扫码登录或飞书应用凭证），并将 **`dmPolicy`** 设为 **`pairing`**。
-3. 用户向 bot 发私聊后，待审批项会出现在 Telegram 设置对话框，或微信 / 飞书的 **Advanced** 区域。
-4. 输入 **8 位配对码** 批准，或在确认 user id 对应真实发消息用户后使用 **快速批准**。
-5. Hub 卡片显示待审批角标；新配对或重复 DM 会通过网关实时连接自动刷新列表。
+```bash
+xopc channels pairing approve <channel> <code> --account <account>
+```
 
-REST 接口（需 gateway bearer token）：
+批准前核对发送者身份。获批用户可以把内容发送给配置的 Agent 和模型。
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/channels/pairing?channel=&account=` | 待审批列表 + 已配对 allowFrom（配置 + 凭证） |
-| `GET` | `/api/channels/pairing/summary` | 各频道 pending / stale / 达上限统计 |
-| `POST` | `/api/channels/pairing/approve` | 按配对码批准 |
-| `POST` | `/api/channels/pairing/approve-sender` | 按 sender id 快速批准 |
-| `DELETE` | `/api/channels/pairing/paired` | 撤销凭证 allowFrom 条目 |
-| `DELETE` | `/api/channels/pairing/pending` | 忽略待审批请求（不批准） |
+## 群聊访问
 
-Summary 与 `xopc doctor` 配对检查仅统计 **已启用** 且 effective **`dmPolicy` 为 `pairing`** 的频道（含账号级覆盖）。
+私人群组使用白名单。通道支持时要求提及机器人，避免它响应每一条消息。先在一个群中测试，再添加到其它群。
 
-**凭证文件目录**：未设置 **`XOPC_CREDENTIALS_DIR`** 时，Telegram / 飞书 使用 **`~/.xopc/credentials/`**（若设置了该环境变量则为其值）。
+## 故障排查
 
-| 通道 | 允许名单文件 | 待审批配对 |
-|------|----------------|------------|
-| Telegram | `xopc-telegram-<account>-allowFrom.json` | `xopc-telegram-<account>-pairing.json` |
-| 飞书 | `xopc-feishu-<account>-allowFrom.json` | `xopc-feishu-<account>-pairing.json` |
-
-**微信** 使用 **`~/.xopc/weixin/credentials/`**（同样可被 **`XOPC_CREDENTIALS_DIR`** 覆盖为其它根目录）：`xopc-weixin-<account>-allowFrom.json` 与 `xopc-weixin-<account>-pairing.json`。
-
-**`allowlist`**：未命中列表则直接丢弃，**不会**发配对码。**`open`**：私聊不做限制。**`disabled`**：不接受私聊。
-
-**飞书网关控制台扫码创建应用：** 会把扫码人的 **`open_id`** 写入 **`channels.feishu.allowFrom`**，在默认 **`pairing`** 下该用户可立刻私聊。
-
-## 与网关启动顺序的关系
-
-使用 **`xopc gateway`** 时，Telegram / 微信 / 飞书 等外连通道可能在 **HTTP 监听成功之后** 才执行 **`start()`**，减轻错误 `apiRoot` 或外网不通时拖住整个网关控制台的情况。说明见 [网关 — 频道启动与 HTTP 监听顺序](../gateway.md#频道启动与-http-监听顺序) 与 [配置 — 频道连接延后](../configuration.md#频道连接延后）。
+- 本地聊天失败：先修复模型。
+- 通道状态异常：检查凭据和 Gateway 日志。
+- 机器人收不到消息：检查平台事件设置、群权限和访问策略。
+- 消息进入错误 Agent：检查通道路由或默认 Agent。
+- 配置已修改但行为未变化：重启 Gateway。

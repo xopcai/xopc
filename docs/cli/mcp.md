@@ -1,3 +1,3 @@
-# MCP CLI & API
+# MCP commands
 
-> This page has been merged into the [MCP guide](./../mcp.md). All CLI commands, REST endpoints, configuration, and UI details are covered there.
+MCP setup and troubleshooting are covered in the [MCP guide](../mcp.md). Current server connections are managed in Gateway settings or the `mcp.servers` configuration block; the current CLI has no top-level `mcp` command.

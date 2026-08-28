@@ -1,43 +1,34 @@
-# 工作区模板
+# Agent Profile 文件
 
-xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `onboard`、`setup` 或 `agents add` 时，会将缺失的模板 **复制**（**不会**覆盖已有文件）到该智能体 **解析后的 Markdown 工作空间根**（见 [磁盘与目录布局](../disk-layout.md)）。下文列出标准文件名与用途，便于对照编辑。
+xopc 为每个 Agent 创建一小组 Markdown 文件，让你无需修改程序代码就能查看和调整 Agent 的身份与工作规则。
 
-运行时选取模板的顺序：`XOPC_TEMPLATE_PATH`（若设置且存在）→ 从安装目录向上查找 `docs/reference/templates` → 否则使用与 `workspace-seed` 同目录打包的 `workspace-templates/`。**文档站中的 `docs/zh/reference/templates/*.md` 仅用于中文路由展示，与运行时种子无直接关系**（正文目前与英文模板相同）。
+默认位置：`~/.xopc/agents/<agent-id>/profile/`。
 
-## 模板文件列表
+| 文件 | 适合填写的内容 |
+| --- | --- |
+| [SOUL.md](./templates/SOUL.md) | 稳定原则、语气和价值观 |
+| [IDENTITY.md](./templates/IDENTITY.md) | 名称、角色、说明、语言和可见身份 |
+| [TOOLS.md](./templates/TOOLS.md) | 可以安全提供给 Agent 的本地工具提示 |
+| [AGENTS.md](./templates/AGENTS.md) | 工作规则、协作方式和红线 |
+| [HEARTBEAT.md](./templates/HEARTBEAT.md) | 启用 Heartbeat 时的简短检查规则 |
 
-| 文件 | 用途 |
-|------|------|
-| [SOUL.md](/zh/reference/templates/SOUL) | 智能体的核心身份、个性与价值观 |
-| [TOOLS.md](/zh/reference/templates/TOOLS) | 工具使用说明和最佳实践 |
-| [AGENTS.md](/zh/reference/templates/AGENTS) | 多智能体协作说明 |
-| [IDENTITY.md](/zh/reference/templates/IDENTITY) | 身份和边界定义 |
-| [HEARTBEAT.md](/zh/reference/templates/HEARTBEAT) | 主动监控配置 |
+## 安全编辑
 
-## 系统提示加载顺序
+1. 先备份 Profile 目录。
+2. 一次只修改一个文件。
+3. 指令保持简短、无歧义。
+4. 新建 Session 并测试一个小任务。
+5. 删除重复或冲突规则。
 
-以下文件从智能体 profile 根读取，并按此顺序写入智能体系统提示。它们只描述智能体；用户上下文会在每轮从 SQLite 单独筛选。
+设置流程和 `xopc agents add` 只创建缺失文件，不会覆盖已有 Profile Markdown。
 
-1. **SOUL.md**
-2. **IDENTITY.md**
-3. **TOOLS.md**
-4. **AGENTS.md**
-5. **HEARTBEAT.md**
+## 不应放入的内容
 
-**CONTEXT.md**、**SKILLS.md** **不在**默认写入系统提示的列表中。`xopc init` **不会**在工作区根下创建这两个文件；需要时可自行放在工作区根。`onboard` / `agents add` 的种子流程只复制上文列表，**不会**自动从本文档目录带入 `CONTEXT.md` / `SKILLS.md`（需自行放入工作区根）。
+- API Key、密码、Token 或私人 SSH 材料；
+- 用户的个人资料或长期记忆；
+- 可以放在工作区中的大型参考文档；
+- 经常变化的 Task 状态。
 
-## 记忆系统
+Profile 文件可能作为 Agent 上下文发送给当前模型。请把其中全部内容视为模型服务商可能看到的信息。
 
-记忆不属于 Agent profile 模板。所有 Agent 使用 SQLite 中同一套用户所有的结构化记录。通过顶层 `userContext` 配置，并在运行时使用 `memory_search` 和 `memory_get`。见 [统一记忆架构](../memory-architecture.md)。
-
-## 编辑建议
-
-- 使用 Markdown 格式
-- 保持简洁，关键信息放在前面
-- 定期更新全局个人资料与共享用户记忆
-- 使用清晰的标题结构
-
-## 另见
-
-- [状态目录与工作空间布局](../workspace.md)
-- [磁盘与目录布局](../disk-layout.md)
+能力设置见 [Agent](../routing-system.md)，Profile、工作区和本地状态的差异见[数据和文件位置](../workspace.md)。

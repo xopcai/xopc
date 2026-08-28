@@ -172,6 +172,16 @@
   background: var(--color-surface-hover);
 }
 
+/* Assistant code blocks use the same quiet neutral treatment as inline code. */
+html:not(.dark) .assistant-markdown-content .markdown-code-block,
+html:not(.dark) .assistant-markdown-content .markdown-body .markdown-code-block > pre {
+  background: color-mix(in srgb, var(--color-fg) 4%, var(--color-surface-panel));
+}
+
+html:not(.dark) .assistant-markdown-content .markdown-code-block-header {
+  background: color-mix(in srgb, var(--color-fg) 7%, var(--color-surface-panel));
+}
+
 html.dark .markdown-code-block {
   border-color: var(--color-edge);
   background: #0d1117;

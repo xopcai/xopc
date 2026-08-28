@@ -1,28 +1,17 @@
-# Network hub
+# Network access
 
-This page links the core docs for how xopc connects and secures remote access to the gateway.
+xopc starts with the Gateway available only on the local computer. Keep that default unless another device or service genuinely needs access.
 
-## Core model
+## Choose a protected path
 
-- **Loopback first:** the gateway defaults to `http://127.0.0.1:18790`.
-- **One gateway per host** owns channels, sessions, and config.
-- **Remote access layers:** Tailscale Serve (tailnet), SSH tunnel (CLI), FRP public tunnel (advanced), LAN bind, reverse proxy.
+| Scenario | Guide |
+| --- | --- |
+| Personal laptop and phone | [Tailscale](./gateway/tailscale.md) |
+| Administrator access to a remote host | [SSH tunnel](./gateway/remote.md) |
+| Trusted private LAN | [Remote access](./remote-access.md#lan-access) |
+| Public URL | [Public tunnel security](./tunnel-security.md) |
+| Existing enterprise identity proxy | [Trusted proxy](./gateway/trusted-proxy.md) |
 
-## Recommended paths
+Generate a Gateway token and run `xopc doctor --security` before allowing access beyond loopback. Do not turn off authentication to solve a networking problem.
 
-| Scenario | Path |
-|----------|------|
-| **Settings UI walkthrough** | **[Remote access guide](./remote-access.md)** |
-| Tailnet phone / laptop | [Tailscale Serve](./gateway/tailscale.md) |
-| VPS / home server | loopback + SSH or Tailscale Serve — [Remote access](./gateway/remote.md) |
-| Public / mobile QR | [FRP tunnel](./tunnel-security.md) (consent required) |
-| Enterprise OAuth | [Trusted proxy](./gateway/trusted-proxy.md) |
-
-## Docs
-
-- **[Remote access (settings guide)](./remote-access.md)**
-- [Remote access (SSH + CLI remote mode)](./gateway/remote.md)
-- [Tailscale Serve / Funnel](./gateway/tailscale.md)
-- [FRP tunnel security](./tunnel-security.md)
-- [Trusted proxy auth](./gateway/trusted-proxy.md)
-- [Configuration](./configuration.md)
+The main decision and troubleshooting guide is [Remote access](./remote-access.md).
