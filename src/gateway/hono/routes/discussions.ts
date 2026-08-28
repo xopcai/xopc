@@ -21,6 +21,9 @@ async function multipart(c: Context): Promise<Record<string, unknown> | null> {
 
 export function registerDiscussionRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+  const mediaRateLimitMiddleware = deps.mediaRateLimitMiddleware
+    ?? deps.chatRateLimitMiddleware
+    ?? strictRateLimitMiddleware;
 
   authenticated.get('/api/discussion-capture/settings', (c) => c.json(service.discussions.settings()));
 
@@ -94,7 +97,7 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     return transcript ? c.json(transcript) : c.json({ error: 'Discussion not found' }, 404);
   });
 
-  authenticated.put('/api/discussions/:id/segments/:sequence', strictRateLimitMiddleware, async (c) => {
+  authenticated.put('/api/discussions/:id/segments/:sequence', mediaRateLimitMiddleware, async (c) => {
     const body = await multipart(c);
     if (!body) return c.json({ error: 'Invalid multipart body' }, 400);
     const file = body.file;

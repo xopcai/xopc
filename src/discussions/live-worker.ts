@@ -65,12 +65,21 @@ export class DiscussionLiveWorker {
     if (this.running) return;
     this.running = true;
     try {
-      await Promise.all(Array.from({ length: this.concurrency }, () => this.processOne()));
+      await Promise.all(Array.from({ length: this.resolveConcurrency() }, () => this.processOne()));
     } finally {
       this.running = false;
       const waiters = this.stoppedWaiters.splice(0);
       for (const resolve of waiters) resolve();
     }
+  }
+
+  private resolveConcurrency(): number {
+    if (this.deps.transcribeSegment) return this.concurrency;
+    const config = this.deps.getConfig();
+    const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
+    return sttConfig.provider === 'xopc-local' || sttConfig.provider === 'local'
+      ? 1
+      : this.concurrency;
   }
 
   private async processOne(): Promise<void> {

@@ -6,7 +6,7 @@ import type {
 } from '../../../media-understanding/types.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getLocalVoiceRuntimeClient } from '../../local/runtime-client.js';
-import { decodeWavToMonoFloat32 } from '../../local/wav.js';
+import { decodeAudioToMonoFloat32 } from '../../audio/normalize.js';
 import {
   DEFAULT_LOCAL_VOICE_MODEL_ID,
   getLocalVoiceModel,
@@ -21,7 +21,7 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
   if (!isLocalVoiceModelInstalled(model.id)) {
     throw new Error(`Local voice model "${model.id}" is not installed`);
   }
-  const decoded = decodeWavToMonoFloat32(req.buffer);
+  const decoded = await decodeAudioToMonoFloat32({ buffer: req.buffer, signal: req.signal });
   const audioBytes = Buffer.from(
     decoded.samples.buffer,
     decoded.samples.byteOffset,
@@ -48,6 +48,9 @@ async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTra
       model: model.id,
       audioDurationSeconds: decoded.durationSeconds,
       latencyMs: Date.now() - startedAt,
+      realTimeFactor: decoded.durationSeconds > 0
+        ? (Date.now() - startedAt) / 1_000 / decoded.durationSeconds
+        : undefined,
       textLength: result.text.length,
     },
     'Local transcription completed',

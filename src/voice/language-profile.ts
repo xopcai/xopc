@@ -44,28 +44,14 @@ export function inferProductLanguageFromEnvironment(): ProductLanguage {
   return locale?.trim().toLowerCase().startsWith('zh') ? 'zh' : 'en';
 }
 
-function hasLegacyManualLanguageSelection(config: Config): boolean {
-  const local = config.tools?.media?.audio?.providers?.['xopc-local'];
-  const edge = config.messages?.tts?.providers?.edge;
-  return (
-    (typeof local?.language === 'string' && local.language.trim().length > 0) ||
-    (typeof edge?.voice === 'string' && edge.voice.trim().length > 0) ||
-    (typeof edge?.lang === 'string' && edge.lang.trim().length > 0)
-  );
-}
-
-/**
- * Install safe product defaults while preserving every explicit on/off choice.
- * Older configs with a persisted language or Edge voice are treated as manual.
- */
+/** Install safe product defaults while preserving every explicit on/off choice. */
 export function initializeVoiceDefaults(
   config: Config,
   language: ProductLanguage = inferProductLanguageFromEnvironment(),
 ): boolean {
   const before = JSON.stringify({ voice: config.voice, tools: config.tools?.media?.audio, tts: config.messages?.tts });
   const existingMode = config.voice?.languageMode;
-  const languageMode: VoiceLanguageMode =
-    existingMode ?? (hasLegacyManualLanguageSelection(config) ? 'manual' : 'auto');
+  const languageMode: VoiceLanguageMode = existingMode ?? 'auto';
 
   config.voice = {
     ...config.voice,
@@ -86,22 +72,6 @@ export function initializeVoiceDefaults(
       'xopc-local': {
         model: DEFAULT_LOCAL_VOICE_MODEL_ID,
         ...(audio?.providers?.['xopc-local'] ?? {}),
-      },
-    },
-  };
-
-  config.messages = config.messages ?? {};
-  const tts = config.messages.tts;
-  config.messages.tts = {
-    ...tts,
-    enabled: tts?.enabled ?? true,
-    provider: tts?.provider ?? 'edge',
-    trigger: tts?.trigger ?? 'inbound',
-    providers: {
-      ...(tts?.providers ?? {}),
-      edge: {
-        enabled: true,
-        ...(tts?.providers?.edge ?? {}),
       },
     },
   };

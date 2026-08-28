@@ -42,6 +42,7 @@ export class LocalVoiceRuntimeClient {
   private child: ChildProcessWithoutNullStreams | null = null;
   private nextId = 1;
   private pending = new Map<number, PendingRequest>();
+  private requestTail: Promise<void> = Promise.resolve();
 
   async request<T>(
     method: string,
@@ -53,6 +54,37 @@ export class LocalVoiceRuntimeClient {
       stopOnTimeout?: boolean;
       onProgress?: (progress: LocalVoiceRuntimeProgress) => void;
     } = {},
+  ): Promise<T> {
+    options.signal?.throwIfAborted();
+    if (method === 'health') return this.executeRequest<T>(method, params, options);
+    const queued = this.requestTail.then(() => this.executeRequest<T>(method, params, options));
+    this.requestTail = queued.then(() => undefined, () => undefined);
+    if (!options.signal) return queued;
+    return new Promise<T>((resolve, reject) => {
+      const abort = () => reject(new Error('Local voice runtime request aborted'));
+      options.signal!.addEventListener('abort', abort, { once: true });
+      void queued.then(
+        (value) => {
+          options.signal!.removeEventListener('abort', abort);
+          resolve(value);
+        },
+        (error: unknown) => {
+          options.signal!.removeEventListener('abort', abort);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  }
+
+  private async executeRequest<T>(
+    method: string,
+    params: Record<string, unknown>,
+    options: {
+      signal?: AbortSignal;
+      timeoutMs?: number;
+      stopOnTimeout?: boolean;
+      onProgress?: (progress: LocalVoiceRuntimeProgress) => void;
+    },
   ): Promise<T> {
     options.signal?.throwIfAborted();
     const child = this.ensureStarted();
@@ -74,7 +106,7 @@ export class LocalVoiceRuntimeClient {
         const pending = this.pending.get(id);
         if (!pending) return;
         this.deletePending(id);
-        pending.reject(new Error('Local voice transcription aborted'));
+        pending.reject(new Error('Local voice runtime request aborted'));
         this.stop();
       };
       const pending = this.pending.get(id);

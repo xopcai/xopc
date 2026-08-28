@@ -9,7 +9,7 @@ The user presses **Record discussion** and speaking starts immediately after mic
 While recording:
 
 - the original recording is persisted as five-second chunks in IndexedDB;
-- overlapping 20-second PCM segments are uploaded for live transcription;
+- speech-aware 4–15 second PCM segments are durably queued for live transcription;
 - the Note displays the assembled live transcript without rewriting its Markdown for every segment;
 - AI may replace the placeholder title and infer a project when confidence is high;
 - an inferred project link is visible and can be undone.
@@ -18,7 +18,7 @@ When the user presses **Finish**:
 
 - the original recording is uploaded once and stored as the Note audio attachment;
 - the server fences the final segment sequence;
-- the original recording is transcribed again as the authoritative transcript;
+- confirmed live segments become the canonical transcript when complete; otherwise the original recording is normalized and transcribed in bounded sequential chunks;
 - AI generates the final title, summary, key points, decisions, actions, risks, and open questions;
 - the Note is updated directly and marked processed;
 - a bounded completion event enters the proactive follow-up pipeline.
@@ -66,7 +66,7 @@ sequenceDiagram
     UI->>IDB: Save original five-second chunks
     UI->>API: Create context-only discussion
     API->>N: Create placeholder voice Note
-    loop Every 20 seconds with overlap
+    loop On speech pause or 15-second bound
         UI->>IDB: Save pending PCM segment
         UI->>API: PUT live segment
         API->>LW: Queue segment
@@ -77,7 +77,7 @@ sequenceDiagram
     UI->>API: PUT original recording
     UI->>API: POST finish with last sequence
     API->>FW: Queue finalization
-    FW->>STT: Transcribe original recording
+    FW->>STT: Use complete live text or transcribe bounded original chunks
     FW->>FW: Analyze and infer context
     FW->>N: Write final title and structured Note
     FW->>PA: Emit bounded completion event
@@ -92,7 +92,7 @@ sequenceDiagram
 `useDiscussionRecorder` separates two audio paths:
 
 1. `MediaRecorder` produces the original compressed chunks. These remain local until the server confirms the original recording attachment.
-2. `LivePcmSegmenter` uses an `AudioWorklet` to create overlapping WAV segments for low-latency STT. These blobs are temporary and deleted after successful upload/transcription.
+2. `LivePcmSegmenter` shares the Chat `AudioWorklet` PCM capture engine. It closes WAV segments at speech pauses, caps continuous speech at 15 seconds, overlaps only forced splits, and skips pure silence. The durable queue deletes a segment only after the gateway acknowledges it.
 
 IndexedDB `xopc-discussion-drafts` has three stores:
 
@@ -116,7 +116,7 @@ All endpoints use gateway authentication.
 | `GET` | `/api/discussions/:id/transcript` | Read assembled live segments |
 | `PUT` | `/api/discussions/:id/segments/:sequence` | Upload one checksummed WAV segment |
 | `PUT` | `/api/discussions/:id/recording` | Upload the authoritative original recording |
-| `POST` | `/api/discussions/:id/finish` | Fence the sequence and start finalization |
+| `POST` | `/api/discussions/:id/stop` | Fence the sequence and start finalization |
 | `POST` | `/api/discussions/:id/retry` | Retry a failed finalization stage |
 | `POST` | `/api/discussions/:id/cancel` | Cancel an active local capture |
 | `DELETE` | `/api/discussions/:id/audio` | Explicitly delete retained audio |

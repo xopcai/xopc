@@ -51,7 +51,14 @@ export interface RunAudioTranscriptionResult {
   /** First successful transcript across attachments (joined when multiple). */
   transcript?: string;
   /** Per-attachment outputs (preserves order). */
-  outputs: Array<{ attachmentIndex: number; text: string; provider: string; model?: string }>;
+  outputs: Array<{
+    attachmentIndex: number;
+    text: string;
+    provider: string;
+    model?: string;
+    language?: string;
+    durationSeconds?: number;
+  }>;
   decision: MediaUnderstandingDecision;
 }
 
@@ -92,6 +99,8 @@ export async function runAudioTranscription(
     text: entry.text,
     provider: entry.provider,
     ...(entry.model ? { model: entry.model } : {}),
+    ...(entry.language ? { language: entry.language } : {}),
+    ...(entry.durationSeconds !== undefined ? { durationSeconds: entry.durationSeconds } : {}),
   }));
 
   const transcript =

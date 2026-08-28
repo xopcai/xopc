@@ -94,6 +94,12 @@ describe('discussion note document', () => {
 
     const transcript = service.transcript(created.discussion.id)!;
     expect(transcript.segments.map((segment) => segment.status)).toEqual(['confirmed', 'confirmed', 'confirmed']);
+    expect(service.metrics()).toMatchObject({
+      totalSegments: 3,
+      failedSegments: 0,
+      retriedSegments: 0,
+      averageSegmentLatencyMs: expect.any(Number),
+    });
     const first = transcript.segments[0]!;
     const corrected = service.correctSegment(created.discussion.id, 0, 'corrected one', first.revision);
     expect(corrected.segments[0]).toMatchObject({ displayText: 'corrected one', correctedByUser: true });

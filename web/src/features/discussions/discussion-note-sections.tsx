@@ -60,6 +60,16 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
   const { discussion, transcript } = detail;
   const organization = detail.organization?.organization;
   const processing = ['stopping', 'sealing', 'organizing'].includes(discussion.status);
+  const outstandingSegments = transcript.stats.uploaded + transcript.stats.transcribing;
+  const transcriptStatus = transcript.stats.failed > 0
+    ? copy.failedSegments.replace('{{count}}', String(transcript.stats.failed))
+    : outstandingSegments > 0
+      ? copy.processingSegments.replace('{{count}}', String(outstandingSegments))
+      : processing
+        ? copy.finalizing
+        : discussion.status === 'completed'
+          ? copy.transcriptReady
+          : null;
 
   return (
     <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-edge-subtle">
@@ -88,7 +98,7 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
           <div className="flex items-center gap-1.5 text-xs text-fg-muted">
             {discussion.status === 'needs_attention' ? <AlertTriangle className="size-3.5 text-danger" />
               : discussion.status === 'completed' ? <CheckCircle2 className="size-3.5 text-success" /> : null}
-            {processing ? copy.finalizing : discussion.status === 'needs_attention' ? discussion.failureMessage : null}
+            {discussion.status === 'needs_attention' ? discussion.failureMessage : transcriptStatus}
           </div>
         </div>
         <div className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg-muted">
