@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
 import { firstNarrationSentence } from '@/features/chat/messages/assistant-text-presentation';
+import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 const emptyLabels = {
@@ -46,6 +47,12 @@ const stepLabels = {
   },
 };
 
+const clusterLabels = {
+  done: new Proxy({}, { get: (_target, key) => String(key) }) as never,
+  ing: new Proxy({}, { get: (_target, key) => String(key) }) as never,
+  join: { join: ', ', joinFinal: ' and ', moreSuffix: ' and more' },
+};
+
 describe('streaming assistant Markdown rendering', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
@@ -68,6 +75,7 @@ describe('streaming assistant Markdown rendering', () => {
     content: MessageContent[],
     streaming: boolean,
     progressiveRender = false,
+    assistantActivity?: AssistantTurnActivityPresentation,
   ) {
     act(() => {
       root.render(
@@ -78,12 +86,13 @@ describe('streaming assistant Markdown rendering', () => {
             isAssistantMessageStreaming={streaming}
             toolLabels={emptyLabels}
             stepLabels={stepLabels}
-            clusterLabels={{ done: {} as never, ing: {} as never, join: {} as never }}
+            clusterLabels={clusterLabels}
             cardLabels={{} as never}
             imagePreviewLabel=""
             onImagePreview={undefined}
             sessionKey={null}
             workflowOptions={{ labels: {} as never }}
+            assistantActivity={assistantActivity}
             progressiveRender={progressiveRender}
           />
         </MemoryRouter>,
@@ -189,7 +198,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).not.toContain('long implementation plan');
   });
 
-  it('shows only the first narration segment in a tool-driven turn', () => {
+  it('collapses adjacent narration segments into one process update', () => {
     render([
       { type: 'text', text: '我先检查项目。', presentation: 'narration' },
       { type: 'text', text: 'I will now create a long implementation.', presentation: 'narration' },
@@ -199,6 +208,50 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('我先检查项目。');
     expect(container.textContent).not.toContain('long implementation');
     expect(container.textContent).toContain('最终结果。');
+  });
+
+  it('keeps later narration updates after an activity boundary', () => {
+    render([
+      { type: 'text', text: '我先检查项目。', presentation: 'narration' },
+      { type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done' },
+      { type: 'text', text: '已经定位到相关组件。', presentation: 'narration' },
+      { type: 'text', text: '最终结果。', presentation: 'answer' },
+    ], false);
+
+    const text = container.textContent ?? '';
+    expect(text).toContain('我先检查项目。');
+    expect(text).toContain('已经定位到相关组件。');
+    expect(text).toContain('最终结果。');
+    expect(text.indexOf('我先检查项目。')).toBeLessThan(text.indexOf('已经定位到相关组件。'));
+    expect(text.indexOf('已经定位到相关组件。')).toBeLessThan(text.indexOf('最终结果。'));
+  });
+
+  it('renders tool groups at their original positions between narration updates', () => {
+    const firstTool = { type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done' } as const;
+    const secondTool = { type: 'tool_use', id: 'command-1', name: 'run_command', status: 'done' } as const;
+    const content: MessageContent[] = [
+      { type: 'text', text: '开始检查。', presentation: 'narration' },
+      firstTool,
+      { type: 'text', text: '已经找到组件。', presentation: 'narration' },
+      secondTool,
+      { type: 'text', text: '修改完成。', presentation: 'answer' },
+    ];
+
+    render(content, false, false, {
+      blocks: [firstTool, secondTool],
+      active: false,
+      failedCount: 0,
+      hasTool: true,
+      expandedByDefault: false,
+    });
+
+    const disclosureButtons = container.querySelectorAll('button[aria-expanded]');
+    const text = container.textContent ?? '';
+    expect(disclosureButtons).toHaveLength(2);
+    expect(text.indexOf('开始检查。')).toBeLessThan(text.indexOf('readFile_one'));
+    expect(text.indexOf('readFile_one')).toBeLessThan(text.indexOf('已经找到组件。'));
+    expect(text.indexOf('已经找到组件。')).toBeLessThan(text.indexOf('runCommand_one'));
+    expect(text.indexOf('runCommand_one')).toBeLessThan(text.indexOf('修改完成。'));
   });
 
   it('renders punctuation-bound strong text after progressive streaming completes', () => {
