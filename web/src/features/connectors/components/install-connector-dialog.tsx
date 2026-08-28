@@ -3,7 +3,9 @@ import { CheckCircle2, ExternalLink, Loader2, PackagePlus, X } from 'lucide-reac
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { SecretInput } from '@/components/ui/secret-input';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
@@ -15,6 +17,7 @@ import {
   configureComposio,
   getComposioHealth,
   getComposioSetupStatus,
+  getComposioToolkitAuthState,
   installConnector,
   installStoreConnector,
   startAccountLearning,
@@ -22,6 +25,7 @@ import {
   testConnector,
   type ConnectorHealthResult,
   type ConnectorInstance,
+  type ComposioToolkitAuthState,
   waitForActiveComposioConnection,
 } from '../connectors-api';
 import { ConnectorLogo } from './connector-logo';
@@ -103,6 +107,8 @@ export function InstallConnectorDialog({
   const [composioSetupLoading, setComposioSetupLoading] = useState(isComposioToolkit);
   const [composioApiKey, setComposioApiKey] = useState('');
   const [composioSetupError, setComposioSetupError] = useState<string | null>(null);
+  const [composioAuth, setComposioAuth] = useState<ComposioToolkitAuthState | null>(null);
+  const [composioAuthLoading, setComposioAuthLoading] = useState(false);
   const [learnAfterConnect, setLearnAfterConnect] = useState(canLearnFromConnection);
 
   useEffect(() => {
@@ -116,6 +122,18 @@ export function InstallConnectorDialog({
       .finally(() => { if (!cancelled) setComposioSetupLoading(false); });
     return () => { cancelled = true; };
   }, [connector.id, isComposioToolkit]);
+  useEffect(() => {
+    if (!composioToolkit || !composioConfigured) return;
+    let cancelled = false;
+    setComposioAuthLoading(true);
+    void getComposioToolkitAuthState(composioToolkit)
+      .then((auth) => { if (!cancelled) setComposioAuth(auth); })
+      .catch((error) => {
+        if (!cancelled) setComposioSetupError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => { if (!cancelled) setComposioAuthLoading(false); });
+    return () => { cancelled = true; };
+  }, [composioConfigured, composioToolkit]);
   const wizardStep = draft.result ? 'complete' : draft.installing ? 'health' : 'configure';
   const stepItems = [
     { id: 'configure', label: t.connectStepConfigure },
@@ -134,6 +152,19 @@ export function InstallConnectorDialog({
         await configureComposio(composioApiKey);
         setComposioConfigured(true);
       }
+      const currentComposioAuth = isComposioToolkit && composioToolkit
+        ? composioAuth ?? await getComposioToolkitAuthState(composioToolkit)
+        : null;
+      const selectedAuthConfigId = draft.config.authConfigId?.trim();
+      if (currentComposioAuth?.requiresCustomAuthConfig && !selectedAuthConfigId) {
+        throw new Error(t.composioAuthConfigRequired);
+      }
+      if (selectedAuthConfigId) {
+        const selected = currentComposioAuth?.authConfigs.find((item) => item.id === selectedAuthConfigId);
+        if (!selected || selected.status !== 'ENABLED' || !selected.isEnabledForToolRouter) {
+          throw new Error(t.composioAuthConfigUnavailable);
+        }
+      }
       const config: Record<string, unknown> = {};
       for (const field of connector.setup.config ?? []) {
         const parsed = parseConfigValue(field.type, draft.config[field.key] ?? '');
@@ -141,6 +172,7 @@ export function InstallConnectorDialog({
           config[field.key] = parsed;
         }
       }
+      if (selectedAuthConfigId) config.authConfigId = selectedAuthConfigId;
       const instance = draft.store
         ? await installStoreConnector(draft.store.packageName, { secrets: draft.secrets, config }, draft.store.version)
         : await installConnector(connector.id, { secrets: draft.secrets, config, definition: connector.source === 'registry' ? connector : undefined });
@@ -205,7 +237,13 @@ export function InstallConnectorDialog({
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [canLearnFromConnection, composioApiKey, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, learnAfterConnect, onChange, onInstalled]);
+  }, [canLearnFromConnection, composioApiKey, composioAuth, composioConfigured, composioToolkit, connector, draft, isComposioToolkit, learnAfterConnect, onChange, onInstalled, t.composioAuthConfigRequired, t.composioAuthConfigUnavailable]);
+
+  const enabledAuthConfigs = composioAuth?.authConfigs.filter(
+    (item) => item.status === 'ENABLED' && item.isEnabledForToolRouter,
+  ) ?? [];
+  const authConfigRequired = composioAuth?.requiresCustomAuthConfig === true;
+  const missingRequiredAuthConfig = composioConfigured && authConfigRequired && !draft.config.authConfigId?.trim();
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -309,6 +347,52 @@ export function InstallConnectorDialog({
                 <span className="mt-1 block text-xs leading-5 text-fg-muted">{t.learnAfterConnectHint}</span>
               </span>
             </label>
+          ) : null}
+          {isComposioToolkit && composioConfigured ? (
+            <section className="rounded-2xl border border-edge bg-surface-base p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-fg">{t.composioAuthConfigTitle}</h3>
+                  <p className="mt-1 text-xs leading-5 text-fg-muted">
+                    {authConfigRequired ? t.composioAuthConfigRequiredHint : t.composioAuthConfigOptionalHint}
+                  </p>
+                </div>
+                <a
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+                  href="https://app.composio.dev"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t.composioAuthConfigManage}<ExternalLink className="size-3.5" aria-hidden />
+                </a>
+              </div>
+              {composioAuthLoading ? (
+                <Skeleton className="mt-3 h-10 w-full" />
+              ) : (
+                <Select
+                  className={cn(inputClass, 'mt-3')}
+                  value={draft.config.authConfigId ?? ''}
+                  onChange={(event) => onChange({
+                    ...draft,
+                    config: { ...draft.config, authConfigId: event.currentTarget.value },
+                    error: null,
+                  })}
+                >
+                  {!authConfigRequired ? <SelectOption value="">{t.composioAuthConfigManaged}</SelectOption> : null}
+                  {authConfigRequired && !draft.config.authConfigId ? (
+                    <SelectOption value="" disabled>{t.composioAuthConfigSelect}</SelectOption>
+                  ) : null}
+                  {enabledAuthConfigs.map((item) => (
+                    <SelectOption key={item.id} value={item.id}>
+                      {item.name} · {item.authScheme ?? 'OAuth'} · {item.id}
+                    </SelectOption>
+                  ))}
+                </Select>
+              )}
+              {!composioAuthLoading && authConfigRequired && enabledAuthConfigs.length === 0 ? (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{t.composioAuthConfigEmpty}</p>
+              ) : null}
+            </section>
           ) : null}
           {draft.store ? (
             <section className="rounded-2xl border border-edge bg-surface-base p-4">
@@ -469,7 +553,7 @@ export function InstallConnectorDialog({
           </div>
 
           <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-6 py-4">
-            <Button variant="primary" disabled={Boolean(draft.result) || draft.installing || composioSetupLoading || (isComposioToolkit && !composioConfigured && !composioApiKey.trim())} onClick={() => void submit()}>
+            <Button variant="primary" disabled={Boolean(draft.result) || draft.installing || composioSetupLoading || composioAuthLoading || missingRequiredAuthConfig || (isComposioToolkit && !composioConfigured && !composioApiKey.trim())} onClick={() => void submit()}>
               {draft.installing ? <Loader2 className="size-4 animate-spin" /> : draft.result ? <CheckCircle2 className="size-4" /> : <PackagePlus className="size-4" />}
               {draft.result ? t.connectedBadge : t.connect}
             </Button>

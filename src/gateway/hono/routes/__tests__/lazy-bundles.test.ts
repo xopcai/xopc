@@ -11,6 +11,7 @@ describe('lazy route bundles', () => {
       '/api/status',
       '/api/realtime/tickets',
       '/api/sessions/example/inputs',
+      '/api/sessions/example/turns/turn-1/replace',
       '/api/send',
     ];
     for (const path of paths) {

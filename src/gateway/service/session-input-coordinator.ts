@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { UserTurnAttachment } from '../user-turn-input.js';
@@ -11,10 +12,13 @@ import {
   insertSessionInput,
   mutateQueuedSessionInput,
   recoverSessionInputState,
+  replaceLatestSessionTurnAndQueueInput,
   setSessionInputStatus,
+  validateLatestSessionTurnTarget,
   type SessionInputDelivery,
   type SessionInputState,
 } from '../../storage/sqlite/index.js';
+import { deleteMediaUrisNoLongerReferenced } from '../../media/session-references.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SessionInputCoordinator');
@@ -28,6 +32,10 @@ export type SubmitSessionInput = {
   attachments?: UserTurnAttachment[];
   thinking?: string;
   origin: TurnOrigin;
+};
+
+export type ReplaceLatestTurnInput = SubmitSessionInput & {
+  targetTurnId: string;
 };
 
 export class SessionInputCoordinator {
@@ -62,11 +70,7 @@ export class SessionInputCoordinator {
     return state;
   }
 
-  async submit(input: SubmitSessionInput): Promise<
-    | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' }
-  > {
-    const sessionKey = input.sessionKey.trim();
+  private async runSubmissionExclusive<T>(sessionKey: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.submissionTails.get(sessionKey) ?? Promise.resolve();
     let release = () => {};
     const current = new Promise<void>((resolve) => { release = resolve; });
@@ -74,11 +78,75 @@ export class SessionInputCoordinator {
     this.submissionTails.set(sessionKey, tail);
     await previous;
     try {
-      return await this.submitLocked({ ...input, sessionKey });
+      return await operation();
     } finally {
       release();
       if (this.submissionTails.get(sessionKey) === tail) this.submissionTails.delete(sessionKey);
     }
+  }
+
+  async submit(input: SubmitSessionInput): Promise<
+    | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
+    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' }
+  > {
+    const sessionKey = input.sessionKey.trim();
+    return this.runSubmissionExclusive(sessionKey, () => this.submitLocked({ ...input, sessionKey }));
+  }
+
+  async replaceLatestTurn(
+    input: ReplaceLatestTurnInput,
+    beforeReplace: () => Promise<void>,
+  ): Promise<
+    | { ok: true; effectiveDelivery: 'next'; state: SessionInputState }
+    | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' }
+  > {
+    const sessionKey = input.sessionKey.trim();
+    return this.runSubmissionExclusive(sessionKey, async () => {
+      const clientMessageId = input.clientMessageId.trim();
+      const content = input.content.trim();
+      const targetTurnId = input.targetTurnId.trim();
+      if (!sessionKey || !clientMessageId || !targetTurnId || (!content && !input.attachments?.length)) {
+        return { ok: false, code: 'BAD_REQUEST' };
+      }
+      if (!await this.deps.sessionExists(sessionKey)) return { ok: false, code: 'BAD_REQUEST' };
+
+      const existing = findSessionInput(sessionKey, clientMessageId);
+      if (existing) {
+        return { ok: true, effectiveDelivery: 'next', state: this.snapshot(sessionKey) };
+      }
+
+      const target = validateLatestSessionTurnTarget(sessionKey, targetTurnId);
+      if (target.ok === false) return target;
+
+      await beforeReplace();
+      const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
+      const result = replaceLatestSessionTurnAndQueueInput({
+        sessionKey,
+        targetTurnId,
+        clientMessageId,
+        content,
+        attachments,
+        thinking: input.thinking,
+        origin: input.origin,
+      });
+      if (result.ok === false) return result;
+
+      if (!result.idempotent) {
+        const replacement = {
+          role: 'user',
+          content,
+          media: attachments,
+        } as unknown as AgentMessage;
+        await deleteMediaUrisNoLongerReferenced({
+          removed: result.removedMessages,
+          remaining: [...result.remainingMessages, replacement],
+        });
+      }
+
+      const state = this.publish(sessionKey);
+      void this.drain(sessionKey);
+      return { ok: true, effectiveDelivery: 'next', state };
+    });
   }
 
   private async submitLocked(input: SubmitSessionInput): Promise<

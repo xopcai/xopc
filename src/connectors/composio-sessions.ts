@@ -54,6 +54,22 @@ export type ComposioAuthorizeResult = {
   status: string;
 };
 
+export type ComposioAuthConfigOption = {
+  id: string;
+  name: string;
+  status: 'ENABLED' | 'DISABLED';
+  authScheme?: string;
+  isComposioManaged: boolean;
+  isEnabledForToolRouter: boolean;
+};
+
+export type ComposioToolkitAuthState = {
+  toolkit: string;
+  managedAuthAvailable: boolean;
+  requiresCustomAuthConfig: boolean;
+  authConfigs: ComposioAuthConfigOption[];
+};
+
 type SessionToolkitResponse = {
   items: Array<{
     slug: string;
@@ -89,6 +105,24 @@ export type ComposioSessionsClient = {
     delete(id: string): Promise<unknown>;
     refresh(id: string): Promise<unknown>;
   };
+  authConfigs?: {
+    list(query?: { toolkit?: string; showDisabled?: boolean }): Promise<{
+      items: Array<{
+        id: string;
+        name: string;
+        status: 'ENABLED' | 'DISABLED';
+        authScheme?: string;
+        isComposioManaged?: boolean;
+        isEnabledForToolRouter?: boolean;
+      }>;
+    }>;
+  };
+  toolkits?: {
+    get(slug: string): Promise<{
+      composioManagedAuthSchemes?: string[];
+      authConfigDetails?: unknown[];
+    }>;
+  };
 };
 
 export type ComposioSessionContext = {
@@ -96,6 +130,7 @@ export type ComposioSessionContext = {
   installationScope?: string;
   providerPrincipalId?: string;
   toolkits?: string[];
+  authConfigs?: Record<string, string>;
   connectedAccounts?: Record<string, string[]>;
   callbackUrl?: string;
 };
@@ -146,6 +181,31 @@ function connectionStatus(value: string | undefined): ConnectorConnection['statu
     case 'INACTIVE': return 'disabled';
     default: return 'unknown';
   }
+}
+
+function errorChainMessage(error: unknown): string {
+  const messages: string[] = [];
+  const visited = new Set<unknown>();
+  let current = error;
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    if (current instanceof Error) messages.push(current.message);
+    else if (typeof current === 'string') messages.push(current);
+    if (!current || typeof current !== 'object' || !('cause' in current)) break;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return messages.join(' ');
+}
+
+function missingAuthConfigMessage(error: unknown, toolkit: string, authConfigId?: string): string | null {
+  const message = errorChainMessage(error);
+  if (!message.includes('require auth configs') && !message.includes('cannot be auto-created')) return null;
+  if (authConfigId) {
+    return `The Composio auth config "${authConfigId}" is not available for toolkit "${toolkit}". `
+      + 'Make sure it is enabled for Tool Router and belongs to the same Composio project as the configured API key.';
+  }
+  return `The Composio toolkit "${toolkit}" requires a custom auth config. `
+    + 'Create one in the Composio dashboard, enable it for Tool Router, then select it in the connector settings.';
 }
 
 export class ComposioSessionsAdapter {
@@ -200,6 +260,9 @@ export class ComposioSessionsAdapter {
         requireExplicitSelection: true,
       },
       ...(context.toolkits?.length ? { toolkits: { enable: context.toolkits } } : {}),
+      ...(context.authConfigs && Object.keys(context.authConfigs).length > 0
+        ? { authConfigs: context.authConfigs }
+        : {}),
       ...(context.connectedAccounts && Object.keys(context.connectedAccounts).length > 0
         ? { connectedAccounts: context.connectedAccounts }
         : {}),
@@ -208,6 +271,34 @@ export class ComposioSessionsAdapter {
       context.providerPrincipalId ?? createComposioPrincipalId(context.principalId, context.installationScope),
       config,
     );
+  }
+
+  async getToolkitAuthState(toolkit: string): Promise<ComposioToolkitAuthState> {
+    const normalizedToolkit = toolkit.trim().toLowerCase();
+    if (!normalizedToolkit) throw new Error('Composio toolkit is required.');
+    const client = await this.createClient();
+    if (!client.authConfigs || !client.toolkits) {
+      throw new Error('The installed Composio runtime does not support auth config discovery.');
+    }
+    const [toolkitDetails, authConfigList] = await Promise.all([
+      client.toolkits.get(normalizedToolkit),
+      client.authConfigs.list({ toolkit: normalizedToolkit, showDisabled: true }),
+    ]);
+    const managedAuthAvailable = (toolkitDetails.composioManagedAuthSchemes?.length ?? 0) > 0;
+    const authConfigs = authConfigList.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      authScheme: item.authScheme,
+      isComposioManaged: item.isComposioManaged === true,
+      isEnabledForToolRouter: item.isEnabledForToolRouter !== false,
+    }));
+    return {
+      toolkit: normalizedToolkit,
+      managedAuthAvailable,
+      requiresCustomAuthConfig: !managedAuthAvailable && (toolkitDetails.authConfigDetails?.length ?? 0) > 0,
+      authConfigs,
+    };
   }
 
   async listToolkitCatalog(context: Omit<ComposioSessionContext, 'toolkits'>): Promise<ComposioToolkitCatalogItem[]> {
@@ -233,10 +324,22 @@ export class ComposioSessionsAdapter {
   }
 
   async authorize(
-    context: ComposioSessionContext & { toolkit: string; installationId?: string; alias?: string },
+    context: ComposioSessionContext & { toolkit: string; authConfigId?: string; installationId?: string; alias?: string },
   ): Promise<ComposioAuthorizeResult> {
     const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);
-    const session = await this.createSession({ ...context, providerPrincipalId, toolkits: [context.toolkit] });
+    let session: ComposioSessionLike;
+    try {
+      session = await this.createSession({
+        ...context,
+        providerPrincipalId,
+        toolkits: [context.toolkit],
+        ...(context.authConfigId ? { authConfigs: { [context.toolkit]: context.authConfigId } } : {}),
+      });
+    } catch (error) {
+      const actionableMessage = missingAuthConfigMessage(error, context.toolkit, context.authConfigId);
+      if (actionableMessage) throw new Error(actionableMessage, { cause: error });
+      throw error;
+    }
     const request = await session.authorize(context.toolkit, {
       callbackUrl: context.callbackUrl,
       alias: context.alias,
@@ -255,7 +358,11 @@ export class ComposioSessionsAdapter {
       identity: {},
       status: connectionStatus(request.status),
       isDefault: listStoredConnectorConnections({ principalId: context.principalId, connectorId }).length === 0,
-      metadata: { toolkit: context.toolkit, providerPrincipalId },
+      metadata: {
+        toolkit: context.toolkit,
+        providerPrincipalId,
+        ...(context.authConfigId ? { authConfigId: context.authConfigId } : {}),
+      },
     });
     return {
       toolkit: context.toolkit,
@@ -299,7 +406,7 @@ export class ComposioSessionsAdapter {
         isDefault: existing?.isDefault ?? false,
         connectedAt: readString(row, ['createdAt', 'created_at']),
         lastError: readString(row, ['lastError', 'last_error']),
-        metadata: { toolkit, providerPrincipalId },
+        metadata: { ...existing?.metadata, toolkit, providerPrincipalId },
       });
       const identityKey = connectorIdentityKey(toolkit, connection.identity);
       if (identityKey) {
@@ -374,12 +481,16 @@ export class ComposioSessionsAdapter {
         ? { [toolkit]: [input.connection.providerConnectionId] }
         : input.context.connectedAccounts;
       const providerPrincipalId = input.connection?.metadata.providerPrincipalId;
+      const connectionAuthConfigId = input.connection?.metadata.authConfigId;
       if (input.connection && (typeof providerPrincipalId !== 'string' || !providerPrincipalId.trim())) {
         throw new Error('Connected account is missing its provider identity. Reconnect the account and try again.');
       }
       const session = await this.createSession({
         ...input.context,
         connectedAccounts,
+        ...(toolkit && typeof connectionAuthConfigId === 'string' && connectionAuthConfigId.trim()
+          ? { authConfigs: { [toolkit]: connectionAuthConfigId.trim() } }
+          : {}),
         ...(typeof providerPrincipalId === 'string' ? { providerPrincipalId } : {}),
       });
       const result = await session.execute(

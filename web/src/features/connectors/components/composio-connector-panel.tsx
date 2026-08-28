@@ -11,6 +11,7 @@ import {
   getComposioScope,
   getComposioPolicy,
   getComposioHealth,
+  getComposioToolkitAuthState,
   getConnectorSyncPolicy,
   listConnectorApprovals,
   listConnectorLearningJobs,
@@ -25,10 +26,12 @@ import {
   startAccountLearning,
   updateComposioConnection,
   updateComposioPolicy,
+  updateConnectorConfig,
   updateConnectorSyncPolicy,
   type ComposioConnection,
   type ComposioInstallationPolicy,
   type ComposioConnectorHealth,
+  type ComposioToolkitAuthState,
   type ComposioScope,
   type ComposioTool,
   type ComposioTriggerEvent,
@@ -111,6 +114,7 @@ export function ComposioConnectorPanel({
   const [policy, setPolicy] = useState<ComposioInstallationPolicy | null>(null);
   const [agents, setAgents] = useState<ConnectorAgentOption[]>([]);
   const [health, setHealth] = useState<ComposioConnectorHealth | null>(null);
+  const [authState, setAuthState] = useState<ComposioToolkitAuthState | null>(null);
   const [learningJobs, setLearningJobs] = useState<ConnectorLearningJob[]>([]);
   const [syncPolicies, setSyncPolicies] = useState<Record<string, ConnectorSyncPolicy>>({});
   const [scope, setScope] = useState<ComposioScope>('read');
@@ -123,7 +127,7 @@ export function ComposioConnectorPanel({
     setLoading(true);
     setError(null);
     try {
-      const [nextConnections, nextTools, nextEvents, nextScope, nextApprovals, nextPolicy, nextHealth, nextLearningJobs] = await Promise.all([
+      const [nextConnections, nextTools, nextEvents, nextScope, nextApprovals, nextPolicy, nextHealth, nextLearningJobs, nextAuthState] = await Promise.all([
         listComposioConnections().catch(() => []),
         listComposioTools(toolkit).catch(() => []),
         listComposioTriggerEvents(20).catch(() => []),
@@ -132,6 +136,7 @@ export function ComposioConnectorPanel({
         getComposioPolicy(toolkit).catch(() => null),
         getComposioHealth(toolkit).catch(() => null),
         listConnectorLearningJobs().catch(() => []),
+        getComposioToolkitAuthState(toolkit).catch(() => null),
       ]);
       setConnections(nextConnections.filter((connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase()));
       setTools(nextTools);
@@ -142,6 +147,7 @@ export function ComposioConnectorPanel({
       setAgents(nextPolicy?.agents ?? []);
       setHealth(nextHealth);
       setLearningJobs(nextLearningJobs);
+      setAuthState(nextAuthState);
       const relevantConnections = nextConnections.filter(
         (connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase(),
       );
@@ -190,6 +196,25 @@ export function ComposioConnectorPanel({
       setLoading(false);
     }
   }, [instance.connectorId, loadComposio, onChanged, toolkit]);
+
+  const updateAuthConfig = useCallback(async (authConfigId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await updateConnectorConfig(instance.instanceId, {
+        config: {
+          ...(instance.config ?? {}),
+          ...(authConfigId ? { authConfigId } : { authConfigId: undefined }),
+        },
+      });
+      await onChanged?.();
+      await loadComposio();
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : String(updateError));
+    } finally {
+      setLoading(false);
+    }
+  }, [instance.config, instance.instanceId, loadComposio, onChanged]);
 
   const updateScope = useCallback(async (nextScope: ComposioScope) => {
     if (!toolkit) return;
@@ -269,6 +294,51 @@ export function ComposioConnectorPanel({
         </div>
       </div>
       {error ? <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+      {authState ? (
+        <div className="mt-3 rounded-lg border border-edge bg-surface-panel p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium text-fg">{t.composioAuthConfigTitle}</p>
+              <p className="mt-1 text-xs text-fg-muted">
+                {authState.requiresCustomAuthConfig ? t.composioAuthConfigRequiredHint : t.composioAuthConfigOptionalHint}
+              </p>
+            </div>
+            <a
+              className="text-xs font-medium text-accent-fg hover:underline"
+              href="https://app.composio.dev"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t.composioAuthConfigManage}
+            </a>
+          </div>
+          <Select
+            className={cn(inputClass, 'mt-2 h-9 py-1')}
+            value={typeof instance.config?.authConfigId === 'string' ? instance.config.authConfigId : ''}
+            disabled={loading}
+            onChange={(event) => void updateAuthConfig(event.currentTarget.value)}
+          >
+            {!authState.requiresCustomAuthConfig ? (
+              <SelectOption value="">{t.composioAuthConfigManaged}</SelectOption>
+            ) : null}
+            {authState.requiresCustomAuthConfig && typeof instance.config?.authConfigId !== 'string' ? (
+              <SelectOption value="" disabled>{t.composioAuthConfigSelect}</SelectOption>
+            ) : null}
+            {authState.authConfigs
+              .filter((item) => item.status === 'ENABLED' && item.isEnabledForToolRouter)
+              .map((item) => (
+                <SelectOption key={item.id} value={item.id}>
+                  {item.name} · {item.authScheme ?? 'OAuth'} · {item.id}
+                </SelectOption>
+              ))}
+          </Select>
+          {authState.requiresCustomAuthConfig && authState.authConfigs.every(
+            (item) => item.status !== 'ENABLED' || !item.isEnabledForToolRouter,
+          ) ? (
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{t.composioAuthConfigEmpty}</p>
+          ) : null}
+        </div>
+      ) : null}
       {health ? (
         <div className={cn(
           'mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs',

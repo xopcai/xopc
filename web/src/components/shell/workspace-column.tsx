@@ -83,6 +83,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
   const workspaceRootLabel = workspaceRoot ? folderDisplayName(workspaceRoot) : m.workspace.title;
+  const electron = isElectron();
 
   const handleFileDragStart = useCallback(
     (event: DragEvent<HTMLButtonElement>, entry: { name: string; path: string }) => {
@@ -364,13 +365,15 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
             />
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
               <h2 className="sr-only">{m.workspace.title}</h2>
-              <div
-                className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-fg"
-                title={workspaceRoot ?? undefined}
-              >
-                <Folder className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                <span className="truncate">{workspaceRootLabel}</span>
-              </div>
+              {!electron ? (
+                <div
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-fg"
+                  title={workspaceRoot ?? undefined}
+                >
+                  <Folder className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                  <span className="truncate">{workspaceRootLabel}</span>
+                </div>
+              ) : null}
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 <WorkspaceOpenLocationMenu workspacePath={workspaceRoot ?? ''} />
                 <Button
@@ -488,7 +491,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                   download: m.workspace.download,
                   copyPath: m.workspace.copyPath,
                   share: m.workspace.shareLink,
-                  ...(isElectron()
+                  ...(electron
                     ? {
                         openDefault: m.workspace.openSystemApp,
                         openWith: m.workspace.chooseApp,

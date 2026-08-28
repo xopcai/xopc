@@ -277,6 +277,7 @@ export class MessageSender {
     thinkingLevel?: string,
     callbacks?: MessagingCallbacks,
     taskId?: string,
+    replaceTurnId?: string,
   ): Promise<void> {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
@@ -288,12 +289,14 @@ export class MessageSender {
         : attachments;
 
     const origin = await waitForEndpointTurnClaim(this._abort.signal);
-    const fingerprint = sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel });
+    const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel })}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
     const clientMessageId = claimSubmissionId(chatId, fingerprint);
     const res = await postSessionInput(
       apiUrl(taskId
         ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
-        : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
+        : replaceTurnId
+          ? `/api/sessions/${encodeURIComponent(chatId)}/turns/${encodeURIComponent(replaceTurnId)}/replace`
+          : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
       JSON.stringify({
         clientMessageId,
         delivery: 'next',

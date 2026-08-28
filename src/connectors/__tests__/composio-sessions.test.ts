@@ -56,6 +56,12 @@ describe('ComposioSessionsAdapter', () => {
         delete: vi.fn(async () => ({})),
         refresh: vi.fn(async () => ({})),
       },
+      authConfigs: {
+        list: vi.fn(async () => ({ items: [] })),
+      },
+      toolkits: {
+        get: vi.fn(async () => ({ composioManagedAuthSchemes: ['OAUTH2'], authConfigDetails: [{}] })),
+      },
     };
   });
 
@@ -91,6 +97,58 @@ describe('ComposioSessionsAdapter', () => {
       alias: 'Work',
       status: 'pending',
     });
+  });
+
+  it('discovers custom auth requirements and passes an explicit auth config to the session', async () => {
+    client.toolkits!.get = vi.fn(async () => ({ composioManagedAuthSchemes: [], authConfigDetails: [{}] }));
+    client.authConfigs!.list = vi.fn(async () => ({
+      items: [{
+        id: 'ac_twitter',
+        name: 'Twitter OAuth',
+        status: 'ENABLED',
+        authScheme: 'OAUTH2',
+        isComposioManaged: false,
+        isEnabledForToolRouter: true,
+      }],
+    }));
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+
+    await expect(adapter.getToolkitAuthState('Twitter')).resolves.toEqual({
+      toolkit: 'twitter',
+      managedAuthAvailable: false,
+      requiresCustomAuthConfig: true,
+      authConfigs: [expect.objectContaining({ id: 'ac_twitter', isEnabledForToolRouter: true })],
+    });
+    await adapter.authorize({
+      principalId: 'owner',
+      installationScope: stateDir,
+      toolkit: 'twitter',
+      authConfigId: 'ac_twitter',
+    });
+
+    expect(client.sessions.create).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^xopc_/),
+      expect.objectContaining({
+        toolkits: { enable: ['twitter'] },
+        authConfigs: { twitter: 'ac_twitter' },
+      }),
+    );
+    expect(listConnectorConnections({ principalId: 'owner' })[0]?.metadata).toMatchObject({
+      authConfigId: 'ac_twitter',
+    });
+  });
+
+  it('turns Tool Router missing-auth failures into an actionable connector error', async () => {
+    client.sessions.create = vi.fn(async () => {
+      throw new Error('The following toolkits require auth configs but none exist and cannot be auto-created: twitter.');
+    });
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+
+    await expect(adapter.authorize({
+      principalId: 'owner',
+      installationScope: stateDir,
+      toolkit: 'twitter',
+    })).rejects.toThrow('requires a custom auth config');
   });
 
   it('groups provider authorizations that resolve to the same account identity', async () => {

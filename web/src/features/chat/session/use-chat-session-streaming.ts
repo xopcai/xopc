@@ -50,7 +50,12 @@ export function useChatSessionStreaming(deps: {
   sessionMgrRef: RefObject<SessionManager>;
 
   sendMessageRef: RefObject<
-    (content: string, attachments?: PendingFollowUp['attachments'], levelOverride?: string) => Promise<void>
+    (
+      content: string,
+      attachments?: PendingFollowUp['attachments'],
+      levelOverride?: string,
+      replaceTurnId?: string,
+    ) => Promise<void>
   >;
 
   shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
@@ -275,7 +280,12 @@ export function useChatSessionStreaming(deps: {
   );
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: WireAttachment[], levelOverride?: string) => {
+    async (
+      content: string,
+      attachments?: WireAttachment[],
+      levelOverride?: string,
+      replaceTurnId?: string,
+    ) => {
       if (!sessionKey) return;
       if (!shouldApplyStreamUpdate(sessionKey)) return;
       if (
@@ -298,6 +308,13 @@ export function useChatSessionStreaming(deps: {
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
       const chatId = sessionKey;
+      const currentMessages = getSessionMessages(chatId);
+      const replaceIndex = replaceTurnId
+        ? currentMessages.findIndex(
+            (message) => message.role === 'user' && message.turnId === replaceTurnId,
+          )
+        : -1;
+      if (replaceTurnId && replaceIndex < 0) return;
       chatRunManager.userAborted = false;
       chatRunManager.activeStreamSessionKey = chatId;
       sendingRef.current = true;
@@ -305,8 +322,11 @@ export function useChatSessionStreaming(deps: {
       clearShellError();
       fq.dismissClarify();
 
+      const baseMessages = replaceIndex >= 0
+        ? currentMessages.slice(0, replaceIndex)
+        : currentMessages;
       const nextMessages = [
-        ...getSessionMessages(chatId),
+        ...baseMessages,
         {
           role: 'user',
           content: content ? [{ type: 'text', text: content }] : [],
@@ -368,12 +388,14 @@ export function useChatSessionStreaming(deps: {
           effectiveThinking,
           sendStreamCallbacks,
           taskId,
+          replaceTurnId,
         );
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           store().clearStreamingState(chatId);
           clearChatRunPresence(chatId);
           setShellError(JSON.stringify(buildSendFailedErrorPayload()));
+          if (replaceTurnId) void loadSessionById(chatId, 0);
         } else {
           clearChatRunPresence(chatId);
         }
@@ -397,7 +419,18 @@ export function useChatSessionStreaming(deps: {
       fq.dismissClarify,
       createNewSession,
       taskId,
+      loadSessionById,
     ],
+  );
+
+  const replaceLatestUserTurn = useCallback(
+    (
+      turnId: string,
+      content: string,
+      attachments?: WireAttachment[],
+      levelOverride?: string,
+    ) => sendMessage(content, attachments, levelOverride, turnId),
+    [sendMessage],
   );
 
   const abort = useCallback(() => {
@@ -468,31 +501,19 @@ export function useChatSessionStreaming(deps: {
       const wireAtt = messageAttachmentsToWire(msg.attachments);
       if (!text.trim() && !wireAtt?.length) return;
 
-      const userRoundIndex = userRoundIndexFromUiMessageIndex(messages, messageIndex);
-      if (userRoundIndex === null) return;
-
-      const deleteCount = uiDeleteCountForUserRound(messages, messageIndex);
-      const updated = [...messages];
-      updated.splice(messageIndex, deleteCount);
-
-      store().updateSessionMessages(key, () => updated);
-
-      void (async () => {
-        try {
-          await sessionMgrRef.current.deleteMessages(key, { userRoundIndex });
-          await sendMessageRef.current(text, wireAtt);
-        } catch {
-          void loadSessionById(key, 0);
-        }
-      })();
+      if (!msg.turnId) return;
+      void sendMessageRef.current(text, wireAtt, undefined, msg.turnId).catch(() => {
+        void loadSessionById(key, 0);
+      });
     },
-    [sessionKeyRef, sendingRef, streamingRef, sessionMgrRef, loadSessionById, sendMessageRef],
+    [sessionKeyRef, sendingRef, streamingRef, loadSessionById, sendMessageRef],
   );
 
   return {
     finalizeMessage,
     tryResumeAgentRun,
     sendMessage,
+    replaceLatestUserTurn,
     interruptAndSend,
     abort,
     deleteMessageRound,
