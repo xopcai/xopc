@@ -44,3 +44,8 @@ export const XOPC_DB_FILENAME = 'xopc.db';
 export function resolveXopcDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
   return join(resolveStateDir(env), XOPC_DB_FILENAME);
 }
+
+/** Durable last-known-good XOPC Cloud model catalog. */
+export function resolveXopcCloudCatalogCachePath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(resolveStateDir(env), 'cache', 'model-catalog', 'xopc-cloud-v1.json');
+}

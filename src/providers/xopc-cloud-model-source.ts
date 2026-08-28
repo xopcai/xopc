@@ -1,12 +1,14 @@
-import { getModelCatalogStore, type ModelCatalogStore } from './model-catalog-store.js';
-import { getModelRegistry } from './model-registry.js';
+import type { AvailableCatalogModel, CatalogSource } from './model-catalog-store.js';
 import { getProviderAuthService, type ProviderAuthService } from './provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from './xopc-cloud-config.js';
-import { reloadImageGenerationProviders } from '../agent/image/generation/provider-registry.js';
 
-export type XopcCloudModelRefreshResult =
+export type XopcCloudCatalogFetchResult =
   | { status: 'skipped'; reason: 'not_configured' }
-  | { status: 'updated'; modelCount: number; models: string[] };
+  | {
+      status: 'fetched';
+      source: Omit<CatalogSource, 'models'>;
+      models: AvailableCatalogModel[];
+    };
 
 export class XopcCloudModelError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
@@ -19,29 +21,26 @@ export class XopcCloudModelSource {
   private readonly fetchImpl: typeof fetch;
   private readonly routerUrl: string;
   private readonly credentials: Pick<ProviderAuthService, 'resolveApiKey'>;
-  private readonly catalogStore: ModelCatalogStore;
-  private readonly refreshModels: () => void;
 
   constructor(options: {
     fetchImpl?: typeof fetch;
     routerUrl?: string;
     credentials?: Pick<ProviderAuthService, 'resolveApiKey'>;
-    catalogStore?: ModelCatalogStore;
-    refreshModels?: () => void;
   } = {}) {
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.routerUrl = resolveXopcModelRouterUrl(options.routerUrl);
     this.credentials = options.credentials ?? getProviderAuthService();
-    this.catalogStore = options.catalogStore ?? getModelCatalogStore();
-    this.refreshModels = options.refreshModels ?? (() => getModelRegistry().refresh());
   }
 
-  async refresh(): Promise<XopcCloudModelRefreshResult> {
-    const accessToken = await this.credentials.resolveApiKey('xopc-cloud');
+  async fetch(signal?: AbortSignal): Promise<XopcCloudCatalogFetchResult> {
+    const requestSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+      : AbortSignal.timeout(30_000);
+    const accessToken = await this.credentials.resolveApiKey('xopc-cloud', requestSignal);
     if (!accessToken) return { status: 'skipped', reason: 'not_configured' };
     const response = await this.fetchImpl(`${this.routerUrl}/models`, {
       headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
-      signal: AbortSignal.timeout(30_000),
+      signal: requestSignal,
     });
     const body = await response.json().catch(() => null) as {
       data?: Array<{
@@ -72,8 +71,16 @@ export class XopcCloudModelSource {
             instructions?: unknown;
           };
           defaultVoice?: unknown;
+          stability?: unknown;
+          priority?: unknown;
+          tier?: unknown;
+          bestEffort?: unknown;
         };
       }>;
+      xopc?: {
+        schemaVersion?: unknown;
+        defaults?: unknown;
+      };
       error?: { message?: unknown; code?: unknown };
     } | null;
     if (!response.ok) {
@@ -121,7 +128,7 @@ export class XopcCloudModelSource {
         const generation = parseImageGenerationCapabilities(model.xopc?.capabilities?.imageGeneration);
         const stt = kind === 'stt' ? parseSttCapabilities(model.xopc?.capabilities) : undefined;
         const tts = kind === 'tts' ? parseTtsCapabilities(model.xopc?.capabilities, model.xopc?.defaultVoice) : undefined;
-        return [model.id, {
+        const catalogModel: AvailableCatalogModel = {
           id: model.id,
           name: model.id,
           kind,
@@ -133,22 +140,67 @@ export class XopcCloudModelSource {
           maxOutputTokens: typeof maxOutputTokens === 'number' && Number.isSafeInteger(maxOutputTokens)
             ? maxOutputTokens
             : null,
+          ...(model.xopc?.stability === 'stable' || model.xopc?.stability === 'preview' || model.xopc?.stability === 'deprecated'
+            ? { stability: model.xopc.stability }
+            : {}),
+          ...(typeof model.xopc?.priority === 'number' && Number.isFinite(model.xopc.priority)
+            ? { priority: model.xopc.priority }
+            : {}),
+          ...(typeof model.xopc?.tier === 'string' && model.xopc.tier
+            ? { tier: model.xopc.tier }
+            : {}),
+          ...(typeof model.xopc?.bestEffort === 'boolean'
+            ? { bestEffort: model.xopc.bestEffort }
+            : {}),
           ...(generation ? { imageGeneration: generation } : {}),
           ...(stt ? { stt } : {}),
           ...(tts ? { tts } : {}),
-        }] as const;
+        };
+        return [model.id, catalogModel] as const;
       })).values()];
-    this.catalogStore.replaceSourceModels('xopc-cloud', {
-      providerId: 'xopc-cloud',
-      baseUrl: this.routerUrl,
-      api: 'openai-completions',
-      etag: response.headers.get('x-xopc-model-catalog-version'),
-      recommendedModel: models[0]?.id ?? null,
-      lastSuccessAt: Date.now(),
-    }, models);
-    this.refreshModels();
-    reloadImageGenerationProviders();
-    return { status: 'updated', modelCount: models.length, models: models.map((model) => model.id) };
+    const recommended = parseRecommendations(body.xopc?.defaults, models);
+    return {
+      status: 'fetched',
+      source: {
+        providerId: 'xopc-cloud',
+        baseUrl: this.routerUrl,
+        api: 'openai-completions',
+        etag: response.headers.get('x-xopc-model-catalog-version'),
+        recommendedModel: models[0]?.id ?? null,
+        ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
+        lastSuccessAt: Date.now(),
+      },
+      models,
+    };
+  }
+}
+
+function parseRecommendations(
+  value: unknown,
+  models: AvailableCatalogModel[],
+): NonNullable<CatalogSource['recommended']> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  const capabilities = ['vision', 'image-generation', 'stt', 'tts'] as const;
+  const recommended: NonNullable<CatalogSource['recommended']> = {};
+  for (const capability of capabilities) {
+    const modelId = raw[capability];
+    if (typeof modelId !== 'string') continue;
+    const model = models.find((entry) => entry.id === modelId);
+    if (model && modelMatchesRecommendation(model, capability)) recommended[capability] = modelId;
+  }
+  return recommended;
+}
+
+function modelMatchesRecommendation(
+  model: AvailableCatalogModel,
+  capability: 'vision' | 'image-generation' | 'stt' | 'tts',
+): boolean {
+  switch (capability) {
+    case 'vision': return model.kind === 'language' && model.input.includes('image');
+    case 'image-generation': return model.kind === 'image' && model.operations.includes('images.generate');
+    case 'stt': return model.kind === 'stt' && model.operations.includes('audio.transcription');
+    case 'tts': return model.kind === 'tts' && model.operations.includes('audio.speech');
   }
 }
 

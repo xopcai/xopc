@@ -1,12 +1,15 @@
 import { getModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
 import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type { AudioTranscriptionRequest, MediaUnderstandingProvider } from '../../../media-understanding/types.js';
 
 function defaultModel(): string | undefined {
-  return getModelCatalogStore().getSource('xopc-cloud')?.models.find((model) =>
-    model.availability === 'available' && model.kind === 'stt')?.id;
+  const source = getModelCatalogStore().getSource('xopc-cloud');
+  return source?.models
+    .filter((model) => model.availability === 'available' && model.kind === 'stt')
+    .sort((left, right) => compareCatalogModels(left, right, source.recommended?.stt))[0]?.id;
 }
 
 export const xopcCloudTranscriptionProvider: MediaUnderstandingProvider = {

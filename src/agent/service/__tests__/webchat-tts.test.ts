@@ -94,4 +94,20 @@ describe('maybeEmitWebchatTts', () => {
       ],
     });
   });
+
+  it('keeps automatic replies silent when TTS config is absent', async () => {
+    const result = await maybeEmitWebchatTts(
+      {
+        config: { messages: undefined } as unknown as Config,
+        sessionStore: { load: vi.fn(), saveMessages: vi.fn() } as never,
+        getLastAssistantPlainText: vi.fn(() => 'should stay text only'),
+        log: { warn: vi.fn() },
+      },
+      'agent:main:silent',
+      true,
+    );
+
+    expect(result).toBeNull();
+    expect(speak).not.toHaveBeenCalled();
+  });
 });

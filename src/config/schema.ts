@@ -909,7 +909,7 @@ export const TTSConfigSchema = z
     enabled: z.boolean().default(true),
     /** Primary provider id — any registered SpeechProviderPlugin id. */
     provider: z.string().min(1).default('edge'),
-    trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('inbound'),
+    trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('off'),
     fallback: TTSFallbackConfigSchema.optional(),
     maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
     timeoutMs: z.number().int().min(1000).max(180000).default(60000),

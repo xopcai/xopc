@@ -16,6 +16,7 @@ import {
   isProviderConfiguredSync,
   resolveModel,
 } from '../../providers/index.js';
+import { buildCapabilityPlansForConfig } from '../../capabilities/readiness/index.js';
 
 export type ToolModelConfig = {
   primary?: string;
@@ -226,7 +227,17 @@ export function resolveEffectiveImageModelConfig(params: {
 }): ResolvedImageModelConfig | null {
   const explicit = resolveConfiguredImageModelConfig(params);
   if (hasToolModelConfig(explicit)) {
-    return { ...explicit, source: 'explicit' };
+    const managed = params.cfg ? buildCapabilityPlansForConfig(params.cfg).vision : undefined;
+    const managedRefs = managed?.primary
+      ? [managed.primary, ...managed.fallbacks].map((candidate) => `${candidate.provider}/${candidate.model}`)
+      : [];
+    const fallbacks = [...new Set([...(explicit.fallbacks ?? []), ...managedRefs])]
+      .filter((ref) => ref !== explicit.primary);
+    return {
+      ...explicit,
+      ...(fallbacks.length > 0 ? { fallbacks } : {}),
+      source: 'explicit',
+    };
   }
 
   const roleCandidates = collectRoleImageModelCandidates(params);
@@ -248,12 +259,18 @@ export function resolveEffectiveImageModelConfig(params: {
     primaryCandidates.push(vision);
   }
 
+  const managed = params.cfg
+    ? buildCapabilityPlansForConfig(params.cfg).vision
+    : undefined;
+  const managedRefs = managed?.primary
+    ? [managed.primary, ...managed.fallbacks].map((candidate) => `${candidate.provider}/${candidate.model}`)
+    : [];
+
   return buildToolModelConfigFromCandidates({
     explicit,
     candidates: [
       ...primaryCandidates,
-      firstVisionModelRef('openai'),
-      firstVisionModelRef('anthropic'),
+      ...managedRefs,
     ],
     source: 'auto-provider',
   });

@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { resolveSTTProviderChain, resolveSTTProviderConfig } from '../factory.js';
 import '../providers/index.js';
+import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+
+afterEach(() => resetModelCatalogStore());
 
 describe('resolveSTTProviderConfig', () => {
   it('reads apiKey from providers map', () => {
@@ -70,6 +73,7 @@ describe('resolveSTTProviderChain', () => {
     const chain = resolveSTTProviderChain({
       enabled: true,
       provider: 'openai',
+      managedAuto: true,
       fallback: { enabled: false, order: [] },
       providers: {
         openai: { apiKey: 'sk-openai' },
@@ -79,5 +83,40 @@ describe('resolveSTTProviderChain', () => {
 
     expect(chain[0]?.id).toBe('openai');
     expect(chain.map((entry) => entry.id)).toContain('alibaba');
+  });
+
+  it('does not expand an explicit provider when fallback is disabled', () => {
+    const chain = resolveSTTProviderChain({
+      enabled: true,
+      provider: 'openai',
+      managedAuto: false,
+      fallback: { enabled: false, order: [] },
+      providers: {
+        openai: { apiKey: 'sk-openai' },
+        alibaba: { apiKey: 'sk-alibaba' },
+      },
+    });
+
+    expect(chain.map((entry) => entry.id)).toEqual(['openai']);
+  });
+
+  it('expands every managed XOPC Cloud STT model for model-level failover', () => {
+    getModelCatalogStore().replaceSourceModels('xopc-cloud', {
+      providerId: 'xopc-cloud', baseUrl: 'https://router.test/v1', api: 'openai-completions',
+      etag: '1', recommendedModel: null, lastSuccessAt: Date.now(),
+    }, ['stt-a', 'stt-b'].map((id) => ({
+      id, name: id, kind: 'stt' as const, input: ['audio' as const], output: ['text' as const],
+      operations: ['audio.transcription' as const], reasoning: false,
+      contextWindow: 128_000, maxOutputTokens: null,
+    })));
+
+    const chain = resolveSTTProviderChain({
+      enabled: true, provider: 'xopc-cloud', managedAuto: true,
+      fallback: { enabled: false, order: [] },
+    });
+
+    expect(chain.map((entry) => `${entry.id}/${entry.model}`).slice(0, 2)).toEqual([
+      'xopc-cloud/stt-a', 'xopc-cloud/stt-b',
+    ]);
   });
 });

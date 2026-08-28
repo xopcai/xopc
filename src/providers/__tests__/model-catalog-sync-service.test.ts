@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ModelCatalogStore } from '../model-catalog-store.js';
 import { ModelCatalogSyncService } from '../model-catalog-sync-service.js';
-import type { XopcCloudModelSource } from '../xopc-cloud-model-source.js';
+import type { XopcCloudCatalogCoordinator } from '../xopc-cloud-catalog-coordinator.js';
 
 describe('ModelCatalogSyncService', () => {
   it('coalesces concurrent refreshes and reports success', async () => {
@@ -14,11 +14,11 @@ describe('ModelCatalogSyncService', () => {
     const wait = new Promise<void>((resolve) => { release = resolve; });
     const refresh = vi.fn(async () => {
       await wait;
-      return { status: 'updated' as const, modelCount: 2 };
+      return { state: 'ready' as const, source: 'network' as const, modelCount: 2 };
     });
     const onUpdated = vi.fn();
     const service = new ModelCatalogSyncService({
-      xopcCloud: { refresh } as XopcCloudModelSource,
+      xopcCloud: { refresh } as Pick<XopcCloudCatalogCoordinator, 'refresh'>,
       onUpdated,
     });
 
@@ -46,8 +46,8 @@ describe('ModelCatalogSyncService', () => {
       };
       const service = new ModelCatalogSyncService({
         xopcCloud: {
-          refresh: vi.fn(async () => ({ status: 'skipped' as const, reason: 'not_configured' as const })),
-        } as XopcCloudModelSource,
+          refresh: vi.fn(async () => ({ state: 'not-authorized' as const, source: 'none' as const, modelCount: 0 })),
+        },
         catalogStore: store,
         loadProviders: () => providers,
         discoverModels: vi.fn(async () => [{ id: 'model-a', name: 'Model A', source: 'live' as const }]),
@@ -69,5 +69,25 @@ describe('ModelCatalogSyncService', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('notifies consumers when permanent auth failure clears the cloud catalog', async () => {
+    const onUpdated = vi.fn();
+    const service = new ModelCatalogSyncService({
+      xopcCloud: {
+        refresh: vi.fn(async () => ({
+          state: 'not-authorized' as const,
+          source: 'none' as const,
+          modelCount: 0,
+          error: { code: 'invalid_token', message: 'revoked', retryable: false },
+        })),
+      },
+      onUpdated,
+    });
+
+    await service.refreshNow();
+
+    expect(onUpdated).toHaveBeenCalledWith(0);
+    expect(service.getStatus().lastError).toBe('revoked');
   });
 });
