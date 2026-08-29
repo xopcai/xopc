@@ -38,8 +38,6 @@
     "noRunResultsTitle": "没有匹配的运行",
     "noRunResultsHint": "调整搜索或筛选条件，查看其他运行记录。",
     "chooseWorkflow": "选择工作流",
-    "libraryTitle": "工作流库",
-    "libraryDescription": "选择适合当前工作的工作流，配置输入后开始运行；也可以创建自己的可复用流程。",
     "librarySearchPlaceholder": "搜索工作流…",
     "recentlyUsed": "最近使用",
     "allWorkflows": "全部工作流",

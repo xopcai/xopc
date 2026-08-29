@@ -9,6 +9,13 @@ export function buildComposerDraftSeed(skill: string, draft: string): string | n
   return trimmedDraft || null;
 }
 
+export function newChatAutoSendHref(draft: string): string | null {
+  const trimmedDraft = draft.trim();
+  if (!trimmedDraft) return null;
+  const params = new URLSearchParams({ draft: trimmedDraft, autoSend: '1' });
+  return `/chat/new?${params.toString()}`;
+}
+
 /**
  * When `/chat/new?skill=…&slash=…` resolves to an actual session and the URL is
  * replaced with `/chat/:key?…`, only composer deep-link params should survive —

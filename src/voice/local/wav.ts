@@ -4,6 +4,13 @@ export interface DecodedPcmAudio {
   durationSeconds: number;
 }
 
+export class UnsupportedWavEncodingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UnsupportedWavEncodingError';
+  }
+}
+
 function readChunkId(buffer: Buffer, offset: number): string {
   return buffer.toString('ascii', offset, offset + 4);
 }
@@ -56,11 +63,11 @@ export function decodeWavToMonoFloat32(buffer: Buffer, targetRate = 16_000): Dec
     throw new Error('WAV audio is missing format or data chunks');
   }
   if (format.channels < 1 || format.channels > 8 || format.sampleRate < 8_000) {
-    throw new Error('Unsupported WAV channel count or sample rate');
+    throw new UnsupportedWavEncodingError('Unsupported WAV channel count or sample rate');
   }
   const bytesPerSample = format.bitsPerSample / 8;
   if (!Number.isInteger(bytesPerSample) || bytesPerSample < 2) {
-    throw new Error(`Unsupported WAV bit depth: ${format.bitsPerSample}`);
+    throw new UnsupportedWavEncodingError(`Unsupported WAV bit depth: ${format.bitsPerSample}`);
   }
   const frameBytes = bytesPerSample * format.channels;
   const frameCount = Math.floor(dataLength / frameBytes);
@@ -74,7 +81,9 @@ export function decodeWavToMonoFloat32(buffer: Buffer, targetRate = 16_000): Dec
       } else if (format.audioFormat === 3 && format.bitsPerSample === 32) {
         sum += buffer.readFloatLE(sampleOffset);
       } else {
-        throw new Error(`Unsupported WAV encoding: format ${format.audioFormat}, ${format.bitsPerSample}-bit`);
+        throw new UnsupportedWavEncodingError(
+          `Unsupported WAV encoding: format ${format.audioFormat}, ${format.bitsPerSample}-bit`,
+        );
       }
     }
     mono[frame] = Math.max(-1, Math.min(1, sum / format.channels));

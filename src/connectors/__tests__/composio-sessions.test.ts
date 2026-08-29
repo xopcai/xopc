@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { CredentialResolver } from '../../auth/credentials.js';
 import {
   closeXopcDatabase,
   listConnectorAccounts,
@@ -21,12 +22,31 @@ import {
   type ComposioSessionsClient,
 } from '../composio-sessions.js';
 
+const directRuntime = vi.hoisted(() => ({
+  construct: vi.fn(),
+  createSession: vi.fn(),
+}));
+
+vi.mock('@composio/core', () => ({
+  Composio: class MockComposio {
+    readonly sessions = { create: directRuntime.createSession };
+
+    constructor(options: unknown) {
+      directRuntime.construct(options);
+    }
+  },
+}));
+
+vi.mock('@composio/experimental', () => ({ PiProvider: class MockPiProvider {} }));
+
 describe('ComposioSessionsAdapter', () => {
   let stateDir: string;
   let session: ComposioSessionLike;
   let client: ComposioSessionsClient;
 
   beforeEach(() => {
+    directRuntime.construct.mockReset();
+    directRuntime.createSession.mockReset();
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-composio-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
@@ -63,9 +83,11 @@ describe('ComposioSessionsAdapter', () => {
         get: vi.fn(async () => ({ composioManagedAuthSchemes: ['OAUTH2'], authConfigDetails: [{}] })),
       },
     };
+    directRuntime.createSession.mockResolvedValue(session);
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
@@ -76,6 +98,33 @@ describe('ComposioSessionsAdapter', () => {
     expect(first).toBe(createComposioPrincipalId('owner@example.com', stateDir));
     expect(first).not.toContain('owner@example.com');
     expect(first).not.toBe(createComposioPrincipalId('other@example.com', stateDir));
+  });
+
+  it('keeps BYOK priority when XOPC Cloud OAuth is also available', async () => {
+    const resolveApiKey = vi.fn(async (provider: string) => {
+      if (provider === 'connector-composio-api-key') return 'user-composio-key';
+      if (provider === 'xopc-cloud') return 'cloud-access-token';
+      return null;
+    });
+    const cloudFetch = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', cloudFetch);
+    const adapter = new ComposioSessionsAdapter({
+      resolver: { resolveApiKey } as unknown as CredentialResolver,
+    });
+
+    await expect(resolveApiKey('xopc-cloud')).resolves.toBe('cloud-access-token');
+    await expect(adapter.listToolkitCatalog({
+      principalId: 'owner',
+      installationScope: stateDir,
+    })).resolves.toEqual([expect.objectContaining({ slug: 'gmail' })]);
+
+    expect(directRuntime.construct).toHaveBeenCalledWith(expect.objectContaining({
+      apiKey: 'user-composio-key',
+      host: 'xopc',
+    }));
+    expect(resolveApiKey).toHaveBeenCalledWith('connector-composio-api-key');
+    expect(directRuntime.createSession).toHaveBeenCalledOnce();
+    expect(cloudFetch).not.toHaveBeenCalled();
   });
 
   it('lists dynamic catalog metadata and persists pending authorization', async () => {

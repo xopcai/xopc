@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
+import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import {
@@ -26,6 +27,7 @@ import {
   type ConnectorHealthResult,
   type ConnectorInstance,
   type ComposioToolkitAuthState,
+  type ComposioSetupStatus,
   waitForActiveComposioConnection,
 } from '../connectors-api';
 import { ConnectorLogo } from './connector-logo';
@@ -104,6 +106,7 @@ export function InstallConnectorDialog({
     : null;
   const canLearnFromConnection = connector.understanding != null;
   const [composioConfigured, setComposioConfigured] = useState(!isComposioToolkit);
+  const [composioSetupStatus, setComposioSetupStatus] = useState<ComposioSetupStatus | null>(null);
   const [composioSetupLoading, setComposioSetupLoading] = useState(isComposioToolkit);
   const [composioApiKey, setComposioApiKey] = useState('');
   const [composioSetupError, setComposioSetupError] = useState<string | null>(null);
@@ -115,7 +118,12 @@ export function InstallConnectorDialog({
     if (!isComposioToolkit) return;
     let cancelled = false;
     void getComposioSetupStatus()
-      .then(({ configured }) => { if (!cancelled) setComposioConfigured(configured); })
+      .then((status) => {
+        if (!cancelled) {
+          setComposioSetupStatus(status);
+          setComposioConfigured(status.configured);
+        }
+      })
       .catch((error) => {
         if (!cancelled) setComposioSetupError(error instanceof Error ? error.message : String(error));
       })
@@ -149,7 +157,9 @@ export function InstallConnectorDialog({
     onChange({ ...draft, installing: true, error: null, result: null, health: null });
     try {
       if (isComposioToolkit && !composioConfigured) {
+        if (!composioApiKey.trim()) throw new Error(t.composioSetupSignInRequired);
         await configureComposio(composioApiKey);
+        setComposioSetupStatus({ configured: true, mode: 'byok' });
         setComposioConfigured(true);
       }
       const currentComposioAuth = isComposioToolkit && composioToolkit
@@ -311,27 +321,32 @@ export function InstallConnectorDialog({
             <section className="rounded-2xl border border-accent/25 bg-accent-soft/50 p-4">
               <h3 className="text-sm font-semibold text-fg">{t.composioSetupTitle}</h3>
               <p className="mt-1 text-xs leading-5 text-fg-muted">{t.composioSetupHint}</p>
-              <ol className="mt-3 list-inside list-decimal space-y-1 text-xs text-fg-muted">
-                <li>{t.composioSetupStepProject}</li>
-                <li>{t.composioSetupStepKey}</li>
-                <li>{t.composioSetupStepPaste}</li>
-              </ol>
-              <a
-                className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
-                href="https://app.composio.dev"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t.composioSetupOpenDashboard}<ExternalLink className="size-3.5" aria-hidden />
-              </a>
-              <SecretInput
-                className="mt-3"
-                value={composioApiKey}
-                onChange={setComposioApiKey}
-                labels={t.secretInputLabels}
-                placeholder={t.composioSetupKeyPlaceholder}
-              />
-              <p className="mt-2 text-[11px] text-fg-subtle">{t.composioSetupStorageHint}</p>
+              <div className="mt-3">
+                <OAuthProviderConnect
+                  providerId="xopc-cloud"
+                  displayName="XOPC Cloud"
+                  connected={false}
+                  onConnected={() => {
+                    void getComposioSetupStatus().then((status) => {
+                      setComposioSetupStatus(status);
+                      setComposioConfigured(status.configured);
+                    });
+                  }}
+                />
+              </div>
+              <details className="mt-3 rounded-xl border border-edge bg-surface-base p-3">
+                <summary className="cursor-pointer text-xs font-medium text-fg">{t.composioSetupByok}</summary>
+                <ol className="mt-3 list-inside list-decimal space-y-1 text-xs text-fg-muted">
+                  <li>{t.composioSetupStepProject}</li>
+                  <li>{t.composioSetupStepKey}</li>
+                  <li>{t.composioSetupStepPaste}</li>
+                </ol>
+                <a className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline" href="https://app.composio.dev" target="_blank" rel="noreferrer">
+                  {t.composioSetupOpenDashboard}<ExternalLink className="size-3.5" aria-hidden />
+                </a>
+                <SecretInput className="mt-3" value={composioApiKey} onChange={setComposioApiKey} labels={t.secretInputLabels} placeholder={t.composioSetupKeyPlaceholder} />
+                <p className="mt-2 text-[11px] text-fg-subtle">{t.composioSetupStorageHint}</p>
+              </details>
             </section>
           ) : null}
           {isComposioToolkit && canLearnFromConnection ? (
@@ -357,16 +372,16 @@ export function InstallConnectorDialog({
                     {authConfigRequired ? t.composioAuthConfigRequiredHint : t.composioAuthConfigOptionalHint}
                   </p>
                 </div>
-                <a
+                {composioSetupStatus?.mode === 'byok' ? <a
                   className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
                   href="https://app.composio.dev"
                   target="_blank"
                   rel="noreferrer"
                 >
                   {t.composioAuthConfigManage}<ExternalLink className="size-3.5" aria-hidden />
-                </a>
+                </a> : <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-fg">{t.composioSetupManaged}</span>}
               </div>
-              {composioAuthLoading ? (
+              {composioSetupStatus?.mode === 'managed' ? null : composioAuthLoading ? (
                 <Skeleton className="mt-3 h-10 w-full" />
               ) : (
                 <Select

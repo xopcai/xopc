@@ -208,7 +208,10 @@ export class DiscussionService {
   }): DiscussionTranscript {
     const capture = getDiscussionCapture(input.discussionId);
     if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
-    if (capture.status !== 'recording' && capture.status !== 'stopping') {
+    const acceptsSegments = capture.status === 'recording' || capture.status === 'stopping';
+    const originalRecordingSupersedesSegment = capture.audioAttachmentId
+      && (capture.status === 'sealing' || capture.status === 'organizing' || capture.status === 'completed');
+    if (!acceptsSegments && !originalRecordingSupersedesSegment) {
       throw new DiscussionServiceError('conflict', 'Discussion no longer accepts transcript segments');
     }
     if (!Number.isInteger(input.sequence) || input.sequence < 0 || input.sequence > 2_000) {
@@ -231,6 +234,7 @@ export class DiscussionService {
     }
     const actualSha256 = createHash('sha256').update(input.file.buffer).digest('hex');
     if (input.sha256 !== actualSha256) throw new DiscussionServiceError('invalid_input', 'Segment checksum mismatch');
+    if (originalRecordingSupersedesSegment) return this.transcript(input.discussionId)!;
     const existing = getDiscussionTranscriptSegment(input.discussionId, input.sequence);
     if (existing && existing.audioSha256 !== actualSha256) {
       throw new DiscussionServiceError('conflict', 'Segment sequence already contains different audio');
@@ -307,6 +311,7 @@ export class DiscussionService {
         buffer: file.buffer,
         mimeType: file.mimeType,
         duration: Math.round(durationMs / 1_000),
+        retainWithoutReference: true,
       });
       if (!attachment) throw new DiscussionServiceError('not_found', 'Discussion note not found');
       try {

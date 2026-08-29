@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -155,7 +156,20 @@ describe('discussion note document', () => {
     const completed = await service.get(created.discussion.id);
     expect(completed?.discussion.status).toBe('completed');
     expect(completed?.organization?.organization?.decisions).toEqual(['Ship Friday.']);
-    expect((await notes.getNote(created.note.id))?.markdown).toBe('My own notes');
+    const completedNote = await notes.getNote(created.note.id);
+    expect(completedNote?.markdown).toBe('My own notes');
+    expect(completedNote?.attachments).toEqual([
+      expect.objectContaining({
+        id: completed?.discussion.audioAttachmentId,
+        type: 'audio',
+        retainWithoutReference: true,
+      }),
+    ]);
+    const retainedRecording = await notes.getAttachmentPath(
+      created.note.id,
+      completed!.discussion.audioAttachmentId!,
+    );
+    expect(await readFile(retainedRecording!.filePath, 'utf8')).toBe('audio');
     expect(() => service.correctSegment(created.discussion.id, 0, 'too late', 3))
       .toThrowError(DiscussionServiceError);
   });
@@ -179,6 +193,8 @@ describe('discussion note document', () => {
       transcriptLanguage: 'en',
     });
     expect(service.transcript(created.discussion.id)?.text).toBe('Recovered from full recording.');
+    const lateSegment = uploadSegment(created.discussion.id, 0, 'late live segment');
+    expect(lateSegment).toMatchObject({ text: 'Recovered from full recording.', segments: [] });
   });
 
   it('requires attention when the original recording never arrives', async () => {

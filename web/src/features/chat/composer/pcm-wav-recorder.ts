@@ -78,6 +78,7 @@ export function encodePcm16Wav(samples: Float32Array, sampleRate = TARGET_SAMPLE
 }
 
 const WORKLET_NAME = 'xopc-pcm-capture';
+const WORKLET_FLUSH_TIMEOUT_MS = 1_000;
 const WORKLET_SOURCE = `
   class XopcPcmCaptureProcessor extends AudioWorkletProcessor {
     constructor() {
@@ -123,6 +124,7 @@ export class PcmFrameCapture {
   readonly sampleRate: number;
   private paused = false;
   private accepting = true;
+  private processorFailed = false;
   private stopPromise?: Promise<void>;
   private flushResolve?: () => void;
 
@@ -150,6 +152,10 @@ export class PcmFrameCapture {
         });
       }
     };
+    this.node.onprocessorerror = () => {
+      this.processorFailed = true;
+      this.flushResolve?.();
+    };
   }
 
   static async start(stream: MediaStream, options: PcmFrameCaptureOptions): Promise<PcmFrameCapture> {
@@ -160,22 +166,22 @@ export class PcmFrameCapture {
     const moduleUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
     try {
       await context.audioWorklet.addModule(moduleUrl);
+      const source = context.createMediaStreamSource(stream);
+      const node = new AudioWorkletNode(context, WORKLET_NAME);
+      const mutedOutput = context.createGain();
+      mutedOutput.gain.value = 0;
+      const capture = new PcmFrameCapture(context, source, node, mutedOutput, options);
+      source.connect(node);
+      node.connect(mutedOutput);
+      mutedOutput.connect(context.destination);
+      await context.resume();
+      return capture;
     } catch (error) {
-      await context.close();
+      await context.close().catch(() => undefined);
       throw error;
     } finally {
       URL.revokeObjectURL(moduleUrl);
     }
-    const source = context.createMediaStreamSource(stream);
-    const node = new AudioWorkletNode(context, WORKLET_NAME);
-    const mutedOutput = context.createGain();
-    mutedOutput.gain.value = 0;
-    const capture = new PcmFrameCapture(context, source, node, mutedOutput, options);
-    source.connect(node);
-    node.connect(mutedOutput);
-    mutedOutput.connect(context.destination);
-    await context.resume();
-    return capture;
   }
 
   pause(): void {
@@ -197,24 +203,41 @@ export class PcmFrameCapture {
     this.flushResolve?.();
     this.flushResolve = undefined;
     this.disconnect();
-    void this.context.close();
+    void this.context.close().catch(() => undefined);
   }
 
   private async finish(): Promise<void> {
     if (!this.accepting) return;
-    await new Promise<void>((resolve) => {
-      this.flushResolve = resolve;
-      this.node.port.postMessage('flush');
-    });
+    if (!this.processorFailed) await this.flushWorklet();
     this.flushResolve = undefined;
     if (!this.accepting) return;
     this.accepting = false;
     this.disconnect();
-    await this.context.close();
+    await this.context.close().catch(() => undefined);
+  }
+
+  private flushWorklet(): Promise<void> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const complete = () => {
+        if (settled) return;
+        settled = true;
+        globalThis.clearTimeout(timeout);
+        resolve();
+      };
+      const timeout = globalThis.setTimeout(complete, WORKLET_FLUSH_TIMEOUT_MS);
+      this.flushResolve = complete;
+      try {
+        this.node.port.postMessage('flush');
+      } catch {
+        complete();
+      }
+    });
   }
 
   private disconnect(): void {
     this.node.port.onmessage = null;
+    this.node.onprocessorerror = null;
     this.source.disconnect();
     this.node.disconnect();
     this.mutedOutput.disconnect();
