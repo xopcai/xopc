@@ -4,8 +4,9 @@ import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../utils/logger.js';
+import { applyPathPrepend } from '../infra/path-prepend.js';
 import { atomicInstallRuntime, extractRuntimeArchive } from './archive.js';
-import { runRuntimeCommand } from './command.js';
+import { runRuntimeCommand, type RuntimeCommandResult } from './command.js';
 import {
   DEFAULT_RUNTIME_VERSIONS,
   detectRuntimePlatform,
@@ -74,6 +75,47 @@ function uvExecutables(installDir: string): RuntimeExecutables {
   const uv = join(installDir, executableName('uv'));
   const uvx = join(installDir, executableName('uvx'));
   return { primary: uv, uv, uvx };
+}
+
+function managedNodeProbeEnvironment(executables: RuntimeExecutables): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  applyPathPrepend(
+    env as Record<string, string>,
+    [dirname(executables.node ?? executables.primary)],
+  );
+  return env;
+}
+
+async function probeNodePackageManagers(executables: RuntimeExecutables) {
+  if (!executables.npm || !executables.npx) return null;
+  const env = managedNodeProbeEnvironment(executables);
+  const [npm, npx] = await Promise.all([
+    runRuntimeCommand({ command: executables.npm, args: ['--version'], env }),
+    runRuntimeCommand({ command: executables.npx, args: ['--version'], env }),
+  ]);
+  return { npm, npx };
+}
+
+function packageManagerProbeFailure(
+  name: 'npm' | 'npx',
+  result: RuntimeCommandResult,
+): string | null {
+  if (result.ok) return null;
+  const output = result.stderr || result.stdout;
+  if (output) return `${name}: ${output}`;
+  if (result.timedOut) return `${name}: timed out`;
+  if (result.aborted) return `${name}: aborted`;
+  return `${name}: exited with code ${result.exitCode ?? 'unknown'}`;
+}
+
+function packageManagerProbeFailureMessage(
+  results: Awaited<ReturnType<typeof probeNodePackageManagers>>,
+): string {
+  if (!results) return 'npm or npx executable is missing';
+  return ([
+    packageManagerProbeFailure('npm', results.npm),
+    packageManagerProbeFailure('npx', results.npx),
+  ].filter((message): message is string => message !== null)).join('; ');
 }
 
 function runtimeConfig(options: RuntimeManagerOptions, runtime: RuntimeKind) {
@@ -185,14 +227,8 @@ export class ManagedRuntimeManager extends EventEmitter {
       const version = parseRuntimeVersion(`${result.stdout}\n${result.stderr}`);
       if (!result.ok || !version || !versionSatisfies(version, requestedVersion)) return null;
       if (runtime === 'node') {
-        const npm = manifest.executables.npm;
-        const npx = manifest.executables.npx;
-        if (!npm || !npx) return null;
-        const [npmProbe, npxProbe] = await Promise.all([
-          runRuntimeCommand({ command: npm, args: ['--version'] }),
-          runRuntimeCommand({ command: npx, args: ['--version'] }),
-        ]);
-        if (!npmProbe.ok || !npxProbe.ok) return null;
+        const packageManagers = await probeNodePackageManagers(manifest.executables);
+        if (!packageManagers?.npm.ok || !packageManagers.npx.ok) return null;
       }
       return {
         runtime,
@@ -342,19 +378,18 @@ export class ManagedRuntimeManager extends EventEmitter {
       }
       let packageManagerVersion: string | undefined;
       if (runtime === 'node') {
-        const npmProbe = await runRuntimeCommand({ command: executables.npm!, args: ['--version'] });
-        const npxProbe = await runRuntimeCommand({ command: executables.npx!, args: ['--version'] });
-        if (!npmProbe.ok || !npxProbe.ok) {
+        const packageManagers = await probeNodePackageManagers(executables);
+        if (!packageManagers?.npm.ok || !packageManagers.npx.ok) {
           await rm(installDir, { recursive: true, force: true });
           throw new RuntimeError(
-            `Node ${version} is missing npm or npx`,
+            `Node ${version} failed its npm or npx installation probe: ${packageManagerProbeFailureMessage(packageManagers)}`,
             'RUNTIME_PROBE_FAILED',
             runtime,
             'probe_package_manager',
             true,
           );
         }
-        packageManagerVersion = npmProbe.stdout;
+        packageManagerVersion = packageManagers.npm.stdout;
       }
       const now = new Date().toISOString();
       const manifest: InstalledRuntimeManifest = {
