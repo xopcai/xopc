@@ -22,6 +22,7 @@ import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { createLogger } from '../../utils/logger.js';
 import { buildCapabilityPlansForConfig, type CapabilityId } from '../../capabilities/readiness/index.js';
 import type { CatalogReadiness } from '../../providers/xopc-cloud-catalog-coordinator.js';
+import { applyXopcCloudCapabilitySetup } from '../xopc-cloud-capability-setup.js';
 
 const log = createLogger('OAuthAsync');
 
@@ -30,6 +31,7 @@ export interface OAuthCompletionReadiness {
   state: 'connected' | 'connected-degraded';
   catalog: CatalogReadiness;
   capabilities: Record<CapabilityId, 'ready' | 'unavailable' | 'disabled'>;
+  configuration?: { applied: boolean; error?: string };
 }
 
 export function buildOAuthCompletionReadiness(
@@ -502,7 +504,21 @@ async function runOAuthFlow(
       : 'OAuth login successful';
     const catalog = await refreshModelCatalogAfterOAuth(session.provider, service);
     if (catalog && session.provider === 'xopc-cloud') {
-      session.readiness = buildOAuthCompletionReadiness(service.currentConfig, catalog);
+      const setup = await applyXopcCloudCapabilitySetup(service);
+      const readiness = buildOAuthCompletionReadiness(service.currentConfig, catalog);
+      if (setup.configured === true) {
+        session.readiness = { ...readiness, configuration: { applied: true } };
+      } else {
+        log.warn(
+          { provider: session.provider, errorMessage: setup.error, missing: setup.missing },
+          `OAuth completed, but XOPC Cloud capabilities could not be configured: ${setup.error}`,
+        );
+        session.readiness = {
+          ...readiness,
+          state: 'connected-degraded',
+          configuration: { applied: false, error: setup.error },
+        };
+      }
     }
 
     session.status = 'completed';

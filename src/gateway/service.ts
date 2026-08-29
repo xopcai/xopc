@@ -119,7 +119,6 @@ import {
   applyAutomaticVoiceLanguage,
   inferProductLanguageFromEnvironment,
   initializeVoiceDefaults,
-  prepareConfiguredLocalVoiceModel,
   type ProductLanguage,
 } from '../voice/language-profile.js';
 import {
@@ -928,7 +927,6 @@ export class GatewayService {
     this.proactiveWorker.start();
     this.proactiveTemporalWorker.start();
     this.proactiveInboxWorker.start();
-    prepareConfiguredLocalVoiceModel(this.config);
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
@@ -1546,7 +1544,6 @@ export class GatewayService {
         return { applied: false, language, mode, error: saved.error ?? 'Failed to save voice language' };
       }
     }
-    prepareConfiguredLocalVoiceModel(this.config);
     return { applied: changed, language, mode };
   }
 

@@ -9,7 +9,6 @@ import {
   fetchVoiceReadiness,
   fetchVoiceSttAvailable,
   invalidateVoiceSttAvailabilityCache,
-  prepareLocalVoiceModel,
   transcribeVoiceBlob,
 } from '../voice-transcribe-api';
 
@@ -71,17 +70,6 @@ describe('voice-transcribe-api', () => {
       provider: 'xopc-local',
       modelId: 'sensevoice-small',
       progress: 0.42,
-    });
-  });
-
-  it('starts or retries the selected local model installation', async () => {
-    fetchJson.mockResolvedValue({ ok: true });
-
-    await prepareLocalVoiceModel('sensevoice-small');
-
-    expect(fetchJson).toHaveBeenCalledWith('/api/voice/local/models/sensevoice-small/install', {
-      method: 'POST',
-      body: '{}',
     });
   });
 });

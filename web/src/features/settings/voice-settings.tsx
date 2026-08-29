@@ -14,6 +14,7 @@ import {
   fetchTtsVoices,
   fetchLocalVoiceStatus,
   installLocalVoiceModel,
+  LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT,
   normalizeVoiceSettings,
   patchVoiceSettings,
   removeLocalVoiceModel,
@@ -388,8 +389,13 @@ export function VoiceSettingsPanel() {
   }, []);
 
   const save = useCallback(async (snapshot: VoiceSettingsState) => {
+    const switchedToLocal = baseline?.stt.provider !== 'xopc-local'
+      && snapshot.stt.provider === 'xopc-local';
     try {
       await patchVoiceSettings(snapshot);
+      if (switchedToLocal) {
+        window.dispatchEvent(new Event(LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT));
+      }
       dispatchForm({ type: 'saved', value: snapshot });
       dirtyRef.current = Boolean(
         formRef.current && JSON.stringify(formRef.current) !== JSON.stringify(snapshot),
@@ -397,7 +403,7 @@ export function VoiceSettingsPanel() {
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : v.saveError);
     }
-  }, [v.saveError]);
+  }, [baseline?.stt.provider, v.saveError]);
 
   const autosave = useAutosave({ value: form, dirty, onSave: save });
 
@@ -719,6 +725,12 @@ function LocalVoiceModelsPanel({ v }: { v: VoiceSettingsMessages }) {
   );
   const [busyModel, setBusyModel] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const refresh = () => void mutate();
+    window.addEventListener(LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT, refresh);
+    return () => window.removeEventListener(LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT, refresh);
+  }, [mutate]);
 
   const runAction = useCallback(
     async (model: LocalVoiceModelStatus, action: 'install' | 'remove') => {
