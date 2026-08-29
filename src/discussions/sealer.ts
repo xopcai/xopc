@@ -11,7 +11,7 @@ import {
   listDiscussionTranscriptSegments,
   updateDiscussionCapture,
 } from './repository.js';
-import { appendTranscriptWithoutOverlap, assembleDiscussionTranscript } from './transcript.js';
+import { appendSequentialTranscript, assembleDiscussionTranscript } from './transcript.js';
 import type { DiscussionCapture } from './types.js';
 
 const log = createLogger('DiscussionSealer');
@@ -124,7 +124,7 @@ export class DiscussionSealer {
         mime: 'audio/wav',
         fileName: `discussion-recovery-${index}.wav`,
       });
-      text = appendTranscriptWithoutOverlap(text, result.text);
+      text = appendSequentialTranscript(text, result.text);
       language ??= result.language;
     });
     return { text, ...(language ? { language } : {}) };

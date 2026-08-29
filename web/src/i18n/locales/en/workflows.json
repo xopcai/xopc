@@ -38,8 +38,6 @@
     "noRunResultsTitle": "No runs match",
     "noRunResultsHint": "Change the search or filters to see other runs.",
     "chooseWorkflow": "Choose workflow",
-    "libraryTitle": "Workflow library",
-    "libraryDescription": "Choose a workflow for the work at hand, configure its input, or create a reusable workflow of your own.",
     "librarySearchPlaceholder": "Search workflows…",
     "recentlyUsed": "Recently used",
     "allWorkflows": "All workflows",

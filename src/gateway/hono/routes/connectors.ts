@@ -24,6 +24,7 @@ import {
   type ComposioScope,
 } from '../../../connectors/composio.js';
 import { resolveComposioApiKey } from '../../../connectors/composio-sessions.js';
+import { inspectManagedComposioStatus } from '../../../connectors/composio-managed-client.js';
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
 import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
@@ -504,8 +505,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   });
 
   authenticated.get('/api/connectors/composio/setup-status', async (c) => {
-    const configured = Boolean(await resolveComposioApiKey());
-    return c.json({ ok: true, payload: { configured } });
+    const byok = Boolean(await resolveComposioApiKey());
+    const status = byok
+      ? { configured: true, mode: 'byok' as const }
+      : await inspectManagedComposioStatus();
+    return c.json({ ok: true, payload: status });
   });
 
   authenticated.post('/api/connectors/composio/setup', strictRateLimitMiddleware, async (c) => {
@@ -515,7 +519,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       : '';
     try {
       await configureComposioApiKey(apiKey);
-      return c.json({ ok: true, payload: { configured: true } });
+      return c.json({ ok: true, payload: { configured: true, mode: 'byok' } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }

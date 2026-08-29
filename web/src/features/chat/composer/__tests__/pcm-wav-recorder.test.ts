@@ -1,12 +1,41 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   calculateRmsLevel,
   encodePcm16Wav,
+  PcmFrameCapture,
   resamplePcm,
 } from '../pcm-wav-recorder';
 
+function fakeCapture() {
+  const context = {
+    sampleRate: 48_000,
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+  const source = { disconnect: vi.fn() };
+  const node: {
+    port: { onmessage: null; postMessage: ReturnType<typeof vi.fn> };
+    onprocessorerror: (() => void) | null;
+    disconnect: ReturnType<typeof vi.fn>;
+  } = {
+    port: { onmessage: null, postMessage: vi.fn() },
+    onprocessorerror: null,
+    disconnect: vi.fn(),
+  };
+  const mutedOutput = { disconnect: vi.fn() };
+  const capture = Reflect.construct(PcmFrameCapture, [
+    context,
+    source,
+    node,
+    mutedOutput,
+    { onSamples: vi.fn() },
+  ]) as PcmFrameCapture;
+  return { capture, context, source, node, mutedOutput };
+}
+
 describe('PCM WAV recorder helpers', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('encodes mono samples as a valid 16 kHz PCM16 WAV file', () => {
     const encoded = encodePcm16Wav(new Float32Array([-1, 0, 1]));
     const view = new DataView(encoded);
@@ -39,6 +68,32 @@ describe('PCM WAV recorder helpers', () => {
     expect(calculateRmsLevel(new Float32Array([0, 0, 0]))).toBe(0);
     expect(calculateRmsLevel(new Float32Array([0.5, -0.5]))).toBeCloseTo(0.5);
     expect(calculateRmsLevel(new Float32Array([2, -2]))).toBe(1);
+  });
+
+  it('stops and releases audio resources when the worklet does not acknowledge flush', async () => {
+    vi.useFakeTimers();
+    const { capture, context, source, node, mutedOutput } = fakeCapture();
+
+    const stopped = capture.stop();
+    expect(node.port.postMessage).toHaveBeenCalledWith('flush');
+    await vi.advanceTimersByTimeAsync(1_000);
+    await stopped;
+
+    expect(source.disconnect).toHaveBeenCalledOnce();
+    expect(node.disconnect).toHaveBeenCalledOnce();
+    expect(mutedOutput.disconnect).toHaveBeenCalledOnce();
+    expect(context.close).toHaveBeenCalledOnce();
+  });
+
+  it('does not wait for flush after the audio processor has failed', async () => {
+    const { capture, context, node } = fakeCapture();
+    expect(node.onprocessorerror).toBeTypeOf('function');
+    node.onprocessorerror?.();
+
+    await capture.stop();
+
+    expect(node.port.postMessage).not.toHaveBeenCalled();
+    expect(context.close).toHaveBeenCalledOnce();
   });
 
 });

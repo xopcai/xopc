@@ -446,7 +446,13 @@ export class NotesService {
     return this.store.listNotes(query);
   }
 
-  async addAttachment(noteId: string, file: { name: string; buffer: Buffer; mimeType: string; duration?: number }): Promise<NoteAttachment | null> {
+  async addAttachment(noteId: string, file: {
+    name: string;
+    buffer: Buffer;
+    mimeType: string;
+    duration?: number;
+    retainWithoutReference?: boolean;
+  }): Promise<NoteAttachment | null> {
     const note = await this.store.getNote(noteId);
     if (!note) return null;
     const { relativePath, size } = await this.store.saveAttachment(noteId, file.name, file.buffer);
@@ -458,6 +464,7 @@ export class NotesService {
       size,
       relativePath,
       duration: file.duration,
+      retainWithoutReference: file.retainWithoutReference,
     };
     const attachments = [...(note.attachments || []), attachment];
     const kind = note.kind === 'thought' && attachment.type === 'audio' ? 'voice' : note.kind === 'thought' ? 'media' : note.kind;

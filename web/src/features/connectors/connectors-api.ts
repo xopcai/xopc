@@ -474,8 +474,14 @@ export async function startConnectorAuthorization(connectorId: string): Promise<
   return requirePayload(response, 'Could not start connector authorization.').authorization;
 }
 
-export async function getComposioSetupStatus(): Promise<{ configured: boolean }> {
-  const response = await fetchJson<ApiEnvelope<{ configured: boolean }>>(
+export type ComposioSetupStatus = {
+  configured: boolean;
+  mode: 'managed' | 'byok';
+  reason?: 'signin_required' | 'reauthorization_required' | 'service_unavailable';
+};
+
+export async function getComposioSetupStatus(): Promise<ComposioSetupStatus> {
+  const response = await fetchJson<ApiEnvelope<ComposioSetupStatus>>(
     apiUrl('/api/connectors/composio/setup-status'),
   );
   return requirePayload(response, 'Could not check the connection service.');

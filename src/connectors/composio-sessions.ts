@@ -30,14 +30,6 @@ export async function resolveComposioApiKey(resolver = new CredentialResolver())
   return stored?.trim() || process.env.XOPC_COMPOSIO_API_KEY?.trim() || process.env.COMPOSIO_API_KEY?.trim() || null;
 }
 
-export async function assertComposioApiKeyConfigured(resolver = new CredentialResolver()): Promise<string> {
-  const apiKey = await resolveComposioApiKey(resolver);
-  if (!apiKey) {
-    throw new Error('Composio API key is not configured. Install the "Composio API Key" connector first.');
-  }
-  return apiKey;
-}
-
 export type ComposioToolkitCatalogItem = {
   slug: string;
   name: string;
@@ -97,6 +89,7 @@ export type ComposioSessionLike = {
 };
 
 export type ComposioSessionsClient = {
+  mode?: 'managed' | 'byok';
   sessions: {
     create(userId: string, config?: ToolRouterCreateSessionConfig): Promise<ComposioSessionLike>;
   };
@@ -222,7 +215,11 @@ export class ComposioSessionsAdapter {
     }
     const resolver = options.resolver ?? new CredentialResolver();
     this.createClient = async () => {
-      const apiKey = await assertComposioApiKeyConfigured(resolver);
+      const apiKey = await resolveComposioApiKey(resolver);
+      if (!apiKey) {
+        const { ManagedComposioClient } = await import('./composio-managed-client.js');
+        return new ManagedComposioClient();
+      }
       let Composio: typeof import('@composio/core').Composio;
       let PiProvider: typeof import('@composio/experimental').PiProvider;
       try {
@@ -237,7 +234,7 @@ export class ComposioSessionsAdapter {
           { cause },
         );
       }
-      return new Composio({
+      const client = new Composio({
         apiKey,
         baseURL: process.env.XOPC_COMPOSIO_BASE_URL?.trim() || undefined,
         allowTracking: false,
@@ -247,6 +244,8 @@ export class ComposioSessionsAdapter {
         provider: new PiProvider(),
         host: 'xopc',
       }) as unknown as ComposioSessionsClient;
+      client.mode = 'byok';
+      return client;
     };
   }
 
