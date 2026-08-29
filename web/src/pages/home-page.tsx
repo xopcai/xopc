@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TabCompletionTextarea } from '@/components/ui/tab-completion-input';
 import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
@@ -359,11 +360,13 @@ export function HomePage() {
             <form onSubmit={startConversation} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <label htmlFor="new-conversation-intent" className="mb-2 shrink-0 text-sm font-medium text-fg">{copy.intentLabel}</label>
-                <textarea
+                <TabCompletionTextarea
                   id="new-conversation-intent"
                   className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
                   value={intent}
                   onChange={(event) => setIntent(event.target.value)}
+                  suggestion={copy.intentSuggestion}
+                  onAcceptSuggestion={setIntent}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();
@@ -438,11 +441,13 @@ export function HomePage() {
                 className="mx-auto mt-8 w-full max-w-[640px] rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
               >
                 <label htmlFor="idle-conversation-intent" className="sr-only">{copy.intentLabel}</label>
-                <textarea
+                <TabCompletionTextarea
                   id="idle-conversation-intent"
                   className="min-h-24 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle"
                   value={intent}
                   onChange={(event) => setIntent(event.target.value)}
+                  suggestion={copy.intentSuggestion}
+                  onAcceptSuggestion={setIntent}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();

@@ -570,115 +570,117 @@ function NoteDetailPanelInner({
         />
         <div
           ref={editorContainerRef}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
         >
           <DiscussionNoteSections noteId={noteId} />
-          {isPreviewingSnapshot ? (
-            <div className="h-full overflow-y-auto px-6 py-4">
-              {displayTitle && (
-                <h1 className="mb-4 text-2xl font-bold text-fg/70">{displayTitle}</h1>
-              )}
-              {displayText ? (
-                <NoteMarkdownView
-                  noteId={noteId}
-                  content={displayText}
-                  className="opacity-80"
-                />
-              ) : (
-                <p className="italic text-fg-muted">{n.emptyPreview}</p>
-              )}
-            </div>
-          ) : (
-            <>
-              {mode === 'wysiwyg' && (
-                <div className="flex h-full flex-col">
-                  <div className="flex shrink-0 items-start px-6 pt-4">
-                    <input
-                      ref={titleInputRef}
-                      type="text"
-                      value={title}
-                      onChange={(e) => handleTitleChange(e.target.value)}
-                      onCompositionStart={() => {
-                        titleComposingRef.current = true;
-                      }}
-                      onCompositionEnd={() => {
-                        titleComposingRef.current = false;
-                      }}
-                      onKeyDown={(e) => {
-                        const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean };
-                        if (e.key === 'Enter' && !titleComposingRef.current && !nativeEvent.isComposing) {
-                          e.preventDefault();
-                          const prosemirror = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
-                          prosemirror?.focus();
-                        }
-                      }}
-                      placeholder={n.titlePlaceholder}
-                      className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
-                    />
-                    {titleAutomationSuggestion}
+          <div className="min-h-0 min-w-0 flex-1">
+            {isPreviewingSnapshot ? (
+              <div className="h-full overflow-y-auto px-6 py-4">
+                {displayTitle && (
+                  <h1 className="mb-4 text-2xl font-bold text-fg/70">{displayTitle}</h1>
+                )}
+                {displayText ? (
+                  <NoteMarkdownView
+                    noteId={noteId}
+                    content={displayText}
+                    className="opacity-80"
+                  />
+                ) : (
+                  <p className="italic text-fg-muted">{n.emptyPreview}</p>
+                )}
+              </div>
+            ) : (
+              <>
+                {mode === 'wysiwyg' && (
+                  <div className="flex h-full flex-col">
+                    <div className="flex shrink-0 items-start px-6 pt-4">
+                      <input
+                        ref={titleInputRef}
+                        type="text"
+                        value={title}
+                        onChange={(e) => handleTitleChange(e.target.value)}
+                        onCompositionStart={() => {
+                          titleComposingRef.current = true;
+                        }}
+                        onCompositionEnd={() => {
+                          titleComposingRef.current = false;
+                        }}
+                        onKeyDown={(e) => {
+                          const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean };
+                          if (e.key === 'Enter' && !titleComposingRef.current && !nativeEvent.isComposing) {
+                            e.preventDefault();
+                            const prosemirror = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
+                            prosemirror?.focus();
+                          }
+                        }}
+                        placeholder={n.titlePlaceholder}
+                        className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
+                      />
+                      {titleAutomationSuggestion}
+                    </div>
+                    <div className="min-h-0 flex-1">
+                      <Suspense fallback={<EditorFallback />}>
+                        <BlockEditor
+                          key={`wysiwyg-${noteId}`}
+                          initialContent={note.markdown ?? ''}
+                          onChange={handleSave}
+                          noteId={noteId}
+                        />
+                      </Suspense>
+                    </div>
                   </div>
-                  <div className="min-h-0 flex-1">
-                    <Suspense fallback={<EditorFallback />}>
-                      <BlockEditor
-                        key={`wysiwyg-${noteId}`}
-                        initialContent={note.markdown ?? ''}
-                        onChange={handleSave}
+                )}
+                {mode === 'source' && (
+                  <div className="flex h-full flex-col">
+                    <div className="flex shrink-0 items-start px-6 pt-4">
+                      <input
+                        ref={titleInputRef}
+                        type="text"
+                        value={title}
+                        onChange={(e) => handleTitleChange(e.target.value)}
+                        placeholder={n.titlePlaceholder}
+                        className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
+                      />
+                      {titleAutomationSuggestion}
+                    </div>
+                    <div className="min-h-0 flex-1">
+                      <Suspense fallback={<EditorFallback />}>
+                        <MarkdownEditor
+                          key={`source-${noteId}`}
+                          initialContent={note.markdown ?? ''}
+                          onChange={handleSave}
+                          isDark={isDark}
+                        />
+                      </Suspense>
+                    </div>
+                  </div>
+                )}
+                {mode === 'preview' && (
+                  <div
+                    className="h-full overflow-y-auto px-6 py-4"
+                    onClick={(event) => {
+                      const target = event.target;
+                      if (!(target instanceof HTMLImageElement)) return;
+                      openImage(target.currentSrc || target.src, target.alt);
+                    }}
+                  >
+                    {title && (
+                      <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
+                    )}
+                    {note.markdown ? (
+                      <NoteMarkdownView
                         noteId={noteId}
+                        content={note.markdown}
+                        className="[&_img]:cursor-zoom-in"
                       />
-                    </Suspense>
+                    ) : (
+                      <p className="italic text-fg-muted">{n.emptyPreview}</p>
+                    )}
                   </div>
-                </div>
-              )}
-              {mode === 'source' && (
-                <div className="flex h-full flex-col">
-                  <div className="flex shrink-0 items-start px-6 pt-4">
-                    <input
-                      ref={titleInputRef}
-                      type="text"
-                      value={title}
-                      onChange={(e) => handleTitleChange(e.target.value)}
-                      placeholder={n.titlePlaceholder}
-                      className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
-                    />
-                    {titleAutomationSuggestion}
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <Suspense fallback={<EditorFallback />}>
-                      <MarkdownEditor
-                        key={`source-${noteId}`}
-                        initialContent={note.markdown ?? ''}
-                        onChange={handleSave}
-                        isDark={isDark}
-                      />
-                    </Suspense>
-                  </div>
-                </div>
-              )}
-              {mode === 'preview' && (
-                <div
-                  className="h-full overflow-y-auto px-6 py-4"
-                  onClick={(event) => {
-                    const target = event.target;
-                    if (!(target instanceof HTMLImageElement)) return;
-                    openImage(target.currentSrc || target.src, target.alt);
-                  }}
-                >
-                  {title && (
-                    <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
-                  )}
-                  {note.markdown ? (
-                    <NoteMarkdownView
-                      noteId={noteId}
-                      content={note.markdown}
-                      className="[&_img]:cursor-zoom-in"
-                    />
-                  ) : (
-                    <p className="italic text-fg-muted">{n.emptyPreview}</p>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
