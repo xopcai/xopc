@@ -687,7 +687,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   useEffect(() => {
     if (!autoSendQuery || !draftQuery.trim()) return;
     if (!auth.hasToken || session.showSessionLoading || session.sessionRoutePending) return;
-    if (!session.sessionKey || stream.sending || stream.streaming || msgSlice.items.length > 0) return;
+    if (!session.sessionKey || stream.sending || stream.streaming) return;
     const message = buildComposerDraftSeed(skillQuery, draftQuery);
     if (!message) return;
     const marker = `${session.sessionKey}:auto-send:${message}`;
@@ -706,7 +706,6 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     autoSendQuery,
     draftQuery,
     handleComposerSend,
-    msgSlice.items.length,
     navigate,
     pathname,
     searchParams,

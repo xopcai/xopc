@@ -50,6 +50,7 @@ function validAnalysisJson(): string {
     suggestions: [suggestion(1), suggestion(2), suggestion(3)],
     profileCandidates: [],
     workThreads: [],
+    conversationStarter: 'Explain the current README changes and suggest the best next step.',
     lowConfidence: false,
     contextQuestion: '',
   });
@@ -84,6 +85,26 @@ describe('work discovery analyzer', () => {
 
     await expect(analyzeWorkContext({ config: {} as never, snapshot }))
       .rejects.toThrow('Analysis response was truncated before completing valid JSON (outputChars=30)');
+  });
+
+  it('keeps a project-aware conversation starter when confidence is low', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        lowConfidence: true,
+        suggestions: [],
+        contextQuestion: 'Which README goal matters most?',
+        conversationStarter: 'Explain the current README changes and what I should clarify first.',
+      }) }],
+      stopReason: 'stop',
+    } as never);
+
+    const analysis = await analyzeWorkContext({ config: {} as never, snapshot });
+
+    expect(analysis.result).toMatchObject({
+      lowConfidence: true,
+      contextQuestion: 'Which README goal matters most?',
+      conversationStarter: 'Explain the current README changes and what I should clarify first.',
+    });
   });
 
   it('validates understanding profile candidates against initialized evidence refs', async () => {
