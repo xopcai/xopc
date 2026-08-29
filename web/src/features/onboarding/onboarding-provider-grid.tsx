@@ -40,9 +40,9 @@ export function OnboardingProviderGrid({
         <button
           type="button"
           onClick={() => onSelect(recommended.id)}
-          className="group flex w-full items-center gap-4 rounded-2xl border border-accent/35 bg-gradient-to-br from-accent-soft/75 via-white/80 to-white/55 p-4 text-left shadow-elevated transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none dark:via-white/7 dark:to-white/3"
+          className="group flex w-full items-center gap-4 rounded-2xl border border-accent/35 bg-accent-soft/55 p-4 text-left shadow-elevated transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none"
         >
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white shadow-surface dark:border-white/10 dark:bg-white/8">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-panel shadow-surface">
             <ProviderLogo providerId={recommended.id} className="size-8" />
           </span>
           <span className="min-w-0 flex-1">
@@ -74,7 +74,7 @@ export function OnboardingProviderGrid({
                   key={provider.id}
                   type="button"
                   onClick={() => onSelect(provider.id)}
-                  className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-edge bg-white/55 p-3 text-center transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-accent/45 hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none dark:bg-white/3 dark:hover:bg-white/6"
+                  className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-edge bg-surface-panel p-3 text-center transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-accent/45 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none"
                 >
                   <ProviderLogo providerId={provider.id} className="size-7" />
                   <span className="text-xs font-medium text-fg">{provider.name}</span>

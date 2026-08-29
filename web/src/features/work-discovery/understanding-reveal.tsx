@@ -196,7 +196,7 @@ export function UnderstandingReveal({
         <div className="xopc-reveal-scene mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-center py-8 text-center sm:py-12">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.eyebrow}</p>
           <h1 className="mx-auto mt-4 max-w-[34rem] text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.25rem]">{t.summaryTitle}</h1>
-          <div className="xopc-understanding-hero-card relative mt-8 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/72 px-6 py-7 text-left shadow-elevated backdrop-blur-2xl dark:border-white/10 dark:bg-white/5 sm:px-8">
+          <div className="xopc-understanding-hero-card relative mt-8 overflow-hidden rounded-[1.75rem] border border-edge bg-surface-panel px-6 py-7 text-left shadow-elevated sm:px-8">
             <UnderstandingConstellation />
             <p className="relative text-lg font-medium leading-8 text-fg sm:text-xl">{run.result?.projectSummary}</p>
             {(run.result?.currentState || workThreads.length || primarySuggestion?.evidence.length) ? (
@@ -244,7 +244,7 @@ export function UnderstandingReveal({
         <div className="xopc-reveal-scene mx-auto flex w-full max-w-[38rem] flex-1 flex-col justify-center py-10 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.memoryEyebrow}</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-fg">{t.memoryTitle}</h1>
-          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-white/70 bg-white/75 p-6 text-left shadow-elevated backdrop-blur-2xl dark:border-white/10 dark:bg-white/5 sm:p-8">
+          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-edge bg-surface-panel p-6 text-left shadow-elevated sm:p-8">
             <div className="flex items-start gap-4">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
               <div className="min-w-0 flex-1">
@@ -263,7 +263,7 @@ export function UnderstandingReveal({
         <div className="xopc-reveal-scene mx-auto flex w-full max-w-[38rem] flex-1 flex-col justify-center py-10 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.focusEyebrow}</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-fg">{t.focusTitle}</h1>
-          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-white/70 bg-white/75 p-7 text-left shadow-elevated backdrop-blur-2xl dark:border-white/10 dark:bg-white/5 sm:p-9">
+          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-edge bg-surface-panel p-7 text-left shadow-elevated sm:p-9">
             <div className="flex items-start gap-4"><span className="mt-2 size-3 shrink-0 rounded-full bg-accent" /><div><p className="text-xl font-semibold tracking-tight text-fg">{focusCandidate.title}</p><p className="mt-3 text-sm leading-6 text-fg-muted">{focusCandidate.summary}</p><p className="mt-5 flex items-start gap-2 rounded-xl bg-surface-muted/80 px-3 py-2.5 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />{t.focusHint}</p></div></div>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse"><Button variant="primary" disabled={busy} onClick={() => void reviewFocus(true)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{t.activateFocus}</Button><Button variant="secondary" disabled={busy} onClick={() => void reviewFocus(false)}>{t.notNow}</Button></div>
           </article>
@@ -280,9 +280,9 @@ function UnderstandingConstellation() {
     <div className="pointer-events-none absolute -right-10 -top-12 size-52 opacity-45" aria-hidden>
       <span className="absolute inset-[12%] rounded-full border border-accent/15" />
       <span className="absolute inset-[28%] rounded-full border border-accent/20" />
-      <span className="absolute left-[45%] top-[45%] size-[10%] rounded-full bg-accent shadow-[0_0_28px_rgba(54,123,245,0.5)]" />
+      <span className="xopc-constellation-core absolute left-[45%] top-[45%] size-[10%] rounded-full bg-accent" />
       <span className="absolute left-[12%] top-[36%] size-2.5 rounded-full bg-accent/55" />
-      <span className="absolute right-[14%] top-[24%] size-2 rounded-full bg-cyan-400/65" />
+      <span className="absolute right-[14%] top-[24%] size-2 rounded-full bg-accent/45" />
       <span className="absolute bottom-[15%] right-[30%] size-2.5 rounded-full bg-accent/35" />
     </div>
   );

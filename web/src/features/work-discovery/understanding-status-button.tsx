@@ -112,8 +112,8 @@ export function UnderstandingStatusButton({
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-950/28 backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in motion-reduce:backdrop-blur-none" />
-        <Dialog.Content className="xopc-understanding-center fixed left-1/2 top-1/2 z-[61] flex h-[min(42rem,calc(100vh-2rem))] w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[1.75rem] border border-white/70 bg-surface-panel/95 shadow-float outline-none backdrop-blur-2xl dark:border-white/10">
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-scrim backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in motion-reduce:backdrop-blur-none" />
+        <Dialog.Content className="xopc-understanding-center fixed left-1/2 top-1/2 z-[61] flex h-[min(42rem,calc(100vh-2rem))] w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[1.75rem] border border-edge bg-surface-panel shadow-float outline-none">
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-edge-subtle px-5 sm:px-6">
             <div>
               <Dialog.Title className="text-sm font-semibold text-fg">
@@ -198,9 +198,9 @@ function UnderstandingActivityVisual() {
     <div className="xopc-understanding-constellation relative size-40" aria-hidden>
       <span className="xopc-constellation-orbit absolute inset-[10%] rounded-full border border-accent/15" />
       <span className="xopc-constellation-orbit xopc-constellation-orbit-delayed absolute inset-[27%] rounded-full border border-accent/20" />
-      <span className="absolute left-[44%] top-[44%] size-[12%] rounded-full bg-accent shadow-[0_0_32px_rgba(54,123,245,0.65)]" />
+      <span className="xopc-constellation-core absolute left-[44%] top-[44%] size-[12%] rounded-full bg-accent" />
       <span className="xopc-constellation-node absolute left-[10%] top-[34%] flex size-8 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-surface"><FileText className="size-3.5" /></span>
-      <span className="xopc-constellation-node xopc-constellation-node-two absolute right-[8%] top-[20%] size-3 rounded-full bg-cyan-400" />
+      <span className="xopc-constellation-node xopc-constellation-node-two absolute right-[8%] top-[20%] size-3 rounded-full bg-accent/55" />
       <span className="xopc-constellation-node xopc-constellation-node-three absolute bottom-[10%] right-[25%] size-3 rounded-full bg-accent/55" />
     </div>
   );

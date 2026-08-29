@@ -477,7 +477,7 @@ export function WorkDiscoveryPage({
         : `mx-auto flex w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16`}>
         {pageState !== 'recognition' ? (
           <div className={cn('flex items-center justify-center', embedded ? 'mb-7 sm:mb-9' : 'mb-10')}>
-            <div className="xopc-discovery-logo relative flex size-16 items-center justify-center rounded-[1.35rem] border border-white/75 bg-white/75 shadow-elevated backdrop-blur-xl dark:border-white/10 dark:bg-white/7">
+            <div className="xopc-discovery-logo relative flex size-16 items-center justify-center rounded-[1.35rem] border border-edge bg-surface-panel shadow-elevated">
               <span className="xopc-discovery-logo-ring absolute -inset-3 rounded-[1.8rem] border border-accent/10" aria-hidden />
               <BrandLogo className="size-10" />
             </div>
@@ -505,7 +505,7 @@ export function WorkDiscoveryPage({
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
               {localSources.length ? (
-                <details className="group mb-5 rounded-2xl border border-edge/80 bg-white/55 text-left shadow-surface dark:bg-white/3">
+                <details className="group mb-5 rounded-2xl border border-edge bg-surface-panel text-left shadow-surface">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-fg marker:content-none">
                     <span>{copy.localSourcesTitle}</span>
                     <ChevronDown className="size-4 text-fg-muted transition-transform duration-200 group-open:rotate-180" aria-hidden />
@@ -735,7 +735,7 @@ export function WorkDiscoveryPage({
                 </p>
               ) : null}
             </div>
-            <div className="xopc-understanding-progress mt-9 rounded-2xl border border-edge/80 bg-white/65 px-5 py-2 shadow-elevated backdrop-blur-xl dark:bg-white/4">
+            <div className="xopc-understanding-progress mt-9 rounded-2xl border border-edge bg-surface-panel px-5 py-2 shadow-elevated">
               {STAGES.map((stage, index) => {
                 const activeIndex = Math.max(0, STAGES.indexOf(run.stage ?? 'folder_structure'));
                 const complete = index < activeIndex;

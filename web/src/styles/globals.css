@@ -580,18 +580,17 @@ html.dark {
 
 .xopc-onboarding-ambient {
   background:
-    radial-gradient(circle at 16% 24%, rgb(58 107 255 / 0.2), transparent 32%),
-    radial-gradient(circle at 42% 78%, rgb(46 216 255 / 0.12), transparent 28%),
-    radial-gradient(circle at 86% 16%, rgb(91 87 255 / 0.08), transparent 30%),
-    linear-gradient(135deg, rgb(248 250 255 / 0.94), rgb(244 248 255 / 0.72) 48%, rgb(255 255 255 / 0.96));
-}
-
-.dark .xopc-onboarding-ambient {
-  background:
-    radial-gradient(circle at 16% 24%, rgb(58 107 255 / 0.22), transparent 34%),
-    radial-gradient(circle at 42% 78%, rgb(46 216 255 / 0.1), transparent 30%),
-    radial-gradient(circle at 86% 16%, rgb(91 87 255 / 0.12), transparent 32%),
-    linear-gradient(135deg, rgb(10 14 24), rgb(13 18 31) 50%, rgb(8 11 19));
+    radial-gradient(
+      circle at 16% 24%,
+      color-mix(in oklab, var(--color-accent) 8%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-surface-base) 94%, var(--color-surface-panel) 6%),
+      var(--color-surface-base) 50%,
+      color-mix(in oklab, var(--color-surface-base) 82%, var(--color-surface-panel) 18%)
+    );
 }
 
 .xopc-onboarding-visual::after {
@@ -599,12 +598,12 @@ html.dark {
   inset: 8% -20% auto auto;
   width: min(30rem, 70vw);
   aspect-ratio: 1;
-  border: 1px solid rgb(58 107 255 / 0.08);
+  border: 1px solid color-mix(in oklab, var(--color-edge) 72%, transparent);
   border-radius: 9999px;
   content: "";
   box-shadow:
-    0 0 0 5rem rgb(58 107 255 / 0.025),
-    0 0 0 10rem rgb(46 216 255 / 0.018);
+    0 0 0 5rem color-mix(in oklab, var(--color-surface-panel) 24%, transparent),
+    0 0 0 10rem color-mix(in oklab, var(--color-surface-panel) 12%, transparent);
 }
 
 .xopc-onboarding-orbit {
@@ -626,7 +625,11 @@ html.dark {
 
 .xopc-understanding-step[data-active="true"] .xopc-understanding-step-icon {
   animation: xopc-understanding-pulse 1.8s ease-in-out infinite;
-  box-shadow: 0 0 0 0 rgb(58 107 255 / 0.22);
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+.xopc-constellation-core {
+  box-shadow: 0 0 28px color-mix(in oklab, var(--color-accent) 32%, transparent);
 }
 
 .xopc-understanding-step[data-complete="true"] {
@@ -696,8 +699,8 @@ html.dark {
 }
 
 @keyframes xopc-understanding-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgb(58 107 255 / 0.22); }
-  50% { box-shadow: 0 0 0 10px rgb(58 107 255 / 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 22%, transparent); }
+  50% { box-shadow: 0 0 0 10px transparent; }
 }
 
 @keyframes xopc-understanding-complete {
