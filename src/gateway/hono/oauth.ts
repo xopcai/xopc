@@ -18,6 +18,7 @@ import {
   buildOAuthCompletionReadiness,
   refreshModelCatalogAfterOAuth,
 } from './oauth-async.js';
+import { applyXopcCloudCapabilitySetup } from '../xopc-cloud-capability-setup.js';
 
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = getOAuthProviderInterfaces();
@@ -85,9 +86,24 @@ export function createOAuthHandler(service: GatewayService) {
       const resolver = new CredentialResolver();
       await resolver.saveOAuthCredentials(provider, credentials);
       const catalog = await refreshModelCatalogAfterOAuth(provider, service);
-      const readiness = catalog
+      let capabilitySetup: Awaited<ReturnType<typeof applyXopcCloudCapabilitySetup>> | undefined;
+      if (catalog && provider === 'xopc-cloud') {
+        capabilitySetup = await applyXopcCloudCapabilitySetup(service);
+      }
+      const baseReadiness = catalog
         ? buildOAuthCompletionReadiness(service.currentConfig, catalog)
         : undefined;
+      const readiness = baseReadiness && capabilitySetup
+        ? {
+            ...baseReadiness,
+            ...(capabilitySetup.configured === true
+              ? { configuration: { applied: true } }
+              : {
+                  state: 'connected-degraded' as const,
+                  configuration: { applied: false, error: capabilitySetup.error },
+                }),
+          }
+        : baseReadiness;
       service.emit('provider.auth.changed', { provider, connected: true });
 
       return c.json({ 

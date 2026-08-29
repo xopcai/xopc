@@ -1,12 +1,5 @@
 import type { Config } from '../config/schema.js';
-import { createLogger } from '../utils/logger.js';
-import { startLocalVoiceModelInstall } from './local/model-manager.js';
-import {
-  DEFAULT_LOCAL_VOICE_MODEL_ID,
-  isLocalVoiceModelInstalled,
-} from './local/models.js';
-
-const log = createLogger('Voice:Language');
+import { DEFAULT_LOCAL_VOICE_MODEL_ID } from './local/models.js';
 
 export type ProductLanguage = 'en' | 'zh';
 export type VoiceLanguageMode = 'auto' | 'manual';
@@ -113,22 +106,4 @@ export function applyAutomaticVoiceLanguage(config: Config, language: ProductLan
     };
   }
   return before !== JSON.stringify({ voice: config.voice, tools: config.tools?.media?.audio, tts: config.messages?.tts });
-}
-
-/** Start the model download without delaying gateway readiness. */
-export function prepareConfiguredLocalVoiceModel(config: Config): void {
-  const audio = config.tools?.media?.audio;
-  if (audio?.enabled === false || (audio?.provider ?? 'xopc-local') !== 'xopc-local') return;
-  const configuredModel = audio?.providers?.['xopc-local']?.model;
-  const modelId = typeof configuredModel === 'string' && configuredModel.trim()
-    ? configuredModel.trim()
-    : DEFAULT_LOCAL_VOICE_MODEL_ID;
-  if (isLocalVoiceModelInstalled(modelId)) return;
-  try {
-    startLocalVoiceModelInstall(modelId);
-    log.info({ modelId, phase: 'startup_prepare' }, 'Local voice model preparation started');
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    log.warn({ err, modelId, errorMessage, phase: 'startup_prepare' }, `Local voice model preparation failed: ${errorMessage}`);
-  }
 }
