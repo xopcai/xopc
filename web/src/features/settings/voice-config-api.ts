@@ -4,6 +4,8 @@ import { apiUrl } from '@/lib/url';
 
 import type { SttSettings, SttProvidersPayload, TtsSettings, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload } from './voice-settings.types';
 
+export const LOCAL_VOICE_MODEL_INSTALL_STARTED_EVENT = 'xopc-local-voice-model-install-started';
+
 export type { SttSettings, TtsSettings, VoiceConfigFieldMetadata, VoiceModelsPayload, VoiceSettingsState, VoiceProvidersPayload, SttProvidersPayload, TtsProviderListEntry, SttProviderListEntry } from './voice-settings.types';
 
 export interface TtsTestPayload {

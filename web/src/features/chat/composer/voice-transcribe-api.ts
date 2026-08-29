@@ -103,14 +103,6 @@ export async function fetchVoiceReadiness(): Promise<VoiceReadiness> {
   }
 }
 
-export async function prepareLocalVoiceModel(modelId = 'sensevoice-small'): Promise<void> {
-  await fetchJson(apiUrl(`/api/voice/local/models/${encodeURIComponent(modelId)}/install`), {
-    method: 'POST',
-    body: '{}',
-  });
-  invalidateVoiceSttAvailabilityCache();
-}
-
 if (typeof window !== 'undefined') {
   window.addEventListener('voice-config-changed', invalidateVoiceSttAvailabilityCache);
   window.addEventListener('config-reload', invalidateVoiceSttAvailabilityCache);
