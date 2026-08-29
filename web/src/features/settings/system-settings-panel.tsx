@@ -43,11 +43,11 @@ function microphoneFeedback(
     prompted: string;
   },
 ): string {
-  if (result.task === 'opened-settings') {
+  if (result.outcome === 'opened-settings') {
     return fb.openedSettings;
   }
   if (result.status === 'granted' && rendererOk) {
-    return result.task === 'already-granted' ? fb.alreadyGranted : fb.granted;
+    return result.outcome === 'already-granted' ? fb.alreadyGranted : fb.granted;
   }
   if (!rendererOk) {
     return fb.rendererDenied;
@@ -67,11 +67,11 @@ function accessibilityFeedback(
     denied: string;
   },
 ): string {
-  if (result.task === 'opened-settings') {
+  if (result.outcome === 'opened-settings') {
     return fb.openedSettings;
   }
   if (result.status === 'granted') {
-    return result.task === 'already-granted' ? fb.alreadyGranted : fb.granted;
+    return result.outcome === 'already-granted' ? fb.alreadyGranted : fb.granted;
   }
   return fb.denied;
 }
@@ -86,11 +86,11 @@ function notificationFeedback(
     prompted: string;
   },
 ): string {
-  if (result.task === 'opened-settings') {
+  if (result.outcome === 'opened-settings') {
     return fb.openedSettings;
   }
   if (result.status === 'granted') {
-    return result.task === 'already-granted' ? fb.alreadyGranted : fb.granted;
+    return result.outcome === 'already-granted' ? fb.alreadyGranted : fb.granted;
   }
   if (result.status === 'denied') {
     return fb.denied;
@@ -108,11 +108,11 @@ function screenFeedback(
     prompted: string;
   },
 ): string {
-  if (result.task === 'opened-settings') {
+  if (result.outcome === 'opened-settings') {
     return fb.openedSettings;
   }
   if (result.status === 'granted') {
-    return result.task === 'already-granted' ? fb.alreadyGranted : fb.granted;
+    return result.outcome === 'already-granted' ? fb.alreadyGranted : fb.granted;
   }
   if (result.status === 'denied') {
     return fb.denied;
@@ -379,7 +379,9 @@ export function SystemSettingsPanel() {
     dispatch({ type: 'patch', patch: { loadError: null } });
     try {
       const result = await api.requestMicrophone();
-      const rendererOk = await probeRendererMicrophone();
+      const rendererOk = result.outcome === 'opened-settings' || result.status === 'denied'
+        ? false
+        : await probeRendererMicrophone();
       dispatch({ type: 'patch', patch: { perms: await api.getPermissions() } });
       dispatch({ type: 'patch', patch: { permFeedback: microphoneFeedback(result, rendererOk, t.permFeedback) } });
     } catch (e) {
