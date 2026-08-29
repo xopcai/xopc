@@ -1,7 +1,9 @@
 import { AlertTriangle, CheckCircle2, Mic, Sparkles } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 
+import { Skeleton } from '@/components/ui/skeleton';
+import { acquireNoteMediaObjectUrl, releaseNoteMediaObjectUrl } from '@/features/notes/note-media-blob';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -19,6 +21,48 @@ type SegmentEvent = {
 function BulletList({ values }: { values: string[] }) {
   if (values.length === 0) return null;
   return <ul className="list-disc space-y-1 pl-5">{values.map((value, index) => <li key={`${index}:${value}`}>{value}</li>)}</ul>;
+}
+
+function DiscussionRecording({
+  noteId,
+  attachmentId,
+  label,
+  unavailableLabel,
+}: {
+  noteId: string;
+  attachmentId: string;
+  label: string;
+  unavailableLabel: string;
+}) {
+  const [source, setSource] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let acquired = false;
+    let disposed = false;
+    setSource(null);
+    setFailed(false);
+    void acquireNoteMediaObjectUrl(noteId, attachmentId)
+      .then((url) => {
+        acquired = true;
+        if (disposed) {
+          releaseNoteMediaObjectUrl(noteId, attachmentId);
+          return;
+        }
+        setSource(url);
+      })
+      .catch(() => {
+        if (!disposed) setFailed(true);
+      });
+    return () => {
+      disposed = true;
+      if (acquired) releaseNoteMediaObjectUrl(noteId, attachmentId);
+    };
+  }, [attachmentId, noteId]);
+
+  if (failed) return <p className="text-xs text-danger">{unavailableLabel}</p>;
+  if (!source) return <Skeleton className="h-10 w-full max-w-md" />;
+  return <audio controls preload="metadata" src={source} className="w-full max-w-md" aria-label={label} />;
 }
 
 export function DiscussionNoteSections({ noteId }: { noteId: string }) {
@@ -86,6 +130,21 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
             {organization.risks.length > 0 ? <div><h3 className="font-medium">{copy.risks}</h3><BulletList values={organization.risks} /></div> : null}
             {organization.openQuestions.length > 0 ? <div><h3 className="font-medium">{copy.openQuestions}</h3><BulletList values={organization.openQuestions} /></div> : null}
           </div>
+        </section>
+      ) : null}
+
+      {discussion.audioAttachmentId ? (
+        <section className="border-b border-edge-subtle px-6 py-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-fg">
+            <Mic className="size-4 text-accent" aria-hidden />
+            {copy.recordingAudio}
+          </div>
+          <DiscussionRecording
+            noteId={noteId}
+            attachmentId={discussion.audioAttachmentId}
+            label={copy.recordingAudio}
+            unavailableLabel={copy.recordingUnavailable}
+          />
         </section>
       ) : null}
 

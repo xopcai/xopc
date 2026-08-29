@@ -14,10 +14,28 @@ function searchableCharacters(value: string): { text: string; sourceEnds: number
 }
 
 function joinOverlap(left: string, remainder: string): string {
-  const next = /[\p{P}\p{S}]$/u.test(left)
-    ? remainder.replace(/^[\s\p{P}\p{S}]+/u, '')
-    : remainder;
-  return `${left}${next}`.trim();
+  const next = /\p{P}$/u.test(left) ? remainder.replace(/^\p{P}+/u, '') : remainder;
+  if (!next || /^\s/u.test(next)) return `${left}${next}`.trim();
+
+  const leftCharacter = Array.from(left).findLast((character) => /[\p{L}\p{N}\p{S}]/u.test(character));
+  const rightCharacter = Array.from(next).find((character) => /[\p{L}\p{N}\p{S}]/u.test(character));
+  const compactScript = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+  const separator = leftCharacter
+    && rightCharacter
+    && !compactScript.test(leftCharacter)
+    && !compactScript.test(rightCharacter)
+    ? ' '
+    : '';
+  return `${left}${separator}${next}`.trim();
+}
+
+/** Joins transcripts from adjacent audio chunks that have no audio overlap. */
+export function appendSequentialTranscript(existing: string, next: string): string {
+  const left = existing.trim();
+  const right = next.trim();
+  if (!left) return right;
+  if (!right) return left;
+  return `${left}\n${right}`;
 }
 
 export function appendTranscriptWithoutOverlap(existing: string, next: string): string {
@@ -40,7 +58,7 @@ export function appendTranscriptWithoutOverlap(existing: string, next: string): 
     const sourceEnd = rightSearchable.sourceEnds[size - 1];
     return joinOverlap(left, right.slice(sourceEnd));
   }
-  return `${left}\n${right}`;
+  return appendSequentialTranscript(left, right);
 }
 
 export function assembleDiscussionTranscript(segments: DiscussionTranscriptSegment[]): string {

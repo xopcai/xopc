@@ -2,13 +2,13 @@ import * as Dialog from '@radix-ui/react-dialog';
 import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
 import { CalendarClock, ChevronRight, CircleAlert, Plus, Sparkles, X } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
-  createTask,
   decideAgentJudgment,
   fetchHome,
   instructAgentJudgment,
@@ -19,7 +19,6 @@ import {
   type HomeResponse,
 } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
-import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -203,18 +202,13 @@ export function HomePage() {
   const t = msg.projectsPage;
   const copy = taskCopy(language);
   const navigate = useNavigate();
-  const location = useLocation();
-  const backgroundPath = `${location.pathname}${location.search}`;
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<HomeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [task, setTask] = useState('');
-  const [createRequestId, setCreateRequestId] = useState(() => crypto.randomUUID());
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [conversationOpen, setConversationOpen] = useState(false);
+  const [intent, setIntent] = useState('');
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [reviewDecision, setReviewDecision] = useState<HomeDecision | null>(null);
@@ -257,48 +251,18 @@ export function HomePage() {
     };
   }, [load]);
 
-  const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+  const startConversation = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmed = task.trim();
-    if (!trimmed || creating) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const started = await createTask({
-        idempotencyKey: createRequestId,
-        title: trimmed,
-        locale: language,
-        priority: 'normal',
-        contract: {
-          objective: trimmed,
-          expectedOutputs: [],
-          acceptanceCriteria: [],
-          constraints: [],
-          approvalRequired: [],
-          assumptions: [],
-          risks: [],
-          acceptancePolicy: 'manual',
-          outputDestinations: [],
-        },
-        dependencies: [],
-        context: [],
-        authorityGrants: [],
-        activation: { mode: 'start' },
-      });
-      setCreateOpen(false);
-      setTask('');
-      setCreateRequestId(crypto.randomUUID());
-      navigate(taskDetailModalHref(backgroundPath, started.task.id));
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setCreating(false);
-    }
-  }, [backgroundPath, createRequestId, creating, language, navigate, task]);
+    const href = newChatAutoSendHref(intent);
+    if (!href) return;
+    setConversationOpen(false);
+    setIntent('');
+    navigate(href);
+  }, [intent, navigate]);
 
   const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
   const headerEnd = useMemo(() => isIdle ? null : (
-    <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
+    <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setConversationOpen(true)}>
       <Plus className="size-4" aria-hidden />
       {copy.newWork}
     </Button>
@@ -375,14 +339,8 @@ export function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Dialog.Root
-        open={createOpen}
-        onOpenChange={(open) => {
-          if (!creating) setCreateOpen(open);
-          if (open) {
-            setCreateError(null);
-            setCreateRequestId(crypto.randomUUID());
-          }
-        }}
+        open={conversationOpen}
+        onOpenChange={setConversationOpen}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
@@ -398,14 +356,14 @@ export function HomePage() {
                 </Button>
               </Dialog.Close>
             </div>
-            <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
+            <form onSubmit={startConversation} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
-                <label htmlFor="new-work-task" className="mb-2 shrink-0 text-sm font-medium text-fg">{copy.intentLabel}</label>
+                <label htmlFor="new-conversation-intent" className="mb-2 shrink-0 text-sm font-medium text-fg">{copy.intentLabel}</label>
                 <textarea
-                  id="new-work-task"
+                  id="new-conversation-intent"
                   className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                  value={task}
-                  onChange={(event) => { setTask(event.target.value); setCreateRequestId(crypto.randomUUID()); }}
+                  value={intent}
+                  onChange={(event) => setIntent(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();
@@ -418,15 +376,14 @@ export function HomePage() {
                 />
                 <div className="mt-2 flex shrink-0 items-center justify-between gap-3 text-[11px] text-fg-subtle">
                   <span>{t.home.submitShortcut}</span>
-                  <span className="tabular-nums">{task.length.toLocaleString()} / {(12_000).toLocaleString()}</span>
+                  <span className="tabular-nums">{intent.length.toLocaleString()} / {(12_000).toLocaleString()}</span>
                 </div>
-                {createError ? <p className="mt-3 text-sm text-danger">{createError}</p> : null}
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
-                <Dialog.Close asChild><Button type="button" variant="ghost" disabled={creating}>{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={!task.trim() || creating}>
+                <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={!intent.trim()}>
                   <Sparkles className="size-4" aria-hidden />
-                  {creating ? copy.starting : copy.submit}
+                  {copy.submit}
                 </Button>
               </div>
             </form>
@@ -477,15 +434,15 @@ export function HomePage() {
             </p>
             {isIdle ? (
               <form
-                onSubmit={submitCreate}
+                onSubmit={startConversation}
                 className="mx-auto mt-8 w-full max-w-[640px] rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
               >
-                <label htmlFor="idle-new-work-task" className="sr-only">{copy.intentLabel}</label>
+                <label htmlFor="idle-conversation-intent" className="sr-only">{copy.intentLabel}</label>
                 <textarea
-                  id="idle-new-work-task"
+                  id="idle-conversation-intent"
                   className="min-h-24 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle"
-                  value={task}
-                  onChange={(event) => { setTask(event.target.value); setCreateRequestId(crypto.randomUUID()); }}
+                  value={intent}
+                  onChange={(event) => setIntent(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();
@@ -497,12 +454,11 @@ export function HomePage() {
                 />
                 <div className="flex items-center justify-end gap-3 border-t border-edge-subtle px-1 pt-2 sm:justify-between">
                   <span className="hidden px-2 text-[11px] text-fg-subtle sm:inline">{t.home.submitShortcut}</span>
-                  <Button type="submit" variant="primary" className="h-9 rounded-lg px-3.5 text-xs" disabled={!task.trim() || creating}>
+                  <Button type="submit" variant="primary" className="h-9 rounded-lg px-3.5 text-xs" disabled={!intent.trim()}>
                     <Sparkles className="size-3.5" aria-hidden />
-                    {creating ? copy.starting : copy.newWork}
+                    {copy.newWork}
                   </Button>
                 </div>
-                {createError ? <p className="px-3 pb-1 pt-2 text-xs text-danger" role="alert">{createError}</p> : null}
               </form>
             ) : null}
           </section>

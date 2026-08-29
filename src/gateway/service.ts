@@ -114,6 +114,7 @@ import {
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
 import { ConnectedSourceChangePublisher } from '../connectors/source-change-publisher.js';
+import { ManagedComposioEventPoller } from '../connectors/composio-managed-events.js';
 import {
   applyAutomaticVoiceLanguage,
   inferProductLanguageFromEnvironment,
@@ -201,6 +202,7 @@ export class GatewayService {
   private workflowRunServiceInstance: WorkflowRunService | null = null;
   private taskRunDispatcher: TaskRunDispatcher | null = null;
   private taskRunDispatchTimer: ReturnType<typeof setInterval> | null = null;
+  private managedComposioEventPoller?: ManagedComposioEventPoller;
   private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
@@ -1110,6 +1112,13 @@ export class GatewayService {
       getMemoryManager: () => this.agentService.getMemoryManager(),
       emit: (type, payload) => this.emit(type, payload),
     });
+    this.managedComposioEventPoller = new ManagedComposioEventPoller({
+      getConfig: () => this.config,
+      triggerAutomation: (event) => this.automationService.triggerEvent(event),
+      requestLearning: (toolkit) => { this.requestConnectorLearningForToolkit(toolkit); },
+      setLearningPaused: (connectionId, paused) => { this.setConnectorLearningPaused(connectionId, paused); },
+    });
+    this.managedComposioEventPoller.start();
     this.connectedSourceChangePublisher = new ConnectedSourceChangePublisher(this.proactive);
     this.connectedSourceChangePublisher.start();
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
@@ -1338,6 +1347,8 @@ export class GatewayService {
     this.connectorSupervisor = null;
     this.connectorLearningCoordinator?.stop();
     this.connectorLearningCoordinator = null;
+    this.managedComposioEventPoller?.stop();
+    this.managedComposioEventPoller = undefined;
     this.connectedSourceChangePublisher?.stop();
     this.connectedSourceChangePublisher = null;
     this.connectedKnowledgeCoordinator?.stop();

@@ -167,6 +167,8 @@
       "undo": "Undo",
       "draftTranscript": "Draft live transcript",
       "fullTranscript": "Full transcript",
+      "recordingAudio": "Original recording",
+      "recordingUnavailable": "The original recording could not be loaded.",
       "organization": "AI organization",
       "decisions": "Decisions",
       "actionItems": "Action items",

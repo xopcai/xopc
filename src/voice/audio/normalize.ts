@@ -3,10 +3,16 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { decodeWavToMonoFloat32, type DecodedPcmAudio } from '../local/wav.js';
+import {
+  decodeWavToMonoFloat32,
+  type DecodedPcmAudio,
+  UnsupportedWavEncodingError,
+} from '../local/wav.js';
 
 const TARGET_SAMPLE_RATE = 16_000;
-const MAX_DECODED_BYTES = TARGET_SAMPLE_RATE * 4 * 15 * 60;
+const MAX_DECODED_DURATION_SECONDS = 15 * 60;
+const MAX_DECODED_BYTES = TARGET_SAMPLE_RATE * 4 * MAX_DECODED_DURATION_SECONDS;
+const MAX_SEGMENTED_DURATION_SECONDS = 30 * 60;
 
 export type AudioFormat = 'wav' | 'webm' | 'ogg' | 'mp3' | 'mp4' | 'unknown';
 
@@ -95,7 +101,17 @@ export async function decodeAudioToMonoFloat32(input: {
   buffer: Buffer;
   signal?: AbortSignal;
 }): Promise<DecodedPcmAudio> {
-  if (detectAudioFormat(input.buffer) === 'wav') return decodeWavToMonoFloat32(input.buffer);
+  if (detectAudioFormat(input.buffer) === 'wav') {
+    try {
+      const decoded = decodeWavToMonoFloat32(input.buffer);
+      if (decoded.durationSeconds > MAX_DECODED_DURATION_SECONDS) {
+        throw new AudioNormalizationError('Decoded audio exceeds the supported duration');
+      }
+      return decoded;
+    } catch (error) {
+      if (!(error instanceof UnsupportedWavEncodingError)) throw error;
+    }
+  }
   const bytes = await runFfmpeg([
     '-i', 'pipe:0', '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(TARGET_SAMPLE_RATE),
     '-f', 'f32le', 'pipe:1',
@@ -114,19 +130,43 @@ export async function decodeAudioToMonoFloat32(input: {
 
 /** Decodes a recording into bounded PCM WAV files and removes all temporary files afterwards. */
 export async function forEachNormalizedAudioSegment(
-  input: { filePath: string; segmentSeconds?: number; signal?: AbortSignal },
+  input: {
+    filePath: string;
+    segmentSeconds?: number;
+    maxDurationSeconds?: number;
+    signal?: AbortSignal;
+  },
   consume: (buffer: Buffer, index: number) => Promise<void>,
 ): Promise<number> {
+  const segmentSeconds = input.segmentSeconds ?? 20;
+  const maxDurationSeconds = input.maxDurationSeconds ?? MAX_SEGMENTED_DURATION_SECONDS;
+  if (!Number.isFinite(segmentSeconds) || segmentSeconds <= 0) {
+    throw new AudioNormalizationError('Audio segment duration must be positive');
+  }
+  if (!Number.isFinite(maxDurationSeconds) || maxDurationSeconds <= 0) {
+    throw new AudioNormalizationError('Maximum audio duration must be positive');
+  }
   const directory = await mkdtemp(join(tmpdir(), 'xopc-audio-'));
   const outputPattern = join(directory, 'segment-%05d.wav');
   try {
     await runFfmpeg([
       '-i', input.filePath, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(TARGET_SAMPLE_RATE),
-      '-c:a', 'pcm_s16le', '-f', 'segment', '-segment_time', String(input.segmentSeconds ?? 20),
+      '-t', String(maxDurationSeconds + segmentSeconds),
+      '-c:a', 'pcm_s16le', '-f', 'segment', '-segment_time', String(segmentSeconds),
       '-reset_timestamps', '1', outputPattern,
     ], { signal: input.signal });
     const files = (await readdir(directory)).filter((name) => name.endsWith('.wav')).sort();
     if (files.length === 0) throw new AudioNormalizationError('Audio decoder produced no segments');
+    let decodedDurationSeconds = 0;
+    for (const file of files) {
+      const decoded = decodeWavToMonoFloat32(await readFile(join(directory, file)));
+      decodedDurationSeconds += decoded.durationSeconds;
+      if (decodedDurationSeconds > maxDurationSeconds + 0.05) {
+        throw new AudioNormalizationError(
+          `Decoded audio exceeds the ${Math.round(maxDurationSeconds)} second limit`,
+        );
+      }
+    }
     for (let index = 0; index < files.length; index += 1) {
       await consume(await readFile(join(directory, files[index]!)), index);
     }

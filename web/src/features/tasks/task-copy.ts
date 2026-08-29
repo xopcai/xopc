@@ -2,11 +2,10 @@ export function taskCopy(language: 'en' | 'zh') {
   return language === 'zh' ? {
     newWork: '交给 xopc',
     dialogTitle: '现在想完成什么？',
-    dialogDescription: '发送后会建立一个持续推进的结果。xopc 会理解目标、执行、验证，并在真正需要你时再提问。',
+    dialogDescription: '发送后会进入新对话。xopc 会直接回答或开始处理；需要持续推进时，再转为任务。',
     intentLabel: '告诉 xopc 你要做什么',
     intentPlaceholder: '例如：整理这周的会议记录，提炼待办并给出下周优先级',
     submit: '进入对话并开始',
-    starting: '正在开始…',
     projectLabel: '归属项目',
     monitoringLabel: '主动跟进',
     monitoringModes: {
@@ -190,11 +189,10 @@ export function taskCopy(language: 'en' | 'zh') {
   } : {
     newWork: 'Ask xopc',
     dialogTitle: 'What do you want to get done?',
-    dialogDescription: 'This creates a durable task. xopc will understand it, execute, verify, and ask only when your input is truly needed.',
+    dialogDescription: 'This opens a new conversation. xopc will answer or start working, and create a task only when the work needs ongoing progress.',
     intentLabel: 'Tell xopc what you need',
     intentPlaceholder: 'For example: summarize this week’s meeting notes and suggest next week’s priorities',
     submit: 'Open conversation and start',
-    starting: 'Starting…',
     projectLabel: 'Project',
     monitoringLabel: 'Proactive follow-up',
     monitoringModes: {

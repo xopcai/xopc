@@ -71,4 +71,15 @@ describe('note-attachment-sync', () => {
     expect(kept.map((item) => item.id)).toEqual(['att-1']);
     expect(removed.map((item) => item.id)).toEqual(['att-2']);
   });
+
+  it('keeps structured attachments that do not belong in user Markdown', () => {
+    const { kept, removed } = partitionAttachmentsByReference(
+      baseNote({
+        attachments: [{ ...imageAttachment, retainWithoutReference: true }],
+      }),
+    );
+
+    expect(kept.map((item) => item.id)).toEqual(['att-1']);
+    expect(removed).toEqual([]);
+  });
 });
