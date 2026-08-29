@@ -102,7 +102,7 @@ describe('image_generate tool — Step 2 input wiring', () => {
       agentId: 'studio',
       modelConfig: {
         primary: 'openai/gpt-image-2',
-        fallbacks: ['google/gemini-3.1-flash-image'],
+        fallbacks: ['google/gemini-3.1-flash-image', 'xopc-cloud/image-01'],
         timeoutMs: 120_000,
         autoProviderFallback: true,
       },
