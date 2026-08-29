@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: 让重要的工作持续向前。
-  tagline: "本地优先的 AI 助手：用于对话、持续任务、可重复流程和你已经在用的应用。模型由你选择，运行环境由你掌控。"
+  text: 它住进你的电脑，然后慢慢开始懂你。
+  tagline: "一个本地优先的私人 AI 助手：形成可检查的理解，接住还没整理好的想法，并陪你把真正重要的事情做成。"
   image:
     src: /logo.svg
     alt: xopc
@@ -13,28 +13,31 @@ hero:
       text: 开始使用
       link: /zh/getting-started
     - theme: alt
+      text: 产品理念
+      link: /zh/product
+    - theme: alt
       text: GitHub
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 先作为普通助手开始
-    details: 安装桌面或终端客户端，连接一个模型，就可以开始聊天。只有需要时再添加高级能力。
-    link: /zh/getting-started
-  - title: 掌控自己的数据
-    details: 配置、Session、Agent Profile 和工作区默认保存在你的电脑上；涉及哪些云端服务由你决定。
-    link: /zh/workspace
-  - title: 从多个设备继续工作
-    details: 在桌面、终端、浏览器、手机、Telegram、微信和飞书中使用相同的 Agent 与 Session。
-    link: /zh/channels/
-  - title: 组织持续结果
-    details: 工作需要明确结果、当前状态、阻塞和下一步时，使用 Project 与 Task。
+  - title: 逐渐理解你
+    details: 把有用的目标、偏好、关系、决定和当前重点放进可查看、可纠正、可删除的认知模型。
+    link: /zh/user-understanding
+  - title: 接住还没整理好的工作
+    details: 从想法、语音、文件、链接或一次对话开始，用 Project 和 Task 保留背景、阻塞、决定与下一步。
+    link: /zh/concepts/loops
+  - title: 推进可以验证的结果
+    details: 澄清目的，使用已授权的工具和上下文，验证结果，并留下之后可以恢复的执行记录。
     link: /zh/projects-tasks-notes
-  - title: 重复已经验证的工作
-    details: 创建可视化 Workflow、保存浏览器任务，并手动、按计划或通过 Webhook 运行。
-    link: /zh/workflows
-  - title: 控制能力边界
-    details: 为每个 Agent 有意识地选择模型、工具、Skill、连接器、MCP 服务和确认边界。
-    link: /zh/routing-system
+  - title: 逐渐获得主动性
+    details: 从建议优先开始；提醒、行动建议、确认后执行和低风险自动化只随明确授权逐步开放。
+    link: /zh/automations
+  - title: 让探索保持可控
+    details: 单独授权来源，查看结论证据，区分事实与推断，并知道云端模型何时会收到上下文。
+    link: /zh/product#信任本身就是产品界面
+  - title: 始终是同一个助手
+    details: 从桌面、终端、网页、手机、Telegram、微信或飞书继续，而不是维护几个互相失忆的机器人。
+    link: /zh/channels/
 ---
 
 [![xopc 桌面应用演示](/xopc-desktop.gif)](./desktop-app.md)
@@ -43,13 +46,18 @@ features:
 
 1. [安装桌面应用](./desktop-app.md)，或按照[终端快速开始](./first-5-minutes.md)操作。
 2. [连接一个模型](./how-to/configure-first-model.md)。
-3. 在聊天中发送测试消息。
-4. 第一次对话成功后，再按需要添加 Agent、消息通道、Workflow 或远程设备。
+3. 先发送测试消息，再告诉 xopc 一件你真正想推进的事情。
+4. 检查哪些内容值得记住，不要假设每句话都会自动成为长期上下文。
+5. 只有数据源、Agent、消息通道、Workflow 或远程设备能帮助真实工作时再添加。
+
+阅读[产品理念](./product.md)，了解 xopc 想建立的长期关系，以及当前基础与下一阶段之间的边界。
 
 ## 找到对应指南
 
 | 你想做什么 | 阅读 |
 | --- | --- |
+| 了解 xopc 正在成为怎样的产品 | [产品理念](./product.md) |
+| 查看或纠正 xopc 对你的理解 | [用户理解](./user-understanding.md) |
 | 开始对话并稍后继续 | [聊天与 Session](./session.md) |
 | 为不同工作使用不同助手 | [Agent](./routing-system.md) |
 | 组织长期工作 | [Project、Task 与笔记](./projects-tasks-notes.md) |
@@ -61,4 +69,4 @@ features:
 | 了解本地存储与备份 | [数据和文件位置](./workspace.md) |
 | 修复设置问题 | [故障排查](./how-to/diagnose-broken-setup.md) |
 
-第一次聊天成功后，可以阅读 [Task 闭环](./concepts/loops.md)了解产品模型。
+第一次聊天成功后，可以阅读 [Task 闭环](./concepts/loops.md)了解持续工作模型。

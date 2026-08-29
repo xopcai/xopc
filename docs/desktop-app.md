@@ -1,6 +1,6 @@
 # Desktop app
 
-The desktop app is the easiest way to run xopc locally. It includes the Gateway console, starts the local service when needed, and lets you manage models, Agents, channels, logs, and updates without keeping a terminal open.
+The desktop app is the primary local home for xopc. It includes the Gateway console, starts the local service when needed, and brings conversation, user understanding, Projects, Tasks, models, permissions, and run history into one place without keeping a terminal open.
 
 ![xopc desktop app demo](/xopc-desktop.gif)
 
@@ -33,10 +33,24 @@ Once that reply succeeds, the core setup is complete. Add channels, remote acces
 
 For provider choices and credential methods, see [Configure a model](./how-to/configure-first-model.md).
 
+### Start getting acquainted
+
+After the model connection works, give xopc one real direction:
+
+```text
+One thing I want to move forward this week is ____.
+Help me clarify the outcome and identify the smallest credible next step.
+```
+
+Some releases also show experimental **Connect recent work** onboarding. This flow analyzes only folders you select, uses a bounded read-only scope, and shows evidence for its next-step suggestions. On macOS it may separately request access to Apple Notes, Calendar, and Reminders. Each permission is optional; you can skip the flow and begin with conversation.
+
+Review proposed long-term understanding under **You** or **User context**. Confirm what is accurate and useful; correct, reject, or delete the rest. See [User understanding](./user-understanding.md).
+
 ## Find common features
 
 | You want to… | Open |
 | --- | --- |
+| Review or correct what xopc knows | **You** or **User context** |
 | Start or resume a conversation | **Chat** |
 | Create and edit assistants | **Agents** |
 | Organize ongoing work | **Projects** or **Tasks** |
@@ -52,7 +66,7 @@ The desktop app and terminal commands use the same xopc data by default, so you 
 
 xopc stores its configuration, local database, Agents, and workspaces under `~/.xopc/` by default. Model requests still go to the provider you choose unless you use a local model.
 
-Read [Data and file locations](./workspace.md) for backup and path details. Do not include keys, tokens, private chats, or personal paths in screenshots.
+Read [Data and file locations](./workspace.md) for backup and path details. Local storage does not prevent selected context from being sent to a configured cloud model. Use a local model when a task must remain on-device. Do not include keys, tokens, private chats, or personal paths in screenshots.
 
 ## Troubleshooting
 

@@ -2,6 +2,8 @@
 
 An Automation starts an Agent, Workflow, or saved browser task manually, on a schedule, or from a webhook. Every run keeps its status and result so you can inspect what happened.
 
+Automation is one stage of xopc's initiative model, not permission to act without limits. Begin with observation or a proposed action, test manually, and enable unattended execution only for an explicit, low-risk scope with understood side effects.
+
 ## Choose the action
 
 | Action | Use it when |
@@ -26,6 +28,8 @@ For deterministic recurring work, prefer a published Workflow or tested browser 
 8. Save, then choose **Run now** for a test.
 
 Keep the first run manual. Enable an unattended schedule only after the result and side effects are correct.
+
+Sending, deleting, purchasing, publishing, or changing an external system should retain the applicable confirmation or explicit policy. A schedule does not expand an Agent's authority.
 
 ## Monitor runs
 
