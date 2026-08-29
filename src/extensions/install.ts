@@ -4,8 +4,9 @@
  * Supports three-tier storage: workspace, global, bundled
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'node:child_process';
 import AdmZip from 'adm-zip';
+import semver from 'semver';
 import {
   existsSync,
   mkdirSync,
@@ -31,6 +32,68 @@ import { MAX_EXTENSION_STORE_ZIP_BYTES } from './store-zip-limits.js';
 const log = createLogger('ExtensionInstall');
 
 const NPM_INSTALL_ENV = process.env.XOPC_EXTENSION_NPM_INSTALL?.trim().toLowerCase();
+const NPM_INSTALL_SCRIPTS_ENV = process.env.XOPC_EXTENSION_NPM_INSTALL_SCRIPTS
+  ?.trim()
+  .toLowerCase();
+const ALLOW_NPM_INSTALL_SCRIPTS = ['1', 'true', 'allow'].includes(
+  NPM_INSTALL_SCRIPTS_ENV ?? '',
+);
+const NPM_PACKAGE_PART_RE = /^(?![._])[a-z0-9][a-z0-9._~-]*$/;
+
+export type ValidatedNpmPackageSpec =
+  | { ok: true; packageName: string; version?: string }
+  | { ok: false; error: string };
+
+/** Accept registry package names with an optional exact semver; reject URLs, paths, tags, and ranges. */
+export function validateNpmPackageSpec(packageSpec: string): ValidatedNpmPackageSpec {
+  if (!packageSpec || packageSpec !== packageSpec.trim() || /\s/.test(packageSpec)) {
+    return { ok: false, error: 'npm package spec must not be empty or contain whitespace' };
+  }
+
+  let packageName = packageSpec;
+  let version: string | undefined;
+  if (packageSpec.startsWith('@')) {
+    const slashIndex = packageSpec.indexOf('/');
+    const versionSeparator = packageSpec.lastIndexOf('@');
+    if (slashIndex <= 1) {
+      return { ok: false, error: 'Invalid scoped npm package name' };
+    }
+    if (versionSeparator > slashIndex) {
+      packageName = packageSpec.slice(0, versionSeparator);
+      version = packageSpec.slice(versionSeparator + 1);
+    }
+  } else {
+    const versionSeparator = packageSpec.lastIndexOf('@');
+    if (versionSeparator > 0) {
+      packageName = packageSpec.slice(0, versionSeparator);
+      version = packageSpec.slice(versionSeparator + 1);
+    }
+  }
+
+  if (packageName.length > 214) {
+    return { ok: false, error: 'npm package name exceeds 214 characters' };
+  }
+  const parts = packageName.startsWith('@')
+    ? packageName.slice(1).split('/')
+    : [packageName];
+  if (
+    parts.length !== (packageName.startsWith('@') ? 2 : 1)
+    || parts.some((part) => !NPM_PACKAGE_PART_RE.test(part))
+  ) {
+    return {
+      ok: false,
+      error: 'Only npm registry package names are allowed (for example pkg or @scope/pkg)',
+    };
+  }
+  if (version !== undefined && !semver.valid(version)) {
+    return {
+      ok: false,
+      error: 'npm package versions must be exact semver values; tags and ranges are not allowed',
+    };
+  }
+
+  return { ok: true, packageName, ...(version ? { version } : {}) };
+}
 
 function extractExecSyncOutput(error: unknown): string {
   if (!error || typeof error !== 'object') return '';
@@ -54,8 +117,9 @@ function truncateOutput(text: string, max = 4500): string {
 
 /**
  * Install production `node_modules` for an unpacked extension (package.json dependencies).
- * Uses pnpm when `pnpm-lock.yaml` is present, otherwise npm. Set `XOPC_EXTENSION_NPM_INSTALL=skip`
- * to skip (extensions must ship runnable code or you install deps manually).
+ * Uses pnpm when `pnpm-lock.yaml` is present, otherwise npm. Lifecycle scripts are disabled by
+ * default; set `XOPC_EXTENSION_NPM_INSTALL_SCRIPTS=allow` only for a reviewed extension that needs
+ * them. Set `XOPC_EXTENSION_NPM_INSTALL=skip` to skip dependency installation entirely.
  */
 function installExtensionProdDependencies(extensionDir: string): { ok: true } | { ok: false; error: string } {
   if (NPM_INSTALL_ENV === 'skip' || NPM_INSTALL_ENV === '0' || NPM_INSTALL_ENV === 'false') {
@@ -78,9 +142,13 @@ function installExtensionProdDependencies(extensionDir: string): { ok: true } | 
       : {}),
   };
 
-  const run = (label: string, command: string): { ok: true } | { ok: false; error: string } => {
+  const run = (
+    label: string,
+    executable: string,
+    args: string[],
+  ): { ok: true } | { ok: false; error: string } => {
     try {
-      execSync(command, execOpts);
+      execFileSync(executable, args, execOpts);
       return { ok: true };
     } catch (err) {
       const out = truncateOutput(extractExecSyncOutput(err));
@@ -96,10 +164,21 @@ function installExtensionProdDependencies(extensionDir: string): { ok: true } | 
   };
 
   const usePnpm = existsSync(join(extensionDir, 'pnpm-lock.yaml'));
+  const scriptArgs = ALLOW_NPM_INSTALL_SCRIPTS ? [] : ['--ignore-scripts'];
+  const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
   if (usePnpm) {
-    const pnpm = run('pnpm', 'pnpm install --prod --no-frozen-lockfile');
+    const pnpm = run(
+      'pnpm',
+      pnpmExecutable,
+      ['install', '--prod', '--no-frozen-lockfile', ...scriptArgs],
+    );
     if (pnpm.ok) return pnpm;
-    const npmFallback = run('npm', 'npm install --omit=dev --no-audit --no-fund');
+    const npmFallback = run(
+      'npm',
+      npmExecutable,
+      ['install', '--omit=dev', '--no-audit', '--no-fund', ...scriptArgs],
+    );
     if (npmFallback.ok) {
       log.warn({ extensionDir }, 'pnpm failed; extension dependencies installed with npm instead');
       return { ok: true };
@@ -107,7 +186,11 @@ function installExtensionProdDependencies(extensionDir: string): { ok: true } | 
     return npmFallback;
   }
 
-  return run('npm', 'npm install --omit=dev --no-audit --no-fund');
+  return run(
+    'npm',
+    npmExecutable,
+    ['install', '--omit=dev', '--no-audit', '--no-fund', ...scriptArgs],
+  );
 }
 
 export interface InstallOptions {
@@ -376,16 +459,24 @@ export async function installFromNpm(
   extensionsDir: string,
   timeoutMs = 120000,
 ): Promise<InstallResult> {
-  const tmpDir = join(tmpdir(), `xopc-install-${Date.now()}`);
+  const validation = validateNpmPackageSpec(packageSpec);
+  if (validation.ok === false) {
+    return { ok: false, error: `Invalid npm package spec: ${validation.error}` };
+  }
+
+  const tmpDir = mkdtempSync(join(tmpdir(), 'xopc-install-'));
 
   try {
     console.log(`📦 Downloading ${packageSpec} from npm...`);
 
-    // Create temp directory
-    mkdirSync(tmpDir, { recursive: true });
-
     // Use npm pack to download package
-    const result = execSync(`npm pack ${packageSpec} --pack-destination ${tmpDir}`, {
+    const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const result = execFileSync(npmExecutable, [
+      'pack',
+      packageSpec,
+      '--pack-destination',
+      tmpDir,
+    ], {
       timeout: timeoutMs,
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -395,12 +486,18 @@ export async function installFromNpm(
     if (!packedFile) {
       return { ok: false, error: 'Failed to download package from npm' };
     }
+    if (packedFile !== packedFile.split(/[\\/]/).pop() || !packedFile.endsWith('.tgz')) {
+      return { ok: false, error: 'npm returned an invalid archive filename' };
+    }
 
     const archivePath = join(tmpDir, packedFile);
+    if (!existsSync(archivePath)) {
+      return { ok: false, error: 'npm package archive was not created' };
+    }
 
     // Extract tarball
     console.log(`📂 Extracting ${packedFile}...`);
-    execSync(`tar -xzf ${archivePath} -C ${tmpDir}`, {
+    execFileSync('tar', ['-xzf', archivePath, '-C', tmpDir], {
       timeout: 30000,
       stdio: 'pipe',
     });
