@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { Config } from '../config/schema.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
+import { createLogger } from '../utils/logger.js';
 import {
   getConnectorInstallation,
   listConnectorConnections,
@@ -22,6 +23,8 @@ import { decodeConnectedSourceCursor, encodeConnectedSourceCursor } from './conn
 import { getConnectorInstance } from './instances.js';
 import { normalizeConnectedSourceResult } from './connected-source-normalizers.js';
 import { sanitizeConnectedSourceValue } from './connected-source-sanitization.js';
+
+const log = createLogger('ConnectedSourceIngestion');
 
 export const COMPOSIO_CONNECTED_SOURCE_TOOLKITS = new Set([
   'gmail',
@@ -108,6 +111,21 @@ function paginationValue(result: unknown, ...keys: string[]): string | undefined
   return undefined;
 }
 
+function isPayloadTooLargeError(error: unknown): boolean {
+  const details = asRecord(error);
+  const status = details?.status ?? details?.statusCode;
+  const code = details?.code;
+  const message = error instanceof Error ? error.message : String(error);
+  return String(status) === '413'
+    || String(code) === '4345'
+    || /\b413\b|ToolRouterV2_PayloadTooLarge|payload is too large/i.test(message);
+}
+
+function maxResultsValue(args: Record<string, unknown>): number | undefined {
+  const value = args.max_results;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function resultToSourceItems(input: {
   result: unknown;
   sourceInstanceId: string;
@@ -168,6 +186,7 @@ function resultToSourceItems(input: {
 
 class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
   readonly kind = 'composio';
+  private adaptiveMaxResults: number | undefined;
 
   constructor(private readonly input: {
     connectorId: string;
@@ -188,22 +207,49 @@ class ComposioKnowledgeSourceAdapter implements KnowledgeSourceAdapter {
     const cursor = decodeConnectedSourceCursor(pull.cursor);
     const scanStartedAt = cursor?.scanStartedAt ?? new Date().toISOString();
     const warnings = pull.cursor && !cursor ? ['Stored connected-source cursor was invalid and was replaced.'] : [];
-    const execute = (cursorValue: string | undefined) => this.input.adapter.executeWithPolicy({
-      context: { principalId: 'local-owner', toolkits: [this.input.toolkit] },
-      installation: { ...this.input.installation, maxScope: 'read', confirmationPolicy: 'never' },
-      connection: this.input.connection,
-      agentId: this.input.agentId,
-      action: {
-        connectorId: this.input.connectorId,
-        actionId: this.input.actionId,
-        toolkit: this.input.toolkit,
-        scope: 'read',
-        curated: true,
-        cachedAt: new Date().toISOString(),
-      },
-      args: this.input.buildArguments?.({ ...pull, cursor: cursorValue }) ?? this.input.arguments,
-      confirmed: true,
-    });
+    const execute = async (cursorValue: string | undefined) => {
+      const configuredArgs = this.input.buildArguments?.({ ...pull, cursor: cursorValue }) ?? this.input.arguments;
+      const configuredMaxResults = maxResultsValue(configuredArgs);
+      let args = this.adaptiveMaxResults && configuredMaxResults && configuredMaxResults > this.adaptiveMaxResults
+        ? { ...configuredArgs, max_results: this.adaptiveMaxResults }
+        : configuredArgs;
+      for (;;) {
+        try {
+          return await this.input.adapter.executeWithPolicy({
+            context: { principalId: 'local-owner', toolkits: [this.input.toolkit] },
+            installation: { ...this.input.installation, maxScope: 'read', confirmationPolicy: 'never' },
+            connection: this.input.connection,
+            agentId: this.input.agentId,
+            action: {
+              connectorId: this.input.connectorId,
+              actionId: this.input.actionId,
+              toolkit: this.input.toolkit,
+              scope: 'read',
+              curated: true,
+              cachedAt: new Date().toISOString(),
+            },
+            args,
+            confirmed: true,
+          });
+        } catch (error) {
+          const currentMaxResults = maxResultsValue(args);
+          if (!isPayloadTooLargeError(error) || !currentMaxResults || currentMaxResults <= 1) throw error;
+          const reducedMaxResults = Math.max(1, Math.floor(currentMaxResults / 2));
+          this.adaptiveMaxResults = reducedMaxResults;
+          log.info(
+            {
+              connectorId: this.input.connectorId,
+              actionId: this.input.actionId,
+              previousMaxResults: currentMaxResults,
+              maxResults: reducedMaxResults,
+              phase: 'payload_too_large_retry',
+            },
+            `Retrying connector action with page size ${reducedMaxResults}`,
+          );
+          args = { ...args, max_results: reducedMaxResults };
+        }
+      }
+    };
     let execution;
     try {
       execution = await execute(pull.cursor);

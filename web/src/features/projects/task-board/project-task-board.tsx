@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { TaskPriority, ProjectMonitoringPolicy, ProjectMonitoringUpdate, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
-import { CalendarClock, CheckCircle2, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Circle, CircleCheck, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
 import { type FormEvent, type Ref, useEffect, useImperativeHandle, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -88,12 +88,26 @@ const LANE_ICONS = {
 } satisfies Record<TaskPhase, typeof CircleDot>;
 
 const LANE_TONES: Record<TaskPhase, string> = {
-  backlog: 'text-fg-muted',
-  ready: 'text-fg-muted',
-  active: 'text-accent-fg',
-  review: 'text-amber-700 dark:text-amber-300',
-  closed: 'text-emerald-700 dark:text-emerald-300',
+  backlog: 'bg-surface-hover text-fg-muted',
+  ready: 'bg-surface-panel text-fg-muted',
+  active: 'bg-accent-soft text-accent-fg',
+  review: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  closed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
 };
+
+function operationalStateTone(state: ProjectTaskCard['operationalState']): string {
+  if (state === 'running' || state === 'queued') return 'border-accent/20 bg-accent-soft text-accent-fg';
+  if (state === 'verifying') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (state === 'waiting') return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  if (state === 'blocked') return 'border-violet-500/20 bg-violet-500/10 text-violet-700 dark:text-violet-300';
+  return 'border-edge-subtle bg-surface-hover text-fg-muted';
+}
+
+function verificationTone(status: NonNullable<ProjectTaskCard['latestVerification']>): string {
+  if (status === 'passed') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (status === 'failed') return 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300';
+  return 'border-edge-subtle bg-surface-hover text-fg-muted';
+}
 
 function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBefore }: {
   task: ProjectTaskCard;
@@ -105,6 +119,17 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
   onDropBefore: (beforeTaskId: string) => void;
 }) {
   const primaryAction = primaryTaskAction(task);
+  const secondaryAction = primaryAction !== 'review' && task.allowedCommands.includes('request_review') ? 'review' : undefined;
+  const isClosed = task.phase === 'closed';
+  const overdue = Boolean(task.dueAt && task.dueAt < Date.now() && !isClosed);
+  const TaskStatusIcon = isClosed ? CircleCheck : Circle;
+  const showPriority = task.priority !== 'normal';
+  const showMetadata = showPriority
+    || task.operationalState !== 'idle'
+    || Boolean(task.latestVerification)
+    || task.acceptanceCriteriaCount > 0
+    || Boolean(task.dueAt)
+    || Boolean(task.nextCheckAt);
   return (
     <article
       draggable
@@ -123,32 +148,21 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
         event.stopPropagation();
         onDropBefore(task.id);
       }}
-      className="min-h-max min-w-0 shrink-0 overflow-hidden rounded-lg border border-edge-subtle bg-surface-panel transition-colors hover:border-edge hover:bg-surface-hover"
+      className="group relative min-h-max min-w-0 shrink-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface transition-[border-color,box-shadow] hover:border-edge focus-within:border-accent/40"
     >
       <Link
         to={taskDetailModalHref(returnTo, task.id)}
-        className="block min-w-0 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        className={cn(
+          'block min-w-0 p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+          secondaryAction ? 'pr-19' : primaryAction && 'pr-11',
+        )}
       >
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 break-words text-sm font-medium leading-5 text-fg">{task.title}</h3>
-          {task.priority === 'critical' || task.priority === 'high' ? (
-            <span className={cn(
-              'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
-              task.priority === 'critical'
-                ? 'bg-red-500/10 text-red-700 dark:text-red-300'
-                : 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-            )}>
-              {copy.priorityOptions[task.priority]}
-            </span>
-          ) : null}
+        <div className="flex items-start gap-2.5">
+          <TaskStatusIcon className={cn('mt-0.5 size-4 shrink-0', isClosed ? 'text-emerald-600 dark:text-emerald-400' : 'text-fg-subtle')} aria-hidden />
+          <h3 className={cn('min-w-0 break-words text-sm font-semibold leading-5', isClosed ? 'text-fg-subtle' : 'text-fg')}>{task.title}</h3>
         </div>
-        {task.attention[0] ? (
-          <p className="mt-2 line-clamp-3 text-xs leading-5 text-fg-muted">
-            {task.attention[0].summary}
-          </p>
-        ) : null}
         {task.operationalState === 'blocked' && task.blockedBy.length > 0 ? (
-          <div className="mt-2 rounded-md bg-violet-500/8 px-2.5 py-2 text-xs text-violet-700 dark:text-violet-300">
+          <div className="ml-6.5 mt-2.5 rounded-lg bg-violet-500/8 px-2.5 py-2 text-xs text-violet-700 dark:text-violet-300">
             <span className="inline-flex items-center gap-1.5 font-medium">
               <Hourglass className="size-3.5" aria-hidden />
               {copy.blockedBy.replace('{{count}}', String(task.blockedBy.length))}
@@ -157,50 +171,84 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
               {task.blockedBy.map((dependency) => dependency.title).join('、')}
             </p>
           </div>
+        ) : task.attention[0] ? (
+          <p className="ml-6.5 mt-2.5 flex items-start gap-1.5 text-xs leading-5 text-fg-muted">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            <span className="line-clamp-2">{task.attention[0].summary}</span>
+          </p>
         ) : null}
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-subtle">
+        {showMetadata ? <div className="ml-6.5 mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+          {showPriority ? (
+            <span className={cn(
+              'inline-flex min-h-6 items-center rounded-md border px-2 font-medium',
+              task.priority === 'critical'
+                ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300'
+                : task.priority === 'high'
+                  ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  : 'border-edge-subtle bg-surface-hover text-fg-muted',
+            )}>
+              {copy.priorityOptions[task.priority]}
+            </span>
+          ) : null}
           {task.operationalState !== 'idle' ? (
-            <span className="font-medium text-accent-fg">{copy.operationalStates[task.operationalState]}</span>
+            <span className={cn('inline-flex min-h-6 items-center rounded-md border px-2 font-medium', operationalStateTone(task.operationalState))}>
+              {copy.operationalStates[task.operationalState]}
+            </span>
           ) : null}
           {task.latestVerification ? (
-            <span className={cn(
-              'font-medium',
-              task.latestVerification === 'passed'
-                ? 'text-emerald-700 dark:text-emerald-300'
-                : task.latestVerification === 'failed'
-                  ? 'text-red-700 dark:text-red-300'
-                  : 'text-fg-subtle',
-            )}>
+            <span className={cn('inline-flex min-h-6 items-center rounded-md border px-2 font-medium', verificationTone(task.latestVerification))}>
               {copy.verification[task.latestVerification]}
             </span>
           ) : null}
           {task.acceptanceCriteriaCount > 0 ? (
-            <span>{copy.acceptanceCriteria.replace('{{count}}', String(task.acceptanceCriteriaCount))}</span>
+            <span className="inline-flex min-h-6 items-center gap-1 rounded-md border border-edge-subtle bg-surface-hover px-2 text-fg-muted">
+              <ListChecks className="size-3" aria-hidden />
+              {copy.acceptanceCriteria.replace('{{count}}', String(task.acceptanceCriteriaCount))}
+            </span>
           ) : null}
           {task.dueAt ? (
-            <span className="inline-flex items-center gap-1">
+            <span className={cn(
+              'inline-flex min-h-6 items-center gap-1 rounded-md border px-2',
+              overdue
+                ? 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300'
+                : 'border-edge-subtle bg-surface-hover text-fg-muted',
+            )}>
               <CalendarClock className="size-3" aria-hidden />
               {formatMediumDateTime(new Date(task.dueAt))}
             </span>
           ) : null}
           {task.nextCheckAt ? (
-            <span className="inline-flex items-center gap-1 text-accent-fg">
+            <span className="inline-flex min-h-6 items-center gap-1 rounded-md border border-accent/20 bg-accent-soft px-2 text-accent-fg">
               <CalendarClock className="size-3" aria-hidden />
               {formatMediumDateTime(new Date(task.nextCheckAt))}
             </span>
           ) : null}
-        </div>
+        </div> : null}
       </Link>
       {primaryAction ? (
-        <div className="flex items-center gap-3 border-t border-edge-subtle px-3 py-2">
-          <button type="button" disabled={busy} onClick={() => onAction(task, primaryAction)} className="text-xs font-medium text-accent-fg hover:underline disabled:cursor-wait disabled:opacity-50">
-            {copy.actions[primaryAction]}
-          </button>
-          {primaryAction !== 'review' && task.allowedCommands.includes('request_review') ? (
-            <button type="button" disabled={busy} onClick={() => onAction(task, 'review')} className="text-xs font-medium text-fg-muted hover:text-fg hover:underline disabled:cursor-wait disabled:opacity-50">
-              {copy.actions.review}
+        <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+          {secondaryAction ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAction(task, secondaryAction)}
+              className="inline-flex size-7 items-center justify-center rounded-md bg-surface-hover text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-wait disabled:opacity-50"
+              aria-label={copy.actions[secondaryAction]}
+              title={copy.actions[secondaryAction]}
+            >
+              <UserRound className="size-3.5" aria-hidden />
             </button>
           ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onAction(task, primaryAction)}
+            className="inline-flex size-7 items-center justify-center rounded-md bg-accent-soft text-accent-fg hover:bg-accent-soft/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-wait disabled:opacity-50"
+            aria-label={copy.actions[primaryAction]}
+            title={copy.actions[primaryAction]}
+          >
+            <ArrowRight className="size-3.5" aria-hidden />
+          </button>
         </div>
       ) : null}
     </article>
@@ -339,18 +387,18 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
                   event.preventDefault();
                   void dropTask(phase, null);
                 }}
-                className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-muted/60 p-2.5"
+                className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-muted/70 p-2.5"
               >
-                <header className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1">
-                  <div className={cn('flex items-center gap-2', LANE_TONES[phase])}>
-                    <Icon className="size-4" aria-hidden />
+                <header className="mb-2.5 flex shrink-0 items-center gap-2 px-0.5">
+                  <div className={cn('flex items-center gap-1.5 rounded-md px-2 py-1', LANE_TONES[phase])}>
+                    <Icon className="size-3.5" aria-hidden />
                     <h3 className="text-sm font-semibold">{copy.phases[phase]}</h3>
                   </div>
-                  <span className="rounded-full bg-surface-panel px-2 py-0.5 text-xs text-fg-subtle">{items.length}</span>
+                  <span className="text-xs text-fg-subtle">{items.length}</span>
                 </header>
                 <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]">
                   <div className="flex flex-col gap-2">
-                    {items.length ? items.map((task) => (
+                    {items.map((task) => (
                       <TaskCard
                         key={task.id}
                         task={task}
@@ -361,11 +409,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
                         onDragStart={setDraggedId}
                         onDropBefore={(beforeTaskId) => void dropTask(phase, beforeTaskId)}
                       />
-                    )) : (
-                      <p className="rounded-lg border border-dashed border-edge px-3 py-5 text-center text-xs text-fg-subtle">
-                        {copy.empty}
-                      </p>
-                    )}
+                    ))}
                   </div>
                 </div>
               </section>

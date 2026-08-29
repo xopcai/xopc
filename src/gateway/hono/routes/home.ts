@@ -8,7 +8,7 @@ import {
 import { HomeQueryService } from '../../../tasks/home-query-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-export { buildHomeBriefing, buildHomeFocusItems } from '../../../tasks/home-query-service.js';
+export { buildHomeWorkbench, decisionFromTask } from '../../../tasks/home-query-service.js';
 
 /** Register the unified work-home read model and its decision actions. */
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {

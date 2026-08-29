@@ -3,6 +3,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+
 const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PNG_BASE64 = PNG_HEADER.toString('base64');
 
@@ -43,6 +45,7 @@ import { createImageGenerateTool } from '../image-generate-tool.js';
 let workspace: string;
 
 beforeEach(async () => {
+  resetModelCatalogStore();
   workspace = await mkdtemp(path.join(os.tmpdir(), 'xopc-img-tool-'));
   generateImageMock.mockReset();
   saveMediaBufferMock.mockReset();
@@ -57,6 +60,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  resetModelCatalogStore();
   vi.clearAllMocks();
 });
 
@@ -102,7 +106,7 @@ describe('image_generate tool — Step 2 input wiring', () => {
       agentId: 'studio',
       modelConfig: {
         primary: 'openai/gpt-image-2',
-        fallbacks: ['google/gemini-3.1-flash-image', 'xopc-cloud/image-01'],
+        fallbacks: ['google/gemini-3.1-flash-image'],
         timeoutMs: 120_000,
         autoProviderFallback: true,
       },

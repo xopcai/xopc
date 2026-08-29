@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { TaskRunReceiptSchema, TaskSchema } from './tasks.js';
-
 export const HomeDecisionSchema = z.object({
   id: z.string(),
   kind: z.enum(['agent_judgment', 'task', 'connector_approval']),
@@ -26,6 +24,7 @@ export const HomeDecisionSchema = z.object({
   href: z.string(),
   projectId: z.string().optional(),
   projectName: z.string().optional(),
+  dueAt: z.number().int().nonnegative().optional(),
   updatedAt: z.number(),
   judgment: z.object({
     inboxItemId: z.string(),
@@ -66,48 +65,6 @@ export const HomeAttentionSchema = z.object({
   sessionKey: z.string().optional(),
 });
 
-export const HomeAutomationSchema = z.object({
-  id: z.string(),
-  name: z.string().optional(),
-  trigger: z.string(),
-  action: z.string(),
-  nextRunAt: z.string(),
-});
-
-export const HomeWorkflowRunSchema = z.object({
-  id: z.string(),
-  definitionId: z.string(),
-  title: z.string(),
-  status: z.string(),
-  sessionKey: z.string().optional(),
-  createdAtMs: z.number(),
-  startedAtMs: z.number().optional(),
-  completedAtMs: z.number().optional(),
-  metrics: z.object({
-    agentCount: z.number(),
-    doneAgentCount: z.number(),
-    errorAgentCount: z.number(),
-    skippedAgentCount: z.number(),
-    artifactCount: z.number(),
-    durationMs: z.number().optional(),
-  }),
-});
-
-export const HomeChatSchema = z.object({
-  key: z.string(),
-  name: z.string(),
-  updatedAt: z.string().optional(),
-  active: z.boolean(),
-});
-
-export const HomeBriefingWinSchema = z.object({
-  id: z.string(),
-  kind: z.enum(['task', 'workflow_run', 'automation_run']),
-  title: z.string(),
-  href: z.string(),
-  completedAt: z.number(),
-});
-
 export const HomeActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('open'),
@@ -137,18 +94,15 @@ export const HomeActionSchema = z.discriminatedUnion('type', [
     subjectKind: z.enum(['automation_run', 'workflow_run']),
     runId: z.string(),
   }),
-  z.object({
-    type: z.literal('ask_ai'),
-    label: z.string(),
-  }),
 ]);
 
-export const HomeFocusItemSchema = z.object({
+export const HomeWorkbenchItemSchema = z.object({
   id: z.string(),
-  kind: z.enum(['decision', 'failure', 'running', 'result', 'scheduled', 'suggestion']),
-  priority: z.number(),
+  kind: z.enum(['decision', 'failure', 'running', 'scheduled']),
   title: z.string(),
   summary: z.string(),
+  recommendation: z.string().optional(),
+  dueAt: z.number().int().nonnegative().optional(),
   statusLabel: z.string().optional(),
   updatedAt: z.number(),
   openAction: HomeActionSchema.optional(),
@@ -156,28 +110,11 @@ export const HomeFocusItemSchema = z.object({
   secondaryActions: z.array(HomeActionSchema).max(2).default([]),
 });
 
-export const HomeRecentTaskSchema = z.object({
-  taskId: z.string(),
-  taskTitle: z.string(),
-  receipt: TaskRunReceiptSchema,
-});
-
 export const HomeResponseSchema = z.object({
-  focusItems: z.array(HomeFocusItemSchema).min(1),
-  briefing: z.object({
-    generatedAt: z.number(),
-    summary: z.string(),
-    focus: z.array(HomeDecisionSchema),
-    progress: z.object({
-      activeWorkflowCount: z.number(),
-      activeTaskCount: z.number(),
-      movingCount: z.number(),
-    }),
-    wins: z.array(HomeBriefingWinSchema),
-    nextScheduled: HomeAutomationSchema.optional(),
-  }),
+  needsUser: z.array(HomeWorkbenchItemSchema),
+  background: z.array(HomeWorkbenchItemSchema),
+  backgroundCount: z.number().int().nonnegative(),
   decisions: z.array(HomeDecisionSchema),
-  attention: z.array(HomeAttentionSchema),
   attentionPolicy: z.object({
     visibleDecisionCount: z.number().int().nonnegative(),
     suppressedDecisionCount: z.number().int().nonnegative(),
@@ -189,19 +126,6 @@ export const HomeResponseSchema = z.object({
     visibleAttentionCount: 0,
     suppressedAttentionCount: 0,
   }),
-  chats: z.object({
-    running: z.array(HomeChatSchema),
-    recent: z.array(HomeChatSchema),
-  }),
-  workflowRuns: z.object({
-    active: z.array(HomeWorkflowRunSchema),
-    recent: z.array(HomeWorkflowRunSchema),
-  }),
-  upcomingAutomations: z.array(HomeAutomationSchema),
-  tasks: z.object({
-    running: z.array(TaskSchema),
-  }).default({ running: [] }),
-  recentTasks: z.array(HomeRecentTaskSchema).default([]),
 });
 
 export const TaskValueMetricsSchema = z.object({
@@ -225,13 +149,8 @@ export const TaskValueMetricsSchema = z.object({
 
 export type HomeDecision = z.infer<typeof HomeDecisionSchema>;
 export type HomeAttention = z.infer<typeof HomeAttentionSchema>;
-export type HomeAutomation = z.infer<typeof HomeAutomationSchema>;
-export type HomeWorkflowRun = z.infer<typeof HomeWorkflowRunSchema>;
-export type HomeChat = z.infer<typeof HomeChatSchema>;
-export type HomeBriefingWin = z.infer<typeof HomeBriefingWinSchema>;
 export type HomeAction = z.infer<typeof HomeActionSchema>;
-export type HomeFocusItem = z.infer<typeof HomeFocusItemSchema>;
-export type HomeRecentTask = z.infer<typeof HomeRecentTaskSchema>;
+export type HomeWorkbenchItem = z.infer<typeof HomeWorkbenchItemSchema>;
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 export type TaskValueMetrics = z.infer<typeof TaskValueMetricsSchema>;
 

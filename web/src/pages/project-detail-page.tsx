@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { TaskChangedEventSchema, type ProjectMonitoringUpdate, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -11,7 +11,7 @@ import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { automationApi, type Automation } from '@/features/automations/automation-api';
+import { AutomationsWorkspace } from '@/features/automations/automations-workspace';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { commandTask, createTask, ensureTaskConversation, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
@@ -657,9 +657,6 @@ export function ProjectDetailPage() {
   const [operatingView, setOperatingView] = useState<ProjectOperatingView | null>(null);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
-  const [automations, setAutomations] = useState<Automation[]>([]);
-  const [automationsLoading, setAutomationsLoading] = useState(false);
-  const [automationActionBusy, setAutomationActionBusy] = useState<string | null>(null);
   const [projectActivity, setProjectActivity] = useState<ProjectActivityEvent[]>([]);
   const [projectActivityTotal, setProjectActivityTotal] = useState(0);
   const [projectActivityLoading, setProjectActivityLoading] = useState(false);
@@ -989,25 +986,6 @@ export function ProjectDetailPage() {
     }
   }, [pm.board.actionFailed, projectId, refreshOperatingView]);
 
-  const refreshProjectAutomations = useCallback(async () => {
-    if (!project) return;
-    setAutomationsLoading(true);
-    setError(null);
-    try {
-      const automationResult = await automationApi.list({ projectId: project.id });
-      setAutomations(automationResult.automations);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAutomationsLoading(false);
-    }
-  }, [project]);
-
-  useEffect(() => {
-    if (tab !== 'automations') return;
-    void refreshProjectAutomations();
-  }, [refreshProjectAutomations, tab]);
-
   const refreshProjectActivity = useCallback(async () => {
     if (!project) return;
     setProjectActivityLoading(true);
@@ -1030,23 +1008,6 @@ export function ProjectDetailPage() {
     if (tab !== 'progress') return;
     void refreshProjectActivity();
   }, [refreshProjectActivity, tab]);
-
-  const toggleAutomation = useCallback(async (automation: Automation) => {
-    setAutomationActionBusy(`toggle:${automation.id}`);
-    setError(null);
-    try {
-      if (automation.enabled) {
-        await automationApi.pause(automation.id);
-      } else {
-        await automationApi.resume(automation.id);
-      }
-      await refreshProjectAutomations();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAutomationActionBusy(null);
-    }
-  }, [refreshProjectAutomations]);
 
   const refreshProjectFiles = useCallback(async () => {
     if (!project?.effectiveWorkspaceRoot?.trim()) {
@@ -1809,70 +1770,12 @@ export function ProjectDetailPage() {
           aria-labelledby="project-primary-tab-automations"
           className="grid min-h-full content-start gap-4"
         >
-          <div className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Zap className="size-4 text-accent-fg" aria-hidden />
-                  <h2 className="text-sm font-semibold text-fg">{pm.automations.title}</h2>
-                </div>
-                <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.automations.hint}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button type="button" variant="ghost" className="rounded-lg" onClick={() => void refreshProjectAutomations()} disabled={automationsLoading}>
-                  <RotateCcw className={cn('size-4', automationsLoading && 'animate-spin')} aria-hidden />
-                  {pm.common.refresh}
-                </Button>
-                <Button type="button" variant="secondary" className="rounded-lg" onClick={() => navigateFromProjectTab('automations', `/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
-                  <Plus className="size-4" aria-hidden />
-                  {pm.automations.create}
-                </Button>
-              </div>
-            </div>
-            {automationsLoading && automations.length === 0 ? (
-              <div className="grid gap-2 md:grid-cols-2" aria-busy>
-                <Skeleton className="h-24 rounded-lg" />
-                <Skeleton className="h-24 rounded-lg" />
-              </div>
-            ) : automations.length ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {automations.map((automation) => (
-                  <div key={automation.id} className="grid gap-3 rounded-lg border border-edge bg-surface-base p-3">
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <button
-                        type="button"
-                        className="min-w-0 truncate text-left text-sm font-medium text-fg hover:text-accent-fg"
-                        onClick={() => navigateFromProjectTab('automations', `/automations?automation=${encodeURIComponent(automation.id)}`)}
-                      >
-                        {automation.name}
-                      </button>
-                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', automation.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-surface-hover text-fg-muted')}>
-                        {automation.enabled ? pm.automations.enabled : pm.automations.paused}
-                      </span>
-                    </div>
-                    <p className="line-clamp-2 text-xs leading-5 text-fg-muted">{automation.description || automation.action.kind}</p>
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 text-xs" onClick={() => navigateFromProjectTab('automations', `/automations?automation=${encodeURIComponent(automation.id)}`)}>
-                        {pm.common.open}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-8 rounded-lg px-2 text-xs"
-                        disabled={automationActionBusy === `toggle:${automation.id}`}
-                        onClick={() => void toggleAutomation(automation)}
-                      >
-                        {automation.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
-                        {automation.enabled ? pm.automations.pause : pm.automations.resume}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-lg border border-dashed border-edge px-3 py-4 text-sm text-fg-muted">{pm.automations.empty}</p>
-            )}
-          </div>
+          <AutomationsWorkspace
+            projectId={project.id}
+            embedded
+            title={pm.automations.title}
+            subtitle={pm.automations.hint}
+          />
         </section>
       ) : null}
 
