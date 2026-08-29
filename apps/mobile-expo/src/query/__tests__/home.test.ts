@@ -11,52 +11,26 @@ const mockedApiFetch = vi.mocked(apiFetch);
 
 function currentGatewayHomeResponse() {
   return {
-    focusItems: [{
-      id: 'suggestion:ask-agent',
-      kind: 'suggestion',
-      priority: 10,
-      title: 'What would you like to move forward?',
-      summary: 'Hand me the outcome you want.',
+    needsUser: [{
+      id: 'decision:approval',
+      kind: 'decision',
+      title: 'Approve connector access',
+      summary: 'A connector needs permission.',
       updatedAt: 1,
-      primaryAction: { type: 'ask_ai', label: 'Ask an agent' },
+      primaryAction: { type: 'open', label: 'Review', href: '/connectors' },
       secondaryActions: [],
     }],
-    briefing: {
-      generatedAt: 1,
-      summary: 'All clear',
-      focus: [],
-      progress: {
-        activeWorkflowCount: 0,
-        activeTaskCount: 0,
-        movingCount: 0,
-      },
-      wins: [],
-    },
+    background: [],
+    backgroundCount: 0,
     decisions: [],
-    attention: [],
     attentionPolicy: {
       visibleDecisionCount: 0,
       suppressedDecisionCount: 0,
       visibleAttentionCount: 0,
       suppressedAttentionCount: 0,
     },
-    chats: { running: [], recent: [] },
     recentlyOpened: [],
     inboxCount: 0,
-    pendingTasks: [],
-    pendingTaskCount: 0,
-    activeAgent: { id: 'main' },
-    gateway: {
-      status: 'running',
-      ready: true,
-      httpListening: true,
-      uptime: 1,
-      tunnel: { state: 'disabled', connected: false },
-    },
-    workflowRuns: { active: [], recent: [] },
-    tasks: { running: [] },
-    upcomingAutomations: [],
-    recentTasks: [],
   };
 }
 
@@ -74,9 +48,9 @@ describe('fetchHome', () => {
     const home = await fetchHome('en');
 
     expect(home).toMatchObject({
-      focusItems: [{ kind: 'suggestion' }],
-      chats: { running: [], recent: [] },
-      tasks: { running: [] },
+      focusItems: [{ kind: 'decision' }],
+      recentlyOpened: [],
+      inboxCount: 0,
     });
     expect(home).not.toHaveProperty('recentSessions');
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/home?locale=en');
