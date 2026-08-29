@@ -20,6 +20,7 @@ import { normalizeElectronUiLanguage, type ElectronUiLanguage } from '../i18n.js
 const execFileAsync = promisify(execFile);
 
 const PREFS_NAME = 'electron-shell-prefs.json';
+const MICROPHONE_PERMISSION_PROMPT_TIMEOUT_MS = 15_000;
 
 const LINUX_HELP_URL = 'https://xopcai.github.io/xopc/';
 
@@ -333,6 +334,30 @@ async function openPrivacyForPlatform(kind: PrivacyPaneKind): Promise<boolean> {
   return false;
 }
 
+async function askForMicrophoneAccessWithTimeout(): Promise<
+  | { state: 'resolved'; granted: boolean }
+  | { state: 'failed' | 'timed-out' }
+> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<{ state: 'timed-out' }>((resolve) => {
+    timeout = setTimeout(
+      () => resolve({ state: 'timed-out' }),
+      MICROPHONE_PERMISSION_PROMPT_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([
+      systemPreferences.askForMediaAccess('microphone').then(
+        (granted) => ({ state: 'resolved' as const, granted }),
+        () => ({ state: 'failed' as const }),
+      ),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 async function requestMicrophoneAccess(): Promise<PermissionRequestResult> {
   if (process.platform === 'darwin') {
     const raw = rawMediaAccessStatus('microphone');
@@ -343,18 +368,18 @@ async function requestMicrophoneAccess(): Promise<PermissionRequestResult> {
       await openMacosPrivacyPane('microphone');
       return { status: 'denied', outcome: 'opened-settings' };
     }
-    try {
-      const granted = await systemPreferences.askForMediaAccess('microphone');
+    const prompt = await askForMicrophoneAccessWithTimeout();
+    if (prompt.state === 'resolved') {
       return {
-        status: granted ? 'granted' : mapMediaStatusWhenAvailable('microphone'),
-        outcome: granted ? 'granted' : 'denied',
-      };
-    } catch {
-      return {
-        status: mapMediaStatusWhenAvailable('microphone'),
-        outcome: 'denied',
+        status: prompt.granted ? 'granted' : mapMediaStatusWhenAvailable('microphone'),
+        outcome: prompt.granted ? 'granted' : 'denied',
       };
     }
+    await openMacosPrivacyPane('microphone');
+    return {
+      status: mapMediaStatusWhenAvailable('microphone'),
+      outcome: 'opened-settings',
+    };
   }
   if (process.platform === 'win32') {
     const raw = rawMediaAccessStatus('microphone');
