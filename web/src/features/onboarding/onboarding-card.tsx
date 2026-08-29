@@ -285,7 +285,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             <button
               type="button"
               aria-label={o.skipSetup}
-              className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={onDismiss}
             >
               <X className="size-4" aria-hidden />
@@ -298,14 +298,14 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         <section className="xopc-onboarding-visual relative hidden min-h-0 items-center justify-center overflow-hidden lg:flex">
           <div className="xopc-onboarding-orbit relative flex size-40 items-center justify-center" aria-hidden>
             <span className="xopc-onboarding-orbit-ring absolute inset-0 rounded-full border border-accent/15" />
-            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[18%] rounded-full border border-momentum-cyan/20" />
-            <span className="flex size-16 items-center justify-center rounded-[1.4rem] border border-white/70 bg-white/80 shadow-float backdrop-blur-xl dark:border-white/10 dark:bg-white/8 lg:size-20">
+            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[18%] rounded-full border border-edge" />
+            <span className="flex size-16 items-center justify-center rounded-[1.4rem] border border-edge bg-surface-panel shadow-float lg:size-20">
               <BrandLogo className="size-10 lg:size-12" />
             </span>
           </div>
         </section>
 
-        <section className="flex min-h-[30rem] items-center border-t border-edge-subtle bg-white/55 px-5 py-10 backdrop-blur-2xl dark:bg-white/[0.025] sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,7rem)]">
+        <section className="flex min-h-[30rem] items-center border-t border-edge-subtle bg-surface-panel/80 px-5 py-10 backdrop-blur-2xl sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,7rem)]">
           <div className="xopc-onboarding-stage w-full max-w-[36rem]" key={step}>
             {step === 'callName' ? (
               <div>
@@ -322,7 +322,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                       onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
                       onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void continueFromCallName(); }}
                       placeholder={o.profileCallNamePlaceholder}
-                      className="h-14 w-full rounded-2xl border border-edge bg-white/80 px-4 text-lg text-fg shadow-surface outline-none transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-accent focus:ring-4 focus:ring-accent/10 dark:bg-white/5"
+                      className="h-14 w-full rounded-2xl border border-edge bg-surface-panel px-4 text-lg text-fg shadow-surface outline-none transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-accent focus:ring-4 focus:ring-accent/10"
                     />
                   )}
                 </label>
@@ -388,7 +388,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                           onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
                           placeholder={o.step2Placeholder}
                           labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
-                          inputClassName="h-14 rounded-2xl bg-white/80 px-4 text-base ring-accent focus:border-accent focus:ring-4 focus:ring-accent/10 dark:bg-white/5"
+                          inputClassName="h-14 rounded-2xl bg-surface-panel px-4 text-base ring-accent focus:border-accent focus:ring-4 focus:ring-accent/10"
                         />
                       </label>
                       <div className="mt-4 flex items-center gap-2 text-xs leading-5 text-fg-muted"><ShieldCheck className="size-4 text-accent-fg" />{o.step2SecurityNote.replace('🔒 ', '')}</div>
