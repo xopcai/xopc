@@ -70,4 +70,13 @@ describe('static-ui cache', () => {
     const response = staticUi.serveStaticFile('assets/app.js');
     expect(response?.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
   });
+
+  it('serves web app manifests with the manifest content type', async () => {
+    writeFileSync(join(tempRoot, 'site.webmanifest'), '{}', 'utf8');
+    const staticUi = await loadStaticUi();
+
+    const response = staticUi.serveStaticFile('site.webmanifest');
+
+    expect(response?.headers.get('Content-Type')).toBe('application/manifest+json');
+  });
 });

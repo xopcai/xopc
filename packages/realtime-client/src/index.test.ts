@@ -156,6 +156,41 @@ describe('RealtimeClient', () => {
     client.disconnect();
   });
 
+  it('waits for a connecting socket to open before reconnecting with a new endpoint', async () => {
+    const sockets: FakeSocket[] = [];
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'web',
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => 'x'.repeat(32),
+      createWebSocket: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    client.connect();
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+
+    client.setEndpoint({
+      createHello: async () => ({
+        principalId: 'p1', endpointId: 'e1', connectionInstanceId: crypto.randomUUID(),
+        displayName: 'Web', kind: 'web', platform: 'web', appVersion: '1',
+        availability: 'foreground', nonce: 'n1', signedAt: Date.now(),
+        signature: 'signed-endpoint-payload', tools: [],
+      }),
+      onReady: vi.fn(),
+      onMessage: vi.fn(),
+    });
+
+    expect(sockets[0]!.closeCode).toBeUndefined();
+    sockets[0]!.open();
+    expect(sockets[0]!.closeReason).toBe('Client reconnecting');
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+
+    client.disconnect();
+  });
+
   it('reconnects from the last acknowledged topic cursor', async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);

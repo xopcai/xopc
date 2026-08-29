@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'xopc is a local-first personal AI assistant that gets to know you over time and keeps what matters moving.',
+  description: 'A personal AI on your computer that remembers your goals and context—and picks up where you left off.',
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
@@ -32,13 +32,13 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
-    ['meta', { property: 'og:title', content: 'xopc - A personal AI that gets to know you' }],
-    ['meta', { property: 'og:description', content: 'Give xopc something that matters. It remembers the context, finds the next step, and keeps it moving.' }],
+    ['meta', { property: 'og:title', content: 'xopc — Keep what matters moving' }],
+    ['meta', { property: 'og:description', content: 'A personal AI on your computer that remembers your goals and context—and picks up where you left off.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'xopc - A personal AI that gets to know you' }],
-    ['meta', { name: 'twitter:description', content: 'Give xopc something that matters. It remembers the context, finds the next step, and keeps it moving.' }],
+    ['meta', { name: 'twitter:title', content: 'xopc — Keep what matters moving' }],
+    ['meta', { name: 'twitter:description', content: 'A personal AI on your computer that remembers your goals and context—and picks up where you left off.' }],
     ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
   ],
   locales: {

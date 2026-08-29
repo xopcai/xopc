@@ -1,6 +1,6 @@
 # Get started with xopc
 
-Give xopc something that matters. Start with the desktop app, connect one model, and let it help you find the next credible step.
+Keep what matters moving. Start with the desktop app, connect one model, and let xopc help you find the next credible step.
 
 ## Choose how to start
 
