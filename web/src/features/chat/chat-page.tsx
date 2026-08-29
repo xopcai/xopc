@@ -1083,9 +1083,10 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                     welcomeSpotlight={activeWelcomeSpotlight}
                     welcomeOverlay={
                       welcomeContextLoading ? (
-                        <ChatWelcomeSpotlightSkeleton showSkeleton={showWelcomeSkeleton} />
+                        <ChatWelcomeSpotlightSkeleton showSkeleton={showWelcomeSkeleton} compact={embedded} />
                       ) : undefined
                     }
+                    compactWelcome={embedded}
                     onRetryWelcomeContext={welcomeContextState.retry}
                     onRefreshWelcomeExploration={
                       activeWelcomeSpotlight?.categories.some((category) => category.scope === 'explore')

@@ -169,6 +169,42 @@ describe('connected source ingestion', () => {
     expect(cursor?.pageToken).toBeUndefined();
   });
 
+  it('reduces the page size after a Composio payload-too-large response', async () => {
+    const executeWithPolicy = vi.fn()
+      .mockRejectedValueOnce(new Error('413 {"error":{"code":4345,"slug":"ToolRouterV2_PayloadTooLarge"}}'))
+      .mockResolvedValueOnce({
+        decision: 'allowed' as const,
+        result: { data: { messages: [{ id: 'mail-page-1' }], nextPageToken: 'page-2' } },
+      })
+      .mockResolvedValueOnce({
+        decision: 'allowed' as const,
+        result: { data: { messages: [{ id: 'mail-page-2' }] } },
+      });
+    const plan = getConnectorLearningPlan('gmail')!;
+    const stream = plan.streams[0]!;
+
+    const result = await ingestComposioConnectedSource({
+      config: {} as Config,
+      connectorId: 'composio-gmail',
+      collectionScope: stream.scope,
+      streamKind: stream.kind,
+      actionId: stream.actionId,
+      arguments: stream.arguments,
+      buildArguments: (pull) => buildConnectorLearningArguments(plan, stream, pull, { email: 'work@example.com' }),
+      agentId: 'main',
+      adapter: { executeWithPolicy } as unknown as ComposioSessionsAdapter,
+    });
+
+    expect(result.itemsSeen).toBe(2);
+    expect(executeWithPolicy).toHaveBeenCalledTimes(3);
+    expect(executeWithPolicy.mock.calls[0]?.[0]).toMatchObject({ args: { max_results: 100 } });
+    expect(executeWithPolicy.mock.calls[1]?.[0]).toMatchObject({ args: { max_results: 50 } });
+    expect(executeWithPolicy.mock.calls[2]?.[0]).toMatchObject({
+      args: { max_results: 50, page_token: 'page-2' },
+    });
+    expect(listKnowledgeSyncRuns()[0]).toMatchObject({ status: 'succeeded', itemsSeen: 2 });
+  });
+
   it('ignores an empty nested connector result', async () => {
     const executeWithPolicy = vi.fn(async () => ({
       decision: 'allowed' as const,

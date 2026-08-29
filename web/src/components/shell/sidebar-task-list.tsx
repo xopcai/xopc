@@ -179,12 +179,15 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
   const runPresence = useChatRunPresenceStore((state) => state.runs[session.key]);
   const title = sessionTitle(session, defaultUnnamedTitle);
   const isPinned = session.status === 'pinned';
 
   const handlePinToggle = async () => {
+    if (pinBusy) return;
+    setPinBusy(true);
     try {
       if (isPinned) {
         await unpinSession(session.key);
@@ -195,6 +198,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       void mutate();
     } catch {
       // Preserve the current sidebar state when the action fails.
+    } finally {
+      setPinBusy(false);
     }
   };
 
@@ -268,12 +273,35 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           />
         ) : null}
       </Link>
+      <button
+        type="button"
+        className={cn(
+          'relative z-10 flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-opacity',
+          'opacity-0 group-hover:opacity-100 focus:opacity-100',
+          'hover:bg-surface-hover hover:text-fg',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          'disabled:cursor-wait',
+        )}
+        aria-label={isPinned ? sess.unpin : sess.pin}
+        title={isPinned ? sess.unpin : sess.pin}
+        aria-pressed={isPinned}
+        disabled={pinBusy}
+        onClick={() => void handlePinToggle()}
+      >
+        {pinBusy ? (
+          <Loader2 className="size-4 animate-spin" strokeWidth={1.75} aria-hidden />
+        ) : isPinned ? (
+          <PinOff className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
+        ) : (
+          <Pin className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
+        )}
+      </button>
       <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
         <Popover.Trigger asChild>
           <button
             type="button"
             className={cn(
-              'relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-opacity',
+              'relative z-10 flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-opacity',
               'opacity-0 group-hover:opacity-100 focus:opacity-100',
               menuOpen && 'opacity-100',
               'hover:bg-surface-hover hover:text-fg',
@@ -305,18 +333,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             >
               <Pencil className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
               {sb.taskRename}
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
-              onClick={() => void handlePinToggle()}
-            >
-              {isPinned ? (
-                <PinOff className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              ) : (
-                <Pin className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              )}
-              {isPinned ? sess.unpin : sess.pin}
             </button>
             <button
               type="button"

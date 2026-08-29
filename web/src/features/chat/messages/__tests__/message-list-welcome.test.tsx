@@ -29,7 +29,7 @@ describe('MessageList welcome state', () => {
     container.remove();
   });
 
-  it('renders default welcome cards for an empty non-streaming chat', () => {
+  it('renders three flat, directly actionable suggestions for an empty non-streaming chat', () => {
     const copy = messages('zh').chat.welcomeSpotlight;
     const welcomeSpotlight = buildWelcomeSpotlight({ kind: 'empty' }, copy, { id: 'main' });
     const workCategory = welcomeSpotlight.categories.find((category) => category.id === 'work');
@@ -70,23 +70,22 @@ describe('MessageList welcome state', () => {
       'button[aria-label="换一个探索方向"]',
     );
     expect(refreshExplorationButton).toBeTruthy();
+    expect(
+      refreshExplorationButton?.closest('[data-welcome-suggestion-scope="explore"]'),
+    ).toBeTruthy();
     act(() => refreshExplorationButton?.click());
     expect(onRefreshWelcomeExploration).toHaveBeenCalledOnce();
 
-    const workCategoryButton = Array.from(container.querySelectorAll('button')).find((button) =>
+    const workSuggestionButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('办公输出'),
     );
-    act(() => workCategoryButton?.click());
-    expect(container.querySelectorAll('[role="region"] button')).toHaveLength(3);
-    const scenarioButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('我 30 分钟后要开会'),
-    );
-    expect(scenarioButton).toBeTruthy();
-    act(() => scenarioButton?.click());
+    expect(workSuggestionButton).toBeTruthy();
+    expect(container.querySelector('[role="region"]')).toBeNull();
+    act(() => workSuggestionButton?.click());
     expect(onPickWelcomePrompt).toHaveBeenCalledWith(
       expect.objectContaining({
         categoryId: 'work',
-        prompt: expect.stringContaining('我 30 分钟后要开会'),
+        prompt: expect.stringContaining('简短周报'),
       }),
     );
   });

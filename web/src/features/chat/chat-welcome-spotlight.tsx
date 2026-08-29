@@ -6,7 +6,6 @@ import {
   FolderOpen,
   Globe,
   ListChecks,
-  MessageCircle,
   NotebookText,
   RefreshCw,
   SearchCheck,
@@ -14,7 +13,7 @@ import {
   Target,
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
-import { memo, useEffect, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
@@ -62,16 +61,16 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   onRetryContext,
   onRefreshExploration,
   onSelectProject,
+  compact = false,
 }: {
   spotlight: WelcomeSpotlightModel;
   onPickPrompt: (selection: WelcomeSuggestionSelection) => void;
   onRetryContext?: () => void;
   onRefreshExploration?: () => void;
   onSelectProject?: (projectId: string) => Promise<void> | void;
+  compact?: boolean;
 }) {
   const s = spotlight;
-  const panelId = useId();
-  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [workDiscovery, setWorkDiscovery] = useState<WorkDiscoveryOnboardingState | null>(null);
   const [projectEntryLoaded, setProjectEntryLoaded] = useState(s.contextKind !== 'empty');
@@ -103,15 +102,15 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
     return () => { cancelled = true; };
   }, [s.contextKind, token]);
 
-  const selectedCategory = useMemo(
-    () => (selectedCategoryIndex == null ? undefined : s.categories[selectedCategoryIndex]),
-    [s.categories, selectedCategoryIndex],
-  );
-
   const pick = (selection: Omit<WelcomeSuggestionSelection, 'contextKind'>) => {
     onPickPrompt({ ...selection, contextKind: s.contextKind });
   };
-  const canRefreshExploration = Boolean(onRefreshExploration);
+  const suggestions = s.categories
+    .flatMap((category) => {
+      const scenario = category.scenarios[0];
+      return scenario ? [{ category, scenario }] : [];
+    })
+    .slice(0, 3);
   const projectEntryMode = resolveWelcomeProjectEntryMode({
     contextKind: s.contextKind,
     projectCount: projects.length,
@@ -137,8 +136,18 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   );
 
   return (
-    <div className="flex flex-col gap-3.5 pb-2 pt-6 sm:gap-4 sm:pb-3 sm:pt-8 [@media(max-height:800px)]:pt-3 sm:[@media(max-height:800px)]:pt-4">
-      <div className="flex flex-col items-center gap-1.5 px-1 pt-14 text-center sm:gap-2 sm:pt-16 [@media(max-height:800px)]:pt-6 sm:[@media(max-height:800px)]:pt-7">
+    <div className={cn(
+      'flex flex-col pb-2',
+      compact
+        ? 'gap-2 pt-1'
+        : 'gap-3.5 pt-6 sm:gap-4 sm:pb-3 sm:pt-8 [@media(max-height:800px)]:pt-3 sm:[@media(max-height:800px)]:pt-4',
+    )}>
+      <div className={cn(
+        'flex flex-col items-center gap-1.5 px-1 text-center sm:gap-2',
+        compact
+          ? 'pt-3 [@media(max-height:800px)]:pt-1'
+          : 'pt-14 sm:pt-16 [@media(max-height:800px)]:pt-6 sm:[@media(max-height:800px)]:pt-7',
+      )}>
         <BrandLogo className="size-11 shrink-0 sm:size-12" aria-hidden />
         {s.contextLabel ? (
           <div
@@ -255,108 +264,81 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
         ) : null}
       </div>
 
-      <section className="mt-7 sm:mt-8 [@media(max-height:800px)]:mt-4 sm:[@media(max-height:800px)]:mt-5" aria-label={s.otherSuggestionsLabel}>
-        <div className="mb-2 flex min-h-8 items-center justify-end gap-3">
-          {canRefreshExploration ? (
-            <button
-              type="button"
-              aria-label={s.refreshExplorationLabel}
-              title={s.refreshExplorationLabel}
-              onClick={onRefreshExploration}
-              className={cn(
-                'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
-                interaction.transition,
-                interaction.press,
-                interaction.focusRingPanel,
-              )}
-            >
-              <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
-              {s.refreshExplorationLabel}
-            </button>
-          ) : null}
-        </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5">
-          {s.categories.map((category, index) => {
-            const expanded = selectedCategoryIndex === index;
+      <section
+        className={cn(
+          compact
+            ? 'mt-2'
+            : 'mt-7 sm:mt-8 [@media(max-height:800px)]:mt-4 sm:[@media(max-height:800px)]:mt-5',
+        )}
+        aria-label={s.otherSuggestionsLabel}
+      >
+        <ul className="grid w-full grid-cols-1 divide-y divide-edge-subtle sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          {suggestions.map(({ category, scenario }, index) => {
+            const canRefreshCategory = category.scope === 'explore' && Boolean(onRefreshExploration);
             return (
-              <div key={category.id} className="relative min-w-0">
+              <li
+                key={category.id}
+                className="relative min-w-0 px-1 py-1 sm:px-2.5"
+                data-welcome-suggestion-scope={category.scope}
+              >
                 <button
                   type="button"
-                  aria-expanded={expanded}
-                  aria-controls={expanded ? panelId : undefined}
-                  onClick={() => setSelectedCategoryIndex((previous) => (previous === index ? null : index))}
+                  title={scenario.prompt}
+                  onClick={() => pick({
+                    suggestionId: scenario.id ?? `${category.id}:${index}`,
+                    categoryId: category.id,
+                    prompt: scenario.prompt,
+                  })}
                   className={cn(
-                    'flex min-h-14 h-full w-full flex-row items-start gap-2.5 rounded-xl border bg-surface-panel p-2.5 text-left shadow-surface sm:flex-col sm:gap-2',
+                    'flex min-h-12 w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-surface-hover/70',
+                    canRefreshCategory && 'pe-10',
                     interaction.transition,
                     interaction.press,
                     interaction.focusRingPanel,
-                    expanded
-                      ? 'border-accent ring-1 ring-accent/25'
-                      : 'border-edge hover:border-edge-strong hover:bg-surface-hover/40 dark:hover:bg-surface-hover/30',
                   )}
                 >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft sm:size-10">
-                    <CategoryIcon name={category.icon} />
-                  </div>
+                  <CategoryIcon name={category.icon} className="mt-0.5 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium leading-snug text-fg sm:text-[0.9375rem]">{category.title}</div>
-                    <div className="mt-0.5 text-xs leading-snug text-fg-muted sm:text-sm">{category.description}</div>
+                    <div className="mt-0.5 text-xs leading-snug text-fg-muted">{category.description}</div>
                   </div>
                 </button>
-              </div>
+                {canRefreshCategory ? (
+                  <button
+                    type="button"
+                    aria-label={s.refreshExplorationLabel}
+                    title={s.refreshExplorationLabel}
+                    onClick={onRefreshExploration}
+                    className={cn(
+                      'absolute end-3 top-2.5 inline-flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
+                      interaction.transition,
+                      interaction.press,
+                      interaction.focusRingPanel,
+                    )}
+                  >
+                    <RefreshCw className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  </button>
+                ) : null}
+              </li>
             );
           })}
-        </div>
+        </ul>
       </section>
-
-      {selectedCategory && selectedCategory.scenarios.length > 0 ? (
-        <div
-          id={panelId}
-          role="region"
-          aria-label={selectedCategory.title}
-          className="flex flex-col gap-1.5 rounded-xl border border-edge bg-surface-base/80 p-2.5 dark:bg-surface-hover/20"
-        >
-          <ul className="flex flex-col gap-1">
-            {selectedCategory.scenarios.slice(0, 3).map((scenario, index) => (
-              <li key={scenario.id ?? scenario.prompt}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    pick({
-                      suggestionId: scenario.id ?? `${selectedCategory.id}:${index}`,
-                      categoryId: selectedCategory.id,
-                      prompt: scenario.prompt,
-                    })
-                  }
-                  className={cn(
-                    'flex min-h-11 w-full items-start gap-2 rounded-lg border border-transparent p-2.5 text-left text-sm leading-snug text-fg',
-                    interaction.transition,
-                    interaction.press,
-                    interaction.focusRingPanel,
-                    'hover:border-edge hover:bg-surface-panel dark:hover:bg-surface-panel/40',
-                  )}
-                >
-                  <MessageCircle className="mt-0.5 size-4 shrink-0 text-accent-fg" strokeWidth={1.75} aria-hidden />
-                  <span className="min-w-0 flex-1 text-pretty">{scenario.prompt}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 });
 
 export const ChatWelcomeSpotlightSkeleton = memo(function ChatWelcomeSpotlightSkeleton({
   showSkeleton = true,
+  compact = false,
 }: {
   showSkeleton?: boolean;
+  compact?: boolean;
 }) {
   const skeletonClassName = showSkeleton ? '' : 'opacity-0';
   return (
-    <div className="flex flex-col gap-3.5 pb-2 pt-6 sm:gap-4 sm:pb-3 sm:pt-8" aria-busy="true">
-      <div className="flex flex-col items-center gap-1.5 px-1 pt-14 text-center sm:gap-2 sm:pt-16">
+    <div className={cn('flex flex-col gap-3.5 pb-2', compact ? 'pt-1' : 'pt-6 sm:gap-4 sm:pb-3 sm:pt-8')} aria-busy="true">
+      <div className={cn('flex flex-col items-center gap-1.5 px-1 text-center sm:gap-2', compact ? 'pt-3' : 'pt-14 sm:pt-16')}>
         <BrandLogo className="size-11 shrink-0 opacity-80 sm:size-12" aria-hidden />
         <Skeleton className={cn('h-5 w-44 max-w-full', skeletonClassName)} />
         <Skeleton className={cn('h-4 w-[min(100%,24rem)]', skeletonClassName)} />
@@ -365,17 +347,14 @@ export const ChatWelcomeSpotlightSkeleton = memo(function ChatWelcomeSpotlightSk
         </div>
       </div>
 
-      <section className="mt-7 sm:mt-8" aria-hidden="true">
-        <div className="mb-2 flex min-h-8 items-center justify-end gap-3">
-          <Skeleton className={cn('h-7 w-24 rounded-lg', skeletonClassName)} />
-        </div>
-        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5">
+      <section className={compact ? 'mt-2' : 'mt-7 sm:mt-8'} aria-hidden="true">
+        <div className="grid w-full grid-cols-1 divide-y divide-edge-subtle sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {[0, 1, 2].map((item) => (
             <div
               key={item}
-              className="flex min-h-14 w-full flex-row items-start gap-2.5 rounded-xl border border-edge bg-surface-panel p-2.5 sm:flex-col sm:gap-2"
+              className="flex min-h-14 w-full items-start gap-2.5 px-3 py-2.5"
             >
-              <Skeleton className={cn('size-9 shrink-0 rounded-lg sm:size-10', skeletonClassName)} />
+              <Skeleton className={cn('mt-0.5 size-5 shrink-0 rounded-md', skeletonClassName)} />
               <div className="min-w-0 flex-1 space-y-2">
                 <Skeleton className={cn('h-4 w-24', skeletonClassName)} />
                 <Skeleton className={cn('h-3 w-32 max-w-full', skeletonClassName)} />

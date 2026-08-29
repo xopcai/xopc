@@ -1,7 +1,12 @@
-import type { HomeResponse } from '@xopcai/gateway-contract';
+import type {
+  HomeAction,
+  HomeAttention,
+  HomeDecision,
+  HomeResponse,
+  HomeWorkbenchItem,
+} from '@xopcai/gateway-contract';
 
 import { listGatewayAgents } from '../gateway/agents-admin.js';
-import { getTunnelService } from '../tunnel/index.js';
 import {
   DEFAULT_AUTOMATION_TIMEOUT_SECONDS,
   type Automation,
@@ -9,10 +14,8 @@ import {
 } from '../automations/index.js';
 import type { AutomationService } from '../automations/service/automation-service.js';
 import type { Config } from '../config/schema.js';
-import type { NotesService } from '../notes/service.js';
 import type { ProactiveInboxService } from '../proactive/inbox/service.js';
 import type { ProjectService } from '../projects/project-service.js';
-import type { SessionIndex } from '../session/manager.js';
 import {
   isHomeAttentionAcknowledged,
   getRelationshipSettings,
@@ -21,18 +24,9 @@ import {
 } from '../storage/sqlite/index.js';
 import type { WorkflowRunSummary } from '../workflows/domain/index.js';
 import type { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
-import { TaskRepository } from './task-repository.js';
-import { TaskRunRepository } from './task-run-repository.js';
+import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { AttentionGovernor } from './attention-governor.js';
-
-type HomeDecision = HomeResponse['decisions'][number];
-type HomeAttention = HomeResponse['attention'][number];
-type HomeBriefingWin = HomeResponse['briefing']['wins'][number];
-type HomeAutomation = HomeResponse['upcomingAutomations'][number];
-type HomeFocusItem = HomeResponse['focusItems'][number];
-type HomeAction = NonNullable<HomeFocusItem['primaryAction']>;
-type HomeRecentTask = HomeResponse['recentTasks'][number];
 
 type HomeWorkflowRun = {
   id: string;
@@ -46,48 +40,20 @@ type HomeWorkflowRun = {
   metrics: WorkflowRunSummary['metrics'];
 };
 
-type HomeAutomationRun = {
+type HomeAutomation = {
   id: string;
-  automationId: string;
-  automationName?: string;
-  status: AutomationRun['status'];
-  createdAtMs: number;
-  startedAtMs?: number;
-  endedAtMs?: number;
-  error?: string;
-  summary?: string;
-  sessionKey?: string;
-  workflowRunId?: string;
-};
-
-type HomeSnapshot = HomeResponse & {
-  recentlyOpened: unknown[];
-  inboxCount: number;
-  pendingTasks: unknown[];
-  pendingTaskCount: number;
-  recentSessions: unknown[];
-  activeAgent: { id: string; name?: string; description?: string };
-  gateway: Record<string, unknown>;
-  recentAutomationRuns: HomeAutomationRun[];
+  name?: string;
+  trigger: string;
+  action: string;
+  nextRunAt: string;
 };
 
 interface HomeGatewayPort {
-  readonly notesServiceInstance: NotesService;
-  readonly sessions: Pick<SessionIndex, 'listSessions'> & {
-    getActiveRun(sessionKey: string): { active: boolean; runId?: string };
-  };
   readonly currentConfig: Config;
   readonly automationServiceInstance: AutomationService;
   readonly projects: ProjectService;
   readonly proactiveInbox: ProactiveInboxService;
   createWorkflowRunService(): WorkflowRunService;
-  getHealth(): {
-    status: string;
-    ready: boolean;
-    httpListening: boolean;
-    version: string;
-    uptime: number;
-  };
 }
 
 function toHomeWorkflowRun(run: WorkflowRunSummary): HomeWorkflowRun {
@@ -133,22 +99,6 @@ function toHomeAutomation(automation: Automation): HomeAutomation | null {
   };
 }
 
-function toHomeAutomationRun(run: AutomationRun): HomeAutomationRun {
-  return {
-    id: run.id,
-    automationId: run.automationId,
-    automationName: run.automationName,
-    status: run.status,
-    createdAtMs: run.createdAtMs,
-    startedAtMs: run.startedAtMs,
-    endedAtMs: run.endedAtMs,
-    error: run.error,
-    summary: run.summary,
-    sessionKey: run.sessionKey,
-    workflowRunId: run.workflowRunId,
-  };
-}
-
 function effectiveAutomationTimeoutSeconds(run: AutomationRun, automation?: Automation): number {
   return ('timeoutSeconds' in run.actionSnapshot ? run.actionSnapshot.timeoutSeconds : undefined)
     ?? automation?.reliability?.timeoutSeconds
@@ -180,63 +130,56 @@ function attentionDetail(
 export function decisionFromTask(
   model: TaskReadModel,
   projectName?: string,
+  locale?: string,
 ): HomeDecision | null {
-  const item = model.attention[0];
-  if (!item || !['input_required', 'approval_required'].includes(item.kind)) return null;
   const task = model.task;
+  const isChinese = locale?.toLowerCase().startsWith('zh') ?? task.locale === 'zh';
+  if (task.phase === 'review') {
+    return {
+      id: `task:${task.id}:review`,
+      kind: 'task',
+      title: task.title,
+      detail: isChinese ? '执行已经完成，正在等待你验收结果。' : 'The work is complete and ready for your review.',
+      reason: 'decision_needed',
+      urgency: 'now',
+      href: `/tasks/${encodeURIComponent(task.id)}`,
+      projectId: task.projectId,
+      projectName,
+      dueAt: task.dueAt,
+      updatedAt: task.updatedAt,
+    };
+  }
+
+  const item = model.attention.find((candidate) => [
+    'input_required',
+    'approval_required',
+    'run_failed',
+    'verification_failed',
+    'overdue',
+  ].includes(candidate.kind));
+  if (!item) return null;
+  const reason = item.kind === 'input_required'
+    ? 'needs_input'
+    : item.kind === 'approval_required'
+      ? 'approval_required'
+      : item.kind === 'run_failed' || item.kind === 'verification_failed'
+        ? 'retry'
+        : item.kind === 'overdue'
+          ? 'overdue'
+          : undefined;
+  if (!reason) return null;
   return {
     id: `task:${task.id}`,
     kind: 'task',
     title: task.title,
     detail: item.summary,
-    reason: item.kind === 'input_required' ? 'needs_input' : 'blocked',
+    reason,
     urgency: 'now',
     href: `/tasks/${encodeURIComponent(task.id)}`,
     projectId: task.projectId,
     projectName,
+    dueAt: task.dueAt,
     updatedAt: task.updatedAt,
-  };
-}
-
-export function buildHomeBriefing(input: {
-  locale?: string;
-  decisions: HomeDecision[];
-  attention: HomeAttention[];
-  activeWorkflowCount: number;
-  activeTaskCount: number;
-  wins: HomeBriefingWin[];
-  nextScheduled?: HomeAutomation;
-  nowMs: number;
-}) {
-  const isChinese = input.locale?.toLowerCase().startsWith('zh') ?? false;
-  const movingCount = input.activeWorkflowCount + input.activeTaskCount;
-  const attentionCount = input.decisions.length + input.attention.length;
-  const summary = attentionCount > 0
-    ? isChinese
-      ? movingCount > 0
-        ? `有 ${attentionCount} 件事需要你处理；我正在继续推进 ${movingCount} 件工作。`
-        : `有 ${attentionCount} 件事需要你处理。`
-      : movingCount > 0
-        ? `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} your attention; I’m continuing ${movingCount} in the background.`
-        : `${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} your attention.`
-    : movingCount > 0
-      ? isChinese
-        ? `目前没有事情需要你处理；我正在继续推进 ${movingCount} 件工作。`
-        : `Nothing needs you right now; I’m continuing ${movingCount} ${movingCount === 1 ? 'item' : 'items'} in the background.`
-      : isChinese
-        ? '今天还没有正在推进的事项。把想要的结果交给我，我会从这里开始。'
-        : 'Nothing is moving yet today. Hand me an task and I’ll take it from here.';
-  return {
-    generatedAt: input.nowMs,
-    summary,
-    focus: input.decisions.slice(0, 3),
-    progress: {
-      activeWorkflowCount: input.activeWorkflowCount,
-      activeTaskCount: input.activeTaskCount,
-      movingCount,
-    },
-    wins: input.wins.slice(0, 5),
-    nextScheduled: input.nextScheduled,
   };
 }
 
@@ -250,21 +193,14 @@ function homeActionCopy(locale?: string) {
         retry: '重试',
         acknowledge: '暂时忽略',
         viewProgress: '查看进度',
-        viewResult: '查看结果',
         viewSchedule: '查看计划',
-        remaining: '项待继续',
-        taskCompleted: '任务已完成',
-        workflowCompleted: '工作流已完成',
-        automationCompleted: '自动化已完成',
         runningTask: '任务正在推进',
         runningWorkflow: '工作流正在推进',
         scheduled: '下一项定时工作',
-        organizeInbox: '整理收件箱',
-        organizeInboxSummary: '把刚捕获的内容整理成笔记、任务或后续行动。',
-        openInbox: '去整理',
-        startSomething: '今天想推进什么？',
-        startSomethingSummary: '把想要的结果交给我，我会从这里开始。',
-        askAi: '交给 Agent',
+        inputRecommendation: '建议补充所需信息，让工作继续推进。',
+        approvalRecommendation: '建议先确认操作范围；符合预期后允许本次操作。',
+        reviewRecommendation: '建议查看结果，确认符合预期后完成验收。',
+        retryRecommendation: '建议先重试；如果再次失败，再检查执行详情。',
       }
     : {
         approve: 'Allow and continue',
@@ -273,21 +209,14 @@ function homeActionCopy(locale?: string) {
         retry: 'Retry',
         acknowledge: 'Dismiss',
         viewProgress: 'View progress',
-        viewResult: 'View result',
         viewSchedule: 'View schedule',
-        remaining: 'remaining',
-        taskCompleted: 'Task completed',
-        workflowCompleted: 'Workflow completed',
-        automationCompleted: 'Automation completed',
         runningTask: 'Task in progress',
         runningWorkflow: 'Workflow in progress',
         scheduled: 'Next scheduled work',
-        organizeInbox: 'Organize your inbox',
-        organizeInboxSummary: 'Turn recent captures into notes, tasks, or next actions.',
-        openInbox: 'Organize',
-        startSomething: 'What would you like to move forward?',
-        startSomethingSummary: 'Hand me the outcome you want and I’ll take it from here.',
-        askAi: 'Ask an agent',
+        inputRecommendation: 'Provide the missing information so the work can continue.',
+        approvalRecommendation: 'Confirm the operation scope, then allow it if it matches your intent.',
+        reviewRecommendation: 'Review the result and accept it if it meets your expectations.',
+        retryRecommendation: 'Retry once; inspect the run details if it fails again.',
       };
 }
 
@@ -301,20 +230,25 @@ function formatScheduleDistance(value: string, nowMs: number, locale?: string): 
   return formatter.format(Math.ceil(distanceMs / 86_400_000), 'day');
 }
 
-export function buildHomeFocusItems(input: {
+function decisionRecommendation(decision: HomeDecision, copy: ReturnType<typeof homeActionCopy>): string {
+  if (decision.judgment?.recommendation) return decision.judgment.recommendation;
+  if (decision.reason === 'needs_input' || decision.reason === 'user_input') return copy.inputRecommendation;
+  if (decision.reason === 'approval_required' || decision.reason === 'user_approval') return copy.approvalRecommendation;
+  if (decision.reason === 'retry') return copy.retryRecommendation;
+  return copy.reviewRecommendation;
+}
+
+export function buildHomeWorkbench(input: {
   locale?: string;
   decisions: HomeDecision[];
   attention: HomeAttention[];
   activeWorkflowRuns: HomeWorkflowRun[];
-  runningTasks: HomeResponse['tasks']['running'];
-  wins: HomeBriefingWin[];
+  runningTasks: TaskAggregate[];
   scheduled: HomeAutomation[];
-  recentTasks: HomeRecentTask[];
-  inboxCount: number;
   nowMs: number;
-}): HomeFocusItem[] {
+}): Pick<HomeResponse, 'needsUser' | 'background' | 'backgroundCount'> {
   const copy = homeActionCopy(input.locale);
-  const decisions = input.decisions.map((decision): HomeFocusItem => {
+  const decisions = input.decisions.map((decision): HomeWorkbenchItem => {
     const openAction: HomeAction = decision.kind === 'agent_judgment' && decision.judgment
       ? { type: 'review_judgment', label: copy.review, itemId: decision.judgment.inboxItemId }
       : { type: 'open', label: copy.review, href: decision.href };
@@ -337,21 +271,21 @@ export function buildHomeFocusItems(input: {
     return {
       id: decision.id,
       kind: 'decision',
-      priority: decision.urgency === 'now' ? 100 : 90,
       title: decision.title,
       summary: decision.detail || copy.review,
-      statusLabel: copy.review,
+      recommendation: decisionRecommendation(decision, copy),
+      dueAt: decision.dueAt,
       updatedAt: decision.updatedAt,
       openAction,
       ...connectorActions,
     };
   });
-  const failures = input.attention.map((item): HomeFocusItem => ({
+  const failures = input.attention.map((item): HomeWorkbenchItem => ({
     id: item.id,
     kind: 'failure',
-    priority: 80,
     title: item.title,
     summary: item.detail,
+    recommendation: copy.retryRecommendation,
     updatedAt: item.updatedAt,
     openAction: { type: 'open', label: copy.review, href: item.href },
     primaryAction: {
@@ -367,7 +301,7 @@ export function buildHomeFocusItems(input: {
       runId: item.runId,
     }],
   }));
-  const workflows = input.activeWorkflowRuns.map((run): HomeFocusItem => {
+  const workflows = input.activeWorkflowRuns.map((run): HomeWorkbenchItem => {
     const openAction: HomeAction = {
       type: 'open',
       label: copy.viewProgress,
@@ -378,7 +312,6 @@ export function buildHomeFocusItems(input: {
     return {
       id: `workflow:${run.id}`,
       kind: 'running',
-      priority: 60,
       title: run.title,
       summary: copy.runningWorkflow,
       statusLabel: run.metrics.agentCount > 0
@@ -386,11 +319,10 @@ export function buildHomeFocusItems(input: {
         : undefined,
       updatedAt: run.startedAtMs ?? run.createdAtMs,
       openAction,
-      primaryAction: openAction,
       secondaryActions: [],
     };
   });
-  const tasks = input.runningTasks.map((task): HomeFocusItem => {
+  const tasks = input.runningTasks.map((task): HomeWorkbenchItem => {
     const openAction: HomeAction = {
       type: 'open',
       label: copy.viewProgress,
@@ -399,123 +331,55 @@ export function buildHomeFocusItems(input: {
     return {
       id: `task:${task.id}`,
       kind: 'running',
-      priority: 55,
       title: task.title,
       summary: copy.runningTask,
       updatedAt: task.updatedAt,
       openAction,
-      primaryAction: openAction,
       secondaryActions: [],
     };
   });
-  const results = input.wins.map((win): HomeFocusItem => {
-    const openAction: HomeAction = { type: 'open', label: copy.viewResult, href: win.href };
-    return {
-      id: win.id,
-      kind: 'result',
-      priority: 40,
-      title: win.title,
-      summary: win.kind === 'workflow_run'
-        ? copy.workflowCompleted
-        : win.kind === 'automation_run'
-          ? copy.automationCompleted
-          : copy.taskCompleted,
-      updatedAt: win.completedAt,
-      openAction,
-      primaryAction: openAction,
-      secondaryActions: [],
-    };
-  });
-  const taskResults = input.recentTasks.map(({ taskId, taskTitle, receipt }): HomeFocusItem => {
-    const openAction: HomeAction = {
-      type: 'open',
-      label: copy.viewResult,
-      href: `/tasks/${encodeURIComponent(taskId)}`,
-    };
-    return {
-      id: `task-result:${taskId}:${receipt.runId}`,
-      kind: 'result',
-      priority: 40,
-      title: taskTitle,
-      summary: receipt.summary,
-      statusLabel: receipt.remainingWork.length > 0 ? `${receipt.remainingWork.length} ${copy.remaining}` : undefined,
-      updatedAt: receipt.finalizedAt,
-      openAction,
-      primaryAction: openAction,
-      secondaryActions: [],
-    };
-  });
-  const scheduled = input.scheduled.map((automation): HomeFocusItem => ({
+  const scheduled = input.scheduled.map((automation): HomeWorkbenchItem => ({
     id: `automation:${automation.id}:scheduled`,
     kind: 'scheduled',
-    priority: 30,
     title: automation.name || automation.id,
     summary: copy.scheduled,
     statusLabel: formatScheduleDistance(automation.nextRunAt, input.nowMs, input.locale),
     updatedAt: Date.parse(automation.nextRunAt),
     openAction: { type: 'open', label: copy.viewSchedule, href: `/automations?automation=${encodeURIComponent(automation.id)}` },
-    primaryAction: { type: 'open', label: copy.viewSchedule, href: `/automations?automation=${encodeURIComponent(automation.id)}` },
     secondaryActions: [],
   }));
-  const items = [...decisions, ...failures, ...workflows, ...tasks, ...results, ...taskResults, ...scheduled]
-    .sort((left, right) => {
-      const priorityDelta = right.priority - left.priority;
-      if (priorityDelta !== 0) return priorityDelta;
-      if (left.kind === 'scheduled' && right.kind === 'scheduled') return left.updatedAt - right.updatedAt;
-      return right.updatedAt - left.updatedAt;
-    });
-  if (items.length > 0) return items;
-  if (input.inboxCount > 0) {
-    return [{
-      id: 'suggestion:organize-inbox',
-      kind: 'suggestion',
-      priority: 10,
-      title: `${copy.organizeInbox} · ${input.inboxCount}`,
-      summary: copy.organizeInboxSummary,
-      updatedAt: input.nowMs,
-      openAction: { type: 'open', label: copy.openInbox, href: '/notes?status=inbox' },
-      primaryAction: { type: 'open', label: copy.openInbox, href: '/notes?status=inbox' },
-      secondaryActions: [],
-    }];
-  }
-  return [{
-    id: 'suggestion:ask-agent',
-    kind: 'suggestion',
-    priority: 10,
-    title: copy.startSomething,
-    summary: copy.startSomethingSummary,
-    updatedAt: input.nowMs,
-    primaryAction: { type: 'ask_ai', label: copy.askAi },
-    secondaryActions: [],
-  }];
+  const urgencyById = new Map(input.decisions.map((decision) => [decision.id, decision.urgency]));
+  decisions.sort((left, right) => {
+    const leftUrgency = urgencyById.get(left.id) === 'now' ? 1 : 0;
+    const rightUrgency = urgencyById.get(right.id) === 'now' ? 1 : 0;
+    return rightUrgency - leftUrgency || right.updatedAt - left.updatedAt;
+  });
+  failures.sort((left, right) => right.updatedAt - left.updatedAt);
+  const needsUser = [...decisions, ...failures];
+  const allBackground = [...workflows, ...tasks, ...scheduled];
+  return {
+    needsUser,
+    background: allBackground.slice(0, 3),
+    backgroundCount: allBackground.length,
+  };
 }
 
 export class HomeQueryService {
-  readonly #runs = new TaskRunRepository();
   readonly #tasks = new TaskRepository();
   readonly #projector = new TaskReadModelProjector();
   readonly #attentionGovernor = new AttentionGovernor();
 
   constructor(private readonly service: HomeGatewayPort) {}
 
-  async getSnapshot(locale?: string): Promise<HomeSnapshot> {
-    const notes = this.service.notesServiceInstance;
-    const sessions = this.service.sessions;
+  async getSnapshot(locale?: string): Promise<HomeResponse> {
     const agents = await listGatewayAgents(this.service.currentConfig);
     const defaultAgent = agents.agents.find((agent) => agent.id === agents.defaultId) ?? agents.agents[0];
     const workflowRunStore = this.service.createWorkflowRunService()
       .createRunStore(defaultAgent?.id ?? agents.defaultId);
-    const tunnel = getTunnelService().getStatus();
-    const health = this.service.getHealth();
     const nowMs = Date.now();
     const tasks = this.#tasks.list({ limit: 60 });
 
-    const [recentlyOpened, inbox, pendingTasks, recentSessions, workflowRuns, automations,
-      automationRuns, projects, connectorApprovals] = await Promise.all([
-      notes.listNotes({ sortBy: 'lastOpenedAt', sortOrder: 'desc', limit: 10 }),
-      notes.listNotes({ status: 'inbox', limit: 0 }),
-      notes.listNotes({ pendingTasksOnly: true, sortBy: 'createdAt', sortOrder: 'desc', limit: 10 }),
-      sessions.listSessions({ channel: 'webchat', sortBy: 'updatedAt', sortOrder: 'desc', limit: 50 }),
+    const [workflowRuns, automations, automationRuns, projects, connectorApprovals] = await Promise.all([
       workflowRunStore.listRunSummaries(20),
       this.service.automationServiceInstance.list(),
       this.service.automationServiceInstance.listRuns({ limit: 10 }),
@@ -524,28 +388,18 @@ export class HomeQueryService {
     ]);
     const activeTasks = tasks.filter((task) => task.phase !== 'closed');
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
-    const workChats = recentSessions.items
-      .filter((session) => (session.messageCount ?? 0) > 0)
-      .map((session) => ({
-        key: session.key,
-        name: session.name || 'Conversation',
-        updatedAt: session.updatedAt,
-        active: sessions.getActiveRun(session.key).active,
-      }));
     const activeWorkflowRuns = workflowRuns
       .filter((run) => run.status === 'queued' || run.status === 'running')
-      .slice(0, 5)
       .map(toHomeWorkflowRun);
     const failedWorkflowRuns = workflowRuns
       .filter((run) => run.status === 'failed' || run.status === 'timeout')
       .slice(0, 5)
       .map(toHomeWorkflowRun);
-    const recentWorkflowRuns = workflowRuns.slice(0, 5).map(toHomeWorkflowRun);
     const upcomingAutomations = automations
+      .filter((automation) => automation.notificationPolicy !== 'none')
       .map(toHomeAutomation)
       .filter((automation): automation is HomeAutomation => Boolean(automation))
-      .sort((a, b) => Date.parse(a.nextRunAt) - Date.parse(b.nextRunAt))
-      .slice(0, 5);
+      .sort((a, b) => Date.parse(a.nextRunAt) - Date.parse(b.nextRunAt));
     const latestAutomationRuns = [...automationRuns]
       .sort((left, right) => right.createdAtMs - left.createdAtMs)
       .filter((run, index, all) => all.findIndex((candidate) => candidate.automationId === run.automationId) === index);
@@ -584,6 +438,7 @@ export class HomeQueryService {
         .map((task) => decisionFromTask(
           this.#projector.project(task),
           task.projectId ? projectsById.get(task.projectId)?.name : undefined,
+          locale,
         ))
         .filter((item): item is HomeDecision => Boolean(item)),
       ...connectorApprovals
@@ -617,6 +472,7 @@ export class HomeQueryService {
         })),
       ...latestAutomationRuns
         .filter((run) => run.status === 'failed' || run.status === 'timeout')
+        .filter((run) => automationsById.get(run.automationId)?.notificationPolicy !== 'none')
         .filter((run) => !isHomeAttentionAcknowledged('automation_run', run.id))
         .map((run): HomeAttention => ({
           id: `automation_run:${run.id}`,
@@ -643,89 +499,24 @@ export class HomeQueryService {
     const decisions = governed.decisions;
     const attention = governed.attention;
 
-    const wins: HomeBriefingWin[] = [
-      ...workflowRuns.filter((run) => run.status === 'succeeded').map((run): HomeBriefingWin => ({
-        id: `workflow:${run.id}`,
-        kind: 'workflow_run',
-        title: run.title,
-        href: `/workflows?runId=${encodeURIComponent(run.id)}`,
-        completedAt: run.completedAtMs ?? run.createdAtMs,
-      })),
-      ...latestAutomationRuns.filter((run) => run.status === 'succeeded').map((run): HomeBriefingWin => ({
-        id: `automation:${run.id}`,
-        kind: 'automation_run',
-        title: run.automationName || run.automationId,
-        href: `/automations?automation=${encodeURIComponent(run.automationId)}&run=${encodeURIComponent(run.id)}`,
-        completedAt: run.endedAtMs ?? run.createdAtMs,
-      })),
-    ].sort((left, right) => right.completedAt - left.completedAt);
     const runningTasks = tasks.filter((task) => {
       const state = this.#projector.project(task).operationalState;
       return state === 'queued' || state === 'running' || state === 'verifying';
-    }).slice(0, 20);
-    const briefing = buildHomeBriefing({
-      locale,
-      decisions,
-      attention,
-      activeWorkflowCount: activeWorkflowRuns.length,
-      activeTaskCount: activeTasks.length,
-      wins,
-      nextScheduled: upcomingAutomations[0],
-      nowMs,
     });
-    const recentTasks = tasks.flatMap((task): HomeRecentTask[] => (
-      this.#runs.listReceipts(task.id, 3).map((receipt) => ({
-        taskId: task.id,
-        taskTitle: task.title,
-        receipt,
-      }))
-    )).sort((a, b) => b.receipt.finalizedAt - a.receipt.finalizedAt).slice(0, 8);
-    const focusItems = buildHomeFocusItems({
+    const workbench = buildHomeWorkbench({
       locale,
       decisions,
       attention,
       activeWorkflowRuns,
       runningTasks,
-      wins,
-      scheduled: upcomingAutomations.slice(0, 3),
-      recentTasks: recentTasks.slice(0, 3),
-      inboxCount: inbox.total,
+      scheduled: upcomingAutomations,
       nowMs,
     });
 
     return {
-      focusItems,
-      recentlyOpened: recentlyOpened.items.filter((note) => note.lastOpenedAt),
-      inboxCount: inbox.total,
-      pendingTasks: pendingTasks.items,
-      pendingTaskCount: pendingTasks.total,
-      recentSessions: recentSessions.items.slice(0, 5),
-      activeAgent: defaultAgent
-        ? { id: defaultAgent.id, name: defaultAgent.name, description: defaultAgent.description }
-        : { id: agents.defaultId },
-      gateway: {
-        status: health.status,
-        ready: health.ready,
-        httpListening: health.httpListening,
-        version: health.version,
-        uptime: health.uptime,
-        tunnel: { state: tunnel.state, publicUrl: tunnel.publicUrl, connected: tunnel.state === 'connected' },
-      },
-      workflowRuns: { active: activeWorkflowRuns, recent: recentWorkflowRuns },
-      briefing,
+      ...workbench,
       decisions,
-      attention,
       attentionPolicy: governed.policy,
-      chats: {
-        running: workChats.filter((chat) => chat.active),
-        recent: workChats.filter((chat) => !chat.active).slice(0, 8),
-      },
-      upcomingAutomations,
-      tasks: {
-        running: runningTasks,
-      },
-      recentTasks,
-      recentAutomationRuns: automationRuns.slice(0, 5).map(toHomeAutomationRun),
     };
   }
 }

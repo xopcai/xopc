@@ -67,7 +67,12 @@ const PLANS: Record<string, ConnectorLearningPlan> = {
     identityProbe: { actionId: 'GMAIL_GET_PROFILE' },
     streams: [{
       scope: 'messages', actionId: 'GMAIL_FETCH_EMAILS', kind: 'activity',
-      arguments: { max_results: 100, query: 'newer_than:30d -in:spam -in:trash' },
+      arguments: {
+        max_results: 100,
+        include_payload: false,
+        verbose: false,
+        query: 'newer_than:30d -in:spam -in:trash',
+      },
     }],
     bootstrapWindowDays: 30,
     intervalMinutes: 15,
