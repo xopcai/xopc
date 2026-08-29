@@ -17,6 +17,7 @@ import {
   requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { listUserFocuses, upsertUserFocus } from '../../user-context/sources/repository.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
   recordWorkDiscoverySourceRefresh,
@@ -152,6 +153,50 @@ describe('work discovery repository', () => {
       status: 'active',
       statement: 'I primarily build TypeScript products.',
     });
+  });
+
+  it('does not activate unreviewed focuses when the summary is confirmed', async () => {
+    createWorkDiscoveryRun({
+      id: 'run-focus-review',
+      idempotencyKey: 'key-focus-review',
+      source: 'manual_selected_directory',
+      status: 'completed',
+      stage: 'next_steps',
+      rootPath: '/workspace',
+      projectId: 'project-1',
+      sessionKey: 'session-1',
+      agentId: 'main',
+      modelRef: 'provider/model',
+      scanPolicyVersion: 1,
+      result: {
+        projectSummary: 'A focused project.',
+        currentState: 'Active.',
+        uncertainties: [],
+        suggestions: [],
+      },
+      createdAt: 1,
+      completedAt: 2,
+    });
+    const focus = upsertUserFocus({
+      canonicalKey: 'work-focus:pending-review',
+      title: 'Pending focus',
+      summary: 'This still needs an explicit decision.',
+      horizon: 'current',
+      status: 'candidate',
+      confidence: 0.9,
+      projectId: 'project-1',
+      evidenceRefs: [],
+    });
+    const service = new WorkDiscoveryService({
+      projects: new ProjectService(),
+      sessions: { appendTranscriptContextEntry: async () => {} } as unknown as SessionIndex,
+      getConfig: () => ({}) as Config,
+      emit: () => {},
+    });
+
+    await service.submitRecognitionFeedback({ runId: 'run-focus-review', decision: 'confirmed' });
+
+    expect(listUserFocuses().find((item) => item.id === focus.id)?.status).toBe('candidate');
   });
 
   it('persists and revokes read-only directory sources', () => {

@@ -8,10 +8,12 @@ vi.mock('../api', () => ({
 }));
 
 vi.mock('../../user-context/user-context-api', () => ({
+  updateUnderstanding: vi.fn(),
   updateUserFocusStatus: vi.fn(),
 }));
 
 import type { ElectronAPI } from '@/types/electron';
+import { updateUnderstanding } from '@/features/user-context/user-context-api';
 
 import { useUnderstandingActivityStore } from '../understanding-activity-store';
 
@@ -49,6 +51,32 @@ describe('understanding activity store', () => {
       sources: { 'local-recent-files': 'completed' },
       itemCounts: { 'local-recent-files': 1 },
       error: 'Analysis failed',
+    });
+  });
+
+  it('edits and activates a source-derived memory in one review decision', async () => {
+    useUnderstandingActivityStore.setState({
+      status: 'review_ready',
+      memories: [{
+        id: 'candidate-1',
+        understandingId: 'understanding-1',
+        category: 'preference',
+        statement: 'Original wording',
+        confidence: 'high',
+        evidence: ['Observed in project notes'],
+        status: 'pending',
+      }],
+    });
+
+    await useUnderstandingActivityStore.getState().reviewMemory('understanding-1', true, 'Edited wording');
+
+    expect(updateUnderstanding).toHaveBeenCalledWith('understanding-1', {
+      statement: 'Edited wording',
+      status: 'active',
+    });
+    expect(useUnderstandingActivityStore.getState().memories[0]).toMatchObject({
+      statement: 'Edited wording',
+      status: 'edited',
     });
   });
 });

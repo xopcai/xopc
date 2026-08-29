@@ -568,61 +568,190 @@ html.dark {
   }
 }
 
-/* First-run onboarding: restrained spatial motion with a soft, glassy light field. */
-.xopc-onboarding-card {
+/* First-run onboarding: a continuous narrative surface, not a setup card. */
+.xopc-onboarding-dialog {
+  animation: xopc-onboarding-dialog-in 420ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-onboarding-experience,
+.xopc-work-discovery-experience {
   isolation: isolate;
 }
 
-.xopc-onboarding-aurora {
+.xopc-onboarding-ambient {
   background:
-    radial-gradient(circle at 34% 55%, rgb(58 107 255 / 0.19), transparent 38%),
-    radial-gradient(circle at 68% 42%, rgb(46 216 255 / 0.14), transparent 34%);
-  filter: blur(22px);
-  animation: xopc-onboarding-aurora 8s ease-in-out infinite alternate;
+    radial-gradient(circle at 16% 24%, rgb(58 107 255 / 0.2), transparent 32%),
+    radial-gradient(circle at 42% 78%, rgb(46 216 255 / 0.12), transparent 28%),
+    radial-gradient(circle at 86% 16%, rgb(91 87 255 / 0.08), transparent 30%),
+    linear-gradient(135deg, rgb(248 250 255 / 0.94), rgb(244 248 255 / 0.72) 48%, rgb(255 255 255 / 0.96));
 }
 
-.xopc-onboarding-logo {
-  animation: xopc-onboarding-logo-in 650ms cubic-bezier(.18, .9, .28, 1.2) both;
+.dark .xopc-onboarding-ambient {
+  background:
+    radial-gradient(circle at 16% 24%, rgb(58 107 255 / 0.22), transparent 34%),
+    radial-gradient(circle at 42% 78%, rgb(46 216 255 / 0.1), transparent 30%),
+    radial-gradient(circle at 86% 16%, rgb(91 87 255 / 0.12), transparent 32%),
+    linear-gradient(135deg, rgb(10 14 24), rgb(13 18 31) 50%, rgb(8 11 19));
 }
 
-.xopc-onboarding-stage {
-  animation: xopc-onboarding-stage-in 420ms cubic-bezier(.2, .8, .2, 1) both;
-  transform-origin: 50% 20%;
+.xopc-onboarding-visual::after {
+  position: absolute;
+  inset: 8% -20% auto auto;
+  width: min(30rem, 70vw);
+  aspect-ratio: 1;
+  border: 1px solid rgb(58 107 255 / 0.08);
+  border-radius: 9999px;
+  content: "";
+  box-shadow:
+    0 0 0 5rem rgb(58 107 255 / 0.025),
+    0 0 0 10rem rgb(46 216 255 / 0.018);
+}
+
+.xopc-onboarding-orbit {
+  animation: xopc-onboarding-orbit-enter 480ms cubic-bezier(.18, .9, .28, 1.12) both;
+}
+
+.xopc-onboarding-stage,
+.xopc-work-discovery-stage {
+  animation: xopc-onboarding-stage-in 460ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-onboarding-provider-options {
+  animation: xopc-onboarding-options-in 360ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-discovery-logo {
+  animation: xopc-onboarding-orbit-enter 480ms cubic-bezier(.18, .9, .28, 1.12) both;
+}
+
+.xopc-understanding-step[data-active="true"] .xopc-understanding-step-icon {
+  animation: xopc-understanding-pulse 1.8s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgb(58 107 255 / 0.22);
+}
+
+.xopc-understanding-step[data-complete="true"] {
+  animation: xopc-understanding-complete 420ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-understanding-center {
+  animation: xopc-understanding-center-in 420ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-reveal-scene {
+  animation: xopc-reveal-scene-in 460ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-understanding-hero-card,
+.xopc-understanding-review-card {
+  animation: xopc-understanding-card-settle 420ms 60ms cubic-bezier(.18, .9, .28, 1.08) both;
+}
+
+.xopc-reveal-calibration {
+  animation: xopc-onboarding-options-in 360ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-understanding-constellation {
+  animation: xopc-understanding-constellation-in 480ms cubic-bezier(.18, .9, .28, 1.12) both;
+}
+
+.xopc-constellation-orbit {
+  animation: xopc-constellation-orbit 10s linear infinite;
+}
+
+.xopc-constellation-orbit-delayed {
+  animation-direction: reverse;
+  animation-duration: 7s;
+}
+
+.xopc-constellation-node {
+  animation: xopc-constellation-node-float 4.4s ease-in-out infinite;
+}
+
+.xopc-constellation-node-two {
+  animation-delay: -1.5s;
+}
+
+.xopc-constellation-node-three {
+  animation-delay: -2.8s;
+}
+
+@keyframes xopc-onboarding-dialog-in {
+  from { opacity: 0; transform: scale(1.018); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes xopc-onboarding-stage-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 12px, 0) scale(0.985);
-    filter: blur(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: blur(0);
-  }
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-@keyframes xopc-onboarding-logo-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 8px, 0) scale(0.82);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
+@keyframes xopc-onboarding-orbit-enter {
+  from { opacity: 0; transform: scale(0.72) rotate(-12deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
 }
 
-@keyframes xopc-onboarding-aurora {
-  from { transform: translate3d(-2%, 0, 0) scale(0.98); opacity: 0.72; }
-  to { transform: translate3d(2%, 5%, 0) scale(1.04); opacity: 1; }
+@keyframes xopc-onboarding-options-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes xopc-understanding-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(58 107 255 / 0.22); }
+  50% { box-shadow: 0 0 0 10px rgb(58 107 255 / 0); }
+}
+
+@keyframes xopc-understanding-complete {
+  from { opacity: 0.55; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes xopc-understanding-center-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.975); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes xopc-reveal-scene-in {
+  from { opacity: 0; transform: translate3d(18px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes xopc-understanding-card-settle {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes xopc-understanding-constellation-in {
+  from { opacity: 0; transform: scale(0.72) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes xopc-constellation-orbit {
+  from { transform: rotate(0deg) scale(0.98); }
+  50% { transform: rotate(180deg) scale(1.04); }
+  to { transform: rotate(360deg) scale(0.98); }
+}
+
+@keyframes xopc-constellation-node-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -6px, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .xopc-onboarding-dialog,
+  .xopc-onboarding-orbit,
   .xopc-onboarding-stage,
-  .xopc-onboarding-logo,
-  .xopc-onboarding-aurora {
+  .xopc-onboarding-provider-options,
+  .xopc-work-discovery-stage,
+  .xopc-discovery-logo,
+  .xopc-understanding-step,
+  .xopc-understanding-center,
+  .xopc-reveal-scene,
+  .xopc-understanding-hero-card,
+  .xopc-understanding-review-card,
+  .xopc-reveal-calibration,
+  .xopc-understanding-constellation,
+  .xopc-constellation-orbit,
+  .xopc-constellation-node {
     animation: none;
   }
 }
