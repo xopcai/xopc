@@ -74,6 +74,7 @@ export class RealtimeClient {
   private ready = false;
   private lastServerMessageAt = 0;
   private endpointBinding?: RealtimeEndpointBinding;
+  private reconnectWhenSocketOpens = false;
 
   constructor(private readonly options: RealtimeClientOptions) {}
 
@@ -85,6 +86,7 @@ export class RealtimeClient {
 
   disconnect(): void {
     this.shouldReconnect = false;
+    this.reconnectWhenSocketOpens = false;
     this.generation += 1;
     this.clearTimers();
     this.ready = false;
@@ -95,6 +97,7 @@ export class RealtimeClient {
   }
 
   reconnect(): void {
+    this.reconnectWhenSocketOpens = false;
     this.generation += 1;
     this.clearTimers();
     this.ready = false;
@@ -126,7 +129,7 @@ export class RealtimeClient {
 
   setEndpoint(binding: RealtimeEndpointBinding): void {
     this.endpointBinding = binding;
-    if (this.shouldReconnect) this.reconnect();
+    this.refreshEndpointConnection();
   }
 
   clearEndpoint(binding?: RealtimeEndpointBinding): void {
@@ -134,7 +137,16 @@ export class RealtimeClient {
     const previous = this.endpointBinding;
     this.endpointBinding = undefined;
     previous?.onDisconnected?.();
-    if (this.shouldReconnect) this.reconnect();
+    this.refreshEndpointConnection();
+  }
+
+  private refreshEndpointConnection(): void {
+    if (!this.shouldReconnect) return;
+    if (this.socket?.readyState === 0) {
+      this.reconnectWhenSocketOpens = true;
+      return;
+    }
+    this.reconnect();
   }
 
   private async open(reconnecting: boolean): Promise<void> {
@@ -181,6 +193,10 @@ export class RealtimeClient {
       this.socket = socket;
       socket.onopen = () => {
         if (generation !== this.generation) return;
+        if (this.reconnectWhenSocketOpens) {
+          this.reconnect();
+          return;
+        }
         const subscriptions: RealtimeSubscription[] = [...this.desiredSubscriptions].map(([topic, afterSeq]) => ({
           topic,
           afterSeq: this.cursors.get(topic) ?? afterSeq,
