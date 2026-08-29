@@ -1,28 +1,19 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { HomeAction, HomeFocusItem } from '@xopcai/gateway-contract';
-import {
-  CalendarClock,
-  ChevronRight,
-  CircleAlert,
-  CircleCheck,
-  MessageCircle,
-  Plus,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
+import { CalendarClock, ChevronRight, CircleAlert, Plus, Sparkles, X } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   acknowledgeWorkAttention,
+  createTask,
   decideAgentJudgment,
   fetchHome,
   instructAgentJudgment,
   respondToWorkDecision,
   retryWorkAttention,
-  createTask,
   transitionAgentJudgment,
   type HomeDecision,
   type HomeResponse,
@@ -38,166 +29,113 @@ function interpolate(template: string, values: Record<string, string | number>):
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ''));
 }
 
-function formatTime(value: string | number | undefined, fallback: string): string {
-  if (value == null) return fallback;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return fallback;
-  return formatMediumDateTime(date);
-}
-
-function CountBadge({ children }: { children: string }) {
-  return <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-fg-muted">{children}</span>;
-}
-
 function HomeSkeleton() {
   return (
-    <div className="space-y-5" aria-busy>
-      <Skeleton className="h-20 rounded-2xl" />
-      <Skeleton className="h-40 rounded-2xl" />
-      <Skeleton className="h-52 rounded-2xl" />
+    <div className="space-y-8" aria-busy>
+      <div className="space-y-3">
+        <Skeleton className="h-10 w-3/5 rounded-xl" />
+        <Skeleton className="h-5 w-4/5 rounded-lg" />
+      </div>
+      <Skeleton className="h-64 rounded-2xl" />
+      <Skeleton className="h-32 rounded-xl" />
     </div>
   );
 }
 
 type HomeActionRunner = (action: HomeAction, itemId: string) => void;
 
-function focusIcon(kind: HomeFocusItem['kind']) {
-  if (kind === 'decision' || kind === 'failure') return <CircleAlert className="size-4" aria-hidden />;
-  if (kind === 'result') return <CircleCheck className="size-4" aria-hidden />;
-  if (kind === 'scheduled') return <CalendarClock className="size-4" aria-hidden />;
-  return <Sparkles className="size-4" aria-hidden />;
-}
-
-function actionNeedsDedicatedButton(action: HomeAction | undefined): action is HomeAction {
-  return Boolean(action && action.type !== 'open' && action.type !== 'review_judgment');
-}
-
-function FocusHero({
+function DecisionCard({
   item,
-  kindLabel,
   busy,
+  recommendationLabel,
+  dueLabel,
+  failureLabel,
+  locale,
   onAction,
 }: {
-  item: HomeFocusItem;
-  kindLabel: string;
+  item: HomeWorkbenchItem;
   busy: boolean;
+  recommendationLabel: string;
+  dueLabel: string;
+  failureLabel: string;
+  locale: 'en' | 'zh';
   onAction: HomeActionRunner;
 }) {
+  const due = item.dueAt ? `${dueLabel} ${formatMediumDateTime(new Date(item.dueAt), locale)}` : null;
+  const kicker = item.kind === 'failure' ? failureLabel : due;
   return (
-    <section className="rounded-2xl border border-edge-subtle bg-surface-base p-4 shadow-surface sm:p-5">
-      <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
-        <span className={item.kind === 'decision' || item.kind === 'failure' ? 'text-warning' : 'text-accent'}>
-          {focusIcon(item.kind)}
-        </span>
-        <span>{kindLabel}</span>
-      </div>
+    <article className="px-5 py-5 sm:px-6 sm:py-6">
+      {kicker ? (
+        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-warning">
+          <span className="size-1.5 rounded-full bg-warning" aria-hidden />
+          <span>{kicker}</span>
+        </div>
+      ) : null}
       <button
         type="button"
-        className="mt-3 block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="block w-full text-left outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-accent"
         disabled={!item.openAction}
         onClick={() => item.openAction && onAction(item.openAction, item.id)}
       >
-        <span className="flex items-start justify-between gap-3">
-          <span className="min-w-0">
-            <span className="block text-base font-semibold leading-6 text-fg">{item.title}</span>
-            <span className="mt-1 block line-clamp-2 text-sm leading-5 text-fg-muted">{item.summary}</span>
-          </span>
-          {item.statusLabel ? (
-            <span className="shrink-0 rounded-full bg-surface-muted px-2 py-1 text-[11px] font-medium text-fg-muted">
-              {item.statusLabel}
-            </span>
-          ) : null}
-        </span>
+        <span className="block text-lg font-semibold leading-7 tracking-tight text-fg">{item.title}</span>
+        <span className="mt-1.5 block text-sm leading-6 text-fg-muted">{item.summary}</span>
       </button>
+      {item.recommendation ? (
+        <p className="mt-3 text-sm leading-6 text-fg-muted">
+          <span className="font-semibold text-fg">{recommendationLabel}：</span>
+          {item.recommendation}
+        </p>
+      ) : null}
       {item.primaryAction || item.secondaryActions.length > 0 ? (
-        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-3">
-          {item.secondaryActions.map((action) => (
-            <Button key={`${action.type}:${action.label}`} type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onAction(action, item.id)}>
-              {action.label}
-            </Button>
-          ))}
+        <div className="mt-5 flex flex-wrap gap-2">
           {item.primaryAction ? (
-            <Button type="button" variant="primary" className="h-8 px-3" disabled={busy} onClick={() => onAction(item.primaryAction!, item.id)}>
+            <Button
+              type="button"
+              variant="primary"
+              className="h-9 rounded-lg px-3.5 text-xs"
+              disabled={busy}
+              onClick={() => onAction(item.primaryAction!, item.id)}
+            >
               {item.primaryAction.label}
             </Button>
           ) : null}
+          {item.secondaryActions.map((action) => (
+            <Button
+              key={`${action.type}:${action.label}`}
+              type="button"
+              variant="secondary"
+              className="h-9 rounded-lg px-3.5 text-xs shadow-none"
+              disabled={busy}
+              onClick={() => onAction(action, item.id)}
+            >
+              {action.label}
+            </Button>
+          ))}
         </div>
-      ) : null}
-    </section>
-  );
-}
-
-function FocusRow({ item, busy, onAction }: { item: HomeFocusItem; busy: boolean; onAction: HomeActionRunner }) {
-  const quickAction = actionNeedsDedicatedButton(item.primaryAction) ? item.primaryAction : undefined;
-  return (
-    <article className="flex min-h-16 items-center gap-3 px-3 py-2.5 sm:px-4">
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        disabled={!item.openAction}
-        onClick={() => item.openAction && onAction(item.openAction, item.id)}
-      >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-fg-muted">
-          {focusIcon(item.kind)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-fg">{item.title}</span>
-          <span className="mt-0.5 block truncate text-xs text-fg-muted">{item.summary}</span>
-        </span>
-        {item.statusLabel ? <span className="max-w-32 shrink-0 truncate text-xs text-fg-subtle">{item.statusLabel}</span> : null}
-        {item.openAction ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden /> : null}
-      </button>
-      {quickAction ? (
-        <Button type="button" variant="secondary" className="h-8 shrink-0 px-2.5 text-xs" disabled={busy} onClick={() => onAction(quickAction, item.id)}>
-          {quickAction.label}
-        </Button>
       ) : null}
     </article>
   );
 }
 
-function FocusSection({
-  title,
-  items,
-  total,
-  viewAllHref,
-  viewAllLabel,
-  showLessLabel,
-  busyItemId,
-  onAction,
-}: {
-  title: string;
-  items: HomeFocusItem[];
-  total: number;
-  viewAllHref?: string;
-  viewAllLabel: string;
-  showLessLabel: string;
-  busyItemId: string | null;
-  onAction: HomeActionRunner;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  if (items.length === 0) return null;
-  const visibleItems = expanded ? items : items.slice(0, 3);
-  const canExpandInline = !viewAllHref && items.length > visibleItems.length;
-  const showViewAllLink = Boolean(viewAllHref && total > visibleItems.length);
+function BackgroundRow({ item, onAction }: { item: HomeWorkbenchItem; onAction: HomeActionRunner }) {
+  const icon = item.kind === 'scheduled'
+    ? <CalendarClock className="size-4" aria-hidden />
+    : <span className="size-1.5 rounded-full bg-success" aria-hidden />;
   return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-3 px-1">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-fg">{title}</h2>
-          <CountBadge>{total.toLocaleString()}</CountBadge>
-        </div>
-        {showViewAllLink ? <Link to={viewAllHref!} className="text-xs font-medium text-accent">{viewAllLabel}</Link> : null}
-        {canExpandInline || expanded ? (
-          <button type="button" className="text-xs font-medium text-accent" onClick={() => setExpanded((value) => !value)}>
-            {expanded ? showLessLabel : viewAllLabel}
-          </button>
-        ) : null}
-      </div>
-      <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface">
-        {visibleItems.map((item) => <FocusRow key={item.id} item={item} busy={busyItemId === item.id} onAction={onAction} />)}
-      </div>
-    </section>
+    <button
+      type="button"
+      className="flex min-h-16 w-full items-center gap-3 py-3 text-left outline-none hover:text-fg focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-accent"
+      disabled={!item.openAction}
+      onClick={() => item.openAction && onAction(item.openAction, item.id)}
+    >
+      <span className="flex size-7 shrink-0 items-center justify-center text-fg-subtle">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-fg">{item.title}</span>
+        <span className="mt-0.5 block truncate text-xs text-fg-muted">{item.summary}</span>
+      </span>
+      {item.statusLabel ? <span className="shrink-0 text-xs text-fg-subtle">{item.statusLabel}</span> : null}
+      {item.openAction ? <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden /> : null}
+    </button>
   );
 }
 
@@ -278,7 +216,7 @@ export function HomePage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
-  const [busyFocusItemId, setBusyFocusItemId] = useState<string | null>(null);
+  const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [reviewDecision, setReviewDecision] = useState<HomeDecision | null>(null);
 
   const load = useCallback(async (showSkeleton = false) => {
@@ -286,8 +224,8 @@ export function HomePage() {
     setLoadError(null);
     try {
       setHome(await fetchHome(language));
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
@@ -358,28 +296,31 @@ export function HomePage() {
     }
   }, [backgroundPath, createRequestId, creating, language, navigate, task]);
 
-  const headerEnd = useMemo(() => (
+  const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
+  const headerEnd = useMemo(() => isIdle ? null : (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setCreateOpen(true)}>
       <Plus className="size-4" aria-hidden />
       {copy.newWork}
     </Button>
-  ), [copy.newWork]);
+  ), [copy.newWork, isIdle]);
 
   const handleJudgmentAction = useCallback(async (item: HomeDecision, action: () => Promise<unknown>) => {
     setBusyDecisionId(item.id);
     setLoadError(null);
-    try { await action(); await load(); }
-    catch (err) { setLoadError(err instanceof Error ? err.message : String(err)); }
-    finally { setBusyDecisionId(null); }
+    try {
+      await action();
+      await load();
+      setReviewDecision(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyDecisionId(null);
+    }
   }, [load]);
 
-  const runFocusAction = useCallback<HomeActionRunner>((action, itemId) => {
+  const runAction = useCallback<HomeActionRunner>((action, itemId) => {
     if (action.type === 'open') {
       navigate(action.href);
-      return;
-    }
-    if (action.type === 'ask_ai') {
-      navigate('/chat/new');
       return;
     }
     if (action.type === 'review_judgment') {
@@ -387,86 +328,52 @@ export function HomePage() {
       if (decision) setReviewDecision(decision);
       return;
     }
-    setBusyFocusItemId(itemId);
+    setBusyItemId(itemId);
     setLoadError(null);
     void (async () => {
       try {
         if (action.type === 'connector_decision') {
-          await respondToWorkDecision(
-            { kind: 'connector_approval', approvalId: action.approvalId },
-            action.decision,
-          );
+          await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
         } else if (action.type === 'retry_run') {
           await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
         } else if (action.type === 'acknowledge_run') {
           await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
         }
         await load();
-      } catch (err) {
-        setLoadError(err instanceof Error ? err.message : String(err));
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : String(error));
       } finally {
-        setBusyFocusItemId(null);
+        setBusyItemId(null);
       }
     })();
   }, [home?.decisions, load, navigate]);
 
-  const focusView = useMemo(() => {
-    const items = home?.focusItems ?? [];
-    const primary = items[0] ?? null;
-    const remaining = primary ? items.filter((item) => item.id !== primary.id) : items;
-    const select = (kinds: HomeFocusItem['kind'][]) => remaining.filter((item) => kinds.includes(item.kind));
-    const primaryKind = primary?.kind;
-    return {
-      primary,
-      needs: {
-        items: select(['decision', 'failure']),
-        total: Math.max(0, (home?.decisions.length ?? 0) + (home?.attention.length ?? 0) - (primaryKind === 'decision' || primaryKind === 'failure' ? 1 : 0)),
-      },
-      running: {
-        items: select(['running']),
-        total: Math.max(0, (home?.tasks.running.length ?? 0) + (home?.workflowRuns.active.length ?? 0) - (primaryKind === 'running' ? 1 : 0)),
-      },
-      scheduled: {
-        items: select(['scheduled']),
-        total: Math.max(0, (home?.upcomingAutomations.length ?? 0) - (primaryKind === 'scheduled' ? 1 : 0)),
-      },
-      results: {
-        items: select(['result']),
-        total: Math.max(0, (home?.recentTasks.length ?? 0) + (home?.briefing.wins.length ?? 0) - (primaryKind === 'result' ? 1 : 0)),
-      },
-    };
-  }, [home]);
-
-  const primaryKindLabel = focusView.primary
-    ? focusView.primary.kind === 'decision'
-      ? copy.needsAttention
-      : focusView.primary.kind === 'failure'
-        ? copy.runAttention
-        : focusView.primary.kind === 'running'
-          ? t.home.continueTitle
-          : focusView.primary.kind === 'result'
-            ? t.home.completed
-            : focusView.primary.kind === 'scheduled'
-              ? t.home.scheduled
-              : t.home.primaryFocus
-    : t.home.primaryFocus;
-
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>
-          <p className="truncate text-xs text-fg-muted">{t.home.subtitle}</p>
-        </div>
-      ),
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>,
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, setPageHeader, t.title, t.home.subtitle]);
+  }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
+
+  const needsUserCount = home?.needsUser.length ?? 0;
+  const backgroundCount = home?.backgroundCount ?? 0;
+  const headline = needsUserCount > 0
+    ? interpolate(t.home.attentionTitle, { count: needsUserCount })
+    : backgroundCount > 0
+      ? t.home.clearTitle
+      : t.home.idleTitle;
+  const intro = needsUserCount > 0
+    ? backgroundCount > 0
+      ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount })
+      : t.home.attentionIntro
+    : backgroundCount > 0
+      ? interpolate(t.home.clearIntro, { count: backgroundCount })
+      : t.home.idleIntro;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-7 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
       <Dialog.Root
         open={createOpen}
         onOpenChange={(open) => {
@@ -482,38 +389,23 @@ export function HomePage() {
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(31rem,calc(100dvh-1.5rem))] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-base font-semibold text-fg">
-                  {copy.dialogTitle}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm leading-5 text-fg-muted">
-                  {copy.dialogDescription}
-                </Dialog.Description>
+                <Dialog.Title className="text-base font-semibold text-fg">{copy.dialogTitle}</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-5 text-fg-muted">{copy.dialogDescription}</Dialog.Description>
               </div>
               <Dialog.Close asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="-mr-2 -mt-1 size-8 shrink-0 rounded-lg p-0"
-                  title={t.cancel}
-                  aria-label={t.cancel}
-                >
+                <Button type="button" variant="ghost" className="-mr-2 -mt-1 size-8 shrink-0 rounded-lg p-0" title={t.cancel} aria-label={t.cancel}>
                   <X className="size-4" aria-hidden />
                 </Button>
               </Dialog.Close>
             </div>
             <form onSubmit={submitCreate} className="flex min-h-0 flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
-                <label htmlFor="new-work-task" className="mb-2 shrink-0 text-sm font-medium text-fg">
-                  {copy.intentLabel}
-                </label>
+                <label htmlFor="new-work-task" className="mb-2 shrink-0 text-sm font-medium text-fg">{copy.intentLabel}</label>
                 <textarea
                   id="new-work-task"
                   className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
                   value={task}
-                  onChange={(event) => {
-                    setTask(event.target.value);
-                    setCreateRequestId(crypto.randomUUID());
-                  }}
+                  onChange={(event) => { setTask(event.target.value); setCreateRequestId(crypto.randomUUID()); }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();
@@ -526,9 +418,7 @@ export function HomePage() {
                 />
                 <div className="mt-2 flex shrink-0 items-center justify-between gap-3 text-[11px] text-fg-subtle">
                   <span>{t.home.submitShortcut}</span>
-                  <span className="tabular-nums">
-                    {task.length.toLocaleString()} / {(12_000).toLocaleString()}
-                  </span>
+                  <span className="tabular-nums">{task.length.toLocaleString()} / {(12_000).toLocaleString()}</span>
                 </div>
                 {createError ? <p className="mt-3 text-sm text-danger">{createError}</p> : null}
               </div>
@@ -550,11 +440,7 @@ export function HomePage() {
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <Dialog.Title className="text-sm font-semibold text-fg">{copy.needsAttention}</Dialog.Title>
-              <Dialog.Close asChild>
-                <Button type="button" variant="ghost" className="size-8 p-0" title={t.cancel} aria-label={t.cancel}>
-                  <X className="size-4" aria-hidden />
-                </Button>
-              </Dialog.Close>
+              <Dialog.Close asChild><Button type="button" variant="ghost" className="size-8 p-0" title={t.cancel} aria-label={t.cancel}><X className="size-4" aria-hidden /></Button></Dialog.Close>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {reviewDecision?.judgment ? (
@@ -574,71 +460,90 @@ export function HomePage() {
       </Dialog.Root>
 
       {loadError ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
+        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
           <span>{loadError}</span>
           <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.home.retry}</Button>
         </div>
       ) : null}
 
       {loading ? <HomeSkeleton /> : home ? (
-        <>
-          <section className="border-b border-edge-subtle pb-5">
-            <p className="text-xs font-medium text-fg-subtle">{t.home.briefingTitle}</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-fg">
-              {home.decisions.length + home.attention.length > 0
-                ? interpolate(t.home.todaySummary, {
-                    attention: home.decisions.length + home.attention.length,
-                    moving: home.briefing.progress.movingCount + home.chats.running.length,
-                  })
-                : interpolate(t.home.todaySummaryClear, {
-                    moving: home.briefing.progress.movingCount + home.chats.running.length,
-                  })}
-            </h2>
-            {home.briefing.summary ? (
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-fg-muted">{home.briefing.summary}</p>
+        <div className={isIdle ? 'flex min-h-[calc(100dvh-10rem)] items-center justify-center pb-[12vh]' : ''}>
+          <section className={isIdle ? 'w-full max-w-2xl text-center' : 'max-w-3xl'}>
+            <h2 className="text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.5rem] sm:leading-[1.12]">{headline}</h2>
+            <p className={isIdle
+              ? 'mx-auto mt-3 max-w-xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'
+              : 'mt-3 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'}>
+              {intro}
+            </p>
+            {isIdle ? (
+              <form
+                onSubmit={submitCreate}
+                className="mx-auto mt-8 w-full max-w-[640px] rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
+              >
+                <label htmlFor="idle-new-work-task" className="sr-only">{copy.intentLabel}</label>
+                <textarea
+                  id="idle-new-work-task"
+                  className="min-h-24 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle"
+                  value={task}
+                  onChange={(event) => { setTask(event.target.value); setCreateRequestId(crypto.randomUUID()); }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  placeholder={copy.intentPlaceholder}
+                  maxLength={12_000}
+                />
+                <div className="flex items-center justify-end gap-3 border-t border-edge-subtle px-1 pt-2 sm:justify-between">
+                  <span className="hidden px-2 text-[11px] text-fg-subtle sm:inline">{t.home.submitShortcut}</span>
+                  <Button type="submit" variant="primary" className="h-9 rounded-lg px-3.5 text-xs" disabled={!task.trim() || creating}>
+                    <Sparkles className="size-3.5" aria-hidden />
+                    {creating ? copy.starting : copy.newWork}
+                  </Button>
+                </div>
+                {createError ? <p className="px-3 pb-1 pt-2 text-xs text-danger" role="alert">{createError}</p> : null}
+              </form>
             ) : null}
           </section>
 
-          {focusView.primary ? (
-            <FocusHero
-              item={focusView.primary}
-              kindLabel={primaryKindLabel}
-              busy={busyFocusItemId === focusView.primary.id}
-              onAction={runFocusAction}
-            />
+          {home.needsUser.length > 0 ? (
+            <section className="mt-10" aria-labelledby="home-needs-user-title">
+              <div className="mb-3 flex items-center gap-2 px-1">
+                <CircleAlert className="size-4 text-warning" aria-hidden />
+                <h2 id="home-needs-user-title" className="text-sm font-semibold text-fg">{t.home.needsUserTitle}</h2>
+              </div>
+              <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base">
+                {home.needsUser.map((item) => (
+                  <DecisionCard
+                    key={item.id}
+                    item={item}
+                    busy={busyItemId === item.id}
+                    recommendationLabel={t.home.recommendationLabel}
+                    dueLabel={t.home.dueLabel}
+                    failureLabel={copy.runAttention}
+                    locale={language}
+                    onAction={runAction}
+                  />
+                ))}
+              </div>
+            </section>
           ) : null}
 
-          <div className="space-y-5">
-            <FocusSection title={copy.needsAttention} items={focusView.needs.items} total={focusView.needs.total} viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
-            <FocusSection title={t.home.continueTitle} items={focusView.running.items} total={focusView.running.total} viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
-            <FocusSection title={t.home.scheduled} items={focusView.scheduled.items} total={focusView.scheduled.total} viewAllHref="/automations" viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
-            <FocusSection title={t.home.completed} items={focusView.results.items} total={focusView.results.total} viewAllLabel={t.home.viewAll} showLessLabel={t.home.showLess} busyItemId={busyFocusItemId} onAction={runFocusAction} />
-
-            {home.chats.recent.length > 0 ? (
-              <section>
-                <div className="mb-2 flex items-center gap-2 px-1">
-                  <MessageCircle className="size-4 text-fg-muted" aria-hidden />
-                  <h2 className="text-sm font-semibold text-fg">{copy.recent}</h2>
-                </div>
-                <div className="divide-y divide-edge-subtle overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-surface">
-                  {home.chats.recent.slice(0, 3).map((chat) => (
-                    <Link key={chat.key} to={`/chat/${encodeURIComponent(chat.key)}`} className="flex min-h-16 items-center gap-3 px-3 py-2.5 hover:bg-surface-hover/55 sm:px-4">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-fg-muted"><MessageCircle className="size-4" aria-hidden /></span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-fg">{chat.name}</span>
-                        <span className="mt-0.5 block text-xs text-fg-subtle">{formatTime(chat.updatedAt, '')}</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </div>
-
-        </>
+          {home.background.length > 0 ? (
+            <section className="mt-10" aria-labelledby="home-background-title">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <h2 id="home-background-title" className="text-sm font-semibold text-fg">{t.home.backgroundTitle}</h2>
+                <span className="text-xs text-fg-subtle">{interpolate(t.home.backgroundCount, { count: home.backgroundCount })}</span>
+              </div>
+              <div className="mt-2 divide-y divide-edge-subtle border-y border-edge-subtle">
+                {home.background.map((item) => <BackgroundRow key={item.id} item={item} onAction={runAction} />)}
+              </div>
+              <p className="mt-5 text-xs leading-5 text-fg-subtle">{t.home.autoArchiveNote}</p>
+            </section>
+          ) : null}
+        </div>
       ) : null}
-
     </main>
   );
 }

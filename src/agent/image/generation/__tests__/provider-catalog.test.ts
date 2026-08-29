@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelsJsonConfig } from '../../../../config/models-json.js';
 import * as providerHttp from '../../../../media-shared/http/index.js';
+import {
+  getModelCatalogStore,
+  resetModelCatalogStore,
+} from '../../../../providers/model-catalog-store.js';
 
 import {
   getImageGenerationProvider,
@@ -11,10 +15,47 @@ import {
 } from '../provider-registry.js';
 
 describe('built-in image generation provider catalog', () => {
-  beforeEach(() => reloadImageGenerationProviders({ providers: {} }));
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    resetModelCatalogStore();
+    reloadImageGenerationProviders({ providers: {} });
+  });
+  afterEach(() => {
+    resetModelCatalogStore();
+    vi.restoreAllMocks();
+  });
 
-  it('contains the built-in providers in a stable order', () => {
+  it('contains the always-available built-in providers in a stable order', () => {
+    expect(listImageGenerationProviders().map((provider) => provider.id)).toEqual([
+      'openai',
+      'dashscope',
+      'minimax',
+      'google',
+      'fal',
+    ]);
+  });
+
+  it('prepends XOPC Cloud when the runtime catalog contains an image model', () => {
+    getModelCatalogStore().replaceSourceModels('xopc-cloud', {
+      providerId: 'xopc-cloud',
+      baseUrl: 'https://router.test/v1',
+      api: 'openai-completions',
+      etag: 'catalog-1',
+      recommendedModel: null,
+      lastSuccessAt: Date.now(),
+    }, [{
+      id: 'image-model',
+      name: 'Image Model',
+      kind: 'image',
+      input: ['text'],
+      output: ['image'],
+      operations: ['images.generate'],
+      reasoning: false,
+      contextWindow: 128_000,
+      maxOutputTokens: null,
+    }]);
+
+    reloadImageGenerationProviders({ providers: {} });
+
     expect(listImageGenerationProviders().map((provider) => provider.id)).toEqual([
       'xopc-cloud',
       'openai',

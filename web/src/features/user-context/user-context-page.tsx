@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Brain, Cable, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, Moon, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Brain, Cable, ChevronLeft, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, MessageCircle, Moon, Pencil, Plus, Settings2, ShieldCheck, Sparkles, Trash2, UserRoundPen, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -37,8 +37,15 @@ const inputClass = 'w-full rounded-xl border border-edge bg-surface-panel px-3 p
 
 const copy = {
   en: {
-    title: 'About You', subtitle: 'What xopc knows, why it knows it, and how it should work with you.',
-    profile: 'Profile', understanding: 'Understanding', collaboration: 'Working agreement', sources: 'Sources', dreaming: 'Background review', privacy: 'Privacy',
+    title: 'You', subtitle: 'A living portrait, shaped together by you and xopc.',
+    profile: 'Your portrait', understanding: 'Shared understanding', collaboration: 'Working together', sources: 'Sources', dreaming: 'Background review', privacy: 'Privacy',
+    portraitEyebrow: 'YOU × XOPC', portraitIntro: 'This is how xopc currently understands you. It grows through your conversations and work — and you always have the final say.',
+    maintainedTogether: 'Shaped together', youDecide: 'You decide what stays', editProfile: 'Edit basics', talkAboutMe: 'Add through conversation',
+    roleMissing: 'Add what you do', direction: 'What matters now', directionEmpty: 'Add a direction so xopc can help keep important work moving.',
+    portraitUnderstanding: 'What xopc understands', portraitUnderstandingHint: 'Confirmed context xopc can use across conversations.', portraitRules: 'How we work together', portraitRulesHint: 'The agreements xopc should follow when helping you.',
+    reviewWaiting: 'waiting for your review', seeAll: 'See all', addFirstUnderstanding: 'Nothing confirmed yet. Tell xopc what matters to you, or review a suggestion when one appears.', addFirstRule: 'No working agreements yet. Add one to make collaboration feel more like yours.',
+    portraitControl: 'How this portrait evolves', portraitControlHint: 'Manage where understanding comes from, how it is reviewed, and what is never retained.', portraitLearn: 'Learn how this portrait is formed', advanced: 'Portrait controls', backToPortrait: 'Back to your portrait',
+    controlSourcesHint: 'See which conversations, connections, and explicit details shape xopc’s understanding.', controlReviewHint: 'Choose how xopc proposes updates and which changes require your confirmation.', controlPrivacyHint: 'Set the boundaries for sensitive content and long-term retention.', controlTrust: 'Inferred understanding is never activated automatically. You can review, correct, or remove it at any time.',
     profileHint: 'Facts you provide directly. These are available across conversations.', done: 'Done', required: 'This field cannot be empty.',
     callName: 'What should xopc call you?', callNamePlaceholder: 'For example: Alex, Joyce, or Dr. Chen',
     role: 'Your role', rolePlaceholder: 'For example: product designer, founder, or engineer',
@@ -61,8 +68,15 @@ const copy = {
     error: 'Could not load your context.', retry: 'Try again',
   },
   zh: {
-    title: '关于你', subtitle: '清楚查看 xopc 知道什么、为什么知道，以及应该如何与你协作。',
-    profile: '个人资料', understanding: '对你的理解', collaboration: '协作约定', sources: '数据来源', dreaming: '后台复核', privacy: '隐私',
+    title: '你', subtitle: '一份由你和 xopc 共同塑造、持续生长的画像。',
+    profile: '你的画像', understanding: '共同理解', collaboration: '协作方式', sources: '数据来源', dreaming: '后台复核', privacy: '隐私',
+    portraitEyebrow: 'YOU × XOPC', portraitIntro: '这是 xopc 此刻对你的理解。它会在对话与共事中逐渐丰富，而你始终拥有最终决定权。',
+    maintainedTogether: '由你与 xopc 共同维护', youDecide: '你决定什么被保留', editProfile: '编辑基本信息', talkAboutMe: '在对话中补充',
+    roleMissing: '补充你的角色', direction: '此刻重要的事', directionEmpty: '写下你此刻的方向，让 xopc 帮你持续推动真正重要的事。',
+    portraitUnderstanding: 'xopc 对你的理解', portraitUnderstandingHint: '已经确认、可以在不同对话中帮助你的上下文。', portraitRules: '我们如何一起工作', portraitRulesHint: 'xopc 在帮助你时应该遵循的约定。',
+    reviewWaiting: '条等待你确认', seeAll: '查看全部', addFirstUnderstanding: '还没有已确认的理解。你可以直接告诉 xopc 什么对你重要，或在它形成建议后确认。', addFirstRule: '还没有协作约定。添加后，xopc 会更像你熟悉的搭档。',
+    portraitControl: '这份画像如何更新', portraitControlHint: '管理理解从哪里来、如何复核，以及哪些内容永远不会被保留。', portraitLearn: '了解这份画像如何形成', advanced: '画像管理', backToPortrait: '返回你的画像',
+    controlSourcesHint: '查看哪些对话、连接与明确告知的内容塑造了 xopc 的理解。', controlReviewHint: '决定 xopc 如何提出更新，以及哪些变化需要你确认。', controlPrivacyHint: '设定敏感内容与长期保留的边界。', controlTrust: '推断出的理解不会自动生效。你可以随时复核、修正或删除。',
     profileHint: '由你直接提供的事实，会在不同对话中使用。', done: '完成', required: '此项不能为空。',
     callName: '希望 xopc 如何称呼你？', callNamePlaceholder: '例如：Mic、Joyce、张老师',
     role: '你的角色', rolePlaceholder: '例如：产品设计师、创业者、工程师',
@@ -188,22 +202,30 @@ export function UserContextPage() {
   if (isLoading) return <div className="space-y-4 p-4 sm:p-6"><Skeleton className="h-10 w-96 max-w-full" /><Skeleton className="h-72 rounded-2xl" /></div>;
   if (error || !data) return <div className="p-6"><Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty></div>;
 
+  const advancedTab = tab === 'sources' || tab === 'dreaming' || tab === 'privacy';
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
-      <PageTabs
+    <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6 lg:py-8">
+      {advancedTab ? <div className="flex items-center gap-3 border-b border-edge pb-4">
+        <Button variant="ghost" className="-ml-2" onClick={() => setParams({ tab: 'profile' })}><ChevronLeft className="size-4" />{t.backToPortrait}</Button>
+        <span className="h-4 w-px bg-edge" aria-hidden="true" />
+        <span className="text-sm font-medium text-fg-muted">{t.advanced}</span>
+      </div> : <PageTabs
         ariaLabel={t.title}
         activeTab={tab}
         onChange={(next) => setParams({ tab: next })}
         items={[
           { id: 'profile', label: t.profile, icon: CircleUserRound },
-          { id: 'understanding', label: t.understanding, icon: Brain, count: data.understandings.length },
-          { id: 'collaboration', label: t.collaboration, icon: Handshake, count: data.rules.filter((rule) => rule.status === 'active').length },
-          { id: 'sources', label: t.sources, icon: Cable },
-          { id: 'dreaming', label: t.dreaming, icon: Moon },
-          { id: 'privacy', label: t.privacy, icon: ShieldCheck },
+          { id: 'understanding', label: t.understanding, icon: Brain, count: data.understandings.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status)).length || undefined },
+          { id: 'collaboration', label: t.collaboration, icon: Handshake },
         ]}
-      />
-      {tab === 'profile' ? <ProfilePanel profile={data.profile} language={language} t={t} onChanged={(profile) => mutate((current) => current ? { ...current, profile } : current, { revalidate: false })} /> : null}
+      />}
+      {tab === 'profile' ? <PortraitOverview
+        data={data}
+        language={language}
+        t={t}
+        onNavigate={(next) => setParams({ tab: next })}
+        onProfileChanged={(profile) => mutate((current) => current ? { ...current, profile } : current, { revalidate: false })}
+      /> : null}
       {tab === 'understanding' ? <UnderstandingPanel items={data.understandings} quality={data.quality} language={language} t={t} onChanged={(understanding) => understanding ? mutate((current) => current ? { ...current, understandings: current.understandings.map((item) => item.id === understanding.id ? understanding : item) } : current, { revalidate: true }) : mutate()} /> : null}
       {tab === 'collaboration' ? <RulesPanel rules={data.rules} language={language} t={t} onChanged={() => mutate()} /> : null}
       {tab === 'sources' ? <SourcesPanel t={t} /> : null}
@@ -213,11 +235,146 @@ export function UserContextPage() {
   );
 }
 
-function ProfilePanel({ profile, language, t, onChanged }: {
+function PortraitOverview({ data, language, t, onNavigate, onProfileChanged }: {
+  data: UserContextResponse;
+  language: 'en' | 'zh';
+  t: typeof copy.en | typeof copy.zh;
+  onNavigate: (tab: Tab) => void;
+  onProfileChanged: (profile: UserProfile) => Promise<unknown>;
+}) {
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const activeUnderstanding = data.understandings.filter((item) => item.status === 'active');
+  const pendingUnderstanding = data.understandings.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status));
+  const activeRules = data.rules.filter((rule) => rule.status === 'active');
+  const displayName = data.profile.callName.trim() || (language === 'zh' ? '你' : 'You');
+  const initial = [...displayName][0]?.toLocaleUpperCase() ?? 'Y';
+
+  return <div className="space-y-5">
+    <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-panel">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" aria-hidden="true" />
+      <div className="grid gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12 lg:px-10 lg:py-11">
+        <div className="min-w-0">
+          <div className="mb-7 flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-accent"><Sparkles className="size-3.5" />{t.portraitEyebrow}</div>
+          <div className="flex items-center gap-4">
+            <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-muted text-2xl font-semibold text-fg sm:size-20 sm:text-3xl">{initial}</div>
+            <div className="min-w-0">
+              <h2 className="truncate text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
+              <button className="mt-1 text-left text-sm text-fg-muted transition-colors hover:text-accent" onClick={() => setEditingProfile(true)}>{data.profile.role.trim() || t.roleMissing}</button>
+            </div>
+          </div>
+          <p className="mt-7 max-w-2xl text-base leading-7 text-fg-muted">{t.portraitIntro}</p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-subtle">
+            <span className="inline-flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-success" />{t.maintainedTogether}</span>
+            <button className="inline-flex items-center gap-1.5 rounded-md transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30" onClick={() => setControlsOpen(true)}><ShieldCheck className="size-3.5" />{t.youDecide}<span aria-hidden="true">·</span><span className="font-medium text-accent">{t.advanced}</span><ChevronRight className="size-3" /></button>
+          </div>
+        </div>
+        <div className="flex flex-col justify-between rounded-2xl border border-edge bg-surface-base/70 p-5 sm:p-6">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-fg-subtle">{t.direction}</p><p className={`mt-4 text-base leading-7 ${data.profile.primaryGoal.trim() ? 'text-fg' : 'text-fg-muted'}`}>{data.profile.primaryGoal.trim() || t.directionEmpty}</p></div>
+          <div className="mt-8 flex flex-wrap gap-2">
+            <Button variant="primary" asChild><Link to="/chat/new"><MessageCircle className="size-4" />{t.talkAboutMe}</Link></Button>
+            <Button onClick={() => setEditingProfile(true)}><UserRoundPen className="size-4" />{t.editProfile}</Button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div className="grid gap-5 lg:grid-cols-2">
+      <PortraitSection
+        icon={<Brain className="size-4" />}
+        title={t.portraitUnderstanding}
+        description={t.portraitUnderstandingHint}
+        action={<button className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline" onClick={() => onNavigate('understanding')}>{t.seeAll}<ChevronRight className="size-3.5" /></button>}
+      >
+        {pendingUnderstanding.length ? <button className="mb-4 flex w-full items-center justify-between rounded-xl border border-accent/20 bg-accent-soft px-3 py-2.5 text-left text-xs text-accent transition-colors hover:border-accent/40" onClick={() => onNavigate('understanding')}><span><Sparkles className="mr-1.5 inline size-3.5" />{pendingUnderstanding.length} {t.reviewWaiting}</span><ArrowUpRight className="size-3.5" /></button> : null}
+        {activeUnderstanding.length ? <div className="space-y-1">{activeUnderstanding.slice(0, 4).map((item) => <div key={item.id} className="group flex gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-hover"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent/70" /><div className="min-w-0"><p className="text-sm leading-6 text-fg">{item.statement}</p><p className="mt-0.5 text-[11px] text-fg-subtle">{kindLabels[item.kind][language]}</p></div></div>)}</div> : <p className="py-5 text-sm leading-6 text-fg-muted">{t.addFirstUnderstanding}</p>}
+      </PortraitSection>
+
+      <PortraitSection
+        icon={<Handshake className="size-4" />}
+        title={t.portraitRules}
+        description={t.portraitRulesHint}
+        action={<button className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline" onClick={() => onNavigate('collaboration')}>{t.seeAll}<ChevronRight className="size-3.5" /></button>}
+      >
+        {activeRules.length ? <div className="space-y-1">{activeRules.slice(0, 4).map((rule) => <div key={rule.id} className="flex gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-hover"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-fg-subtle" /><div className="min-w-0"><p className="text-sm leading-6 text-fg">{rule.statement}</p><p className="mt-0.5 text-[11px] text-fg-subtle">{ruleLabels[rule.category][language]}</p></div></div>)}</div> : <p className="py-5 text-sm leading-6 text-fg-muted">{t.addFirstRule}</p>}
+      </PortraitSection>
+    </div>
+
+    <button className="group flex w-full items-center gap-4 rounded-2xl border border-edge bg-surface-panel px-5 py-4 text-left transition-colors hover:bg-surface-hover sm:px-6" onClick={() => setControlsOpen(true)}>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"><Settings2 className="size-4" /></span>
+        <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{t.portraitLearn}</span><span className="mt-0.5 block text-xs leading-5 text-fg-muted">{t.portraitControlHint}</span></span>
+        <ChevronRight className="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+    </button>
+
+    <EditProfileDialog open={editingProfile} onOpenChange={setEditingProfile} profile={data.profile} language={language} t={t} onChanged={onProfileChanged} />
+    <PortraitControlDialog open={controlsOpen} onOpenChange={setControlsOpen} t={t} onNavigate={(next) => { setControlsOpen(false); onNavigate(next); }} />
+  </div>;
+}
+
+function PortraitSection({ icon, title, description, action, children }: { icon: React.ReactNode; title: string; description: string; action: React.ReactNode; children: React.ReactNode }) {
+  return <section className="rounded-2xl border border-edge bg-surface-panel p-5 sm:p-6">
+    <div className="flex items-start gap-3"><span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted">{icon}</span><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-fg">{title}</h3>{action}</div><p className="mt-1 text-xs leading-5 text-fg-muted">{description}</p></div></div>
+    <div className="mt-4 border-t border-edge pt-3">{children}</div>
+  </section>;
+}
+
+function PortraitControlDialog({ open, onOpenChange, t, onNavigate }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  t: typeof copy.en | typeof copy.zh;
+  onNavigate: (tab: Extract<Tab, 'sources' | 'dreaming' | 'privacy'>) => void;
+}) {
+  const items: Array<{ tab: Extract<Tab, 'sources' | 'dreaming' | 'privacy'>; icon: React.ReactNode; label: string; description: string }> = [
+    { tab: 'sources', icon: <Cable className="size-4" />, label: t.sources, description: t.controlSourcesHint },
+    { tab: 'dreaming', icon: <Moon className="size-4" />, label: t.dreaming, description: t.controlReviewHint },
+    { tab: 'privacy', icon: <ShieldCheck className="size-4" />, label: t.privacy, description: t.controlPrivacyHint },
+  ];
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal>
+    <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+    <Dialog.Content className="fixed inset-y-0 right-0 z-[90] h-full w-[min(30rem,100vw)] overflow-hidden border-l border-edge bg-surface-panel shadow-popover outline-none sm:rounded-l-2xl">
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-5 sm:px-6 sm:py-6">
+          <div className="min-w-0"><div className="mb-3 flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent"><Settings2 className="size-4" /></div><Dialog.Title className="text-lg font-semibold tracking-tight text-fg">{t.portraitControl}</Dialog.Title><Dialog.Description className="mt-2 text-sm leading-6 text-fg-muted">{t.portraitControlHint}</Dialog.Description></div>
+          <Dialog.Close asChild><Button variant="ghost" className="size-8 shrink-0 p-0" aria-label={t.cancel}><X className="size-4" /></Button></Dialog.Close>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="space-y-3">{items.map((item) => <button key={item.tab} className="group flex w-full items-start gap-4 rounded-2xl border border-edge bg-surface-base p-4 text-left transition-colors hover:border-edge-strong hover:bg-surface-hover" onClick={() => onNavigate(item.tab)}>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted transition-colors group-hover:text-accent">{item.icon}</span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{item.label}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{item.description}</span></span>
+            <ChevronRight className="mt-2.5 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
+          </button>)}</div>
+          <div className="mt-6 flex gap-3 rounded-2xl bg-surface-muted p-4"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" /><p className="text-xs leading-5 text-fg-muted">{t.controlTrust}</p></div>
+        </div>
+      </div>
+    </Dialog.Content>
+  </Dialog.Portal></Dialog.Root>;
+}
+
+function EditProfileDialog({ open, onOpenChange, profile, language, t, onChanged }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   profile: UserProfile;
   language: 'en' | 'zh';
   t: typeof copy.en | typeof copy.zh;
   onChanged: (profile: UserProfile) => Promise<unknown>;
+}) {
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal>
+    <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+    <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] h-[min(42rem,calc(100vh-2rem))] w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-5 py-4 sm:px-6"><div><Dialog.Title className="text-base font-semibold text-fg">{t.editProfile}</Dialog.Title><Dialog.Description className="mt-1 text-xs leading-5 text-fg-muted">{t.profileHint}</Dialog.Description></div><Dialog.Close asChild><Button variant="ghost" className="size-8 shrink-0 p-0" aria-label={t.cancel}><X className="size-4" /></Button></Dialog.Close></header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6"><ProfilePanel profile={profile} language={language} t={t} onChanged={onChanged} bare /></div>
+      </div>
+    </Dialog.Content>
+  </Dialog.Portal></Dialog.Root>;
+}
+
+function ProfilePanel({ profile, language, t, onChanged, bare = false }: {
+  profile: UserProfile;
+  language: 'en' | 'zh';
+  t: typeof copy.en | typeof copy.zh;
+  onChanged: (profile: UserProfile) => Promise<unknown>;
+  bare?: boolean;
 }) {
   const sourceDraft = useMemo(() => toUserProfileDraft(profile), [profile]);
   const [draft, setDraft] = useSyncedDraft(sourceDraft);
@@ -233,20 +390,19 @@ function ProfilePanel({ profile, language, t, onChanged }: {
   const field = (key: 'callName' | 'role' | 'pronouns' | 'timezone' | 'locale', label: string, placeholder?: string) => (
     <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{label}</span><input className={inputClass} placeholder={placeholder} value={draft[key]} onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))} /></label>
   );
-  return <Card>
-    <div onBlurCapture={autosave.onBlurCapture}>
-      <p className="mb-5 text-sm leading-6 text-fg-muted">{t.profileHint}</p>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {field('callName', t.callName, t.callNamePlaceholder)}
-        {field('role', t.role, t.rolePlaceholder)}
-        <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.primaryGoal}</span><textarea className={inputClass} rows={3} placeholder={t.primaryGoalPlaceholder} value={draft.primaryGoal} onChange={(event) => setDraft((current) => ({ ...current, primaryGoal: event.target.value }))} /></label>
-        {language === 'en' ? field('pronouns', t.pronouns, t.pronounsPlaceholder) : null}
-        <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone} onChange={(event) => setDraft((current) => ({ ...current, timezone: event.target.value }))} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => ({ ...current, timezone: detectBrowserTimezone() }))}>{t.detect}</Button></div></label>
-        {field('locale', t.locale)}
-      </div>
-      <div className="mt-5 flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
+  const content = <div onBlurCapture={autosave.onBlurCapture}>
+    <div className="grid gap-4 sm:grid-cols-2">
+      {field('callName', t.callName, t.callNamePlaceholder)}
+      {field('role', t.role, t.rolePlaceholder)}
+      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.primaryGoal}</span><textarea className={inputClass} rows={3} placeholder={t.primaryGoalPlaceholder} value={draft.primaryGoal} onChange={(event) => setDraft((current) => ({ ...current, primaryGoal: event.target.value }))} /></label>
+      {language === 'en' ? field('pronouns', t.pronouns, t.pronounsPlaceholder) : null}
+      <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone} onChange={(event) => setDraft((current) => ({ ...current, timezone: event.target.value }))} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => ({ ...current, timezone: detectBrowserTimezone() }))}>{t.detect}</Button></div></label>
+      {field('locale', t.locale)}
     </div>
-  </Card>;
+    <div className="mt-5 flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
+  </div>;
+  if (bare) return content;
+  return <Card><p className="mb-5 text-sm leading-6 text-fg-muted">{t.profileHint}</p>{content}</Card>;
 }
 
 function UnderstandingPanel({ items, quality, language, t, onChanged }: { items: UserUnderstanding[]; quality: UserUnderstandingQuality; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: (understanding?: UserUnderstanding) => Promise<unknown> }) {

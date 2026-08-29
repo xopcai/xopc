@@ -1,98 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildHomeBriefing, buildHomeFocusItems } from '../home.js';
+import { buildHomeWorkbench, decisionFromTask } from '../home.js';
 
-describe('home briefing', () => {
-  it('summarizes decisions and background progress in the requested locale', () => {
-    const briefing = buildHomeBriefing({
-      locale: 'zh-CN',
-      decisions: [
-        {
-          id: 'task:1',
-          kind: 'task',
-          title: '确认发布范围',
-          reason: 'needs_input',
-          urgency: 'now',
-          href: '/tasks/1',
-          updatedAt: 100,
-        },
-      ],
-      attention: [],
-      activeWorkflowCount: 1,
-      activeTaskCount: 3,
-      wins: [],
-      nextScheduled: undefined,
-      inboxCount: 0,
-      nowMs: 400,
-      nowMs: 200,
-    });
-
-    expect(briefing.summary).toBe('有 1 件事需要你处理；我正在继续推进 4 件工作。');
-    expect(briefing.focus).toHaveLength(1);
-    expect(briefing.progress).toEqual({
-      activeWorkflowCount: 1,
-      activeTaskCount: 3,
-      movingCount: 4,
-    });
-  });
-
-  it('keeps the briefing calm when nothing needs the user', () => {
-    const briefing = buildHomeBriefing({
-      locale: 'en',
-      decisions: [],
-      attention: [],
-      activeWorkflowCount: 0,
-      activeTaskCount: 1,
-      wins: [],
-      nowMs: 200,
-    });
-
-    expect(briefing.summary).toBe("Nothing needs you right now; I’m continuing 1 item in the background.");
-    expect(briefing.focus).toEqual([]);
-  });
-
-  it('shows a result-oriented empty state', () => {
-    const briefing = buildHomeBriefing({
-      locale: 'en',
-      decisions: [],
-      attention: [],
-      activeWorkflowCount: 0,
-      activeTaskCount: 0,
-      wins: [],
-      nowMs: 200,
-    });
-
-    expect(briefing.summary).toContain('Hand me an task');
-  });
-
-  it('includes run issues in the attention summary without treating them as decisions', () => {
-    const briefing = buildHomeBriefing({
-      locale: 'en',
-      decisions: [],
-      attention: [{
-        id: 'automation_run:run-1',
-        kind: 'automation_run',
-        runId: 'run-1',
-        title: 'Daily report',
-        detail: 'The run exceeded 5 minutes and was stopped.',
-        reason: 'run_timeout',
-        href: '/automations?run=run-1',
-        updatedAt: 100,
-      }],
-      activeWorkflowCount: 0,
-      activeTaskCount: 0,
-      wins: [],
-      nowMs: 200,
-    });
-
-    expect(briefing.summary).toBe('1 item needs your attention.');
-    expect(briefing.focus).toEqual([]);
-  });
-});
-
-describe('home focus items', () => {
-  it('prioritizes decisions and exposes executable connector actions', () => {
-    const items = buildHomeFocusItems({
+describe('home workbench', () => {
+  it('keeps decisions and failures in the user-attention layer', () => {
+    const workbench = buildHomeWorkbench({
       locale: 'zh-CN',
       decisions: [{
         id: 'connector-approval:approval-1',
@@ -117,85 +29,87 @@ describe('home focus items', () => {
       }],
       activeWorkflowRuns: [],
       runningTasks: [],
-      wins: [],
       scheduled: [],
-      recentTasks: [],
-      inboxCount: 0,
       nowMs: 400,
     });
 
-    expect(items.map((item) => item.kind)).toEqual(['decision', 'failure']);
-    expect(items[0]?.primaryAction).toEqual({
+    expect(workbench.needsUser.map((item) => item.kind)).toEqual(['decision', 'failure']);
+    expect(workbench.needsUser[0]?.primaryAction).toEqual({
       type: 'connector_decision',
       label: '允许并继续',
       approvalId: 'approval-1',
       decision: 'approve',
     });
-    expect(items[1]?.secondaryActions[0]?.type).toBe('acknowledge_run');
+    expect(workbench.needsUser[1]?.recommendation).toContain('重试');
+    expect(workbench.background).toEqual([]);
+    expect(workbench.backgroundCount).toBe(0);
   });
 
-  it('offers one useful suggestion only when no work is active', () => {
-    const items = buildHomeFocusItems({
+  it('allows a genuinely quiet empty state', () => {
+    const workbench = buildHomeWorkbench({
       locale: 'en',
       decisions: [],
       attention: [],
       activeWorkflowRuns: [],
       runningTasks: [],
-      wins: [],
       scheduled: [],
-      recentTasks: [],
-      inboxCount: 0,
       nowMs: 500,
     });
 
-    expect(items).toEqual([expect.objectContaining({
-      id: 'suggestion:ask-agent',
-      kind: 'suggestion',
-      primaryAction: { type: 'ask_ai', label: 'Ask an agent' },
-    })]);
+    expect(workbench).toEqual({ needsUser: [], background: [], backgroundCount: 0 });
   });
 
-  it('prefers organizing captured content over a generic idle suggestion', () => {
-    const items = buildHomeFocusItems({
-      locale: 'zh-CN',
-      decisions: [],
-      attention: [],
-      activeWorkflowRuns: [],
-      runningTasks: [],
-      wins: [],
-      scheduled: [],
-      recentTasks: [],
-      inboxCount: 3,
-      nowMs: 600,
-    });
-
-    expect(items[0]).toMatchObject({
-      id: 'suggestion:organize-inbox',
-      title: '整理收件箱 · 3',
-      primaryAction: { type: 'open', href: '/notes?status=inbox' },
-    });
-  });
-
-  it('keeps every scheduled item independently addressable', () => {
-    const items = buildHomeFocusItems({
+  it('counts all background work while returning only the first three rows', () => {
+    const workbench = buildHomeWorkbench({
       locale: 'en',
       decisions: [],
       attention: [],
-      activeWorkflowRuns: [],
+      activeWorkflowRuns: [{
+        id: 'run-1',
+        definitionId: 'workflow-1',
+        title: 'Research',
+        status: 'running',
+        createdAtMs: 100,
+        metrics: { agentCount: 2, doneAgentCount: 1, errorAgentCount: 0, skippedAgentCount: 0, artifactCount: 0 },
+      }],
       runningTasks: [],
-      wins: [],
       scheduled: [
         { id: 'morning', trigger: '0 8 * * *', action: 'agent:main', nextRunAt: '2026-08-29T00:00:00.000Z' },
+        { id: 'noon', trigger: '0 12 * * *', action: 'agent:main', nextRunAt: '2026-08-29T04:00:00.000Z' },
         { id: 'evening', trigger: '0 18 * * *', action: 'agent:main', nextRunAt: '2026-08-29T10:00:00.000Z' },
       ],
-      recentTasks: [],
-      inboxCount: 0,
       nowMs: 500,
     });
 
-    expect(items.map((item) => item.primaryAction)).toEqual([
-      { type: 'open', label: 'View schedule', href: '/automations?automation=morning' },
-      { type: 'open', label: 'View schedule', href: '/automations?automation=evening' },
-    ]);
+    expect(workbench.backgroundCount).toBe(4);
+    expect(workbench.background).toHaveLength(3);
+    expect(workbench.background.map((item) => item.kind)).toEqual(['running', 'scheduled', 'scheduled']);
+  });
+
+  it('turns a completed manual task into a review decision', () => {
+    const decision = decisionFromTask({
+      task: {
+        id: 'task-1',
+        title: 'Weekly report',
+        phase: 'review',
+        priority: 'normal',
+        source: 'user',
+        locale: 'en',
+        latestContractVersion: 1,
+        boardRank: 1024,
+        version: 2,
+        createdAt: 100,
+        updatedAt: 200,
+      },
+      operationalState: 'idle',
+      attention: [],
+      allowedCommands: [],
+    });
+
+    expect(decision).toMatchObject({
+      id: 'task:task-1:review',
+      reason: 'decision_needed',
+      detail: 'The work is complete and ready for your review.',
+    });
   });
 });

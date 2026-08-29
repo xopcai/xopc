@@ -27,6 +27,7 @@ export const MessageList = memo(function MessageList({
   onRefreshWelcomeExploration,
   onSelectWelcomeProject,
   welcomeOverlay,
+  compactWelcome = false,
   onDeleteRound,
   onRetryUserMessageRound,
   deleteRoundDisabled,
@@ -53,6 +54,7 @@ export const MessageList = memo(function MessageList({
   onRefreshWelcomeExploration?: () => void;
   onSelectWelcomeProject?: (projectId: string) => Promise<void> | void;
   welcomeOverlay?: ReactNode;
+  compactWelcome?: boolean;
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
   deleteRoundDisabled?: boolean;
@@ -82,6 +84,7 @@ export const MessageList = memo(function MessageList({
             onRetryContext={onRetryWelcomeContext}
             onRefreshExploration={onRefreshWelcomeExploration}
             onSelectProject={onSelectWelcomeProject}
+            compact={compactWelcome}
           />
         </div>
       );

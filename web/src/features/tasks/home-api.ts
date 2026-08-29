@@ -3,7 +3,6 @@ import {
   TaskDetailResponseSchema,
   parseHomeResponse,
   type HomeAttention,
-  type HomeChat,
   type HomeDecision,
   type HomeResponse,
   type TaskCommand,
@@ -16,7 +15,7 @@ import {
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type { HomeAttention, HomeChat, HomeDecision, HomeResponse };
+export type { HomeAttention, HomeDecision, HomeResponse };
 export type TaskDetail = TaskDetailResponse;
 
 export async function createTask(input: TaskCreateRequest): Promise<TaskCreateResponse> {
