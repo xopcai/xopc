@@ -188,6 +188,7 @@ export interface WorkDiscoveryResult {
   currentState: string;
   uncertainties: string[];
   suggestions: WorkDiscoverySuggestion[];
+  conversationStarter?: string;
   discoveredProjects?: Array<{
     rootPath: string;
     displayName: string;
