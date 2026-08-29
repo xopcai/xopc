@@ -14,6 +14,7 @@ export interface StartWorkflowRunServiceParams {
   parentSessionKey?: string;
   projectId?: string;
   contextRefs?: WorkflowRunContextRef[];
+  contextSnapshotId?: string;
   writebackPolicy?: WorkflowRunWritebackPolicy;
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;

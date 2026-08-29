@@ -30,6 +30,16 @@ export async function resolveComposioApiKey(resolver = new CredentialResolver())
   return stored?.trim() || process.env.XOPC_COMPOSIO_API_KEY?.trim() || process.env.COMPOSIO_API_KEY?.trim() || null;
 }
 
+export async function assertComposioAccessConfigured(resolver = new CredentialResolver()): Promise<'byok' | 'managed'> {
+  if (await resolveComposioApiKey(resolver)) return 'byok';
+  const cloudAccessToken = await resolver.resolveApiKey('xopc-cloud').catch(() => null);
+  if (cloudAccessToken?.trim()) return 'managed';
+  throw new Error(
+    'Composio API key is not configured and XOPC Cloud is not signed in. '
+    + 'Install the "Composio API Key" connector first or sign in to XOPC Cloud.',
+  );
+}
+
 export type ComposioToolkitCatalogItem = {
   slug: string;
   name: string;

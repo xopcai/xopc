@@ -9,6 +9,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   cancelWorkflowRun,
+  listProjectWorkflowPresets,
   listWorkflowDefinitions,
   listWorkflowRuns,
   retryWorkflowRun,
@@ -50,6 +51,7 @@ export function useWorkflowsPage() {
   const pageTabParam = searchParams.get(WORKFLOW_PAGE_TAB_PARAM)?.trim() ?? '';
   const runLayoutParam = searchParams.get(WORKFLOW_RUN_LAYOUT_PARAM)?.trim() ?? '';
   const ownerAgentParam = searchParams.get(WORKFLOW_AGENT_PARAM)?.trim() ?? '';
+  const projectId = searchParams.get('projectId')?.trim() || undefined;
   const pageTab: WorkflowPageTab = WORKFLOW_PAGE_TAB_SET.has(pageTabParam) ? (pageTabParam as WorkflowPageTab) : 'runs';
   const runLayout: WorkflowRunLayout = WORKFLOW_RUN_LAYOUT_SET.has(runLayoutParam) ? (runLayoutParam as WorkflowRunLayout) : 'list';
   const statusFilter: WorkflowStatusFilter = WORKFLOW_STATUS_FILTER_SET.has(statusParam) ? (statusParam as WorkflowStatusFilter) : 'all';
@@ -62,9 +64,14 @@ export function useWorkflowsPage() {
     return agentsSwr.data?.defaultId;
   }, [agentsSwr.data, ownerAgentParam]);
   const definitionsSwr = useSWR(hasToken ? ['workflow-definitions', token] : null, listWorkflowDefinitions, { revalidateOnFocus: false });
+  const projectPresetsSwr = useSWR(
+    hasToken && projectId ? ['workflow-project-presets', token, projectId] : null,
+    () => listProjectWorkflowPresets(projectId!),
+    { revalidateOnFocus: false },
+  );
   const runsSwr = useSWR(
-    hasToken && ownerAgentId ? ['workflow-runs', token, ownerAgentId] : null,
-    () => listWorkflowRuns(RUN_FETCH_LIMIT, { ownerAgentId }),
+    hasToken && ownerAgentId ? ['workflow-runs', token, ownerAgentId, projectId ?? ''] : null,
+    () => listWorkflowRuns(RUN_FETCH_LIMIT, { ownerAgentId, projectId }),
     {
       revalidateOnFocus: false,
       refreshInterval: (latest) => latest?.some((run) => run.status === 'queued' || run.status === 'running') ? 3000 : 0,
@@ -119,13 +126,22 @@ export function useWorkflowsPage() {
     next.delete(WORKFLOW_STATUS_FILTER_PARAM);
   }), [patchSearchParams]);
 
-  const ownerSuffix = ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : '';
-  const openDefinitionDetails = useCallback((definition: WorkflowDefinition) => navigate(`/workflows/${definition.id}${ownerSuffix}`), [navigate, ownerSuffix]);
+  const routeSearch = useMemo(() => {
+    const params = new URLSearchParams();
+    if (ownerAgentId) params.set('agentId', ownerAgentId);
+    if (projectId) params.set('projectId', projectId);
+    return params.size ? `?${params.toString()}` : '';
+  }, [ownerAgentId, projectId]);
+  const openDefinitionDetails = useCallback((definition: WorkflowDefinition) => navigate(`/workflows/${definition.id}${routeSearch}`), [navigate, routeSearch]);
   const startWorkflow = openDefinitionDetails;
   const openWorkflowEditor = useCallback((definition: WorkflowDefinition) => {
-    navigate(definition.metadata.source === 'user' ? `/workflows/${definition.id}/edit${ownerSuffix}` : `/workflows/new?copy=${encodeURIComponent(definition.id)}${ownerAgentId ? `&agentId=${encodeURIComponent(ownerAgentId)}` : ''}`);
-  }, [navigate, ownerAgentId, ownerSuffix]);
-  const openRunDetails = useCallback((run: WorkflowRunSummary) => navigate(`/workflows/runs/${run.id}${ownerSuffix}`), [navigate, ownerSuffix]);
+    const params = new URLSearchParams(routeSearch.slice(1));
+    if (definition.metadata.source !== 'user') params.set('copy', definition.id);
+    navigate(definition.metadata.source === 'user'
+      ? `/workflows/${definition.id}/edit${routeSearch}`
+      : `/workflows/new${params.size ? `?${params.toString()}` : ''}`);
+  }, [navigate, routeSearch]);
+  const openRunDetails = useCallback((run: WorkflowRunSummary) => navigate(`/workflows/runs/${run.id}${routeSearch}`), [navigate, routeSearch]);
   const openRunInChat = useCallback((run: WorkflowRunSummary) => {
     const sessionKey = resolveRunSessionKey(run);
     if (sessionKey) navigate(workflowChatHref(sessionKey));
@@ -142,11 +158,11 @@ export function useWorkflowsPage() {
   const retryRun = useCallback(async (runId: string) => {
     try {
       const result = await retryWorkflowRun(runId, { ownerAgentId });
-      navigate(`/workflows/runs/${result.runId}${ownerSuffix}`);
+      navigate(`/workflows/runs/${result.runId}${routeSearch}`);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : labels.retryFailed);
     }
-  }, [labels.retryFailed, navigate, ownerAgentId, ownerSuffix]);
+  }, [labels.retryFailed, navigate, ownerAgentId, routeSearch]);
   useEffect(() => {
     const refresh = () => void runsSwr.mutate();
     window.addEventListener('workflow-run-updated', refresh);
@@ -158,10 +174,10 @@ export function useWorkflowsPage() {
   }, [runsSwr]);
 
   const refreshAll = useCallback(() => {
-    void Promise.all([agentsSwr.mutate(), definitionsSwr.mutate(), runsSwr.mutate()]);
-  }, [agentsSwr, definitionsSwr, runsSwr]);
-  const loading = agentsSwr.isLoading || definitionsSwr.isLoading || runsSwr.isLoading;
-  const error = agentsSwr.error?.message ?? definitionsSwr.error?.message ?? runsSwr.error?.message ?? null;
+    void Promise.all([agentsSwr.mutate(), definitionsSwr.mutate(), projectPresetsSwr.mutate(), runsSwr.mutate()]);
+  }, [agentsSwr, definitionsSwr, projectPresetsSwr, runsSwr]);
+  const loading = agentsSwr.isLoading || definitionsSwr.isLoading || runsSwr.isLoading || projectPresetsSwr.isLoading;
+  const error = agentsSwr.error?.message ?? definitionsSwr.error?.message ?? runsSwr.error?.message ?? projectPresetsSwr.error?.message ?? null;
 
   return {
     language,
@@ -171,6 +187,7 @@ export function useWorkflowsPage() {
     searchQuery,
     setSearchQuery,
     ownerAgentId,
+    projectId,
     agentOptions: agentsSwr.data?.agents ?? [],
     setOwnerAgentId,
     workflowFilterId,
@@ -185,6 +202,7 @@ export function useWorkflowsPage() {
     runLayout,
     setRunLayout,
     definitions,
+    projectPresetDefinitionIds: new Set((projectPresetsSwr.data ?? []).map((preset) => preset.definitionId)),
     runs,
     openDefinitionDetails,
     startWorkflow,
