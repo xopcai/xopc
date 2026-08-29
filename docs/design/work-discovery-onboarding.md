@@ -244,7 +244,7 @@ The first result is not a dashboard. It is a full-screen sequence with one decis
 1. **Current context:** show one synthesized statement. Current state, work-thread labels, and evidence stay behind **Why do I think this?**.
 2. **Calibration:** offer only **Accurate** or **Adjust**. Adjustment requires the actual corrected intent; category labels are not accepted as substitutes for a correction.
    - When the current objective is uncertain, never present an empty prompt. Generate one editable `conversationStarter` from the selected folder, readable project context, and recent changes.
-   - The starter asks the assistant to explain the project state and most important next step before acting. Confirming it opens the project conversation and sends it immediately; it does not route through the recommendation screen.
+   - Any submitted calibration text—generated starter or user correction—opens the project conversation and sends immediately. It does not route through memory, focus, or recommendation screens.
 3. **Lasting understanding:** show only the highest-value pending candidate with **Remember**, **This time only**, and **Edit**. Numeric confidence is not shown.
 4. **Current focus:** show only the highest-value pending focus and state that focus affects prioritization and reminders, not execution authorization.
 
