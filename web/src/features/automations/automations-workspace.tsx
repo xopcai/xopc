@@ -1326,7 +1326,13 @@ function AutomationList({
   onOpenDetails: (automationId: string) => void;
 }) {
   if (automations.length === 0) {
-    return <EmptyState icon={<Zap className="size-5" />} title={labels.empty.filtered} />;
+    return (
+      <EmptyState
+        className="rounded-none border-0 shadow-none"
+        icon={<Zap className="size-5" />}
+        title={labels.empty.filtered}
+      />
+    );
   }
   return (
     <div className="divide-y divide-edge-subtle">
@@ -2017,9 +2023,20 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
+function EmptyState({
+  className,
+  icon,
+  title,
+}: {
+  className?: string;
+  icon: React.ReactNode;
+  title: string;
+}) {
   return (
-    <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-edge-subtle bg-surface-base text-fg-muted shadow-surface">
+    <div className={cn(
+      'flex min-h-48 flex-col items-center justify-center rounded-lg border border-edge-subtle bg-surface-base text-fg-muted shadow-surface',
+      className,
+    )}>
       {icon}
       <div className="mt-2 text-sm">{title}</div>
     </div>

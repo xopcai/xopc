@@ -6,6 +6,7 @@ import useSWR from 'swr';
 
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Button } from '@/components/ui/button';
+import { TabCompletionInput } from '@/components/ui/tab-completion-input';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -672,7 +673,7 @@ function DreamingPanel({ lastRun, t }: { lastRun: ContextConsolidationRun | null
     <Card><div onBlurCapture={autosave.onBlurCapture}><div className="grid gap-4 sm:grid-cols-2">
       <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.mode}</span><Select value={draft.mode} onChange={(event) => setDraft((current) => current ? { ...current, mode: event.target.value as 'off' | 'review' } : current)}><SelectOption value="review">{t.on}</SelectOption><SelectOption value="off">{t.off}</SelectOption></Select></label>
       <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.reviewTime}</span><input type="time" className={inputClass} value={draft.schedule.time} onChange={(event) => setDraft((current) => current ? { ...current, schedule: { time: event.target.value } } : current)} /></label>
-      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><input className={`${inputClass} min-w-0 flex-1`} value={draft.timezone ?? ''} placeholder={detectBrowserTimezone()} onChange={(event) => setDraft((current) => current ? { ...current, timezone: event.target.value || undefined } : current)} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => current ? { ...current, timezone: detectBrowserTimezone() } : current)}>{t.detect}</Button></div></label>
+      <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium text-fg">{t.timezone}</span><div className="flex gap-2"><TabCompletionInput className={`${inputClass} min-w-0 flex-1`} value={draft.timezone ?? ''} placeholder={detectBrowserTimezone()} suggestion={detectBrowserTimezone()} onAcceptSuggestion={(timezone) => setDraft((current) => current ? { ...current, timezone } : current)} onChange={(event) => setDraft((current) => current ? { ...current, timezone: event.target.value || undefined } : current)} /><Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => current ? { ...current, timezone: detectBrowserTimezone() } : current)}>{t.detect}</Button></div></label>
       <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.evidenceThreshold}</span><input type="number" min={2} max={10} className={inputClass} value={draft.minEvidenceSources} onChange={(event) => setDraft((current) => current ? { ...current, minEvidenceSources: Number(event.target.value) } : current)} /></label>
       <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{t.scanLimit}</span><input type="number" min={1} max={2000} className={inputClass} value={draft.limit} onChange={(event) => setDraft((current) => current ? { ...current, limit: Number(event.target.value) } : current)} /></label>
     </div><div className="mt-5 flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div></div></Card>

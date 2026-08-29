@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CopyTextRow } from '@/components/ui/copy-text-row';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { TabCompletionInput } from '@/components/ui/tab-completion-input';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import type { MobilePairQrState } from '@/features/tunnel/use-mobile-pair-qr';
 import { useEnableLanPairing } from '@/features/tunnel/use-enable-lan-pairing';
@@ -235,7 +236,7 @@ export function MobilePairQrSection({
           <label className="text-sm font-medium text-fg" htmlFor="tunnel-mobile-pair-base">
             {t.pairBaseUrlLabel}
           </label>
-          <input
+          <TabCompletionInput
             id="tunnel-mobile-pair-base"
             className={cn(inputClassName(), 'font-mono text-xs')}
             type="text"
@@ -244,6 +245,8 @@ export function MobilePairQrSection({
             placeholder={suggestedUrl || t.pairBaseUrlPlaceholder}
             value={pairBaseUrl}
             onChange={(e) => setPairBaseUrl(e.target.value)}
+            suggestion={suggestedUrl || null}
+            onAcceptSuggestion={setPairBaseUrl}
           />
           <p className="text-xs text-fg-subtle">{t.pairBaseUrlHint}</p>
           {!baseOk && pairBaseUrl.trim() ? (

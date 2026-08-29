@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { TabCompletionInput } from '@/components/ui/tab-completion-input';
 import { TimePicker } from '@/components/ui/time-picker';
 import { cn } from '@/lib/cn';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
@@ -77,12 +78,14 @@ export function ActiveHoursPicker({ value, onChange, labels, disabled }: ActiveH
         </label>
         <label className="block min-w-0">
           <span className="text-xs font-medium text-fg-muted">{labels.timezone}</span>
-          <input
+          <TabCompletionInput
             type="text"
             disabled={disabled}
             className={timeInputClass}
             value={value.timezone}
             onChange={(e) => onChange({ ...value, timezone: e.target.value })}
+            suggestion="Asia/Shanghai"
+            onAcceptSuggestion={(timezone) => onChange({ ...value, timezone })}
             placeholder="Asia/Shanghai"
             autoComplete="off"
           />
