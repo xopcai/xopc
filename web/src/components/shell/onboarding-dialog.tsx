@@ -32,8 +32,12 @@ export function OnboardingDialog() {
     modelSetup.ready &&
     ((modelSetup.needsSetup && !modelSetup.guideDismissed) || activationOpen);
 
-  const leaveExperience = () => {
+  const closeExperience = () => {
     setActivationOpen(false);
+  };
+
+  const leaveExperience = () => {
+    closeExperience();
     navigate('/chat');
   };
 
@@ -72,7 +76,11 @@ export function OnboardingDialog() {
             />
           ) : (
             <div className="xopc-onboarding-work-stage h-full overflow-hidden">
-              <WorkDiscoveryPage embedded onRequestClose={leaveExperience} />
+              <WorkDiscoveryPage
+                embedded
+                onRequestClose={leaveExperience}
+                onConversationOpen={closeExperience}
+              />
             </div>
           )}
         </Dialog.Content>
