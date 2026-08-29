@@ -1,6 +1,7 @@
 import type { Context, Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
+import { prepareLocalVoiceModelAfterProviderSwitch } from '../../../voice/local/provider-switch.js';
 import { enumerateLanGatewayCandidates } from '../../host.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -63,6 +64,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.patch('/api/config', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json();
     const config: Config = service.currentConfig as Config;
+    const previousSttProvider = config.tools?.media?.audio?.provider;
 
     applyAgentsPatch(config, body);
     applyChannelsPatch(config, body);
@@ -86,6 +88,10 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!result.saved) {
       return c.json({ ok: false, error: result.error }, 500);
     }
+    prepareLocalVoiceModelAfterProviderSwitch(
+      previousSttProvider,
+      service.currentConfig as Config,
+    );
 
     if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
       service.reloadHeartbeatFromCurrentConfig();

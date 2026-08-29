@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
   fetchVoiceReadiness,
-  prepareLocalVoiceModel,
   transcribeVoiceBlob,
   type VoiceReadiness,
 } from '@/features/chat/composer/voice-transcribe-api';
@@ -21,6 +20,10 @@ function formatElapsed(sec: number): string {
   const s = Math.floor(sec % 60);
   const m = Math.floor(sec / 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function isCaptureStartingOrRecording(phase: VoiceInputPhase): boolean {
+  return phase === 'requesting' || phase === 'recording';
 }
 
 export interface UseComposerVoiceInputOptions {
@@ -162,9 +165,20 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   }, [stopTimer]);
 
   const beginCapture = useCallback(async () => {
-    if (disabled) return;
+    if (disabled || isCaptureStartingOrRecording(phaseRef.current)) return;
+    // Consume the queued capture before changing phase. Otherwise the readiness effect
+    // observes `requesting` with the queue still set and starts another permission request.
+    pendingCaptureRef.current = false;
     updatePhase('requesting');
     try {
+      const electronSystem = window.electronAPI?.system;
+      if (electronSystem) {
+        const permission = await electronSystem.requestMicrophone();
+        if (permission.status === 'denied') {
+          throw new Error('Microphone permission denied');
+        }
+        if (phaseRef.current !== 'requesting') return;
+      }
       window.dispatchEvent(new Event('xopc-voice-recording-start'));
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -176,36 +190,41 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       mediaStreamRef.current = stream;
       const startedAt = performance.now();
       recordStartPerfRef.current = startedAt;
-      recorderRef.current = await PcmWavRecorder.start(stream, {
+      const recorder = await PcmWavRecorder.start(stream, {
         onAudioLevel: ({ level }) => {
           setAudioLevel(Math.min(1, level * 8));
         },
       });
+      if (phaseRef.current !== 'requesting') {
+        recorder.cancel();
+        stopVoiceMediaStreamTracks();
+        return;
+      }
+      recorderRef.current = recorder;
       lastRecordingRef.current = null;
       setHasRetainedRecording(false);
-      pendingCaptureRef.current = false;
       setElapsedSec(0);
       updatePhase('recording');
       startTimer();
     } catch {
+      const shouldReportFailure = phaseRef.current === 'requesting';
+      pendingCaptureRef.current = false;
       resetCaptureState();
       updatePhase('idle');
-      showComposerNotification('error', m.voiceMicDenied);
+      if (shouldReportFailure) showComposerNotification('error', m.voiceMicDenied);
     }
-  }, [disabled, m.voiceMicDenied, resetCaptureState, startTimer, updatePhase]);
+  }, [disabled, m.voiceMicDenied, resetCaptureState, startTimer, stopVoiceMediaStreamTracks, updatePhase]);
 
-  const prepareAndWait = useCallback(async (current: VoiceReadiness) => {
+  const waitForLocalPreparation = useCallback((current: VoiceReadiness) => {
+    if (current.state !== 'preparing') {
+      pendingCaptureRef.current = false;
+      updatePhase('idle');
+      showComposerNotification('error', m.voicePreparationFailed, undefined, { href: '/settings/capabilities/voice' });
+      return;
+    }
     pendingCaptureRef.current = true;
     updatePhase('preparing');
-    if (current.state === 'needs_download' || current.state === 'error') {
-      try {
-        await prepareLocalVoiceModel(current.modelId ?? 'sensevoice-small');
-      } catch (cause) {
-        setReadiness({ ...current, state: 'error', error: cause instanceof Error ? cause.message : String(cause) });
-        updatePhase('error');
-      }
-    }
-  }, [updatePhase]);
+  }, [m.voicePreparationFailed, updatePhase]);
 
   const startVoiceInput = useCallback(async () => {
     if (disabled || phaseRef.current !== 'idle') return;
@@ -215,12 +234,16 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       await beginCapture();
       return;
     }
-    if (current.provider === 'xopc-local' && ['preparing', 'needs_download', 'error'].includes(current.state)) {
-      await prepareAndWait(current);
+    if (current.provider === 'xopc-local' && current.state === 'preparing') {
+      waitForLocalPreparation(current);
+      return;
+    }
+    if (current.provider === 'xopc-local' && ['needs_download', 'error'].includes(current.state)) {
+      showComposerNotification('error', m.voicePreparationFailed, undefined, { href: '/settings/capabilities/voice' });
       return;
     }
     showComposerNotification('error', m.voiceSttNotConfigured, undefined, { href: '/settings/voice' });
-  }, [beginCapture, disabled, m.voiceSttNotConfigured, prepareAndWait]);
+  }, [beginCapture, disabled, m.voicePreparationFailed, m.voiceSttNotConfigured, waitForLocalPreparation]);
 
   const retryVoiceInput = useCallback(() => {
     const blob = lastRecordingRef.current;
@@ -228,8 +251,8 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       void processRecording(blob);
       return;
     }
-    void prepareAndWait(readiness);
-  }, [prepareAndWait, processRecording, readiness]);
+    waitForLocalPreparation(readiness);
+  }, [processRecording, readiness, waitForLocalPreparation]);
 
   useEffect(() => {
     let cancelled = false;
