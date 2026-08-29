@@ -242,6 +242,20 @@ describe('connector install and instances', () => {
     expect(config.connectors?.instances).toBeUndefined();
   });
 
+  it('installs a SaaS toolkit through managed Composio when XOPC Cloud is signed in', async () => {
+    const config = {} as Config;
+    const resolver = {
+      resolveApiKey: vi.fn(async (provider: string) => provider === 'xopc-cloud' ? 'cloud-token' : null),
+    } as unknown as CredentialResolver;
+
+    await expect(installConnector(config, 'composio-gmail', {}, resolver)).resolves.toMatchObject({
+      connectorId: 'composio-gmail',
+      materialized: { type: 'composio', toolkit: 'gmail', role: 'toolkit' },
+    });
+    expect(resolver.resolveApiKey).toHaveBeenCalledWith('connector-composio-api-key');
+    expect(resolver.resolveApiKey).toHaveBeenCalledWith('xopc-cloud');
+  });
+
   it('requires a non-empty key when installing the Composio credential connector', async () => {
     const config = {} as Config;
     const resolver = { saveApiKey: vi.fn() } as unknown as CredentialResolver;

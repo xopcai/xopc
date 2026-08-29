@@ -166,6 +166,7 @@
       "delete": "删除",
       "continue": "继续推进",
       "newChat": "新建会话",
+      "runWorkflow": "运行工作流",
       "viewAll": "查看全部",
       "agent": "agent",
       "defaultAgent": "默认 agent",

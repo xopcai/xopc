@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { TaskChangedEventSchema, type ProjectMonitoringUpdate, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, GitBranch, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -1141,6 +1141,12 @@ export function ProjectDetailPage() {
   const headerEnd = useMemo(
     () => project ? (
       <>
+        <Button asChild variant="secondary" className="h-9 rounded-lg">
+          <Link to={`/workflows?tab=library&projectId=${encodeURIComponent(project.id)}`}>
+            <GitBranch className="size-4" aria-hidden />
+            {pm.common.runWorkflow}
+          </Link>
+        </Button>
         <Button variant="secondary" className="h-9 rounded-lg" onClick={openTaskCreate}>
           <Plus className="size-4" aria-hidden />
           {pm.board.create}
@@ -1151,7 +1157,7 @@ export function ProjectDetailPage() {
         </Button>
       </>
     ) : null,
-    [openTaskCreate, pm.board.create, pm.common.newChat, project, startChat, startingChat],
+    [openTaskCreate, pm.board.create, pm.common.newChat, pm.common.runWorkflow, project, startChat, startingChat],
   );
 
   useLayoutEffect(() => {

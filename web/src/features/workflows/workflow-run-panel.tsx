@@ -888,6 +888,7 @@ function WorkflowReplayLineagePanel({
 
 function WorkflowBindingPanel({ view, labels }: { view: WorkflowRunView; labels: WorkflowsMessages }) {
   const refs = view.run.metadata?.contextRefs ?? [];
+  const snapshot = view.run.metadata?.contextSnapshot;
   const targets = view.run.metadata?.writebackPolicy?.targets ?? [];
   if (!refs.length && !targets.length) return null;
 
@@ -896,7 +897,11 @@ function WorkflowBindingPanel({ view, labels }: { view: WorkflowRunView; labels:
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-fg">{labels.contextRefsTitle}</h3>
-          <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.contextRefsHint}</p>
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">
+            {snapshot
+              ? labels.contextSnapshotSummary.replace('{{count}}', String(snapshot.totalTokens))
+              : labels.contextRefsHint}
+          </p>
           <div className="mt-3 grid gap-2">
             {refs.length ? refs.map((ref) => (
               <MetadataItem

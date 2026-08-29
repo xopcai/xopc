@@ -31,10 +31,12 @@ import type {
   WorkflowRunSource,
 } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
+import { resolveWorkflowContext } from '../context/workflow-context.js';
 import { WorkflowEngine } from '../engine/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
 import type { WorkflowSessionBridge } from './workflow-session-bridge.js';
+import { resolveWorkflowWritebackPolicy, WorkflowWritebackService } from './workflow-writeback-service.js';
 export type {
   CancelWorkflowRunResult,
   CancelWorkflowRunServiceParams,
@@ -180,12 +182,52 @@ export class WorkflowRunService {
     const runId = randomUUID();
     const goal = params.goal ?? '';
     const linkedTaskRun = params.taskRunId ? new TaskRunRepository().get(params.taskRunId) : undefined;
-    const projectId =
+    const inheritedProjectId =
       params.projectId?.trim() ||
       (linkedTaskRun ? new TaskRepository().get(linkedTaskRun.taskId)?.projectId : undefined) ||
       (params.parentSessionKey?.trim()
         ? (await this.options.service.sessionIndexInstance.getStore().getMetadata(params.parentSessionKey.trim()))?.projectId
         : undefined);
+    const taskId = linkedTaskRun?.taskId;
+    const requestedContextRefs = params.contextRefs
+      ? [
+          ...(inheritedProjectId && !params.contextRefs.some((ref) => ref.kind === 'project' && ref.id === inheritedProjectId)
+            ? [{ kind: 'project' as const, id: inheritedProjectId, role: 'scope' }]
+            : []),
+          ...params.contextRefs,
+        ]
+      : buildDefaultWorkflowContextRefs({ projectId: inheritedProjectId, taskId, source: params.source });
+    const passiveContextRefs = requestedContextRefs.filter((ref) => !['project', 'task', 'note'].includes(ref.kind));
+    let resolvedContext: Awaited<ReturnType<typeof resolveWorkflowContext>>;
+    try {
+      resolvedContext = await resolveWorkflowContext({
+        runId,
+        projectId: inheritedProjectId,
+        refs: requestedContextRefs.filter((ref) => ['project', 'task', 'note'].includes(ref.kind)),
+        config: this.options.service.currentConfig,
+        reuseSnapshotId: params.contextSnapshotId,
+      });
+    } catch (cause) {
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message: cause instanceof Error ? cause.message : 'Workflow context could not be resolved',
+        httpStatus: 400,
+      };
+    }
+    const projectId = resolvedContext?.projectId ?? inheritedProjectId;
+    const contextRefs = resolvedContext ? [...resolvedContext.refs, ...passiveContextRefs] : requestedContextRefs;
+    let writebackPolicy: WorkflowRunMetadata['writebackPolicy'];
+    try {
+      writebackPolicy = resolveWorkflowWritebackPolicy(params.writebackPolicy, { projectId, taskId });
+    } catch (cause) {
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message: cause instanceof Error ? cause.message : 'Invalid workflow writeback policy',
+        httpStatus: 400,
+      };
+    }
     const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
       runId,
       agentId: params.agentId,
@@ -230,6 +272,7 @@ export class WorkflowRunService {
       runStore,
       sessionKey,
       projectId,
+      contextInstructions: resolvedContext?.instructions,
     });
     const limits = resolveWorkflowRunLimits({
       config: this.options.service.currentConfig,
@@ -253,8 +296,9 @@ export class WorkflowRunService {
         agentId: params.agentId,
         taskRunId: params.taskRunId,
         projectId,
-        contextRefs: params.contextRefs,
-        writebackPolicy: params.writebackPolicy,
+        contextRefs,
+        contextSnapshot: resolvedContext?.snapshot,
+        writebackPolicy,
         sessionKey,
         source,
         input: inputEnvelope,
@@ -303,6 +347,7 @@ export class WorkflowRunService {
       taskRunId: existing.run.metadata?.taskRunId,
       projectId,
       contextRefs: existing.run.metadata?.contextRefs,
+      contextSnapshotId: existing.run.metadata?.contextSnapshot?.id,
       writebackPolicy: existing.run.metadata?.writebackPolicy,
       input: existing.run.metadata?.input ? undefined : existing.run.input,
       inputEnvelope: existing.run.metadata?.input,
@@ -352,6 +397,36 @@ export class WorkflowRunService {
     const parentSessionKey =
       existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
     const projectId = existing.run.metadata?.projectId;
+    const taskRunId = existing.run.metadata?.taskRunId;
+    const taskId = taskRunId ? new TaskRunRepository().get(taskRunId)?.taskId : undefined;
+    let writebackPolicy: WorkflowRunMetadata['writebackPolicy'];
+    try {
+      writebackPolicy = resolveWorkflowWritebackPolicy(existing.run.metadata?.writebackPolicy, { projectId, taskId });
+    } catch (cause) {
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message: cause instanceof Error ? cause.message : 'Invalid workflow writeback policy',
+        httpStatus: 400,
+      };
+    }
+    let resolvedContext: Awaited<ReturnType<typeof resolveWorkflowContext>>;
+    try {
+      resolvedContext = await resolveWorkflowContext({
+        runId: replayRunId,
+        projectId,
+        refs: existing.run.metadata?.contextRefs?.filter((ref) => ['project', 'task', 'note'].includes(ref.kind)) ?? [],
+        config: this.options.service.currentConfig,
+        reuseSnapshotId: existing.run.metadata?.contextSnapshot?.id,
+      });
+    } catch (cause) {
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message: cause instanceof Error ? cause.message : 'Workflow context snapshot could not be loaded',
+        httpStatus: 400,
+      };
+    }
     const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
       runId: replayRunId,
       agentId: params.agentId,
@@ -370,6 +445,7 @@ export class WorkflowRunService {
       runStore: replayRunStore,
       sessionKey,
       projectId,
+      contextInstructions: resolvedContext?.instructions,
     });
     const limits = resolveWorkflowRunLimits({
       config: this.options.service.currentConfig,
@@ -390,10 +466,11 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
-        taskRunId: existing.run.metadata?.taskRunId,
+        taskRunId,
         projectId,
         contextRefs: existing.run.metadata?.contextRefs,
-        writebackPolicy: existing.run.metadata?.writebackPolicy,
+        contextSnapshot: resolvedContext?.snapshot,
+        writebackPolicy,
         sessionKey,
         source,
         input: inputEnvelope,
@@ -532,6 +609,7 @@ export class WorkflowRunService {
     runStore: WorkflowRunStore;
     sessionKey: string;
     projectId?: string;
+    contextInstructions?: string;
   }): WorkflowEngine {
     const gatewayService = this.options.service;
     const profileAgentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
@@ -556,9 +634,11 @@ export class WorkflowRunService {
     return new WorkflowEngine({
       cwd: workspace,
       projectId: params.projectId,
+      contextInstructions: params.contextInstructions,
       eventStore: params.eventStore,
       runStore: params.runStore,
       runner,
+      hooks: [{ afterRun: ({ runId, status }) => new WorkflowWritebackService().apply(params.runStore, runId, status) }],
       resolveModelId: (modelId) => {
         return resolveModelById(resolveModelRef(gatewayService.currentConfig, profileAgentId, modelId));
       },
@@ -630,6 +710,7 @@ export function buildWorkflowRunMetadata(params: {
   taskRunId?: string;
   projectId?: string;
   contextRefs?: WorkflowRunMetadata['contextRefs'];
+  contextSnapshot?: WorkflowRunMetadata['contextSnapshot'];
   writebackPolicy?: WorkflowRunMetadata['writebackPolicy'];
   sessionKey: string;
   source: WorkflowRunSource;
@@ -642,13 +723,14 @@ export function buildWorkflowRunMetadata(params: {
   const taskId = taskRunId ? new TaskRunRepository().get(taskRunId)?.taskId : undefined;
   const projectId = params.projectId?.trim() || undefined;
   const contextRefs = params.contextRefs ?? buildDefaultWorkflowContextRefs({ projectId, taskId, source: params.source });
-  const writebackPolicy = params.writebackPolicy ?? buildDefaultWorkflowWritebackPolicy({ projectId, taskId });
+  const writebackPolicy = resolveWorkflowWritebackPolicy(params.writebackPolicy, { projectId, taskId });
   return {
     sessionKey: params.sessionKey,
     triggerSource: params.source.kind,
     agentId: params.agentId,
     projectId,
     contextRefs,
+    contextSnapshot: params.contextSnapshot,
     writebackPolicy,
     retryOfRunId: params.retryOfRunId,
     replay: params.replay,
@@ -675,16 +757,6 @@ function buildDefaultWorkflowContextRefs(params: {
   if (params.taskId) refs.push({ kind: 'task', id: params.taskId, role: 'objective' });
   if (params.source.kind === 'chat') refs.push({ kind: 'session', id: params.source.sessionKey, role: 'parent_session' });
   return refs;
-}
-
-function buildDefaultWorkflowWritebackPolicy(params: {
-  projectId?: string;
-  taskId?: string;
-}): WorkflowRunMetadata['writebackPolicy'] {
-  const targets: NonNullable<WorkflowRunMetadata['writebackPolicy']>['targets'] = [];
-  if (params.projectId) targets.push({ kind: 'project', id: params.projectId, mode: 'record' });
-  if (params.taskId) targets.push({ kind: 'task', id: params.taskId, mode: 'evaluate' });
-  return { targets };
 }
 
 export function resolveWorkflowReplayTargets(

@@ -20,6 +20,7 @@ import {
 import { connectorIdentityKey } from './connector-identity.js';
 import {
   ComposioSessionsAdapter,
+  assertComposioAccessConfigured,
   type ComposioToolkitAuthState,
 } from './composio-sessions.js';
 import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
@@ -387,6 +388,7 @@ export async function listComposioConnections(resolver = new CredentialResolver(
 export async function inspectComposioConnectorHealth(toolkit: string, resolver = new CredentialResolver()): Promise<ComposioConnectorHealth> {
   const normalizedToolkit = normalizeToolkit(toolkit);
   try {
+    await assertComposioAccessConfigured(resolver);
     const all = await listComposioConnections(resolver);
     const connections = all.filter((connection) => connection.toolkit.toLowerCase() === normalizedToolkit);
     const byAccount = new Map<string, ComposioConnection[]>();
