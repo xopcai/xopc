@@ -352,6 +352,7 @@ describe('WorkflowRunService helpers', () => {
 
   it('preserves project metadata when retrying a workflow run', async () => {
     const definition = createDefinition();
+    const project = new ProjectService().create({ name: 'Retry Project' });
     const config = {} as import('../../config/schema.js').Config;
     const eventStore = new WorkflowEventStore(config, 'main');
     const runStore = new WorkflowRunStore(config, 'main', eventStore);
@@ -371,7 +372,7 @@ describe('WorkflowRunService helpers', () => {
           metadata: buildWorkflowRunMetadata({
             definition,
             agentId: 'main',
-            projectId: 'project-retry',
+            projectId: project.id,
             sessionKey: 'agent:main:webchat:default:direct:project-run',
             source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:project-run' },
             input: {
@@ -418,7 +419,7 @@ describe('WorkflowRunService helpers', () => {
 
     expect(result.ok).toBe(true);
     expect(prepareRunSession).toHaveBeenCalledWith(expect.objectContaining({
-      projectId: 'project-retry',
+      projectId: project.id,
     }));
   });
 

@@ -140,8 +140,9 @@ export interface WorkflowRunMetadata {
   agentId?: string;
   projectId?: string;
   contextRefs?: WorkflowRunContextRef[];
+  contextSnapshot?: WorkflowRunContextSnapshotRef;
   writebackPolicy?: WorkflowRunWritebackPolicy;
-  taskId?: string;
+  taskRunId?: string;
   retryOfRunId?: string;
   replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;
@@ -154,10 +155,27 @@ export interface WorkflowRunMetadata {
 export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';
 
 export interface WorkflowRunContextRef {
-  kind: 'project' | 'task' | 'session' | 'attachment' | 'memory';
+  kind: 'project' | 'task' | 'note' | 'session' | 'attachment' | 'memory';
   id: string;
   role?: string;
   title?: string;
+  version?: string;
+  tokenEstimate?: number;
+}
+
+export interface WorkflowRunContextSnapshotRef {
+  id: string;
+  traceId: string;
+  createdAtMs: number;
+  totalTokens: number;
+}
+
+export interface ProjectWorkflowPreset {
+  projectId: string;
+  definitionId: string;
+  contextRefs: WorkflowRunContextRef[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface WorkflowRunWritebackPolicy {
@@ -405,8 +423,9 @@ export interface WorkflowStats {
 
 export interface StartWorkflowRunOptions {
   definitionId: string;
-  taskId?: string;
+  taskRunId?: string;
   projectId?: string;
+  contextRefs?: WorkflowRunContextRef[];
   goal?: string;
   input?: unknown;
   agentId?: string;
@@ -529,6 +548,34 @@ export async function getWorkflowDefinition(id: string): Promise<WorkflowDefinit
     apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}`),
   );
   return data.definition;
+}
+
+export async function listProjectWorkflowPresets(projectId: string): Promise<ProjectWorkflowPreset[]> {
+  const params = new URLSearchParams({ projectId });
+  const data = await fetchJson<{ presets: ProjectWorkflowPreset[] }>(
+    apiUrl(`/api/workflows/project-presets?${params.toString()}`),
+  );
+  return data.presets ?? [];
+}
+
+export async function saveProjectWorkflowPreset(
+  projectId: string,
+  definitionId: string,
+  contextRefs: WorkflowRunContextRef[],
+): Promise<ProjectWorkflowPreset> {
+  const data = await fetchJson<{ preset: ProjectWorkflowPreset }>(
+    apiUrl(`/api/workflows/project-presets/${encodeURIComponent(definitionId)}`),
+    { method: 'PUT', body: JSON.stringify({ projectId, contextRefs }) },
+  );
+  return data.preset;
+}
+
+export async function removeProjectWorkflowPreset(projectId: string, definitionId: string): Promise<void> {
+  const params = new URLSearchParams({ projectId });
+  await fetchJson(
+    apiUrl(`/api/workflows/project-presets/${encodeURIComponent(definitionId)}?${params.toString()}`),
+    { method: 'DELETE' },
+  );
 }
 
 export async function validateWorkflowDefinition(
