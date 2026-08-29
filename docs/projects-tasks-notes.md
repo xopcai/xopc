@@ -1,6 +1,8 @@
 # Projects, Tasks, and Notes
 
-Use these features when work must stay organized beyond one conversation. You can keep using Chat alone for short or exploratory requests.
+Use these features when work must stay organized beyond one conversation. You can keep using Chat alone for short or exploratory requests, and you do not need to turn an incomplete thought into a structured Task before sharing it with xopc.
+
+The intended flow is progressive: capture the thought first, clarify its relationship to a goal or Project, then create a Task only when a durable result, blocker, or next action needs to survive.
 
 ## Choose the right place
 

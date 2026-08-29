@@ -1,65 +1,66 @@
-# Comparison
+# Where xopc fits
 
-This page compares xopc with adjacent AI agent products using public product positioning checked on July 7, 2026. The goal is not to rank tools. It is to help you choose the right layer.
+xopc sits between a personal knowledge system, a long-running work manager, and an agent runtime—but its product is not any one of those parts. It is a local-first personal AI assistant that develops a reviewable understanding of one person and helps that person move important work forward over time.
 
-## Short version
+This page explains product boundaries rather than ranking vendors.
 
-Use **Codex** or **Claude Code** when your main job is software development inside a codebase. Use **WorkBuddy** when your main job is office deliverables like reports, decks, spreadsheets, or research packages. Use **Qoder/QoderWork** when you want a commercial agentic coding and work suite.
+## How adjacent products differ
 
-Use **xopc** when you want a self-hosted, local-first assistant that keeps durable tasks and project context available across models, channels, automations, workflows, and surfaces.
+| Product category | Usually optimized for | Where xopc differs |
+| --- | --- | --- |
+| **General chat assistant** | Answering the current request in a conversation | xopc preserves governed understanding, Projects, Tasks, decisions, and run history so work can continue across time and surfaces. |
+| **Coding agent** | Reading, changing, and verifying work inside a codebase | xopc can support coding, but its scope is the person's wider goals, relationships, commitments, files, messages, and recurring work. A coding agent can remain one execution tool. |
+| **AI employee or role agent** | Performing a defined organizational role or queue of delegated jobs | xopc is centered on one person's changing intentions. It starts without pretending to know the user and earns initiative through correction and explicit authority. |
+| **Task manager** | Storing tasks the user has already clarified and organized | xopc accepts incomplete thoughts and evidence, helps discover the relevant goal and context, and turns them into the next credible action. |
+| **Automation platform** | Connecting triggers, integrations, and deterministic actions | xopc connects automation to personal context, Task state, evidence, and an authority ladder. Automation is an execution capability, not the product identity. |
+| **Personal knowledge system** | Capturing, linking, and retrieving information | xopc distinguishes fact from inference, governs what should be remembered or forgotten, and uses trusted understanding to help act. |
 
-## Comparison table
+## The defining differences
 
-| Product | Public positioning | Strong fit | xopc advantage |
-| --- | --- | --- | --- |
-| **Codex** | OpenAI's coding agent for software development across CLI, IDE, app, and cloud tasks. | Writing, reviewing, debugging, and automating development work in repos. | xopc is broader than coding: local state under `~/.xopc/`, BYOK/local models, gateway APIs, scheduled loops, desktop/web/mobile, and messengers share one assistant. |
-| **Claude Code** | Anthropic's agentic coding system that reads codebases, edits files, runs tests, and works through git/toolchains. | Project-level engineering work and coding task handoff. | xopc is a personal AI runtime for long-running work, not only repo execution. Tasks, projects, sessions, agents, channels, skills, workflows, and automations can all connect around the same local state. |
-| **Qoder / QoderWork** | Agentic platform covering autonomous development desktop, QoderWork, QoderWake, Qoder CLI, plugins, and cloud agents. | Commercial coding and work-agent suite with multi-agent collaboration and desktop/work scenarios. | xopc is MIT open source and hackable. You own the runtime, config, data directory, model choices, gateway, and extension surface. |
-| **WorkBuddy** | Full-scenario AI agent desktop workstation for workplace roles, planning and executing tasks that produce verifiable outputs. | Office work such as reports, presentations, spreadsheets, data analysis, deep research, and batch file processing. | xopc is better when you want self-hosted operation, BYOK providers, local/cloud model mixing, messenger channels, and long-term project memory instead of a packaged office agent. |
+### A relationship that improves over time
 
-## Where xopc is different
+xopc begins with safe defaults and no claim to know the user. Understanding grows from authorized sources, shared work, and explicit correction. The useful unit is not only a message or task completion, but whether the next interaction begins from better grounded context.
 
-### 1. Task loops, not just one-shot execution
+### Intent, not only tasks
 
-Many agents execute a task. xopc is built around ongoing loops: direction, action, feedback, and recalibration. That makes it a better fit for side projects, personal operating systems, long-running research, independent businesses, and recurring review rhythms.
+The input may be a clear request, a vague thought, a file, a link, or a signal from connected work. xopc helps connect it to a goal or Project, define a Task when durable execution is needed, identify blockers, and preserve decisions and evidence.
 
-### 2. Local-first ownership
+### Local-first ownership
 
-xopc keeps config, local state, sessions, logs, agent files, and workspaces under your xopc state directory by default. You can run the gateway yourself, expose it through your own remote-access layer, and choose what leaves your machine.
+Configuration, state, conversations, logs, Agent files, and workspaces live under the xopc state directory by default. The user chooses models, providers, remote access, sources, tools, and capability boundaries.
 
-### 3. Bring your own models
+Local-first does not mean cloud models receive no data. Relevant context is sent to a selected cloud provider when required for a request. Users can choose local models for work that must stay on-device.
 
-xopc is designed for provider freedom. Use cloud APIs, local model servers, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, and other configured providers. Your default assistant is not tied to one vendor account.
+### Reviewable understanding
 
-### 4. One assistant, many surfaces
+Facts, inferences, and collaboration rules are distinct. The user can inspect, confirm, correct, reject, or delete understanding. Old and contradictory items can return to review rather than silently shaping behavior forever.
 
-The same assistant can be available from CLI, TUI, browser, desktop, mobile, Telegram, WeChat, and Feishu/Lark. You do not need a separate bot, a separate web app, and a separate terminal assistant that all forget each other.
+### Initiative that must be earned
 
-### 5. Automations and workflows as first-class product behavior
+xopc's intended progression is observation, reminder, proposal, confirmed execution, then explicitly authorized low-risk automation. High-impact external actions do not become acceptable merely because the model is confident.
 
-xopc supports scheduled runs, reminders, summaries, visual workflow runs, and multi-agent routing. This is where the "loop" becomes practical: important work can resurface without waiting for you to open a chat.
+### One assistant across surfaces
 
-## Choose xopc if
+Desktop, web, terminal, mobile, and messaging channels can reach the same Agents, Conversations, Projects, Tasks, and user understanding. Surfaces do not need to become separate assistants that forget one another.
 
-- You want a private, self-hosted AI assistant on your own machine.
-- You want long-term context for tasks, projects, sessions, and recurring work.
-- You want the same assistant in terminal, desktop, web, mobile, and messengers.
-- You want to bring your own API keys or local models.
-- You want a hackable MIT-licensed system instead of a closed product surface.
-- You want automations and workflows, not only chat.
+## Choose xopc when
 
-## Choose another tool first if
+- you want one personal assistant to become more useful across months, not only one session;
+- you want understanding and memory to be visible and correctable;
+- you want to begin with messy input rather than maintaining a perfect task system;
+- you want Tasks and Projects to preserve important work and its evidence;
+- you want to bring your own cloud keys or local models;
+- you want a self-hosted, MIT-licensed system that can be extended;
+- you want proactive help to remain suggestion-first and permission-aware.
 
-- You only need a coding agent inside one repository.
-- Your team already standardizes on Codex or Claude Code for engineering workflows.
-- You primarily need office deliverables from a packaged commercial workbench.
-- You want a fully managed enterprise agent platform instead of a self-hosted system.
+## Choose a narrower tool first when
 
-## Public sources
+- you only need code changes inside one repository;
+- you only need stateless answers or document generation;
+- you already have clearly structured tasks and do not want AI to interpret context;
+- you want a fully managed enterprise work platform instead of a local system;
+- you do not want to operate models, credentials, storage, updates, or remote access.
 
-- [OpenAI Codex](https://developers.openai.com/codex)
-- [Codex CLI](https://developers.openai.com/codex/cli)
-- [Anthropic Claude Code](https://www.anthropic.com/product/claude-code)
-- [Claude Code GitHub repository](https://github.com/anthropics/claude-code)
-- [Qoder](https://qoder.com/)
-- [Tencent WorkBuddy overview](https://www.workbuddy.ai/docs/workbuddy/Overview)
+Narrower tools and xopc can coexist. xopc can retain the personal intent and durable context while a specialized tool performs one part of the execution.
+
+See [Product philosophy](./product.md), [User understanding](./user-understanding.md), and [The Task Loop](./concepts/loops.md).
