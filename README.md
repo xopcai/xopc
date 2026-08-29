@@ -6,9 +6,9 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>It lives on your computer—and slowly gets to know you.</strong><br />
-  xopc is a local-first personal AI assistant that gets to know you over time.<br />
-  It builds a reviewable, correctable understanding from the parts of your digital life you choose to share, catches every thought, and helps you move what truly matters forward.
+  <strong>It lives on your computer—and gets to know you over time.</strong><br />
+  Give xopc something that matters.<br />
+  It remembers the context, finds the next step, and keeps it moving.
 </p>
 
 <p align="center">
@@ -21,11 +21,9 @@
 </p>
 
 <p align="center">
-  <a href="https://xopc.ai"><strong>xopc.ai</strong></a> ·
-  <a href="https://github.com/xopcai/xopc"><strong>GitHub</strong></a> ·
-  <a href="https://xopcai.github.io/xopc/">Documentation</a> ·
-  <a href="#get-started">Get started</a> ·
-  <a href="https://github.com/xopcai/xopc/releases">Releases</a>
+  <a href="https://xopc.ai/en#download"><strong>Download the desktop app →</strong></a> ·
+  <a href="#quick-start"><strong>Install in 30 seconds</strong></a> ·
+  <a href="https://xopcai.github.io/xopc/">Read the docs</a>
 </p>
 
 <p align="center">
@@ -34,15 +32,12 @@
   </a>
 </p>
 
+> After setup, try: **“One thing I want to move forward this week is ____. Help me find the smallest credible next step.”**
+
 <details>
 <summary><strong>Table of Contents</strong></summary>
 
-- [What xopc is](#what-xopc-is)
-- [From first meeting to trust](#from-first-meeting-to-trust)
-- [Four things it must learn](#four-things-it-must-learn)
-- [How trust is earned](#how-trust-is-earned)
-- [What exists today](#what-exists-today)
-- [First product horizon](#first-product-horizon)
+- [Why try xopc](#why-try-xopc)
 - [Get started](#get-started)
 - [Where to chat](#where-to-chat)
 - [Channels](#channels)
@@ -57,124 +52,18 @@
 
 ---
 
-## What xopc is
+## Why try xopc
 
-xopc is not an AI employee, not an agent confined to one task or codebase, and not merely a productivity tool. It is a **private AI assistant** designed to live on your computer for the long term: starting from zero, learning what matters to you, and gradually helping you move it forward as trust grows.
+- **Start before it is organized.** Drop in text, voice, files, links, or a thought you cannot explain clearly yet.
+- **Stop repeating yourself.** Sessions, projects, tasks, and correctable user understanding keep the context that matters.
+- **Move beyond advice.** xopc can use tools, run workflows, verify results, and continue the work later.
+- **Stay in control.** It is local-first, sources are authorized separately, and high-impact actions such as sending or deleting require confirmation.
 
-It does not pretend to know you the moment it is installed. Its understanding should come from sources you explicitly authorize, the work you do together, and the conclusions you confirm or correct.
+**Turn goals into loops.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends.
 
-> **Meet → Explore → Understand → Assist → Earn trust → Become gradually proactive**
+xopc works from desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark, with your choice of cloud or local models.
 
-Chat is only one place where this relationship appears. Models, agents, tasks, projects, memory, workflows, and automations are supporting capabilities. The actual product promise is simpler: **it understands me better than it did yesterday, and it helped me advance something important.**
-
-## From first meeting to trust
-
-xopc's ideal first experience is not a wall of tool toggles. It is a restrained and transparent process of getting acquainted:
-
-1. It introduces itself, then asks: **“Where may I begin to understand you?”**
-2. You choose, one source at a time, whether to share local files, mail, calendar, or something else.
-3. Exploration stays visible: what it is looking at, what it found, and what it proposes to remember.
-4. It turns scattered evidence into an early understanding of goals, relationships, projects, commitments, and blockers.
-5. You can confirm, correct, delete, or ask it to forget any part of that understanding.
-6. Instead of trying to process everything, it finds one thing worth advancing now and helps you take the first step.
-
-The real **aha moment** is not “it can access Gmail.” It is:
-
-> “I think I'm beginning to know you. The most important thing right now may not be clearing every unread email, but moving this project that has been stuck for two weeks. Shall we finish the first step tonight?”
-
-## Four things it must learn
-
-### 1. Understand a person
-
-xopc should maintain a living model that you can inspect and correct—not put everything into a vector database forever:
-
-- your goals, preferences, and habits;
-- the people and relationships that matter;
-- active projects;
-- past decisions and the reasons behind them;
-- promises that remain unfulfilled;
-- recent pressures, blockers, and directions of attention.
-
-It must also decide what is worth remembering, what should be forgotten, and what may no longer be true.
-
-### 2. Hold complex, messy work
-
-Give it text, voice, a screenshot, an email, a file, a link, or a thought you have not made clear yet. Being organized is not a prerequisite for using xopc; making the mess clear is work you do together:
-
-```text
-A thought appears
-→ connect it to a goal or project
-→ add context
-→ form a next action
-→ identify dependencies and blockers
-→ bring it back at the right time
-→ preserve decisions made along the way
-→ turn the experience into something reusable
-```
-
-### 3. Solve problems with you
-
-It needs to understand why the work matters, then help clarify the problem, investigate, read context, make a plan, use tools, verify the result, and record what happened. Complex work can span conversations, surfaces, and long periods without requiring you to explain it all again.
-
-### 4. Earn initiative
-
-Initiative does not mean more notifications. It means noticing a forgotten commitment, sensing that a project has stalled, connecting new information to an existing goal, and knowing when not to interrupt.
-
-Permission should unlock gradually with trust:
-
-```text
-Observe only
-→ offer reminders
-→ propose an action
-→ act after confirmation
-→ automatically handle explicitly authorized, low-risk work
-```
-
-## How trust is earned
-
-Exploring someone's digital life can feel magical or frightening. xopc must keep that exploration visible and under the user's control:
-
-- authorize each data source separately, with permission that can be revoked;
-- show what is being examined and why;
-- preserve the relationship between evidence and conclusions;
-- distinguish **observed facts** from **inferences**;
-- let users confirm, correct, delete, or prohibit a memory;
-- keep data on-device by default and make cloud-model context sharing clear;
-- separately confirm high-impact actions such as sending, deleting, or purchasing.
-
-Trust is not a paragraph in a privacy policy. It is accumulated through every act of restraint.
-
-## What exists today
-
-xopc already provides the local foundation for this relationship:
-
-| Capability | Current foundation |
-| --- | --- |
-| **Local operation & ownership** | Desktop app, self-hosted gateway, local state, BYOK, and cloud or local models |
-| **Durable understanding** | User understanding that can be reviewed, confirmed, corrected, and deleted; relevance-based context selection; stale and conflicting-item review |
-| **Long-running work** | Persistent sessions, tasks, projects, notes, workspaces, run history, and resumable context |
-| **Execution & follow-up** | Tools, skills, workflows, scheduled/manual/webhook automations, and inspectable run history |
-| **Multiple surfaces** | Desktop, web, CLI, TUI, iOS/Android, Telegram, WeChat, Feishu/Lark, and APIs |
-
-These foundations are still converging into one coherent personal-assistant experience. For the exact capabilities of the current release, see [Releases](https://github.com/xopcai/xopc/releases) and the [documentation](https://xopcai.github.io/xopc/).
-
-## First product horizon
-
-The first product horizon now being built is intentionally small and complete:
-
-1. Make the local macOS app the primary experience.
-2. Provide one universal entry point for text, voice, files, and links.
-3. Begin with three sources: local files, Gmail, and Calendar.
-4. Make the personal understanding model inspectable, traceable, and correctable.
-5. Manage long-running work through projects and tasks.
-6. Find one genuinely important thing each day and help the user move it forward.
-7. Require confirmation before every external action.
-
-Success is not measured by message volume or the number of tasks completed automatically. The more important question is:
-
-> **After seven days, how many people feel: it understands me better than it did on day one, and it genuinely helped me advance something important?**
-
-For builders, the foundation remains a self-hosted, extensible personal AI runtime. See how tasks, state, execution, and triggers form resumable, inspectable loops in [The Continuous Work Model](https://xopcai.github.io/xopc/concepts/loops).
+For the full product philosophy, trust model, and roadmap, read [Product philosophy](https://xopcai.github.io/xopc/product).
 
 ---
 
@@ -188,7 +77,7 @@ For builders, the foundation remains a self-hosted, extensible personal AI runti
 
 For most users, the **desktop app** is the easiest way to start: install the app, finish model setup in the UI, then chat in the built-in console. It starts the local gateway for you.
 
-1. Download from **[GitHub Releases](https://github.com/xopcai/xopc/releases)** — macOS `.dmg`, Windows `.exe`, Linux `.AppImage` / `.deb`.
+1. Open **[xopc.ai](https://xopc.ai/en#download)** and choose macOS, Windows, or Linux.
 2. Open xopc and complete model setup.
 3. Start chatting.
 
@@ -268,7 +157,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 | Surface | How | Best for |
 | --- | --- | --- |
-| **Desktop app** | [GitHub Releases](#desktop-app) | Easiest start: native app + embedded gateway console |
+| **Desktop app** | [Download from xopc.ai](https://xopc.ai/en#download) | Easiest start: native app + embedded gateway console |
 | **TUI** | `xopc` or `xopc tui` (remote: `xopc tui --url …`) | Full keyboard, streaming, fastest terminal path |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |

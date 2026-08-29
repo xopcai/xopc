@@ -3,55 +3,47 @@ layout: home
 
 hero:
   name: xopc
-  text: It lives on your computer—and slowly gets to know you.
-  tagline: "A local-first personal AI assistant that forms a reviewable understanding, catches unfinished thoughts, and helps you move what truly matters forward."
+  text: It lives on your computer—and gets to know you over time.
+  tagline: "Give xopc something that matters. It remembers the context, finds the next step, and keeps it moving."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
     alt: xopc
   actions:
     - theme: brand
-      text: Get started
+      text: Download the desktop app
+      link: https://xopc.ai/en#download
+    - theme: alt
+      text: Install in terminal
+      link: /first-5-minutes
+    - theme: alt
+      text: Browse the docs
       link: /getting-started
-    - theme: alt
-      text: Product philosophy
-      link: /product
-    - theme: alt
-      text: GitHub
-      link: https://github.com/xopcai/xopc
 
 features:
-  - title: Understand you over time
-    details: Keep useful goals, preferences, relationships, decisions, and current focus in a model you can inspect, correct, or delete.
-    link: /user-understanding
-  - title: Catch work before it is organized
-    details: Begin with a thought, voice note, file, link, or conversation. Let Projects and Tasks preserve the context, blockers, decisions, and next action.
+  - title: Start before it is organized
+    details: Drop in text, voice, files, links, or a thought you cannot explain clearly yet.
     link: /concepts/loops
-  - title: Work toward verified results
-    details: Clarify the purpose, use approved tools and context, verify the outcome, and leave an inspectable record that can be resumed later.
+  - title: Stop repeating yourself
+    details: Sessions, Projects, Tasks, and correctable user understanding keep the context that matters.
+    link: /user-understanding
+  - title: Move beyond advice
+    details: Use tools, run Workflows, verify results, and continue important work after the conversation ends.
     link: /projects-tasks-notes
-  - title: Earn initiative gradually
-    details: Start suggestion-first. Reminders, proposed actions, confirmed execution, and low-risk automation unlock only with explicit authority.
-    link: /automations
-  - title: Keep exploration under control
-    details: Authorize sources separately, see evidence behind conclusions, distinguish facts from inference, and understand when cloud models receive context.
+  - title: Stay in control
+    details: Run local-first, authorize sources separately, and keep confirmation for high-impact actions.
     link: /product#trust-is-a-product-surface
-  - title: Stay with the same assistant
-    details: Continue from desktop, terminal, browser, mobile, Telegram, Weixin, or Feishu without creating several assistants that forget each other.
-    link: /channels/
 ---
 
-[![xopc desktop app demo](/xopc-desktop.gif)](./desktop-app.md)
+[![xopc desktop app demo](/xopc-desktop.gif)](https://xopc.ai/en#download)
 
-## The shortest path
+## Start with one important thing
 
-1. [Install the desktop app](./desktop-app.md) or follow the [terminal quick start](./first-5-minutes.md).
+1. [Download the desktop app](https://xopc.ai/en#download) or follow the [terminal quick start](./first-5-minutes.md).
 2. [Connect one model](./how-to/configure-first-model.md).
-3. Send a test message, then tell xopc one real thing you want to move forward.
-4. Review what should be remembered instead of assuming every statement becomes permanent context.
-5. Add a source, Agent, channel, Workflow, or remote device only when it helps real work.
+3. Tell xopc: **“One thing I want to move forward this week is ____. Help me find the smallest credible next step.”**
 
-Read [Product philosophy](./product.md) for the intended relationship and the boundary between current foundations and the next product horizon.
+**Turn goals into loops.** xopc keeps context, the next action, evidence, and follow-up together so important work does not disappear when a chat ends. [See how the Task Loop works](./concepts/loops.md).
 
 ## Find the right guide
 
@@ -70,4 +62,4 @@ Read [Product philosophy](./product.md) for the intended relationship and the bo
 | Understand local storage and backup | [Data and file locations](./workspace.md) |
 | Fix a setup problem | [Troubleshooting](./how-to/diagnose-broken-setup.md) |
 
-New to the work model? Read [The Task Loop](./concepts/loops.md) after the first successful conversation.
+For the longer product story and trust model, read [Product philosophy](./product.md).
