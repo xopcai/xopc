@@ -16,6 +16,7 @@ describe('built-in image generation provider catalog', () => {
 
   it('contains the built-in providers in a stable order', () => {
     expect(listImageGenerationProviders().map((provider) => provider.id)).toEqual([
+      'xopc-cloud',
       'openai',
       'dashscope',
       'minimax',
