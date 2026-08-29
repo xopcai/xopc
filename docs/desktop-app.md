@@ -6,8 +6,8 @@ The desktop app is the primary local home for xopc. It includes the Gateway cons
 
 ## Install
 
-1. Open [GitHub Releases](https://github.com/xopcai/xopc/releases).
-2. Download the newest package for your computer.
+1. Open the [xopc.ai download page](https://xopc.ai/en#download).
+2. Choose your platform and download the newest package for your computer.
 3. Install and launch **xopc**.
 
 | Platform | Package |
@@ -17,6 +17,8 @@ The desktop app is the primary local home for xopc. It includes the Gateway cons
 | Linux | `.AppImage` or `.deb` |
 
 On macOS, move xopc to **Applications**. On Windows, run the installer. On Linux, install the `.deb` or allow the `.AppImage` to run.
+
+Release notes and direct historical artifacts remain available on [GitHub Releases](https://github.com/xopcai/xopc/releases).
 
 ## First run
 

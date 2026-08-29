@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'xopc is a local-first personal AI assistant that gets to know you over time and helps move what truly matters forward.',
+  description: 'xopc is a local-first personal AI assistant that gets to know you over time and keeps what matters moving.',
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
@@ -33,12 +33,12 @@ export default defineConfig({
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
     ['meta', { property: 'og:title', content: 'xopc - A personal AI that gets to know you' }],
-    ['meta', { property: 'og:description', content: 'It lives on your computer, forms a reviewable understanding, and helps you move what truly matters forward.' }],
+    ['meta', { property: 'og:description', content: 'Give xopc something that matters. It remembers the context, finds the next step, and keeps it moving.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'xopc - A personal AI that gets to know you' }],
-    ['meta', { name: 'twitter:description', content: 'It lives on your computer, forms a reviewable understanding, and helps you move what truly matters forward.' }],
+    ['meta', { name: 'twitter:description', content: 'Give xopc something that matters. It remembers the context, finds the next step, and keeps it moving.' }],
     ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
   ],
   locales: {
@@ -53,6 +53,7 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
+          { text: 'Download', link: 'https://xopc.ai/en#download' },
           { text: 'Get started', link: '/getting-started' },
           { text: 'Product', link: '/product' },
           { text: 'Guides', link: '/session' },
@@ -150,6 +151,7 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
+          { text: '下载', link: 'https://xopc.ai/zh#download' },
           { text: '快速开始', link: '/zh/getting-started' },
           { text: '产品理念', link: '/zh/product' },
           { text: '使用指南', link: '/zh/session' },
