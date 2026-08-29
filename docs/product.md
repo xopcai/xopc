@@ -1,6 +1,6 @@
 # Product philosophy
 
-> **xopc lives on your computer—and slowly gets to know you.**
+> **Keep what matters moving.**
 
 xopc is a local-first personal AI assistant. It builds a reviewable, correctable understanding from the parts of your digital life you choose to share, catches unfinished thoughts, and helps you move genuinely important work forward.
 
@@ -126,4 +126,3 @@ This is a direction, not a claim that every part is complete in the current rele
 Message volume and automatic task count are not the north-star measure. The more important question is:
 
 > After seven days, does the user feel that xopc understands them better than it did on day one—and that it genuinely helped advance something important?
-

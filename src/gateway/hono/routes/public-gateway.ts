@@ -18,6 +18,18 @@ import {
 import type { GatewayService } from '../../service.js';
 import { serveStaticFile } from '../lib/static-ui.js';
 
+const PUBLIC_UI_ROOT_ASSETS = [
+  'apple-touch-icon.png',
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+  'favicon.png',
+  'favicon.svg',
+  'notification-sw.js',
+  'pwa-192x192.png',
+  'pwa-512x512.png',
+  'site.webmanifest',
+] as const;
+
 export function registerPublicGatewayRoutes(app: Hono, service: GatewayService): void {
   app.get('/health', (c) => {
     return c.json(service.getHealth());
@@ -166,6 +178,14 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
     if (fallback) return fallback;
     return c.text('Not found', 404);
   });
+
+  for (const assetPath of PUBLIC_UI_ROOT_ASSETS) {
+    app.get(`/${assetPath}`, (c) => {
+      const response = serveStaticFile(assetPath, c.req.raw);
+      if (response) return response;
+      return c.text('Not found', 404);
+    });
+  }
 
   app.get('/logo.svg', (c) => {
     const response = serveStaticFile('logo.svg', c.req.raw);

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: It lives on your computer—and gets to know you over time.
-  tagline: "Give xopc something that matters. It remembers the context, finds the next step, and keeps it moving."
+  text: Keep what matters moving.
+  tagline: "A personal AI on your computer that remembers your goals and context—and picks up where you left off."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
@@ -43,7 +43,7 @@ features:
 2. [Connect one model](./how-to/configure-first-model.md).
 3. Tell xopc: **“One thing I want to move forward this week is ____. Help me find the smallest credible next step.”**
 
-**Turn goals into loops.** xopc keeps context, the next action, evidence, and follow-up together so important work does not disappear when a chat ends. [See how the Task Loop works](./concepts/loops.md).
+**Keep what matters moving.** xopc keeps context, the next action, evidence, and follow-up together so important work does not disappear when a chat ends. [See how the Task Loop works](./concepts/loops.md).
 
 ## Find the right guide
 
