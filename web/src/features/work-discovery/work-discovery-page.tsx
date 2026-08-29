@@ -48,9 +48,11 @@ function errorText(error: unknown): string {
 export function WorkDiscoveryPage({
   embedded = false,
   onRequestClose,
+  onConversationOpen,
 }: {
   embedded?: boolean;
   onRequestClose?: () => void;
+  onConversationOpen?: () => void;
 } = {}) {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).onboarding.workDiscovery;
@@ -303,6 +305,7 @@ export function WorkDiscoveryPage({
     if (draft) params.set('draft', draft);
     if (draft && autoSend) params.set('autoSend', '1');
     const query = params.toString();
+    onConversationOpen?.();
     navigate(`/chat/${encodeURIComponent(sessionKey)}${query ? `?${query}` : ''}`);
   };
 
@@ -401,12 +404,19 @@ export function WorkDiscoveryPage({
     }
   };
 
-  const startConversationFromUnderstanding = async (starter: string) => {
+  const startConversationFromUnderstanding = async (
+    starter: string,
+    decision: 'confirmed' | 'corrected',
+  ) => {
     if (!run) return false;
     setBusy(true);
     setError(null);
     try {
-      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, 'confirmed');
+      const next = await submitWorkDiscoveryRecognitionFeedback(
+        run.id,
+        decision,
+        decision === 'corrected' ? starter : undefined,
+      );
       setRun(next);
       replaceBatchRun(next);
       openConversation(run.sessionKey, starter, true);

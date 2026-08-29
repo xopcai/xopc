@@ -26,7 +26,7 @@ type UnderstandingRevealProps = {
   ) => Promise<boolean>;
   onReviewFocus: (focus: UserFocus, accepted: boolean) => Promise<boolean>;
   onFinish: (decision: RecognitionDecision, correction?: string) => Promise<boolean>;
-  onStartConversation: (starter: string) => Promise<boolean>;
+  onStartConversation: (starter: string, decision: RecognitionDecision) => Promise<boolean>;
 };
 
 const copy = {
@@ -124,6 +124,7 @@ export function UnderstandingReveal({
   const [correctionOpen, setCorrectionOpen] = useState(lowConfidence);
   const [correction, setCorrection] = useState(lowConfidence ? suggestedStarter : '');
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
+  const [conversationStarting, setConversationStarting] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState('');
@@ -160,12 +161,12 @@ export function UnderstandingReveal({
     else await finish(nextDecision, correction.trim());
   };
 
-  const startSuggestedConversation = async () => {
+  const startConversationFromInput = async () => {
     const starter = correction.trim();
     if (!starter) return;
-    setSummaryConfirmed(true);
-    const opened = await onStartConversation(starter);
-    if (!opened) setSummaryConfirmed(false);
+    setConversationStarting(true);
+    const opened = await onStartConversation(starter, lowConfidence ? 'confirmed' : 'corrected');
+    if (!opened) setConversationStarting(false);
   };
 
   useEffect(() => {
@@ -230,7 +231,7 @@ export function UnderstandingReveal({
               <textarea id="understanding-correction" value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={t.correctionPlaceholder} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15" />
               <div className="mt-4 flex justify-end gap-2">
                 {!lowConfidence ? <Button variant="ghost" disabled={summaryConfirmed} onClick={() => setCorrectionOpen(false)}>{t.cancel}</Button> : null}
-                <Button variant="primary" disabled={busy || summaryConfirmed || !correction.trim()} onClick={() => void (lowConfidence ? startSuggestedConversation() : advanceAfterSummary('corrected'))}>{lowConfidence ? t.startConversation : t.continueWithCorrection}</Button>
+                <Button variant="primary" disabled={busy || conversationStarting || !correction.trim()} onClick={() => void startConversationFromInput()}>{lowConfidence ? t.startConversation : t.continueWithCorrection}</Button>
               </div>
             </div>
           )}
