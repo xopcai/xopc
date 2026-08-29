@@ -6,9 +6,9 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>It lives on your computer—and gets to know you over time.</strong><br />
-  Give xopc something that matters.<br />
-  It remembers the context, finds the next step, and keeps it moving.
+  <strong>Keep what matters moving.</strong><br />
+  A personal AI on your computer that remembers your goals and context—<br />
+  and picks up where you left off.
 </p>
 
 <p align="center">
@@ -59,7 +59,7 @@
 - **Move beyond advice.** xopc can use tools, run workflows, verify results, and continue the work later.
 - **Stay in control.** It is local-first, sources are authorized separately, and high-impact actions such as sending or deleting require confirmation.
 
-**Turn goals into loops.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends.
+**Keep what matters moving.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends.
 
 xopc works from desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark, with your choice of cloud or local models.
 
