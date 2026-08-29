@@ -1,16 +1,16 @@
 # Get started with xopc
 
-xopc is a local-first personal AI assistant that gets to know you through the context you deliberately share and the work you do together. It begins simply: install one client, connect one model, and establish a working first conversation before granting more access.
+Give xopc something that matters. Start with the desktop app, connect one model, and let it help you find the next credible step.
 
 ## Choose how to start
 
 | If you prefer… | Start with |
 | --- | --- |
-| A normal desktop application | [Desktop app](./desktop-app.md) |
+| A normal desktop application | [Download from xopc.ai](https://xopc.ai/en#download) |
 | A terminal | [Terminal quick start](./first-5-minutes.md) |
 | A self-hosted container | [Docker](./docker.md) |
 
-The desktop app is the simplest choice for most people. The terminal and Docker installations use the same configuration and can be added later.
+The desktop app is the simplest choice for most people. See the [desktop guide](./desktop-app.md) for installation details. Terminal and Docker use the same configuration and can be added later.
 
 ## What you need
 
@@ -22,7 +22,7 @@ You do not need to configure channels, tools, extra Agents, or remote access bef
 
 ## Your first successful setup
 
-1. Install and open xopc using one of the options above.
+1. [Download](https://xopc.ai/en#download), install, and open xopc using one of the options above.
 2. Add one model provider. In the desktop or web console, follow the model setup screen. In a terminal, run `xopc onboard --quick`.
 3. Open **Chat** or run `xopc`.
 4. Send: `Reply with “xopc is ready” and tell me which model you are using.`
@@ -31,9 +31,9 @@ The setup is complete when the assistant replies without a credential or connect
 
 If it does not, run `xopc doctor` and continue with [Troubleshooting](./how-to/diagnose-broken-setup.md).
 
-## Begin with something real
+## Give it something real
 
-Once the connection works, give xopc one small but meaningful piece of context instead of configuring every feature. For example:
+Once the connection works, skip the feature tour and give xopc one meaningful direction:
 
 ```text
 One thing I want to move forward this week is ____.

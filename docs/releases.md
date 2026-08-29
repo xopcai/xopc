@@ -1,6 +1,6 @@
 # Release channels
 
-Stable releases, notes, and desktop installers are published on [GitHub Releases](https://github.com/xopcai/xopc/releases). The command-line package history is available on [npm](https://www.npmjs.com/package/@xopcai/xopc).
+Download the current desktop app from [xopc.ai](https://xopc.ai/en#download). Release notes and historical artifacts remain available on [GitHub Releases](https://github.com/xopcai/xopc/releases), and the command-line package history is available on [npm](https://www.npmjs.com/package/@xopcai/xopc).
 
 ## Choose a version
 

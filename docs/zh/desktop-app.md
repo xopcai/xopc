@@ -6,8 +6,8 @@
 
 ## 安装
 
-1. 打开 [GitHub Releases](https://github.com/xopcai/xopc/releases)。
-2. 下载适合当前电脑的最新安装包。
+1. 打开 [xopc.ai 下载页面](https://xopc.ai/zh#download)。
+2. 选择当前平台并下载最新安装包。
 3. 安装并启动 **xopc**。
 
 | 平台 | 安装包 |
@@ -17,6 +17,8 @@
 | Linux | `.AppImage` 或 `.deb` |
 
 macOS 用户将 xopc 拖入“应用程序”；Windows 用户运行安装器；Linux 用户安装 `.deb`，或为 `.AppImage` 添加执行权限。
+
+发布说明和历史安装包仍可在 [GitHub Releases](https://github.com/xopcai/xopc/releases) 查看。
 
 ## 第一次运行
 

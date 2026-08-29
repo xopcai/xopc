@@ -1,6 +1,6 @@
 # 发布通道
 
-稳定版本、发布说明和桌面安装包发布在 [GitHub Releases](https://github.com/xopcai/xopc/releases)，命令行包历史见 [npm](https://www.npmjs.com/package/@xopcai/xopc)。
+当前桌面应用请从 [xopc.ai](https://xopc.ai/zh#download) 下载。发布说明与历史安装包仍可在 [GitHub Releases](https://github.com/xopcai/xopc/releases) 查看，命令行包历史见 [npm](https://www.npmjs.com/package/@xopcai/xopc)。
 
 ## 选择版本
 

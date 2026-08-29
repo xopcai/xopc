@@ -4,53 +4,45 @@ layout: home
 hero:
   name: xopc
   text: 它住进你的电脑，然后慢慢开始懂你。
-  tagline: "一个本地优先的私人 AI 助手：形成可检查的理解，接住还没整理好的想法，并陪你把真正重要的事情做成。"
+  tagline: "把一件重要的事交给 xopc。它会记住背景、找到下一步，并陪你持续推进。"
   image:
     src: /logo.svg
     alt: xopc
   actions:
     - theme: brand
-      text: 开始使用
+      text: 下载桌面应用
+      link: https://xopc.ai/zh#download
+    - theme: alt
+      text: 终端安装
+      link: /zh/first-5-minutes
+    - theme: alt
+      text: 浏览文档
       link: /zh/getting-started
-    - theme: alt
-      text: 产品理念
-      link: /zh/product
-    - theme: alt
-      text: GitHub
-      link: https://github.com/xopcai/xopc
 
 features:
-  - title: 逐渐理解你
-    details: 把有用的目标、偏好、关系、决定和当前重点放进可查看、可纠正、可删除的认知模型。
-    link: /zh/user-understanding
-  - title: 接住还没整理好的工作
-    details: 从想法、语音、文件、链接或一次对话开始，用 Project 和 Task 保留背景、阻塞、决定与下一步。
+  - title: 不用先整理好
+    details: 直接丢给它文字、语音、文件、链接，或者一句还没想清楚的话。
     link: /zh/concepts/loops
-  - title: 推进可以验证的结果
-    details: 澄清目的，使用已授权的工具和上下文，验证结果，并留下之后可以恢复的执行记录。
+  - title: 不用反复解释
+    details: Session、Project、Task 和可纠正的用户理解会保留真正有用的背景。
+    link: /zh/user-understanding
+  - title: 不只给建议
+    details: 调用工具、运行 Workflow、验证结果，并在一次对话结束后继续推进。
     link: /zh/projects-tasks-notes
-  - title: 逐渐获得主动性
-    details: 从建议优先开始；提醒、行动建议、确认后执行和低风险自动化只随明确授权逐步开放。
-    link: /zh/automations
-  - title: 让探索保持可控
-    details: 单独授权来源，查看结论证据，区分事实与推断，并知道云端模型何时会收到上下文。
+  - title: 始终由你控制
+    details: 本地优先、数据源单独授权，高影响操作继续保留人工确认。
     link: /zh/product#信任本身就是产品界面
-  - title: 始终是同一个助手
-    details: 从桌面、终端、网页、手机、Telegram、微信或飞书继续，而不是维护几个互相失忆的机器人。
-    link: /zh/channels/
 ---
 
-[![xopc 桌面应用演示](/xopc-desktop.gif)](./desktop-app.md)
+[![xopc 桌面应用演示](/xopc-desktop.gif)](https://xopc.ai/zh#download)
 
-## 最短路径
+## 从一件重要的事开始
 
-1. [安装桌面应用](./desktop-app.md)，或按照[终端快速开始](./first-5-minutes.md)操作。
+1. [下载桌面应用](https://xopc.ai/zh#download)，或按照[终端快速开始](./first-5-minutes.md)操作。
 2. [连接一个模型](./how-to/configure-first-model.md)。
-3. 先发送测试消息，再告诉 xopc 一件你真正想推进的事情。
-4. 检查哪些内容值得记住，不要假设每句话都会自动成为长期上下文。
-5. 只有数据源、Agent、消息通道、Workflow 或远程设备能帮助真实工作时再添加。
+3. 告诉 xopc：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
 
-阅读[产品理念](./product.md)，了解 xopc 想建立的长期关系，以及当前基础与下一阶段之间的边界。
+**把目标变成持续推进的闭环。** xopc 把背景、下一步、结果证据和后续跟进留在一起，让重要的事情不会随着一次对话结束而消失。[了解 Task 闭环](./concepts/loops.md)。
 
 ## 找到对应指南
 
@@ -69,4 +61,4 @@ features:
 | 了解本地存储与备份 | [数据和文件位置](./workspace.md) |
 | 修复设置问题 | [故障排查](./how-to/diagnose-broken-setup.md) |
 
-第一次聊天成功后，可以阅读 [Task 闭环](./concepts/loops.md)了解持续工作模型。
+完整的产品故事和信任模型见[产品理念](./product.md)。

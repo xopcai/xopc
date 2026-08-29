@@ -11,7 +11,7 @@ xopc update --check
 
 ## Desktop app
 
-Use **Settings → Gateway** when an in-app update is offered, or download the new installer from [GitHub Releases](https://github.com/xopcai/xopc/releases). Close other xopc windows before replacing the application.
+Use **Settings → Gateway** when an in-app update is offered, or download the current installer from [xopc.ai](https://xopc.ai/en#download). Historical artifacts remain available on [GitHub Releases](https://github.com/xopcai/xopc/releases). Close other xopc windows before replacing the application.
 
 ## Command-line installation
 
