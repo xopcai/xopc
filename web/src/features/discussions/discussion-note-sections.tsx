@@ -116,7 +116,7 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
           : null;
 
   return (
-    <div className="max-h-[45%] shrink-0 overflow-y-auto border-b border-edge-subtle">
+    <aside className="max-h-[45%] shrink-0 overflow-y-auto border-b border-edge-subtle xl:h-full xl:max-h-none xl:w-[clamp(20rem,34%,27rem)] xl:border-r xl:border-b-0">
       {organization ? (
         <section className="border-b border-edge-subtle px-6 py-5">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-accent-fg">
@@ -124,7 +124,7 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
             {copy.organization}
           </div>
           <p className="text-sm leading-6 text-fg">{organization.summary}</p>
-          <div className="mt-4 grid gap-4 text-sm leading-6 text-fg sm:grid-cols-2">
+          <div className="mt-4 grid gap-4 text-sm leading-6 text-fg sm:grid-cols-2 xl:grid-cols-1">
             {organization.decisions.length > 0 ? <div><h3 className="font-medium">{copy.decisions}</h3><BulletList values={organization.decisions} /></div> : null}
             {organization.actionItems.length > 0 ? <div><h3 className="font-medium">{copy.actionItems}</h3><BulletList values={organization.actionItems.map((item) => item.title)} /></div> : null}
             {organization.risks.length > 0 ? <div><h3 className="font-medium">{copy.risks}</h3><BulletList values={organization.risks} /></div> : null}
@@ -160,10 +160,10 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
             {discussion.status === 'needs_attention' ? discussion.failureMessage : transcriptStatus}
           </div>
         </div>
-        <div className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg-muted">
+        <div className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg-muted xl:max-h-none xl:overflow-visible">
           {transcript.text || copy.waitingTranscript}
         </div>
       </section>
-    </div>
+    </aside>
   );
 }

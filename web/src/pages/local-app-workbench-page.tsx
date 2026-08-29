@@ -26,6 +26,7 @@ import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { suggestionFromExample, TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
 import {
   createLocalApp,
   getLocalApp,
@@ -551,8 +552,8 @@ export function LocalAppWorkbenchPage() {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent"><Sparkles className="size-4" />{zh ? '告诉 Coder 你的想法' : 'Tell Coder your idea'}</div>
             <h2 className="mt-4 text-xl font-semibold tracking-tight text-fg">{zh ? '你想创建什么？' : 'What do you want to create?'}</h2>
             <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '我们会建立一个 Coder Project，并把应用上下文和开发 Skill 带入对话。' : 'We will create a Coder Project and carry the app context and development skill into chat.'}</p>
-            <label className="mt-6 text-xs font-medium text-fg-muted">{zh ? '应用名称' : 'App name'}<input value={name} onChange={(event) => setName(event.target.value)} required className="mt-2 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '例如：阅读清单' : 'e.g. Reading list'} /></label>
-            <label className="mt-4 text-xs font-medium text-fg-muted">{zh ? '描述你的想法' : 'Describe your idea'}<textarea value={idea} onChange={(event) => setIdea(event.target.value)} required rows={7} className="mt-2 w-full resize-none rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm leading-6 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '我想要一个可以记录待读文章、标记进度并按主题筛选的小工具…' : 'I want a small tool that tracks articles, reading progress, and topics…'} /></label>
+            <label className="mt-6 text-xs font-medium text-fg-muted">{zh ? '应用名称' : 'App name'}<TabCompletionInput value={name} onChange={(event) => setName(event.target.value)} suggestion={suggestionFromExample(zh ? '例如：阅读清单' : 'e.g. Reading list')} onAcceptSuggestion={setName} required className="mt-2 w-full rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '例如：阅读清单' : 'e.g. Reading list'} /></label>
+            <label className="mt-4 text-xs font-medium text-fg-muted">{zh ? '描述你的想法' : 'Describe your idea'}<TabCompletionTextarea value={idea} onChange={(event) => setIdea(event.target.value)} suggestion={suggestionFromExample(zh ? '我想要一个可以记录待读文章、标记进度并按主题筛选的小工具…' : 'I want a small tool that tracks articles, reading progress, and topics…')} onAcceptSuggestion={setIdea} required rows={7} className="mt-2 w-full resize-none rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm leading-6 text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" placeholder={zh ? '我想要一个可以记录待读文章、标记进度并按主题筛选的小工具…' : 'I want a small tool that tracks articles, reading progress, and topics…'} /></label>
             {actionError ? <p className="mt-3 text-sm text-danger" role="alert">{actionError}</p> : null}
             <Button type="submit" variant="primary" className="mt-5 h-10" disabled={busy || !name.trim() || !idea.trim()}>{busy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '进入 Coder 对话' : 'Continue with Coder'}</Button>
           </form>
@@ -578,10 +579,12 @@ export function LocalAppWorkbenchPage() {
         </div>
         <form className="mt-5" onSubmit={(event) => { event.preventDefault(); void onContinueDevelopment(changeRequest); }}>
           <label className="text-xs font-medium text-fg-muted" htmlFor="local-app-change-request">{zh ? '下一步想改什么？' : 'What should change next?'}</label>
-          <textarea
+          <TabCompletionTextarea
             id="local-app-change-request"
             value={changeRequest}
             onChange={(event) => setChangeRequest(event.target.value)}
+            suggestion={suggestionFromExample(zh ? '例如：增加月视图，并支持按标签筛选' : 'e.g. Add a monthly view and tag filters')}
+            onAcceptSuggestion={setChangeRequest}
             rows={4}
             className="mt-2 w-full resize-none rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm leading-6 text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
             placeholder={zh ? '例如：增加月视图，并支持按标签筛选' : 'e.g. Add a monthly view and tag filters'}

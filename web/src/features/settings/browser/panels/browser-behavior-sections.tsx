@@ -1,5 +1,6 @@
 import { ShieldAlert, SlidersHorizontal } from 'lucide-react';
 
+import { TabCompletionInput } from '@/components/ui/tab-completion-input';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 
 import { AgentDefaultsField } from '.././browser-settings-field';
@@ -47,11 +48,13 @@ export function BrowserBehaviorSections({
             </Select>
           </AgentDefaultsField>
           <AgentDefaultsField label={a.label.browserDialogTimeout} description={a.desc.browserDialogTimeout}>
-            <input
+            <TabCompletionInput
               type="number"
               className={inputClassName()}
               min={1}
               value={form.browserDialogTimeout ?? ''}
+              suggestion="300"
+              onAcceptSuggestion={(value) => update({ browserDialogTimeout: Number.parseInt(value, 10) })}
               placeholder="300"
               onChange={(e) => {
                 const v = e.target.value;
@@ -79,11 +82,13 @@ export function BrowserBehaviorSections({
             </label>
           </AgentDefaultsField>
           <AgentDefaultsField label={a.label.browserCommandTimeout} description={a.desc.browserCommandTimeout}>
-            <input
+            <TabCompletionInput
               type="number"
               className={inputClassName()}
               min={5}
               value={form.browserCommandTimeout ?? ''}
+              suggestion="30"
+              onAcceptSuggestion={(value) => update({ browserCommandTimeout: Number.parseInt(value, 10) })}
               placeholder="30"
               onChange={(e) => {
                 const v = e.target.value;
