@@ -191,7 +191,6 @@ export const ChatComposer = memo(function ChatComposer({
     void setWorkspaceTrust(sessionKey, true)
       .then(() => {
         setWorkspaceTrustPrompt(null);
-        showComposerNotification('success', m.chat.commandPalette.workspaceTrustSuccess);
       })
       .catch((err) => {
         showComposerNotification(

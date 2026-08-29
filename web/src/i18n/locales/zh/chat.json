@@ -1095,7 +1095,6 @@
       "workspaceTrustConfirm": "信任工作区",
       "workspaceTrustCancel": "暂不",
       "workspaceTrustSaving": "正在信任…",
-      "workspaceTrustSuccess": "项目工作区已受信任，本地技能现在可用。",
       "workspaceTrustFailed": "无法信任项目工作区：{{error}}",
       "showGroupedMore": "显示另外 {{count}} 条"
     },

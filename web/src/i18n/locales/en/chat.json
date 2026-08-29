@@ -1095,7 +1095,6 @@
       "workspaceTrustConfirm": "Trust workspace",
       "workspaceTrustCancel": "Not now",
       "workspaceTrustSaving": "Trusting…",
-      "workspaceTrustSuccess": "Project workspace trusted. Local skills are now available.",
       "workspaceTrustFailed": "Could not trust the project workspace: {{error}}",
       "showGroupedMore": "Show {{count}} more"
     },
