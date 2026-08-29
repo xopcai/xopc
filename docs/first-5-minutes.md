@@ -52,15 +52,17 @@ Reply with “xopc is ready” and tell me which model you are using.
 
 Exit with the key shown in the TUI help. The Session is saved, so you can resume it later with `xopc resume`.
 
-## 4. Try one useful task
+## 4. Start with one important thing
 
-Use a request with a clear result, for example:
+Give xopc one real direction without expecting it to know you already:
 
 ```text
-Help me plan this week. Ask only for information you need, propose a realistic plan, and finish with the three most important next actions.
+One thing I want to move forward this week is ____.
+Ask only for missing context, help me define what done means,
+and propose the smallest credible next action.
 ```
 
-The assistant can use enabled tools and your workspace when the task requires them. It should ask before actions that need missing access or credentials.
+The assistant can use enabled tools and your workspace when the task requires them. It should ask before actions that need missing access or credentials. Review any proposed long-term understanding instead of assuming every message should be remembered.
 
 ## If it does not work
 
@@ -74,4 +76,4 @@ xopc logs tail
 - If the command is not found, open a new terminal and verify that the installer added xopc to `PATH`.
 - If the model rejects the request, verify the key, model name, account balance, and network access.
 
-Continue with [Chat and sessions](./session.md) or open the browser console with `xopc gateway`.
+Continue with [User understanding](./user-understanding.md), [Chat and sessions](./session.md), or open the browser console with `xopc gateway`.
