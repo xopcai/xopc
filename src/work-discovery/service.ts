@@ -24,8 +24,6 @@ import { clusterActivityTopics } from '../user-context/sources/activity-clusteri
 import {
   createUnderstandingSourceRun,
   getUnderstandingSourceRun,
-  listUserFocuses,
-  setUserFocusStatus,
   upsertUnderstandingSourceGrant,
   upsertUserFocus,
   updateUnderstandingSourceRun,
@@ -814,7 +812,7 @@ export class WorkDiscoveryService {
         snapshot: investigatedSnapshot,
         evidence: unifiedEvidence,
       });
-      for (const thread of workThreads) {
+      const focusCandidates = workThreads.map((thread) => (
         upsertUserFocus({
           canonicalKey: `work-focus:${thread.canonicalKey}`,
           title: thread.title,
@@ -824,11 +822,12 @@ export class WorkDiscoveryService {
           confidence: thread.confidence,
           projectId: run.projectId,
           evidenceRefs: thread.evidenceIds,
-        });
-      }
+        })
+      ));
       const result = this.persistProfileCandidates(run, {
         ...baseResult,
         ...(workThreads.length ? { workThreads } : {}),
+        ...(focusCandidates.length ? { focusCandidates } : {}),
       });
       current = updateWorkDiscoveryRun(run.id, { status: 'analyzing', stage: 'next_steps' })!;
       this.publish(current);
@@ -1003,12 +1002,7 @@ export class WorkDiscoveryService {
       recognitionDecision: input.decision,
       ...(correctedIntent ? { correctedIntent } : {}),
     });
-    if (input.decision === 'confirmed') {
-      const focusKeys = new Set((run.result.workThreads ?? []).map((thread) => `work-focus:${thread.canonicalKey}`));
-      for (const focus of listUserFocuses(['candidate'])) {
-        if (focusKeys.has(focus.canonicalKey)) setUserFocusStatus(focus.id, 'active');
-      }
-    } else if ((input.decision === 'corrected' || input.decision === 'different_goal') && correctedIntent) {
+    if ((input.decision === 'corrected' || input.decision === 'different_goal') && correctedIntent) {
       upsertUserFocus({
         canonicalKey: `user-focus:${createHash('sha256').update(correctedIntent.toLocaleLowerCase()).digest('hex').slice(0, 20)}`,
         title: correctedIntent.slice(0, 120),

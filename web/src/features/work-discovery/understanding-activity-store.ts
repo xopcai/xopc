@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import type { ElectronUnderstandingSourceCollectionResult } from '@/types/electron';
-import { updateUserFocusStatus, type UserFocus } from '@/features/user-context/user-context-api';
+import { updateUnderstanding, updateUserFocusStatus, type UserFocus } from '@/features/user-context/user-context-api';
 
 import {
   fetchWorkDiscoveryRun,
@@ -29,7 +29,7 @@ type UnderstandingActivityState = {
   finish: () => void;
   updateDirectoryRun: (run: WorkDiscoveryRun) => void;
   collectSources: (workDiscoveryRunId: string | undefined, selectedSources: string[]) => Promise<void>;
-  reviewMemory: (understandingId: string, accepted: boolean) => Promise<void>;
+  reviewMemory: (understandingId: string, accepted: boolean, statement?: string) => Promise<void>;
   reviewFocus: (focusId: string, accepted: boolean) => Promise<void>;
 };
 
@@ -134,12 +134,13 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       }));
     }
   },
-  reviewMemory: async (understandingId, accepted) => {
+  reviewMemory: async (understandingId, accepted, statement) => {
     try {
-      await reviewUnderstandingSourceProfile([{ understandingId, status: accepted ? 'accepted' : 'rejected' }]);
+      if (statement) await updateUnderstanding(understandingId, { statement, status: 'active' });
+      else await reviewUnderstandingSourceProfile([{ understandingId, status: accepted ? 'accepted' : 'rejected' }]);
       set((state) => {
         const memories = state.memories.map((memory) => memory.understandingId === understandingId
-          ? { ...memory, status: accepted ? 'accepted' as const : 'rejected' as const } : memory);
+          ? { ...memory, ...(statement ? { statement } : {}), status: statement ? 'edited' as const : accepted ? 'accepted' as const : 'rejected' as const } : memory);
         return {
           memories,
           status: memories.some((memory) => memory.status === 'pending') || state.focuses.some((focus) => focus.status === 'candidate') ? 'review_ready'
@@ -149,6 +150,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) });
+      throw error;
     }
   },
   reviewFocus: async (focusId, accepted) => {
@@ -168,6 +170,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) });
+      throw error;
     }
   },
 }));

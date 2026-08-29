@@ -1,4 +1,4 @@
-import { Check, ChevronRight, ExternalLink, ListChecks, MessageSquareText, Rocket, ShieldCheck, Sparkles, X, type LucideIcon } from 'lucide-react';
+import { ChevronRight, ExternalLink, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -17,11 +17,8 @@ import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provi
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
 import {
-  createCollaborationRule,
   detectBrowserTimezone,
-  fetchUserContext,
   fetchUserProfile,
-  updateCollaborationRule,
   updateUserProfile,
 } from '@/features/user-context/user-context-api';
 import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
@@ -37,9 +34,7 @@ interface OnboardingCardProps {
   canDismiss?: boolean;
 }
 
-type OnboardingStep = 'callName' | 'collaboration' | 'provider' | 'apiKey';
-type ExecutionMode = 'act' | 'plan' | 'confirm';
-type OutputMode = 'concise' | 'balanced' | 'detailed';
+type OnboardingStep = 'callName' | 'provider' | 'apiKey';
 
 type OnboardingState = {
   step: OnboardingStep;
@@ -48,10 +43,6 @@ type OnboardingState = {
   busy: boolean;
   error: string | null;
   callName: string;
-  role: string;
-  primaryGoal: string;
-  executionMode: ExecutionMode;
-  outputMode: OutputMode;
   profileLoading: boolean;
 };
 
@@ -66,10 +57,6 @@ const initialOnboarding: OnboardingState = {
   busy: false,
   error: null,
   callName: '',
-  role: '',
-  primaryGoal: '',
-  executionMode: 'act',
-  outputMode: 'balanced',
   profileLoading: true,
 };
 
@@ -82,61 +69,9 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   }
 }
 
-const STEP_ORDER: OnboardingStep[] = ['callName', 'collaboration', 'provider', 'apiKey'];
+const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey'];
 
 const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 1;
-
-function ChoiceGroup({ label, value, options, onChange }: {
-  label: string;
-  value: string;
-  options: Array<{ value: string; title: string; hint: string; icon: LucideIcon }>;
-  onChange: (value: string) => void;
-}) {
-  const selectedHint = options.find((option) => option.value === value)?.hint;
-
-  return (
-    <fieldset>
-      <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-fg-muted">{label}</legend>
-      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={label}>
-        {options.map((option) => {
-          const selected = option.value === value;
-          const Icon = option.icon;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              className={cn(
-                'group relative flex min-h-18 items-center gap-2.5 rounded-xl border p-3 text-left transition-[transform,border-color,background-color,box-shadow] duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
-                'hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none motion-reduce:transition-none',
-                selected
-                  ? 'border-accent/60 bg-accent-soft/75 shadow-surface'
-                  : 'border-edge bg-surface-base/60 hover:border-edge-strong hover:bg-surface-panel',
-              )}
-              onClick={() => onChange(option.value)}
-            >
-              <span className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
-                selected ? 'bg-accent text-white' : 'bg-surface-muted text-fg-muted group-hover:text-fg',
-              )}>
-                <Icon className="size-4" aria-hidden />
-              </span>
-              <span className="block pr-5 text-sm font-semibold text-fg">{option.title}</span>
-              <span className={cn(
-                'absolute right-2.5 top-2.5 flex size-5 items-center justify-center rounded-full border transition-all',
-                selected ? 'scale-100 border-accent bg-accent text-white' : 'scale-90 border-edge-strong bg-transparent text-transparent',
-              )}>
-                <Check className="size-3" strokeWidth={2.5} aria-hidden />
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-2 min-h-5 text-xs leading-5 text-fg-muted">{selectedHint}</p>
-    </fieldset>
-  );
-}
 
 export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
@@ -145,8 +80,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
   const {
-    step, selectedProvider, apiKey, busy, error, callName, role, primaryGoal,
-    executionMode, outputMode, profileLoading,
+    step, selectedProvider, apiKey, busy, error, callName, profileLoading,
   } = state;
 
   const stepLabel = useMemo(
@@ -206,7 +140,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           if (prefill) {
             dispatch({ type: 'prefillCallName', value: prefill });
           }
-          dispatch({ type: 'patch', patch: { role: profile.role, primaryGoal: profile.primaryGoal } });
           dispatch({ type: 'patch', patch: { profileLoading: false } });
           return;
         } catch {
@@ -231,75 +164,14 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     try {
       await updateUserProfile({
         callName: normalizedCallName,
-        role: role.trim(),
-        primaryGoal: primaryGoal.trim(),
         timezone: detectBrowserTimezone(),
       });
-      dispatch({ type: 'patch', patch: { step: 'collaboration' } });
+      dispatch({ type: 'patch', patch: { step: 'provider' } });
     } catch (cause) {
       dispatch({
         type: 'patch',
         patch: { error: cause instanceof Error ? cause.message : String(cause) },
       });
-    } finally {
-      dispatch({ type: 'patch', patch: { busy: false } });
-    }
-  };
-
-  const saveCollaborationDefaults = async () => {
-    const statements = language === 'zh'
-      ? {
-          execution: executionMode === 'act'
-            ? '任务明确时直接推进并汇报结果；外部、不可逆或高风险操作前再确认。'
-            : executionMode === 'plan'
-              ? '任务明确时先给出简洁方案，再开始执行。'
-              : '执行重要动作前先向我确认。',
-          output: outputMode === 'concise'
-            ? '默认先给结论，只保留完成当前任务所需的必要信息。'
-            : outputMode === 'balanced'
-              ? '默认给出结论、核心理由和有用的下一步信息。'
-              : '默认提供完整背景、关键权衡和验证过程。',
-        }
-      : {
-          execution: executionMode === 'act'
-            ? 'When the task is clear, move it forward and report the result; pause before external, irreversible, or high-risk actions.'
-            : executionMode === 'plan'
-              ? 'When the task is clear, show a concise approach before taking action.'
-              : 'Ask me before taking meaningful action.',
-          output: outputMode === 'concise'
-            ? 'Lead with the outcome and include only the details needed for the current task.'
-            : outputMode === 'balanced'
-              ? 'Default to the outcome, core reasoning, and the next useful detail.'
-              : 'Default to complete context, key tradeoffs, and verification.',
-        };
-
-    dispatch({ type: 'patch', patch: { busy: true, error: null } });
-    try {
-      const current = await fetchUserContext();
-      const saveRule = async (
-        onboardingKey: 'execution_mode' | 'output_mode',
-        statement: string,
-        category: 'execution' | 'communication',
-      ) => {
-        const existing = current.rules.find((rule) => rule.conditions.onboardingKey === onboardingKey);
-        if (existing) {
-          await updateCollaborationRule(existing.id, { statement, status: 'active' });
-          return;
-        }
-        await createCollaborationRule({
-          statement,
-          category,
-          priority: 20,
-          conditions: { onboardingKey },
-        });
-      };
-      await Promise.all([
-        saveRule('execution_mode', statements.execution, 'execution'),
-        saveRule('output_mode', statements.output, 'communication'),
-      ]);
-      dispatch({ type: 'patch', patch: { step: 'provider' } });
-    } catch (cause) {
-      dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
     } finally {
       dispatch({ type: 'patch', patch: { busy: false } });
     }
@@ -321,12 +193,10 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
     await updateUserProfile({
       ...(callName.trim() ? { callName: callName.trim() } : {}),
-      role: role.trim(),
-      primaryGoal: primaryGoal.trim(),
       timezone: detectBrowserTimezone(),
     });
     await onComplete();
-  }, [callName, onComplete, primaryGoal, role]);
+  }, [callName, onComplete]);
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
@@ -384,31 +254,26 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   };
 
   return (
-    <div className="xopc-onboarding-card relative flex h-full w-full flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-surface-panel/95 p-5 shadow-float backdrop-blur-2xl dark:border-white/10">
-      <div className="xopc-onboarding-aurora pointer-events-none absolute inset-x-0 -top-48 h-80" aria-hidden />
-      <header className="relative z-10 grid min-h-13 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-edge-subtle pb-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="xopc-onboarding-logo flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/70 bg-white/80 shadow-surface dark:border-white/10 dark:bg-white/5">
-            <BrandLogo className="size-7" />
-          </div>
-          <h2 className="hidden truncate text-sm font-semibold tracking-[-0.015em] text-fg sm:block">{o.title}</h2>
+    <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base" data-step={step}>
+      <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
+      <header className="relative z-20 flex h-18 shrink-0 items-center justify-between px-5 sm:px-8 lg:px-10">
+        <div className="flex items-center gap-3">
+          <BrandLogo className="size-8" />
+          <span className="text-sm font-semibold tracking-[-0.02em] text-fg">xopc</span>
         </div>
-        <div className="w-28 sm:w-56" aria-label={stepLabel}>
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <div className="mr-2 hidden items-center gap-1.5 sm:flex" aria-label={stepLabel}>
             {STEP_ORDER.map((item, index) => (
               <span
                 key={item}
                 className={cn(
-                  'h-1.5 flex-1 rounded-full transition-[background-color,transform] duration-500 motion-reduce:transition-none',
-                  index < stepNumber(step) ? 'scale-y-110 bg-accent' : 'bg-edge-strong/70',
+                  'h-1.5 w-5 rounded-full transition-[transform,background-color,opacity] duration-500 motion-reduce:transition-none',
+                  index === stepNumber(step) - 1 ? 'scale-x-100 bg-accent' : index < stepNumber(step) ? 'scale-x-[.35] bg-accent/45' : 'scale-x-[.35] bg-edge-strong',
                 )}
                 aria-hidden
               />
             ))}
           </div>
-          <p className="mt-1.5 text-center text-[10px] font-medium uppercase tracking-[0.12em] text-fg-subtle">{stepLabel}</p>
-        </div>
-        <div className="flex items-center justify-end gap-1">
           <OnboardingLanguageSwitch
             value={language}
             onChange={(nextLanguage) => {
@@ -420,7 +285,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             <button
               type="button"
               aria-label={o.skipSetup}
-              className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-flex size-10 items-center justify-center rounded-xl text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               onClick={onDismiss}
             >
               <X className="size-4" aria-hidden />
@@ -429,247 +294,122 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         </div>
       </header>
 
-      <div className="xopc-onboarding-content relative z-10 min-h-0 flex-1 overflow-hidden pt-4">
-        {step === 'callName' ? (
-          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-2xl flex-col gap-4">
-            <div>
-              <h3 className="text-lg font-semibold tracking-tight text-fg">{o.step0Title}</h3>
-              <p className="mt-1 text-sm text-fg-muted">{o.step0Subtitle}</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-fg">
-                {o.profileCallNameLabel}
-                {profileLoading ? <Skeleton className="mt-1 h-10 w-full rounded-xl" /> : (
-                  <input
-                    autoFocus
-                    value={callName}
-                    onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
-                    placeholder={o.profileCallNamePlaceholder}
-                    className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-                  />
-                )}
-              </label>
-              <label className="block text-sm font-medium text-fg">
-                {o.profileRoleLabel}
-                <input
-                  value={role}
-                  onChange={(event) => dispatch({ type: 'patch', patch: { role: event.target.value } })}
-                  placeholder={o.profileRolePlaceholder}
-                  maxLength={300}
-                  className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-                />
-              </label>
-            </div>
-            <label className="block text-sm font-medium text-fg">
-              {o.profileGoalLabel}
-              <textarea
-                value={primaryGoal}
-                onChange={(event) => dispatch({ type: 'patch', patch: { primaryGoal: event.target.value } })}
-                placeholder={o.profileGoalPlaceholder}
-                maxLength={500}
-                rows={2}
-                className="mt-1 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-              />
-            </label>
-            <div className="min-h-5">
-              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            </div>
-            <div className="mt-auto flex flex-wrap justify-between gap-2 border-t border-edge-subtle pt-4">
-              <button
-                type="button"
-                className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
-                disabled={busy || profileLoading}
-                onClick={() => void continueFromCallName()}
-              >
-                {o.skipCallName}
-              </button>
-              <Button
-                type="button"
-                className="bg-accent text-white hover:bg-accent/90"
-                disabled={busy || profileLoading}
-                onClick={() => void continueFromCallName()}
-              >
-                {busy ? o.savingProfile : o.continue}
-              </Button>
-            </div>
+      <main className="relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(16rem,0.65fr)_minmax(32rem,1.35fr)]">
+        <section className="xopc-onboarding-visual relative hidden min-h-0 items-center justify-center overflow-hidden lg:flex">
+          <div className="xopc-onboarding-orbit relative flex size-40 items-center justify-center" aria-hidden>
+            <span className="xopc-onboarding-orbit-ring absolute inset-0 rounded-full border border-accent/15" />
+            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[18%] rounded-full border border-momentum-cyan/20" />
+            <span className="flex size-16 items-center justify-center rounded-[1.4rem] border border-white/70 bg-white/80 shadow-float backdrop-blur-xl dark:border-white/10 dark:bg-white/8 lg:size-20">
+              <BrandLogo className="size-10 lg:size-12" />
+            </span>
           </div>
-        ) : null}
+        </section>
 
-        {step === 'collaboration' ? (
-          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-3xl flex-col gap-3">
-            <div>
-              <h3 className="text-lg font-semibold tracking-tight text-fg">{o.collaborationTitle}</h3>
-              <p className="mt-1 text-sm text-fg-muted">{o.collaborationSubtitle}</p>
-            </div>
-
-            <ChoiceGroup
-              label={o.executionLabel}
-              value={executionMode}
-              onChange={(value) => dispatch({ type: 'patch', patch: { executionMode: value as ExecutionMode } })}
-              options={[
-                { value: 'act', title: o.executionAct, hint: o.executionActHint, icon: Rocket },
-                { value: 'plan', title: o.executionPlan, hint: o.executionPlanHint, icon: ListChecks },
-                { value: 'confirm', title: o.executionConfirm, hint: o.executionConfirmHint, icon: ShieldCheck },
-              ]}
-            />
-            <ChoiceGroup
-              label={o.outputLabel}
-              value={outputMode}
-              onChange={(value) => dispatch({ type: 'patch', patch: { outputMode: value as OutputMode } })}
-              options={[
-                { value: 'concise', title: o.outputConcise, hint: o.outputConciseHint, icon: MessageSquareText },
-                { value: 'balanced', title: o.outputBalanced, hint: o.outputBalancedHint, icon: Sparkles },
-                { value: 'detailed', title: o.outputDetailed, hint: o.outputDetailedHint, icon: ListChecks },
-              ]}
-            />
-            <div className="min-h-5">
-              {error ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            </div>
-            <div className="mt-auto flex items-center justify-between gap-3 border-t border-edge-subtle pt-4">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>
-                {o.back}
-              </Button>
-              <Button
-                type="button"
-                className="min-w-32 bg-accent text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-accent-hover motion-reduce:transform-none"
-                disabled={busy}
-                onClick={() => void saveCollaborationDefaults()}
-              >
-                {busy ? o.savingCollaboration : <>{o.continue}<ChevronRight className="ml-1 size-4" aria-hidden /></>}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        {step === 'provider' ? (
-          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-4xl flex-col gap-4">
-            <div>
-              <h3 className="text-lg font-semibold tracking-tight text-fg">{o.step1Title}</h3>
-              {callName.trim() ? (
-                <p className="mt-1 text-sm text-fg-muted">
-                  {language === 'zh' ? `好的 ${callName}，${o.step1Subtitle}` : `Great, ${callName}! ${o.step1Subtitle}`}
-                </p>
-              ) : (
-                <p className="mt-1 text-sm text-fg-muted">{o.step1Subtitle}</p>
-              )}
-            </div>
-            <OnboardingProviderGrid
-              onSelect={(id) => {
-                dispatch({
-                  type: 'patch',
-                  patch: { selectedProvider: id, step: 'apiKey', apiKey: '', error: null },
-                });
-              }}
-            />
-            <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-edge-subtle pt-4">
-              <Button type="button" variant="secondary" onClick={() => dispatch({ type: 'patch', patch: { step: 'collaboration', error: null } })}>
-                {o.back}
-              </Button>
-              <div className="flex flex-wrap items-center justify-end gap-4">
-                <Link to="/settings/capabilities/models" className="text-xs font-medium text-accent-fg hover:underline">
-                  {language === 'zh' ? '配置其他模型…' : 'Configure other models…'}
-                </Link>
-                {canDismiss ? (
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
-                    onClick={onDismiss}
-                  >
-                    {o.skipSetup}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {step === 'apiKey' ? (
-          <div className="xopc-onboarding-stage mx-auto flex h-full max-w-2xl flex-col gap-4">
-            <div>
-              <h3 className="text-lg font-semibold tracking-tight text-fg">
-                {selectedProvider === 'xopc-cloud'
-                  ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud')
-                  : `${o.step2Title}${selectedProvider ? ` (${selectedProvider})` : ''}`}
-              </h3>
-              <p className="mt-1 text-sm text-fg-muted">
-                {selectedProvider === 'xopc-cloud'
-                  ? (language === 'zh'
-                      ? '登录 XOPC Console 并授权，模型会自动同步，无需填写 API Key。'
-                      : 'Sign in to XOPC Console to sync your models. No API key is required.')
-                  : o.step2Subtitle}
-              </p>
-            </div>
-            {selectedProvider === 'xopc-cloud' ? (
-              <OAuthProviderConnect
-                providerId="xopc-cloud"
-                displayName="XOPC Model Service"
-                connected={false}
-                onConnected={() => void finishXopcCloudSetup()}
-              />
-            ) : (
-              <>
-                {selectedProvider && (() => {
-                  const enrichment = PROVIDER_ENRICHMENT[selectedProvider];
-                  const apiKeyUrl = enrichment?.apiKeyUrl;
-                  if (!apiKeyUrl) return null;
-                  return (
-                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3.5 py-2.5">
-                      <span className="text-xs text-fg-muted">
-                        {language === 'zh' ? '获取 API Key：' : 'Get your API Key:'}
-                      </span>
-                      <a
-                        href={apiKeyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
-                      >
-                        {language === 'zh' ? '前往获取' : 'Get API Key'}
-                        <ExternalLink className="size-3" />
-                      </a>
-                    </div>
-                  );
-                })()}
-                <label className="block text-sm font-medium text-fg">
-                  <span className="sr-only">{o.step2Placeholder}</span>
-                  <SecretInput
-                    className="mt-1"
-                    value={apiKey}
-                    onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
-                    placeholder={o.step2Placeholder}
-                    labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
-                    inputClassName="rounded-xl py-2.5 ring-accent focus:border-accent focus:ring-2 focus:ring-accent/30"
-                  />
+        <section className="flex min-h-[30rem] items-center border-t border-edge-subtle bg-white/55 px-5 py-10 backdrop-blur-2xl dark:bg-white/[0.025] sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,7rem)]">
+          <div className="xopc-onboarding-stage w-full max-w-[36rem]" key={step}>
+            {step === 'callName' ? (
+              <div>
+                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '先认识彼此' : 'First, let’s meet'}</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">{o.step0Title}</h1>
+                <p className="mt-3 text-sm leading-7 text-fg-muted">{o.step0Subtitle}</p>
+                <label className="mt-10 block">
+                  <span className="sr-only">{o.profileCallNameLabel}</span>
+                  {profileLoading ? <Skeleton className="h-14 w-full rounded-2xl" /> : (
+                    <input
+                      autoFocus
+                      autoComplete="name"
+                      value={callName}
+                      onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                      onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void continueFromCallName(); }}
+                      placeholder={o.profileCallNamePlaceholder}
+                      className="h-14 w-full rounded-2xl border border-edge bg-white/80 px-4 text-lg text-fg shadow-surface outline-none transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-accent focus:ring-4 focus:ring-accent/10 dark:bg-white/5"
+                    />
+                  )}
                 </label>
-                <p className="text-xs text-fg-muted">{o.step2SecurityNote}</p>
-              </>
-            )}
-            {busy && selectedProvider === 'xopc-cloud' ? (
-              <p className="text-sm text-fg-muted">
-                {language === 'zh' ? '正在应用推荐模型…' : 'Applying the recommended model…'}
-              </p>
+                {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
+                <div className="mt-10 flex items-center justify-end gap-3">
+                  <Button className="h-11 bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy || profileLoading} onClick={() => void continueFromCallName()}>
+                    {busy ? o.savingProfile : o.continue}<ChevronRight className="size-4" aria-hidden />
+                  </Button>
+                </div>
+              </div>
             ) : null}
-            <div className="min-h-5">
-              {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            </div>
-            <div className="mt-auto flex flex-wrap justify-between gap-2 border-t border-edge-subtle pt-4">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>
-                {o.back}
-              </Button>
-              {selectedProvider !== 'xopc-cloud' ? (
-                <Button
-                  type="button"
-                  className="bg-accent text-white hover:bg-accent/90"
-                  disabled={busy || !apiKey.trim()}
-                  onClick={() => void onContinueApiKey()}
-                >
-                  {busy ? o.continue : o.startChatting}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
 
-      </div>
+            {step === 'provider' ? (
+              <div>
+                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '接通智能' : 'Connect intelligence'}</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">{language === 'zh' ? '选择能力来源' : 'Choose how xopc is powered'}</h1>
+                <p className="mt-3 text-sm leading-7 text-fg-muted">
+                  {callName.trim()
+                    ? (language === 'zh' ? `${callName.trim()}，我们会自动使用推荐模型，高级选项可以稍后调整。` : `${callName.trim()}, we’ll apply the recommended model and leave advanced choices for later.`)
+                    : o.step1Subtitle}
+                </p>
+                <div className="mt-8">
+                  <OnboardingProviderGrid
+                    onSelect={(id) => dispatch({ type: 'patch', patch: { selectedProvider: id, step: 'apiKey', apiKey: '', error: null } })}
+                  />
+                </div>
+                <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+                  <Button variant="ghost" onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
+                  <Link to="/settings/capabilities/models" className="text-xs font-medium text-fg-muted hover:text-accent-fg hover:underline">
+                    {language === 'zh' ? '打开高级模型设置' : 'Open advanced model settings'}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
+            {step === 'apiKey' ? (
+              <div>
+                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '最后一步' : 'One last step'}</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">
+                  {selectedProvider === 'xopc-cloud'
+                    ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud')
+                    : (language === 'zh' ? `连接 ${selectedProvider ?? ''}` : `Connect ${selectedProvider ?? ''}`)}
+                </h1>
+                <p className="mt-3 text-sm leading-7 text-fg-muted">
+                  {selectedProvider === 'xopc-cloud'
+                    ? (language === 'zh' ? '登录后会自动同步可用模型，不需要填写 API Key。' : 'Sign in to sync available models automatically. No API key is required.')
+                    : o.step2Subtitle}
+                </p>
+                <div className="mt-9">
+                  {selectedProvider === 'xopc-cloud' ? (
+                    <OAuthProviderConnect providerId="xopc-cloud" displayName="XOPC Model Service" connected={false} onConnected={() => void finishXopcCloudSetup()} />
+                  ) : (
+                    <>
+                      {selectedProvider && PROVIDER_ENRICHMENT[selectedProvider]?.apiKeyUrl ? (
+                        <a href={PROVIDER_ENRICHMENT[selectedProvider].apiKeyUrl} target="_blank" rel="noopener noreferrer" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent-fg hover:underline">
+                          {language === 'zh' ? '获取 API Key' : 'Get an API key'}<ExternalLink className="size-3.5" />
+                        </a>
+                      ) : null}
+                      <label className="block">
+                        <span className="sr-only">{o.step2Placeholder}</span>
+                        <SecretInput
+                          value={apiKey}
+                          onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
+                          placeholder={o.step2Placeholder}
+                          labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
+                          inputClassName="h-14 rounded-2xl bg-white/80 px-4 text-base ring-accent focus:border-accent focus:ring-4 focus:ring-accent/10 dark:bg-white/5"
+                        />
+                      </label>
+                      <div className="mt-4 flex items-center gap-2 text-xs leading-5 text-fg-muted"><ShieldCheck className="size-4 text-accent-fg" />{o.step2SecurityNote.replace('🔒 ', '')}</div>
+                    </>
+                  )}
+                </div>
+                {busy && selectedProvider === 'xopc-cloud' ? <p className="mt-4 text-sm text-fg-muted">{language === 'zh' ? '正在应用推荐模型…' : 'Applying the recommended model…'}</p> : null}
+                {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
+                <div className="mt-10 flex items-center justify-between gap-3">
+                  <Button variant="ghost" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>{o.back}</Button>
+                  {selectedProvider !== 'xopc-cloud' ? (
+                    <Button className="h-11 bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy || !apiKey.trim()} onClick={() => void onContinueApiKey()}>
+                      {busy ? o.continue : (language === 'zh' ? '接入我的工作' : 'Connect my work')}<ChevronRight className="size-4" aria-hidden />
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
