@@ -1,4 +1,6 @@
 import useSWR from 'swr';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
@@ -23,40 +25,65 @@ export function OnboardingProviderGrid({
 }) {
   const language = useLocaleStore((s) => s.language);
   const recommendedLabel = messages(language).onboarding.providerRecommended;
+  const [showOthers, setShowOthers] = useState(false);
   const { data } = useSWR('onboarding-provider-meta', fetchProviderMetaList, {
     revalidateOnFocus: false,
   });
 
   const providers = resolveOnboardingProviders(data, isElectron());
+  const recommended = providers[0];
+  const others = providers.slice(1);
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-      {providers.map((p, index) => {
-        const subtitle = providerSubtitle(p);
-        const recommended = index === 0;
-        return (
+    <div>
+      {recommended ? (
+        <button
+          type="button"
+          onClick={() => onSelect(recommended.id)}
+          className="group flex w-full items-center gap-4 rounded-2xl border border-accent/35 bg-gradient-to-br from-accent-soft/75 via-white/80 to-white/55 p-4 text-left shadow-elevated transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none dark:via-white/7 dark:to-white/3"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white shadow-surface dark:border-white/10 dark:bg-white/8">
+            <ProviderLogo providerId={recommended.id} className="size-8" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-base font-semibold text-fg">{recommended.name}</span>
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">{recommendedLabel}</span>
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-fg-muted">{providerSubtitle(recommended)}</span>
+          </span>
+          <ChevronRight className="size-5 shrink-0 text-accent-fg transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transform-none" aria-hidden />
+        </button>
+      ) : null}
+
+      {others.length ? (
+        <div className="mt-4">
           <button
-            key={p.id}
             type="button"
-            onClick={() => onSelect(p.id)}
-            className={cn(
-              'relative flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-xl border border-edge p-3 text-center transition-colors',
-              'hover:border-accent hover:bg-accent-soft',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              recommended && 'border-accent/50 bg-accent-soft/30',
-            )}
+            className="flex items-center gap-1.5 text-sm font-medium text-fg-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-expanded={showOthers}
+            onClick={() => setShowOthers((value) => !value)}
           >
-            {recommended && (
-              <span className="absolute -top-2 right-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">
-                {recommendedLabel}
-              </span>
-            )}
-            <ProviderLogo providerId={p.id} className="size-8" />
-            <span className="text-sm font-medium text-fg">{p.name}</span>
-            {subtitle ? <span className="line-clamp-2 text-xs text-fg-muted">{subtitle}</span> : null}
+            {language === 'zh' ? '使用其他模型服务' : 'Use another model service'}
+            <ChevronDown className={cn('size-4 transition-transform duration-200', showOthers && 'rotate-180')} aria-hidden />
           </button>
-        );
-      })}
+          {showOthers ? (
+            <div className="xopc-onboarding-provider-options mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {others.map((provider) => (
+                <button
+                  key={provider.id}
+                  type="button"
+                  onClick={() => onSelect(provider.id)}
+                  className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-edge bg-white/55 p-3 text-center transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-accent/45 hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transform-none dark:bg-white/3 dark:hover:bg-white/6"
+                >
+                  <ProviderLogo providerId={provider.id} className="size-7" />
+                  <span className="text-xs font-medium text-fg">{provider.name}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

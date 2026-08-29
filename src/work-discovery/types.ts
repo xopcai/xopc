@@ -1,3 +1,5 @@
+import type { UserFocus } from '../user-context/sources/types.js';
+
 export type WorkDiscoveryOnboardingStatus =
   | 'not_started'
   | 'in_progress'
@@ -208,6 +210,7 @@ export interface WorkDiscoveryResult {
   };
   workThreadCandidates?: WorkUnderstandingThreadCandidate[];
   workThreads?: WorkUnderstandingThread[];
+  focusCandidates?: UserFocus[];
 }
 
 export interface WorkDiscoveryProfileCandidate {

@@ -1,5 +1,6 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { UserFocus } from '@/features/user-context/user-context-api';
 
 export type WorkDiscoveryStatus = 'queued' | 'probing' | 'analyzing' | 'completed' | 'failed' | 'canceled';
 export type WorkDiscoveryStage = 'folder_structure' | 'recent_progress' | 'next_steps';
@@ -57,6 +58,7 @@ export type WorkDiscoveryResult = {
   }>;
   profileCandidates?: WorkDiscoveryProfileCandidate[];
   workThreads?: WorkUnderstandingThread[];
+  focusCandidates?: UserFocus[];
   primarySuggestionId?: string;
   lowConfidence?: boolean;
   contextQuestion?: string;
