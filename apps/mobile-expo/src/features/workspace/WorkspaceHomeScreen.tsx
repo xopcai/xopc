@@ -24,7 +24,6 @@ import {
   retryHomeAttention,
   type HomeAction,
   type HomeFocusItem,
-  type HomeWorkflowRun,
 } from '../../query/home';
 import { queryKeys } from '../../query/keys';
 import { fetchNotes, type NoteIndexEntry } from '../../query/notes';
@@ -80,15 +79,7 @@ function timestampMs(value: string | number | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function workflowProgress(run: HomeWorkflowRun, hm: ReturnType<typeof useMessages>['homePage']): string {
-  if (run.metrics.agentCount <= 0) return hm.workflowRunning;
-  return t(hm.workflowProgress, {
-    done: run.metrics.doneAgentCount,
-    total: run.metrics.agentCount,
-  });
-}
-
-type RemoteHomeAction = Exclude<HomeAction, { type: 'open' | 'ask_ai' | 'review_judgment' }>;
+type RemoteHomeAction = Exclude<HomeAction, { type: 'open' | 'review_judgment' }>;
 
 export function WorkspaceHomeScreen() {
   const router = useRouter();
@@ -142,11 +133,6 @@ export function WorkspaceHomeScreen() {
   const m = useMessages();
   const hm = m.homePage;
 
-  const handleSessionPress = useCallback((sessionKey: string) => {
-    recordUsageEvent('home_continue_opened');
-    router.push(`/chat/${sessionKey}`);
-  }, [router]);
-
   const handleNotePress = useCallback((note: NoteIndexEntry) => {
     recordUsageEvent('home_continue_opened');
     openNoteDetail(router, note.id);
@@ -160,34 +146,6 @@ export function WorkspaceHomeScreen() {
   const focusedIds = useMemo(() => new Set((home?.focusItems ?? []).map((item) => item.id)), [home?.focusItems]);
 
   const continueItems = useMemo<ContinueItem[]>(() => {
-    const workflowItems = (home?.workflowRuns.active ?? []).map((run) => ({
-      id: `workflow:${run.id}`,
-      kind: 'running_work' as const,
-      updatedAt: run.startedAtMs ?? run.createdAtMs,
-      value: {
-        id: `workflow:${run.id}`,
-        title: run.title,
-        meta: `${hm.workflowItemMeta} · ${workflowProgress(run, hm)}`,
-        icon: 'source-branch-sync',
-        onPress: () => run.sessionKey ? handleSessionPress(run.sessionKey) : router.push(`/workflows/runs/${run.id}`),
-      },
-    }));
-    const runningKeys = new Set((home?.chats.running ?? []).map((session) => session.key));
-    const sessionItems = [...(home?.chats.running ?? []), ...(home?.chats.recent ?? []).filter((session) => !runningKeys.has(session.key))]
-      .map((session) => ({
-        id: `session:${session.key}`,
-        kind: session.active ? 'active_chat' as const : 'recent_chat' as const,
-        updatedAt: timestampMs(session.updatedAt),
-        value: {
-          id: `session:${session.key}`,
-          title: session.name || m.sessions.untitled,
-          meta: session.active
-            ? `${hm.chatItemMeta} · ${hm.taskStatusRunning}`
-            : `${hm.chatItemMeta} · ${timeLabel(session.updatedAt, hm)}`,
-          icon: 'message-processing-outline',
-          onPress: () => handleSessionPress(session.key),
-        },
-      }));
     const noteItems = homeNotes.map((note) => ({
       id: `note:${note.id}`,
       kind: 'note' as const,
@@ -200,23 +158,11 @@ export function WorkspaceHomeScreen() {
         onPress: () => handleNotePress(note),
       },
     }));
-    const taskItems = (home?.tasks.running ?? []).map((task) => ({
-      id: `task:${task.id}`,
-      kind: 'running_work' as const,
-      updatedAt: task.updatedAt,
-      value: {
-        id: `task:${task.id}`,
-        title: task.title,
-        meta: `${hm.libraryWork} · ${hm.taskStatusRunning}`,
-        icon: 'progress-clock',
-        onPress: () => router.push(`/tasks/${task.id}`),
-      },
-    }));
     return rankHomeContinueCandidates(
-      [...workflowItems, ...taskItems, ...sessionItems, ...noteItems].filter((item) => !focusedIds.has(item.id)),
+      noteItems.filter((item) => !focusedIds.has(item.id)),
       primaryFocus?.id,
     ).slice(0, 3);
-  }, [focusedIds, handleNotePress, handleSessionPress, hm, home?.chats.recent, home?.chats.running, home?.tasks.running, home?.workflowRuns.active, homeNotes, m.sessions.untitled, primaryFocus?.id, router]);
+  }, [focusedIds, handleNotePress, hm, homeNotes, primaryFocus?.id]);
 
   const remoteActionMutation = useMutation({
     mutationFn: async (action: RemoteHomeAction) => {
@@ -253,10 +199,7 @@ export function WorkspaceHomeScreen() {
   });
 
   const runHomeAction = useCallback((action: HomeAction) => {
-    if (action.type === 'ask_ai') {
-      recordUsageEvent('ask_ai_started');
-      openAskAi();
-    } else if (action.type === 'open') {
+    if (action.type === 'open') {
       recordUsageEvent('home_focus_opened');
       router.push(mobileRouteForHomeHref(action.href) as never);
     } else if (action.type === 'review_judgment') {
@@ -265,7 +208,7 @@ export function WorkspaceHomeScreen() {
     } else {
       remoteActionMutation.mutate(action);
     }
-  }, [openAskAi, remoteActionMutation, router]);
+  }, [remoteActionMutation, router]);
 
   const refresh = useCallback(async () => {
     await homeQuery.refetch();
@@ -339,17 +282,16 @@ export function WorkspaceHomeScreen() {
           />
         ) : (
           <>
-            {!home.gateway.ready ? (
-              <HomeGatewayStatus onPress={() => router.push('/settings/gateway')} />
+            {primaryFocus ? (
+              <HomeFocusCard
+                item={primaryFocus}
+                pending={remoteActionMutation.isPending}
+                onAction={runHomeAction}
+              />
             ) : null}
-            <HomeFocusCard
-              item={primaryFocus ?? home.focusItems[0]}
-              pending={remoteActionMutation.isPending}
-              onAction={runHomeAction}
-            />
             <HomeFocusSections
               items={remainingFocusItems}
-              scheduledTotal={Math.max(0, home.upcomingAutomations.length - (primaryFocus?.kind === 'scheduled' ? 1 : 0))}
+              scheduledTotal={remainingFocusItems.filter((item) => item.kind === 'scheduled').length}
               pending={remoteActionMutation.isPending}
               onAction={runHomeAction}
               onViewSchedules={() => router.push('/automation')}
@@ -363,7 +305,7 @@ export function WorkspaceHomeScreen() {
               onSessions={() => router.push('/sessions')}
               onFiles={() => router.push('/files')}
               onAutomation={() => router.push('/automation')}
-              showAutomation={home.upcomingAutomations.length > 0}
+              showAutomation={home.focusItems.some((item) => item.kind === 'scheduled')}
             />
           </>
         )}
@@ -418,33 +360,9 @@ function HomeLoadError({ onRetry, retrying }: { onRetry: () => void; retrying: b
   );
 }
 
-function HomeGatewayStatus({ onPress }: { onPress: () => void }) {
-  const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  return (
-    <Pressable
-      style={[styles.statusBanner, { backgroundColor: colors.surface.grouped }]}
-      onPress={onPress}
-      accessibilityRole="button"
-    >
-      <Icon
-        source="progress-clock"
-        size={16}
-        color={colors.semantic.warning}
-      />
-      <Text style={[styles.statusText, { color: colors.text.secondary }]}>
-        {hm.gatewayStartingStatus}
-      </Text>
-      <Icon source="chevron-right" size={16} color={colors.text.tertiary} />
-    </Pressable>
-  );
-}
-
 function focusIcon(kind: HomeFocusItem['kind']): string {
   if (kind === 'decision') return 'shield-check-outline';
   if (kind === 'failure') return 'alert-circle-outline';
-  if (kind === 'result') return 'check-circle-outline';
-  if (kind === 'suggestion') return 'creation-outline';
   return 'progress-clock';
 }
 
@@ -523,7 +441,6 @@ function HomeFocusSections({
   const needs = items.filter((item) => item.kind === 'decision' || item.kind === 'failure');
   const running = items.filter((item) => item.kind === 'running');
   const scheduled = items.filter((item) => item.kind === 'scheduled');
-  const results = items.filter((item) => item.kind === 'result');
   return (
     <>
       <HomeFocusList title={hm.sectionAttention} items={needs} pending={pending} onAction={onAction} />
@@ -536,7 +453,6 @@ function HomeFocusSections({
         onAction={onAction}
         onViewAll={scheduledTotal > scheduled.length ? onViewSchedules : undefined}
       />
-      <HomeFocusList title={hm.sectionRecentTasks} items={results} pending={pending} onAction={onAction} />
     </>
   );
 }
@@ -849,8 +765,6 @@ const styles = StyleSheet.create({
   loadError: { minHeight: 280, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xxl, gap: spacing.md },
   retryButton: { minHeight: 48, borderRadius: radii.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl, marginTop: spacing.sm },
   retryButtonText: { ...typography.ui, fontWeight: '600' },
-  statusBanner: { minHeight: 44, borderRadius: radii.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
-  statusText: { ...typography.caption, fontWeight: '500' },
   focusCard: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, padding: spacing.content, gap: spacing.md },
   focusHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   focusHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },

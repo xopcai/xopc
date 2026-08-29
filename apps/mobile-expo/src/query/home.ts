@@ -2,42 +2,19 @@ import {
   parseHomeResponse,
   type HomeAttention,
   type HomeDecision,
-  type HomeFocusItem,
-  type HomeResponse,
+  type HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
 
-export type { HomeAction, HomeAttention, HomeDecision, HomeFocusItem } from '@xopcai/gateway-contract';
+export type { HomeAction, HomeAttention, HomeDecision, HomeWorkbenchItem as HomeFocusItem } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
 import type { NoteIndexEntry } from './notes';
 
-export type HomeGateway = {
-  status: string;
-  ready: boolean;
-  httpListening: boolean;
-  version: string;
-  uptime: number;
-  tunnel: {
-    state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
-    publicUrl: string | null;
-    connected: boolean;
-  };
-};
-
-export type HomeWorkflowRun = HomeResponse['workflowRuns']['active'][number];
-
 export interface HomeData {
-  focusItems: [HomeFocusItem, ...HomeFocusItem[]];
+  focusItems: HomeWorkbenchItem[];
   recentlyOpened: NoteIndexEntry[];
   inboxCount: number;
-  chats: HomeResponse['chats'];
-  gateway: HomeGateway;
-  workflowRuns: {
-    active: HomeWorkflowRun[];
-  };
-  upcomingAutomations: HomeResponse['upcomingAutomations'];
-  tasks: HomeResponse['tasks'];
 }
 
 export async function fetchHome(language: Language): Promise<HomeData> {
@@ -45,16 +22,10 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   if (!res.ok) throw new Error(`Failed to fetch home: ${res.status}`);
   const raw = await res.json() as unknown;
   const core = parseHomeResponse(raw);
-  const home = raw as HomeData;
   return {
-    focusItems: core.focusItems as [HomeFocusItem, ...HomeFocusItem[]],
-    recentlyOpened: home.recentlyOpened,
-    inboxCount: home.inboxCount,
-    chats: core.chats,
-    gateway: home.gateway,
-    workflowRuns: { active: home.workflowRuns.active },
-    upcomingAutomations: home.upcomingAutomations,
-    tasks: core.tasks,
+    focusItems: [...core.needsUser, ...core.background],
+    recentlyOpened: [],
+    inboxCount: 0,
   };
 }
 
