@@ -11,7 +11,7 @@ xopc update --check
 
 ## 桌面应用
 
-应用提供更新时使用 **设置 → Gateway**，或从 [GitHub Releases](https://github.com/xopcai/xopc/releases) 下载新安装包。替换应用前关闭其它 xopc 窗口。
+应用提供更新时使用 **设置 → Gateway**，或从 [xopc.ai](https://xopc.ai/zh#download) 下载当前安装包。历史安装包仍可在 [GitHub Releases](https://github.com/xopcai/xopc/releases) 查看。替换应用前关闭其它 xopc 窗口。
 
 ## 命令行安装
 
