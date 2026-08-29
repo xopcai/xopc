@@ -8,7 +8,7 @@ import type {
   ComposioSessionLike,
   ComposioSessionsClient,
   ComposioToolkitAuthState,
-} from './composio-sessions.js';
+} from './composio-session-types.js';
 
 type JsonRecord = Record<string, unknown>;
 
