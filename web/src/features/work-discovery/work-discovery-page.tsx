@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { messages } from '@/i18n/messages';
@@ -35,9 +34,15 @@ import {
 import { runWorkDiscoveryBatch } from './run-work-discovery-batch';
 import { UnderstandingReveal } from './understanding-reveal';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
+import {
+  UnderstandingSourceConvergence,
+  type UnderstandingSignal,
+  type UnderstandingSignalKind,
+} from './understanding-source-convergence';
+import { WorkDiscoveryConnectorsStep } from './work-discovery-connectors-step';
 import { defaultSelectedLocalSourceIds } from './work-discovery-source-defaults';
 
-type PageState = 'loading' | 'intro' | 'candidates' | 'consent' | 'running' | 'recognition' | 'recommendation' | 'error';
+type PageState = 'loading' | 'intro' | 'candidates' | 'consent' | 'connectors' | 'running' | 'recognition' | 'recommendation' | 'error';
 
 const STAGES: WorkDiscoveryStage[] = ['folder_structure', 'recent_progress', 'next_steps'];
 
@@ -48,11 +53,11 @@ function errorText(error: unknown): string {
 export function WorkDiscoveryPage({
   embedded = false,
   onRequestClose,
-  onConversationOpen,
+  onNavigateAway,
 }: {
   embedded?: boolean;
   onRequestClose?: () => void;
-  onConversationOpen?: () => void;
+  onNavigateAway?: () => void;
 } = {}) {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).onboarding.workDiscovery;
@@ -73,10 +78,36 @@ export function WorkDiscoveryPage({
   const [batchPosition, setBatchPosition] = useState({ current: 0, total: 0 });
   const [localSources, setLocalSources] = useState<ElectronUnderstandingSourceDefinition[]>([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(() => new Set());
+  const [connectedSignals, setConnectedSignals] = useState<UnderstandingSignal[]>([]);
   const stopBatchRef = useRef(false);
   const understandingMemories = useUnderstandingActivityStore((state) => state.memories);
   const understandingFocuses = useUnderstandingActivityStore((state) => state.focuses);
   const understandingActivityStatus = useUnderstandingActivityStore((state) => state.status);
+
+  const signalKindByCategory: Partial<Record<ElectronUnderstandingSourceDefinition['category'], UnderstandingSignalKind>> = {
+    recent_documents: 'recent',
+    calendar: 'calendar',
+    tasks: 'task',
+    notes: 'note',
+    mail: 'mail',
+    messages: 'message',
+    code_activity: 'git',
+    files: 'file',
+  };
+  const runningSignals: UnderstandingSignal[] = [
+    { id: 'work-folder', label: copy.sourceSignals.workFolder, kind: 'folder' },
+    { id: 'project-files', label: copy.sourceSignals.projectFiles, kind: 'file' },
+    { id: 'recent-changes', label: copy.sourceSignals.recentChanges, kind: 'recent' },
+    { id: 'git-state', label: copy.sourceSignals.gitState, kind: 'git' },
+    ...localSources
+      .filter((source) => selectedSourceIds.has(source.id))
+      .map((source): UnderstandingSignal => ({
+        id: source.id,
+        label: source.displayName,
+        kind: signalKindByCategory[source.category] ?? 'data',
+      })),
+    ...connectedSignals,
+  ];
 
   const toggleSource = (sourceId: string) => {
     setSelectedSourceIds((current) => {
@@ -214,11 +245,22 @@ export function WorkDiscoveryPage({
   const picker = useDirectoryPicker({ onPicked: selectFolder });
 
   useEffect(() => {
+    if (!startFresh) {
+      const currentRun = useUnderstandingActivityStore.getState().directoryRun;
+      if (currentRun) {
+        applyRun(currentRun);
+        return;
+      }
+    }
     let cancelled = false;
+    const loadingFallback = window.setTimeout(() => {
+      if (!cancelled) setPageState('intro');
+    }, 4_000);
     void fetchWorkDiscoveryOnboarding()
       .then(async ({ enabled, state }) => {
         if (cancelled) return;
         if (!enabled) {
+          window.clearTimeout(loadingFallback);
           if (onRequestClose) onRequestClose();
           else navigate('/chat', { replace: true });
           return;
@@ -226,21 +268,31 @@ export function WorkDiscoveryPage({
         if (!startFresh && state.activeRunId) {
           try {
             const active = await fetchWorkDiscoveryRun(state.activeRunId);
-            if (!cancelled) applyRun(active);
+            if (!cancelled) {
+              window.clearTimeout(loadingFallback);
+              applyRun(active);
+            }
             return;
           } catch {
             // Fall back to the introduction if the saved run was removed.
           }
         }
-        if (!cancelled) setPageState('intro');
+        if (!cancelled) {
+          window.clearTimeout(loadingFallback);
+          setPageState('intro');
+        }
       })
       .catch((cause) => {
+        window.clearTimeout(loadingFallback);
         if (!cancelled) {
           setError(errorText(cause));
           setPageState('intro');
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(loadingFallback);
+    };
   }, [applyRun, navigate, onRequestClose, startFresh]);
 
   useEffect(() => {
@@ -305,7 +357,7 @@ export function WorkDiscoveryPage({
     if (draft) params.set('draft', draft);
     if (draft && autoSend) params.set('autoSend', '1');
     const query = params.toString();
-    onConversationOpen?.();
+    onNavigateAway?.();
     navigate(`/chat/${encodeURIComponent(sessionKey)}${query ? `?${query}` : ''}`);
   };
 
@@ -326,6 +378,23 @@ export function WorkDiscoveryPage({
     stopBatchRef.current = true;
     const canceled = await cancelWorkDiscoveryRun(run.id);
     applyRun(canceled);
+  };
+
+  const continueInBackground = () => {
+    onNavigateAway?.();
+    navigate('/chat');
+  };
+
+  const startConfiguredUnderstanding = () => {
+    if (preview) {
+      void start();
+      return;
+    }
+    void startSelectedCandidates();
+  };
+
+  const backFromConnectors = () => {
+    setPageState(preview ? 'consent' : candidates.length ? 'candidates' : 'intro');
   };
 
   const handleSuggestion = async (suggestion: WorkDiscoverySuggestion, discussOnly: boolean) => {
@@ -475,7 +544,7 @@ export function WorkDiscoveryPage({
       <main key={pageState} className={embedded
         ? `xopc-work-discovery-stage relative z-10 mx-auto flex h-full min-h-0 w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[46rem]'} flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto [scrollbar-gutter:stable]'}`
         : `mx-auto flex w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16`}>
-        {pageState !== 'recognition' ? (
+        {pageState !== 'recognition' && pageState !== 'running' && pageState !== 'loading' ? (
           <div className={cn('flex items-center justify-center', embedded ? 'mb-7 sm:mb-9' : 'mb-10')}>
             <div className="xopc-discovery-logo relative flex size-16 items-center justify-center rounded-[1.35rem] border border-edge bg-surface-panel shadow-elevated">
               <span className="xopc-discovery-logo-ring absolute -inset-3 rounded-[1.8rem] border border-accent/10" aria-hidden />
@@ -485,19 +554,20 @@ export function WorkDiscoveryPage({
         ) : null}
 
         {pageState === 'loading' ? (
-          <div className="mx-auto flex min-h-[26rem] w-full max-w-md flex-col items-center" aria-busy>
-            <Skeleton className="h-8 w-64 max-w-full" />
-            <Skeleton className="mt-4 h-4 w-full max-w-sm" />
-            <Skeleton className="mt-2 h-4 w-4/5 max-w-xs" />
-            <Skeleton className="mt-10 h-12 w-full rounded-xl" />
-            <Skeleton className="mt-3 h-11 w-full rounded-xl" />
-            <Skeleton className="mt-5 h-4 w-3/5 max-w-56" />
-          </div>
+          <section className="mx-auto flex min-h-[32rem] w-full max-w-md flex-1 flex-col items-center justify-center text-center" aria-busy>
+            <BrandLogo className="size-14" aria-hidden />
+            <div className="mt-7 flex items-center gap-2 text-sm font-medium text-fg">
+              <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+              {copy.loading}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-fg-muted">{copy.loadingHint}</p>
+          </section>
         ) : null}
 
         {pageState === 'intro' ? (
           <section className="flex flex-1 flex-col text-center" aria-labelledby="work-discovery-title">
             <div className="mx-auto max-w-[36rem]">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.sourceStepEyebrow}</p>
               <h1 id="work-discovery-title" className="text-2xl font-semibold tracking-tight text-fg">
                 {copy.title}
               </h1>
@@ -505,7 +575,7 @@ export function WorkDiscoveryPage({
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
               {localSources.length ? (
-                <details className="group mb-5 rounded-2xl border border-edge bg-surface-panel text-left shadow-surface">
+                <details open className="group mb-5 rounded-2xl border border-edge bg-surface-panel text-left shadow-surface">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-fg marker:content-none">
                     <span>{copy.localSourcesTitle}</span>
                     <ChevronDown className="size-4 text-fg-muted transition-transform duration-200 group-open:rotate-180" aria-hidden />
@@ -565,13 +635,6 @@ export function WorkDiscoveryPage({
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
                 <span>{copy.quickScanNote}</span>
               </div>
-              <button
-                type="button"
-                className="mt-4 text-sm font-medium text-accent-fg hover:underline"
-                onClick={() => navigate('/connectors?understanding=1&returnTo=%2Fonboarding%2Fworkspace')}
-              >
-                {copy.connectCloudSource}
-              </button>
               {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
             </div>
             <button type="button" className="mx-auto mt-auto pt-10 text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => void skip()} disabled={busy}>
@@ -635,10 +698,9 @@ export function WorkDiscoveryPage({
                   type="button"
                   className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover"
                   disabled={busy || selectedCandidatePaths.size === 0}
-                  onClick={() => void startSelectedCandidates()}
+                  onClick={() => setPageState('connectors')}
                 >
-                  {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                  {copy.analyzeSelected.replace('{{count}}', String(selectedCandidatePaths.size))}
+                  {copy.continueToConnectors}
                 </Button>
                 <Button type="button" variant="secondary" className="h-11 flex-1" disabled={busy} onClick={picker.pick}>
                   {copy.chooseFolderManually}
@@ -713,8 +775,8 @@ export function WorkDiscoveryPage({
             </div>
             {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
             <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
-              <Button type="button" className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" disabled={busy} onClick={() => void start()}>
-                {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}{copy.startAnalysis}
+              <Button type="button" className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" disabled={busy} onClick={() => setPageState('connectors')}>
+                {copy.continueToConnectors}
               </Button>
               <Button type="button" variant="secondary" className="h-11 flex-1" disabled={busy} onClick={picker.pick}>{copy.changeFolder}</Button>
             </div>
@@ -722,9 +784,20 @@ export function WorkDiscoveryPage({
           </section>
         ) : null}
 
+        {pageState === 'connectors' ? (
+          <WorkDiscoveryConnectorsStep
+            busy={busy}
+            onBack={backFromConnectors}
+            onContinue={startConfiguredUnderstanding}
+            onSkip={() => void skip()}
+            onConnectedSignalsChange={setConnectedSignals}
+          />
+        ) : null}
+
         {pageState === 'running' && run ? (
           <section aria-labelledby="work-discovery-running-title" aria-live="polite">
             <div className="text-center">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.understandingStepEyebrow}</p>
               <h1 id="work-discovery-running-title" className="text-2xl font-semibold tracking-tight text-fg">{copy.analyzingTitle}</h1>
               <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.analyzingSubtitle}</p>
               {batchPosition.total > 1 ? (
@@ -735,24 +808,30 @@ export function WorkDiscoveryPage({
                 </p>
               ) : null}
             </div>
-            <div className="xopc-understanding-progress mt-9 rounded-2xl border border-edge bg-surface-panel px-5 py-2 shadow-elevated">
+            <UnderstandingSourceConvergence
+              signals={runningSignals}
+              ariaLabel={copy.sourceSignals.ariaLabel}
+              centerLabel={copy.sourceSignals.centerLabel}
+            />
+            <div className="xopc-understanding-progress mx-auto -mt-2 grid max-w-xl grid-cols-3 gap-2">
               {STAGES.map((stage, index) => {
                 const activeIndex = Math.max(0, STAGES.indexOf(run.stage ?? 'folder_structure'));
                 const complete = index < activeIndex;
                 const active = index === activeIndex;
                 return (
-                  <div key={stage} className="xopc-understanding-step flex items-center gap-4 border-b border-edge-subtle py-4 last:border-b-0" data-active={active || undefined} data-complete={complete || undefined}>
-                    <span className={`xopc-understanding-step-icon flex size-8 items-center justify-center rounded-full ${complete ? 'bg-accent text-white' : active ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>
-                      {complete ? <Check className="size-4" /> : active ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <span className="size-1.5 rounded-full bg-current" />}
+                  <div key={stage} className={`xopc-understanding-step flex min-w-0 flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center ${active ? 'border-accent/30 bg-accent-soft/70' : 'border-edge bg-surface-panel/70'}`} data-active={active || undefined} data-complete={complete || undefined}>
+                    <span className={`xopc-understanding-step-icon flex size-7 items-center justify-center rounded-full ${complete ? 'bg-accent text-white' : active ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>
+                      {complete ? <Check className="size-3.5" /> : active ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" /> : <span className="size-1.5 rounded-full bg-current" />}
                     </span>
-                    <span className={active || complete ? 'text-sm font-medium text-fg' : 'text-sm text-fg-muted'}>{copy.stages[stage]}</span>
+                    <span className={active || complete ? 'text-xs font-medium leading-5 text-fg' : 'text-xs leading-5 text-fg-muted'}>{copy.stages[stage]}</span>
                   </div>
                 );
               })}
             </div>
             <p className="mt-4 truncate text-center font-mono text-xs text-fg-muted">{run.rootPath}</p>
-            <div className="mx-auto mt-7 flex max-w-md flex-col gap-3">
-              <Button type="button" variant="secondary" className="h-11 w-full" onClick={() => navigate('/chat')}>
+            <p className="mx-auto mt-4 max-w-lg text-center text-xs leading-5 text-fg-muted">{copy.backgroundChoiceHint}</p>
+            <div className="mx-auto mt-5 flex max-w-md flex-col gap-3">
+              <Button type="button" variant="secondary" className="h-11 w-full" onClick={continueInBackground}>
                 {copy.continueInBackground}
               </Button>
               <button type="button" className="mx-auto text-sm text-fg-muted hover:text-danger hover:underline" onClick={() => void cancelCurrentAnalysis()}>

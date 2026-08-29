@@ -79,7 +79,7 @@ export function OnboardingDialog() {
               <WorkDiscoveryPage
                 embedded
                 onRequestClose={leaveExperience}
-                onConversationOpen={closeExperience}
+                onNavigateAway={closeExperience}
               />
             </div>
           )}

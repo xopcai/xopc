@@ -79,4 +79,26 @@ describe('understanding activity store', () => {
       status: 'edited',
     });
   });
+
+  it('keeps a completed directory run ready for review until the user confirms it', () => {
+    useUnderstandingActivityStore.getState().updateDirectoryRun({
+      id: 'run-1',
+      rootPath: '/workspace',
+      status: 'completed',
+      projectId: 'project-1',
+      sessionKey: 'session-1',
+      result: {
+        projectSummary: 'A project summary',
+        currentState: 'Ready for review',
+        uncertainties: [],
+        suggestions: [],
+      },
+    });
+
+    expect(useUnderstandingActivityStore.getState()).toMatchObject({
+      status: 'review_ready',
+      directoryStatus: 'completed',
+      directoryRun: { id: 'run-1' },
+    });
+  });
 });

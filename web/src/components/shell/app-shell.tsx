@@ -28,6 +28,7 @@ import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/ta
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
 import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
+import { UnderstandingActivityCoordinator } from '@/features/work-discovery/understanding-activity-coordinator';
 import {
   closeWorkDiscoveryOverlaySearch,
   isWorkDiscoveryOverlaySearch,
@@ -155,6 +156,7 @@ export function AppShell() {
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
         <EndpointToolBridge />
         <GatewayRealtimeBridge />
+        <UnderstandingActivityCoordinator />
         <AgentRunNotificationCoordinator />
         <ElectronMenuListener />
         <WindowsTitlebar />
@@ -182,6 +184,7 @@ export function AppShell() {
         {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
       </a>
       <GatewayRealtimeBridge />
+      <UnderstandingActivityCoordinator />
       <AgentRunNotificationCoordinator />
       <ElectronMenuListener />
       <NavigateToChatListener />
