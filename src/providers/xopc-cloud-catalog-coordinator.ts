@@ -8,6 +8,7 @@ import {
   type ModelCatalogStore,
 } from './model-catalog-store.js';
 import { getModelRegistry } from './model-registry.js';
+import { disconnectProviderCore } from './provider-disconnect-core.js';
 import { XopcCloudModelSource } from './xopc-cloud-model-source.js';
 
 const log = createLogger('XopcCloudCatalog');
@@ -64,8 +65,9 @@ export class XopcCloudCatalogCoordinator {
     this.reloadImageProviders = options.reloadImageProviders ?? reloadImageGenerationProviders;
     this.withLock = options.withLock ?? ((operation) => withOAuthProviderLock('xopc-cloud', operation));
     this.onPermanentAuthFailure = options.onPermanentAuthFailure ?? (async () => {
-      const { disconnectProvider } = await import('./provider-disconnect.js');
-      await disconnectProvider('xopc-cloud');
+      await disconnectProviderCore('xopc-cloud', {
+        clearCloudCatalog: () => this.clear('invalid-grant'),
+      });
     });
   }
 

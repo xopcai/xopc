@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { resolveXopcCloudCatalogCachePath } from '../config/paths-state.js';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
-import type { CatalogModel, CatalogSource } from './model-catalog-store.js';
+import type { CatalogModel, CatalogSource } from './model-catalog-types.js';
 
 const MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 

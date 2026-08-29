@@ -459,19 +459,6 @@ export class ExtensionLoader {
 
   async loadExtension(config: ResolvedExtensionConfig): Promise<ExtensionApi | null> {
     try {
-      //  Check cache first
-      const cacheKey = this.cache.buildKey(this.options, [config.id]);
-      const cached = this.cache.get<ExtensionApi>(cacheKey);
-      if (cached) {
-        log.debug({ extensionId: config.id }, 'Extension loaded from cache');
-        return cached;
-      }
-
-      // Check if already loaded
-      if (this.extensionInstances.has(config.id)) {
-        return this.extensionInstances.get(config.id)!;
-      }
-
       // Resolve extension path using resolveExtensionPath
       let extensionPath: string | null;
       if (isAbsolute(config.path)) {
@@ -493,18 +480,39 @@ export class ExtensionLoader {
       //  Security check
       const source = config.source || 'bundled';
       const safetyResult = checkExtensionPathSafety(extensionPath, extensionPath, source);
-      
-      if (!safetyResult.safe) {
+
+      if (this.securityConfig.checkPermissions && !safetyResult.safe) {
         logSecurityIssue(config.id, safetyResult);
-        
-        if (this.securityConfig.checkPermissions && source !== 'bundled') {
-          // Check allowlist
-          if (!isExtensionAllowed(config.id, this.securityConfig)) {
-            this.diagnostics.error(config.id, `Extension not allowed: ${safetyResult.detail}`);
-            log.error({ extensionId: config.id, reason: safetyResult.reason }, 'Extension blocked by security policy');
-            return null;
-          }
-        }
+        this.diagnostics.error(config.id, `Unsafe extension path: ${safetyResult.detail}`);
+        log.error(
+          { extensionId: config.id, reason: safetyResult.reason },
+          'Extension blocked because its path is unsafe',
+        );
+        return null;
+      }
+
+      // Filesystem safety and publisher trust are independent boundaries. A safely-owned
+      // directory must not bypass allowUntrusted=false for non-bundled code.
+      if (source !== 'bundled' && !isExtensionAllowed(config.id, this.securityConfig)) {
+        this.diagnostics.error(config.id, 'Extension is not present in extensions.security.allow');
+        log.error(
+          { extensionId: config.id, source },
+          'Extension blocked because it is not trusted by security policy',
+        );
+        return null;
+      }
+
+      // Trust checks must run before both local and shared cache hits so a policy change cannot
+      // keep previously-loaded third-party code authorized.
+      const cacheKey = this.cache.buildKey(this.options, [config.id]);
+      const cached = this.cache.get<ExtensionApi>(cacheKey);
+      if (cached) {
+        log.debug({ extensionId: config.id }, 'Extension loaded from cache');
+        return cached;
+      }
+
+      if (this.extensionInstances.has(config.id)) {
+        return this.extensionInstances.get(config.id)!;
       }
 
       // Track provenance 
