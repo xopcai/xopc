@@ -1,5 +1,5 @@
 import { ArrowLeft, CopyPlus, Pencil, Play } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -10,6 +10,7 @@ import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { WorkflowEditor, type WorkflowEditorInitialDraft } from './workflow-create-dialog';
 import { definitionToManifest } from './workflow-definition-manifest';
@@ -85,6 +86,8 @@ export function WorkflowDetailPage() {
   const language = useLocaleStore((state) => state.language);
   const labels = messages(language).workflows;
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
+  const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const { ownerAgentId } = useWorkflowOwnerAgent();
   const projectId = searchParams.get('projectId')?.trim() || undefined;
   const { definition, loading, error } = useWorkflowDefinition(definitionId);
@@ -103,6 +106,53 @@ export function WorkflowDetailPage() {
   );
   const inputValidity = validateWorkflowInputEditorValue(definition, setup);
   const localized = definition ? resolveWorkflowLocalizedCopy(definition, language) : null;
+
+  const libraryParams = new URLSearchParams({ tab: 'library' });
+  if (ownerAgentId) libraryParams.set('agentId', ownerAgentId);
+  const libraryHref = `/workflows?${libraryParams.toString()}`;
+
+  let editHref: string | null = null;
+  if (definition) {
+    const editQuery = new URLSearchParams();
+    if (ownerAgentId) editQuery.set('agentId', ownerAgentId);
+    if (projectId) editQuery.set('projectId', projectId);
+    if (definition.metadata.source !== 'user') editQuery.set('copy', definition.id);
+    editHref = `${definition.metadata.source === 'user' ? `/workflows/${definition.id}/edit` : '/workflows/new'}${editQuery.size ? `?${editQuery.toString()}` : ''}`;
+  }
+
+  useLayoutEffect(() => {
+    const backLabel = language === 'zh' ? '返回工作流库' : 'Back to workflow library';
+    setPageHeader({
+      startExtra: (
+        <Link to={libraryHref} className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={backLabel}>
+          <ArrowLeft className="size-4" aria-hidden />
+        </Link>
+      ),
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">
+            {definition?.title ?? (language === 'zh' ? '工作流详情' : 'Workflow details')}
+          </h1>
+          {definition ? (
+            <p className="truncate text-xs text-fg-muted">
+              {definition.metadata.source === 'user' ? labels.badgeUser : labels.badgeBuiltin}
+              {' · '}
+              {language === 'zh' ? `版本 ${definition.revision}` : `Version ${definition.revision}`}
+            </p>
+          ) : null}
+        </div>
+      ),
+      end: definition && editHref ? (
+        <Button asChild variant="secondary" className="h-9 shrink-0">
+          <Link to={editHref}>
+            {definition.metadata.source === 'user' ? <Pencil className="size-4" aria-hidden /> : <CopyPlus className="size-4" aria-hidden />}
+            {definition.metadata.source === 'user' ? labels.editWorkflow : labels.copyAndEditWorkflow}
+          </Link>
+        </Button>
+      ) : null,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, definition, editHref, labels.badgeBuiltin, labels.badgeUser, labels.copyAndEditWorkflow, labels.editWorkflow, language, libraryHref, setPageHeader]);
 
   const start = useCallback(async () => {
     if (!definition || !inputValidity.valid || starting) return;
@@ -129,44 +179,15 @@ export function WorkflowDetailPage() {
   if (loading) return <WorkflowRouteSkeleton />;
   if (!definition || !localized) return <WorkflowRouteError message={error?.message ?? (language === 'zh' ? '没有找到这个工作流' : 'Workflow not found')} />;
 
-  const editQuery = new URLSearchParams();
-  if (ownerAgentId) editQuery.set('agentId', ownerAgentId);
-  if (projectId) editQuery.set('projectId', projectId);
-  if (definition.metadata.source !== 'user') editQuery.set('copy', definition.id);
-  const editHref = `${definition.metadata.source === 'user' ? `/workflows/${definition.id}/edit` : '/workflows/new'}${editQuery.size ? `?${editQuery.toString()}` : ''}`;
-
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
       <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6">
-        <Link to="/workflows" className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-muted hover:text-fg">
-          <ArrowLeft className="size-4" aria-hidden />
-          {language === 'zh' ? '返回工作流' : 'Back to workflows'}
-        </Link>
-
-        <header className="mt-4 flex flex-col gap-4 border-b border-edge pb-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
-              <span>{definition.metadata.source === 'user' ? labels.badgeUser : labels.badgeBuiltin}</span>
-              <span>·</span>
-              <span>{language === 'zh' ? `版本 ${definition.revision}` : `Version ${definition.revision}`}</span>
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold text-fg">{definition.title}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</p>
-          </div>
-          <Button asChild variant="secondary" className="shrink-0">
-            <Link to={editHref}>
-              {definition.metadata.source === 'user' ? <Pencil className="size-4" aria-hidden /> : <CopyPlus className="size-4" aria-hidden />}
-              {definition.metadata.source === 'user' ? labels.editWorkflow : labels.copyAndEditWorkflow}
-            </Link>
-          </Button>
-        </header>
+        <p className="max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</p>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <section className="min-w-0">
-            <h2 className="text-base font-semibold text-fg">{language === 'zh' ? '它会怎样完成任务' : 'How it completes the task'}</h2>
-            <p className="mt-1 text-sm text-fg-muted">{language === 'zh' ? '点击步骤查看职责；运行后这里会显示实时状态。' : 'Select a step to understand its role. Live status appears here while running.'}</p>
-            <WorkflowDefinitionGraph graph={definition.graph} language={language} className="mt-3 h-[28rem] rounded-xl border border-edge" />
-          </section>
+          <div className="min-w-0">
+            <WorkflowDefinitionGraph graph={definition.graph} language={language} className="h-[28rem] rounded-xl border border-edge" />
+          </div>
 
           <aside className="rounded-xl border border-edge bg-surface-base/45 p-4">
             <h2 className="text-base font-semibold text-fg">{language === 'zh' ? '开始一次运行' : 'Start a run'}</h2>

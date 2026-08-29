@@ -102,7 +102,7 @@ function WorkflowLibraryCard({
       </div>
 
       <div className="mt-3 flex items-center gap-2 border-t border-edge-subtle pt-3">
-        <Button type="button" variant="primary" className="h-8 flex-1 rounded-lg text-xs" onClick={() => onPick(definition)}>
+        <Button type="button" variant="secondary" className="h-8 flex-1 rounded-lg text-xs" onClick={() => onPick(definition)}>
           <Play className="size-3.5" aria-hidden />
           {labels.configureAndRun}
         </Button>

@@ -26,6 +26,8 @@ export interface NoteAttachment {
   relativePath: string;
   transcript?: string;
   duration?: number;
+  /** Retained by a structured note feature even when absent from user-owned Markdown. */
+  retainWithoutReference?: boolean;
 }
 
 export interface NoteAiMeta {

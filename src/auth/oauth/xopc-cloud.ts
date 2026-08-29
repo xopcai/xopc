@@ -8,7 +8,7 @@ import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } fr
 
 const CLIENT_ID = 'xopc-native';
 const DEFAULT_CONSOLE_URL = 'https://console.xopc.ai';
-const DEFAULT_SCOPE = 'models:read models:invoke account:usage offline_access';
+const DEFAULT_SCOPE = 'models:read models:invoke account:usage connectors:read connectors:manage connectors:execute offline_access';
 const CALLBACK_PATH = '/oauth/callback';
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
 

@@ -14,7 +14,7 @@ export function partitionAttachmentsByReference(
   const removed: NoteAttachment[] = [];
 
   for (const attachment of attachments) {
-    if (referenced.has(attachment.id)) kept.push(attachment);
+    if (attachment.retainWithoutReference || referenced.has(attachment.id)) kept.push(attachment);
     else removed.push(attachment);
   }
 

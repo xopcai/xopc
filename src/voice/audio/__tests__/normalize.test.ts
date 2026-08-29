@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -88,6 +88,39 @@ describe('audio normalization', () => {
       const decoded = await decodeAudioToMonoFloat32({ buffer: encoded.stdout });
       expect(decoded.sampleRate).toBe(16_000);
       expect(decoded.durationSeconds).toBeGreaterThan(0.3);
+    }
+  });
+
+  it.runIf(hasFfmpeg)('falls back to ffmpeg for WAV encodings outside the native fast path', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xopc-normalize-wav-test-'));
+    const filePath = join(directory, 'pcm24.wav');
+    try {
+      const encoded = spawnSync(
+        'ffmpeg',
+        ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-c:a', 'pcm_s24le', '-y', filePath],
+        { input: pcmWav(0.5), maxBuffer: 4 * 1024 * 1024 },
+      );
+      expect(encoded.status, encoded.stderr.toString()).toBe(0);
+      const decoded = await decodeAudioToMonoFloat32({ buffer: await readFile(filePath) });
+      expect(decoded.sampleRate).toBe(16_000);
+      expect(decoded.durationSeconds).toBeCloseTo(0.5, 1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.runIf(hasFfmpeg)('rejects recordings whose decoded duration exceeds the segment limit', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xopc-normalize-limit-test-'));
+    const filePath = join(directory, 'recording.wav');
+    try {
+      await writeFile(filePath, pcmWav(2.1));
+      await expect(forEachNormalizedAudioSegment({
+        filePath,
+        segmentSeconds: 1,
+        maxDurationSeconds: 1,
+      }, async () => undefined)).rejects.toThrow('Decoded audio exceeds the 1 second limit');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

@@ -88,6 +88,7 @@ describe('xopcCloudOAuthProvider', () => {
       expect(authorizationUrl.origin).toBe('https://console.test');
       expect(authorizationUrl.pathname).toBe('/oauth/authorize');
       expect(authorizationUrl.searchParams.get('code_challenge_method')).toBe('S256');
+      expect(authorizationUrl.searchParams.get('scope')).toContain('connectors:execute');
       const redirectUri = authorizationUrl.searchParams.get('redirect_uri')!;
       const callback = new URL(redirectUri);
       callback.searchParams.set('code', 'authorization-code');

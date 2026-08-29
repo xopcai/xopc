@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildComposerDraftSeed,
+  newChatAutoSendHref,
   projectIdForNewChatHandoff,
   searchParamsForComposerHandoff,
 } from '@/features/chat/session/composer-handoff-params';
@@ -15,6 +16,12 @@ describe('composer handoff params', () => {
 
   it('keeps the draft when the skill id is invalid', () => {
     expect(buildComposerDraftSeed('invalid skill', 'Keep this request')).toBe('Keep this request');
+  });
+
+  it('builds a trimmed new-chat handoff that sends immediately', () => {
+    expect(newChatAutoSendHref('  Summarize this & suggest next steps  '))
+      .toBe('/chat/new?draft=Summarize+this+%26+suggest+next+steps&autoSend=1');
+    expect(newChatAutoSendHref('   ')).toBeNull();
   });
 
   it('preserves both params while resolving a new chat route', () => {

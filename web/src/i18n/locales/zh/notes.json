@@ -167,6 +167,8 @@
       "undo": "撤销",
       "draftTranscript": "实时转写草稿",
       "fullTranscript": "完整转写",
+      "recordingAudio": "原始录音",
+      "recordingUnavailable": "暂时无法加载原始录音。",
       "organization": "AI 整理",
       "decisions": "决策",
       "actionItems": "待办",

@@ -409,10 +409,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             aria-labelledby="workflow-tab-library"
             className="py-5"
           >
-            <div className="mb-5">
-              <h2 id="workflow-library-heading" className="text-base font-semibold text-fg">{labels.libraryTitle}</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{labels.libraryDescription}</p>
-            </div>
             <WorkflowPickLibrary
               definitions={definitions}
               runs={runs}
