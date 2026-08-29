@@ -62,7 +62,7 @@ describe('UnderstandingReveal', () => {
     });
 
     const adjust = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Adjust');
+      .find((button) => button.textContent === 'Edit');
     await act(async () => adjust?.click());
 
     const textarea = container.querySelector('textarea');
@@ -74,7 +74,7 @@ describe('UnderstandingReveal', () => {
     });
 
     const continueButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Continue with this understanding');
+      .find((button) => button.textContent === 'Continue');
     await act(async () => continueButton?.click());
 
     expect(onStartConversation).toHaveBeenCalledWith(
