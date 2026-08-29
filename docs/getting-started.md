@@ -1,6 +1,6 @@
 # Get started with xopc
 
-xopc gives you one locally operated AI assistant across desktop, terminal, browser, mobile, and messaging apps. To get a working first conversation, install one client, connect one model, and send a test message.
+xopc is a local-first personal AI assistant that gets to know you through the context you deliberately share and the work you do together. It begins simply: install one client, connect one model, and establish a working first conversation before granting more access.
 
 ## Choose how to start
 
@@ -31,10 +31,25 @@ The setup is complete when the assistant replies without a credential or connect
 
 If it does not, run `xopc doctor` and continue with [Troubleshooting](./how-to/diagnose-broken-setup.md).
 
+## Begin with something real
+
+Once the connection works, give xopc one small but meaningful piece of context instead of configuring every feature. For example:
+
+```text
+One thing I want to move forward this week is ____.
+Help me clarify the outcome and choose the smallest credible next step.
+Do not remember anything long-term unless I can review it.
+```
+
+When user understanding is enabled, proposed understanding can be reviewed in **You** or **User context**. Confirm only what is accurate and useful; correct, reject, or delete the rest. See [User understanding](./user-understanding.md).
+
+Some desktop releases also offer experimental **Connect recent work** onboarding. It analyzes only folders you select, within a bounded read-only scope, and shows evidence-backed next steps. On macOS it may separately request access to Apple Notes, Calendar, and Reminders. Skip it if you prefer to begin with conversation.
+
 ## Learn the main parts as you need them
 
 | Part | What it is for | Guide |
 | --- | --- | --- |
+| User understanding | Reviewable goals, preferences, relationships, focus, and collaboration rules | [User understanding](./user-understanding.md) |
 | Session | A conversation you can return to from any connected client | [Chat and sessions](./session.md) |
 | Agent | A named assistant with its own role, model choices, tools, and workspace | [Agents](./routing-system.md) |
 | Project and Task | Long-running work with an explicit result, status, and next action | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
@@ -46,10 +61,11 @@ You can use xopc as a normal chat assistant without creating Projects, Workflows
 
 ## Recommended next steps
 
-1. Read [Models and providers](./models.md) before adding a second model.
+1. Read [Product philosophy](./product.md) to understand the intended trust and initiative model.
 2. Review [Data and file locations](./workspace.md) so you know what is stored locally.
-3. Configure [remote access](./remote-access.md) only if another device must reach the Gateway.
-4. Connect a [channel](./channels/index.md) after local chat works.
+3. Read [Models and providers](./models.md) before adding a second model, especially if personal context may be sent to a cloud provider.
+4. Configure [remote access](./remote-access.md) only if another device must reach the Gateway.
+5. Connect a [channel](./channels/index.md) after local chat works.
 
 ## Where configuration lives
 

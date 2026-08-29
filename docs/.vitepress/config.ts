@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'XOPC is a local-first AI system that remembers context, coordinates AI, and sustains long-term progress.',
+  description: 'xopc is a local-first personal AI assistant that gets to know you over time and helps move what truly matters forward.',
   base,
   // Product documentation is published here. Engineering plans and ADRs stay
   // in the repository, but are deliberately excluded from the user site.
@@ -32,13 +32,13 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
-    ['meta', { property: 'og:title', content: 'xopc - Turn goals into loops' }],
-    ['meta', { property: 'og:description', content: 'Keep what matters moving. A local-first AI system that remembers context, coordinates AI, and sustains long-term progress.' }],
+    ['meta', { property: 'og:title', content: 'xopc - A personal AI that gets to know you' }],
+    ['meta', { property: 'og:description', content: 'It lives on your computer, forms a reviewable understanding, and helps you move what truly matters forward.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'xopc - Turn goals into loops' }],
-    ['meta', { name: 'twitter:description', content: 'Keep what matters moving. A local-first AI system that remembers context, coordinates AI, and sustains long-term progress.' }],
+    ['meta', { name: 'twitter:title', content: 'xopc - A personal AI that gets to know you' }],
+    ['meta', { name: 'twitter:description', content: 'It lives on your computer, forms a reviewable understanding, and helps you move what truly matters forward.' }],
     ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
   ],
   locales: {
@@ -54,6 +54,7 @@ export default defineConfig({
         },
         nav: [
           { text: 'Get started', link: '/getting-started' },
+          { text: 'Product', link: '/product' },
           { text: 'Guides', link: '/session' },
           { text: 'Configuration', link: '/configuration' }
         ],
@@ -62,6 +63,8 @@ export default defineConfig({
             text: 'Start',
             items: [
               { text: 'Overview', link: '/getting-started' },
+              { text: 'Product philosophy', link: '/product' },
+              { text: 'Where xopc fits', link: '/comparison' },
               { text: 'Desktop app', link: '/desktop-app' },
               { text: 'Terminal quick start', link: '/first-5-minutes' },
               { text: 'Docker', link: '/docker' },
@@ -72,6 +75,7 @@ export default defineConfig({
           {
             text: 'Daily use',
             items: [
+              { text: 'User understanding', link: '/user-understanding' },
               { text: 'Chat and sessions', link: '/session' },
               { text: 'Agents', link: '/routing-system' },
               { text: 'Projects, Tasks & Notes', link: '/projects-tasks-notes' },
@@ -147,6 +151,7 @@ export default defineConfig({
         },
         nav: [
           { text: '快速开始', link: '/zh/getting-started' },
+          { text: '产品理念', link: '/zh/product' },
           { text: '使用指南', link: '/zh/session' },
           { text: '配置', link: '/zh/configuration' }
         ],
@@ -155,6 +160,8 @@ export default defineConfig({
             text: '快速开始',
             items: [
               { text: '产品与入口', link: '/zh/getting-started' },
+              { text: '产品理念', link: '/zh/product' },
+              { text: '产品边界', link: '/zh/comparison' },
               { text: '桌面应用', link: '/zh/desktop-app' },
               { text: '终端快速开始', link: '/zh/first-5-minutes' },
               { text: 'Docker', link: '/zh/docker' },
@@ -165,6 +172,7 @@ export default defineConfig({
           {
             text: '日常使用',
             items: [
+              { text: '用户理解', link: '/zh/user-understanding' },
               { text: '聊天与会话', link: '/zh/session' },
               { text: 'Agent', link: '/zh/routing-system' },
               { text: 'Project、Task 与笔记', link: '/zh/projects-tasks-notes' },
