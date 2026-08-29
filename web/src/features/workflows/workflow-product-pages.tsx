@@ -1,10 +1,12 @@
-import { ArrowLeft, CopyPlus, Pencil, Play } from 'lucide-react';
+import { ArrowLeft, BookmarkCheck, CopyPlus, FolderKanban, Pencil, Play, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchProjects } from '@/features/projects/api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
@@ -13,6 +15,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { WorkflowEditor, type WorkflowEditorInitialDraft } from './workflow-create-dialog';
+import { WorkflowContextPicker } from './workflow-context-picker';
 import { definitionToManifest } from './workflow-definition-manifest';
 import { WorkflowDefinitionGraph } from './workflow-definition-graph';
 import { resolveWorkflowInputPayload, validateWorkflowInputEditorValue } from './workflow-input-editor.utils';
@@ -30,15 +33,19 @@ import {
   cancelWorkflowRun,
   getWorkflowRun,
   getWorkflowRunComparison,
+  listProjectWorkflowPresets,
   listWorkflowDefinitions,
   listWorkflowRuns,
+  removeProjectWorkflowPreset,
   replayWorkflowRun,
   retryWorkflowRun,
+  saveProjectWorkflowPreset,
   saveWorkflowDefinition,
   startWorkflowRun,
   type WorkflowDefinition,
   type WorkflowDefinitionManifest,
   type WorkflowGraph,
+  type WorkflowRunContextRef,
   type WorkflowRunReplayScope,
 } from './workflow-api';
 
@@ -81,7 +88,7 @@ const emptyRunSetup = (): WorkflowRunSetupValue => ({ goal: '', argValues: {}, s
 
 export function WorkflowDetailPage() {
   const { definitionId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const language = useLocaleStore((state) => state.language);
   const labels = messages(language).workflows;
@@ -91,14 +98,23 @@ export function WorkflowDetailPage() {
   const { ownerAgentId } = useWorkflowOwnerAgent();
   const projectId = searchParams.get('projectId')?.trim() || undefined;
   const { definition, loading, error } = useWorkflowDefinition(definitionId);
+  const projects = useSWR('workflow-project-options', () => fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }), { revalidateOnFocus: false });
+  const projectPresets = useSWR(
+    projectId ? ['workflow-project-presets', projectId] : null,
+    () => listProjectWorkflowPresets(projectId!),
+    { revalidateOnFocus: false },
+  );
   const runs = useSWR(
     ownerAgentId ? ['workflow-detail-runs', ownerAgentId, definitionId, projectId ?? ''] : null,
     () => listWorkflowRuns(100, { ownerAgentId, projectId }),
     { revalidateOnFocus: false },
   );
   const [setup, setSetup] = useState<WorkflowRunSetupValue>(emptyRunSetup);
+  const [contextRefs, setContextRefs] = useState<WorkflowRunContextRef[]>([]);
   const [starting, setStarting] = useState(false);
+  const [savingPreset, setSavingPreset] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const hydratedPresetKey = useRef<string | undefined>(undefined);
 
   const recentRuns = useMemo(
     () => (runs.data ?? []).filter((run) => run.definitionId === definition?.id).slice(0, 6),
@@ -106,10 +122,66 @@ export function WorkflowDetailPage() {
   );
   const inputValidity = validateWorkflowInputEditorValue(definition, setup);
   const localized = definition ? resolveWorkflowLocalizedCopy(definition, language) : null;
+  const projectPreset = projectPresets.data?.find((preset) => preset.definitionId === definition?.id);
+  const presetMatchesSelection = Boolean(projectPreset)
+    && JSON.stringify(projectPreset?.contextRefs) === JSON.stringify(contextRefs);
+  useEffect(() => {
+    if (!projectId || !definition || !projectPresets.data) return;
+    const key = `${projectId}:${definition.id}`;
+    if (hydratedPresetKey.current === key) return;
+    hydratedPresetKey.current = key;
+    setContextRefs(projectPreset?.contextRefs ?? []);
+  }, [definition, projectId, projectPreset?.contextRefs, projectPresets.data]);
+  const setProjectId = useCallback((nextProjectId: string) => {
+    hydratedPresetKey.current = undefined;
+    setContextRefs([]);
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (nextProjectId) next.set('projectId', nextProjectId);
+      else next.delete('projectId');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const savePreset = useCallback(async () => {
+    if (!projectId || !definition || savingPreset) return;
+    setSavingPreset(true);
+    setActionError(null);
+    try {
+      const saved = await saveProjectWorkflowPreset(projectId, definition.id, contextRefs);
+      await projectPresets.mutate((current) => [
+        saved,
+        ...(current ?? []).filter((preset) => preset.definitionId !== saved.definitionId),
+      ], { revalidate: false });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : labels.projectWorkflowSaveFailed);
+    } finally {
+      setSavingPreset(false);
+    }
+  }, [contextRefs, definition, labels.projectWorkflowSaveFailed, projectId, projectPresets, savingPreset]);
+
+  const removePreset = useCallback(async () => {
+    if (!projectId || !definition || savingPreset) return;
+    setSavingPreset(true);
+    setActionError(null);
+    try {
+      await removeProjectWorkflowPreset(projectId, definition.id);
+      await projectPresets.mutate((current) => (current ?? []).filter((preset) => preset.definitionId !== definition.id), { revalidate: false });
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : labels.projectWorkflowRemoveFailed);
+    } finally {
+      setSavingPreset(false);
+    }
+  }, [definition, labels.projectWorkflowRemoveFailed, projectId, projectPresets, savingPreset]);
 
   const libraryParams = new URLSearchParams({ tab: 'library' });
   if (ownerAgentId) libraryParams.set('agentId', ownerAgentId);
+  if (projectId) libraryParams.set('projectId', projectId);
   const libraryHref = `/workflows?${libraryParams.toString()}`;
+  const runParams = new URLSearchParams();
+  if (ownerAgentId) runParams.set('agentId', ownerAgentId);
+  if (projectId) runParams.set('projectId', projectId);
+  const runSearch = runParams.size ? `?${runParams.toString()}` : '';
 
   let editHref: string | null = null;
   if (definition) {
@@ -165,16 +237,17 @@ export function WorkflowDetailPage() {
         input: resolveWorkflowInputPayload(definition, setup),
         agentId: ownerAgentId,
         projectId,
+        contextRefs,
         concurrency: setup.concurrency.trim() ? Number(setup.concurrency) : undefined,
         maxSubagents: setup.maxSubagents.trim() ? Number(setup.maxSubagents) : undefined,
       });
-      navigate(`/workflows/runs/${result.runId}${ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : ''}`);
+      navigate(`/workflows/runs/${result.runId}${runSearch}`);
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : labels.startFailed);
     } finally {
       setStarting(false);
     }
-  }, [definition, inputValidity.valid, labels.startFailed, localized?.description, navigate, ownerAgentId, projectId, setup, starting]);
+  }, [contextRefs, definition, inputValidity.valid, labels.startFailed, localized?.description, navigate, ownerAgentId, projectId, runSearch, setup, starting]);
 
   if (loading) return <WorkflowRouteSkeleton />;
   if (!definition || !localized) return <WorkflowRouteError message={error?.message ?? (language === 'zh' ? '没有找到这个工作流' : 'Workflow not found')} />;
@@ -192,6 +265,41 @@ export function WorkflowDetailPage() {
           <aside className="rounded-xl border border-edge bg-surface-base/45 p-4">
             <h2 className="text-base font-semibold text-fg">{language === 'zh' ? '开始一次运行' : 'Start a run'}</h2>
             <p className="mt-1 text-sm leading-6 text-fg-muted">{localized.whenToUse || localized.description}</p>
+            <label className="mt-4 block text-xs font-medium text-fg-muted">
+              <span className="mb-1.5 flex items-center gap-1.5">
+                <FolderKanban className="size-3.5 text-fg-subtle" aria-hidden />
+                {labels.runProject}
+              </span>
+              <Select
+                value={projectId ?? ''}
+                aria-label={labels.runProject}
+                onChange={(event) => setProjectId(event.target.value)}
+                className="h-9 w-full rounded-lg border border-edge bg-surface-panel px-2.5 text-sm text-fg shadow-surface"
+              >
+                <SelectOption value="">{labels.runProjectNone}</SelectOption>
+                {(projects.data?.items ?? [])
+                  .filter((project) => project.status !== 'archived' && project.status !== 'cancelled')
+                  .map((project) => <SelectOption key={project.id} value={project.id}>{project.name}</SelectOption>)}
+              </Select>
+            </label>
+            <div className="mt-3">
+              <WorkflowContextPicker projectId={projectId} language={language} value={contextRefs} onChange={setContextRefs} />
+            </div>
+            {projectId ? (
+              <div className="mt-2 flex items-center gap-2">
+                <Button type="button" variant="ghost" className="h-8 flex-1 justify-start px-2 text-xs" disabled={savingPreset || presetMatchesSelection} onClick={() => void savePreset()}>
+                  <BookmarkCheck className="size-3.5" aria-hidden />
+                  {presetMatchesSelection
+                    ? labels.projectWorkflowSaved
+                    : projectPreset ? labels.updateProjectWorkflow : labels.saveProjectWorkflow}
+                </Button>
+                {projectPreset ? (
+                  <Button type="button" variant="ghost" className="size-8 p-0 text-fg-muted" disabled={savingPreset} aria-label={labels.removeProjectWorkflow} onClick={() => void removePreset()}>
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             <div className="mt-4">
               <WorkflowRunSetupPanel
                 definition={definition}
@@ -216,7 +324,7 @@ export function WorkflowDetailPage() {
           {recentRuns.length ? (
             <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {recentRuns.map((run) => (
-                <button key={run.id} type="button" className="rounded-xl border border-edge bg-surface-base/40 p-3 text-left hover:bg-surface-hover" onClick={() => navigate(`/workflows/runs/${run.id}${ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : ''}`)}>
+                <button key={run.id} type="button" className="rounded-xl border border-edge bg-surface-base/40 p-3 text-left hover:bg-surface-hover" onClick={() => navigate(`/workflows/runs/${run.id}${runSearch}`)}>
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-medium text-fg">{run.title}</span>
                     <span className="shrink-0 text-xs text-fg-subtle">{labels.status[run.status]}</span>
@@ -240,6 +348,11 @@ export function WorkflowEditorPage() {
   const { ownerAgentId } = useWorkflowOwnerAgent();
   const copyId = searchParams.get('copy')?.trim() || undefined;
   const repairRunId = searchParams.get('repairRun')?.trim() || undefined;
+  const projectId = searchParams.get('projectId')?.trim() || undefined;
+  const editorParams = new URLSearchParams();
+  if (ownerAgentId) editorParams.set('agentId', ownerAgentId);
+  if (projectId) editorParams.set('projectId', projectId);
+  const editorSearch = editorParams.size ? `?${editorParams.toString()}` : '';
   const sourceId = definitionId ?? copyId;
   const { definition, definitions, loading, upsertDefinition, refreshDefinitions } = useWorkflowDefinition(sourceId);
   const repairRun = useSWR(repairRunId && ownerAgentId ? ['workflow-repair-run', repairRunId, ownerAgentId] : null, () => getWorkflowRun(repairRunId!, { ownerAgentId }), { revalidateOnFocus: false });
@@ -284,7 +397,7 @@ export function WorkflowEditorPage() {
     try {
       const saved = await saveWorkflowDefinition(payload.name, payload.graph, payload.manifest, payload.expectedRevision);
       await upsertDefinition(saved);
-      navigate(`/workflows/${saved.id}/edit`, { replace: true });
+      navigate(`/workflows/${saved.id}/edit${editorSearch}`, { replace: true });
       return saved;
     } catch (cause) {
       const conflict = parseWorkflowSaveConflict(cause);
@@ -293,7 +406,7 @@ export function WorkflowEditorPage() {
     } finally {
       setSaving(false);
     }
-  }, [navigate, upsertDefinition]);
+  }, [editorSearch, navigate, upsertDefinition]);
 
   const saveAndStart = useCallback(async (payload: { name: string; graph: WorkflowGraph; manifest: WorkflowDefinitionManifest; expectedRevision: number; goal: string }) => {
     setSaving(true);
@@ -302,8 +415,8 @@ export function WorkflowEditorPage() {
     try {
       const saved = await saveWorkflowDefinition(payload.name, payload.graph, payload.manifest, payload.expectedRevision);
       await upsertDefinition(saved);
-      const result = await startWorkflowRun({ definitionId: saved.id, goal: payload.goal, input: { goal: payload.goal }, agentId: ownerAgentId });
-      navigate(`/workflows/runs/${result.runId}${ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : ''}`);
+      const result = await startWorkflowRun({ definitionId: saved.id, goal: payload.goal, input: { goal: payload.goal }, agentId: ownerAgentId, projectId });
+      navigate(`/workflows/runs/${result.runId}${editorSearch}`);
     } catch (cause) {
       const conflict = parseWorkflowSaveConflict(cause);
       setSaveConflict(conflict);
@@ -312,7 +425,7 @@ export function WorkflowEditorPage() {
     } finally {
       setSaving(false);
     }
-  }, [navigate, ownerAgentId, upsertDefinition]);
+  }, [editorSearch, navigate, ownerAgentId, projectId, upsertDefinition]);
 
   if (loading) return <WorkflowRouteSkeleton />;
   if (definitionId && !definition) return <WorkflowRouteError message={language === 'zh' ? '没有找到这个工作流' : 'Workflow not found'} />;

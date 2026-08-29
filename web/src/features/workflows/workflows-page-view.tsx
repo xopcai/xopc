@@ -87,6 +87,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     labels,
     hasToken,
     definitions,
+    projectPresetDefinitionIds,
     runs,
     searchQuery,
     setSearchQuery,
@@ -413,6 +414,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               definitions={definitions}
               runs={runs}
               language={language}
+              projectPresetDefinitionIds={projectPresetDefinitionIds}
               onPick={startWorkflow}
               onDetail={openDefinitionDetails}
               onEdit={openWorkflowEditor}

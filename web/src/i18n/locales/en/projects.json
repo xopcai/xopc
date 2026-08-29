@@ -166,6 +166,7 @@
       "delete": "Delete",
       "continue": "Continue",
       "newChat": "New chat",
+      "runWorkflow": "Run workflow",
       "viewAll": "View all",
       "agent": "agent",
       "defaultAgent": "Default agent",

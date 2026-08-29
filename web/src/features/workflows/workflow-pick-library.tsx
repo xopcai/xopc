@@ -1,4 +1,4 @@
-import { Braces, CopyPlus, Layers3, Pencil, Play, Search, UsersRound } from 'lucide-react';
+import { BookmarkCheck, Braces, CopyPlus, Layers3, Pencil, Play, Search, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ function WorkflowLibraryCard({
   onPick,
   onDetail,
   onEdit,
+  savedForProject,
 }: {
   definition: WorkflowDefinition;
   language: StoredLanguage;
@@ -42,6 +43,7 @@ function WorkflowLibraryCard({
   onPick: (definition: WorkflowDefinition) => void;
   onDetail: (definition: WorkflowDefinition) => void;
   onEdit: (definition: WorkflowDefinition) => void;
+  savedForProject: boolean;
 }) {
   const localized = resolveWorkflowLocalizedCopy(definition, language);
   const scale = agentScaleLabel(definition, labels);
@@ -62,6 +64,12 @@ function WorkflowLibraryCard({
               <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] text-fg-subtle">
                 <Braces className="size-2.5" aria-hidden />
                 {labels.inputSchemaBadge}
+              </span>
+            ) : null}
+            {savedForProject ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[10px] text-success">
+                <BookmarkCheck className="size-2.5" aria-hidden />
+                {labels.projectWorkflowBadge}
               </span>
             ) : null}
           </div>
@@ -118,6 +126,7 @@ export function WorkflowPickLibrary({
   definitions,
   runs,
   language,
+  projectPresetDefinitionIds,
   onPick,
   onDetail,
   onEdit,
@@ -125,6 +134,7 @@ export function WorkflowPickLibrary({
   definitions: WorkflowDefinition[];
   runs: WorkflowRunSummary[];
   language: StoredLanguage;
+  projectPresetDefinitionIds?: Set<string>;
   onPick: (definition: WorkflowDefinition) => void;
   onDetail: (definition: WorkflowDefinition) => void;
   onEdit: (definition: WorkflowDefinition) => void;
@@ -249,6 +259,7 @@ export function WorkflowPickLibrary({
                 definition={definition}
                 language={language}
                 labels={labels}
+                savedForProject={projectPresetDefinitionIds?.has(definition.id) ?? false}
                 onPick={onPick}
                 onDetail={onDetail}
                 onEdit={onEdit}

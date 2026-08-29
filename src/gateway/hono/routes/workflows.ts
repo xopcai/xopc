@@ -16,6 +16,7 @@ import type {
   WorkflowGraph,
   WorkflowArtifactRef,
   WorkflowRunInputEnvelope,
+  WorkflowRunContextRef,
   WorkflowRunSource,
   WorkflowRunSummary,
   WorkflowRunView,
@@ -24,6 +25,7 @@ import { validateWorkflowDefinitionInput } from '../../../workflows/domain/index
 import { WorkflowDraftService, type CreateWorkflowDraftRequest } from '../../../workflows/draft/index.js';
 import { WorkflowDraftConflictError, WorkflowDraftStore, type SaveWorkflowAuthoringDraftInput } from '../../../workflows/authoring/index.js';
 import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
+import { ProjectWorkflowPresetRepository } from '../../../workflows/project-presets/project-workflow-preset-repository.js';
 import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -34,6 +36,7 @@ interface StartWorkflowRunRequestBody {
   goal?: string;
   taskRunId?: string;
   projectId?: string;
+  contextRefs?: unknown;
   agentId?: string;
   parentSessionKey?: string;
   source?: WorkflowRunSource;
@@ -49,6 +52,38 @@ interface ReplayWorkflowRunRequestBody {
 
 interface RetryWorkflowRunRequestBody {
   projectId?: string;
+}
+
+interface SaveProjectWorkflowPresetRequestBody {
+  projectId?: string;
+  contextRefs?: unknown;
+}
+
+const WORKFLOW_CONTEXT_KINDS = new Set<WorkflowRunContextRef['kind']>([
+  'project', 'task', 'note', 'session', 'attachment', 'memory',
+]);
+
+function parseWorkflowContextRefs(value: unknown): WorkflowRunContextRef[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 50) throw new Error('contextRefs must be an array with at most 50 items');
+  return value.map((candidate) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) throw new Error('Invalid workflow context reference');
+    const ref = candidate as Record<string, unknown>;
+    const kind = typeof ref.kind === 'string' ? ref.kind : '';
+    const id = typeof ref.id === 'string' ? ref.id.trim() : '';
+    if (!WORKFLOW_CONTEXT_KINDS.has(kind as WorkflowRunContextRef['kind']) || !id || id.length > 512) {
+      throw new Error('Invalid workflow context reference');
+    }
+    const role = typeof ref.role === 'string' ? ref.role.trim() : undefined;
+    const title = typeof ref.title === 'string' ? ref.title.trim() : undefined;
+    if ((role?.length ?? 0) > 64 || (title?.length ?? 0) > 256) throw new Error('Invalid workflow context reference');
+    return {
+      kind: kind as WorkflowRunContextRef['kind'],
+      id,
+      ...(role ? { role } : {}),
+      ...(title ? { title } : {}),
+    };
+  });
 }
 
 interface WorkflowRunComparison {
@@ -119,6 +154,39 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : 'Workflow definition not found' }, 404);
     }
+  });
+
+  authenticated.get('/api/workflows/project-presets', (c) => {
+    const projectId = c.req.query('projectId')?.trim();
+    if (!projectId) return c.json({ error: 'projectId is required' }, 400);
+    if (!service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 404);
+    return c.json({ presets: new ProjectWorkflowPresetRepository().list(projectId) });
+  });
+
+  authenticated.put('/api/workflows/project-presets/:definitionId', async (c) => {
+    const definitionId = c.req.param('definitionId').trim();
+    const body = await readJsonBody<SaveProjectWorkflowPresetRequestBody>(c.req.raw);
+    const projectId = body.projectId?.trim();
+    if (!projectId) return c.json({ error: 'projectId is required' }, 400);
+    if (!service.projects.get(projectId)) return c.json({ error: 'Project not found' }, 404);
+    try {
+      createWorkflowCatalog().load(definitionId);
+      const contextRefs = parseWorkflowContextRefs(body.contextRefs) ?? [];
+      if (contextRefs.some((ref) => ref.kind !== 'task' && ref.kind !== 'note')) {
+        return c.json({ error: 'Project workflow presets support task and note context only' }, 400);
+      }
+      const preset = new ProjectWorkflowPresetRepository().save({ projectId, definitionId, contextRefs });
+      return c.json({ preset });
+    } catch (cause) {
+      return c.json({ error: cause instanceof Error ? cause.message : 'Could not save project workflow' }, 400);
+    }
+  });
+
+  authenticated.delete('/api/workflows/project-presets/:definitionId', (c) => {
+    const projectId = c.req.query('projectId')?.trim();
+    if (!projectId) return c.json({ error: 'projectId is required' }, 400);
+    const removed = new ProjectWorkflowPresetRepository().remove(projectId, c.req.param('definitionId'));
+    return c.json({ removed });
   });
 
   authenticated.post('/api/workflows/definitions/validate', async (c) => {
@@ -305,6 +373,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       if (!removed) {
         return c.json({ error: 'User workflow not found or cannot delete built-in workflow' }, 404);
       }
+      new ProjectWorkflowPresetRepository().removeDefinition(id);
       const drafts = new WorkflowDraftStore().list(id);
       for (const draft of drafts) new WorkflowDraftStore().remove(draft.id);
       return c.json({ removed: true });
@@ -335,6 +404,12 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     if (projectId && !service.projects.get(projectId)) {
       return c.json({ error: 'Project not found' }, 404);
     }
+    let contextRefs: WorkflowRunContextRef[] | undefined;
+    try {
+      contextRefs = parseWorkflowContextRefs(body.contextRefs);
+    } catch (cause) {
+      return c.json({ error: cause instanceof Error ? cause.message : 'Invalid workflow context references' }, 400);
+    }
     const explicitAgentId = body.agentId ?? c.req.query('agentId');
     const agentId = projectId
       ? resolveProjectAgentId({
@@ -349,6 +424,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       definitionId,
       taskRunId,
       projectId,
+      contextRefs,
       input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,

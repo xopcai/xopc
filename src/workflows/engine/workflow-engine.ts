@@ -18,6 +18,7 @@ import type { WorkflowAgentInvocationSnapshot } from '../domain/index.js';
 export interface WorkflowEngineOptions {
   cwd: string;
   projectId?: string;
+  contextInstructions?: string;
   eventStore: WorkflowEventStore;
   runStore: WorkflowRunStore;
   runner: WorkflowRuntimeSubagentRunner;
@@ -256,6 +257,7 @@ export class WorkflowEngine {
               subagentSessionKeys.set(ctx.id, sessionKey);
               return {
                 sessionKey,
+                instructions: this.options.contextInstructions,
                 sessionMetadata: {
                   parentSessionKey: this.options.parentSessionKey,
                   projectId: this.options.projectId,
@@ -493,6 +495,7 @@ export class WorkflowEngine {
           workflowAgentId: target.agentId,
           workflowAgentLabel: invocation.label,
         },
+        instructions: this.options.contextInstructions,
         onProgress: (event) => recorder.onProgress(event),
       });
       throwIfSignalAborted(params.signal);
