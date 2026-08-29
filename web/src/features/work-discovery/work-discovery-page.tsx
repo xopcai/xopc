@@ -298,9 +298,12 @@ export function WorkDiscoveryPage({
     }
   };
 
-  const openConversation = (sessionKey: string, draft?: string) => {
-    const query = draft ? `?draft=${encodeURIComponent(draft)}` : '';
-    navigate(`/chat/${encodeURIComponent(sessionKey)}${query}`);
+  const openConversation = (sessionKey: string, draft?: string, autoSend = false) => {
+    const params = new URLSearchParams();
+    if (draft) params.set('draft', draft);
+    if (draft && autoSend) params.set('autoSend', '1');
+    const query = params.toString();
+    navigate(`/chat/${encodeURIComponent(sessionKey)}${query ? `?${query}` : ''}`);
   };
 
   const selectBatchRun = (next: WorkDiscoveryRun) => {
@@ -389,6 +392,24 @@ export function WorkDiscoveryPage({
       setRun(next);
       replaceBatchRun(next);
       setPageState('recommendation');
+      return true;
+    } catch (cause) {
+      setError(errorText(cause));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startConversationFromUnderstanding = async (starter: string) => {
+    if (!run) return false;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, 'confirmed');
+      setRun(next);
+      replaceBatchRun(next);
+      openConversation(run.sessionKey, starter, true);
       return true;
     } catch (cause) {
       setError(errorText(cause));
@@ -744,6 +765,7 @@ export function WorkDiscoveryPage({
             onReviewMemory={reviewMemory}
             onReviewFocus={(focus, accepted) => reviewFocus(focus.id, accepted)}
             onFinish={completeUnderstandingReveal}
+            onStartConversation={startConversationFromUnderstanding}
           />
         ) : null}
 

@@ -199,7 +199,23 @@ function snapshotForModel(snapshot: WorkContextSnapshot): WorkContextSnapshot {
   };
 }
 
-function lowConfidenceResult(snapshot: WorkContextSnapshot, question?: string): WorkDiscoveryResult {
+function defaultConversationStarter(snapshot: WorkContextSnapshot): string {
+  const name = snapshot.root.displayName;
+  const changedPathCount = snapshot.git?.changedPaths.length ?? 0;
+  if (changedPathCount > 0) {
+    return `Review the ${changedPathCount} changed ${changedPathCount === 1 ? 'path' : 'paths'} in ${name}, explain what work appears to be in progress, and recommend the most important next step.`;
+  }
+  if (snapshot.root.projectKind === 'coding') {
+    return `Help me understand ${name}: summarize what this project does, its current state, and the most important place to start.`;
+  }
+  return `Help me understand the contents of ${name}, what appears most important right now, and where I should start.`;
+}
+
+function lowConfidenceResult(
+  snapshot: WorkContextSnapshot,
+  question?: string,
+  conversationStarter?: string,
+): WorkDiscoveryResult {
   return {
     projectSummary: snapshot.root.projectKind === 'coding'
       ? `${snapshot.root.displayName} appears to be a software project.`
@@ -209,6 +225,7 @@ function lowConfidenceResult(snapshot: WorkContextSnapshot, question?: string): 
       : 'There was not enough recent, readable context to determine the current objective.',
     uncertainties: ['The current objective is not explicit in the selected files.'],
     suggestions: [],
+    conversationStarter: conversationStarter?.trim().slice(0, 2_000) || defaultConversationStarter(snapshot),
     lowConfidence: true,
     contextQuestion: question ?? 'What are you trying to move forward in this folder?',
   };
@@ -231,7 +248,7 @@ export async function analyzeWorkContext(input: {
   const prompt = [
     'You help a user resume real work in one explicitly selected local folder.',
     'Analyze only the supplied bounded snapshot. Never claim that you ran commands, tests, or inspected anything absent from it.',
-    'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, lowConfidence, and contextQuestion.',
+    'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, conversationStarter, lowConfidence, and contextQuestion.',
     'profileCandidates contains stable, useful facts about the user inferred from the supplied project evidence. Include every distinct fact with direct support; do not pad the list.',
     'Each profile candidate has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
     'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
@@ -246,6 +263,8 @@ export async function analyzeWorkContext(input: {
     'verification is a short array describing how the user can tell the task is real.',
     'Each evidence item contains an optional exact relative path from the snapshot and one concrete observation.',
     'actionPrompt asks the assistant to investigate or continue the step; it does not silently authorize file changes.',
+    'conversationStarter is one concise, editable first-person prompt the user can send immediately. Ground it in the most important visible project or directory signal, ask the assistant to explain before acting, and never silently authorize file changes.',
+    'Always return conversationStarter, including when confidence is low.',
     'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
     'Use Simplified Chinese for every user-facing string when the visible snapshot documents are mainly Chinese; otherwise use English.',
     '',
@@ -279,6 +298,7 @@ export async function analyzeWorkContext(input: {
       result: lowConfidenceResult(
         input.snapshot,
         typeof parsed.contextQuestion === 'string' ? parsed.contextQuestion.trim().slice(0, 500) : undefined,
+        typeof parsed.conversationStarter === 'string' ? parsed.conversationStarter : undefined,
       ),
     };
   }
@@ -291,8 +311,20 @@ export async function analyzeWorkContext(input: {
   const suggestions = Array.isArray(parsed.suggestions)
     ? parsed.suggestions.map((value) => validateSuggestion(value, allowedPaths)).filter((value): value is WorkDiscoverySuggestion => Boolean(value))
     : [];
-  if (suggestions.length !== 3) return { modelRef, result: lowConfidenceResult(input.snapshot) };
+  if (suggestions.length !== 3) {
+    return {
+      modelRef,
+      result: lowConfidenceResult(
+        input.snapshot,
+        typeof parsed.contextQuestion === 'string' ? parsed.contextQuestion.trim().slice(0, 500) : undefined,
+        typeof parsed.conversationStarter === 'string' ? parsed.conversationStarter : undefined,
+      ),
+    };
+  }
   const primarySuggestion = [...suggestions].sort((a, b) => suggestionScore(b) - suggestionScore(a))[0];
+  const conversationStarter = typeof parsed.conversationStarter === 'string'
+    ? parsed.conversationStarter.trim().slice(0, 2_000)
+    : primarySuggestion?.actionPrompt;
   const profileCandidates = input.candidateContext?.length && Array.isArray(parsed.profileCandidates)
     ? parsed.profileCandidates
       .map((value) => validateProfileCandidate(value))
@@ -313,6 +345,7 @@ export async function analyzeWorkContext(input: {
       currentState: currentState.slice(0, 1_200),
       uncertainties: strings(parsed.uncertainties, 6).map((value) => value.slice(0, 500)),
       suggestions,
+      ...(conversationStarter ? { conversationStarter } : {}),
       ...(profileCandidates.length > 0 ? { profileCandidates } : {}),
       ...(workThreadCandidates.length > 0 ? { workThreadCandidates } : {}),
       ...(primarySuggestion ? { primarySuggestionId: primarySuggestion.id } : {}),

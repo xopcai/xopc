@@ -6,6 +6,7 @@ import type { UserFocus } from '@/features/user-context/user-context-api';
 import { cn } from '@/lib/cn';
 
 import type { WorkDiscoveryProfileCandidate, WorkDiscoveryRun } from './api';
+import { understandingConversationStarter } from './understanding-conversation-starter';
 
 type RevealStep = 'summary' | 'memory' | 'focus';
 type RecognitionDecision = 'confirmed' | 'corrected';
@@ -25,6 +26,7 @@ type UnderstandingRevealProps = {
   ) => Promise<boolean>;
   onReviewFocus: (focus: UserFocus, accepted: boolean) => Promise<boolean>;
   onFinish: (decision: RecognitionDecision, correction?: string) => Promise<boolean>;
+  onStartConversation: (starter: string) => Promise<boolean>;
 };
 
 const copy = {
@@ -42,6 +44,9 @@ const copy = {
     correctionTitle: '正确的重点是什么？',
     correctionPlaceholder: '直接告诉我你现在真正想推进什么。',
     continueWithCorrection: '按这个理解继续',
+    starterTitle: '从这个问题开始',
+    starterHint: '已根据当前目录、最近变更和可读文档生成，可以直接修改。',
+    startConversation: '进入对话',
     cancel: '取消',
     memoryEyebrow: '长期理解',
     memoryTitle: '要记住这一点吗？',
@@ -72,6 +77,9 @@ const copy = {
     correctionTitle: 'What is the right focus?',
     correctionPlaceholder: 'Tell me what you actually want to move forward right now.',
     continueWithCorrection: 'Continue with this understanding',
+    starterTitle: 'Start with this question',
+    starterHint: 'Prepared from this folder, its recent changes, and readable project context. Edit it if needed.',
+    startConversation: 'Start conversation',
     cancel: 'Cancel',
     memoryEyebrow: 'Lasting understanding',
     memoryTitle: 'Should I remember this?',
@@ -103,12 +111,18 @@ export function UnderstandingReveal({
   onReviewMemory,
   onReviewFocus,
   onFinish,
+  onStartConversation,
 }: UnderstandingRevealProps) {
   const t = copy[language];
+  const lowConfidence = run.result?.lowConfidence === true;
+  const suggestedStarter = useMemo(
+    () => understandingConversationStarter(run, language),
+    [language, run],
+  );
   const [step, setStep] = useState<RevealStep>('summary');
   const [decision, setDecision] = useState<RecognitionDecision>('confirmed');
-  const [correctionOpen, setCorrectionOpen] = useState(Boolean(run.result?.lowConfidence));
-  const [correction, setCorrection] = useState('');
+  const [correctionOpen, setCorrectionOpen] = useState(lowConfidence);
+  const [correction, setCorrection] = useState(lowConfidence ? suggestedStarter : '');
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [editingMemory, setEditingMemory] = useState(false);
@@ -146,6 +160,14 @@ export function UnderstandingReveal({
     else await finish(nextDecision, correction.trim());
   };
 
+  const startSuggestedConversation = async () => {
+    const starter = correction.trim();
+    if (!starter) return;
+    setSummaryConfirmed(true);
+    const opened = await onStartConversation(starter);
+    if (!opened) setSummaryConfirmed(false);
+  };
+
   useEffect(() => {
     if (!summaryConfirmed || activityRunning || step !== 'summary') return;
     if (memoryCandidate) setStep('memory');
@@ -175,7 +197,7 @@ export function UnderstandingReveal({
           <h1 className="mx-auto mt-4 max-w-[34rem] text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.25rem]">{t.summaryTitle}</h1>
           <div className="xopc-understanding-hero-card relative mt-8 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/72 px-6 py-7 text-left shadow-elevated backdrop-blur-2xl dark:border-white/10 dark:bg-white/5 sm:px-8">
             <UnderstandingConstellation />
-            <p className="relative text-lg font-medium leading-8 text-fg sm:text-xl">{correction.trim() || run.result?.projectSummary}</p>
+            <p className="relative text-lg font-medium leading-8 text-fg sm:text-xl">{run.result?.projectSummary}</p>
             {(run.result?.currentState || workThreads.length || primarySuggestion?.evidence.length) ? (
               <div className="relative mt-5 border-t border-edge-subtle pt-4">
                 <button type="button" className="flex items-center gap-2 text-xs font-medium text-fg-muted hover:text-fg" onClick={() => setEvidenceOpen((open) => !open)}>
@@ -203,11 +225,12 @@ export function UnderstandingReveal({
             </div>
           ) : (
             <div className="xopc-reveal-calibration mx-auto mt-7 w-full max-w-xl rounded-2xl border border-edge bg-surface-panel/80 p-5 text-left shadow-surface backdrop-blur-xl">
-              <label className="text-sm font-semibold text-fg" htmlFor="understanding-correction">{t.correctionTitle}</label>
-              <textarea id="understanding-correction" autoFocus value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={t.correctionPlaceholder} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15" />
+              <label className="text-sm font-semibold text-fg" htmlFor="understanding-correction">{lowConfidence ? t.starterTitle : t.correctionTitle}</label>
+              {lowConfidence ? <p className="mt-1.5 text-xs leading-5 text-fg-muted">{t.starterHint}</p> : null}
+              <textarea id="understanding-correction" value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={t.correctionPlaceholder} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15" />
               <div className="mt-4 flex justify-end gap-2">
-                {!run.result?.lowConfidence ? <Button variant="ghost" disabled={summaryConfirmed} onClick={() => setCorrectionOpen(false)}>{t.cancel}</Button> : null}
-                <Button variant="primary" disabled={summaryConfirmed || !correction.trim()} onClick={() => void advanceAfterSummary('corrected')}>{t.continueWithCorrection}</Button>
+                {!lowConfidence ? <Button variant="ghost" disabled={summaryConfirmed} onClick={() => setCorrectionOpen(false)}>{t.cancel}</Button> : null}
+                <Button variant="primary" disabled={busy || summaryConfirmed || !correction.trim()} onClick={() => void (lowConfidence ? startSuggestedConversation() : advanceAfterSummary('corrected'))}>{lowConfidence ? t.startConversation : t.continueWithCorrection}</Button>
               </div>
             </div>
           )}
