@@ -291,7 +291,7 @@ export function SidebarNavItems({
       capabilities: m.sidebar.moreGroupCapabilities,
       build: m.sidebar.moreGroupBuild,
     };
-    const groups: OverflowGroupId[] = ['work', 'capabilities', 'build'];
+    const groups: OverflowGroupId[] = ['capabilities', 'work', 'build'];
 
     return (
       <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>

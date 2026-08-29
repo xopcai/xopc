@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
+import { TabCompletionInput } from '@/components/ui/tab-completion-input';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 
 import { AgentDefaultsField } from '.././browser-settings-field';
@@ -259,12 +260,14 @@ export function ExtensionCard({
       advanced={
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={m.label.browserExtensionPort} description={m.desc.browserExtensionPort}>
-            <input
+            <TabCompletionInput
               type="number"
               className={inputClassName()}
               min={1024}
               max={65535}
               value={form.port ?? ''}
+              suggestion={String(DEFAULT_PORT)}
+              onAcceptSuggestion={(value) => onChange({ port: Number.parseInt(value, 10) })}
               placeholder={String(DEFAULT_PORT)}
               onChange={(e) => {
                 const v = e.target.value;
@@ -273,10 +276,12 @@ export function ExtensionCard({
             />
           </AgentDefaultsField>
           <AgentDefaultsField label={m.label.browserExtensionHost} description={m.desc.browserExtensionHost}>
-            <input
+            <TabCompletionInput
               type="text"
               className={inputClassName()}
               value={form.host}
+              suggestion="127.0.0.1"
+              onAcceptSuggestion={(host) => onChange({ host })}
               placeholder="127.0.0.1"
               onChange={(e) => onChange({ host: e.target.value })}
               autoComplete="off"
@@ -286,7 +291,7 @@ export function ExtensionCard({
             label={m.label.browserExtensionConnectionTimeout}
             description={m.desc.browserExtensionConnectionTimeout}
           >
-            <input
+            <TabCompletionInput
               type="number"
               className={inputClassName()}
               min={1}
@@ -297,6 +302,8 @@ export function ExtensionCard({
                   : ''
               }
               placeholder={String(DEFAULT_CONNECTION_TIMEOUT_MS / 1000)}
+              suggestion={String(DEFAULT_CONNECTION_TIMEOUT_MS / 1000)}
+              onAcceptSuggestion={(value) => onChange({ connectionTimeoutMs: Number.parseInt(value, 10) * 1000 })}
               onChange={(e) => {
                 const v = e.target.value;
                 onChange({

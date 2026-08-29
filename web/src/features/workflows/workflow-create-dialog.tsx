@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
+import { suggestionFromExample, TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { interaction } from '@/lib/interaction';
@@ -570,7 +571,7 @@ export function WorkflowEditor({
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <Sparkles className="size-4 shrink-0 text-accent-fg" />
-                <input value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void generate(); }} placeholder={copy.aiPlaceholder} className={`${fieldClass} mt-0 flex-1`} />
+                <TabCompletionInput value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} suggestion={suggestionFromExample(copy.aiPlaceholder)} onAcceptSuggestion={setAiPrompt} onKeyDown={(event) => { if (event.key === 'Enter') void generate(); }} placeholder={copy.aiPlaceholder} className={`${fieldClass} mt-0 flex-1`} />
                 <Button variant="secondary" className="h-10 shrink-0" disabled={Boolean(proposal) || generating || !aiPrompt.trim()} onClick={() => void generate()}>{generating ? copy.designing : copy.applyWithAi}</Button>
               </div>
               <div className="flex items-center gap-2">
@@ -606,9 +607,11 @@ function ChatFirstStart({
         <div className="flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
         <h2 className="mt-5 text-2xl font-semibold text-fg">{copy.introTitle}</h2>
         <p className="mt-2 text-sm leading-6 text-fg-muted">{copy.introDescription}</p>
-        <textarea
+        <TabCompletionTextarea
           value={prompt}
           onChange={(event) => onPromptChange(event.target.value)}
+          suggestion={suggestionFromExample(copy.introPlaceholder)}
+          onAcceptSuggestion={onPromptChange}
           placeholder={copy.introPlaceholder}
           className={`${fieldClass} mt-6 h-auto min-h-32 resize-y py-3 text-base leading-6`}
         />

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 import { TimePicker } from '@/components/ui/time-picker';
 import { DatePicker } from '@/components/ui/date-picker';
+import { TabCompletionTextarea } from '@/components/ui/tab-completion-input';
 
 import {
   buildCronFromPickerState,
@@ -391,12 +392,14 @@ export function CronSchedulePicker({
   const customBlock =
     mode === 'custom' ? (
       <div className="pt-1">
-        <textarea
+        <TabCompletionTextarea
           disabled={disabled}
           className={cronTextareaClass}
           rows={2}
           spellCheck={false}
           value={rawCron}
+          suggestion="*/5 * * * *"
+          onAcceptSuggestion={(next) => commitPicker({ rawCron: next })}
           placeholder="*/5 * * * *"
           onChange={(e) => {
             commitPicker({ rawCron: e.target.value });
