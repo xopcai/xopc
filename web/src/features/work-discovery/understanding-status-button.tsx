@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Brain, Check, FileText, Loader2, X } from 'lucide-react';
+import { Check, FileText, Loader2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -23,7 +24,17 @@ export function UnderstandingStatusButton({
   const location = useLocation();
   const language = useLocaleStore((state) => state.language);
   const state = useUnderstandingActivityStore();
+  const [reviewing, setReviewing] = useState(false);
   const zh = language === 'zh';
+  const pendingCount = state.memories.filter((memory) => memory.status === 'pending').length
+    + state.focuses.filter((focus) => focus.status === 'candidate').length;
+
+  useEffect(() => {
+    if (!state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
+    const timer = window.setTimeout(state.finish, 800);
+    return () => window.clearTimeout(timer);
+  }, [pendingCount, state.drawerOpen, state.finish, state.status]);
+
   const preloadWorkDiscovery = () => {
     if (persistent) void loadWorkDiscoveryOverlay();
     else preloadRouteForPath('/onboarding/workspace');
@@ -35,6 +46,7 @@ export function UnderstandingStatusButton({
     }
     navigate({ pathname: location.pathname, search: openWorkDiscoveryOverlaySearch(location.search) });
   };
+
   if (state.status === 'idle') {
     if (!persistent) return null;
     const label = messages(language).you.relearn;
@@ -55,18 +67,34 @@ export function UnderstandingStatusButton({
         onFocus={preloadWorkDiscovery}
         onClick={openWorkDiscovery}
       >
-        <Brain className="size-4 text-accent-fg" aria-hidden />
+        <Sparkles className="size-4 text-accent-fg" aria-hidden />
       </Button>
     );
   }
+
   const running = state.status === 'running';
-  const sourceRows = Object.keys(state.sources).map((sourceId) => ({
-    key: sourceId,
-    label: sourceId.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '),
-    icon: FileText,
-  }));
+  const pendingMemory = state.memories.find((memory) => memory.status === 'pending' && memory.understandingId);
+  const pendingFocus = state.focuses.find((focus) => focus.status === 'candidate');
+  const sourceStatuses = Object.values(state.sources);
+  const completeSources = sourceStatuses.filter((status) => status === 'completed').length;
+  const unavailableSources = sourceStatuses.filter((status) => status === 'failed' || status === 'denied').length;
+
+  const reviewMemory = async (accepted: boolean) => {
+    if (!pendingMemory?.understandingId) return;
+    setReviewing(true);
+    await state.reviewMemory(pendingMemory.understandingId, accepted);
+    setReviewing(false);
+  };
+
+  const reviewFocus = async (accepted: boolean) => {
+    if (!pendingFocus) return;
+    setReviewing(true);
+    await state.reviewFocus(pendingFocus.id, accepted);
+    setReviewing(false);
+  };
+
   return (
-    <Dialog.Root modal={false} open={state.drawerOpen} onOpenChange={state.setDrawerOpen}>
+    <Dialog.Root open={state.drawerOpen} onOpenChange={state.setDrawerOpen}>
       <Dialog.Trigger asChild>
         <Button
           type="button"
@@ -76,36 +104,104 @@ export function UnderstandingStatusButton({
             APP_CHROME_NO_DRAG_CLASS,
             floating && 'fixed right-4 top-3 z-40 bg-surface-panel shadow-surface',
           )}
-          title={zh ? '查看用户理解进度' : 'View understanding progress'}
+          title={zh ? '查看 xopc 对你的理解' : 'Review what xopc understands'}
+          aria-label={zh ? '查看 xopc 对你的理解' : 'Review what xopc understands'}
         >
-          {running ? <Loader2 className="size-4 animate-spin" /> : <Brain className="size-4 text-accent-fg" />}
-          {state.status === 'review_ready' ? <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-accent" /> : null}
+          {running ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Sparkles className="size-4 text-accent-fg" />}
+          {pendingCount ? <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-accent ring-2 ring-surface-panel" /> : null}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Content className="xopc-drawer-right fixed inset-y-0 right-0 z-[61] flex w-[min(26rem,calc(100vw-2rem))] flex-col border-l border-edge bg-surface-panel shadow-float">
-          <div className="flex h-14 shrink-0 items-center justify-between border-b border-edge px-4">
-            <div><Dialog.Title className="font-semibold text-fg">{zh ? '正在理解你的工作' : 'Understanding your work'}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{running ? (zh ? '后台调查仍在进行' : 'Background investigation is running') : (zh ? '本轮调查已有结果' : 'This investigation has results')}</Dialog.Description></div>
-            <Dialog.Close asChild><Button variant="ghost" className="size-8 p-0"><X className="size-4" /></Button></Dialog.Close>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <div className="space-y-2">
-              <SourceRow label={zh ? '工作目录' : 'Work directories'} status={state.directoryStatus} count={0} icon={Brain} zh={zh} />
-              {sourceRows.map((row) => <SourceRow key={row.key} label={row.label} status={state.sources[row.key]} count={state.itemCounts[row.key]} icon={row.icon} zh={zh} />)}
+        <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-950/28 backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in motion-reduce:backdrop-blur-none" />
+        <Dialog.Content className="xopc-understanding-center fixed left-1/2 top-1/2 z-[61] flex h-[min(42rem,calc(100vh-2rem))] w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[1.75rem] border border-white/70 bg-surface-panel/95 shadow-float outline-none backdrop-blur-2xl dark:border-white/10">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-edge-subtle px-5 sm:px-6">
+            <div>
+              <Dialog.Title className="text-sm font-semibold text-fg">
+                {running ? (zh ? '正在形成理解' : 'Understanding is taking shape') : pendingCount ? (zh ? '一起校准' : 'Calibrate together') : (zh ? '理解由你掌控' : 'You control the understanding')}
+              </Dialog.Title>
+              <Dialog.Description className="mt-0.5 text-xs text-fg-muted">
+                {running
+                  ? (zh ? '把不同来源连接成有意义的上下文' : 'Connecting sources into useful context')
+                  : pendingCount
+                    ? (zh ? `${pendingCount} 条候选等待确认` : `${pendingCount} candidates to review`)
+                    : (zh ? '本轮候选已经处理完成' : 'This round of candidates is complete')}
+              </Dialog.Description>
             </div>
-            {state.threads.length ? <div className="mt-6"><h3 className="text-sm font-semibold text-fg">{zh ? '综合识别到的工作重点' : 'Work focus across sources'}</h3><div className="mt-2 space-y-2">{state.threads.map((thread) => <div key={thread.id} className="rounded-xl border border-edge bg-surface-base p-3"><div className="flex items-center gap-2"><span className="rounded-full bg-accent-soft px-2 py-0.5 text-[0.7rem] font-medium text-accent-fg">{thread.horizon === 'current' ? (zh ? '当前' : 'Current') : thread.horizon === 'ongoing' ? (zh ? '持续' : 'Ongoing') : (zh ? '长期' : 'Long term')}</span><p className="text-sm font-medium text-fg">{thread.title}</p></div><p className="mt-1.5 text-xs leading-5 text-fg-muted">{thread.summary}</p></div>)}</div></div> : null}
-            {state.focuses.length ? <div className="mt-6"><h3 className="text-sm font-semibold text-fg">{zh ? '你可能正在关注' : 'You may be focusing on'}</h3><p className="mt-1 text-xs text-fg-muted">{zh ? '这些只是候选，确认后才会用于后续协作。' : 'These are candidates and are only used after you confirm them.'}</p><div className="mt-2 space-y-2">{state.focuses.map((focus) => <div key={focus.id} className="rounded-xl border border-edge bg-surface-base p-3"><div className="flex items-center gap-2"><span className="rounded-full bg-accent-soft px-2 py-0.5 text-[0.7rem] font-medium text-accent-fg">{focus.horizon === 'current' ? (zh ? '当前' : 'Current') : focus.horizon === 'ongoing' ? (zh ? '持续' : 'Ongoing') : (zh ? '长期' : 'Long term')}</span><p className="text-sm font-medium text-fg">{focus.title}</p></div><p className="mt-1.5 text-xs leading-5 text-fg-muted">{focus.summary}</p>{focus.status === 'candidate' ? <div className="mt-2 flex gap-2"><Button type="button" className="px-2.5 py-1.5 text-xs" variant="primary" onClick={() => void state.reviewFocus(focus.id, true)}>{zh ? '是我在关注的' : 'Confirm'}</Button><Button type="button" className="px-2.5 py-1.5 text-xs" variant="ghost" onClick={() => void state.reviewFocus(focus.id, false)}>{zh ? '不是' : 'Not now'}</Button></div> : <p className="mt-1 text-xs text-fg-muted">{focus.status === 'active' ? (zh ? '已确认' : 'Confirmed') : (zh ? '已忽略' : 'Ignored')}</p>}</div>)}</div></div> : null}
-            {state.memories.length ? <div className="mt-6"><h3 className="text-sm font-semibold text-fg">{zh ? `新理解到 ${state.memories.length} 条背景` : `${state.memories.length} new insights`}</h3><div className="mt-2 space-y-2">{state.memories.map((memory) => <div key={memory.id} className="rounded-xl bg-surface-base p-3 text-sm leading-6 text-fg"><p>{memory.statement}</p>{memory.status === 'pending' && memory.understandingId ? <div className="mt-2 flex gap-2"><Button type="button" className="px-2.5 py-1.5 text-xs" variant="primary" onClick={() => void state.reviewMemory(memory.understandingId!, true)}>{zh ? '记住' : 'Remember'}</Button><Button type="button" className="px-2.5 py-1.5 text-xs" variant="ghost" onClick={() => void state.reviewMemory(memory.understandingId!, false)}>{zh ? '忽略' : 'Ignore'}</Button></div> : <p className="mt-1 text-xs text-fg-muted">{memory.status === 'accepted' ? (zh ? '已写入对你的理解' : 'Saved to understanding') : (zh ? '已忽略' : 'Ignored')}</p>}</div>)}</div></div> : null}
-            {state.error ? <p className="mt-4 text-sm text-danger">{state.error}</p> : null}
+            <Dialog.Close asChild><Button variant="ghost" className="size-8 rounded-xl p-0" aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Button></Dialog.Close>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-7 sm:px-9 sm:py-9">
+            {running ? (
+              <section className="flex min-h-full flex-col items-center justify-center text-center" aria-live="polite">
+                <UnderstandingActivityVisual />
+                <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{zh ? '正在建立默契' : 'Building shared context'}</p>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-fg">{zh ? '我正在把这些线索连接起来。' : 'I am connecting the signals.'}</h2>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-fg-muted">
+                  {zh ? '内容只用于形成候选理解，未经你确认，不会成为长期记忆。' : 'Content only shapes candidates. Nothing becomes lasting memory until you confirm it.'}
+                </p>
+                <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs text-fg-muted">
+                  <span className="rounded-full border border-edge bg-surface-base px-3 py-1.5">{state.directoryStatus === 'completed' ? (zh ? '工作目录已理解' : 'Work folder understood') : (zh ? '正在理解工作目录' : 'Understanding work folder')}</span>
+                  {sourceStatuses.length ? <span className="rounded-full border border-edge bg-surface-base px-3 py-1.5">{zh ? `${completeSources}/${sourceStatuses.length} 个来源已完成` : `${completeSources}/${sourceStatuses.length} sources complete`}</span> : null}
+                </div>
+              </section>
+            ) : pendingMemory ? (
+              <section className="xopc-reveal-scene mx-auto flex min-h-full max-w-xl flex-col justify-center text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{zh ? '长期理解' : 'Lasting understanding'}</p>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-fg">{zh ? '这件事值得我以后记住吗？' : 'Should I remember this for later?'}</h2>
+                <article className="mt-7 rounded-[1.5rem] border border-edge/80 bg-surface-base/80 p-6 text-left shadow-surface">
+                  <div className="flex items-start gap-4">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-lg font-medium leading-8 text-fg">{pendingMemory.statement}</p>
+                      {pendingMemory.evidence.length ? <p className="mt-4 text-xs leading-5 text-fg-muted"><span className="font-medium text-fg">{zh ? '理解依据：' : 'Based on: '}</span>{pendingMemory.evidence[0]}</p> : null}
+                    </div>
+                  </div>
+                  <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
+                    <Button variant="primary" disabled={reviewing} onClick={() => void reviewMemory(true)}>{reviewing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{zh ? '记住' : 'Remember it'}</Button>
+                    <Button variant="secondary" disabled={reviewing} onClick={() => void reviewMemory(false)}>{zh ? '只用于这次' : 'This time only'}</Button>
+                  </div>
+                </article>
+              </section>
+            ) : pendingFocus ? (
+              <section className="xopc-reveal-scene mx-auto flex min-h-full max-w-xl flex-col justify-center text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{zh ? '当前关注' : 'Current focus'}</p>
+                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-fg">{zh ? '要让我持续关注这个方向吗？' : 'Should I keep this direction in focus?'}</h2>
+                <article className="mt-7 rounded-[1.5rem] border border-edge/80 bg-surface-base/80 p-6 text-left shadow-surface">
+                  <div className="flex items-start gap-4">
+                    <span className="mt-2 size-3 shrink-0 rounded-full bg-accent" />
+                    <div><p className="text-lg font-semibold text-fg">{pendingFocus.title}</p><p className="mt-2 text-sm leading-6 text-fg-muted">{pendingFocus.summary}</p></div>
+                  </div>
+                  <p className="mt-5 flex gap-2 rounded-xl bg-surface-muted px-3 py-2.5 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />{zh ? '关注只影响优先级和提醒，不代表执行授权。' : 'Focus affects priority and reminders, never authorization to act.'}</p>
+                  <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
+                    <Button variant="primary" disabled={reviewing} onClick={() => void reviewFocus(true)}>{reviewing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{zh ? '加入关注' : 'Add to focus'}</Button>
+                    <Button variant="secondary" disabled={reviewing} onClick={() => void reviewFocus(false)}>{zh ? '暂时不用' : 'Not now'}</Button>
+                  </div>
+                </article>
+              </section>
+            ) : (
+              <section className="xopc-reveal-scene flex min-h-full flex-col items-center justify-center text-center">
+                <div className="flex size-14 items-center justify-center rounded-full bg-accent-soft text-accent-fg"><Check className="size-6" /></div>
+                <h2 className="mt-4 text-lg font-semibold tracking-tight text-fg">{zh ? '理解已更新' : 'Understanding updated'}</h2>
+                {state.status === 'partial' || unavailableSources ? <p className="mt-5 text-xs leading-5 text-fg-muted">{zh ? `${unavailableSources || 1} 个来源未完成，其余理解仍然可用。` : `${unavailableSources || 1} sources were unavailable; the rest of the understanding remains usable.`}</p> : null}
+                {state.error ? <p className="mt-3 text-sm text-danger">{state.error}</p> : null}
+              </section>
+            )}
           </div>
-          {!running ? <div className="flex shrink-0 gap-2 border-t border-edge p-4"><Button type="button" className="flex-1" onPointerEnter={preloadWorkDiscovery} onPointerDown={preloadWorkDiscovery} onFocus={preloadWorkDiscovery} onClick={() => { state.finish(); openWorkDiscovery(); }}>{zh ? '重新理解' : 'Run again'}</Button><Button type="button" variant="primary" className="flex-1" onClick={state.finish}>{zh ? '完成' : 'Done'}</Button></div> : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
 }
 
-function SourceRow({ label, status, count, icon: Icon, zh }: { label: string; status: string; count: number; icon: typeof Brain; zh: boolean }) {
-  const done = status === 'completed';
-  return <div className="flex items-center gap-3 rounded-xl border border-edge px-3 py-3"><Icon className="size-4 text-fg-muted" /><div className="min-w-0 flex-1"><p className="text-sm font-medium text-fg">{label}</p><p className="text-xs text-fg-muted">{status === 'running' ? (zh ? '正在扫描' : 'Scanning') : status === 'denied' ? (zh ? '未授权' : 'Permission denied') : status === 'failed' ? (zh ? '扫描失败' : 'Failed') : status === 'skipped' ? (zh ? '未选择' : 'Not selected') : done ? (count ? `${count} ${zh ? '项' : 'items'}` : (zh ? '已完成' : 'Completed')) : (zh ? '等待开始' : 'Waiting')}</p></div>{done ? <Check className="size-4 text-success" /> : status === 'running' ? <Loader2 className="size-4 animate-spin text-accent" /> : null}</div>;
+function UnderstandingActivityVisual() {
+  return (
+    <div className="xopc-understanding-constellation relative size-40" aria-hidden>
+      <span className="xopc-constellation-orbit absolute inset-[10%] rounded-full border border-accent/15" />
+      <span className="xopc-constellation-orbit xopc-constellation-orbit-delayed absolute inset-[27%] rounded-full border border-accent/20" />
+      <span className="absolute left-[44%] top-[44%] size-[12%] rounded-full bg-accent shadow-[0_0_32px_rgba(54,123,245,0.65)]" />
+      <span className="xopc-constellation-node absolute left-[10%] top-[34%] flex size-8 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-surface"><FileText className="size-3.5" /></span>
+      <span className="xopc-constellation-node xopc-constellation-node-two absolute right-[8%] top-[20%] size-3 rounded-full bg-cyan-400" />
+      <span className="xopc-constellation-node xopc-constellation-node-three absolute bottom-[10%] right-[25%] size-3 rounded-full bg-accent/55" />
+    </div>
+  );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, GitBranch, Loader2, ShieldCheck, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
@@ -26,12 +26,14 @@ import {
   submitWorkDiscoveryRecognitionFeedback,
   updateWorkDiscoveryProfile,
   type WorkDiscoveryCandidate,
+  type WorkDiscoveryProfileCandidate,
   type WorkDiscoveryPreview,
   type WorkDiscoveryRun,
   type WorkDiscoveryStage,
   type WorkDiscoverySuggestion,
 } from './api';
 import { runWorkDiscoveryBatch } from './run-work-discovery-batch';
+import { UnderstandingReveal } from './understanding-reveal';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
 import { defaultSelectedLocalSourceIds } from './work-discovery-source-defaults';
 
@@ -61,10 +63,7 @@ export function WorkDiscoveryPage({
   const [run, setRun] = useState<WorkDiscoveryRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-  const [correction, setCorrection] = useState('');
   const [alternativesOpen, setAlternativesOpen] = useState(false);
-  const [profileSelection, setProfileSelection] = useState<Set<string>>(() => new Set());
   const [candidates, setCandidates] = useState<WorkDiscoveryCandidate[]>([]);
   const [selectedCandidatePaths, setSelectedCandidatePaths] = useState<Set<string>>(() => new Set());
   const [batchRuns, setBatchRuns] = useState<WorkDiscoveryRun[]>([]);
@@ -73,6 +72,9 @@ export function WorkDiscoveryPage({
   const [localSources, setLocalSources] = useState<ElectronUnderstandingSourceDefinition[]>([]);
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(() => new Set());
   const stopBatchRef = useRef(false);
+  const understandingMemories = useUnderstandingActivityStore((state) => state.memories);
+  const understandingFocuses = useUnderstandingActivityStore((state) => state.focuses);
+  const understandingActivityStatus = useUnderstandingActivityStore((state) => state.status);
 
   const toggleSource = (sourceId: string) => {
     setSelectedSourceIds((current) => {
@@ -97,9 +99,6 @@ export function WorkDiscoveryPage({
     useUnderstandingActivityStore.getState().updateDirectoryRun(next);
     setRun(next);
     if (next.status === 'completed') {
-      setProfileSelection(new Set(
-        next.result?.profileCandidates?.filter((candidate) => candidate.status === 'pending').map((candidate) => candidate.id) ?? [],
-      ));
       setPageState(next.feedback?.recognitionDecision === 'confirmed' ? 'recommendation' : 'recognition');
     }
     else if (next.status === 'failed' || next.status === 'canceled') setPageState('error');
@@ -306,11 +305,7 @@ export function WorkDiscoveryPage({
 
   const selectBatchRun = (next: WorkDiscoveryRun) => {
     setRun(next);
-    setCorrectionOpen(false);
     setAlternativesOpen(false);
-    setProfileSelection(new Set(
-      next.result?.profileCandidates?.filter((candidate) => candidate.status === 'pending').map((candidate) => candidate.id) ?? [],
-    ));
     if (next.status === 'completed') {
       setPageState(next.feedback?.recognitionDecision === 'confirmed' ? 'recommendation' : 'recognition');
     } else if (next.status === 'failed' || next.status === 'canceled') {
@@ -336,51 +331,69 @@ export function WorkDiscoveryPage({
     openConversation(run.sessionKey, draft);
   };
 
-  const confirmRecognition = async () => {
-    if (!run) return;
+  const reviewMemory = async (
+    candidate: WorkDiscoveryProfileCandidate,
+    status: 'accepted' | 'edited' | 'rejected',
+    statement?: string,
+  ) => {
+    if (!run) return false;
     setBusy(true);
     setError(null);
     try {
-      const candidates = run.result?.profileCandidates ?? [];
-      const withProfile = candidates.length > 0
-        ? await updateWorkDiscoveryProfile(run.id, candidates.map((candidate) => ({
-            id: candidate.id,
-            status: profileSelection.has(candidate.id) ? 'accepted' as const : 'rejected' as const,
-          })))
-        : run;
-      const next = await submitWorkDiscoveryRecognitionFeedback(withProfile.id, 'confirmed');
-      setRun(next);
-      replaceBatchRun(next);
-      setPageState('recommendation');
+      const runCandidate = run.result?.profileCandidates?.find((item) => (
+        item.id === candidate.id || Boolean(item.understandingId && item.understandingId === candidate.understandingId)
+      ));
+      const sourceCandidate = understandingMemories.find((item) => (
+        item.id === candidate.id || Boolean(item.understandingId && item.understandingId === candidate.understandingId)
+      ));
+      if (runCandidate) {
+        const next = await updateWorkDiscoveryProfile(run.id, [{ id: runCandidate.id, status, ...(statement ? { statement } : {}) }]);
+        setRun(next);
+        replaceBatchRun(next);
+      }
+      if (sourceCandidate?.understandingId) {
+        await useUnderstandingActivityStore.getState().reviewMemory(sourceCandidate.understandingId, status === 'accepted', statement);
+      }
+      return true;
     } catch (cause) {
       setError(errorText(cause));
+      return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const submitCorrection = async (decision: 'corrected' | 'different_goal') => {
-    if (!run || !correction.trim()) return;
+  const reviewFocus = async (focusId: string, accepted: boolean) => {
     setBusy(true);
     setError(null);
     try {
-      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, decision, correction.trim());
-      setRun(next);
-      openConversation(next.sessionKey, correction.trim());
+      await useUnderstandingActivityStore.getState().reviewFocus(focusId, accepted);
+      return true;
     } catch (cause) {
       setError(errorText(cause));
+      return false;
+    } finally {
       setBusy(false);
     }
   };
 
-  const openWithoutConfirming = async () => {
-    if (!run) return;
+  const completeUnderstandingReveal = async (
+    decision: 'confirmed' | 'corrected' | 'different_goal',
+    correctedIntent?: string,
+  ) => {
+    if (!run) return false;
     setBusy(true);
+    setError(null);
     try {
-      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, 'dismissed');
-      openConversation(next.sessionKey);
+      const next = await submitWorkDiscoveryRecognitionFeedback(run.id, decision, correctedIntent);
+      setRun(next);
+      replaceBatchRun(next);
+      setPageState('recommendation');
+      return true;
     } catch (cause) {
       setError(errorText(cause));
+      return false;
+    } finally {
       setBusy(false);
     }
   };
@@ -425,14 +438,18 @@ export function WorkDiscoveryPage({
 
   return (
     <div className={embedded
-      ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-base'
-      : 'flex min-h-full flex-1 flex-col bg-surface-base'}>
-      <main className={embedded
-        ? `mx-auto flex h-full min-h-0 w-full max-w-[40rem] flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto [scrollbar-gutter:stable]'}`
-        : 'mx-auto flex w-full max-w-[40rem] flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16'}>
-        {!embedded ? (
-          <div className="mb-10 flex items-center justify-center">
-            <BrandLogo className="size-11" />
+      ? 'xopc-work-discovery-experience relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-base'
+      : 'xopc-work-discovery-experience relative flex min-h-full flex-1 flex-col bg-surface-base'}>
+      <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
+      <main key={pageState} className={embedded
+        ? `xopc-work-discovery-stage relative z-10 mx-auto flex h-full min-h-0 w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[46rem]'} flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto [scrollbar-gutter:stable]'}`
+        : `mx-auto flex w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16`}>
+        {pageState !== 'recognition' ? (
+          <div className={cn('flex items-center justify-center', embedded ? 'mb-7 sm:mb-9' : 'mb-10')}>
+            <div className="xopc-discovery-logo relative flex size-16 items-center justify-center rounded-[1.35rem] border border-white/75 bg-white/75 shadow-elevated backdrop-blur-xl dark:border-white/10 dark:bg-white/7">
+              <span className="xopc-discovery-logo-ring absolute -inset-3 rounded-[1.8rem] border border-accent/10" aria-hidden />
+              <BrandLogo className="size-10" />
+            </div>
           </div>
         ) : null}
 
@@ -457,10 +474,14 @@ export function WorkDiscoveryPage({
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
               {localSources.length ? (
-                <div className="mb-5 rounded-xl border border-edge bg-surface-panel p-3 text-left">
-                  <p className="text-sm font-medium text-fg">{copy.localSourcesTitle}</p>
-                  <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.localSourcesSubtitle}</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <details className="group mb-5 rounded-2xl border border-edge/80 bg-white/55 text-left shadow-surface dark:bg-white/3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-fg marker:content-none">
+                    <span>{copy.localSourcesTitle}</span>
+                    <ChevronDown className="size-4 text-fg-muted transition-transform duration-200 group-open:rotate-180" aria-hidden />
+                  </summary>
+                  <div className="border-t border-edge-subtle px-4 pb-4 pt-3">
+                    <p className="text-xs leading-5 text-fg-muted">{copy.localSourcesSubtitle}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {localSources.map((source) => {
                       const selected = selectedSourceIds.has(source.id);
                       return (
@@ -486,8 +507,9 @@ export function WorkDiscoveryPage({
                         </button>
                       );
                     })}
+                    </div>
                   </div>
-                </div>
+                </details>
               ) : null}
               <Button
                 type="button"
@@ -682,14 +704,14 @@ export function WorkDiscoveryPage({
                 </p>
               ) : null}
             </div>
-            <div className="mt-9 rounded-xl border border-edge bg-surface-panel px-5 py-2">
+            <div className="xopc-understanding-progress mt-9 rounded-2xl border border-edge/80 bg-white/65 px-5 py-2 shadow-elevated backdrop-blur-xl dark:bg-white/4">
               {STAGES.map((stage, index) => {
                 const activeIndex = Math.max(0, STAGES.indexOf(run.stage ?? 'folder_structure'));
                 const complete = index < activeIndex;
                 const active = index === activeIndex;
                 return (
-                  <div key={stage} className="flex items-center gap-4 border-b border-edge-subtle py-4 last:border-b-0">
-                    <span className={`flex size-7 items-center justify-center rounded-full ${complete ? 'bg-accent text-white' : active ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>
+                  <div key={stage} className="xopc-understanding-step flex items-center gap-4 border-b border-edge-subtle py-4 last:border-b-0" data-active={active || undefined} data-complete={complete || undefined}>
+                    <span className={`xopc-understanding-step-icon flex size-8 items-center justify-center rounded-full ${complete ? 'bg-accent text-white' : active ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>
                       {complete ? <Check className="size-4" /> : active ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <span className="size-1.5 rounded-full bg-current" />}
                     </span>
                     <span className={active || complete ? 'text-sm font-medium text-fg' : 'text-sm text-fg-muted'}>{copy.stages[stage]}</span>
@@ -710,122 +732,19 @@ export function WorkDiscoveryPage({
         ) : null}
 
         {pageState === 'recognition' && run?.result ? (
-          <section aria-labelledby="work-discovery-recognition-title">
-            <div className="text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.recognitionEyebrow}</p>
-              <h1 id="work-discovery-recognition-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg">
-                {run.result.lowConfidence ? copy.lowConfidenceTitle : copy.recognitionTitle}
-              </h1>
-            </div>
-            {batchRunSwitcher}
-            <div className="mt-7 rounded-2xl border border-accent/25 bg-gradient-to-br from-accent-soft/45 via-surface-panel to-surface-panel p-5 sm:p-6">
-              <p className="text-base font-medium leading-7 text-fg">{run.result.projectSummary}</p>
-              <p className="mt-3 text-sm leading-6 text-fg-muted">{run.result.currentState}</p>
-              {!run.result.lowConfidence && primarySuggestion?.evidence.length ? (
-                <ul className="mt-5 space-y-2 border-t border-edge-subtle pt-4">
-                  {primarySuggestion.evidence.slice(0, 3).map((item, index) => (
-                    <li key={`${primarySuggestion.id}-recognition-${index}`} className="flex gap-2 text-xs leading-5 text-fg-muted">
-                      <GitBranch className="mt-0.5 size-3.5 shrink-0 text-accent-fg" />
-                      <span>{item.path ? <><code className="font-mono text-fg">{item.path}</code>: </> : null}{item.observation}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-
-            {run.result.workThreads?.length ? (
-              <div className="mt-5 rounded-xl border border-edge bg-surface-panel p-4">
-                <p className="text-sm font-medium text-fg">{copy.workThreadsTitle}</p>
-                <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.workThreadsSubtitle}</p>
-                <div className="mt-3 divide-y divide-edge-subtle">
-                  {run.result.workThreads.map((thread) => (
-                    <div key={thread.id} className="py-3 first:pt-0 last:pb-0">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[0.7rem] font-medium text-accent-fg">
-                          {thread.horizon === 'current'
-                            ? copy.workThreadCurrent
-                            : thread.horizon === 'ongoing'
-                              ? copy.workThreadOngoing
-                              : copy.workThreadLongTerm}
-                        </span>
-                        <span className="text-sm font-medium text-fg">{thread.title}</span>
-                      </div>
-                      <p className="mt-1.5 text-xs leading-5 text-fg-muted">{thread.summary}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {run.result.profileCandidates?.length ? (
-              <div className="mt-5 rounded-xl border border-edge bg-surface-panel p-4">
-                <p className="text-sm font-medium text-fg">{copy.profileCandidatesTitle}</p>
-                <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.profileCandidatesSubtitle}</p>
-                <div className="mt-3 space-y-2">
-                  {run.result.profileCandidates.map((candidate) => (
-                    <label key={candidate.id} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-muted">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 size-4 rounded border-edge accent-accent"
-                        checked={profileSelection.has(candidate.id)}
-                        onChange={() => setProfileSelection((current) => {
-                          const next = new Set(current);
-                          if (next.has(candidate.id)) next.delete(candidate.id);
-                          else next.add(candidate.id);
-                          return next;
-                        })}
-                      />
-                      <span className="text-sm leading-5 text-fg">{candidate.statement}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {run.result.lowConfidence ? (
-              <div className="mt-5">
-                <p className="text-sm font-medium leading-6 text-fg">{run.result.contextQuestion}</p>
-                <textarea
-                  value={correction}
-                  onChange={(event) => setCorrection(event.target.value)}
-                  placeholder={copy.correctionPlaceholder}
-                  className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-panel px-3 py-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15"
-                />
-                <Button className="mt-3 w-full bg-accent text-white hover:bg-accent-hover" disabled={busy || !correction.trim()} onClick={() => void submitCorrection('different_goal')}>
-                  {copy.continueWithCorrection}
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row-reverse">
-                  <Button className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" disabled={busy} onClick={() => void confirmRecognition()}>
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{copy.confirmUnderstanding}
-                  </Button>
-                  <Button variant="secondary" className="h-11 flex-1" disabled={busy} onClick={() => setCorrectionOpen((open) => !open)}>
-                    {copy.notQuiteRight}
-                  </Button>
-                </div>
-                {correctionOpen ? (
-                  <div className="mt-4 rounded-xl border border-edge bg-surface-panel p-4">
-                    <label className="text-sm font-medium text-fg" htmlFor="work-discovery-correction">{copy.correctionLabel}</label>
-                    <textarea
-                      id="work-discovery-correction"
-                      value={correction}
-                      onChange={(event) => setCorrection(event.target.value)}
-                      placeholder={copy.correctionPlaceholder}
-                      className="mt-2 min-h-24 w-full resize-y rounded-lg border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15"
-                    />
-                    <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <Button variant="ghost" disabled={busy || !correction.trim()} onClick={() => void submitCorrection('different_goal')}>{copy.differentGoal}</Button>
-                      <Button variant="primary" disabled={busy || !correction.trim()} onClick={() => void submitCorrection('corrected')}>{copy.useCorrection}</Button>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            )}
-            {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
-            <button type="button" disabled={busy} className="mx-auto mt-6 block text-sm text-fg-muted hover:text-fg hover:underline disabled:opacity-60" onClick={() => void openWithoutConfirming()}>{copy.openConversation}</button>
-          </section>
+          <UnderstandingReveal
+            key={run.id}
+            run={run}
+            sourceMemories={understandingMemories}
+            focuses={[...(run.result.focusCandidates ?? []), ...understandingFocuses]}
+            activityRunning={understandingActivityStatus === 'running'}
+            language={language}
+            busy={busy}
+            error={error}
+            onReviewMemory={reviewMemory}
+            onReviewFocus={(focus, accepted) => reviewFocus(focus.id, accepted)}
+            onFinish={completeUnderstandingReveal}
+          />
         ) : null}
 
         {pageState === 'recommendation' && run?.result && primarySuggestion ? (
@@ -876,7 +795,7 @@ export function WorkDiscoveryPage({
             ) : null}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
               <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.sessionKey)}>{copy.doSomethingElse}</button>
-              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => { setCorrectionOpen(true); setPageState('recognition'); }}>{copy.correctUnderstanding}</button>
+              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => setPageState('recognition')}>{copy.correctUnderstanding}</button>
             </div>
           </section>
         ) : null}

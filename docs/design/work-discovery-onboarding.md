@@ -18,23 +18,24 @@ The implemented flow starts with bounded candidate discovery in common developer
 4. **Native personal context scan:** available only in the Electron app on macOS. The onboarding action requests the operating-system permissions for Notes, Calendar, and Reminders, then reads up to 50 recent items from each source with per-item and total character limits. The personal-context synthesis waits for the directory investigation and reconciles corroboration, conflicts, current focus, and stale signals across the sources. Raw source content is held only for the model call and is not stored in xopc's database.
 5. **Bounded AI investigation:** the model iteratively plans hypotheses and selects read-only `read_text_excerpt` or `search_authorized_text` actions. Tool calls, content characters, and elapsed time have hard limits. Secret paths, binaries, excluded directories, writes, and arbitrary shell commands are unavailable.
 6. **Work Threads:** current, ongoing, and long-term work streams are persisted with evidence lineage, focus scores, status, confidence, project relationships, and user feedback. Explicit corrections survive later inference.
-7. **Unified evidence and memory review:** file, Git, related-project metadata, connected personal context, session context, and direct user statements use one evidence model. Personal context can corroborate an existing Work Thread; long verbatim overlaps are rejected. Only high-confidence, non-ephemeral facts supported by multiple observations become active memory automatically. Other candidates require a Remember or Ignore decision in the global understanding drawer.
+7. **Unified evidence and minimal calibration:** file, Git, related-project metadata, connected personal context, session context, and direct user statements use one evidence model. Personal context can corroborate an existing Work Thread; long verbatim overlaps are rejected. First run asks for one current-context decision, then at most one durable-memory decision and one time-bounded focus decision. Remaining candidates stay pending in About You. Inferred durable facts and focuses never activate from summary confirmation alone.
 8. **Incremental refresh and governance:** approved folders use bounded metadata fingerprints. A refresh runs only when the fingerprint changes and duplicate active refreshes are reused. Source lineage, derived-data deletion, quality metrics, and offline precision/recall/evidence-coverage evaluation are exposed by the gateway.
 
 Native app access uses fixed JXA programs through the public Automation interfaces for Notes, Calendar, and Reminders. No source values are interpolated into executable script text, and xopc does not read private application databases. Each scan is initiated by the onboarding action; there is no durable native-source grant or scheduled rescan. User-confirmed memories remain user-controlled through About You.
 
-The global understanding indicator is a one-shot progress and review surface. It appears while the investigation runs, remains until the user reviews the result, and then disappears. The user may explicitly run the investigation again. Scheduled scanning is intentionally out of scope until change detection, source-specific consent, cost controls, and result quality justify it.
+The global understanding indicator opens a fixed responsive Understanding Center instead of a drawer. Running activity is presented as one synthesis state, and review-ready candidates are shown one at a time. After the final decision it shows a brief confirmation and closes automatically; rerun and full management remain at their existing product entry points. Scheduled scanning is intentionally out of scope until change detection, source-specific consent, cost controls, and result quality justify it.
 
 ## Product Decision
 
-Add an optional activation stage after model setup, separate from the existing configuration dialog.
+Add an optional activation stage after the minimal three-step setup: optional call name, intelligence provider, and provider authorization. Welcome-only and collaboration-preference screens are intentionally omitted; safe collaboration defaults apply until the user changes them during real use.
 
 The activation stage uses a focused, single-column flow inspired by a native setup assistant. It stays within the existing Calm Intelligence visual system:
 
 - neutral workstation surfaces;
 - Loop Blue for the primary action and focus;
 - a small amount of Momentum Cyan for analysis progress;
-- no new palette, decorative AI treatment, or celebratory animation.
+- one continuous first-run narrative shared with model setup;
+- purposeful spatial motion for scene continuity and analysis status, without confetti or decorative AI theater.
 
 The feature is called **Connect recent work** in user-facing English and **接入最近的工作** in Chinese. Avoid naming the entry point “computer scan” or “disk scan”; those phrases foreground implementation risk instead of user value.
 
@@ -141,7 +142,7 @@ Re-entry is an ordinary feature action and does not reset first-run onboarding s
 
 ```mermaid
 flowchart TD
-  Config[Profile and model configured] --> Intro[Connect recent work]
+  Config[Call name, provider, and authorization configured] --> Intro[Connect recent work]
   Intro -->|Understand my work| Discover[Discover likely work folders]
   Intro -->|Choose folder manually| Pick[Native or gateway folder picker]
   Discover --> Create[Create or reuse Project and session]
@@ -153,8 +154,12 @@ flowchart TD
   Confirm -->|Change folder| Pick
   Create --> Analyze[Bounded local probe and model analysis]
   Native --> Context[AI personal-context synthesis]
-  Context --> Drawer[Global progress and memory review drawer]
-  Analyze --> Results[Three evidence-backed suggestions]
+  Context --> Center[Progressive Understanding Center]
+  Analyze --> Reveal[Understanding Reveal]
+  Reveal --> Summary[Confirm or correct current context]
+  Summary --> Memory[Review at most one durable understanding]
+  Memory --> Focus[Review at most one time-bounded focus]
+  Focus --> Results[Evidence-backed next step]
   Analyze -->|Cancel| Partial[Open Project chat with folder attached]
   Analyze -->|Failure| Partial
   Results -->|Continue| Session[Continue visible Project session]
@@ -164,7 +169,7 @@ flowchart TD
 
 ## Screen and State Specification
 
-The flow is a full-page focus surface inside the existing app shell. The content column is centered, approximately `40rem` wide, with generous vertical space. Avoid a large floating card around the entire flow. Use borders or quiet inset surfaces only for the selected path, consent summary, evidence, and actionable result rows.
+The flow is a full-screen focus surface that continues directly from model setup without revealing the normal app shell between stages. The content column is centered, approximately `40rem` wide, with generous vertical space. Avoid a large floating card around the entire flow. Use borders or quiet inset surfaces only for the selected path, consent summary, evidence, and actionable result rows. Scene transitions preserve the brand mark and ambient light field so setup, consent, analysis, and the first useful result feel like one product experience.
 
 ### 1. Introduction
 
@@ -232,7 +237,20 @@ Show the selected folder and a **Cancel analysis** action. Canceling stops addit
 
 If the user navigates away, analysis continues in the gateway. A small shell-level status item can link back to the run. Reloading the route restores persisted progress.
 
-### 4. Results
+### 4. Understanding Reveal
+
+The first result is not a dashboard. It is a full-screen sequence with one decision per scene:
+
+1. **Current context:** show one synthesized statement. Current state, work-thread labels, and evidence stay behind **Why do I think this?**.
+2. **Calibration:** offer only **Accurate** or **Adjust**. Adjustment requires the actual corrected intent; category labels are not accepted as substitutes for a correction.
+3. **Lasting understanding:** show only the highest-value pending candidate with **Remember**, **This time only**, and **Edit**. Numeric confidence is not shown.
+4. **Current focus:** show only the highest-value pending focus and state that focus affects prioritization and reminders, not execution authorization.
+
+Remaining candidates stay pending for later review. A single control note below the final candidate replaces a separate trust or completion screen. The flow enters the recommended next step immediately after the last necessary decision.
+
+Confirmed understanding uses Loop Blue. In-progress inference may use Momentum Cyan. Rejected candidates disappear quietly without celebration. Continuous motion is limited to active analysis; reading and decision scenes use one entrance transition and then remain still. All motion stops under reduced-motion preferences.
+
+### 5. Recommended next step
 
 The result begins with a short, editable interpretation:
 
@@ -264,7 +282,7 @@ Additional actions:
 
 Selecting **Continue** sends the suggestion's `actionPrompt` into the existing Project session. Selecting **Discuss first** opens the same session with a draft prompt that the user can edit.
 
-### 5. Low-confidence result
+### 6. Low-confidence result
 
 When the analyzer cannot infer credible next steps, do not fabricate specificity. Show what was understood, list the uncertainty, and ask one material question:
 
@@ -272,7 +290,7 @@ When the analyzer cannot infer credible next steps, do not fabricate specificity
 
 Suggested answers may use detected areas, but the user can always type freely. The normal chat remains available.
 
-### 6. Failure
+### 7. Failure
 
 Use a concise task and recovery:
 

@@ -455,6 +455,7 @@ disabled:bg-surface-hover disabled:text-fg-disabled disabled:cursor-not-allowed
 | 颜色/背景切换 | `transition-colors duration-150 ease-out` | 150ms | 悬浮、激活态切换 |
 | 尺寸/位移变化 | `transition-transform duration-200 ease-out` | 200ms | 展开/收起、位移 |
 | 弹窗/面板出现 | `transition-opacity transition-transform duration-300 ease-out` | 300ms | 模态框、抽屉 |
+| 首次体验场景切换 | narrative motion token | 400–500ms | 仅限 onboarding 的低频共享场景转场；必须可中断 |
 | 按压反馈 | `active:scale-95` | 即时 | 所有按钮和可点击卡片必须有 |
 | 微上浮 | `hover:-translate-y-0.5` | 配合 200ms | 卡片悬浮时的轻微上浮 |
 
