@@ -19,6 +19,7 @@ type UnderstandingActivityState = {
   status: ActivityStatus;
   drawerOpen: boolean;
   directoryStatus: SourceStatus;
+  directoryRun: WorkDiscoveryRun | null;
   sources: Record<string, SourceStatus>;
   itemCounts: Record<string, number>;
   memories: WorkDiscoveryProfileCandidate[];
@@ -62,6 +63,7 @@ const reset = {
   status: 'idle' as const,
   drawerOpen: false,
   directoryStatus: 'idle' as const,
+  directoryRun: null,
   sources: {},
   itemCounts: {},
   memories: [],
@@ -86,8 +88,11 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
     const hasPendingFocus = get().focuses.some((focus) => focus.status === 'candidate');
     set({
       directoryStatus,
+      directoryRun: run,
       status: directoryStatus === 'completed' && sourcesDone
-        ? hasPendingMemory || hasPendingFocus ? 'review_ready' : sourceFailed ? 'partial' : 'completed'
+        ? !run.feedback?.recognitionDecision || hasPendingMemory || hasPendingFocus
+          ? 'review_ready'
+          : sourceFailed ? 'partial' : 'completed'
         : directoryStatus === 'failed' && sourcesDone ? 'partial' : 'running',
     });
   },
