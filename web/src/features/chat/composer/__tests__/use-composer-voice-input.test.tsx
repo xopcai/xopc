@@ -109,6 +109,40 @@ describe('useComposerVoiceInput', () => {
     expect(mocks.showComposerNotification).toHaveBeenCalledTimes(1);
   });
 
+  it('does not call getUserMedia while macOS reauthorization settings are open', async () => {
+    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
+    const requestMicrophone = vi.fn(async () => ({
+      status: 'unknown' as const,
+      outcome: 'opened-settings' as const,
+    }));
+    window.electronAPI = {
+      platform: 'darwin',
+      system: { requestMicrophone },
+    } as unknown as NonNullable<Window['electronAPI']>;
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    function Harness() {
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await voice.startVoiceInput();
+    });
+
+    expect(requestMicrophone).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(voice.phase).toBe('idle');
+  });
+
   it('does not start a missing local model download when the microphone button is pressed', async () => {
     mocks.fetchVoiceReadiness.mockResolvedValue({
       state: 'needs_download',

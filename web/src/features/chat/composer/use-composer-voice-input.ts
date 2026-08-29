@@ -174,7 +174,9 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       const electronSystem = window.electronAPI?.system;
       if (electronSystem) {
         const permission = await electronSystem.requestMicrophone();
-        if (permission.status === 'denied') {
+        const requiresMacosReauthorization =
+          window.electronAPI?.platform === 'darwin' && permission.status !== 'granted';
+        if (permission.status === 'denied' || requiresMacosReauthorization) {
           throw new Error('Microphone permission denied');
         }
         if (phaseRef.current !== 'requesting') return;
