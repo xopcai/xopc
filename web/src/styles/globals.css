@@ -678,6 +678,84 @@ html.dark {
   animation-delay: -2.8s;
 }
 
+.xopc-source-convergence-field {
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--color-accent) 12%, transparent) 0,
+    color-mix(in oklab, var(--color-accent) 4%, transparent) 24%,
+    transparent 62%
+  );
+}
+
+.xopc-source-convergence-orbit {
+  transform: translate(-50%, -50%);
+  animation: xopc-source-convergence-orbit 14s linear infinite;
+}
+
+.xopc-source-convergence-orbit--outer {
+  width: min(29rem, 84vw);
+  aspect-ratio: 1.9;
+}
+
+.xopc-source-convergence-orbit--inner {
+  width: min(17rem, 54vw);
+  aspect-ratio: 1.45;
+  animation-direction: reverse;
+  animation-duration: 9s;
+}
+
+.xopc-source-convergence-signal {
+  z-index: 2;
+  transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y)));
+  animation: xopc-source-convergence-signal 5.7s var(--xopc-source-delay) cubic-bezier(.42, 0, .3, 1) infinite;
+}
+
+.xopc-source-convergence-signal::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-accent) 34%, transparent), transparent);
+  content: "";
+  opacity: 0;
+  transform: translate(-100%, -50%);
+}
+
+.xopc-source-convergence-chip {
+  animation: xopc-source-convergence-chip 5.7s var(--xopc-source-delay) ease-in-out infinite;
+}
+
+.xopc-source-convergence-core {
+  z-index: 4;
+}
+
+.xopc-source-convergence-core-glow {
+  background: radial-gradient(circle, color-mix(in oklab, var(--color-accent) 20%, transparent), transparent 68%);
+  animation: xopc-source-convergence-breathe 2.8s ease-in-out infinite;
+}
+
+.xopc-source-convergence-particles i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-accent) 60%, transparent);
+  animation: xopc-source-convergence-particle 3.8s ease-in-out infinite;
+}
+
+.xopc-source-convergence-particles i:nth-child(1) { --particle-x: -8rem; --particle-y: -4rem; animation-delay: -.2s; }
+.xopc-source-convergence-particles i:nth-child(2) { --particle-x: 7rem; --particle-y: -5rem; animation-delay: -.7s; }
+.xopc-source-convergence-particles i:nth-child(3) { --particle-x: 10rem; --particle-y: 2rem; animation-delay: -1.2s; }
+.xopc-source-convergence-particles i:nth-child(4) { --particle-x: 5rem; --particle-y: 6rem; animation-delay: -1.7s; }
+.xopc-source-convergence-particles i:nth-child(5) { --particle-x: -6rem; --particle-y: 7rem; animation-delay: -2.2s; }
+.xopc-source-convergence-particles i:nth-child(6) { --particle-x: -10rem; --particle-y: 2rem; animation-delay: -2.7s; }
+.xopc-source-convergence-particles i:nth-child(7) { --particle-x: 1rem; --particle-y: -8rem; animation-delay: -3.2s; }
+.xopc-source-convergence-particles i:nth-child(8) { --particle-x: -2rem; --particle-y: 8rem; animation-delay: -3.7s; }
+
 @keyframes xopc-onboarding-dialog-in {
   from { opacity: 0; transform: scale(1.018); }
   to { opacity: 1; transform: scale(1); }
@@ -709,8 +787,8 @@ html.dark {
 }
 
 @keyframes xopc-understanding-center-in {
-  from { opacity: 0; transform: translate(-50%, -48%) scale(0.975); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: scale(0.975); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes xopc-reveal-scene-in {
@@ -739,6 +817,63 @@ html.dark {
   50% { transform: translate3d(0, -6px, 0); }
 }
 
+@keyframes xopc-source-convergence-orbit {
+  from { transform: translate(-50%, -50%) rotate(0deg) scale(.98); }
+  50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.03); }
+  to { transform: translate(-50%, -50%) rotate(360deg) scale(.98); }
+}
+
+@keyframes xopc-source-convergence-signal {
+  0%, 18% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y))) scale(.82);
+  }
+  28%, 54% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y))) scale(1);
+  }
+  88% {
+    opacity: .72;
+    transform: translate(-50%, -50%) scale(.48);
+  }
+  92%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.22);
+  }
+}
+
+@keyframes xopc-source-convergence-chip {
+  0%, 48% { box-shadow: var(--shadow-elevated); }
+  68% { border-color: color-mix(in oklab, var(--color-accent) 42%, var(--color-edge)); }
+  100% { box-shadow: 0 0 20px color-mix(in oklab, var(--color-accent) 22%, transparent); }
+}
+
+@keyframes xopc-source-convergence-breathe {
+  0%, 100% { opacity: .58; transform: scale(.86); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@keyframes xopc-source-convergence-particle {
+  0% { opacity: 0; transform: translate(var(--particle-x), var(--particle-y)) scale(.5); }
+  24% { opacity: .8; }
+  82% { opacity: .35; }
+  100% { opacity: 0; transform: translate(0, 0) scale(1.35); }
+}
+
+@media (max-width: 480px) {
+  .xopc-source-convergence-signal[data-position="0"] { --xopc-source-x: -8.2rem !important; --xopc-source-y: -5.6rem !important; }
+  .xopc-source-convergence-signal[data-position="1"] { --xopc-source-x: -1.8rem !important; --xopc-source-y: -7.6rem !important; }
+  .xopc-source-convergence-signal[data-position="2"] { --xopc-source-x: 7.5rem !important; --xopc-source-y: -5rem !important; }
+  .xopc-source-convergence-signal[data-position="3"] { --xopc-source-x: 8.6rem !important; --xopc-source-y: 3.5rem !important; }
+  .xopc-source-convergence-signal[data-position="4"] { --xopc-source-x: 2.2rem !important; --xopc-source-y: 7.4rem !important; }
+  .xopc-source-convergence-signal[data-position="5"] { --xopc-source-x: -7.8rem !important; --xopc-source-y: 5.5rem !important; }
+
+  .xopc-source-convergence-chip {
+    max-width: 7.5rem;
+    padding: .42rem .6rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .xopc-onboarding-dialog,
   .xopc-onboarding-orbit,
@@ -754,8 +889,18 @@ html.dark {
   .xopc-reveal-calibration,
   .xopc-understanding-constellation,
   .xopc-constellation-orbit,
-  .xopc-constellation-node {
+  .xopc-constellation-node,
+  .xopc-source-convergence-orbit,
+  .xopc-source-convergence-signal,
+  .xopc-source-convergence-chip,
+  .xopc-source-convergence-core-glow,
+  .xopc-source-convergence-particles i {
     animation: none;
+  }
+
+  .xopc-source-convergence-signal {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y)));
   }
 }
 

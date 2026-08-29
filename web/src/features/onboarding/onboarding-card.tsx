@@ -299,9 +299,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           <div className="xopc-onboarding-orbit relative flex size-40 items-center justify-center" aria-hidden>
             <span className="xopc-onboarding-orbit-ring absolute inset-0 rounded-full border border-accent/15" />
             <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[18%] rounded-full border border-edge" />
-            <span className="flex size-16 items-center justify-center rounded-[1.4rem] border border-edge bg-surface-panel shadow-float lg:size-20">
-              <BrandLogo className="size-10 lg:size-12" />
-            </span>
+            <BrandLogo className="size-10 lg:size-12" />
           </div>
         </section>
 

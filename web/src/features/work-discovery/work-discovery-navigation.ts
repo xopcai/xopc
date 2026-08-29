@@ -1,4 +1,13 @@
 export const WORK_DISCOVERY_OVERLAY_PARAM = 'workDiscovery';
+export const WORK_SERVICE_CONNECT_PATH = '/connectors?understanding=1&returnTo=%2Fonboarding%2Fworkspace';
+
+export function openWorkServiceConnection(
+  navigate: (path: string) => unknown,
+  onNavigateAway?: () => void,
+): void {
+  onNavigateAway?.();
+  navigate(WORK_SERVICE_CONNECT_PATH);
+}
 
 export function isWorkDiscoveryOverlaySearch(search: string): boolean {
   return new URLSearchParams(search).get(WORK_DISCOVERY_OVERLAY_PARAM) === 'new';
