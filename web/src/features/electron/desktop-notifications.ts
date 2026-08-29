@@ -11,7 +11,7 @@ export async function enableDesktopNotificationsWithTest(
   if (!isElectron() || !system?.requestNotifications) return 'unsupported';
   const result = await system.requestNotifications();
   if (result.status !== 'granted') {
-    if (result.task === 'opened-settings' || result.status === 'denied') return 'denied';
+    if (result.outcome === 'opened-settings' || result.status === 'denied') return 'denied';
     return 'default';
   }
   await system.setBehavior({ notifyEnabled: true });
