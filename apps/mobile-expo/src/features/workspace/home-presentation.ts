@@ -5,6 +5,14 @@ export type HomeContinueCandidate<T> = {
   updatedAt: number;
 };
 
+export type HomeGreetingPeriod = 'morning' | 'afternoon' | 'evening';
+
+export function homeGreetingPeriod(hour: number): HomeGreetingPeriod {
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+}
+
 const RECENT_USER_ACTIVITY_MS = 24 * 60 * 60 * 1_000;
 
 function continueTier<T>(candidate: HomeContinueCandidate<T>, nowMs: number): number {

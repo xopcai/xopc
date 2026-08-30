@@ -68,8 +68,8 @@ const PLANS: Record<string, ConnectorLearningPlan> = {
     streams: [{
       scope: 'messages', actionId: 'GMAIL_FETCH_EMAILS', kind: 'activity',
       arguments: {
-        max_results: 100,
-        include_payload: false,
+        max_results: 30,
+        include_payload: true,
         verbose: false,
         query: 'newer_than:30d -in:spam -in:trash',
       },

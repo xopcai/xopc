@@ -23,7 +23,7 @@ import { useOptionalWorkspaceTransition } from './workspace-transition-context';
 import type { FinalizeAskAiHandler } from './workspace-transition.types';
 
 export type WorkspaceNavigationValue = {
-  openAskAi: () => void;
+  openAskAi: (agentId?: string) => void;
   retryAskAi: () => void;
   dismissAskAiError: () => void;
   isOpeningAskAi: boolean;
@@ -45,6 +45,7 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
   const m = useMessages();
   const [askAiState, dispatchAskAi] = useReducer(reduceOperationState, idleOperationState);
   const openingAskAiRef = useRef(false);
+  const lastAgentIdRef = useRef<string | undefined>(undefined);
 
   const prefetchAskAiSession = useCallback(() => {
     prefetchNewChatSession(defaultAgentId);
@@ -57,12 +58,14 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
     [transition],
   );
 
-  const openAskAi = useCallback(() => {
+  const openAskAi = useCallback((agentId?: string) => {
     if (openingAskAiRef.current) return;
+    const targetAgentId = agentId?.trim() || defaultAgentId;
+    lastAgentIdRef.current = targetAgentId;
     openingAskAiRef.current = true;
     dispatchAskAi({ type: 'start' });
 
-    void takeNewChatSessionKey(defaultAgentId)
+    void takeNewChatSessionKey(targetAgentId)
       .then((sessionKey) => {
         openChat(router, sessionKey);
         dispatchAskAi({ type: 'succeed' });
@@ -76,7 +79,7 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
   }, [defaultAgentId, m.homePage.askAiStartFailed, router]);
 
   const retryAskAi = useCallback(() => {
-    openAskAi();
+    openAskAi(lastAgentIdRef.current);
   }, [openAskAi]);
 
   const dismissAskAiError = useCallback(() => {
@@ -110,12 +113,15 @@ export function useWorkspaceNavigation(): WorkspaceNavigationValue {
   const m = useMessages();
   const [askAiState, dispatchAskAi] = useReducer(reduceOperationState, idleOperationState);
   const openingAskAiRef = useRef(false);
+  const lastAgentIdRef = useRef<string | undefined>(undefined);
 
-  const openAskAi = useCallback(() => {
+  const openAskAi = useCallback((agentId?: string) => {
     if (openingAskAiRef.current) return;
+    const targetAgentId = agentId?.trim() || defaultAgentId;
+    lastAgentIdRef.current = targetAgentId;
     openingAskAiRef.current = true;
     dispatchAskAi({ type: 'start' });
-    void takeNewChatSessionKey(defaultAgentId)
+    void takeNewChatSessionKey(targetAgentId)
       .then((sessionKey) => {
         openChat(router, sessionKey);
         dispatchAskAi({ type: 'succeed' });
@@ -132,7 +138,7 @@ export function useWorkspaceNavigation(): WorkspaceNavigationValue {
     () =>
       ctx ?? {
         openAskAi,
-        retryAskAi: openAskAi,
+        retryAskAi: () => openAskAi(lastAgentIdRef.current),
         dismissAskAiError: () => dispatchAskAi({ type: 'dismiss' }),
         isOpeningAskAi: askAiState.status === 'pending',
         askAiError: askAiState.status === 'error' ? askAiState.message : null,

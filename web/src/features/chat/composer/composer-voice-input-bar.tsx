@@ -49,6 +49,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
   const transcribing = phase === 'transcribing';
   const preparing = phase === 'preparing';
   const requesting = phase === 'requesting';
+  const starting = phase === 'starting';
   const failed = phase === 'error';
   const progress = typeof readiness.progress === 'number'
     ? Math.round(Math.max(0, Math.min(1, readiness.progress)) * 100)
@@ -64,6 +65,8 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
       ? preparingStatus
       : requesting
         ? m.voiceRequestingMicrophone
+        : starting
+          ? m.voiceStartingMicrophone
         : transcribing
           ? m.voiceTranscribing
           : m.voiceRecordingStatus;

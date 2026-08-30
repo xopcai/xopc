@@ -1,15 +1,19 @@
 import { createHash } from 'node:crypto';
-import { readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, join, relative } from 'node:path';
 
 import { resolvePersonalWorkRoots } from '../../src/work-discovery/candidate-discovery.js';
+import { extractDocumentText } from '../../src/document-understanding/extract.js';
 import type { UnderstandingSourceItem } from '../../src/user-context/sources/types.js';
 
 const SOURCE_ID = 'local-recent-files';
 const MAX_ITEMS = 200;
 const MAX_ENTRIES_PER_DIRECTORY = 250;
 const MAX_DEPTH = 2;
+const MAX_CONTENT_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_ITEM_TEXT_CHARS = 12_000;
+const MAX_TOTAL_TEXT_CHARS = 120_000;
 const DAY_MS = 86_400_000;
 
 const DOCUMENT_EXTENSIONS = new Set([
@@ -53,7 +57,7 @@ export async function collectRecentFileItems(
   const environment = options.environment ?? process.env;
   const nowMs = options.nowMs ?? Date.now();
   const roots = await resolvePersonalWorkRoots(homeDirectory, platform, environment);
-  const collected: Array<{ item: UnderstandingSourceItem; modifiedAt: number }> = [];
+  const collected: Array<{ item: UnderstandingSourceItem; modifiedAt: number; path: string; size: number }> = [];
 
   const visit = async (root: string, directory: string, depth: number): Promise<void> => {
     const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
@@ -72,6 +76,8 @@ export async function collectRecentFileItems(
       const id = itemId(path);
       collected.push({
         modifiedAt: info.mtimeMs,
+        path,
+        size: info.size,
         item: {
           id,
           sourceId: SOURCE_ID,
@@ -88,8 +94,22 @@ export async function collectRecentFileItems(
   };
 
   await Promise.all(roots.map((root) => visit(root, root, 0)));
-  return collected
+  const recent = collected
     .sort((left, right) => right.modifiedAt - left.modifiedAt || left.item.title.localeCompare(right.item.title))
-    .slice(0, MAX_ITEMS)
-    .map(({ item }) => item);
+    .slice(0, MAX_ITEMS);
+  let remaining = MAX_TOTAL_TEXT_CHARS;
+  const items: UnderstandingSourceItem[] = [];
+  for (const candidate of recent) {
+    let text = '';
+    if (remaining > 0 && candidate.size <= MAX_CONTENT_FILE_BYTES) {
+      const buffer = await readFile(candidate.path).catch(() => null);
+      if (buffer) {
+        const extracted = extractDocumentText({ buffer, fileName: candidate.item.title });
+        if (extracted.ok) text = extracted.text.slice(0, Math.min(MAX_ITEM_TEXT_CHARS, remaining)).trim();
+      }
+    }
+    remaining -= text.length;
+    items.push({ ...candidate.item, ...(text ? { text } : {}) });
+  }
+  return items;
 }

@@ -2,6 +2,7 @@ export const LOCAL_UNDERSTANDING_SOURCE_IDS = [
   'local-recent-files',
   'chromium-bookmarks',
   'apple-notes',
+  'apple-mail',
   'apple-calendar',
   'apple-reminders',
   'windows-recent-documents',

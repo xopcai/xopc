@@ -90,7 +90,7 @@ export function UnderstandingStatusButton({
     && !state.directoryRun.feedback?.recognitionDecision;
   const sourceStatuses = Object.values(state.sources);
   const completeSources = sourceStatuses.filter((status) => status === 'completed').length;
-  const unavailableSources = sourceStatuses.filter((status) => status === 'failed' || status === 'denied').length;
+  const unavailableSources = sourceStatuses.filter((status) => status === 'failed' || status === 'denied' || status === 'partial').length;
 
   const reviewMemory = async (accepted: boolean) => {
     if (!pendingMemory?.understandingId) return;

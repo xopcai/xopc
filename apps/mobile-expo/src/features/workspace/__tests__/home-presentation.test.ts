@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { mobileRouteForHomeHref, rankHomeContinueCandidates } from '../home-presentation';
+import {
+  homeGreetingPeriod,
+  mobileRouteForHomeHref,
+  rankHomeContinueCandidates,
+} from '../home-presentation';
 
 describe('home presentation', () => {
   it('prefers recently used content over background work and removes the focused item', () => {
@@ -12,6 +16,15 @@ describe('home presentation', () => {
     ], 'note:1', now);
 
     expect(ranked).toEqual(['session', 'workflow']);
+  });
+
+  it('uses stable day periods for the workspace greeting', () => {
+    expect(homeGreetingPeriod(0)).toBe('morning');
+    expect(homeGreetingPeriod(11)).toBe('morning');
+    expect(homeGreetingPeriod(12)).toBe('afternoon');
+    expect(homeGreetingPeriod(17)).toBe('afternoon');
+    expect(homeGreetingPeriod(18)).toBe('evening');
+    expect(homeGreetingPeriod(23)).toBe('evening');
   });
 
   it('maps every home target to its concrete native destination', () => {

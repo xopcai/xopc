@@ -26,6 +26,8 @@ export const queryKeys = {
   workspaceDir: (scope: string, dir: string) => ['workspace', 'dir', scope, dir] as const,
   notes: (query?: string) => ['notes', query?.trim() ?? ''] as const,
   notesAll: ['notes'] as const,
+  homeRecentNotes: ['notes', 'home-recent'] as const,
+  homeInboxCount: ['notes', 'home-inbox-count'] as const,
   workspaceSearch: (query: string) => ['workspace-search', query.trim()] as const,
   note: (id: string) => ['note', id] as const,
   projects: ['projects'] as const,

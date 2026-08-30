@@ -83,4 +83,31 @@ describe('UnderstandingReveal', () => {
     );
     expect(onFinish).not.toHaveBeenCalled();
   });
+
+  it('records a low-confidence conversation starter as corrected intent', async () => {
+    const onStartConversation = vi.fn(async () => true);
+    act(() => {
+      root.render(
+        <UnderstandingReveal
+          run={{ ...run, result: { ...run.result!, lowConfidence: true, conversationStarter: 'Explain the current work.' } }}
+          sourceMemories={[]}
+          focuses={[]}
+          activityRunning={false}
+          language="en"
+          busy={false}
+          error={null}
+          onReviewMemory={async () => true}
+          onReviewFocus={async () => true}
+          onFinish={async () => true}
+          onStartConversation={onStartConversation}
+        />,
+      );
+    });
+
+    const startButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Start conversation');
+    await act(async () => startButton?.click());
+
+    expect(onStartConversation).toHaveBeenCalledWith('Explain the current work.', 'corrected');
+  });
 });

@@ -13,7 +13,7 @@ import {
 } from './api';
 
 type ActivityStatus = 'idle' | 'running' | 'review_ready' | 'completed' | 'partial';
-type SourceStatus = 'idle' | 'running' | 'completed' | 'denied' | 'failed' | 'skipped';
+type SourceStatus = 'idle' | 'running' | 'completed' | 'partial' | 'denied' | 'failed' | 'skipped';
 
 type UnderstandingActivityState = {
   status: ActivityStatus;
@@ -83,7 +83,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
     const directoryStatus: SourceStatus = run.status === 'completed'
       ? 'completed' : run.status === 'failed' || run.status === 'canceled' ? 'failed' : 'running';
     const sourcesDone = Object.values(get().sources).every((status) => status !== 'running' && status !== 'idle');
-    const sourceFailed = Object.values(get().sources).some((status) => status === 'denied' || status === 'failed');
+    const sourceFailed = Object.values(get().sources).some((status) => status === 'denied' || status === 'failed' || status === 'partial');
     const hasPendingMemory = get().memories.some((memory) => memory.status === 'pending');
     const hasPendingFocus = get().focuses.some((focus) => focus.status === 'candidate');
     set({
@@ -118,13 +118,18 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       if (items.length) await waitForDirectoryUnderstanding(workDiscoveryRunId);
       const understanding = items.length
         ? await importUnderstandingSources(items, workDiscoveryRunId, sourceCheckpoints)
-        : { profileCandidates: [], workThreads: [], focuses: [] };
+        : { profileCandidates: [], workThreads: [], focuses: [], sourceStatuses: [] };
+      for (const sourceStatus of understanding.sourceStatuses) {
+        sources[sourceStatus.sourceId] = sourceStatus.status;
+      }
       const memories = understanding.profileCandidates;
       const focuses = understanding.focuses;
-      const hasFailure = Object.values(sources).some((status) => status === 'denied' || status === 'failed');
+      const hasFailure = Object.values(sources).some((status) => status === 'denied' || status === 'failed' || status === 'partial');
+      const analysisErrors = understanding.sourceStatuses.flatMap((item) => item.error ? [item.error] : []);
       const directoryDone = !workDiscoveryRunId || get().directoryStatus === 'completed';
       set({
         sources, itemCounts, memories, threads: understanding.workThreads, focuses,
+        ...(analysisErrors.length ? { error: analysisErrors.join('; ') } : {}),
         status: !directoryDone ? 'running'
           : memories.some((memory) => memory.status === 'pending') || focuses.some((focus) => focus.status === 'candidate') ? 'review_ready'
             : hasFailure ? 'partial' : 'completed',
@@ -149,7 +154,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         return {
           memories,
           status: memories.some((memory) => memory.status === 'pending') || state.focuses.some((focus) => focus.status === 'candidate') ? 'review_ready'
-            : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed') ? 'partial' : 'completed',
+            : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed' || source === 'partial') ? 'partial' : 'completed',
           error: undefined,
         };
       });
@@ -169,7 +174,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         return {
           focuses,
           status: reviewReady ? 'review_ready'
-            : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed') ? 'partial' : 'completed',
+            : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed' || source === 'partial') ? 'partial' : 'completed',
           error: undefined,
         };
       });
