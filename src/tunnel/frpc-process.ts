@@ -57,6 +57,9 @@ export function spawnFrpcProcess(frpcBin: string, configPath: string): FrpcProce
   });
 
   child.on('exit', (code, signal) => {
+    loginReject?.(new Error(`frpc exited before login (code=${code ?? 'null'}, signal=${signal ?? 'null'})`));
+    loginResolve = undefined;
+    loginReject = undefined;
     for (const h of exitHandlers) h(code, signal);
   });
 
