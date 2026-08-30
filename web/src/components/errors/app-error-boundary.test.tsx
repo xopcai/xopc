@@ -12,7 +12,8 @@ vi.mock('@/lib/build-info', () => ({
   },
 }));
 
-import { AppErrorBoundary, AppErrorFallback, buildAppErrorReport } from './app-error-boundary';
+import { AppErrorBoundary, AppErrorFallback } from './app-error-boundary';
+import { buildAppErrorReport } from './app-error-boundary.utils';
 
 describe('AppErrorFallback', () => {
   let container: HTMLDivElement;
