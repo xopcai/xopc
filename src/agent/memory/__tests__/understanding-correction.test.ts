@@ -101,7 +101,7 @@ describe('understanding correction attribution', () => {
 
     await coordinator.prepare({
       role: 'user',
-      content: [{ type: 'text', text: '普通问题' }],
+      content: [{ type: 'text', text: '请按我的偏好回答。' }],
     } as AgentMessage, sessionKey, 'previous-turn');
     await coordinator.prepare({
       role: 'user',

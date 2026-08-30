@@ -29,6 +29,7 @@ export type SessionAgentConfig = {
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  userContextMode: 'enabled' | 'off' | 'temporary';
 };
 
 function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
@@ -53,6 +54,7 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     typeof payload.reasoningLevel !== 'string' ||
     typeof payload.effectiveWorkspacePath !== 'string' ||
     typeof payload.workingDirectoryLocked !== 'boolean' ||
+    (payload.userContextMode !== 'enabled' && payload.userContextMode !== 'off' && payload.userContextMode !== 'temporary') ||
     (workspaceSource !== 'project' &&
       workspaceSource !== 'session_override' &&
       workspaceSource !== 'agent_default_root' &&
@@ -83,6 +85,7 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
         },
     effectiveWorkspacePath: payload.effectiveWorkspacePath,
     workingDirectoryLocked: payload.workingDirectoryLocked,
+    userContextMode: payload.userContextMode,
     workspaceSource,
   };
 }
@@ -200,6 +203,7 @@ export class SessionManager {
       thinkingLevel?: string;
       model?: string | null;
       workingDirectory?: string;
+      userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ): Promise<void> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
@@ -330,12 +334,13 @@ export class SessionManager {
     return pending;
   }
 
-  async createSession(options?: { agentId?: string; projectId?: string | null }): Promise<SessionInfo> {
+  async createSession(options?: { agentId?: string; projectId?: string | null; temporary?: boolean }): Promise<SessionInfo> {
     const body: Record<string, unknown> = { channel: 'webchat' };
     const raw = options?.agentId?.trim();
     if (raw) body.agentId = raw.toLowerCase();
     const projectId = options?.projectId?.trim();
     if (projectId) body.projectId = projectId;
+    if (options?.temporary === true) body.temporary = true;
     const res = await apiFetch(apiUrl('/api/sessions'), {
       method: 'POST',
       body: JSON.stringify(body),

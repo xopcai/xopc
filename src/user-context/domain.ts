@@ -77,7 +77,7 @@ export type CollaborationRule = {
 };
 
 export type PersonalizationItem = {
-  objectType: 'profile' | 'rule' | 'understanding';
+  objectType: 'profile' | 'rule' | 'focus' | 'understanding';
   objectId: string;
   versionId?: string;
   decision: 'selected' | 'irrelevant' | 'expired' | 'scope_mismatch' | 'sensitive'
@@ -85,6 +85,7 @@ export type PersonalizationItem = {
   reason: string;
   content: string;
   sourceLabel: string;
+  origin: 'told_by_user' | 'observed' | 'inferred' | 'connected_source';
   rank?: number;
   score?: number;
   injectedChars: number;
@@ -95,8 +96,19 @@ export type ContextEvidence = {
   sourceType: 'conversation' | 'connector' | 'user' | 'runtime';
   sourceInstanceId?: string;
   sourceRef: string;
+  sourceRunId?: string;
+  sourceItemId?: string;
+  sessionId?: string;
+  turnId?: string;
+  messageId?: string;
+  contentHash?: string;
+  retentionPolicy?: 'metadata_only' | 'derived_only' | 'bounded_raw';
+  processingPolicy?: 'local_only' | 'remote_allowed';
+  extractorId?: string;
+  extractorVersion?: string;
   redactedExcerpt?: string;
   trustLevel: 'owner' | 'trusted' | 'untrusted';
   observedAt: number;
+  ingestedAt: number;
   createdAt: number;
 };

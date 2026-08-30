@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import type { ElectronUnderstandingSourceCollectionResult } from '@/types/electron';
-import { updateUnderstanding, updateUserFocusStatus, type UserFocus } from '@/features/user-context/user-context-api';
+import { updateUnderstanding, updateUserFocus, type UserFocus } from '@/features/user-context/user-context-api';
 
 import {
   fetchWorkDiscoveryRun,
@@ -165,7 +165,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
   },
   reviewFocus: async (focusId, accepted) => {
     try {
-      await updateUserFocusStatus(focusId, accepted ? 'active' : 'rejected');
+      await updateUserFocus(focusId, { status: accepted ? 'active' : 'rejected' });
       set((state) => {
         const focuses = state.focuses.map((focus) => focus.id === focusId
           ? { ...focus, status: accepted ? 'active' as const : 'rejected' as const } : focus);

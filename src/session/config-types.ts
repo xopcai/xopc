@@ -19,6 +19,6 @@ export interface SessionAgentConfig {
   providerOverride?: string;
   workingDirectoryOverride?: string;
   responseLanguage?: ResponseLanguage;
-  userContextMode?: 'enabled' | 'off';
+  userContextMode?: 'enabled' | 'off' | 'temporary';
   updatedAt?: number;
 }

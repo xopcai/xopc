@@ -56,13 +56,18 @@ export async function resolveNewChatTarget(opts: {
   projectId?: string | null;
   currentSessionKey?: string | null;
   forceNew?: boolean;
+  temporary?: boolean;
 }): Promise<NewChatResolution> {
   const agentId = normalizeAgentId(opts.agentId);
   const projectId = opts.projectId?.trim() || undefined;
   const current = opts.currentSessionKey?.trim() || null;
 
-  if (opts.forceNew) {
-    const session = await opts.sessionMgr.createSession({ agentId, projectId });
+  if (opts.forceNew || opts.temporary) {
+    const session = await opts.sessionMgr.createSession({
+      agentId,
+      ...(projectId ? { projectId } : {}),
+      ...(opts.temporary ? { temporary: true } : {}),
+    });
     return { kind: 'create', sessionKey: session.key, session };
   }
 

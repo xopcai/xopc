@@ -19,6 +19,10 @@ const rememberCommand: CommandDefinition = {
   acceptsArgs: true,
   examples: ['/remember I prefer concise updates', '/remember --session This chat is about launch planning'],
   handler: async (ctx: CommandContext, args: string) => {
+    const mode = (await ctx.getSessionConfigStore?.().get(ctx.sessionKey))?.userContextMode;
+    if (mode === 'temporary') {
+      return { content: 'This conversation is temporary, so it cannot save user understanding.', success: false };
+    }
     const { content, sessionOnly } = parseRememberArgs(args);
     if (!content || content.length > 5_000) {
       return { content: 'Usage: /remember [--session] <what xopc should know> (max 5000 characters)', success: false };
@@ -45,26 +49,31 @@ const learningCommand: CommandDefinition = {
   id: 'understanding.learning',
   name: 'learning',
   aliases: ['learn'],
-  description: 'Control user-understanding context and learning for this conversation (on | off | status)',
+  description: 'Control user-understanding context and learning for this conversation (on | off | temporary | status)',
   category: 'session',
   scope: ['private'],
   acceptsArgs: true,
-  examples: ['/learning off', '/learning on', '/learning status'],
+  examples: ['/learning temporary', '/learning off', '/learning on', '/learning status'],
   handler: async (ctx: CommandContext, args: string) => {
     const store = ctx.getSessionConfigStore?.();
     if (!store) return { content: 'Session settings are unavailable here.', success: false };
     const action = args.trim().toLowerCase() || 'status';
-    if (!['on', 'off', 'status'].includes(action)) {
-      return { content: 'Usage: /learning on | off | status', success: false };
+    if (!['on', 'off', 'temporary', 'status'].includes(action)) {
+      return { content: 'Usage: /learning on | off | temporary | status', success: false };
     }
     if (action !== 'status') {
-      await store.update(ctx.sessionKey, { userContextMode: action === 'off' ? 'off' : 'enabled' });
+      await store.update(ctx.sessionKey, {
+        userContextMode: action === 'on' ? 'enabled' : action as 'off' | 'temporary',
+      });
     }
     const globallyEnabled = ctx.config.userContext.enabled;
-    const enabled = globallyEnabled && (await store.get(ctx.sessionKey))?.userContextMode !== 'off';
+    const mode = (await store.get(ctx.sessionKey))?.userContextMode ?? 'enabled';
+    const enabled = globallyEnabled && mode === 'enabled';
     return {
       content: enabled
         ? 'User understanding is enabled for this conversation.'
+        : globallyEnabled && mode === 'temporary'
+          ? 'This is a temporary conversation. Stored user context is not read, and this conversation does not update user understanding.'
         : globallyEnabled
           ? 'User understanding is off for this conversation. Existing chat history is still stored; use /remember for anything you explicitly want saved.'
           : 'User understanding is disabled globally. Existing chat history is still stored.',

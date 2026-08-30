@@ -185,6 +185,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       if (projectId) {
         service.projects.attachSession(sessionKey, projectId);
       }
+      if (body.temporary === true) {
+        await service.sessions.patchAgentConfig(sessionKey, { userContextMode: 'temporary' });
+      }
       const session = await service.sessions.getSession(sessionKey);
       return c.json({ session }, 201);
     }
@@ -209,6 +212,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
     if (projectId) {
       service.projects.attachSession(sessionKey, projectId);
+    }
+    if (body.temporary === true) {
+      await service.sessions.patchAgentConfig(sessionKey, { userContextMode: 'temporary' });
     }
     const session = await service.sessions.getSession(sessionKey);
     return c.json({ session }, 201);

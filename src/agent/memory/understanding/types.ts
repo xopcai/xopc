@@ -26,4 +26,10 @@ export interface UnderstandingReviewResult {
     kind: UnderstandingKind;
     status: UserUnderstanding['status'];
   }>;
+  writeOutputs?: Array<{
+    candidateKey: string;
+    objectId?: string;
+    versionId?: string;
+    outcome: 'created' | 'deduplicated' | 'rejected';
+  }>;
 }

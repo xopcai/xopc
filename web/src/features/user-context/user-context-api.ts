@@ -57,24 +57,9 @@ export type CollaborationRule = {
 export type UserContextResponse = {
   profile: UserProfile;
   understandings: UserUnderstanding[];
+  focuses: UserFocus[];
   rules: CollaborationRule[];
   consolidation: { lastRun: ContextConsolidationRun | null };
-  quality: UserUnderstandingQuality;
-};
-
-export type UserUnderstandingQuality = {
-  windowDays: number;
-  records: { total: number; candidate: number; active: number; needsReview: number; agingCandidates: number };
-  decisions: { total: number; acceptanceRate: number | null };
-  recall: { total: number; helpfulRate: number | null };
-  quickUnderstanding: {
-    sourcesAuthorized: number;
-    sourcesCollected: number;
-    sourceCoverage: number | null;
-    bootstrapJobs: number;
-    successfulBootstrapRate: number | null;
-    medianBootstrapDurationMs: number | null;
-  };
 };
 
 export type ContextConsolidationRun = {
@@ -136,11 +121,23 @@ export type ConnectedContentCandidate = {
 
 export type UserFocus = {
   id: string;
+  versionId: string;
+  principalId: string;
   title: string;
   summary: string;
   horizon: 'current' | 'ongoing' | 'long_term';
   status: 'candidate' | 'active' | 'paused' | 'completed' | 'rejected';
   confidence: number;
+  scope: UserContextScope;
+  explicitness: UserUnderstanding['explicitness'];
+  sensitivity: UserUnderstanding['sensitivity'];
+  disclosurePolicy: UserUnderstanding['disclosurePolicy'];
+  validFrom?: number;
+  validTo?: number;
+  reviewAt?: number;
+  evidenceRefs: string[];
+  sourceRunId?: string;
+  createdAt: number;
   updatedAt: number;
 };
 
@@ -259,26 +256,35 @@ export function readConnectedContent(sourceItemIds: string[]): Promise<{
   });
 }
 
-export function revokeUnderstandingSourceGrant(grantId: string): Promise<{ grant: UnderstandingSourceGrant }> {
-  return fetchJson(apiUrl(`/api/understanding/sources/grants/${encodeURIComponent(grantId)}?deleteDerived=true`), { method: 'DELETE' });
+export type SourceRevocationImpact = {
+  derivedCount: number;
+  understandingCount: number;
+  focusCount: number;
+  boundedRawCount: number;
+};
+
+export function fetchUnderstandingSourceRevocationImpact(grantId: string): Promise<{ impact: SourceRevocationImpact }> {
+  return fetchJson(apiUrl(`/api/understanding/sources/grants/${encodeURIComponent(grantId)}/impact`));
+}
+
+export function revokeUnderstandingSourceGrant(
+  grantId: string,
+  options: { derived: 'delete' | 'retain'; raw: 'delete' | 'retain' },
+): Promise<{ grant: UnderstandingSourceGrant; impact: SourceRevocationImpact }> {
+  const query = new URLSearchParams(options);
+  return fetchJson(apiUrl(`/api/understanding/sources/grants/${encodeURIComponent(grantId)}?${query}`), { method: 'DELETE' });
 }
 
 export function refreshUnderstandingSourceGrant(grantId: string): Promise<unknown> {
   return fetchJson(apiUrl(`/api/understanding/sources/grants/${encodeURIComponent(grantId)}/refresh`), { method: 'POST' });
 }
 
-export async function fetchUserFocuses(): Promise<UserFocus[]> {
-  const response = await fetchJson<{ focuses: UserFocus[] }>(apiUrl('/api/understanding/focuses'));
-  return response.focuses;
-}
-
-export function updateUserFocusStatus(focusId: string, status: UserFocus['status']): Promise<{ focus: UserFocus }> {
+export function updateUserFocus(
+  focusId: string,
+  patch: Partial<Pick<UserFocus, 'title' | 'summary' | 'status'>>,
+): Promise<{ focus: UserFocus }> {
   return fetchJson(apiUrl(`/api/understanding/focuses/${encodeURIComponent(focusId)}`), {
     method: 'PATCH',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(patch),
   });
-}
-
-export function deleteUserFocus(focusId: string): Promise<{ ok: true }> {
-  return fetchJson(apiUrl(`/api/understanding/focuses/${encodeURIComponent(focusId)}`), { method: 'DELETE' });
 }
