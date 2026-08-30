@@ -54,6 +54,10 @@ export async function updateTask(
   return fetchTask(taskId);
 }
 
+export async function deleteTask(taskId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}`), { method: 'DELETE' });
+}
+
 export async function commandTask(
   taskId: string,
   command: TaskCommand,
@@ -62,6 +66,18 @@ export async function commandTask(
   await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/commands`), {
     method: 'POST',
     body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), expectedVersion, command }),
+  });
+  return fetchTask(taskId);
+}
+
+export async function cancelTaskRun(
+  taskId: string,
+  runId: string,
+  expectedVersion: number,
+): Promise<TaskDetail> {
+  await fetchJson(apiUrl(`/api/task-runs/${encodeURIComponent(runId)}/cancel`), {
+    method: 'POST',
+    body: JSON.stringify({ expectedVersion, reason: 'Cancelled by user' }),
   });
   return fetchTask(taskId);
 }

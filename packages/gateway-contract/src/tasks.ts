@@ -48,6 +48,11 @@ export const TaskChangedEventSchema = z.object({
   actorId: z.string().min(1).optional(),
   occurredAt: z.number().int().nonnegative(),
 });
+export const TaskDeletedEventSchema = z.object({
+  taskId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+  deletedAt: z.number().int().nonnegative(),
+});
 export const TaskAcceptancePolicySchema = z.enum([
   'verified_auto',
   'verified_then_review',
@@ -405,6 +410,7 @@ export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
 export type TaskPatchRequest = z.infer<typeof TaskPatchRequestSchema>;
 export type TaskChangedField = z.infer<typeof TaskChangedFieldSchema>;
 export type TaskChangedEvent = z.infer<typeof TaskChangedEventSchema>;
+export type TaskDeletedEvent = z.infer<typeof TaskDeletedEventSchema>;
 export type TaskCommand = z.infer<typeof TaskCommandSchema>;
 export type TaskCommandRequest = z.infer<typeof TaskCommandRequestSchema>;
 export type TaskDependencyUpdateRequest = z.infer<typeof TaskDependencyUpdateRequestSchema>;
