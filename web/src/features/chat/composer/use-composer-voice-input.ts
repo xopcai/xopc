@@ -11,6 +11,8 @@ import type { ChatMessages } from '@/i18n/messages';
 import { PcmWavRecorder } from './pcm-wav-recorder';
 
 export type VoiceInputPhase = 'idle' | 'preparing' | 'requesting' | 'starting' | 'recording' | 'transcribing' | 'error';
+type VoiceCaptureStartStage = 'permission' | 'media' | 'recorder';
+type VoiceCaptureFailureKind = 'permission' | 'device' | 'recorder';
 
 const MAX_RECORDING_MS = 120_000;
 const READINESS_POLL_MS = 1_000;
@@ -37,6 +39,21 @@ async function getMicrophonePermissionState(): Promise<PermissionState | null> {
   } catch {
     return null;
   }
+}
+
+function errorName(error: unknown): string {
+  return error instanceof DOMException || error instanceof Error ? error.name : '';
+}
+
+export function classifyVoiceCaptureFailure(
+  stage: VoiceCaptureStartStage,
+  error: unknown,
+): VoiceCaptureFailureKind {
+  if (stage === 'permission') return 'permission';
+  if (stage === 'recorder') return 'recorder';
+  const name = errorName(error);
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'permission';
+  return 'device';
 }
 
 export interface UseComposerVoiceInputOptions {
@@ -183,6 +200,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
     // observes `requesting` with the queue still set and starts another permission request.
     pendingCaptureRef.current = false;
     updatePhase('starting');
+    let startStage: VoiceCaptureStartStage = 'permission';
     try {
       const electronSystem = window.electronAPI?.system;
       const permissionState = await getMicrophonePermissionState();
@@ -202,6 +220,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       if (!isCapturePending(phaseRef.current)) return;
       updatePhase('starting');
       window.dispatchEvent(new Event('xopc-voice-recording-start'));
+      startStage = 'media';
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
@@ -212,6 +231,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       mediaStreamRef.current = stream;
       const startedAt = performance.now();
       recordStartPerfRef.current = startedAt;
+      startStage = 'recorder';
       const recorder = await PcmWavRecorder.start(stream, {
         onAudioLevel: ({ level }) => {
           setAudioLevel(Math.min(1, level * 8));
@@ -228,14 +248,39 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       setElapsedSec(0);
       updatePhase('recording');
       startTimer();
-    } catch {
+    } catch (error) {
       const shouldReportFailure = isCapturePending(phaseRef.current);
+      const failureKind = classifyVoiceCaptureFailure(startStage, error);
+      const failureName = errorName(error);
+      const failureMessage = error instanceof Error ? error.message : String(error);
+      console.error('[chat:voice] capture start failed', {
+        stage: startStage,
+        kind: failureKind,
+        errorName: failureName,
+        errorMessage: failureMessage,
+      });
       pendingCaptureRef.current = false;
       resetCaptureState();
       updatePhase('idle');
-      if (shouldReportFailure) showComposerNotification('error', m.voiceMicDenied);
+      if (shouldReportFailure) {
+        const message = failureKind === 'permission'
+          ? m.voiceMicDenied
+          : failureKind === 'device'
+            ? m.voiceMicUnavailable
+            : m.voiceRecorderFailed;
+        showComposerNotification('error', message);
+      }
     }
-  }, [disabled, m.voiceMicDenied, resetCaptureState, startTimer, stopVoiceMediaStreamTracks, updatePhase]);
+  }, [
+    disabled,
+    m.voiceMicDenied,
+    m.voiceMicUnavailable,
+    m.voiceRecorderFailed,
+    resetCaptureState,
+    startTimer,
+    stopVoiceMediaStreamTracks,
+    updatePhase,
+  ]);
 
   const waitForLocalPreparation = useCallback((current: VoiceReadiness) => {
     if (current.state !== 'preparing') {

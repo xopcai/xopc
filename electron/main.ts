@@ -46,7 +46,10 @@ import {
   registerSystemSettingsIpc,
   stopAllPowerSaveBlockers,
 } from './ipc/system-settings-ipc.js';
-import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.js';
+import {
+  isShellChromiumPermissionGranted,
+  isTrustedShellPermissionRequest,
+} from './ipc/shell-permission-gates.js';
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { registerDesktopPetIpc } from './desktop-pet/ipc.js';
@@ -929,19 +932,39 @@ app.whenReady().then(async () => {
   if (!gotTheLock) return;
 
   // Align Chromium media / screen capture with OS privacy before granting renderer access.
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    const trusted = isTrustedShellPermissionRequest([
+      webContents?.getURL(),
+      requestingOrigin,
+      details.requestingUrl,
+      details.securityOrigin,
+      details.embeddingOrigin,
+    ]);
+    if (!trusted) return false;
     if (permission === 'notifications') {
       return isShellNotificationGranted();
     }
-    return isShellChromiumPermissionGranted(permission);
+    return isShellChromiumPermissionGranted(permission, details);
   });
 
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const requestingUrl = 'requestingUrl' in details ? details.requestingUrl : undefined;
+    const securityOrigin = 'securityOrigin' in details ? details.securityOrigin : undefined;
+    const trusted = isTrustedShellPermissionRequest([
+      webContents.getURL(),
+      requestingUrl,
+      securityOrigin,
+    ]);
+    if (!trusted) {
+      callback(false);
+      return;
+    }
     if (permission === 'notifications') {
       callback(isShellNotificationGranted());
       return;
     }
-    callback(isShellChromiumPermissionGranted(permission));
+    const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined;
+    callback(isShellChromiumPermissionGranted(permission, { mediaTypes }));
   });
 
   await initElectronShellPreferences();
