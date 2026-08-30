@@ -179,7 +179,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   const finishSetup = useCallback(async (modelRef: string) => {
     const defaults = await fetchGlobalDefaults();
-    await updateGlobalDefaultModels({
+    const updatedDefaults = await updateGlobalDefaultModels({
       ...defaults.models,
       defaultRole: 'deep',
       roles: {
@@ -187,6 +187,12 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         deep: { model: modelRef },
       },
     });
+    const configuredRole = updatedDefaults.models.defaultRole;
+    if (updatedDefaults.models.roles[configuredRole]?.model !== modelRef) {
+      throw new Error(language === 'zh'
+        ? '默认模型未能保存，请重试。'
+        : 'The default model could not be saved. Try again.');
+    }
     void revalidateGatewayConfig();
     void invalidateConfiguredModelsCache();
     dispatchConfigReload();
@@ -196,7 +202,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       timezone: detectBrowserTimezone(),
     });
     await onComplete();
-  }, [callName, onComplete]);
+  }, [callName, language, onComplete]);
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;

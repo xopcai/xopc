@@ -73,7 +73,7 @@ export function WorkDiscoveryPage({
   const wd = messages(language).chat.workingDirectory;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const startFresh = embedded || searchParams.get('new') === '1';
+  const startFresh = searchParams.get('new') === '1';
   const [pageState, setPageState] = useState<PageState>('loading');
   const [preview, setPreview] = useState<WorkDiscoveryPreview | null>(null);
   const [run, setRun] = useState<WorkDiscoveryRun | null>(null);
