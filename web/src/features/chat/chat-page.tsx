@@ -66,6 +66,7 @@ import { showActivity } from '@/stores/activity-store';
 import { Button } from '@/components/ui/button';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { peekComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
+import { takeComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
 
 const ChatTerminalDock = lazy(async () => {
   const module = await import('@/features/chat/terminal/chat-terminal-dock');
@@ -142,6 +143,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const draftQuery = searchParams.get('draft') ?? '';
   const autoSendQuery = searchParams.get('autoSend') === '1';
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
+  const attachmentsHandoffId = searchParams.get('attachmentsHandoff');
   const chatSessionKey = session.decodedKey ?? session.sessionKey;
   const [launchFile, setLaunchFile] = useState<Pick<File, 'name' | 'type'> | null>(null);
   const launchFileSessionRef = useRef<string | null>(null);
@@ -685,12 +687,15 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   }, [session.sessionKey]);
 
   useEffect(() => {
-    if (!autoSendQuery || !draftQuery.trim()) return;
+    if (!autoSendQuery || (!draftQuery.trim() && !attachmentsHandoffId)) return;
     if (!auth.hasToken || session.showSessionLoading || session.sessionRoutePending) return;
     if (!session.sessionKey || stream.sending || stream.streaming) return;
     const message = buildComposerDraftSeed(skillQuery, draftQuery);
-    if (!message) return;
-    const marker = `${session.sessionKey}:auto-send:${message}`;
+    const attachments = attachmentsHandoffId
+      ? takeComposerPayloadHandoff(attachmentsHandoffId)
+      : undefined;
+    if (!message && !attachments?.length) return;
+    const marker = `${session.sessionKey}:auto-send:${message ?? ''}:${attachmentsHandoffId ?? ''}`;
     if (routeComposerSeedMarkerRef.current === marker) return;
     routeComposerSeedMarkerRef.current = marker;
     const next = new URLSearchParams(searchParams);
@@ -698,12 +703,14 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     next.delete('slash');
     next.delete('draft');
     next.delete('autoSend');
+    next.delete('attachmentsHandoff');
     const query = next.toString();
     navigate({ pathname, search: query ? `?${query}` : '' }, { replace: true });
-    void handleComposerSend(message);
+    void handleComposerSend(message ?? '', attachments ?? undefined);
   }, [
     auth.hasToken,
     autoSendQuery,
+    attachmentsHandoffId,
     draftQuery,
     handleComposerSend,
     navigate,

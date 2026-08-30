@@ -1,12 +1,31 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
-import { CalendarClock, ChevronRight, CircleAlert, Plus, Sparkles, X } from 'lucide-react';
-import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { CalendarClock, ChevronRight, CircleAlert, Paperclip, Plus, Sparkles, X } from 'lucide-react';
+import {
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TabCompletionTextarea } from '@/components/ui/tab-completion-input';
+import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
+import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
+import {
+  ACCEPT,
+  collectClipboardFiles,
+  isComposerAcceptableFile,
+} from '@/features/chat/composer/composer-clipboard';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
+import { createComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
+import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
@@ -213,6 +232,8 @@ export function HomePage() {
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [reviewDecision, setReviewDecision] = useState<HomeDecision | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const attachments = useComposerAttachments({ chat: msg.chat });
 
   const load = useCallback(async (showSkeleton = false) => {
     if (showSkeleton) setLoading(true);
@@ -252,14 +273,67 @@ export function HomePage() {
     };
   }, [load]);
 
+  const processAttachmentFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0 || attachmentBusy) return;
+    setAttachmentBusy(true);
+    try {
+      await attachments.processFiles(files);
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }, [attachmentBusy, attachments.processFiles]);
+
+  const handleAttachmentPaste = useCallback(async (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const collected = collectClipboardFiles(event.clipboardData);
+    if (collected.length === 0) return;
+    event.preventDefault();
+    const accepted = collected.filter(isComposerAcceptableFile);
+    if (accepted.length === 0) {
+      showComposerNotification('warning', msg.chat.clipboardFileTypeUnsupported);
+      return;
+    }
+    await processAttachmentFiles(accepted);
+  }, [msg.chat.clipboardFileTypeUnsupported, processAttachmentFiles]);
+
+  const handleAttachmentDragOver = useCallback((event: DragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    attachments.setIsDragging(true);
+  }, [attachments.setIsDragging]);
+
+  const handleAttachmentDragLeave = useCallback((event: DragEvent<HTMLFormElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      attachments.setIsDragging(false);
+    }
+  }, [attachments.setIsDragging]);
+
+  const handleAttachmentDrop = useCallback(async (event: DragEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    attachments.setIsDragging(false);
+    await processAttachmentFiles(Array.from(event.dataTransfer.files));
+  }, [attachments.setIsDragging, processAttachmentFiles]);
+
   const startConversation = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const href = newChatAutoSendHref(intent);
+    const wireAttachments = attachments.wireAttachmentsPayload();
+    const attachmentsHandoff = wireAttachments.length > 0
+      ? createComposerPayloadHandoff(wireAttachments)
+      : undefined;
+    const href = newChatAutoSendHref(intent, attachmentsHandoff);
     if (!href) return;
     setConversationOpen(false);
     setIntent('');
+    attachments.clearAttachments();
     navigate(href);
-  }, [intent, navigate]);
+  }, [attachments.clearAttachments, attachments.wireAttachmentsPayload, intent, navigate]);
+
+  const attachmentsFull = attachments.attachments.length >= MAX_CHAT_ATTACHMENTS;
+  const hasConversationDraft = Boolean(intent.trim()) || attachments.attachments.length > 0;
+  const attachTitle = attachmentsFull
+    ? interpolate(msg.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS })
+    : `${msg.chat.attachFile} (${attachments.attachments.length}/${MAX_CHAT_ATTACHMENTS})`;
 
   const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
   const headerEnd = useMemo(() => isIdle ? null : (
@@ -339,6 +413,18 @@ export function HomePage() {
 
   return (
     <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <input
+        ref={attachments.fileInputRef}
+        type="file"
+        multiple
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          const files = event.target.files;
+          if (files) void processAttachmentFiles(Array.from(files));
+          event.target.value = '';
+        }}
+      />
       <Dialog.Root
         open={conversationOpen}
         onOpenChange={setConversationOpen}
@@ -357,7 +443,18 @@ export function HomePage() {
                 </Button>
               </Dialog.Close>
             </div>
-            <form onSubmit={startConversation} className="flex min-h-0 flex-1 flex-col">
+            <form
+              onSubmit={startConversation}
+              onDragOver={handleAttachmentDragOver}
+              onDragLeave={handleAttachmentDragLeave}
+              onDrop={(event) => void handleAttachmentDrop(event)}
+              className="relative flex min-h-0 flex-1 flex-col"
+            >
+              {attachments.isDragging ? (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-accent-soft/90 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
+                  {msg.chat.dropFiles}
+                </div>
+              ) : null}
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
                 <label htmlFor="new-conversation-intent" className="mb-2 shrink-0 text-sm font-medium text-fg">{copy.intentLabel}</label>
                 <TabCompletionTextarea
@@ -365,6 +462,7 @@ export function HomePage() {
                   className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
                   value={intent}
                   onChange={(event) => setIntent(event.target.value)}
+                  onPaste={(event) => void handleAttachmentPaste(event)}
                   suggestion={copy.intentSuggestion}
                   onAcceptSuggestion={setIntent}
                   onKeyDown={(event) => {
@@ -377,14 +475,31 @@ export function HomePage() {
                   maxLength={12_000}
                   autoFocus
                 />
+                <ComposerAttachmentChips
+                  attachments={attachments.attachments}
+                  topPadded={false}
+                  onRemove={attachments.removeAttachment}
+                  className="mt-3 border-b-0 bg-transparent px-0 pb-0"
+                />
                 <div className="mt-2 flex shrink-0 items-center justify-between gap-3 text-[11px] text-fg-subtle">
                   <span>{t.home.submitShortcut}</span>
                   <span className="tabular-nums">{intent.length.toLocaleString()} / {(12_000).toLocaleString()}</span>
                 </div>
               </div>
-              <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+              <div className="flex shrink-0 items-center gap-2 border-t border-edge px-5 py-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="mr-auto size-9 rounded-lg p-0"
+                  disabled={attachmentBusy || attachmentsFull}
+                  title={attachTitle}
+                  aria-label={attachTitle}
+                  onClick={() => attachments.fileInputRef.current?.click()}
+                >
+                  <Paperclip className="size-4" aria-hidden />
+                </Button>
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={!intent.trim()}>
+                <Button type="submit" variant="primary" className="min-w-32" disabled={!hasConversationDraft || attachmentBusy}>
                   <Sparkles className="size-4" aria-hidden />
                   {copy.submit}
                 </Button>
@@ -438,14 +553,23 @@ export function HomePage() {
             {isIdle ? (
               <form
                 onSubmit={startConversation}
-                className="mx-auto mt-8 w-full max-w-[640px] rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
+                onDragOver={handleAttachmentDragOver}
+                onDragLeave={handleAttachmentDragLeave}
+                onDrop={(event) => void handleAttachmentDrop(event)}
+                className="relative mx-auto mt-8 w-full max-w-[640px] overflow-hidden rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
               >
+                {attachments.isDragging ? (
+                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-accent-soft/90 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
+                    {msg.chat.dropFiles}
+                  </div>
+                ) : null}
                 <label htmlFor="idle-conversation-intent" className="sr-only">{copy.intentLabel}</label>
                 <TabCompletionTextarea
                   id="idle-conversation-intent"
                   className="min-h-24 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle"
                   value={intent}
                   onChange={(event) => setIntent(event.target.value)}
+                  onPaste={(event) => void handleAttachmentPaste(event)}
                   suggestion={copy.intentSuggestion}
                   onAcceptSuggestion={setIntent}
                   onKeyDown={(event) => {
@@ -457,9 +581,26 @@ export function HomePage() {
                   placeholder={copy.intentPlaceholder}
                   maxLength={12_000}
                 />
-                <div className="flex items-center justify-end gap-3 border-t border-edge-subtle px-1 pt-2 sm:justify-between">
-                  <span className="hidden px-2 text-[11px] text-fg-subtle sm:inline">{t.home.submitShortcut}</span>
-                  <Button type="submit" variant="primary" className="h-9 rounded-lg px-3.5 text-xs" disabled={!intent.trim()}>
+                <ComposerAttachmentChips
+                  attachments={attachments.attachments}
+                  topPadded={false}
+                  onRemove={attachments.removeAttachment}
+                  className="border-b-0 bg-transparent px-3 pb-2 pt-0"
+                />
+                <div className="flex items-center gap-2 border-t border-edge-subtle px-1 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="size-9 rounded-lg p-0"
+                    disabled={attachmentBusy || attachmentsFull}
+                    title={attachTitle}
+                    aria-label={attachTitle}
+                    onClick={() => attachments.fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="size-4" aria-hidden />
+                  </Button>
+                  <span className="hidden text-[11px] text-fg-subtle sm:inline">{t.home.submitShortcut}</span>
+                  <Button type="submit" variant="primary" className="ml-auto h-9 rounded-lg px-3.5 text-xs" disabled={!hasConversationDraft || attachmentBusy}>
                     <Sparkles className="size-3.5" aria-hidden />
                     {copy.newWork}
                   </Button>
