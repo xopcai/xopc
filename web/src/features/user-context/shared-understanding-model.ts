@@ -17,6 +17,10 @@ export type SharedUnderstandingHistoryItem =
   | { type: 'focus'; id: string; updatedAt: number; focus: UserFocus }
   | { type: 'understanding'; id: string; updatedAt: number; understanding: UserUnderstanding };
 
+export type SharedUnderstandingTimelineItem =
+  | { type: 'focus'; id: string; updatedAt: number; focus: UserFocus }
+  | { type: 'understanding'; id: string; updatedAt: number; understanding: UserUnderstanding };
+
 export type UnderstandingRelationReason = 'project_scope' | 'topic_overlap' | 'global_context';
 
 export type UnderstandingRelation = {
@@ -30,6 +34,7 @@ export type SharedUnderstandingModel = {
   activeUnderstandings: UserUnderstanding[];
   reviewQueue: SharedUnderstandingReviewItem[];
   history: SharedUnderstandingHistoryItem[];
+  timeline: SharedUnderstandingTimelineItem[];
 };
 
 function newestFirst<T extends { updatedAt: number }>(left: T, right: T): number {
@@ -70,7 +75,16 @@ export function buildSharedUnderstandingModel(
         understanding,
       })),
   ].sort(newestFirst);
-  return { currentFocuses, activeUnderstandings, reviewQueue, history };
+  const timeline: SharedUnderstandingTimelineItem[] = [
+    ...focuses.map((focus) => ({ type: 'focus' as const, id: focus.id, updatedAt: focus.updatedAt, focus })),
+    ...understandings.map((understanding) => ({
+      type: 'understanding' as const,
+      id: understanding.id,
+      updatedAt: understanding.updatedAt,
+      understanding,
+    })),
+  ].sort(newestFirst);
+  return { currentFocuses, activeUnderstandings, reviewQueue, history, timeline };
 }
 
 function tokens(value: string): Set<string> {

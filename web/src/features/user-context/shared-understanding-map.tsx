@@ -1,4 +1,4 @@
-import { CheckCircle2, Pencil, Target, UserRound } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Pencil, Target, UserRound } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -16,27 +16,31 @@ const NODE_POSITIONS = [
 const COPY = {
   en: {
     focus: 'Focus', selectFocus: 'Focus in view', you: 'You', active: 'Active', pending: 'Needs review',
-    hint: 'These are possible connections inferred from scope and wording, not verified facts. Select a node to inspect the signal.',
+    hint: 'A local map around one focus — enough context to explain xopc’s help, without turning your portrait into a database.',
+    confirmed: 'Confirmed', possible: 'Possible', weak: 'Show weak signals', hideWeak: 'Hide weak signals',
     noFocus: 'Confirm a focus first, then xopc can show the context that affects it.',
-    noRelations: 'No possible connection is strong enough to show yet.', why: 'Why it may be related',
-    project_scope: 'It may be related because it belongs to the same project.', topic_overlap: 'Its wording overlaps this focus.',
-    global_context: 'This global context may apply across your work.',
+    noRelations: 'No relationship is strong enough to show yet.', why: 'Why this relationship is shown',
+    project_scope: 'Both belong to the same project.', topic_overlap: 'They share a meaningful topic signal.',
+    global_context: 'This confirmed context may shape work across projects.',
+    projectEdge: 'same project', topicEdge: 'shared topic', contextEdge: 'shapes work',
     edit: 'Edit', pause: 'Pause', complete: 'Complete', incorrect: 'Not true', archive: 'Move to history',
     save: 'Save', cancel: 'Cancel', review: 'Review this suggestion',
     explicit: 'You said this directly', observed: 'Observed across work', inferred: 'Inferred — may be wrong',
-    relatedCount: 'possible connections',
+    relatedCount: 'relationships',
   },
   zh: {
     focus: '当前关注', selectFocus: '图中关注', you: '你', active: '进行中', pending: '待确认',
-    hint: '这些是根据范围和措辞推测的可能关联，并非已验证事实。点选节点可查看判断依据。',
+    hint: '只围绕一个当前重点展开局部关系：足以解释 xopc 为什么这样帮助你，又不会把画像变成数据库。',
+    confirmed: '已确认', possible: '可能关联', weak: '显示弱信号', hideWeak: '隐藏弱信号',
     noFocus: '先确认一项关注，xopc 才能展示会影响它的上下文。',
-    noRelations: '目前还没有足够明确的可能关联。', why: '为什么可能相关',
-    project_scope: '它们可能相关，因为属于同一个项目。', topic_overlap: '它们的措辞与当前关注有所重叠。',
-    global_context: '这条全局上下文可能适用于不同工作。',
+    noRelations: '目前还没有足够明确的关系。', why: '为什么展示这条关系',
+    project_scope: '它们属于同一个项目。', topic_overlap: '它们共享了有意义的主题信号。',
+    global_context: '这条已确认的上下文可能影响不同项目中的工作。',
+    projectEdge: '同一项目', topicEdge: '主题相关', contextEdge: '影响工作方式',
     edit: '编辑', pause: '暂停', complete: '完成', incorrect: '不正确', archive: '移入历史',
     save: '保存', cancel: '取消', review: '去确认这条建议',
     explicit: '由你直接告知', observed: '从过往工作中观察到', inferred: '推断内容，可能有误',
-    relatedCount: '条可能关联',
+    relatedCount: '条关系',
   },
 } as const;
 
@@ -52,7 +56,9 @@ export function SharedUnderstandingMap({ focuses, understandings, language, onRe
   const t = COPY[language];
   const [focusId, setFocusId] = useState(focuses[0]?.id ?? '');
   const focus = focuses.find((item) => item.id === focusId) ?? focuses[0];
-  const relations = useMemo(() => focus ? rankUnderstandingRelations(focus, understandings) : [], [focus, understandings]);
+  const allRelations = useMemo(() => focus ? rankUnderstandingRelations(focus, understandings) : [], [focus, understandings]);
+  const [showWeak, setShowWeak] = useState(false);
+  const relations = useMemo(() => showWeak ? allRelations : allRelations.filter((relation) => relation.score >= 0.25), [allRelations, showWeak]);
   const [selectedUnderstandingId, setSelectedUnderstandingId] = useState<string | null>(null);
   const selectedRelation = relations.find((relation) => relation.understanding.id === selectedUnderstandingId) ?? null;
 
@@ -69,9 +75,16 @@ export function SharedUnderstandingMap({ focuses, understandings, language, onRe
   if (!focus) return <div className="rounded-2xl border border-dashed border-edge px-5 py-16 text-center text-sm text-fg-muted">{t.noFocus}</div>;
 
   return <section className="overflow-hidden rounded-2xl border border-edge bg-surface-panel">
-    <header className="flex flex-col gap-3 border-b border-edge px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs leading-5 text-fg-muted">{t.hint}</p>
-      {focuses.length > 1 ? <label className="flex shrink-0 items-center gap-2 text-xs text-fg-muted"><span>{t.selectFocus}</span><Select value={focus.id} onChange={(event) => { setFocusId(event.target.value); setSelectedUnderstandingId(null); }} triggerClassName="min-w-44 bg-surface-base">{focuses.map((item) => <SelectOption key={item.id} value={item.id}>{item.title}</SelectOption>)}</Select></label> : null}
+    <header className="flex flex-col gap-3 border-b border-edge px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-2xl text-xs leading-5 text-fg-muted">{t.hint}</p>
+        {focuses.length > 1 ? <label className="flex shrink-0 items-center gap-2 text-xs text-fg-muted"><span>{t.selectFocus}</span><Select value={focus.id} onChange={(event) => { setFocusId(event.target.value); setSelectedUnderstandingId(null); }} triggerClassName="min-w-44 bg-surface-base">{focuses.map((item) => <SelectOption key={item.id} value={item.id}>{item.title}</SelectOption>)}</Select></label> : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-fg-subtle">
+        <span className="inline-flex items-center gap-1.5"><span className="h-px w-5 bg-edge-strong" />{t.confirmed}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-5 border-t border-dashed border-warning" />{t.possible}</span>
+        {allRelations.some((relation) => relation.score < 0.25) ? <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-md text-fg-muted hover:text-accent" onClick={() => setShowWeak((value) => !value)}>{showWeak ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}{showWeak ? t.hideWeak : t.weak}</button> : null}
+      </div>
     </header>
 
     <div className="grid lg:grid-cols-[minmax(0,1fr)_19rem]">
@@ -85,13 +98,17 @@ export function SharedUnderstandingMap({ focuses, understandings, language, onRe
 
           <div className="absolute left-1/2 top-[13%] z-10 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-white shadow-surface"><UserRound className="size-5" /><span className="sr-only">{t.you}</span></div>
           <button type="button" onClick={() => setSelectedUnderstandingId(null)} className={`absolute left-1/2 top-1/2 z-10 flex w-44 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm font-medium shadow-surface transition-colors ${selectedRelation ? 'border-edge bg-surface-panel hover:bg-surface-hover' : 'border-accent bg-accent-soft text-accent-fg ring-2 ring-accent/15'}`}><Target className="size-4 shrink-0" /><span className="line-clamp-2">{focus.title}</span></button>
+          {relations.map((relation, index) => {
+            const position = NODE_POSITIONS[index] ?? NODE_POSITIONS[0];
+            return <span key={`edge:${relation.understanding.id}`} style={{ left: `${(50 + position.x) / 2}%`, top: `${(50 + position.y) / 2}%` }} className="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2 rounded bg-surface-base/90 px-1.5 py-0.5 text-[9px] text-fg-subtle">{relationEdgeLabel(relation, t)}</span>;
+          })}
           {relations.map((relation, index) => <GraphNode key={relation.understanding.id} relation={relation} position={NODE_POSITIONS[index] ?? NODE_POSITIONS[0]} language={language} selected={selectedUnderstandingId === relation.understanding.id} onSelect={() => setSelectedUnderstandingId(relation.understanding.id)} />)}
           {!relations.length ? <p className="absolute inset-x-0 bottom-8 text-center text-xs text-fg-muted">{t.noRelations}</p> : null}
         </div>
 
         <div className="grid gap-2 sm:hidden">
           <button type="button" onClick={() => setSelectedUnderstandingId(null)} className={`rounded-xl border p-3 text-left ${selectedRelation ? 'border-edge bg-surface-panel' : 'border-accent bg-accent-soft'}`}><span className="text-xs text-fg-muted">{t.focus}</span><p className="mt-1 text-sm font-medium text-fg">{focus.title}</p></button>
-          {relations.map((relation) => <button key={relation.understanding.id} type="button" onClick={() => setSelectedUnderstandingId(relation.understanding.id)} className={`rounded-xl border p-3 text-left ${selectedUnderstandingId === relation.understanding.id ? 'border-accent bg-accent-soft' : relation.understanding.status === 'active' ? 'border-edge bg-surface-panel' : 'border-warning/40 bg-warning-soft'}`}><span className="text-[11px] text-fg-subtle">{UNDERSTANDING_KIND_LABELS[relation.understanding.kind][language]}</span><p className="mt-1 line-clamp-2 text-sm text-fg">{relation.understanding.statement}</p></button>)}
+          {relations.map((relation) => <button key={relation.understanding.id} type="button" onClick={() => setSelectedUnderstandingId(relation.understanding.id)} className={`rounded-xl border p-3 text-left ${selectedUnderstandingId === relation.understanding.id ? 'border-accent bg-accent-soft' : relation.understanding.status === 'active' ? 'border-edge bg-surface-panel' : 'border-dashed border-warning/40 bg-warning-soft'}`}><span className="flex items-center justify-between gap-2 text-[11px] text-fg-subtle"><span>{UNDERSTANDING_KIND_LABELS[relation.understanding.kind][language]}</span><span>{relationEdgeLabel(relation, t)}</span></span><p className="mt-1 line-clamp-2 text-sm text-fg">{relation.understanding.statement}</p></button>)}
         </div>
       </div>
 
@@ -106,6 +123,12 @@ export function SharedUnderstandingMap({ focuses, understandings, language, onRe
       />
     </div>
   </section>;
+}
+
+function relationEdgeLabel(relation: UnderstandingRelation, t: typeof COPY.en | typeof COPY.zh): string {
+  if (relation.reasons.includes('project_scope')) return t.projectEdge;
+  if (relation.reasons.includes('topic_overlap')) return t.topicEdge;
+  return t.contextEdge;
 }
 
 function GraphNode({ relation, position, language, selected, onSelect }: {
