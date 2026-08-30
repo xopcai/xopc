@@ -1109,8 +1109,9 @@
     },
     "atMention": {
       "noResults": "无匹配项",
-      "placeholder": "搜索文件…",
-      "searchError": "搜索工作区失败",
+      "placeholder": "搜索引用…",
+      "searchError": "搜索引用失败",
+      "notes": "Note",
       "files": "文件",
       "folders": "文件夹",
       "recentFiles": "最近",

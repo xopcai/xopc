@@ -55,7 +55,6 @@ export interface PaletteApplyContext {
     onUnavailableSkill?: (item: PaletteItem) => void;
     /** Opens the structured review launcher for the built-in `/review` command. */
     onReviewLauncher?: () => void;
-    onAddContextRef?: (ref: ComposerContextRef) => void;
   };
 }
 
@@ -165,24 +164,10 @@ const applyAgentItem: PaletteItemHandler = (item, ctx) => {
   ctx.callbacks.onChatAgentChange(item.name);
 };
 
-const applyNoteItem: PaletteItemHandler = (item, ctx) => {
-  const range = ctx.slashRange;
-  if (!range || !item.noteRef || !ctx.callbacks.onAddContextRef) return;
-  const next = replaceRange(ctx.editor.valueRef.current, range.start, range.end, '');
-  ctx.editor.resetEditor({ nextText: next, caretOffset: range.start, focus: true });
-  ctx.callbacks.onAddContextRef({
-    kind: 'note',
-    sourceId: item.noteRef.sourceId,
-    expectedVersion: item.noteRef.expectedVersion,
-    title: item.name,
-  });
-};
-
 export const paletteItemHandlers: Record<PaletteItemKind, PaletteItemHandler> = {
   skill: applySkillItem,
   command: applyCommandItem,
   agent: applyAgentItem,
-  note: applyNoteItem,
 };
 
 export function applyPaletteItem(item: PaletteItem, ctx: PaletteApplyContext): void {
