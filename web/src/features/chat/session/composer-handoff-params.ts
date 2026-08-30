@@ -9,10 +9,14 @@ export function buildComposerDraftSeed(skill: string, draft: string): string | n
   return trimmedDraft || null;
 }
 
-export function newChatAutoSendHref(draft: string): string | null {
+export function newChatAutoSendHref(draft: string, attachmentsHandoff?: string): string | null {
   const trimmedDraft = draft.trim();
-  if (!trimmedDraft) return null;
-  const params = new URLSearchParams({ draft: trimmedDraft, autoSend: '1' });
+  const trimmedAttachmentsHandoff = attachmentsHandoff?.trim() ?? '';
+  if (!trimmedDraft && !trimmedAttachmentsHandoff) return null;
+  const params = new URLSearchParams();
+  if (trimmedDraft) params.set('draft', trimmedDraft);
+  params.set('autoSend', '1');
+  if (trimmedAttachmentsHandoff) params.set('attachmentsHandoff', trimmedAttachmentsHandoff);
   return `/chat/new?${params.toString()}`;
 }
 
@@ -31,11 +35,13 @@ export function searchParamsForComposerHandoff(search: string): string {
   const draft = sp.get('draft');
   const autoSend = sp.get('autoSend');
   const attachmentHandoff = sp.get('attachmentHandoff');
+  const attachmentsHandoff = sp.get('attachmentsHandoff');
   if (skill) next.set('skill', skill);
   if (slash) next.set('slash', slash);
   if (draft) next.set('draft', draft);
   if (autoSend === '1') next.set('autoSend', '1');
   if (attachmentHandoff) next.set('attachmentHandoff', attachmentHandoff);
+  if (attachmentsHandoff) next.set('attachmentsHandoff', attachmentsHandoff);
   const out = next.toString();
   return out ? `?${out}` : '';
 }

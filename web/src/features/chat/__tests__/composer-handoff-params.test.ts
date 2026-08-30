@@ -22,6 +22,8 @@ describe('composer handoff params', () => {
     expect(newChatAutoSendHref('  Summarize this & suggest next steps  '))
       .toBe('/chat/new?draft=Summarize+this+%26+suggest+next+steps&autoSend=1');
     expect(newChatAutoSendHref('   ')).toBeNull();
+    expect(newChatAutoSendHref('  ', 'payload-1'))
+      .toBe('/chat/new?autoSend=1&attachmentsHandoff=payload-1');
   });
 
   it('preserves both params while resolving a new chat route', () => {
@@ -36,5 +38,11 @@ describe('composer handoff params', () => {
     expect(projectIdForNewChatHandoff('?attachmentHandoff=file-1&projectId=project-1')).toBe(
       'project-1',
     );
+  });
+
+  it('preserves an immediate-send attachment payload while resolving a new chat route', () => {
+    expect(
+      searchParamsForComposerHandoff('?attachmentsHandoff=payload-1&autoSend=1&projectId=project-1'),
+    ).toBe('?autoSend=1&attachmentsHandoff=payload-1');
   });
 });
