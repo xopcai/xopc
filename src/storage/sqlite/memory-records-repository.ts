@@ -825,6 +825,32 @@ export function deleteMemoryRecord(recordId: string): boolean {
   });
 }
 
+export function countMemoryRecordsBySourceInstanceId(sourceInstanceId: string): number {
+  const row = getSqliteDatabase().prepare(
+    `SELECT COUNT(*) AS count FROM memory_records
+     WHERE json_extract(source_json, '$.sourceInstanceId') = ?`,
+  ).get(sourceInstanceId) as { count: number };
+  return Number(row.count);
+}
+
+export function deleteMemoryRecordsBySourceInstanceId(sourceInstanceId: string): number {
+  return runSqliteWriteTransaction((db) => {
+    const recordIds = (db.prepare(
+      `SELECT record_id FROM memory_records
+       WHERE json_extract(source_json, '$.sourceInstanceId') = ?`,
+    ).all(sourceInstanceId) as Array<{ record_id: string }>).map((row) => row.record_id);
+    if (!recordIds.length) return 0;
+    const removeFts = db.prepare('DELETE FROM memory_records_fts WHERE record_id = ?');
+    const removeRecord = db.prepare('DELETE FROM memory_records WHERE record_id = ?');
+    let deleted = 0;
+    for (const recordId of recordIds) {
+      removeFts.run(recordId);
+      deleted += Number(removeRecord.run(recordId).changes);
+    }
+    return deleted;
+  });
+}
+
 /** Change lifecycle status without reconstructing or weakening the record's provenance. */
 export function setMemoryRecordStatus(recordId: string, status: MemoryStatus, nowMs = Date.now()): boolean {
   return runSqliteWriteTransaction((db) => {

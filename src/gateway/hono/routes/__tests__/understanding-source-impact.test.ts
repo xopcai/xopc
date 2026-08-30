@@ -8,16 +8,22 @@ import {
   closeXopcDatabase,
   createContextEvidence,
   createUnderstanding,
+  getUnderstanding,
+  listKnowledgeSourceItems,
+  listMemoryRecords,
   linkUnderstandingEvidence,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  upsertKnowledgeSourceItems,
+  upsertMemoryRecord,
 } from '../../../../storage/sqlite/index.js';
 import {
   createUnderstandingSourceRun,
+  listUserFocuses,
   upsertUnderstandingSourceGrant,
   upsertUserFocus,
 } from '../../../../user-context/sources/repository.js';
-import { sourceRevocationImpact } from '../understanding-sources.js';
+import { applySourceRevocationChoices, sourceRevocationImpact } from '../understanding-sources.js';
 
 describe('understanding source revocation impact', () => {
   let stateDir: string;
@@ -38,7 +44,7 @@ describe('understanding source revocation impact', () => {
     const grant = upsertUnderstandingSourceGrant({
       sourceKey: 'connector:impact', adapterId: 'connector:test', category: 'files', platform: 'all',
       displayName: 'Impact source', accessMode: 'once', retentionPolicy: 'derived_only',
-      processingPolicy: 'remote_allowed', config: {},
+      processingPolicy: 'remote_allowed', config: { connectorId: 'test', accountId: 'account' },
     });
     const run = createUnderstandingSourceRun({ grantId: grant.id, kind: 'bootstrap' });
     const sourceOnly = createUnderstanding({
@@ -68,12 +74,39 @@ describe('understanding source revocation impact', () => {
       horizon: 'current', status: 'candidate', confidence: 0.8,
       evidenceRefs: [connectedEvidence.sourceRef], sourceRunId: run.id,
     });
+    const sourceInstanceId = 'composio:test:account';
+    upsertKnowledgeSourceItems([{
+      sourceInstanceId,
+      collectionScope: 'items',
+      externalId: 'raw-1',
+      itemType: 'test:item',
+      contentHash: 'hash-1',
+      normalizedText: 'Bounded source material.',
+      synthesisPipeline: 'connected_knowledge',
+    }]);
+    upsertMemoryRecord({
+      providerId: 'connected-knowledge',
+      kind: 'workspace_fact',
+      sourceAgentId: 'main',
+      content: 'Derived connected memory.',
+      source: { provider: 'test', sourceInstanceId },
+    });
 
-    expect(sourceRevocationImpact(grant.id)).toMatchObject({
-      derivedCount: 2,
+    const impact = sourceRevocationImpact(grant.id)!;
+    expect(impact).toMatchObject({
+      derivedCount: 3,
       understandingCount: 1,
       focusCount: 1,
+      memoryRecordCount: 1,
+      boundedRawCount: 1,
       understandingIds: [sourceOnly.id],
     });
+
+    expect(applySourceRevocationChoices(impact, { derived: 'delete', raw: 'delete' }))
+      .toEqual({ derivedDeleted: 3, rawDeleted: 1 });
+    expect(getUnderstanding(sourceOnly.id)).toBeUndefined();
+    expect(listUserFocuses()).toEqual([]);
+    expect(listMemoryRecords({ providerId: 'connected-knowledge' })).toEqual([]);
+    expect(listKnowledgeSourceItems({ sourceInstanceId })).toEqual([]);
   });
 });

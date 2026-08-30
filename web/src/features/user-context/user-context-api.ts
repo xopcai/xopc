@@ -294,6 +294,7 @@ export type SourceRevocationImpact = {
   derivedCount: number;
   understandingCount: number;
   focusCount: number;
+  memoryRecordCount: number;
   boundedRawCount: number;
 };
 

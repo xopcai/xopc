@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
+import { isLocalModelBaseUrl } from '../providers/model-call.js';
+import { resolveModel } from '../providers/index.js';
 import { ActivityService } from '../activity/service.js';
 import type { ProjectService } from '../projects/project-service.js';
 import { buildSessionKey } from '../routing/session-key.js';
@@ -28,6 +30,7 @@ import {
   upsertUserFocus,
   updateUnderstandingSourceRun,
   updateUnderstandingSourceGrantCheckpoint,
+  updateUnderstandingSourceGrantPolicies,
 } from '../user-context/sources/repository.js';
 import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import type { UnderstandingSourceCategory, UnderstandingSourceItem } from '../user-context/sources/types.js';
@@ -81,6 +84,114 @@ import type {
 } from './types.js';
 
 const log = createLogger('WorkDiscovery');
+const MAX_UNDERSTANDING_ITEMS = 150;
+const MAX_UNDERSTANDING_INPUT_ITEMS = 1_200;
+const MAX_UNDERSTANDING_ITEM_CHARS = 12_000;
+const MAX_UNDERSTANDING_TOTAL_CHARS = 300_000;
+
+export type ModelProcessingPolicy = 'local_only' | 'remote_allowed';
+
+function modelProcessingTarget(config: Config): { provider: string; remoteModel: boolean } {
+  const modelRef = getAgentDefaultModelRef(config);
+  if (!modelRef) throw new Error('No default model configured');
+  const model = resolveModel(modelRef);
+  return { provider: model.provider, remoteModel: !isLocalModelBaseUrl(model.baseUrl) };
+}
+
+function fairTextBudgets(lengths: number[], budget: number): number[] {
+  const allocations = lengths.map(() => 0);
+  let remaining = budget;
+  let active = lengths.map((length, index) => ({ length, index })).filter((item) => item.length > 0);
+  while (remaining > 0 && active.length > 0) {
+    const share = Math.max(1, Math.floor(remaining / active.length));
+    const next: typeof active = [];
+    for (const item of active) {
+      const needed = item.length - allocations[item.index]!;
+      const granted = Math.min(needed, share, remaining);
+      allocations[item.index] = allocations[item.index]! + granted;
+      remaining -= granted;
+      if (allocations[item.index]! < item.length) next.push(item);
+      if (remaining === 0) break;
+    }
+    active = next;
+  }
+  return allocations;
+}
+
+/** Sanitize and round-robin local sources so one verbose source cannot starve the rest. */
+export function normalizeUnderstandingSourceItems(rawItems: unknown[]): UnderstandingSourceItem[] {
+  const itemTypes = new Set<UnderstandingSourceItem['type']>([
+    'document', 'calendar_event', 'task', 'note', 'mail', 'message', 'code_activity', 'bookmark',
+  ]);
+  const ownerAttributions = new Set<UnderstandingSourceItem['ownerAttribution']>(['user', 'other', 'shared', 'unknown']);
+  const sensitivities = new Set<UnderstandingSourceItem['sensitivity']>(['normal', 'personal', 'secret', 'regulated']);
+  const sanitized = rawItems.slice(0, MAX_UNDERSTANDING_INPUT_ITEMS).flatMap((value): UnderstandingSourceItem[] => {
+    if (!value || typeof value !== 'object') return [];
+    const raw = value as Record<string, unknown>;
+    const id = typeof raw.id === 'string' ? raw.id.trim().slice(0, 500) : '';
+    const sourceId = typeof raw.sourceId === 'string' ? raw.sourceId.trim().slice(0, 200) : '';
+    const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 300) : '';
+    const type = typeof raw.type === 'string' && itemTypes.has(raw.type as UnderstandingSourceItem['type'])
+      ? raw.type as UnderstandingSourceItem['type'] : null;
+    const evidenceRef = typeof raw.evidenceRef === 'string' ? raw.evidenceRef.trim().slice(0, 1_000) : '';
+    const ownerAttribution = typeof raw.ownerAttribution === 'string'
+      && ownerAttributions.has(raw.ownerAttribution as UnderstandingSourceItem['ownerAttribution'])
+      ? raw.ownerAttribution as UnderstandingSourceItem['ownerAttribution'] : 'unknown';
+    const sensitivity = typeof raw.sensitivity === 'string'
+      && sensitivities.has(raw.sensitivity as UnderstandingSourceItem['sensitivity'])
+      ? raw.sensitivity as UnderstandingSourceItem['sensitivity'] : 'personal';
+    if (!id || !isLocalUnderstandingSourceId(sourceId) || !title || !type
+      || !evidenceRef.startsWith(`${sourceId}://`)
+      || sensitivity === 'secret' || sensitivity === 'regulated') return [];
+    const timestamp = (key: string) => {
+      const candidate = raw[key];
+      return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined;
+    };
+    const resourceUri = (() => {
+      if (typeof raw.resourceUri !== 'string') return undefined;
+      try {
+        const url = new URL(raw.resourceUri.trim());
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+          || url.search || url.hash || (url.pathname && url.pathname !== '/')) return undefined;
+        return url.origin.slice(0, 1_000);
+      } catch {
+        return undefined;
+      }
+    })();
+    const text = typeof raw.text === 'string' ? raw.text.trim().slice(0, MAX_UNDERSTANDING_ITEM_CHARS) : '';
+    return [{
+      id, sourceId, type, title, ownerAttribution, sensitivity, evidenceRef,
+      ...(text ? { text } : {}),
+      ...(typeof raw.group === 'string' && raw.group.trim() ? { group: raw.group.trim().slice(0, 200) } : {}),
+      ...(resourceUri ? { resourceUri } : {}),
+      ...(timestamp('occurredAt') != null ? { occurredAt: timestamp('occurredAt') } : {}),
+      ...(timestamp('modifiedAt') != null ? { modifiedAt: timestamp('modifiedAt') } : {}),
+      ...(timestamp('startsAt') != null ? { startsAt: timestamp('startsAt') } : {}),
+      ...(timestamp('endsAt') != null ? { endsAt: timestamp('endsAt') } : {}),
+    }];
+  });
+  const bySource = new Map<string, UnderstandingSourceItem[]>();
+  for (const item of sanitized) bySource.set(item.sourceId, [...(bySource.get(item.sourceId) ?? []), item]);
+  const selected: UnderstandingSourceItem[] = [];
+  let round = 0;
+  while (selected.length < MAX_UNDERSTANDING_ITEMS) {
+    let added = false;
+    for (const sourceItems of bySource.values()) {
+      const item = sourceItems[round];
+      if (!item) continue;
+      selected.push(item);
+      added = true;
+      if (selected.length === MAX_UNDERSTANDING_ITEMS) break;
+    }
+    if (!added) break;
+    round += 1;
+  }
+  const budgets = fairTextBudgets(selected.map((item) => item.text?.length ?? 0), MAX_UNDERSTANDING_TOTAL_CHARS);
+  return selected.map((item, index) => {
+    const text = item.text?.slice(0, budgets[index]);
+    return { ...item, ...(text ? { text } : { text: undefined }) };
+  });
+}
 function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingKind {
   if (category === 'preference') return 'preference';
   if (category === 'workflow') return 'routine';
@@ -238,12 +349,18 @@ export class WorkDiscoveryService {
     return listWorkDiscoveryDirectorySources();
   }
 
-  async grantDirectorySource(rootPath: string) {
+  getModelProcessingTarget() {
+    return modelProcessingTarget(this.options.getConfig());
+  }
+
+  async grantDirectorySource(rootPath: string, processingPolicy: ModelProcessingPolicy) {
     const preview = await previewWorkDiscoveryRoot(rootPath);
+    const target = this.getModelProcessingTarget();
     return upsertWorkDiscoveryDirectorySource({
       rootPath: preview.canonicalRootPath,
       displayName: preview.displayName,
       fingerprint: preview.fingerprint,
+      processingPolicy: target.remoteModel ? processingPolicy : 'local_only',
     });
   }
 
@@ -313,63 +430,15 @@ export class WorkDiscoveryService {
 
   async importUnderstandingSources(
     rawItems: unknown[],
+    processingPolicy: ModelProcessingPolicy,
     signal?: AbortSignal,
     runId?: string,
     rawCheckpoints?: Record<string, unknown>,
   ) {
-    let remaining = 300_000;
-    const itemTypes = new Set<UnderstandingSourceItem['type']>([
-      'document', 'calendar_event', 'task', 'note', 'mail', 'message', 'code_activity', 'bookmark',
-    ]);
-    const ownerAttributions = new Set<UnderstandingSourceItem['ownerAttribution']>(['user', 'other', 'shared', 'unknown']);
-    const sensitivities = new Set<UnderstandingSourceItem['sensitivity']>(['normal', 'personal', 'secret', 'regulated']);
-    const items: UnderstandingSourceItem[] = rawItems.flatMap((value) => {
-      if (!value || typeof value !== 'object' || remaining <= 0) return [];
-      const raw = value as Record<string, unknown>;
-      const id = typeof raw.id === 'string' ? raw.id.trim().slice(0, 500) : '';
-      const sourceId = typeof raw.sourceId === 'string' ? raw.sourceId.trim().slice(0, 200) : '';
-      const title = typeof raw.title === 'string' ? raw.title.trim().slice(0, 300) : '';
-      const type = typeof raw.type === 'string' && itemTypes.has(raw.type as UnderstandingSourceItem['type'])
-        ? raw.type as UnderstandingSourceItem['type'] : null;
-      const evidenceRef = typeof raw.evidenceRef === 'string' ? raw.evidenceRef.trim().slice(0, 1_000) : '';
-      const ownerAttribution = typeof raw.ownerAttribution === 'string'
-        && ownerAttributions.has(raw.ownerAttribution as UnderstandingSourceItem['ownerAttribution'])
-        ? raw.ownerAttribution as UnderstandingSourceItem['ownerAttribution'] : 'unknown';
-      const sensitivity = typeof raw.sensitivity === 'string'
-        && sensitivities.has(raw.sensitivity as UnderstandingSourceItem['sensitivity'])
-        ? raw.sensitivity as UnderstandingSourceItem['sensitivity'] : 'personal';
-      if (!id || !isLocalUnderstandingSourceId(sourceId) || !title || !type
-        || !evidenceRef.startsWith(`${sourceId}://`)
-        || sensitivity === 'secret' || sensitivity === 'regulated') return [];
-      const text = typeof raw.text === 'string' ? raw.text.trim().slice(0, Math.min(12_000, remaining)) : '';
-      remaining -= text.length;
-      const timestamp = (key: string) => {
-        const candidate = raw[key];
-        return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined;
-      };
-      const resourceUri = (() => {
-        if (typeof raw.resourceUri !== 'string') return undefined;
-        try {
-          const url = new URL(raw.resourceUri.trim());
-          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
-            || url.search || url.hash || (url.pathname && url.pathname !== '/')) return undefined;
-          return url.origin.slice(0, 1_000);
-        } catch {
-          return undefined;
-        }
-      })();
-      return [{
-        id, sourceId, type, title, ownerAttribution, sensitivity, evidenceRef,
-        ...(text ? { text } : {}),
-        ...(typeof raw.group === 'string' && raw.group.trim() ? { group: raw.group.trim().slice(0, 200) } : {}),
-        ...(resourceUri ? { resourceUri } : {}),
-        ...(timestamp('occurredAt') != null ? { occurredAt: timestamp('occurredAt') } : {}),
-        ...(timestamp('modifiedAt') != null ? { modifiedAt: timestamp('modifiedAt') } : {}),
-        ...(timestamp('startsAt') != null ? { startsAt: timestamp('startsAt') } : {}),
-        ...(timestamp('endsAt') != null ? { endsAt: timestamp('endsAt') } : {}),
-      }];
-    }).slice(0, 150);
+    const items = normalizeUnderstandingSourceItems(rawItems);
     if (!items.length) throw new Error('No readable understanding source items were provided');
+    const target = this.getModelProcessingTarget();
+    const effectiveProcessingPolicy = target.remoteModel ? processingPolicy : 'local_only';
 
     const checkpoints = new Map<string, { fingerprint: string; collectedAt: number }>();
     for (const [sourceId, value] of Object.entries(rawCheckpoints ?? {})) {
@@ -398,7 +467,7 @@ export class WorkDiscoveryService {
       const platform = sourceId.startsWith('apple-') ? 'darwin'
         : sourceId.startsWith('windows-') ? 'win32'
           : sourceId.startsWith('linux-') ? 'linux' : 'all';
-      const grant = upsertUnderstandingSourceGrant({
+      let grant = upsertUnderstandingSourceGrant({
         sourceKey: `understanding-source:${sourceId}`,
         adapterId: sourceId,
         category,
@@ -406,9 +475,14 @@ export class WorkDiscoveryService {
         displayName: sourceId,
         accessMode: 'once',
         retentionPolicy: 'derived_only',
-        processingPolicy: 'local_only',
+        processingPolicy: effectiveProcessingPolicy,
         config: { readOnly: true },
       });
+      if (grant.processingPolicy !== effectiveProcessingPolicy) {
+        grant = updateUnderstandingSourceGrantPolicies(grant.id, {
+          processingPolicy: effectiveProcessingPolicy,
+        }) ?? grant;
+      }
       sourceGrants.set(sourceId, grant);
       const checkpoint = checkpoints.get(sourceId);
       const previousFingerprint = typeof grant.checkpoint.fingerprint === 'string' ? grant.checkpoint.fingerprint : undefined;
@@ -451,10 +525,10 @@ export class WorkDiscoveryService {
     const linkedRun = runId ? getWorkDiscoveryRun(runId) : null;
     let analysis: Awaited<ReturnType<typeof analyzeUnderstandingSources>>;
     try {
-      const remoteAllowed = allowsRemoteSourceProcessing(
+      const modelProcessingAllowed = !target.remoteModel || allowsRemoteSourceProcessing(
         [...changedSourceIds].map((sourceId) => sourceGrants.get(sourceId)?.processingPolicy ?? 'local_only'),
       );
-      analysis = remoteAllowed
+      analysis = modelProcessingAllowed
         ? await analyzeUnderstandingSources({
           config: this.options.getConfig(), items: analysisItems,
           ...(linkedRun?.result ? { workContext: {
@@ -630,6 +704,7 @@ export class WorkDiscoveryService {
       rootPath: preview.canonicalRootPath,
       displayName: preview.displayName,
       fingerprint: preview.fingerprint,
+      processingPolicy: source.processingPolicy,
     });
     return this.startRun({
       rootPath: preview.canonicalRootPath,
@@ -638,10 +713,14 @@ export class WorkDiscoveryService {
     });
   }
 
-  async startQuickRun(input: { idempotencyKey: string }): Promise<WorkDiscoveryRun> {
+  async startQuickRun(input: {
+    idempotencyKey: string;
+    processingPolicy: ModelProcessingPolicy;
+  }): Promise<WorkDiscoveryRun> {
     const candidates = await this.discoverCandidates();
     const primary = candidates[0];
     if (!primary) throw new Error('No accessible work projects were found');
+    await this.grantDirectorySource(primary.rootPath, input.processingPolicy);
     return this.startRun({
       rootPath: primary.rootPath,
       source: 'onboarding_selected_directory',
@@ -664,6 +743,13 @@ export class WorkDiscoveryService {
 
     const preview = await previewWorkDiscoveryRoot(input.rootPath);
     const rootPath = preview.canonicalRootPath;
+    const approvedSource = listWorkDiscoveryDirectorySources()
+      .find((source) => source.rootPath === rootPath && source.status === 'active');
+    if (!approvedSource) throw new Error('Selected folder must be approved before analysis');
+    const target = modelProcessingTarget(config);
+    if (target.remoteModel && approvedSource.processingPolicy !== 'remote_allowed') {
+      throw new Error('Remote model analysis requires explicit processing permission for this folder');
+    }
     const agentId = getDefaultAgentId(config);
     const match = this.options.projects.resolveOrCreateForWorkspacePath({
       workspacePath: rootPath,

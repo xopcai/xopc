@@ -6,6 +6,10 @@ import {
   readConnectedContent,
 } from '../../../connectors/content-enrichment.js';
 import {
+  countKnowledgeSourceItems,
+  countMemoryRecordsBySourceInstanceId,
+  deleteKnowledgeSourceItems,
+  deleteMemoryRecordsBySourceInstanceId,
   deleteUnderstanding,
   getConnectorAccount,
   listUnderstandingEvidence,
@@ -75,15 +79,47 @@ export function sourceRevocationImpact(grantId: string) {
     const evidence = listUserFocusEvidence(focus.id);
     return evidence.some((entry) => !belongs(entry)) ? [] : [focus];
   });
+  const memoryRecordCount = sourceInstanceId ? countMemoryRecordsBySourceInstanceId(sourceInstanceId) : 0;
+  const boundedRawCount = sourceInstanceId ? countKnowledgeSourceItems(sourceInstanceId) : 0;
   return {
     grant,
+    sourceInstanceId,
     understandingIds: understandings.map((item) => item.id),
     focusIds: focuses.map((item) => item.id),
-    derivedCount: understandings.length + focuses.length,
+    derivedCount: understandings.length + focuses.length + memoryRecordCount,
     understandingCount: understandings.length,
     focusCount: focuses.length,
-    boundedRawCount: 0,
+    memoryRecordCount,
+    boundedRawCount,
   };
+}
+
+export function applySourceRevocationChoices(
+  impact: NonNullable<ReturnType<typeof sourceRevocationImpact>>,
+  options: { derived: 'delete' | 'retain'; raw: 'delete' | 'retain' },
+): { derivedDeleted: number; rawDeleted: number } {
+  let derivedDeleted = 0;
+  for (const id of impact.focusIds) {
+    if (options.derived === 'delete') {
+      if (deleteUserFocus(id)) derivedDeleted += 1;
+    } else {
+      updateUserFocus(id, { status: 'paused' });
+    }
+  }
+  for (const id of impact.understandingIds) {
+    if (options.derived === 'delete') {
+      if (deleteUnderstanding(id)) derivedDeleted += 1;
+    } else {
+      setUnderstandingStatus(id, 'needs_review');
+    }
+  }
+  if (options.derived === 'delete' && impact.sourceInstanceId) {
+    derivedDeleted += deleteMemoryRecordsBySourceInstanceId(impact.sourceInstanceId);
+  }
+  const rawDeleted = options.raw === 'delete' && impact.sourceInstanceId
+    ? deleteKnowledgeSourceItems(impact.sourceInstanceId)
+    : 0;
+  return { derivedDeleted, rawDeleted };
 }
 
 export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -175,17 +211,12 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
     const connectionId = accountId ? getConnectorAccount(accountId)?.currentConnectionId : undefined;
     if (connectionId) deps.service.setConnectorLearningPaused(connectionId, true);
     const grant = revokeUnderstandingSourceGrant(grantId);
-    if (grant && impact) {
-      for (const id of impact.focusIds) {
-        if (derived === 'delete') deleteUserFocus(id);
-        else updateUserFocus(id, { status: 'paused' });
-      }
-      for (const id of impact.understandingIds) {
-        if (derived === 'delete') deleteUnderstanding(id);
-        else setUnderstandingStatus(id, 'needs_review');
-      }
-    }
-    return grant ? c.json({ ok: true, grant, impact, rawDeleted: 0 }) : c.json({ ok: false, error: 'Source grant not found' }, 404);
+    const deleted = grant && impact
+      ? applySourceRevocationChoices(impact, { derived, raw })
+      : { derivedDeleted: 0, rawDeleted: 0 };
+    return grant
+      ? c.json({ ok: true, grant, impact, ...deleted })
+      : c.json({ ok: false, error: 'Source grant not found' }, 404);
   });
 
   authenticated.post('/api/understanding/sources/grants/:grantId/refresh', limited, async (c) => {
@@ -216,9 +247,16 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
   authenticated.post('/api/understanding/sources/work-folders', limited, async (c) => {
     const body = await c.req.json().catch(() => null);
     const rootPath = stringField(body, 'rootPath');
+    const processingPolicy = stringField(body, 'processingPolicy');
     if (!rootPath) return c.json({ ok: false, error: 'Missing rootPath' }, 400);
+    if (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed') {
+      return c.json({ ok: false, error: 'Explicit processingPolicy is required' }, 400);
+    }
     try {
-      return c.json({ ok: true, source: await service.grantDirectorySource(rootPath) }, 201);
+      return c.json({
+        ok: true,
+        source: await service.grantDirectorySource(rootPath, processingPolicy),
+      }, 201);
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
     }
@@ -236,14 +274,19 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
   authenticated.post('/api/understanding/bootstrap', limited, async (c) => {
     const body = await c.req.json().catch(() => null);
     const items = body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>).items)
-      ? (body as { items: unknown[] }).items.slice(0, 150) : [];
+      ? (body as { items: unknown[] }).items.slice(0, 1_200) : [];
+    const processingPolicy = stringField(body, 'processingPolicy');
     if (!items.length) return c.json({ ok: false, error: 'No understanding source items were provided' }, 400);
+    if (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed') {
+      return c.json({ ok: false, error: 'Explicit processingPolicy is required' }, 400);
+    }
     try {
       const checkpoints = body && typeof body === 'object' && (body as Record<string, unknown>).sourceCheckpoints
         && typeof (body as Record<string, unknown>).sourceCheckpoints === 'object'
         ? (body as { sourceCheckpoints: Record<string, unknown> }).sourceCheckpoints : undefined;
       const result = await service.importUnderstandingSources(
         items,
+        processingPolicy,
         c.req.raw.signal,
         stringField(body, 'workDiscoveryRunId') || undefined,
         checkpoints,

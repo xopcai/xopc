@@ -4,9 +4,11 @@ import {
   attachMemoryEvidence,
   claimKnowledgeSourceItems,
   completeKnowledgeSourceItemSynthesis,
+  deleteMemoryRecord,
   deleteMemoryEvidenceForRecord,
   getMemoryRecord,
   listKnowledgeSourceItems,
+  pruneBoundedKnowledgeSourceItems,
   upsertMemoryRecord,
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
@@ -30,6 +32,11 @@ export type KnowledgeSynthesisBatchResult = {
   ignored: number;
   failed: number;
   recordIds: string[];
+};
+
+export type ConnectedKnowledgePruneResult = {
+  rawDeleted: number;
+  derivedDeleted: number;
 };
 
 function providerId(item: KnowledgeSourceItem): string {
@@ -210,12 +217,41 @@ export class ConnectedKnowledgePipeline {
     return result;
   }
 
-  private rebuildDailySummary(sourceInstanceId: string, day: string): void {
+  /** Remove bounded raw items and every content-bearing memory derived only from them. */
+  pruneBoundedRetention(sourceInstanceId: string, olderThanMs: number): ConnectedKnowledgePruneResult {
+    const expired: KnowledgeSourceItem[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const page = listKnowledgeSourceItems({
+        sourceInstanceId,
+        retentionClass: 'bounded',
+        retentionBeforeMs: olderThanMs,
+        includeDeleted: true,
+        limit: 500,
+        offset,
+      });
+      expired.push(...page);
+      if (page.length < 500) break;
+    }
+    if (!expired.length) return { rawDeleted: 0, derivedDeleted: 0 };
+    const affectedDays = new Set(expired.map(dayFor));
+    let derivedDeleted = 0;
+    for (const item of expired) {
+      if (deleteMemoryRecord(knowledgeRecordId(item.id))) derivedDeleted += 1;
+    }
+    const rawDeleted = pruneBoundedKnowledgeSourceItems(sourceInstanceId, olderThanMs);
+    for (const day of affectedDays) {
+      if (this.rebuildDailySummary(sourceInstanceId, day, true)) derivedDeleted += 1;
+    }
+    return { rawDeleted, derivedDeleted };
+  }
+
+  private rebuildDailySummary(sourceInstanceId: string, day: string, deleteWhenEmpty = false): boolean {
     const items = listKnowledgeSourceItems({ sourceInstanceId, limit: 500 })
       .filter((item) => dayFor(item) === day && item.synthesisStatus === 'completed')
       .slice(0, MAX_SUMMARY_ITEMS);
     if (items.length === 0) {
       const existing = getMemoryRecord(summaryRecordId(sourceInstanceId, day));
+      if (existing && deleteWhenEmpty) return deleteMemoryRecord(existing.id);
       if (existing) {
         upsertMemoryRecord({
           id: existing.id,
@@ -241,7 +277,7 @@ export class ConnectedKnowledgePipeline {
           canonicalKey: existing.canonicalKey,
         });
       }
-      return;
+      return false;
     }
     const sourceProvider = providerId(items[0]!);
     const lines = [`# ${sourceProvider} updates for ${day}`, ''];
@@ -289,5 +325,6 @@ export class ConnectedKnowledgePipeline {
         observedAt: item.occurredAt ?? item.sourceUpdatedAt,
       });
     }
+    return false;
   }
 }

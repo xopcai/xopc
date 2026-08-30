@@ -1,4 +1,5 @@
 import type { Config } from '../config/schema.js';
+import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
 import type { UnderstandingReviewResult } from '../agent/memory/understanding/types.js';
 import {
@@ -10,7 +11,6 @@ import {
   getConnectorAccount,
   getConnectorInstallation,
   getConnectorSyncPolicyForConnection,
-  pruneBoundedKnowledgeSourceItems,
   recoverStaleConnectorLearningJobs,
   reconcileConnectorAccount,
   setConnectorLearningPaused,
@@ -18,7 +18,7 @@ import {
   upsertConnectorConnection,
   type ConnectorLearningJob,
 } from '../storage/sqlite/index.js';
-import { ConnectedUnderstandingPipeline } from '../knowledge/index.js';
+import { ConnectedKnowledgePipeline, ConnectedUnderstandingPipeline } from '../knowledge/index.js';
 import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
 import { createLogger } from '../utils/logger.js';
 import {
@@ -360,10 +360,16 @@ export function startConnectorLearningCoordinator(options: {
       lastCollectedAt: Date.now(),
     });
     publish(completed);
-    pruneBoundedKnowledgeSourceItems(
+    const retention = new ConnectedKnowledgePipeline({
+      agentId: job.agentId,
+      workspaceId: getWorkspacePath(options.getConfig()),
+    }).pruneBoundedRetention(
       job.sourceInstanceId,
       Date.now() - plan.bootstrapWindowDays * 24 * 60 * 60_000,
     );
+    if (retention.rawDeleted || retention.derivedDeleted) {
+      log.info({ jobId: job.id, sourceInstanceId: job.sourceInstanceId, ...retention }, 'Connected source retention pruned');
+    }
     const syncPolicy = getConnectorSyncPolicyForConnection(job.connectionId);
     if (syncPolicy?.scanEnabled === false) return;
     const intervalMinutes = syncPolicy?.intervalMinutes ?? plan.intervalMinutes;
