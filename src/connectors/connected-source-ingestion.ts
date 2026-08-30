@@ -48,13 +48,17 @@ function boundedPersonValue(value: unknown, maxLength = 320): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+function normalizedEmail(value: string): string {
+  return /<([^<>\s]+@[^<>\s]+)>/.exec(value)?.[1]?.toLowerCase() ?? value.toLowerCase();
+}
+
 function personEntities(record: Record<string, unknown> | null): PersonEntitySignal[] {
   if (!record) return [];
   const extractPerson = (value: unknown, role: string): PersonEntitySignal[] => {
     if (typeof value === 'string') {
       const normalized = boundedPersonValue(value);
       if (!normalized) return [];
-      return normalized.includes('@') ? [{ role, email: normalized }] : [{ role, name: normalized }];
+      return normalized.includes('@') ? [{ role, email: normalizedEmail(normalized) }] : [{ role, name: normalized }];
     }
     const nested = asRecord(value);
     if (!nested) return [];
@@ -94,6 +98,23 @@ function connectionIdentities(identity: Record<string, unknown>): string[] {
     .filter((value): value is string => typeof value === 'string')
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean))];
+}
+
+function hasOwnerAttribution(
+  toolkit: string,
+  people: PersonEntitySignal[],
+  ownerIdentities: string[],
+): boolean {
+  const attributableRoles = toolkit === 'gmail'
+    ? new Set(['sender', 'from'])
+    : toolkit === 'googlecalendar'
+      ? new Set(['organizer'])
+      : new Set(['author', 'user', 'username', 'owner', 'owners']);
+  return people
+    .filter((person) => attributableRoles.has(person.role))
+    .flatMap((person) => [person.email, person.username, person.name])
+    .filter((value): value is string => Boolean(value))
+    .some((value) => ownerIdentities.includes(value.trim().toLowerCase()));
 }
 
 function resultPayload(value: unknown): Record<string, unknown> {
@@ -143,14 +164,11 @@ function resultToSourceItems(input: {
     const record = entity.value;
     const people = personEntities(record);
     const ownerIdentities = connectionIdentities(input.connectionIdentity);
-    const observedIdentities = peopleSignals(people).map((value) => value.toLowerCase());
     const actorAttributed = entity.metadata.actorAttributed === true
-      || input.toolkit === 'gmail'
-      || input.toolkit === 'googlecalendar'
-      || (['github', 'googledrive'].includes(input.toolkit)
-        && observedIdentities.some((value) => ownerIdentities.includes(value)));
+      || hasOwnerAttribution(input.toolkit, people, ownerIdentities);
     const serialized = JSON.stringify(sanitizeConnectedSourceValue(entity.value), null, 2);
-    const normalizedText = serialized.length > 8_000 ? `${serialized.slice(0, 8_000)}\n…` : serialized;
+    const contentChars = typeof entity.value.content === 'string' ? 24_000 : 8_000;
+    const normalizedText = serialized.length > contentChars ? `${serialized.slice(0, contentChars)}\n…` : serialized;
     const contentHash = createHash('sha256').update(serialized).digest('hex');
     return {
       sourceInstanceId: input.sourceInstanceId,

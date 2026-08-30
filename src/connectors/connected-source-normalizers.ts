@@ -57,11 +57,75 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== ''));
 }
 
+const MAX_EMAIL_CONTENT_CHARS = 24_000;
+
+function gmailHeaders(message: JsonRecord): Map<string, string> {
+  const messagePayload = record(message.payload);
+  const values = Array.isArray(messagePayload?.headers) ? messagePayload.headers : [];
+  const headers = new Map<string, string>();
+  for (const value of values) {
+    const header = record(value);
+    const name = text(header, 'name')?.toLowerCase();
+    const headerValue = text(header, 'value');
+    if (name && headerValue) headers.set(name, headerValue);
+  }
+  return headers;
+}
+
+function decodeGmailBody(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim() || value.length > 256_000) return undefined;
+  try {
+    const decoded = Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8').trim();
+    return decoded || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function stripHtml(value: string): string {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function gmailContent(message: JsonRecord): string | undefined {
+  const direct = text(message, 'plainText', 'plain_text', 'text', 'content', 'body');
+  if (direct) return direct.slice(0, MAX_EMAIL_CONTENT_CHARS);
+  const plain: string[] = [];
+  const html: string[] = [];
+  const visit = (value: unknown, depth = 0): void => {
+    if (depth > 10 || plain.join('').length >= MAX_EMAIL_CONTENT_CHARS) return;
+    const part = record(value);
+    if (!part) return;
+    const mimeType = text(part, 'mimeType', 'mime_type')?.toLowerCase();
+    const body = record(part.body);
+    const decoded = decodeGmailBody(body?.data);
+    if (decoded) {
+      if (mimeType === 'text/html') html.push(stripHtml(decoded));
+      else if (!mimeType || mimeType === 'text/plain') plain.push(decoded);
+    }
+    if (Array.isArray(part.parts)) {
+      for (const nested of part.parts) visit(nested, depth + 1);
+    }
+  };
+  visit(message.payload);
+  const content = (plain.length ? plain : html).filter(Boolean).join('\n\n').trim();
+  return content ? content.slice(0, MAX_EMAIL_CONTENT_CHARS) : undefined;
+}
+
 function normalizeGmail(result: unknown): ConnectedSourceEntity[] {
   return rows(payload(result), 'messages').flatMap((message) => {
     const externalId = text(message, 'id', 'messageId', 'message_id');
     if (!externalId) return [];
     const occurredAt = time(message.internalDate ?? message.internal_date ?? message.date ?? message.timestamp);
+    const headers = gmailHeaders(message);
     return [{
       externalId,
       itemType: 'email',
@@ -70,12 +134,13 @@ function normalizeGmail(result: unknown): ConnectedSourceEntity[] {
       value: compact({
         id: externalId,
         threadId: text(message, 'threadId', 'thread_id'),
-        subject: text(message, 'subject'),
-        sender: message.sender ?? message.from,
-        recipients: message.recipients ?? message.to,
+        subject: text(message, 'subject') ?? headers.get('subject'),
+        sender: message.sender ?? message.from ?? headers.get('from'),
+        recipients: message.recipients ?? message.to ?? headers.get('to'),
         date: occurredAt,
         labels: message.labelIds ?? message.label_ids ?? message.labels,
         snippet: text(message, 'snippet', 'preview'),
+        content: gmailContent(message),
       }),
       metadata: {
         observationKind: 'message',

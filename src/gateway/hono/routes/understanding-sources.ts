@@ -14,6 +14,7 @@ import {
 import { listUnderstandingSourceDefinitions } from '../../../user-context/sources/catalog.js';
 import {
   listUnderstandingSourceGrants,
+  listUnderstandingSourceRuns,
   getUnderstandingSourceGrant,
   deleteUserFocus,
   listUserFocuses,
@@ -59,10 +60,17 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
     return c.json({ ok: true, sources: listUnderstandingSourceDefinitions(platform) });
   });
 
-  authenticated.get('/api/understanding/sources/grants', (c) => c.json({
-    ok: true,
-    grants: listUnderstandingSourceGrants({ includeRevoked: c.req.query('includeRevoked') === 'true' }),
-  }));
+  authenticated.get('/api/understanding/sources/grants', (c) => {
+    const grants = listUnderstandingSourceGrants({ includeRevoked: c.req.query('includeRevoked') === 'true' });
+    return c.json({
+      ok: true,
+      grants,
+      latestRuns: Object.fromEntries(grants.flatMap((grant) => {
+        const run = listUnderstandingSourceRuns(grant.id, 1)[0];
+        return run ? [[grant.id, run]] : [];
+      })),
+    });
+  });
 
   authenticated.get('/api/understanding/sources/content-candidates', (c) => {
     const agentId = resolveDefaultAgentId(deps.service.currentConfig);
@@ -85,16 +93,31 @@ export function registerUnderstandingSourceRoutes(authenticated: Hono, deps: Aut
   authenticated.delete('/api/understanding/sources/grants/:grantId', limited, (c) => {
     const current = getUnderstandingSourceGrant(c.req.param('grantId'));
     const accountId = typeof current?.config.accountId === 'string' ? current.config.accountId : undefined;
+    const connectorId = typeof current?.config.connectorId === 'string' ? current.config.connectorId : undefined;
+    const sourceInstanceId = accountId && connectorId ? `composio:${connectorId}:${accountId}` : undefined;
     const connectionId = accountId ? getConnectorAccount(accountId)?.currentConnectionId : undefined;
     if (connectionId) deps.service.setConnectorLearningPaused(connectionId, true);
     const grant = revokeUnderstandingSourceGrant(c.req.param('grantId'));
     if (grant && c.req.query('deleteDerived') === 'true') {
       const activeGrantIds = new Set(listUnderstandingSourceGrants().map((item) => item.id));
+      const activeSourceInstanceIds = new Set(listUnderstandingSourceGrants().flatMap((item) => {
+        const activeAccountId = typeof item.config.accountId === 'string' ? item.config.accountId : undefined;
+        const activeConnectorId = typeof item.config.connectorId === 'string' ? item.config.connectorId : undefined;
+        return activeAccountId && activeConnectorId ? [`composio:${activeConnectorId}:${activeAccountId}`] : [];
+      }));
       for (const understanding of listUnderstandings()) {
-        const grantEvidence = listUnderstandingEvidence(understanding.id)
+        const evidence = listUnderstandingEvidence(understanding.id);
+        const grantEvidence = evidence
           .map((evidence) => /^understanding-source-grant:([^:]+):/.exec(evidence.sourceRef)?.[1])
           .filter((id): id is string => Boolean(id));
-        if (grantEvidence.includes(grant.id) && !grantEvidence.some((id) => id !== grant.id && activeGrantIds.has(id))) {
+        const connectorEvidence = evidence
+          .map((item) => item.sourceInstanceId)
+          .filter((id): id is string => Boolean(id));
+        const belongsToRevokedSource = grantEvidence.includes(grant.id)
+          || Boolean(sourceInstanceId && connectorEvidence.includes(sourceInstanceId));
+        const hasActiveAlternative = grantEvidence.some((id) => id !== grant.id && activeGrantIds.has(id))
+          || connectorEvidence.some((id) => id !== sourceInstanceId && activeSourceInstanceIds.has(id));
+        if (belongsToRevokedSource && !hasActiveAlternative) {
           deleteUnderstanding(understanding.id);
         }
       }

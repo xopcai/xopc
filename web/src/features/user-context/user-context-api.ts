@@ -113,6 +113,18 @@ export type UnderstandingSourceGrant = {
   updatedAt: number;
 };
 
+export type UnderstandingSourceRun = {
+  id: string;
+  grantId: string;
+  kind: 'preview' | 'bootstrap' | 'incremental' | 'fingerprint';
+  status: 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'canceled';
+  itemsSeen: number;
+  metadata: Record<string, unknown>;
+  errorMessage?: string;
+  startedAt: number;
+  completedAt?: number;
+};
+
 export type ConnectedContentCandidate = {
   sourceItemId: string;
   sourceInstanceId: string;
@@ -220,9 +232,15 @@ export function deleteCollaborationRule(id: string): Promise<{ ok: true }> {
   return fetchJson(apiUrl(`/api/you/rules/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
-export async function fetchUnderstandingSourceGrants(): Promise<UnderstandingSourceGrant[]> {
-  const response = await fetchJson<{ grants: UnderstandingSourceGrant[] }>(apiUrl('/api/understanding/sources/grants'));
-  return response.grants;
+export async function fetchUnderstandingSourceOverview(): Promise<{
+  grants: UnderstandingSourceGrant[];
+  latestRuns: Record<string, UnderstandingSourceRun>;
+}> {
+  const response = await fetchJson<{
+    grants: UnderstandingSourceGrant[];
+    latestRuns?: Record<string, UnderstandingSourceRun>;
+  }>(apiUrl('/api/understanding/sources/grants'));
+  return { grants: response.grants, latestRuns: response.latestRuns ?? {} };
 }
 
 export async function fetchConnectedContentCandidates(): Promise<ConnectedContentCandidate[]> {

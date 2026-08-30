@@ -33,35 +33,33 @@ function makeEntry(overrides: Partial<NoteIndexEntry> = {}): NoteIndexEntry {
 }
 
 describe('upsertNoteInListCaches', () => {
-  it('prepends a note to home recentlyOpened', () => {
+  it('prepends a note to the home recent-notes query', () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(queryKeys.home, {
-      recentlyOpened: [makeEntry({ id: 'note-old' })],
-      inboxCount: 0,
-      pendingTasks: [],
-      pendingTaskCount: 0,
-      recentSessions: [],
+    queryClient.setQueryData(queryKeys.homeRecentNotes, {
+      items: [makeEntry({ id: 'note-old' })],
+      total: 1,
+      limit: 6,
+      offset: 0,
+      hasMore: false,
     });
 
     upsertNoteInListCaches(queryClient, noteToIndexEntry(makeNote({ id: 'note-new' })));
 
-    const home = queryClient.getQueryData<{
-      recentlyOpened: NoteIndexEntry[];
-    }>(queryKeys.home);
-    expect(home?.recentlyOpened.map((item) => item.id)).toEqual(['note-new', 'note-old']);
+    const home = queryClient.getQueryData<{ items: NoteIndexEntry[] }>(queryKeys.homeRecentNotes);
+    expect(home?.items.map((item) => item.id)).toEqual(['note-new', 'note-old']);
   });
 
   it('bumps an existing note to the front with merged fields', () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(queryKeys.home, {
-      recentlyOpened: [
+    queryClient.setQueryData(queryKeys.homeRecentNotes, {
+      items: [
         makeEntry({ id: 'note-b', title: 'B' }),
         makeEntry({ id: 'note-a', title: 'Old title' }),
       ],
-      inboxCount: 0,
-      pendingTasks: [],
-      pendingTaskCount: 0,
-      recentSessions: [],
+      total: 2,
+      limit: 6,
+      offset: 0,
+      hasMore: false,
     });
 
     upsertNoteInListCaches(
@@ -69,12 +67,10 @@ describe('upsertNoteInListCaches', () => {
       noteToIndexEntry(makeNote({ id: 'note-a', title: 'New title', updatedAt: 99 })),
     );
 
-    const home = queryClient.getQueryData<{
-      recentlyOpened: NoteIndexEntry[];
-    }>(queryKeys.home);
-    expect(home?.recentlyOpened.map((item) => item.id)).toEqual(['note-a', 'note-b']);
-    expect(home?.recentlyOpened[0]?.title).toBe('New title');
-    expect(home?.recentlyOpened[0]?.updatedAt).toBe(99);
+    const home = queryClient.getQueryData<{ items: NoteIndexEntry[] }>(queryKeys.homeRecentNotes);
+    expect(home?.items.map((item) => item.id)).toEqual(['note-a', 'note-b']);
+    expect(home?.items[0]?.title).toBe('New title');
+    expect(home?.items[0]?.updatedAt).toBe(99);
   });
 
   it('prepends matching notes infinite lists only when filters match', () => {
@@ -121,12 +117,8 @@ describe('upsertNoteInListCaches', () => {
 
   it('no-ops when matching note queries have no cached data yet', () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(queryKeys.home, {
-      recentlyOpened: [],
-      inboxCount: 0,
-      pendingTasks: [],
-      pendingTaskCount: 0,
-      recentSessions: [],
+    queryClient.setQueryData(queryKeys.homeRecentNotes, {
+      items: [], total: 0, limit: 6, offset: 0, hasMore: false,
     });
     queryClient.getQueryCache().build(queryClient, {
       queryKey: [...queryKeys.notesAll, 'all', 'all'],
@@ -136,7 +128,7 @@ describe('upsertNoteInListCaches', () => {
       upsertNoteInListCaches(queryClient, noteToIndexEntry(makeNote({ id: 'note-new' })));
     }).not.toThrow();
 
-    const home = queryClient.getQueryData<{ recentlyOpened: NoteIndexEntry[] }>(queryKeys.home);
-    expect(home?.recentlyOpened.map((item) => item.id)).toEqual(['note-new']);
+    const home = queryClient.getQueryData<{ items: NoteIndexEntry[] }>(queryKeys.homeRecentNotes);
+    expect(home?.items.map((item) => item.id)).toEqual(['note-new']);
   });
 });

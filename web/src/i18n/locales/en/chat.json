@@ -800,6 +800,7 @@
     "voicePreparing": "Preparing local speech recognition…",
     "voicePreparingProgress": "Preparing local speech recognition… {progress}%",
     "voiceRequestingMicrophone": "Waiting for microphone permission…",
+    "voiceStartingMicrophone": "Starting microphone…",
     "voicePreparationFailed": "Local speech preparation failed — retry",
     "voiceNeedsPreparation": "Local speech model needs preparation",
     "voiceRetry": "Retry transcription",
