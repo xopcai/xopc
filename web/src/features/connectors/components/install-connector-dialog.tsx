@@ -317,7 +317,17 @@ export function InstallConnectorDialog({
               })}
             </div>
             <div className="flex flex-col gap-4">
-          {isComposioToolkit && !composioConfigured ? (
+          {isComposioToolkit && composioSetupLoading ? (
+            <section
+              className="rounded-2xl border border-edge bg-surface-base p-4"
+              aria-busy="true"
+              aria-label={t.composioSetupTitle}
+            >
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="mt-2 h-3 w-72 max-w-full" />
+              <Skeleton className="mt-3 h-16 w-full rounded-xl" />
+            </section>
+          ) : isComposioToolkit && !composioConfigured ? (
             <section className="rounded-2xl border border-accent/25 bg-accent-soft/50 p-4">
               <h3 className="text-sm font-semibold text-fg">{t.composioSetupTitle}</h3>
               <p className="mt-1 text-xs leading-5 text-fg-muted">{t.composioSetupHint}</p>
