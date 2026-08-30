@@ -94,7 +94,15 @@
         "workFolder": "工作目录",
         "projectFiles": "项目文件",
         "recentChanges": "最近变更",
-        "gitState": "Git 状态"
+        "gitState": "Git 状态",
+        "filesScanned": "发现 {{count}} 个文件",
+        "changedFiles": "{{count}} 个变更文件",
+        "changedFile": "已变更文件",
+        "contextFile": "已读取上下文",
+        "structureFile": "项目结构文件",
+        "recentArea": "近期工作区域",
+        "scanningFiles": "正在扫描项目结构",
+        "checkingChanges": "正在检查 Git 活动"
       },
       "cancelAnalysis": "取消分析",
       "foundTitle": "我看到的当前状态",

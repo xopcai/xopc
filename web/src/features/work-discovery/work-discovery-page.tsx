@@ -50,6 +50,15 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function compactPathLabel(path: string): string {
+  const parts = path.replaceAll('\\', '/').split('/').filter(Boolean);
+  return parts.slice(-2).join('/') || path;
+}
+
+function formatCount(template: string, count: number): string {
+  return template.replace('{{count}}', String(count));
+}
+
 export function WorkDiscoveryPage({
   embedded = false,
   onRequestClose,
@@ -94,11 +103,69 @@ export function WorkDiscoveryPage({
     code_activity: 'git',
     files: 'file',
   };
+  const projectKind = run?.snapshot?.projectKind ?? preview?.projectKind;
+  const projectKindLabel = projectKind === 'coding'
+    ? copy.codingProject
+    : projectKind === 'general'
+      ? copy.generalProject
+      : projectKind === 'unknown'
+        ? copy.unknownProject
+        : null;
+  const snapshotFileSignals: UnderstandingSignal[] = (run?.snapshot?.files ?? []).slice(0, 4).map((file) => ({
+    id: `snapshot-file:${file.relativePath}`,
+    label: compactPathLabel(file.relativePath),
+    kind: file.source === 'git_change' ? 'recent' : 'file',
+    meta: file.source === 'git_change'
+      ? copy.sourceSignals.changedFile
+      : file.source === 'document'
+        ? copy.sourceSignals.contextFile
+        : copy.sourceSignals.structureFile,
+    detail: file.relativePath,
+  }));
+  const activeRootPath = run?.rootPath ?? preview?.canonicalRootPath;
+  const recentAreaSignals: UnderstandingSignal[] = snapshotFileSignals.length === 0
+    ? (preview?.fingerprint.recentAreas ?? []).slice(0, 2).map((area) => ({
+        id: `recent-area:${area}`,
+        label: area,
+        kind: 'recent',
+        meta: copy.sourceSignals.recentArea,
+        detail: area,
+      }))
+    : [];
+  const fallbackSignals: UnderstandingSignal[] = snapshotFileSignals.length === 0
+    ? recentAreaSignals.length > 0
+      ? recentAreaSignals
+      : [
+          { id: 'project-files', label: copy.sourceSignals.projectFiles, kind: 'file', meta: copy.sourceSignals.scanningFiles },
+          { id: 'recent-changes', label: copy.sourceSignals.recentChanges, kind: 'recent', meta: copy.sourceSignals.checkingChanges },
+        ]
+    : [];
+  const scannedFileCount = run?.snapshot?.sampledPathCount;
+  const folderMeta = [
+    projectKindLabel,
+    scannedFileCount != null ? formatCount(copy.sourceSignals.filesScanned, scannedFileCount) : null,
+  ].filter((item): item is string => Boolean(item)).join(' · ');
+  const activeBranch = run?.snapshot?.branch ?? preview?.fingerprint.branch;
+  const changedFileCount = run?.snapshot?.changedPathCount ?? preview?.fingerprint.changedFileCount;
   const runningSignals: UnderstandingSignal[] = [
-    { id: 'work-folder', label: copy.sourceSignals.workFolder, kind: 'folder' },
-    { id: 'project-files', label: copy.sourceSignals.projectFiles, kind: 'file' },
-    { id: 'recent-changes', label: copy.sourceSignals.recentChanges, kind: 'recent' },
-    { id: 'git-state', label: copy.sourceSignals.gitState, kind: 'git' },
+    {
+      id: 'work-folder',
+      label: activeRootPath ? compactPathLabel(activeRootPath) : copy.sourceSignals.workFolder,
+      kind: 'folder',
+      ...(folderMeta ? { meta: folderMeta } : {}),
+      ...(activeRootPath ? { detail: activeRootPath } : {}),
+    },
+    ...snapshotFileSignals,
+    ...fallbackSignals,
+    {
+      id: 'git-state',
+      label: activeBranch ?? copy.sourceSignals.gitState,
+      kind: 'git',
+      ...(changedFileCount != null
+        ? { meta: formatCount(copy.sourceSignals.changedFiles, changedFileCount) }
+        : {}),
+      ...(activeBranch ? { detail: `Git · ${activeBranch}` } : {}),
+    },
     ...localSources
       .filter((source) => selectedSourceIds.has(source.id))
       .map((source): UnderstandingSignal => ({

@@ -27,7 +27,6 @@ import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-inpu
 import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
-import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
 import { UnderstandingActivityCoordinator } from '@/features/work-discovery/understanding-activity-coordinator';
 import {
   closeWorkDiscoveryOverlaySearch,
@@ -160,7 +159,6 @@ export function AppShell() {
         <AgentRunNotificationCoordinator />
         <ElectronMenuListener />
         <WindowsTitlebar />
-        <UnderstandingStatusButton floating />
         {isElectronDarwin() ? (
           <div
             className={cn('w-full', APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS)}

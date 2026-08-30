@@ -61,11 +61,23 @@ describe('UnderstandingStatusButton', () => {
     useUnderstandingActivityStore.getState().finish();
   });
 
-  it('reviews a completed directory run in place instead of navigating back to onboarding', async () => {
+  it('stays hidden outside the You page', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat']}>
           <UnderstandingStatusButton />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.querySelector('[aria-label="Review what xopc understands"]')).toBeNull();
+  });
+
+  it('reviews a completed directory run in place instead of navigating back to onboarding', async () => {
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/you']}>
+          <UnderstandingStatusButton persistent />
           <LocationProbe />
         </MemoryRouter>,
       );
@@ -76,6 +88,6 @@ describe('UnderstandingStatusButton', () => {
 
     expect(document.body.textContent).toContain('Here is what I understand so far');
     expect(document.body.textContent).not.toContain('Review and confirm');
-    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/chat');
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/you');
   });
 });

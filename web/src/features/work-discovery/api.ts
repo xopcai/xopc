@@ -72,6 +72,20 @@ export type WorkDiscoveryRun = {
   rootPath: string;
   projectId: string;
   sessionKey: string;
+  snapshot?: {
+    projectKind: 'coding' | 'general' | 'unknown';
+    sampledPathCount: number;
+    omittedPathCount: number;
+    documentCount: number;
+    contentBytes: number;
+    changedPathCount: number;
+    branch?: string;
+    files?: Array<{
+      relativePath: string;
+      source: 'git_change' | 'document' | 'structure';
+    }>;
+    truncated: boolean;
+  };
   result?: WorkDiscoveryResult;
   feedback?: {
     recognitionDecision: 'confirmed' | 'corrected' | 'different_goal' | 'dismissed';

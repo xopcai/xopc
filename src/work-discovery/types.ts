@@ -286,6 +286,11 @@ export interface WorkContextSnapshotSummary {
   documentCount: number;
   contentBytes: number;
   changedPathCount: number;
+  branch?: string;
+  files: Array<{
+    relativePath: string;
+    source: 'git_change' | 'document' | 'structure';
+  }>;
   truncated: boolean;
 }
 
