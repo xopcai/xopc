@@ -1,3 +1,5 @@
+import pcmCaptureWorkletUrl from './pcm-capture-worklet.ts?worker&url';
+
 const TARGET_SAMPLE_RATE = 16_000;
 
 export interface RecorderAudioLevel {
@@ -79,41 +81,6 @@ export function encodePcm16Wav(samples: Float32Array, sampleRate = TARGET_SAMPLE
 
 const WORKLET_NAME = 'xopc-pcm-capture';
 const WORKLET_FLUSH_TIMEOUT_MS = 1_000;
-const WORKLET_SOURCE = `
-  class XopcPcmCaptureProcessor extends AudioWorkletProcessor {
-    constructor() {
-      super();
-      this.buffer = new Float32Array(2048);
-      this.offset = 0;
-      this.port.onmessage = (event) => {
-        if (event.data === 'flush') {
-          this.flush();
-          this.port.postMessage({ type: 'flushed' });
-        }
-      };
-    }
-    flush() {
-      if (!this.offset) return;
-      const samples = this.buffer.slice(0, this.offset);
-      this.offset = 0;
-      this.port.postMessage({ type: 'samples', buffer: samples.buffer }, [samples.buffer]);
-    }
-    process(inputs) {
-      const channel = inputs[0] && inputs[0][0];
-      if (!channel) return true;
-      let sourceOffset = 0;
-      while (sourceOffset < channel.length) {
-        const count = Math.min(channel.length - sourceOffset, this.buffer.length - this.offset);
-        this.buffer.set(channel.subarray(sourceOffset, sourceOffset + count), this.offset);
-        this.offset += count;
-        sourceOffset += count;
-        if (this.offset === this.buffer.length) this.flush();
-      }
-      return true;
-    }
-  }
-  registerProcessor('${WORKLET_NAME}', XopcPcmCaptureProcessor);
-`;
 
 type CaptureMessage =
   | { type: 'samples'; buffer: ArrayBuffer }
@@ -163,9 +130,8 @@ export class PcmFrameCapture {
       throw new Error('PCM audio recording is not supported in this browser');
     }
     const context = new AudioContext();
-    const moduleUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'text/javascript' }));
     try {
-      await context.audioWorklet.addModule(moduleUrl);
+      await context.audioWorklet.addModule(pcmCaptureWorkletUrl);
       const source = context.createMediaStreamSource(stream);
       const node = new AudioWorkletNode(context, WORKLET_NAME);
       const mutedOutput = context.createGain();
@@ -179,8 +145,6 @@ export class PcmFrameCapture {
     } catch (error) {
       await context.close().catch(() => undefined);
       throw error;
-    } finally {
-      URL.revokeObjectURL(moduleUrl);
     }
   }
 

@@ -4,7 +4,15 @@
 
 import { systemPreferences } from 'electron';
 
+import { isEmbeddedGatewayLoopbackUrl } from '../loopback-url.js';
 import type { TccTriState } from './system-settings-types.js';
+
+type OsMediaAccessType = 'microphone' | 'screen' | 'camera';
+
+export interface ShellPermissionDetails {
+  mediaType?: 'video' | 'audio' | 'unknown';
+  mediaTypes?: Array<'video' | 'audio'>;
+}
 
 export function tccToTriState(s: string): TccTriState {
   if (s === 'granted') {
@@ -35,7 +43,7 @@ function linuxMediaGranted(type: 'microphone' | 'screen' | 'camera'): boolean {
   }
 }
 
-function isMediaTypeGranted(type: 'microphone' | 'screen' | 'camera'): boolean {
+function isMediaTypeGranted(type: OsMediaAccessType): boolean {
   const raw = rawMediaAccessStatus(type);
   if (process.platform === 'win32') {
     return raw !== 'denied' && raw !== 'restricted';
@@ -49,22 +57,44 @@ function isMediaTypeGranted(type: 'microphone' | 'screen' | 'camera'): boolean {
   return false;
 }
 
+export function isTrustedShellPermissionRequest(urls: Array<string | null | undefined>): boolean {
+  const origins = urls
+    .filter((url): url is string => Boolean(url))
+    .map((url) => {
+      if (!isEmbeddedGatewayLoopbackUrl(url)) return null;
+      try {
+        return new URL(url).origin;
+      } catch {
+        return null;
+      }
+    });
+  return origins.length > 0
+    && origins.every((origin): origin is string => origin !== null)
+    && new Set(origins).size === 1;
+}
+
+export function requiredOsMediaAccessTypes(
+  permission: string,
+  details: ShellPermissionDetails = {},
+): OsMediaAccessType[] {
+  if (permission === 'audioCapture') return ['microphone'];
+  if (permission === 'videoCapture') return ['camera'];
+  if (permission === 'display-capture') return ['screen'];
+  if (permission !== 'media') return [];
+
+  const requested = details.mediaTypes
+    ?? (details.mediaType && details.mediaType !== 'unknown' ? [details.mediaType] : []);
+  return [...new Set(requested.map((type) => type === 'audio' ? 'microphone' : 'camera'))];
+}
+
 /**
  * Whether the renderer may use a Chromium permission that maps to an OS privacy toggle.
  * Prevents auto-granting before TCC / Windows privacy registers the app.
  */
-export function isShellChromiumPermissionGranted(permission: string): boolean {
-  if (permission === 'media' || permission === 'audioCapture') {
-    return isMediaTypeGranted('microphone');
-  }
-
-  if (permission === 'display-capture') {
-    return isMediaTypeGranted('screen');
-  }
-
-  if (permission === 'videoCapture') {
-    return isMediaTypeGranted('camera');
-  }
-
-  return false;
+export function isShellChromiumPermissionGranted(
+  permission: string,
+  details: ShellPermissionDetails = {},
+): boolean {
+  const requiredTypes = requiredOsMediaAccessTypes(permission, details);
+  return requiredTypes.length > 0 && requiredTypes.every(isMediaTypeGranted);
 }
