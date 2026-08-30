@@ -12,6 +12,8 @@ import {
   getUnderstanding,
   linkUnderstandingEvidence,
   listContextConsolidationDecisions,
+  listUnderstandingEvidence,
+  listUnderstandings,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
@@ -50,7 +52,7 @@ describe('structured user context consolidation', () => {
       config: ConfigSchema.parse({}), triggerKind: 'schedule', now: 10,
     });
 
-    expect(result.metrics).toEqual({ scanned: 1, needsReview: 1, stale: 0 });
+    expect(result.metrics).toEqual({ scanned: 1, needsReview: 1, stale: 0, globalCandidates: 0 });
     expect(getUnderstanding(candidate.id)?.status).toBe('needs_review');
     expect(listContextConsolidationDecisions(result.run.runId)).toEqual([
       expect.objectContaining({
@@ -93,10 +95,62 @@ describe('structured user context consolidation', () => {
       config: ConfigSchema.parse({}), triggerKind: 'schedule', now: 10,
     });
 
-    expect(result.metrics).toEqual({ scanned: 1, needsReview: 1, stale: 0 });
+    expect(result.metrics).toEqual({ scanned: 1, needsReview: 1, stale: 0, globalCandidates: 0 });
     expect(getUnderstanding(candidate.id)?.status).toBe('needs_review');
     expect(listContextConsolidationDecisions(result.run.runId)).toEqual([
       expect.objectContaining({ reasonCode: 'contradictory_evidence', evidenceCount: 1 }),
     ]);
+  });
+
+  it('proposes a global preference only after confirmation in distinct projects', async () => {
+    for (const [index, projectId] of ['project-1', 'project-2'].entries()) {
+      const understanding = createUnderstanding({
+        kind: 'preference', canonicalKey: 'preference:concise-updates', status: 'active',
+        scope: { type: 'project', id: projectId }, explicitness: 'explicit', durability: 'durable',
+        sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 1,
+        statement: 'Prefers concise progress updates.', createdBy: 'user', changeReason: 'test',
+      });
+      const evidence = createContextEvidence({
+        sourceType: 'conversation', sourceRef: `turn:${index + 1}`, trustLevel: 'owner', observedAt: index + 1,
+      });
+      linkUnderstandingEvidence(understanding.versionId, evidence.id, 'supports', 1);
+    }
+
+    const first = await runContextConsolidation({
+      config: ConfigSchema.parse({}), triggerKind: 'manual', now: 10,
+    });
+    const global = listUnderstandings(['candidate']).find((item) => item.scope.type === 'global');
+
+    expect(first.metrics.globalCandidates).toBe(1);
+    expect(global).toMatchObject({
+      canonicalKey: 'preference:concise-updates', status: 'candidate', explicitness: 'inferred',
+    });
+    expect(listUnderstandingEvidence(global!.id, 'supports')).toHaveLength(2);
+
+    const second = await runContextConsolidation({
+      config: ConfigSchema.parse({}), triggerKind: 'manual', now: 11,
+    });
+    expect(second.metrics.globalCandidates).toBe(0);
+  });
+
+  it('does not globalize project items that were corrected to different statements', async () => {
+    for (const [projectId, statement] of [
+      ['project-1', 'Prefers concise progress updates.'],
+      ['project-2', 'Prefers detailed progress updates.'],
+    ]) {
+      createUnderstanding({
+        kind: 'preference', canonicalKey: 'preference:progress-updates', status: 'active',
+        scope: { type: 'project', id: projectId }, explicitness: 'explicit', durability: 'durable',
+        sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 1,
+        statement, createdBy: 'user', changeReason: 'test',
+      });
+    }
+
+    const result = await runContextConsolidation({
+      config: ConfigSchema.parse({}), triggerKind: 'manual', now: 10,
+    });
+
+    expect(result.metrics.globalCandidates).toBe(0);
+    expect(listUnderstandings(['candidate'])).toEqual([]);
   });
 });

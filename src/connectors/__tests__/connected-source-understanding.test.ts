@@ -129,8 +129,8 @@ describe('connected source understanding input', () => {
       analyze: vi.fn(async ({ items }) => ({
         modelRef: 'test/model',
         profileCandidates: [{
-          id: 'candidate-1', category: 'focus', statement: 'Is preparing the Atlas launch.',
-          confidence: 'high', evidence: ['Repeated launch preparation.'],
+          id: 'candidate-1', category: 'responsibility', statement: 'Owns the Atlas launch review.',
+          confidence: 'high', evidence: ['The source directly assigns the launch review to the user.'],
           evidenceRefs: [items[0]!.evidenceRef], status: 'pending',
         }],
         workThreadCandidates: [{
@@ -143,7 +143,7 @@ describe('connected source understanding input', () => {
 
     expect(result).toEqual({ created: 1, focusCount: 1, status: 'completed' });
     expect(applyUnderstandingCandidates).toHaveBeenCalledWith(
-      [expect.objectContaining({ kind: 'current_state', content: 'Is preparing the Atlas launch.' })],
+      [expect.objectContaining({ kind: 'project_context', content: 'Owns the Atlas launch review.' })],
       expect.objectContaining({ source: { provider: 'connected-sources', sourceInstanceId } }),
     );
     expect(listUserFocuses()).toEqual([expect.objectContaining({

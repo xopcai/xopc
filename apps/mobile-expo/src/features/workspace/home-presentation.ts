@@ -5,6 +5,13 @@ export type HomeContinueCandidate<T> = {
   updatedAt: number;
 };
 
+export type HomeRunningCandidate<T> = {
+  value: T;
+  id: string;
+  kind: 'conversation' | 'work';
+  updatedAt: number;
+};
+
 export type HomeGreetingPeriod = 'morning' | 'afternoon' | 'evening';
 
 export function homeGreetingPeriod(hour: number): HomeGreetingPeriod {
@@ -32,6 +39,17 @@ export function rankHomeContinueCandidates<T>(
     .filter((candidate) => candidate.id !== focusedId)
     .sort((left, right) => (
       continueTier(right, nowMs) - continueTier(left, nowMs)
+      || right.updatedAt - left.updatedAt
+    ))
+    .map((candidate) => candidate.value);
+}
+
+export function rankHomeRunningCandidates<T>(
+  candidates: HomeRunningCandidate<T>[],
+): T[] {
+  return candidates
+    .sort((left, right) => (
+      Number(right.kind === 'conversation') - Number(left.kind === 'conversation')
       || right.updatedAt - left.updatedAt
     ))
     .map((candidate) => candidate.value);

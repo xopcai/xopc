@@ -141,6 +141,13 @@ export class GatewayAgentRunner {
     return this.activeWebchatRunBySession.get(sessionKey);
   }
 
+  listActiveRuns(): Array<{ sessionKey: string; runId: string }> {
+    return [...this.activeWebchatRunBySession.entries()].map(([sessionKey, runId]) => ({
+      sessionKey,
+      runId,
+    }));
+  }
+
   getClarifyBridge(): ClarifyBridge {
     return this.clarifyBridge;
   }

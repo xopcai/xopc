@@ -218,7 +218,7 @@ export interface WorkDiscoveryResult {
 export interface WorkDiscoveryProfileCandidate {
   id: string;
   understandingId?: string;
-  category: 'role' | 'focus' | 'technology' | 'workflow' | 'preference';
+  category: 'role' | 'responsibility' | 'preference' | 'routine';
   statement: string;
   confidence: 'high' | 'medium' | 'low';
   evidence: string[];

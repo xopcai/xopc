@@ -2,6 +2,7 @@ import {
   parseHomeResponse,
   type HomeAttention,
   type HomeDecision,
+  type HomeRunningConversation,
   type HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
 
@@ -10,6 +11,7 @@ export type { HomeAction, HomeAttention, HomeDecision, HomeWorkbenchItem as Home
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
 export interface HomeData {
+  runningConversations: HomeRunningConversation[];
   needsUser: HomeWorkbenchItem[];
   background: HomeWorkbenchItem[];
   backgroundCount: number;
@@ -21,6 +23,7 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const raw = await res.json() as unknown;
   const core = parseHomeResponse(raw);
   return {
+    runningConversations: core.runningConversations,
     needsUser: core.needsUser,
     background: core.background,
     backgroundCount: core.backgroundCount,

@@ -122,10 +122,10 @@ describe('work discovery analyzer', () => {
         suggestions: [],
         contextQuestion: 'Which milestone matters now?',
         profileCandidates: [{
-          category: 'technology',
-          statement: 'Works on a TypeScript product.',
+          category: 'role',
+          statement: 'Maintains this TypeScript product.',
           confidence: 'high',
-          evidence: ['README.md describes the TypeScript product.'],
+          evidence: ['Recent work repeatedly attributes maintenance decisions to the user.'],
         }],
         workThreads: [{
           topicKey: 'typescript-product',
@@ -145,7 +145,7 @@ describe('work discovery analyzer', () => {
     expect(analysis.result).toMatchObject({
       lowConfidence: true,
       projectSummary: 'A TypeScript product repository.',
-      profileCandidates: [expect.objectContaining({ statement: 'Works on a TypeScript product.' })],
+      profileCandidates: [expect.objectContaining({ statement: 'Maintains this TypeScript product.' })],
       workThreadCandidates: [expect.objectContaining({ topicKey: 'typescript-product' })],
     });
   });
@@ -153,7 +153,7 @@ describe('work discovery analyzer', () => {
   it('keeps profile candidates for a normal manual scan without candidate context', async () => {
     const parsed = JSON.parse(validAnalysisJson()) as Record<string, unknown>;
     parsed.profileCandidates = [{
-      category: 'workflow',
+      category: 'routine',
       statement: 'Maintains current project notes in the repository.',
       confidence: 'medium',
       evidence: ['README.md contains current project notes.'],
@@ -174,7 +174,7 @@ describe('work discovery analyzer', () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: [{
-          category: 'workflow',
+          category: 'routine',
           statement: 'Reviews recent project notes regularly.',
           confidence: 'high',
           evidence: ['A recent project note was found.'],
@@ -205,13 +205,41 @@ describe('work discovery analyzer', () => {
     expect(request.messages?.[0]?.content).toContain('not “The user prefers pnpm”');
   });
 
+  it('rejects legacy project-fact and focus profile categories', async () => {
+    const evidenceRef = 'local-recent-files://item-1';
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        profileCandidates: [
+          {
+            category: 'technology', statement: 'Uses TypeScript.', confidence: 'high',
+            evidence: ['package.json'], evidenceRefs: [evidenceRef],
+          },
+          {
+            category: 'focus', statement: 'Is fixing the current build.', confidence: 'high',
+            evidence: ['Recent changes'], evidenceRefs: [evidenceRef],
+          },
+        ],
+        workThreads: [],
+      }) }],
+      stopReason: 'stop',
+    } as never);
+    const item: UnderstandingSourceItem = {
+      id: 'item-1', sourceId: 'local-recent-files', type: 'document', title: 'Project files',
+      ownerAttribution: 'user', sensitivity: 'personal', evidenceRef,
+    };
+
+    const analysis = await analyzeUnderstandingSources({ config: {} as never, items: [item] });
+
+    expect(analysis.profileCandidates).toEqual([]);
+  });
+
   it('keeps every valid understanding and work stream instead of applying fixed item caps', async () => {
     const evidenceRef = 'local-recent-files://item-1';
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: Array.from({ length: 7 }, (_, index) => ({
-          category: 'focus',
-          statement: `Supported user focus ${index + 1}`,
+          category: 'responsibility',
+          statement: `Supported user responsibility ${index + 1}`,
           confidence: 'high',
           evidence: [`Evidence ${index + 1}`],
           evidenceRefs: [evidenceRef],
@@ -250,7 +278,7 @@ describe('work discovery analyzer', () => {
       .mockResolvedValueOnce({
         content: [{ type: 'text', text: JSON.stringify({
           profileCandidates: [{
-            category: 'focus',
+            category: 'routine',
             statement: 'Plans work from calendar commitments.',
             confidence: 'medium',
             evidence: ['A current calendar commitment was found.'],
@@ -284,7 +312,7 @@ describe('work discovery analyzer', () => {
     const resultFor = (ref: string, statement: string) => ({
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: [{
-          category: 'focus', statement, confidence: 'medium', evidence: ['Supported item.'], evidenceRefs: [ref],
+          category: 'responsibility', statement, confidence: 'medium', evidence: ['Supported item.'], evidenceRefs: [ref],
         }],
         workThreads: [],
       }) }],

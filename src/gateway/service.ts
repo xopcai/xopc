@@ -475,6 +475,7 @@ export class GatewayService {
       sessionIndex: this.sessionIndex,
       getAgentService: () => this.ensureAgentService(),
       getActiveWebchatRunId: (sk) => this.agentRunner.getActiveRunId(sk),
+      listActiveWebchatRuns: () => this.agentRunner.listActiveRuns(),
     });
 
     this.marketplace = new GatewayMarketplaceService({

@@ -11,6 +11,13 @@ const mockedApiFetch = vi.mocked(apiFetch);
 
 function currentGatewayHomeResponse() {
   return {
+    runningConversations: [{
+      sessionKey: 'agent:main:webchat:default:direct:chat-1',
+      runId: 'run-1',
+      title: 'Plan the launch',
+      agentId: 'main',
+      updatedAt: 2,
+    }],
     needsUser: [{
       id: 'decision:approval',
       kind: 'decision',
@@ -48,6 +55,7 @@ describe('fetchHome', () => {
     const home = await fetchHome('en');
 
     expect(home).toMatchObject({
+      runningConversations: [{ runId: 'run-1' }],
       needsUser: [{ kind: 'decision' }],
       background: [],
       backgroundCount: 0,

@@ -103,6 +103,53 @@ describe('structured user context planner', () => {
     expect(consumed.consentRequests).toEqual([expect.objectContaining({ recordId: gated.id })]);
   });
 
+  it('reviews active non-sensitive understanding across scopes only for an explicit self-review', () => {
+    const projectItem = createUnderstanding({
+      kind: 'project_context', canonicalKey: 'project:role', status: 'active',
+      scope: { type: 'project', id: 'project-xopc' }, explicitness: 'explicit', durability: 'durable',
+      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 1,
+      statement: 'Maintains the xopc gateway.', createdBy: 'user', changeReason: 'test',
+    });
+    const candidate = createUnderstanding({
+      kind: 'preference', canonicalKey: 'preference:unconfirmed', status: 'candidate',
+      scope: { type: 'global' }, explicitness: 'inferred', durability: 'durable',
+      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.9,
+      statement: 'May prefer weekly summaries.', createdBy: 'runtime', changeReason: 'test',
+    });
+    const planner = new UserContextPlanner();
+    const ordinary = planner.plan({
+      sessionKey: 'session-review', workspaceId: '/other', turnId: 'turn-ordinary',
+      query: 'Help me plan today', userMessage: message('Help me plan today'),
+    });
+    const review = planner.plan({
+      sessionKey: 'session-review', workspaceId: '/other', turnId: 'turn-review',
+      query: '介绍下你认识的我', userMessage: message('介绍下你认识的我'),
+    });
+
+    expect(textOf(ordinary.modelMessage)).not.toContain(projectItem.statement);
+    expect(textOf(review.modelMessage)).toContain(projectItem.statement);
+    expect(textOf(review.modelMessage)).toContain('[Project: project-xopc]');
+    expect(textOf(review.modelMessage)).toContain('empty memory_search result does not mean');
+    expect(textOf(review.modelMessage)).not.toContain(candidate.statement);
+  });
+
+  it('does not apply the ordinary three-focus cap to an explicit self-review', () => {
+    for (let index = 1; index <= 4; index += 1) {
+      upsertUserFocus({
+        canonicalKey: `focus:review-${index}`, title: `Focus ${index}`, summary: `Active focus ${index}`,
+        horizon: 'ongoing', status: 'active', confidence: 1,
+        scope: { type: 'project', id: `project-${index}` }, explicitness: 'explicit', evidenceRefs: [],
+      });
+    }
+
+    const plan = new UserContextPlanner().plan({
+      sessionKey: 'session-focus-review', workspaceId: '/repo', turnId: 'turn-focus-review',
+      query: '介绍下你认识的我', userMessage: message('介绍下你认识的我'),
+    });
+
+    expect(plan.items.filter((item) => item.objectType === 'focus')).toHaveLength(4);
+  });
+
   it('does not inject a rule that exceeds the context budget', () => {
     createCollaborationRule({
       category: 'execution', priority: 1, scope: { type: 'global' }, conditions: {},

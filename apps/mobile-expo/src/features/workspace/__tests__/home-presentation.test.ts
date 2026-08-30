@@ -4,6 +4,7 @@ import {
   homeGreetingPeriod,
   mobileRouteForHomeHref,
   rankHomeContinueCandidates,
+  rankHomeRunningCandidates,
 } from '../home-presentation';
 
 describe('home presentation', () => {
@@ -25,6 +26,16 @@ describe('home presentation', () => {
     expect(homeGreetingPeriod(17)).toBe('afternoon');
     expect(homeGreetingPeriod(18)).toBe('evening');
     expect(homeGreetingPeriod(23)).toBe('evening');
+  });
+
+  it('keeps executing conversations ahead of other background work', () => {
+    const ranked = rankHomeRunningCandidates([
+      { id: 'task:1', kind: 'work', updatedAt: 300, value: 'task' },
+      { id: 'session:1', kind: 'conversation', updatedAt: 100, value: 'conversation' },
+      { id: 'workflow:1', kind: 'work', updatedAt: 200, value: 'workflow' },
+    ]);
+
+    expect(ranked).toEqual(['conversation', 'task', 'workflow']);
   });
 
   it('maps every home target to its concrete native destination', () => {
