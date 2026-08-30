@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { Config } from '../../config/schema.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import {
   BROWSER_EXT_REQUIRED_FILES,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
+  ensureBrowserExtensionOnStartup,
   resolveWindowsExtensionManager,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
@@ -107,6 +109,30 @@ describe('browser-ext-install', () => {
     const second = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(second.copied).toBe(false);
     expect(second.extensionDir).toBe(first.extensionDir);
+  });
+
+  it('skips startup artifact sync when browser tools are disabled', async () => {
+    const extensionRoot = join(binDir, 'browser-ext');
+
+    await ensureBrowserExtensionOnStartup({
+      browser: { enabled: false, backend: 'extension' },
+    } as unknown as Config);
+
+    expect(existsSync(extensionRoot)).toBe(false);
+  });
+
+  it('syncs startup artifacts for the enabled extension backend only', async () => {
+    const extensionRoot = join(binDir, 'browser-ext');
+
+    await ensureBrowserExtensionOnStartup({
+      browser: { enabled: true, backend: 'local' },
+    } as unknown as Config);
+    expect(existsSync(extensionRoot)).toBe(false);
+
+    await ensureBrowserExtensionOnStartup({
+      browser: { enabled: true, backend: 'extension' },
+    } as unknown as Config);
+    expect(validateBrowserExtLayout(extensionRoot)).toBe(true);
   });
 
   it('ensure overwrites the same directory when bundled manifest version changes', async () => {
