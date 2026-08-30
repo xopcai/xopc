@@ -8,9 +8,16 @@ import { isDurableUnderstandingCandidate } from '../../user-context/understandin
 import { UNDERSTANDING_KINDS } from '../../user-context/domain.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
-import { getSessionMetadata } from '../../storage/sqlite/index.js';
+import {
+  createContextEvidence,
+  finishContextExtractionRun,
+  getSessionMetadata,
+  loadCompactionSourceSnapshot,
+} from '../../storage/sqlite/index.js';
+import { claimRegisteredExtraction, extractionInputHash } from '../../user-context/extraction/registry.js';
 
 import { extractTextContent } from '../context/workspace.js';
+import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import type { MemoryManager } from '../memory/manager.js';
 import type { UnderstandingCandidate } from '../memory/understanding/types.js';
 import {
@@ -30,9 +37,37 @@ import {
 
 const log = createLogger('BackgroundReview');
 
-function cloneMessageTail(messages: AgentMessage[], max: number): AgentMessage[] {
-  const tail = messages.length <= max ? messages : messages.slice(-max);
-  return JSON.parse(JSON.stringify(tail)) as AgentMessage[];
+type EvidenceMessage = { entryId: string; createdAt: number; message: AgentMessage };
+type BackgroundCandidate = UnderstandingCandidate & { evidenceRefs: string[] };
+
+function isReviewMessage(value: unknown): value is AgentMessage {
+  if (!value || typeof value !== 'object') return false;
+  const role = (value as { role?: unknown }).role;
+  return role === 'user' || role === 'assistant';
+}
+
+function tagMessage(message: AgentMessage, entryId: string): AgentMessage {
+  const copy = JSON.parse(JSON.stringify(message)) as AgentMessage;
+  const tag = `[evidence_ref:${entryId}]\n`;
+  const messageContent = readAgentMessageContent(copy);
+  if (typeof messageContent === 'string') return { ...copy, content: `${tag}${messageContent}` } as AgentMessage;
+  if (Array.isArray(messageContent)) {
+    const content = [...messageContent] as Array<{ type: string; text?: string }>;
+    const first = content[0];
+    if (first?.type === 'text') content[0] = { ...first, text: `${tag}${first.text ?? ''}` };
+    else content.unshift({ type: 'text', text: tag });
+    return { ...copy, content } as AgentMessage;
+  }
+  return copy;
+}
+
+function loadEvidenceMessages(sessionKey: string, max: number): EvidenceMessage[] {
+  const snapshot = loadCompactionSourceSnapshot(sessionKey);
+  if (!snapshot) return [];
+  return snapshot.entries
+    .filter((entry) => isReviewMessage(entry.row))
+    .slice(-max)
+    .map((entry) => ({ entryId: entry.entryId, createdAt: entry.createdAt, message: entry.row as AgentMessage }));
 }
 
 export interface RunBackgroundReviewParams {
@@ -59,7 +94,7 @@ function lastAssistantText(agent: Agent): string {
   return '';
 }
 
-export function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
+function parseBackgroundCandidates(raw: string): BackgroundCandidate[] {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw)?.[1];
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
@@ -67,7 +102,7 @@ export function parseUnderstandingCandidates(raw: string): UnderstandingCandidat
   try {
     const parsed = JSON.parse(candidateJson) as { candidates?: unknown };
     if (!Array.isArray(parsed.candidates)) return [];
-    const output: UnderstandingCandidate[] = [];
+    const output: BackgroundCandidate[] = [];
     for (const value of parsed.candidates.slice(0, 8)) {
       if (!value || typeof value !== 'object') continue;
       const item = value as Record<string, unknown>;
@@ -86,6 +121,9 @@ export function parseUnderstandingCandidates(raw: string): UnderstandingCandidat
       const disclosurePolicy = item.disclosurePolicy === 'silent' || item.disclosurePolicy === 'ask_before_reference'
         ? item.disclosurePolicy
         : 'referenceable';
+      const evidenceRefs = Array.isArray(item.evidenceRefs)
+        ? [...new Set(item.evidenceRefs.filter((value): value is string => typeof value === 'string' && value.trim().length > 0))]
+        : [];
       output.push({
         kind,
         content: item.content.trim(),
@@ -95,7 +133,8 @@ export function parseUnderstandingCandidates(raw: string): UnderstandingCandidat
         durability,
         sensitivity,
         disclosurePolicy,
-      });
+        evidenceRefs,
+      } as BackgroundCandidate);
     }
     return output;
   } catch {
@@ -103,8 +142,26 @@ export function parseUnderstandingCandidates(raw: string): UnderstandingCandidat
   }
 }
 
+export function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
+  return parseBackgroundCandidates(raw).map(({ evidenceRefs: _evidenceRefs, ...candidate }) => candidate);
+}
+
 async function runUnderstandingReview(params: RunBackgroundReviewParams): Promise<void> {
   const { sessionKey, mainAgent, settings, memoryManager, getConfig } = params;
+  const evidenceMessages = loadEvidenceMessages(sessionKey, settings.maxHistoryMessages);
+  if (!evidenceMessages.length) {
+    log.debug({ sessionKey }, 'User-understanding review skipped because no persisted evidence was available');
+    return;
+  }
+  const lastEvidence = evidenceMessages[evidenceMessages.length - 1]!;
+  const extraction = claimRegisteredExtraction({
+    extractorId: 'transcript-synthesis',
+    sourceRef: `session:${sessionKey}:window:${evidenceMessages[0]!.entryId}:${lastEvidence.entryId}`,
+    contentForHash: evidenceMessages.map((entry) => entry.entryId).join('\n'),
+    processingPolicy: 'remote_allowed',
+    destination: 'remote_model',
+  });
+  if (!extraction.shouldExecute) return;
   const reviewAgent = new Agent({
     initialState: {
       systemPrompt: UNDERSTANDING_REVIEW_SYSTEM_PROMPT,
@@ -116,7 +173,7 @@ async function runUnderstandingReview(params: RunBackgroundReviewParams): Promis
     streamFn: createExtensionAwareStreamFn(),
     getApiKey: (provider: string) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
   });
-  reviewAgent.state.messages = cloneMessageTail(mainAgent.state.messages, settings.maxHistoryMessages);
+  reviewAgent.state.messages = evidenceMessages.map((entry) => tagMessage(entry.message, entry.entryId));
   const timeoutMs = Math.min(settings.maxDurationMs, resolveAgentTurnTimeoutMs(getConfig()));
   try {
     await runAgentTurnWithTimeout(reviewAgent, async () => {
@@ -127,18 +184,66 @@ async function runUnderstandingReview(params: RunBackgroundReviewParams): Promis
     log.warn({ err, sessionKey }, 'User-understanding review failed or timed out');
     reviewAgent.abort();
     await reviewAgent.waitForIdle().catch(() => {});
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_failed' });
     return;
   }
-  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return;
-  const candidates = parseUnderstandingCandidates(lastAssistantText(reviewAgent));
-  const projectId = getSessionMetadata(sessionKey)?.projectId;
-  await memoryManager.applyUnderstandingCandidates(candidates, {
-    sessionKey,
-    ...(projectId ? { projectId } : {}),
-    sourceText: 'Background review of the current session transcript',
-    reviewSource: 'background',
-  });
-  log.debug({ sessionKey, candidateCount: candidates.length }, 'User-understanding review completed');
+  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_failed' });
+    return;
+  }
+  const candidates = parseBackgroundCandidates(lastAssistantText(reviewAgent));
+  let applied = 0;
+  try {
+    const evidenceByRef = new Map(evidenceMessages.map((entry) => [entry.entryId, entry]));
+    const projectId = getSessionMetadata(sessionKey)?.projectId;
+    const outputs: Array<{
+      candidateKey: string; objectType?: 'understanding'; objectId?: string; versionId?: string;
+      outcome: 'created' | 'deduplicated' | 'rejected';
+    }> = [];
+    for (const { evidenceRefs, ...candidate } of candidates) {
+      const referenced = evidenceRefs.flatMap((ref) => {
+        const entry = evidenceByRef.get(ref);
+        return entry ? [entry] : [];
+      });
+      if (!referenced.length) {
+        outputs.push({ candidateKey: `${candidate.kind}:${candidate.content}`, outcome: 'rejected' });
+        continue;
+      }
+      const evidenceIds = referenced.map((entry) => createContextEvidence({
+        sourceType: 'conversation',
+        sourceRef: `session:${sessionKey}:entry:${entry.entryId}`,
+        sourceRunId: extraction.run.id,
+        sessionId: sessionKey,
+        messageId: entry.entryId,
+        contentHash: extractionInputHash(JSON.stringify(entry.message)),
+        retentionPolicy: 'derived_only',
+        processingPolicy: 'remote_allowed',
+        extractorId: 'transcript-synthesis',
+        extractorVersion: '1',
+        trustLevel: 'owner',
+        observedAt: entry.createdAt,
+      }).id);
+      const result = await memoryManager.applyUnderstandingCandidates([candidate], {
+        sessionKey,
+        ...(projectId ? { projectId } : {}),
+        evidenceIds,
+        reviewSource: 'background',
+        extractionRunId: extraction.run.id,
+      });
+      outputs.push(...(result.writeOutputs ?? []).map((output) => ({
+        candidateKey: output.candidateKey,
+        ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
+        ...(output.versionId ? { versionId: output.versionId } : {}),
+        outcome: output.outcome,
+      })));
+      applied += 1;
+    }
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs });
+  } catch (error) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'write_failed' });
+    throw error;
+  }
+  log.debug({ sessionKey, candidateCount: candidates.length, applied }, 'User-understanding review completed');
 }
 
 export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams): Promise<void> {

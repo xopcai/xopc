@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { USER_CONTEXT_PRINCIPAL_ID, type ContextEvidence, type UserContextScope } from '../domain.js';
 import type {
   UnderstandingSourceGrant,
   UnderstandingSourceRun,
@@ -21,9 +22,27 @@ type RunRow = {
 };
 
 type FocusRow = {
-  focus_id: string; canonical_key: string; title: string; summary: string; horizon: string;
-  status: string; confidence: number; project_id: string | null; evidence_refs_json: string;
+  focus_id: string; current_version_id: string; principal_id: string; canonical_key: string; title: string; summary: string; horizon: string;
+  status: string; confidence: number; scope_type: UserContextScope['type']; scope_id: string | null;
+  explicitness: UserFocus['explicitness']; sensitivity: UserFocus['sensitivity'];
+  disclosure_policy: UserFocus['disclosurePolicy']; valid_from: number | null; valid_to: number | null;
+  review_at: number | null; evidence_refs_json: string;
   source_run_id: string | null; created_at: number; updated_at: number;
+};
+
+type UserFocusInput = Omit<UserFocus,
+  'id' | 'versionId' | 'principalId' | 'scope' | 'explicitness' | 'sensitivity' | 'disclosurePolicy'
+  | 'validFrom' | 'validTo' | 'reviewAt' | 'createdAt' | 'updatedAt'> & {
+  principalId?: string;
+  scope?: UserContextScope;
+  explicitness?: UserFocus['explicitness'];
+  sensitivity?: UserFocus['sensitivity'];
+  disclosurePolicy?: UserFocus['disclosurePolicy'];
+  validFrom?: number;
+  validTo?: number;
+  reviewAt?: number;
+  changeReason?: string;
+  nowMs?: number;
 };
 
 function record(value: string): Record<string, unknown> {
@@ -65,12 +84,77 @@ function runFromRow(row: RunRow): UnderstandingSourceRun {
 
 function focusFromRow(row: FocusRow): UserFocus {
   return {
-    id: row.focus_id, canonicalKey: row.canonical_key, title: row.title, summary: row.summary,
+    id: row.focus_id, versionId: row.current_version_id, principalId: row.principal_id, canonicalKey: row.canonical_key,
+    title: row.title, summary: row.summary,
     horizon: row.horizon as UserFocus['horizon'], status: row.status as UserFocus['status'],
-    confidence: row.confidence, ...(row.project_id ? { projectId: row.project_id } : {}),
+    confidence: row.confidence,
+    scope: { type: row.scope_type, ...(row.scope_id ? { id: row.scope_id } : {}) },
+    explicitness: row.explicitness,
+    sensitivity: row.sensitivity,
+    disclosurePolicy: row.disclosure_policy,
+    ...(row.valid_from == null ? {} : { validFrom: row.valid_from }),
+    ...(row.valid_to == null ? {} : { validTo: row.valid_to }),
+    ...(row.review_at == null ? {} : { reviewAt: row.review_at }),
     evidenceRefs: strings(row.evidence_refs_json), ...(row.source_run_id ? { sourceRunId: row.source_run_id } : {}),
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
+}
+
+function focusSnapshot(row: FocusRow): Record<string, unknown> {
+  return {
+    horizon: row.horizon, status: row.status, confidence: row.confidence,
+    scopeType: row.scope_type, scopeId: row.scope_id, explicitness: row.explicitness,
+    sensitivity: row.sensitivity, disclosurePolicy: row.disclosure_policy,
+    validFrom: row.valid_from, validTo: row.valid_to, reviewAt: row.review_at,
+    evidenceRefs: strings(row.evidence_refs_json),
+  };
+}
+
+function sameFocusVersion(left: FocusRow | undefined, right: FocusRow): boolean {
+  return Boolean(left && left.title === right.title && left.summary === right.summary
+    && JSON.stringify(focusSnapshot(left)) === JSON.stringify(focusSnapshot(right)));
+}
+
+function linkFocusEvidence(versionId: string, evidenceRefs: string[], confidence: number): void {
+  if (!evidenceRefs.length) return;
+  const placeholders = evidenceRefs.map(() => '?').join(', ');
+  getSqliteDatabase().prepare(`INSERT OR IGNORE INTO user_focus_evidence_links (
+    version_id, evidence_id, relation, confidence
+  ) SELECT ?, evidence_id, 'supports', ? FROM context_evidence WHERE source_ref IN (${placeholders})`)
+    .run(versionId, confidence, ...evidenceRefs);
+}
+
+export function listUserFocusEvidence(focusId: string): ContextEvidence[] {
+  const rows = getSqliteDatabase().prepare(`SELECT DISTINCT e.* FROM context_evidence e
+    JOIN user_focus_evidence_links l ON l.evidence_id = e.evidence_id
+    JOIN user_focus_versions v ON v.version_id = l.version_id
+    WHERE v.focus_id = ? ORDER BY e.observed_at DESC`).all(focusId) as Array<{
+      evidence_id: string; source_type: ContextEvidence['sourceType']; source_instance_id: string | null;
+      source_ref: string; source_run_id: string | null; source_item_id: string | null;
+      session_id: string | null; turn_id: string | null; message_id: string | null; content_hash: string | null;
+      retention_policy: ContextEvidence['retentionPolicy'] | null;
+      processing_policy: ContextEvidence['processingPolicy'] | null;
+      extractor_id: string | null; extractor_version: string | null;
+      redacted_excerpt: string | null; trust_level: ContextEvidence['trustLevel'];
+      observed_at: number; ingested_at: number | null; created_at: number;
+    }>;
+  return rows.map((row) => ({
+    id: row.evidence_id, sourceType: row.source_type,
+    ...(row.source_instance_id ? { sourceInstanceId: row.source_instance_id } : {}),
+    sourceRef: row.source_ref, ...(row.source_run_id ? { sourceRunId: row.source_run_id } : {}),
+    ...(row.source_item_id ? { sourceItemId: row.source_item_id } : {}),
+    ...(row.session_id ? { sessionId: row.session_id } : {}),
+    ...(row.turn_id ? { turnId: row.turn_id } : {}),
+    ...(row.message_id ? { messageId: row.message_id } : {}),
+    ...(row.content_hash ? { contentHash: row.content_hash } : {}),
+    ...(row.retention_policy ? { retentionPolicy: row.retention_policy } : {}),
+    ...(row.processing_policy ? { processingPolicy: row.processing_policy } : {}),
+    ...(row.extractor_id ? { extractorId: row.extractor_id } : {}),
+    ...(row.extractor_version ? { extractorVersion: row.extractor_version } : {}),
+    ...(row.redacted_excerpt ? { redactedExcerpt: row.redacted_excerpt } : {}),
+    trustLevel: row.trust_level, observedAt: row.observed_at,
+    ingestedAt: row.ingested_at ?? row.created_at, createdAt: row.created_at,
+  }));
 }
 
 export function listUnderstandingSourceGrants(options: { includeRevoked?: boolean } = {}): UnderstandingSourceGrant[] {
@@ -101,8 +185,7 @@ export function upsertUnderstandingSourceGrant(input: Omit<UnderstandingSourceGr
     ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(source_key) DO UPDATE SET
       adapter_id = excluded.adapter_id, category = excluded.category, platform = excluded.platform,
-      display_name = excluded.display_name, status = 'active', access_mode = excluded.access_mode,
-      retention_policy = excluded.retention_policy, processing_policy = excluded.processing_policy,
+      display_name = excluded.display_name, status = 'active',
       config_json = excluded.config_json, checkpoint_json = excluded.checkpoint_json,
       last_collected_at = COALESCE(excluded.last_collected_at, understanding_source_grants.last_collected_at),
       updated_at = excluded.updated_at
@@ -131,6 +214,28 @@ export function updateUnderstandingSourceGrantCheckpoint(id: string, input: {
     JSON.stringify(input.checkpoint ?? current.checkpoint),
     input.lastCollectedAt ?? current.lastCollectedAt ?? null,
     now,
+    id,
+  ));
+  return getUnderstandingSourceGrant(id);
+}
+
+export function updateUnderstandingSourceGrantPolicies(id: string, patch: {
+  accessMode?: UnderstandingSourceGrant['accessMode'];
+  retentionPolicy?: UnderstandingSourceGrant['retentionPolicy'];
+  processingPolicy?: UnderstandingSourceGrant['processingPolicy'];
+  nowMs?: number;
+}): UnderstandingSourceGrant | null {
+  const current = getUnderstandingSourceGrant(id);
+  if (!current) return null;
+  runSqliteWriteTransaction((db) => db.prepare(`
+    UPDATE understanding_source_grants
+    SET access_mode = ?, retention_policy = ?, processing_policy = ?, updated_at = ?
+    WHERE grant_id = ?
+  `).run(
+    patch.accessMode ?? current.accessMode,
+    patch.retentionPolicy ?? current.retentionPolicy,
+    patch.processingPolicy ?? current.processingPolicy,
+    patch.nowMs ?? Date.now(),
     id,
   ));
   return getUnderstandingSourceGrant(id);
@@ -184,13 +289,25 @@ export function updateUnderstandingSourceRun(id: string, patch: {
   return getUnderstandingSourceRun(id);
 }
 
-export function upsertUserFocus(input: Omit<UserFocus, 'id' | 'createdAt' | 'updatedAt'> & { nowMs?: number }): UserFocus {
+export function upsertUserFocus(input: UserFocusInput): UserFocus {
   const id = randomUUID(); const now = input.nowMs ?? Date.now();
-  runSqliteWriteTransaction((db) => db.prepare(`
+  const scope = input.scope ?? { type: 'global' as const };
+  const explicitness = input.explicitness ?? 'inferred';
+  const sensitivity = input.sensitivity ?? 'normal';
+  const disclosurePolicy = input.disclosurePolicy ?? 'referenceable';
+  const existingRow = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE canonical_key = ?')
+    .get(input.canonicalKey) as FocusRow | undefined;
+  if (existingRow?.explicitness === 'explicit' && explicitness !== 'explicit') {
+    return focusFromRow(existingRow);
+  }
+  let currentVersionId = existingRow?.current_version_id;
+  runSqliteWriteTransaction((db) => {
+    db.prepare(`
     INSERT INTO user_focuses (
-      focus_id, canonical_key, title, summary, horizon, status, confidence, project_id,
-      evidence_refs_json, source_run_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      focus_id, principal_id, canonical_key, title, summary, horizon, status, confidence,
+      scope_type, scope_id, explicitness, sensitivity, disclosure_policy,
+      valid_from, valid_to, review_at, evidence_refs_json, source_run_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(canonical_key) DO UPDATE SET title = excluded.title, summary = excluded.summary,
       horizon = excluded.horizon,
       status = CASE
@@ -199,10 +316,34 @@ export function upsertUserFocus(input: Omit<UserFocus, 'id' | 'createdAt' | 'upd
         ELSE excluded.status
       END,
       confidence = excluded.confidence,
-      project_id = excluded.project_id, evidence_refs_json = excluded.evidence_refs_json,
+      scope_type = excluded.scope_type, scope_id = excluded.scope_id,
+      explicitness = excluded.explicitness, sensitivity = excluded.sensitivity,
+      disclosure_policy = excluded.disclosure_policy, valid_from = excluded.valid_from,
+      valid_to = excluded.valid_to, review_at = excluded.review_at,
+      evidence_refs_json = excluded.evidence_refs_json,
       source_run_id = excluded.source_run_id, updated_at = excluded.updated_at
-  `).run(id, input.canonicalKey, input.title, input.summary, input.horizon, input.status, input.confidence,
-    input.projectId ?? null, JSON.stringify(input.evidenceRefs), input.sourceRunId ?? null, now, now));
+  `).run(
+    id, input.principalId ?? USER_CONTEXT_PRINCIPAL_ID, input.canonicalKey, input.title, input.summary,
+    input.horizon, input.status, input.confidence, scope.type, scope.id ?? null,
+    explicitness, sensitivity, disclosurePolicy, input.validFrom ?? null, input.validTo ?? null,
+    input.reviewAt ?? null, JSON.stringify(input.evidenceRefs), input.sourceRunId ?? null, now, now,
+    );
+    const nextRow = db.prepare('SELECT * FROM user_focuses WHERE canonical_key = ?')
+      .get(input.canonicalKey) as FocusRow;
+    if (!sameFocusVersion(existingRow, nextRow)) {
+      currentVersionId = randomUUID();
+      db.prepare(`INSERT INTO user_focus_versions (
+        version_id, focus_id, title, summary, snapshot_json, created_by, change_reason, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        currentVersionId, nextRow.focus_id, nextRow.title, nextRow.summary, JSON.stringify(focusSnapshot(nextRow)),
+        explicitness === 'explicit' ? 'user' : input.sourceRunId ? 'connector' : 'runtime',
+        input.changeReason ?? (existingRow ? 'Focus updated' : 'Focus created'), now,
+      );
+      db.prepare('UPDATE user_focuses SET current_version_id = ? WHERE focus_id = ?')
+        .run(currentVersionId, nextRow.focus_id);
+    }
+  });
+  if (currentVersionId) linkFocusEvidence(currentVersionId, input.evidenceRefs, input.confidence);
   return focusFromRow(getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE canonical_key = ?')
     .get(input.canonicalKey) as unknown as FocusRow);
 }
@@ -215,9 +356,35 @@ export function listUserFocuses(statuses?: UserFocus['status'][]): UserFocus[] {
     .all(...statuses) as unknown as FocusRow[]).map(focusFromRow);
 }
 
-export function setUserFocusStatus(id: string, status: UserFocus['status'], nowMs = Date.now()): UserFocus | null {
-  runSqliteWriteTransaction((db) => db.prepare('UPDATE user_focuses SET status = ?, updated_at = ? WHERE focus_id = ?')
-    .run(status, nowMs, id));
+export function updateUserFocus(
+  id: string,
+  patch: Partial<Pick<UserFocus, 'title' | 'summary' | 'status'>>,
+  nowMs = Date.now(),
+): UserFocus | null {
+  const currentRow = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE focus_id = ?')
+    .get(id) as FocusRow | undefined;
+  if (!currentRow) return null;
+  const current = focusFromRow(currentRow);
+  if ((patch.title ?? current.title) === current.title
+    && (patch.summary ?? current.summary) === current.summary
+    && (patch.status ?? current.status) === current.status) return current;
+  const versionId = randomUUID();
+  runSqliteWriteTransaction((db) => {
+    db.prepare(`UPDATE user_focuses
+      SET title = ?, summary = ?, status = ?, updated_at = ? WHERE focus_id = ?`).run(
+      patch.title ?? current.title, patch.summary ?? current.summary,
+      patch.status ?? current.status, nowMs, id,
+    );
+    const nextRow = db.prepare('SELECT * FROM user_focuses WHERE focus_id = ?').get(id) as FocusRow;
+    db.prepare(`INSERT INTO user_focus_versions (
+      version_id, focus_id, title, summary, snapshot_json, created_by, change_reason, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 'Focus updated', ?)`).run(
+      versionId, id, nextRow.title, nextRow.summary, JSON.stringify(focusSnapshot(nextRow)),
+      current.explicitness === 'explicit' ? 'user' : 'runtime', nowMs,
+    );
+    db.prepare('UPDATE user_focuses SET current_version_id = ? WHERE focus_id = ?').run(versionId, id);
+  });
+  linkFocusEvidence(versionId, current.evidenceRefs, current.confidence);
   const row = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE focus_id = ?').get(id) as FocusRow | undefined;
   return row ? focusFromRow(row) : null;
 }

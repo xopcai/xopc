@@ -938,6 +938,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         chatAgentDisabled={isSessionTransitioning}
         sessionKey={session.sessionKey}
         workspacePath={session.effectiveWorkspacePath}
+        userContextMode={session.userContextMode}
+        onCreateTemporarySession={() => void session.createNewSession({ forceNew: true, temporary: true })}
         canChangeWorkspace={canChangeWorkingDirectory}
         workspaceDisabled={isSessionTransitioning || stream.sending || stream.streaming}
         onWorkspaceChange={session.onSessionWorkingDirectoryChange}

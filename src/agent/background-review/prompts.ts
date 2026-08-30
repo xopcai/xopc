@@ -8,10 +8,10 @@ Focus on:
 3. Has the user explicitly corrected a prior assumption? Prefer the correction and do not preserve the contradicted interpretation.
 
 Return JSON only, with this shape:
-{"candidates":[{"kind":"preference","content":"...","confidence":0.8,"importance":0.7,"durability":"durable","sensitivity":"normal","disclosurePolicy":"referenceable","tags":["background-review"]}]}
+{"candidates":[{"kind":"preference","content":"...","confidence":0.8,"importance":0.7,"durability":"durable","sensitivity":"normal","disclosurePolicy":"referenceable","evidenceRefs":["entry-id"]}]}
 
 Allowed kinds: preference, boundary, relationship, routine, current_state, long_term_goal, project_context, task_lesson, derived_insight.
-Only include facts supported by the conversation and likely to matter in a future session. A temporary mood or one-off reaction is current context, not durable identity; omit it unless the user describes a recurring pattern that will matter later. Never include passwords, tokens, credentials, or speculative diagnoses. Use {"candidates":[]} when nothing qualifies.
+Every reviewed message is prefixed with an evidence_ref. Every candidate must list the exact one or more evidence_ref values that support it. Omit a candidate when no exact message supports it. Only include facts supported by the conversation and likely to matter in a future session. A temporary mood or one-off reaction is current context, not durable identity; omit it unless the user describes a recurring pattern that will matter later. Never include passwords, tokens, credentials, or speculative diagnoses. Use {"candidates":[]} when nothing qualifies.
 
 ${USER_FACING_UNDERSTANDING_WRITING_GUIDANCE}
 

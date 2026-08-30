@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase, createUnderstanding, getUnderstanding, listUnderstandings,
-  getSqliteDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest,
+  getSqliteDatabase, listUnderstandingEvidence, openXopcDatabase, resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import {
   extractExplicitUnderstandingCandidates, extractHighSignalUnderstandingCandidates, UserUnderstandingService,
@@ -59,6 +59,10 @@ describe('UserUnderstandingService', () => {
     });
     expect(result.createdRecords[0]).toMatchObject({ status: 'candidate' });
     expect(getUnderstanding(result.createdRecords[0]!.id)?.status).toBe('candidate');
+    expect(listUnderstandingEvidence(result.createdRecords[0]!.id)[0]).toMatchObject({
+      sourceType: 'conversation', sessionId: 'webchat:test', processingPolicy: 'local_only',
+      extractorId: 'deterministic-signal', extractorVersion: '1', retentionPolicy: 'derived_only',
+    });
   });
 
   it('does not infer a durable preference from an ordinary one-off request', () => {

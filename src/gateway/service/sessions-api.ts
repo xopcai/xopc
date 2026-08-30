@@ -176,6 +176,7 @@ export class GatewaySessionsApi {
       verboseLevel?: string;
       workingDirectory?: string;
       responseLanguage?: string | null;
+      userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ) {
     return this.opts.getAgentService().sessionConfig.patch(sessionKey, body);

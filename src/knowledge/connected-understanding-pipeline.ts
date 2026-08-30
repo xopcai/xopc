@@ -238,7 +238,7 @@ export function renderConnectedObservation(observation: ClaimObservation): Under
 export class ConnectedUnderstandingPipeline {
   constructor(private readonly memoryManager: MemoryManager) {}
 
-  async process(agentId: string): Promise<UnderstandingReviewResult> {
+  async process(agentId: string, extractionRunId: string): Promise<UnderstandingReviewResult> {
     const items = listKnowledgeSourceItems({ agentId, includeDeleted: false, limit: 500 });
     const observations = deriveConnectedClaimObservations(items);
     const totals: UnderstandingReviewResult = {
@@ -259,11 +259,13 @@ export class ConnectedUnderstandingPipeline {
           ...(sourceInstanceIds.length === 1 ? { sourceInstanceId: sourceInstanceIds[0] } : {}),
         },
         reviewSource: 'background',
+        extractionRunId,
       });
       totals.created += result.created;
       totals.deduplicated += result.deduplicated;
       totals.rejected += result.rejected;
       totals.createdRecords.push(...result.createdRecords);
+      totals.writeOutputs = [...(totals.writeOutputs ?? []), ...(result.writeOutputs ?? [])];
     }
     return totals;
   }

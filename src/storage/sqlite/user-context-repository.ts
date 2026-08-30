@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   USER_CONTEXT_PRINCIPAL_ID,
@@ -39,6 +39,49 @@ type UnderstandingRow = {
   statement: string;
   payload_json: string;
 };
+
+type EvidenceRow = {
+  evidence_id: string;
+  source_type: ContextEvidence['sourceType'];
+  source_instance_id: string | null;
+  source_ref: string;
+  source_run_id: string | null;
+  source_item_id: string | null;
+  session_id: string | null;
+  turn_id: string | null;
+  message_id: string | null;
+  content_hash: string | null;
+  retention_policy: ContextEvidence['retentionPolicy'] | null;
+  processing_policy: ContextEvidence['processingPolicy'] | null;
+  extractor_id: string | null;
+  extractor_version: string | null;
+  redacted_excerpt: string | null;
+  trust_level: ContextEvidence['trustLevel'];
+  observed_at: number;
+  ingested_at: number | null;
+  created_at: number;
+};
+
+function evidenceFromRow(row: EvidenceRow): ContextEvidence {
+  return {
+    id: row.evidence_id, sourceType: row.source_type,
+    ...(row.source_instance_id ? { sourceInstanceId: row.source_instance_id } : {}),
+    sourceRef: row.source_ref,
+    ...(row.source_run_id ? { sourceRunId: row.source_run_id } : {}),
+    ...(row.source_item_id ? { sourceItemId: row.source_item_id } : {}),
+    ...(row.session_id ? { sessionId: row.session_id } : {}),
+    ...(row.turn_id ? { turnId: row.turn_id } : {}),
+    ...(row.message_id ? { messageId: row.message_id } : {}),
+    ...(row.content_hash ? { contentHash: row.content_hash } : {}),
+    ...(row.retention_policy ? { retentionPolicy: row.retention_policy } : {}),
+    ...(row.processing_policy ? { processingPolicy: row.processing_policy } : {}),
+    ...(row.extractor_id ? { extractorId: row.extractor_id } : {}),
+    ...(row.extractor_version ? { extractorVersion: row.extractor_version } : {}),
+    ...(row.redacted_excerpt ? { redactedExcerpt: row.redacted_excerpt } : {}),
+    trustLevel: row.trust_level, observedAt: row.observed_at,
+    ingestedAt: row.ingested_at ?? row.created_at, createdAt: row.created_at,
+  };
+}
 
 type RuleRow = {
   rule_id: string;
@@ -308,6 +351,20 @@ export function setUnderstandingStatus(
         updated_at = ?
     WHERE understanding_id = ?`)
     .run(status, confirmation?.explicitness ?? null, confirmation?.confidence ?? null, now, id);
+  const assertionStatus = status === 'active' ? 'active'
+    : status === 'archived' ? 'closed'
+      : status === 'rejected' ? 'rejected' : 'candidate';
+  getSqliteDatabase().prepare(`UPDATE context_temporal_assertions
+    SET status = ?, updated_at = ? WHERE object_type = 'understanding' AND object_id = ?`)
+    .run(assertionStatus, now, id);
+  const result = getUnderstanding(id);
+  if (!result) throw new Error(`User understanding not found: ${id}`);
+  return result;
+}
+
+export function closeUnderstandingValidity(id: string, validTo = Date.now()): UserUnderstanding {
+  getSqliteDatabase().prepare(`UPDATE user_understandings SET valid_to = ?, updated_at = ?
+    WHERE understanding_id = ?`).run(validTo, validTo, id);
   const result = getUnderstanding(id);
   if (!result) throw new Error(`User understanding not found: ${id}`);
   return result;
@@ -417,37 +474,58 @@ export function deleteCollaborationRule(id: string): boolean {
 }
 
 export function createContextEvidence(
-  input: Omit<ContextEvidence, 'id' | 'createdAt'>,
+  input: Omit<ContextEvidence, 'id' | 'ingestedAt' | 'createdAt'> & { ingestedAt?: number },
   principalId = USER_CONTEXT_PRINCIPAL_ID,
 ): ContextEvidence {
   const existing = getSqliteDatabase().prepare(`SELECT * FROM context_evidence
     WHERE principal_id = ? AND source_type = ?
       AND COALESCE(source_instance_id, '') = COALESCE(?, '') AND source_ref = ?`)
-    .get(principalId, input.sourceType, input.sourceInstanceId ?? null, input.sourceRef) as {
-      evidence_id: string; source_type: ContextEvidence['sourceType']; source_instance_id: string | null;
-      source_ref: string; redacted_excerpt: string | null; trust_level: ContextEvidence['trustLevel'];
-      observed_at: number; created_at: number;
-    } | undefined;
+    .get(principalId, input.sourceType, input.sourceInstanceId ?? null, input.sourceRef) as EvidenceRow | undefined;
+  const derivedHash = input.contentHash ?? (input.redactedExcerpt
+    ? createHash('sha256').update(input.redactedExcerpt).digest('hex')
+    : undefined);
   if (existing) {
-    return {
-      id: existing.evidence_id,
-      sourceType: existing.source_type,
-      ...(existing.source_instance_id ? { sourceInstanceId: existing.source_instance_id } : {}),
-      sourceRef: existing.source_ref,
-      ...(existing.redacted_excerpt ? { redactedExcerpt: existing.redacted_excerpt } : {}),
-      trustLevel: existing.trust_level,
-      observedAt: existing.observed_at,
-      createdAt: existing.created_at,
-    };
+    getSqliteDatabase().prepare(`UPDATE context_evidence SET
+      source_run_id = COALESCE(source_run_id, ?), source_item_id = COALESCE(source_item_id, ?),
+      session_id = COALESCE(session_id, ?), turn_id = COALESCE(turn_id, ?),
+      message_id = COALESCE(message_id, ?), content_hash = COALESCE(content_hash, ?),
+      retention_policy = COALESCE(retention_policy, ?),
+      processing_policy = CASE
+        WHEN processing_policy = 'local_only' OR ? = 'local_only' THEN 'local_only'
+        ELSE COALESCE(processing_policy, ?)
+      END,
+      extractor_id = COALESCE(extractor_id, ?), extractor_version = COALESCE(extractor_version, ?),
+      ingested_at = COALESCE(ingested_at, ?)
+      WHERE evidence_id = ?`).run(
+      input.sourceRunId ?? null, input.sourceItemId ?? null, input.sessionId ?? null,
+      input.turnId ?? null, input.messageId ?? null, derivedHash ?? null,
+      input.retentionPolicy ?? null, input.processingPolicy ?? null, input.processingPolicy ?? null,
+      input.extractorId ?? null, input.extractorVersion ?? null,
+      input.ingestedAt ?? Date.now(), existing.evidence_id,
+    );
+    return evidenceFromRow(getSqliteDatabase().prepare('SELECT * FROM context_evidence WHERE evidence_id = ?')
+      .get(existing.evidence_id) as EvidenceRow);
   }
-  const evidence: ContextEvidence = { ...input, id: randomUUID(), createdAt: Date.now() };
+  const createdAt = Date.now();
+  const evidence: ContextEvidence = {
+    ...input,
+    id: randomUUID(),
+    ...(derivedHash ? { contentHash: derivedHash } : {}),
+    ingestedAt: input.ingestedAt ?? createdAt,
+    createdAt,
+  };
   getSqliteDatabase().prepare(`INSERT INTO context_evidence (
-    evidence_id, principal_id, source_type, source_instance_id, source_ref,
-    redacted_excerpt, trust_level, observed_at, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    evidence_id, principal_id, source_type, source_instance_id, source_ref, source_run_id,
+    source_item_id, session_id, turn_id, message_id, content_hash, retention_policy,
+    processing_policy, extractor_id, extractor_version, redacted_excerpt, trust_level,
+    observed_at, ingested_at, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(evidence.id, principalId, evidence.sourceType, evidence.sourceInstanceId ?? null,
-      evidence.sourceRef, evidence.redactedExcerpt ?? null, evidence.trustLevel,
-      evidence.observedAt, evidence.createdAt);
+      evidence.sourceRef, evidence.sourceRunId ?? null, evidence.sourceItemId ?? null,
+      evidence.sessionId ?? null, evidence.turnId ?? null, evidence.messageId ?? null,
+      evidence.contentHash ?? null, evidence.retentionPolicy ?? null, evidence.processingPolicy ?? null,
+      evidence.extractorId ?? null, evidence.extractorVersion ?? null, evidence.redactedExcerpt ?? null,
+      evidence.trustLevel, evidence.observedAt, evidence.ingestedAt, evidence.createdAt);
   return evidence;
 }
 
@@ -472,21 +550,8 @@ export function listUnderstandingEvidence(
     JOIN understanding_evidence_links l ON l.evidence_id = e.evidence_id
     JOIN user_understanding_versions v ON v.version_id = l.version_id
     WHERE v.understanding_id = ? AND (? IS NULL OR l.relation = ?)
-    ORDER BY e.observed_at DESC`).all(understandingId, relation ?? null, relation ?? null) as Array<{
-      evidence_id: string; source_type: ContextEvidence['sourceType']; source_instance_id: string | null;
-      source_ref: string; redacted_excerpt: string | null; trust_level: ContextEvidence['trustLevel'];
-      observed_at: number; created_at: number;
-    }>;
-  return rows.map((row) => ({
-    id: row.evidence_id,
-    sourceType: row.source_type,
-    ...(row.source_instance_id ? { sourceInstanceId: row.source_instance_id } : {}),
-    sourceRef: row.source_ref,
-    ...(row.redacted_excerpt ? { redactedExcerpt: row.redacted_excerpt } : {}),
-    trustLevel: row.trust_level,
-    observedAt: row.observed_at,
-    createdAt: row.created_at,
-  }));
+    ORDER BY e.observed_at DESC`).all(understandingId, relation ?? null, relation ?? null) as EvidenceRow[];
+  return rows.map(evidenceFromRow);
 }
 
 export function recordContextRun(input: {
@@ -516,11 +581,12 @@ export function recordContextRun(input: {
     }
     const insert = db.prepare(`INSERT INTO context_run_items (
       context_run_id, object_type, object_id, version_id, decision, reason, content_snapshot,
-      source_label, rank, score, injected_chars
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      source_label, origin, rank, score, injected_chars
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const item of input.items) {
       insert.run(runId, item.objectType, item.objectId, item.versionId ?? null, item.decision,
-        item.reason, item.content, item.sourceLabel, item.rank ?? null, item.score ?? null, item.injectedChars);
+        item.reason, item.content, item.sourceLabel, item.origin,
+        item.rank ?? null, item.score ?? null, item.injectedChars);
     }
   });
   return runId;
@@ -534,7 +600,7 @@ export function getTurnPersonalization(turnId: string): { runId: string; items: 
     .all(run.context_run_id) as Array<{
       object_type: PersonalizationItem['objectType']; object_id: string; version_id: string | null;
       decision: PersonalizationItem['decision']; reason: string; content_snapshot: string; source_label: string;
-      rank: number | null; score: number | null; injected_chars: number;
+      origin: PersonalizationItem['origin']; rank: number | null; score: number | null; injected_chars: number;
     }>;
   return {
     runId: run.context_run_id,
@@ -546,6 +612,7 @@ export function getTurnPersonalization(turnId: string): { runId: string; items: 
       reason: row.reason,
       content: row.content_snapshot,
       sourceLabel: row.source_label,
+      origin: row.origin,
       ...(row.rank === null ? {} : { rank: row.rank }),
       ...(row.score === null ? {} : { score: row.score }),
       injectedChars: row.injected_chars,

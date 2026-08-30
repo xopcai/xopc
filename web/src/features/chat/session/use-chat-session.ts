@@ -88,6 +88,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workspaceSource = sessionSlice?.workspaceSource ?? 'agent_default_root';
+  const userContextMode = sessionSlice?.userContextMode ?? 'enabled';
 
   useEffect(() => {
     messagesLenRef.current = sessionSlice?.messages.length ?? 0;
@@ -404,6 +405,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       modelSupportsThinking,
       effectiveWorkspacePath,
       workspaceSource,
+      userContextMode,
       hasMore,
       loadingMore,
       loadMoreMessages,

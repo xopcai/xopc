@@ -1,4 +1,4 @@
-import { Plus, SquareTerminal } from 'lucide-react';
+import { Plus, ShieldOff, SquareTerminal } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -28,9 +28,11 @@ type ChatPageHeaderRegistrationProps = {
   chatAgentDisabled: boolean;
   sessionKey?: string | null;
   workspacePath?: string | null;
+  userContextMode?: 'enabled' | 'off' | 'temporary';
   canChangeWorkspace?: boolean;
   workspaceDisabled?: boolean;
   onWorkspaceChange?: (path: string) => Promise<void>;
+  onCreateTemporarySession?: () => void;
 };
 
 /**
@@ -45,9 +47,11 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentDisabled,
   sessionKey,
   workspacePath,
+  userContextMode = 'enabled',
   canChangeWorkspace = false,
   workspaceDisabled = false,
   onWorkspaceChange,
+  onCreateTemporarySession,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
   const { sessionKey: routeSessionKey } = useParams();
@@ -145,6 +149,25 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               />
             </div>
           ) : null}
+          {userContextMode === 'temporary' ? (
+            <span
+              className="shrink-0 rounded-full border border-edge px-2 py-1 text-xs font-medium text-fg-muted"
+              title={m.chat.temporarySessionHint}
+            >
+              {m.chat.temporarySession}
+            </span>
+          ) : null}
+          {onCreateTemporarySession ? (
+            <button
+              type="button"
+              className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+              title={m.chat.newTemporarySessionHint}
+              aria-label={m.chat.newTemporarySession}
+              onClick={onCreateTemporarySession}
+            >
+              <ShieldOff className="size-4" />
+            </button>
+          ) : null}
           {activeSessionKey && window.electronAPI?.terminal ? (
             <button
               type="button"
@@ -183,15 +206,21 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentPlaceholder,
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
+    m.chat.temporarySession,
+    m.chat.temporarySessionHint,
+    m.chat.newTemporarySession,
+    m.chat.newTemporarySessionHint,
     m.chat.terminal.open,
     terminalShortcut,
     m.sidebar.newTask,
     terminalPanelOpen,
     activeSessionKey,
     workspacePath,
+    userContextMode,
     canChangeWorkspace,
     workspaceDisabled,
     onWorkspaceChange,
+    onCreateTemporarySession,
     toggleTerminalPanel,
     setPageHeader,
   ]);

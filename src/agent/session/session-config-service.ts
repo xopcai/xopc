@@ -52,6 +52,7 @@ export interface PatchSessionAgentConfigInput {
   verboseLevel?: string;
   workingDirectory?: string;
   responseLanguage?: string | null;
+  userContextMode?: 'enabled' | 'off' | 'temporary';
 }
 
 export interface PatchSessionAgentConfigResult {
@@ -132,6 +133,13 @@ export class SessionConfigService {
         await this.opts.sessionConfigStore.update(sessionKey, { responseLanguage: parsed.data });
       }
       this.opts.agentManager.removeAgent(sessionKey);
+    }
+
+    if (partial.userContextMode !== undefined) {
+      if (!['enabled', 'off', 'temporary'].includes(partial.userContextMode)) {
+        return { ok: false, error: 'Invalid user context mode' };
+      }
+      await this.opts.sessionConfigStore.update(sessionKey, { userContextMode: partial.userContextMode });
     }
 
     if (partial.workingDirectory !== undefined) {

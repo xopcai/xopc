@@ -1,8 +1,10 @@
 import type { Config } from '../config/schema.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
+import type { UnderstandingReviewResult } from '../agent/memory/understanding/types.js';
 import {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
+  finishContextExtractionRun,
   listConnectorConnections,
   listConnectorLearningJobs,
   getConnectorAccount,
@@ -17,9 +19,11 @@ import {
   type ConnectorLearningJob,
 } from '../storage/sqlite/index.js';
 import { ConnectedUnderstandingPipeline } from '../knowledge/index.js';
+import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
 import { createLogger } from '../utils/logger.js';
 import {
   createUnderstandingSourceRun,
+  getUnderstandingSourceGrant,
   listUnderstandingSourceRuns,
   upsertUnderstandingSourceGrant,
   upsertUserFocus,
@@ -268,19 +272,46 @@ export function startConnectorLearningCoordinator(options: {
       itemsIndexed,
     }));
     publish(updateConnectorLearningJob(job.id, { phase: 'deriving' }));
-    const understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
-      .process(job.agentId);
-    for (const record of understanding.createdRecords.filter((item) => item.kind === 'project_context')) {
-      upsertUserFocus({
-        canonicalKey: `connector-focus:${job.accountId}:${record.id}`,
-        title: record.content.slice(0, 120),
-        summary: record.content,
-        horizon: 'ongoing',
-        status: 'candidate',
-        confidence: 0.72,
-        evidenceRefs: [`connector-account:${job.accountId}`],
-        sourceRunId: sourceRun.id,
-      });
+    const structuralExtraction = claimRegisteredExtraction({
+      extractorId: 'connector-structural', sourceRef: `understanding-source-run:${sourceRun.id}`,
+      contentForHash: `${job.sourceInstanceId}:${itemsSeen}:${itemsIndexed}`,
+      processingPolicy: 'local_only', destination: 'deterministic',
+    });
+    let understanding: UnderstandingReviewResult = {
+      proposed: 0, created: 0, deduplicated: 0, rejected: 0, createdRecords: [], writeOutputs: [],
+    };
+    if (structuralExtraction.shouldExecute) {
+      try {
+        understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
+          .process(job.agentId, structuralExtraction.run.id);
+        const structuralFocuses = understanding.createdRecords
+          .filter((item) => item.kind === 'project_context')
+          .map((record) => upsertUserFocus({
+            canonicalKey: `connector-focus:${job.accountId}:${record.id}`,
+            title: record.content.slice(0, 120), summary: record.content, horizon: 'ongoing',
+            status: 'candidate', confidence: 0.72, evidenceRefs: [`connector-account:${job.accountId}`],
+            sourceRunId: sourceRun.id,
+          }));
+        finishContextExtractionRun({
+          runId: structuralExtraction.run.id, status: 'completed',
+          outputs: [
+            ...(understanding.writeOutputs ?? []).map((output) => ({
+              candidateKey: output.candidateKey,
+              ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
+              ...(output.versionId ? { versionId: output.versionId } : {}), outcome: output.outcome,
+            })),
+            ...structuralFocuses.map((focus) => ({
+              candidateKey: focus.canonicalKey, objectType: 'focus' as const, objectId: focus.id,
+              versionId: focus.versionId, outcome: 'created' as const,
+            })),
+          ],
+        });
+      } catch (error) {
+        finishContextExtractionRun({
+          runId: structuralExtraction.run.id, status: 'failed', errorCode: 'extractor_failed',
+        });
+        throw error;
+      }
     }
     let semantic: Awaited<ReturnType<typeof deriveConnectedSourceUnderstanding>> = {
       created: 0,
@@ -293,6 +324,7 @@ export function startConnectorLearningCoordinator(options: {
         agentId: job.agentId,
         sourceInstanceId: job.sourceInstanceId,
         sourceRunId: sourceRun.id,
+        processingPolicy: getUnderstandingSourceGrant(sourceRun.grantId)?.processingPolicy ?? 'local_only',
         memoryManager: options.getMemoryManager(),
       });
     } catch (error) {

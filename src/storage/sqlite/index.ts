@@ -30,6 +30,27 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  claimContextExtractionRun,
+  finishContextExtractionRun,
+  getContextExtractionRun,
+  hasIndependentExtractionOutput,
+  listContextExtractionOutputs,
+  listContextExtractionRuns,
+  type ContextExtractionOutput,
+  type ContextExtractionRun,
+  type ContextExtractionStatus,
+  type ContextObjectType,
+} from './context-extraction-repository.js';
+export {
+  closeTemporalAssertions,
+  createTemporalAssertion,
+  linkContextObjects,
+  listContextObjectRelations,
+  listTemporalAssertions,
+  type ContextObjectRelation,
+  type ContextTemporalAssertion,
+} from './context-relation-repository.js';
+export {
   finishContextConsolidationRun,
   getContextConsolidationRun,
   listContextConsolidationDecisions,
@@ -49,6 +70,7 @@ export {
   createCollaborationRule,
   createContextEvidence,
   createUnderstanding,
+  closeUnderstandingValidity,
   consumeContextConsent,
   deleteCollaborationRule,
   deleteUnderstanding,
