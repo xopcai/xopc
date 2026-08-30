@@ -12,7 +12,6 @@ describe('terminal panel store', () => {
   beforeEach(() => {
     useTerminalPanelStore.setState({
       openBySessionKey: {},
-      approvedSessionIds: {},
       tabsBySessionKey: {},
       activeTabKeyBySessionKey: {},
       height: 300,
@@ -65,11 +64,6 @@ describe('terminal panel store', () => {
     expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([]);
     expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBeUndefined();
     expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(true);
-  });
-
-  it('tracks approval per concrete session id', () => {
-    useTerminalPanelStore.getState().approve('id-a');
-    expect(useTerminalPanelStore.getState().approvedSessionIds).toEqual({ 'id-a': true });
   });
 
   it('clamps panel height', () => {

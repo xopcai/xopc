@@ -48,8 +48,6 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const closeTerminal = useTerminalPanelStore((state) => state.closeTerminal);
   const setActiveTerminal = useTerminalPanelStore((state) => state.setActiveTerminal);
   const setHeight = useTerminalPanelStore((state) => state.setHeight);
-  const approve = useTerminalPanelStore((state) => state.approve);
-  const approvedSessionIds = useTerminalPanelStore((state) => state.approvedSessionIds);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalIdRef = useRef<string | null>(null);
   const resizeDragRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -59,7 +57,6 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const [rendered, setRendered] = useState(open);
   const [entering, setEntering] = useState(open);
   const [closing, setClosing] = useState(false);
-  const approved = sessionId ? Boolean(approvedSessionIds[sessionId]) : false;
 
   useEffect(() => {
     if (open) {
@@ -103,7 +100,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   }, [api, rendered, sessionKey]);
 
   useEffect(() => {
-    if (!rendered || !api || !sessionId || !terminalKey || !approved || !containerRef.current) return;
+    if (!rendered || !api || !sessionId || !terminalKey || !containerRef.current) return;
     setError(null);
     const terminal = new Terminal({
       cursorBlink: true,
@@ -195,7 +192,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
       removeError();
       terminal.dispose();
     };
-  }, [api, approved, m.exited, rendered, sessionId, sessionKey, terminalKey]);
+  }, [api, m.exited, rendered, sessionId, sessionKey, terminalKey]);
 
   const closeTerminalTab = useCallback((key: string) => {
     closeTerminal(sessionKey, key);
@@ -293,14 +290,6 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
         </div>
       ) : !sessionId && resolvingSession ? (
         <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">{m.preparing}</div>
-      ) : sessionId && !approved ? (
-        <div className="flex flex-1 items-center justify-center p-6">
-          <div className="max-w-lg rounded-lg border border-edge bg-surface-panel p-5 text-center">
-            <p className="text-sm font-medium text-fg">{m.permissionTitle}</p>
-            <p className="mt-2 text-sm leading-relaxed text-fg-muted">{m.permissionBody}</p>
-            <Button className="mt-4" onClick={() => approve(sessionId)}>{m.enable}</Button>
-          </div>
-        </div>
       ) : (
         <div className="relative min-h-0 flex-1 p-2">
           <div ref={containerRef} className="h-full w-full overflow-hidden" />

@@ -34,7 +34,6 @@ export function clampTerminalHeight(height: number): number {
 
 type TerminalPanelState = {
   openBySessionKey: Record<string, boolean>;
-  approvedSessionIds: Record<string, boolean>;
   tabsBySessionKey: Record<string, TerminalTab[]>;
   activeTabKeyBySessionKey: Record<string, string | undefined>;
   height: number;
@@ -43,13 +42,11 @@ type TerminalPanelState = {
   addTerminal: (sessionKey: string) => string;
   closeTerminal: (sessionKey: string, terminalKey: string) => void;
   setActiveTerminal: (sessionKey: string, terminalKey: string) => void;
-  approve: (sessionId: string) => void;
   setHeight: (height: number) => void;
 };
 
 export const useTerminalPanelStore = create<TerminalPanelState>((set, get) => ({
   openBySessionKey: {},
-  approvedSessionIds: {},
   tabsBySessionKey: {},
   activeTabKeyBySessionKey: {},
   height: TERMINAL_HEIGHT_DEFAULT,
@@ -111,8 +108,5 @@ export const useTerminalPanelStore = create<TerminalPanelState>((set, get) => ({
       },
     };
   }),
-  approve: (sessionId) => set((state) => ({
-    approvedSessionIds: { ...state.approvedSessionIds, [sessionId]: true },
-  })),
   setHeight: (height) => set({ height: clampTerminalHeight(height) }),
 }));

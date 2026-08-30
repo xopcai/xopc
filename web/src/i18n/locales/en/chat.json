@@ -1073,9 +1073,6 @@
       "closeTab": "Close terminal",
       "noTerminals": "No terminals are open",
       "preparing": "Preparing terminal…",
-      "permissionTitle": "Enable terminal for this conversation?",
-      "permissionBody": "This opens an interactive shell in the conversation workspace. Commands run with your desktop user permissions.",
-      "enable": "Enable terminal",
       "exited": "Process exited with code {{code}}"
     },
     "commandPalette": {
