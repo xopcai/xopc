@@ -36,6 +36,9 @@ describe('shared understanding model', () => {
     expect(model.activeUnderstandings.map((item) => item.id)).toEqual(['understanding-1']);
     expect(model.reviewQueue.map((item) => item.id)).toEqual(['understanding-review', 'focus-review']);
     expect(model.history.map((item) => item.id)).toEqual(['focus-history', 'understanding-history']);
+    expect(model.timeline.map((item) => item.id)).toEqual([
+      'understanding-review', 'focus-review', 'focus-1', 'understanding-1', 'focus-history', 'understanding-history',
+    ]);
   });
 
   it('ranks explainable project, topic, and global-context relations', () => {
