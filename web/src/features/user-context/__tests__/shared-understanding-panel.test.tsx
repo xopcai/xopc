@@ -9,6 +9,7 @@ vi.mock('../user-context-api', async (importOriginal) => {
   return {
     ...actual,
     createUnderstanding: vi.fn(),
+    fetchUnderstandingEvidence: vi.fn().mockResolvedValue({ evidence: [] }),
     updateUnderstanding: vi.fn().mockResolvedValue({ understanding: {} }),
     updateUserFocus: vi.fn().mockResolvedValue({ focus: {} }),
   };
@@ -85,7 +86,7 @@ describe('SharedUnderstandingPanel', () => {
     />));
 
     const mapTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-      .find((button) => button.textContent?.includes('可能关联'));
+      .find((button) => button.textContent?.includes('关系'));
     await act(async () => mapTab?.click());
     expect([...container.querySelectorAll<HTMLButtonElement>('button')]
       .some((button) => button.textContent === '编辑')).toBe(true);
@@ -94,8 +95,8 @@ describe('SharedUnderstandingPanel', () => {
       .find((button) => button.textContent?.includes('发布前先完成验证'));
     await act(async () => contextNode?.click());
 
-    expect(container.textContent).toContain('为什么可能相关');
-    expect(container.textContent).toContain('措辞');
+    expect(container.textContent).toContain('为什么展示这条关系');
+    expect(container.textContent).toContain('主题信号');
     const incorrect = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent === '不正确');
     await act(async () => incorrect?.click());
