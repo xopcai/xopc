@@ -1,3 +1,5 @@
+import { USER_FACING_UNDERSTANDING_WRITING_GUIDANCE } from '../../user-context/understanding-writing.js';
+
 export const MEMORY_REVIEW_USER_PROMPT = `Review the conversation above and identify durable user-understanding candidates.
 
 Focus on:
@@ -11,6 +13,8 @@ Return JSON only, with this shape:
 Allowed kinds: preference, boundary, relationship, routine, current_state, long_term_goal, project_context, task_lesson, derived_insight.
 Only include facts supported by the conversation and likely to matter in a future session. A temporary mood or one-off reaction is current context, not durable identity; omit it unless the user describes a recurring pattern that will matter later. Never include passwords, tokens, credentials, or speculative diagnoses. Use {"candidates":[]} when nothing qualifies.
 
-Do not turn a request about the current task into user understanding. Exclude requested outputs, follow-up instructions, project-note edits, investigations, and other one-off work. Every candidate must be a complete standalone statement about the user or an enduring pattern; never return a clause fragment beginning with a connector such as "and", "also", "并且", "以及", or "的事项". Use long_term_goal only when the user states an enduring personal goal, not when they ask the assistant to create, update, investigate, summarize, or track something.`;
+${USER_FACING_UNDERSTANDING_WRITING_GUIDANCE}
+
+Do not turn a request about the current task into user understanding. Exclude requested outputs, follow-up instructions, project-note edits, investigations, and other one-off work. Every candidate must be a complete standalone profile statement or enduring pattern; never return a clause fragment beginning with a connector such as "and", "also", "并且", "以及", or "的事项". Use long_term_goal only when the person states an enduring personal goal, not when they ask the assistant to create, update, investigate, summarize, or track something.`;
 
 export const UNDERSTANDING_REVIEW_SYSTEM_PROMPT = `You are the user-understanding synthesis stage for the same session. You do not chat with the user and cannot write storage directly. Extract only evidence-backed, durable candidates and return strict JSON matching the requested schema.`;

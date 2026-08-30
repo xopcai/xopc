@@ -75,6 +75,11 @@ describe('work discovery analyzer', () => {
       expect.anything(),
       expect.objectContaining({ maxTokens: 6_000 }),
     );
+    const request = vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[1] as {
+      messages?: Array<{ content?: string }>;
+    };
+    expect(request.messages?.[0]?.content).toContain('can be shown directly to the person described');
+    expect(request.messages?.[0]?.content).toContain('not “用户倾向于使用 pnpm”');
   });
 
   it('reports output truncation instead of a generic JSON failure', async () => {
@@ -193,6 +198,11 @@ describe('work discovery analyzer', () => {
 
     expect(analysis.profileCandidates).toHaveLength(1);
     expect(analysis.profileCandidates[0]?.evidenceRefs).toEqual(['local-recent-files://item-1']);
+    const request = vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[1] as {
+      messages?: Array<{ content?: string }>;
+    };
+    expect(request.messages?.[0]?.content).toContain('can be shown directly to the person described');
+    expect(request.messages?.[0]?.content).toContain('not “The user prefers pnpm”');
   });
 
   it('keeps every valid understanding and work stream instead of applying fixed item caps', async () => {
