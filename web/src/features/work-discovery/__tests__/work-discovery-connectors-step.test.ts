@@ -6,7 +6,7 @@ import {
   mergeUnderstandingConnectors,
   ONBOARDING_CONNECTOR_FALLBACKS,
   sortUnderstandingConnectors,
-} from '../work-discovery-connectors-step';
+} from '../work-discovery-connectors';
 
 function connector(toolkit: string, understanding = true): ConnectorDefinition {
   return {

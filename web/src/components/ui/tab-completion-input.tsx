@@ -19,14 +19,6 @@ export type TabCompletionInputProps = Omit<InputHTMLAttributes<HTMLInputElement>
 export type TabCompletionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onKeyDown'>
   & TabCompletionBehaviorProps<HTMLTextAreaElement>;
 
-/** Converts a localized “for example” placeholder into the value accepted by Tab. */
-export function suggestionFromExample(placeholder: string): string {
-  return placeholder
-    .replace(/^(?:例如\s*[：:]?|for example\s*[：:]?|e\.g\.\s*)/i, '')
-    .replace(/…$/, '')
-    .trim();
-}
-
 function ariaKeyShortcuts(existing: string | undefined, suggestion: string | null | undefined): string | undefined {
   if (!suggestion?.trim()) return existing;
   if (!existing) return 'Tab';

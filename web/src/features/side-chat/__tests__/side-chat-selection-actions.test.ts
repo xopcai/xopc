@@ -6,7 +6,7 @@ import {
   FILL_CHAT_COMPOSER_EVENT,
   type FillChatComposerDetail,
 } from '@/features/chat/composer/fill-composer-dispatch';
-import { addSelectionToMainChat } from '../side-chat-selection-launcher';
+import { addSelectionToMainChat } from '../side-chat-selection-actions';
 
 describe('side chat selection actions', () => {
   it('adds selected text to the main chat composer', () => {

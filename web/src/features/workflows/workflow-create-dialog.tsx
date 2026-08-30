@@ -22,7 +22,8 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { suggestionFromExample, TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
+import { TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
+import { suggestionFromExample } from '@/components/ui/tab-completion-input.utils';
 import { cn } from '@/lib/cn';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { interaction } from '@/lib/interaction';

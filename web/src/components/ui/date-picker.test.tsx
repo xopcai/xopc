@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDatePickerValue, toDatePickerValue } from '@/components/ui/date-picker';
+import { parseDatePickerValue, toDatePickerValue } from '@/components/ui/date-picker.utils';
 
 describe('date picker value helpers', () => {
   it('round-trips a local calendar date without timezone drift', () => {
