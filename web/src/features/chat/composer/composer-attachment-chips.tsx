@@ -14,11 +14,13 @@ export function ComposerAttachmentChips({
   attachments,
   topPadded,
   onRemove,
+  className,
 }: {
   attachments: Attachment[];
   /** Adds a smaller top padding when something (e.g. follow-up stack) is rendered above. */
   topPadded: boolean;
   onRemove: (index: number) => void;
+  className?: string;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).chat;
@@ -28,6 +30,7 @@ export function ComposerAttachmentChips({
       className={cn(
         'flex flex-wrap gap-2 border-b border-edge-subtle/90 bg-surface-hover/20 px-4 pb-2 dark:border-edge-subtle',
         topPadded ? 'pt-2' : 'pt-3',
+        className,
       )}
     >
       {attachments.map((a, index) => (
