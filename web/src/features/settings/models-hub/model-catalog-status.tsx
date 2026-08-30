@@ -128,64 +128,64 @@ export function ModelCatalogStatus() {
               ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
               : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
           </p>
-          {readiness ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {(Object.entries(readiness.capabilities) as Array<[
-                CapabilityId,
-                CapabilityReadinessPayload['capabilities'][CapabilityId],
-              ]>).map(([capability, plan]) => {
-                const label = capability === 'vision'
-                  ? (zh ? '图片理解' : 'Vision')
-                  : capability === 'image-generation'
-                    ? (zh ? '图片生成' : 'Image generation')
-                    : capability.toUpperCase();
-                const automatic = plan.selectionSource !== 'explicit-config';
-                return (
-                  <div key={capability} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-fg">{label}</span>
-                      <span className={plan.status === 'ready'
-                        ? 'text-xs text-emerald-600 dark:text-emerald-400'
-                        : plan.status === 'disabled'
-                          ? 'text-xs text-fg-muted'
-                          : 'text-xs text-amber-600 dark:text-amber-400'}>
-                        {plan.status === 'ready'
-                          ? (zh ? '可用' : 'Ready')
-                          : plan.status === 'disabled'
-                            ? (zh ? '已关闭' : 'Off')
-                            : (zh ? '需处理' : 'Needs attention')}
-                      </span>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-fg-muted" title={plan.primary
-                      ? `${plan.primary.provider}/${plan.primary.model}`
-                      : undefined}>
-                      {plan.primary
-                        ? `${automatic ? (zh ? '自动' : 'Auto') : (zh ? '显式' : 'Explicit')} · ${plan.primary.provider}/${plan.primary.model}`
-                        : (zh ? '无可用实现' : 'No available implementation')}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-          {unavailable.length > 0 ? (
-            <div className="mt-2 space-y-1 text-sm text-amber-700 dark:text-amber-300">
-              {unavailable.slice(0, 3).map((reference) => (
-                <p key={reference.ref}>
-                  {reference.ref} {zh ? '不可用' : 'is unavailable'}
-                  {reference.suggestedRef ? ` · ${zh ? '建议' : 'Suggested'} ${reference.suggestedRef}` : ''}
-                  {` · ${reference.locations.length} ${zh ? '处引用' : 'references'}`}
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {failure ? <p className="mt-2 text-sm text-danger">{failure}</p> : null}
         </div>
-        <Button type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
+        <Button className="shrink-0" type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
           {refreshing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
           {refreshing ? (zh ? '刷新中…' : 'Refreshing…') : (zh ? '立即刷新' : 'Refresh now')}
         </Button>
       </div>
+      {readiness ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {(Object.entries(readiness.capabilities) as Array<[
+            CapabilityId,
+            CapabilityReadinessPayload['capabilities'][CapabilityId],
+          ]>).map(([capability, plan]) => {
+            const label = capability === 'vision'
+              ? (zh ? '图片理解' : 'Vision')
+              : capability === 'image-generation'
+                ? (zh ? '图片生成' : 'Image generation')
+                : capability.toUpperCase();
+            const automatic = plan.selectionSource !== 'explicit-config';
+            return (
+              <div key={capability} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 text-xs font-medium text-fg">{label}</span>
+                  <span className={plan.status === 'ready'
+                    ? 'shrink-0 text-xs text-emerald-600 dark:text-emerald-400'
+                    : plan.status === 'disabled'
+                      ? 'shrink-0 text-xs text-fg-muted'
+                      : 'shrink-0 text-xs text-amber-600 dark:text-amber-400'}>
+                    {plan.status === 'ready'
+                      ? (zh ? '可用' : 'Ready')
+                      : plan.status === 'disabled'
+                        ? (zh ? '已关闭' : 'Off')
+                        : (zh ? '需处理' : 'Needs attention')}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-xs text-fg-muted" title={plan.primary
+                  ? `${plan.primary.provider}/${plan.primary.model}`
+                  : undefined}>
+                  {plan.primary
+                    ? `${automatic ? (zh ? '自动' : 'Auto') : (zh ? '显式' : 'Explicit')} · ${plan.primary.provider}/${plan.primary.model}`
+                    : (zh ? '无可用实现' : 'No available implementation')}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {unavailable.length > 0 ? (
+        <div className="mt-2 space-y-1 text-sm text-amber-700 dark:text-amber-300">
+          {unavailable.slice(0, 3).map((reference) => (
+            <p key={reference.ref}>
+              {reference.ref} {zh ? '不可用' : 'is unavailable'}
+              {reference.suggestedRef ? ` · ${zh ? '建议' : 'Suggested'} ${reference.suggestedRef}` : ''}
+              {` · ${reference.locations.length} ${zh ? '处引用' : 'references'}`}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {failure ? <p className="mt-2 text-sm text-danger">{failure}</p> : null}
     </div>
   );
 }
