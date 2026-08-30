@@ -69,12 +69,23 @@ describe('work discovery probe', () => {
     const root = await temporaryRoot();
     await writeFile(join(root, 'TODO.md'), '- continue');
     const snapshot = await probeWorkDiscoveryRoot(root);
+    snapshot.git = {
+      branch: 'main',
+      changedPaths: ['TODO.md', '.env'],
+      recentCommits: [],
+    };
 
-    expect(summarizeWorkContextSnapshot(snapshot)).toMatchObject({
+    const summary = summarizeWorkContextSnapshot(snapshot);
+    expect(summary).toMatchObject({
       documentCount: 1,
       contentBytes: expect.any(Number),
-      changedPathCount: 0,
+      changedPathCount: 2,
+      branch: 'main',
+      files: [
+        { relativePath: 'TODO.md', source: 'git_change' },
+      ],
     });
+    expect(summary.files).not.toContainEqual(expect.objectContaining({ relativePath: '.env' }));
   });
 
   it('builds a bounded local fingerprint before deep analysis', async () => {

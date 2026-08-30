@@ -33,6 +33,8 @@ export type UnderstandingSignal = {
   id: string;
   label: string;
   kind: UnderstandingSignalKind;
+  meta?: string;
+  detail?: string;
 };
 
 const ICONS: Record<UnderstandingSignalKind, LucideIcon> = {
@@ -85,9 +87,12 @@ export function UnderstandingSourceConvergence({
         } as CSSProperties;
         return (
           <span key={signal.id} className="xopc-source-convergence-signal absolute left-1/2 top-1/2" style={style} data-position={index} aria-hidden>
-            <span className="xopc-source-convergence-chip flex max-w-36 items-center gap-2 rounded-xl border border-edge bg-surface-panel/95 px-3 py-2 text-xs font-medium text-fg shadow-elevated backdrop-blur-md">
+            <span className="xopc-source-convergence-chip flex max-w-44 items-center gap-2 rounded-xl border border-edge bg-surface-panel/95 px-3 py-2 text-fg shadow-elevated backdrop-blur-md">
               <Icon className="size-3.5 shrink-0 text-accent-fg" />
-              <span className="truncate">{signal.label}</span>
+              <span className="min-w-0" title={signal.detail}>
+                <span className="block truncate text-xs font-medium">{signal.label}</span>
+                {signal.meta ? <span className="mt-0.5 block truncate text-[10px] font-normal text-fg-muted">{signal.meta}</span> : null}
+              </span>
             </span>
           </span>
         );
@@ -100,7 +105,10 @@ export function UnderstandingSourceConvergence({
       </div>
 
       <div className="xopc-source-convergence-particles pointer-events-none absolute inset-0" aria-hidden>
-        {Array.from({ length: 8 }).map((_, index) => <i key={index} />)}
+        {Array.from({ length: 12 }).map((_, index) => <i key={index} />)}
+      </div>
+      <div className="xopc-source-convergence-meteors pointer-events-none absolute inset-0" aria-hidden>
+        {Array.from({ length: 6 }).map((_, index) => <i key={index} />)}
       </div>
     </div>
   );

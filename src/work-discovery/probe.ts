@@ -408,6 +408,22 @@ export async function searchWorkDiscoveryText(input: {
 }
 
 export function summarizeWorkContextSnapshot(snapshot: WorkContextSnapshot): WorkContextSnapshotSummary {
+  const normalizePath = (relativePath: string) => relativePath.replaceAll('\\', '/');
+  const sampledPaths = new Set(snapshot.structure.sampledPaths.map(normalizePath));
+  const files = new Map<string, WorkContextSnapshotSummary['files'][number]['source']>();
+  for (const relativePath of snapshot.git?.changedPaths ?? []) {
+    const normalized = normalizePath(relativePath);
+    if (sampledPaths.has(normalized)) files.set(normalized, 'git_change');
+  }
+  for (const document of snapshot.documents) {
+    const normalized = normalizePath(document.relativePath);
+    if (!files.has(normalized)) files.set(normalized, 'document');
+  }
+  for (const relativePath of snapshot.structure.sampledPaths) {
+    const normalized = normalizePath(relativePath);
+    if (!files.has(normalized)) files.set(normalized, 'structure');
+  }
+
   return {
     projectKind: snapshot.root.projectKind,
     sampledPathCount: snapshot.structure.sampledPaths.length,
@@ -415,6 +431,8 @@ export function summarizeWorkContextSnapshot(snapshot: WorkContextSnapshot): Wor
     documentCount: snapshot.documents.length,
     contentBytes: snapshot.limits.contentBytes,
     changedPathCount: snapshot.git?.changedPaths.length ?? 0,
+    ...(snapshot.git?.branch ? { branch: snapshot.git.branch } : {}),
+    files: Array.from(files, ([relativePath, source]) => ({ relativePath, source })).slice(0, 8),
     truncated: snapshot.limits.truncated,
   };
 }
