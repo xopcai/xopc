@@ -21,7 +21,7 @@ describe('XOPC Cloud polling rate limit', () => {
       expect((await app.request('/poll', { method: 'POST' })).status).toBe(200);
     }
 
-    expect(buckets.strictApi().consume('127.0.0.1').remaining).toBe(14);
+    expect(buckets.strictApi().consume('127.0.0.1').remaining).toBe(149);
   });
 
   it('allows high-frequency task interactions without consuming the strict bucket', async () => {
@@ -39,6 +39,6 @@ describe('XOPC Cloud polling rate limit', () => {
 
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get('Retry-After')).toBeTruthy();
-    expect(buckets.strictApi().consume('127.0.0.1').remaining).toBe(14);
+    expect(buckets.strictApi().consume('127.0.0.1').remaining).toBe(149);
   });
 });
