@@ -170,6 +170,8 @@ describe('Gateway Security Fixes', () => {
       const res = await app.request('/health');
       const csp = res.headers.get('Content-Security-Policy');
       expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).not.toContain("script-src 'self' blob:");
       expect(csp).toContain("media-src 'self' blob: data:");
       expect(csp).toContain("frame-ancestors 'none'");
       expect(csp).toContain("frame-src 'none'");

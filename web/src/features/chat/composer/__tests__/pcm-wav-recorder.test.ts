@@ -34,7 +34,48 @@ function fakeCapture() {
 }
 
 describe('PCM WAV recorder helpers', () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('loads the PCM processor from a bundled same-origin URL', async () => {
+    const addModule = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const source = { connect: vi.fn(), disconnect: vi.fn() };
+    const mutedOutput = {
+      gain: { value: 1 },
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    };
+    class FakeAudioContext {
+      sampleRate = 48_000;
+      audioWorklet = { addModule };
+      destination = {};
+      createMediaStreamSource = vi.fn(() => source);
+      createGain = vi.fn(() => mutedOutput);
+      resume = vi.fn().mockResolvedValue(undefined);
+      close = close;
+    }
+    class FakeAudioWorkletNode {
+      port = { onmessage: null, postMessage: vi.fn() };
+      onprocessorerror: (() => void) | null = null;
+      connect = vi.fn();
+      disconnect = vi.fn();
+    }
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode);
+
+    const stream = {} as MediaStream;
+    const capture = await PcmFrameCapture.start(stream, { onSamples: vi.fn() });
+
+    expect(addModule).toHaveBeenCalledOnce();
+    const moduleUrl = addModule.mock.calls[0]?.[0];
+    expect(moduleUrl).toEqual(expect.any(String));
+    expect(moduleUrl).not.toMatch(/^(?:blob|data):/);
+    capture.cancel();
+    expect(close).toHaveBeenCalledOnce();
+  });
 
   it('encodes mono samples as a valid 16 kHz PCM16 WAV file', () => {
     const encoded = encodePcm16Wav(new Float32Array([-1, 0, 1]));

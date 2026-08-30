@@ -33,6 +33,8 @@ import {
 
 const chat = {
   voiceMicDenied: 'Microphone unavailable',
+  voiceMicUnavailable: 'Microphone device unavailable',
+  voiceRecorderFailed: 'Recorder failed',
   voicePreparationFailed: 'Local model is not ready',
 } as ChatMessages;
 
@@ -108,10 +110,79 @@ describe('useComposerVoiceInput', () => {
     expect(voice.phase).toBe('recording');
   });
 
+  it('reports recorder initialization failures separately from permission denial', async () => {
+    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'xopc-local' });
+    const stopTrack = vi.fn();
+    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(async () => stream) },
+    });
+    mocks.startRecorder.mockRejectedValue(new DOMException(
+      "Unable to load a worklet's module.",
+      'AbortError',
+    ));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    function Harness() {
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await voice.startVoiceInput();
+    });
+
+    expect(stopTrack).toHaveBeenCalledOnce();
+    expect(mocks.showComposerNotification).toHaveBeenCalledWith('error', 'Recorder failed');
+    expect(mocks.showComposerNotification).not.toHaveBeenCalledWith('error', 'Microphone unavailable');
+    expect(consoleError).toHaveBeenCalledWith(
+      '[chat:voice] capture start failed',
+      expect.objectContaining({ stage: 'recorder', kind: 'recorder', errorName: 'AbortError' }),
+    );
+    consoleError.mockRestore();
+  });
+
+  it('reports getUserMedia permission errors as permission denial', async () => {
+    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError')),
+      },
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    function Harness() {
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await voice.startVoiceInput();
+    });
+
+    expect(mocks.showComposerNotification).toHaveBeenCalledWith('error', 'Microphone unavailable');
+    expect(consoleError).toHaveBeenCalledWith(
+      '[chat:voice] capture start failed',
+      expect.objectContaining({ stage: 'media', kind: 'permission', errorName: 'NotAllowedError' }),
+    );
+    consoleError.mockRestore();
+  });
+
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
     delete window.electronAPI;
+    vi.restoreAllMocks();
   });
 
   it('requests Electron microphone permission once after an in-progress model download and returns to idle when denied', async () => {
