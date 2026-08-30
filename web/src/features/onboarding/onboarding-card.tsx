@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, ShieldCheck, X } from 'lucide-react';
+import { ChevronRight, ExternalLink, Mail, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -262,11 +262,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   return (
     <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base" data-step={step}>
       <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
-      <header className="relative z-20 flex h-18 shrink-0 items-center justify-between px-5 sm:px-8 lg:px-10">
-        <div className="flex items-center gap-3">
-          <BrandLogo className="size-8" />
-          <span className="text-sm font-semibold tracking-[-0.02em] text-fg">xopc</span>
-        </div>
+      <header className="relative z-20 flex h-18 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-2">
           <div className="mr-2 hidden items-center gap-1.5 sm:flex" aria-label={stepLabel}>
             {STEP_ORDER.map((item, index) => (
@@ -302,10 +298,20 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
       <main className="relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(16rem,0.65fr)_minmax(32rem,1.35fr)]">
         <section className="xopc-onboarding-visual relative hidden min-h-0 items-center justify-center overflow-hidden lg:flex">
-          <div className="xopc-onboarding-orbit relative flex size-40 items-center justify-center" aria-hidden>
-            <span className="xopc-onboarding-orbit-ring absolute inset-0 rounded-full border border-accent/15" />
-            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[18%] rounded-full border border-edge" />
-            <BrandLogo className="size-10 lg:size-12" />
+          <div className="xopc-onboarding-orbit relative flex size-72 items-center justify-center" aria-hidden>
+            <span className="xopc-onboarding-orbit-glow absolute inset-[14%] rounded-full" />
+            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--outer absolute inset-0 rounded-full" />
+            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--middle absolute inset-[17%] rounded-full" />
+            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[31%] rounded-full" />
+            <span className="xopc-onboarding-orbit-sweep absolute inset-[8%] rounded-full" />
+            <span className="xopc-onboarding-orbit-satellite xopc-onboarding-orbit-satellite--one absolute inset-[8%] rounded-full"><i /></span>
+            <span className="xopc-onboarding-orbit-satellite xopc-onboarding-orbit-satellite--two absolute inset-[24%] rounded-full"><i /></span>
+            <span className="xopc-onboarding-orbit-particles absolute inset-0">
+              <i /><i /><i /><i /><i /><i />
+            </span>
+            <span className="xopc-onboarding-orbit-core relative flex size-24 items-center justify-center rounded-full">
+              <BrandLogo className="size-12 lg:size-14" />
+            </span>
           </div>
         </section>
 
@@ -318,16 +324,30 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 <p className="mt-3 text-sm leading-7 text-fg-muted">{o.step0Subtitle}</p>
                 <label className="mt-10 block">
                   <span className="sr-only">{o.profileCallNameLabel}</span>
-                  {profileLoading ? <Skeleton className="h-14 w-full rounded-2xl" /> : (
-                    <input
-                      autoFocus
-                      autoComplete="name"
-                      value={callName}
-                      onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
-                      onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void continueFromCallName(); }}
-                      placeholder={o.profileCallNamePlaceholder}
-                      className="h-14 w-full rounded-2xl border border-edge bg-surface-panel px-4 text-lg text-fg shadow-surface outline-none transition-[border-color,box-shadow] placeholder:text-fg-subtle focus:border-accent focus:ring-4 focus:ring-accent/10"
-                    />
+                  {profileLoading ? <Skeleton className="h-24 w-full rounded-3xl" /> : (
+                    <span className="xopc-onboarding-name-envelope group relative flex min-h-24 w-full items-center gap-4 overflow-hidden rounded-3xl border border-edge bg-surface-panel px-5 py-4 shadow-surface">
+                      <span className="xopc-onboarding-name-envelope-fold pointer-events-none absolute inset-0" aria-hidden />
+                      <span className="xopc-onboarding-name-envelope-icon relative z-10 flex size-11 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-panel text-accent-fg shadow-surface" aria-hidden>
+                        <Mail className="size-5" strokeWidth={1.6} />
+                      </span>
+                      <span className="relative z-10 min-w-0 flex-1">
+                        <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
+                          {o.profileCallNameLabel}
+                        </span>
+                        <input
+                          autoFocus
+                          autoComplete="name"
+                          value={callName}
+                          onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                          onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void continueFromCallName(); }}
+                          placeholder={o.profileCallNamePlaceholder}
+                          className="mt-1.5 h-8 w-full bg-transparent text-lg font-medium tracking-[-0.01em] text-fg outline-none placeholder:font-normal placeholder:text-fg-subtle"
+                        />
+                      </span>
+                      <span className="xopc-onboarding-name-envelope-seal relative z-10 hidden size-9 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent-soft sm:flex" aria-hidden>
+                        <span className="size-2 rounded-full bg-accent shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-accent)_12%,transparent)]" />
+                      </span>
+                    </span>
                   )}
                 </label>
                 {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
@@ -341,11 +361,11 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
             {step === 'provider' ? (
               <div>
-                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '接通智能' : 'Connect intelligence'}</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">{language === 'zh' ? '选择能力来源' : 'Choose how xopc is powered'}</h1>
+                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '配置智能模型' : 'Configure intelligence'}</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">{language === 'zh' ? '选择模型服务' : 'Choose an AI service'}</h1>
                 <p className="mt-3 text-sm leading-7 text-fg-muted">
                   {callName.trim()
-                    ? (language === 'zh' ? `${callName.trim()}，我们会自动使用推荐模型，高级选项可以稍后调整。` : `${callName.trim()}, we’ll apply the recommended model and leave advanced choices for later.`)
+                    ? (language === 'zh' ? `${callName.trim()}，选择一个服务，我们会为你配置推荐模型。你可以稍后在设置中进行调整。` : `${callName.trim()}, choose a service and we’ll configure its recommended model. You can adjust it later in Settings.`)
                     : o.step1Subtitle}
                 </p>
                 <div className="mt-8">

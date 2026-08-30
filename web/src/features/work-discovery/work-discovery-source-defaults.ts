@@ -4,6 +4,7 @@ const DEFAULT_ONBOARDING_SOURCE_IDS = new Set([
   'local-recent-files',
   'chromium-bookmarks',
   'apple-notes',
+  'apple-mail',
   'apple-calendar',
   'apple-reminders',
 ]);
