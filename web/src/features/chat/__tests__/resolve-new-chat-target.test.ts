@@ -67,6 +67,18 @@ describe('resolveNewChatTarget', () => {
     expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main' });
   });
 
+  it('temporary always creates a temporary server session instead of reusing an empty shell', async () => {
+    const mgr = mockSessionMgr([emptyA]);
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+      temporary: true,
+    });
+    expect(result.kind).toBe('create');
+    expect(mgr.loadSessions).not.toHaveBeenCalled();
+    expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main', temporary: true });
+  });
+
   it('noop when current session is already an empty shell', async () => {
     const mgr = mockSessionMgr([emptyA]);
     const result = await resolveNewChatTarget({

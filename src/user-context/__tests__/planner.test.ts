@@ -11,6 +11,7 @@ import {
   updateUserProfile,
 } from '../../storage/sqlite/index.js';
 import { UserContextPlanner } from '../planner.js';
+import { upsertUserFocus } from '../sources/repository.js';
 
 function message(text: string): AgentMessage {
   return { role: 'user', content: [{ type: 'text', text }] } as AgentMessage;
@@ -132,6 +133,71 @@ describe('structured user context planner', () => {
     expect(plan.items).not.toEqual(expect.arrayContaining([expect.objectContaining({ recordId: candidate.id })]));
   });
 
+  it('injects only relevant, in-scope focuses and records the decision', () => {
+    const relevant = upsertUserFocus({
+      canonicalKey: 'focus:xopc-release', title: 'Ship xopc', summary: 'Prepare the xopc release',
+      horizon: 'current', status: 'active', confidence: 1,
+      scope: { type: 'project', id: 'project-xopc' }, explicitness: 'explicit', evidenceRefs: [],
+    });
+    const unrelated = upsertUserFocus({
+      canonicalKey: 'focus:garden', title: 'Plan garden', summary: 'Choose plants for spring',
+      horizon: 'ongoing', status: 'active', confidence: 1, evidenceRefs: [],
+    });
+    const plan = new UserContextPlanner().plan({
+      sessionKey: 'session-focus', workspaceId: '/repo/xopc', projectId: 'project-xopc', turnId: 'turn-focus',
+      query: 'Prepare the xopc release checklist', userMessage: message('Prepare the release checklist'),
+    });
+
+    expect(textOf(plan.modelMessage)).toContain('Ship xopc');
+    expect(textOf(plan.modelMessage)).not.toContain('Plan garden');
+    expect(plan.items).toContainEqual(expect.objectContaining({ recordId: relevant.id, objectType: 'focus' }));
+    expect(plan.rejected).toContainEqual({ recordId: unrelated.id, reason: 'low_score' });
+    expect(getTurnPersonalization('turn-focus')?.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ objectType: 'focus', objectId: relevant.id, decision: 'selected' }),
+      expect.objectContaining({ objectType: 'focus', objectId: unrelated.id, decision: 'irrelevant' }),
+    ]));
+  });
+
+  it('keeps focus content inside the shared context budget', () => {
+    upsertUserFocus({
+      canonicalKey: 'focus:oversized', title: 'Release', summary: 'A focus that cannot fit',
+      horizon: 'current', status: 'active', confidence: 1,
+      scope: { type: 'project', id: 'project-xopc' }, evidenceRefs: [],
+    });
+    const plan = new UserContextPlanner().plan({
+      sessionKey: 'session-focus-budget', workspaceId: '/repo/xopc', projectId: 'project-xopc',
+      turnId: 'turn-focus-budget', query: 'release', userMessage: message('release'),
+      allocation: { profile: 'standard', maxResults: 2, maxChars: 5, reason: 'test' },
+    });
+
+    expect(textOf(plan.modelMessage)).not.toContain('cannot fit');
+    expect(getTurnPersonalization('turn-focus-budget')?.items).toContainEqual(expect.objectContaining({
+      objectType: 'focus', decision: 'budget_exceeded',
+    }));
+  });
+
+  it('budgets the complete injected block without duplicating focuses', () => {
+    updateUserProfile({ callName: 'Mic' });
+    const focus = upsertUserFocus({
+      canonicalKey: 'focus:exact-budget', title: 'Ship release', summary: 'Prepare the release',
+      horizon: 'current', status: 'active', confidence: 1, evidenceRefs: [],
+    });
+    const maxChars = 800;
+    const plan = new UserContextPlanner().plan({
+      sessionKey: 'session-exact-budget', workspaceId: '/repo', turnId: 'turn-exact-budget',
+      query: 'prepare release', userMessage: message('prepare release'),
+      allocation: { profile: 'standard', maxResults: 5, maxChars, reason: 'test' },
+    });
+    const prompt = textOf(plan.modelMessage);
+    const block = prompt.slice(0, prompt.lastIndexOf('\n\nprepare release'));
+    const selected = getTurnPersonalization('turn-exact-budget')!.items
+      .filter((item) => item.decision === 'selected');
+
+    expect(block.length).toBeLessThanOrEqual(maxChars);
+    expect(selected.reduce((sum, item) => sum + item.injectedChars, 0)).toBe(block.length);
+    expect(prompt.match(new RegExp(focus.title, 'g'))).toHaveLength(1);
+  });
+
   it('applies collaboration rules only on their configured channel', () => {
     createCollaborationRule({
       category: 'communication', priority: 1, scope: { type: 'global' },
@@ -148,5 +214,23 @@ describe('structured user context planner', () => {
     });
     expect(textOf(web.modelMessage)).not.toContain('mobile-friendly');
     expect(textOf(telegram.modelMessage)).toContain('mobile-friendly');
+  });
+
+  it('applies collaboration rules only to their configured agent', () => {
+    createCollaborationRule({
+      category: 'execution', priority: 1, scope: { type: 'global' },
+      conditions: { agentId: 'coder' }, statement: 'Always run the repository typecheck.',
+    });
+    const planner = new UserContextPlanner();
+    const main = planner.plan({
+      sessionKey: 'agent:main:webchat:default:direct:1', workspaceId: '/repo',
+      turnId: 'turn-main-agent', query: 'update code', userMessage: message('Update code'),
+    });
+    const coder = planner.plan({
+      sessionKey: 'agent:coder:webchat:default:direct:1', workspaceId: '/repo',
+      turnId: 'turn-coder-agent', query: 'update code', userMessage: message('Update code'),
+    });
+    expect(textOf(main.modelMessage)).not.toContain('repository typecheck');
+    expect(textOf(coder.modelMessage)).toContain('repository typecheck');
   });
 });

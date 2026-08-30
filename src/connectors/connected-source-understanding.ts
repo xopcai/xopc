@@ -5,7 +5,10 @@ import type { UnderstandingCandidate } from '../agent/memory/understanding/types
 import type { Config } from '../config/schema.js';
 import type { KnowledgeSourceItem } from '../knowledge/types.js';
 import { listKnowledgeSourceItems } from '../storage/sqlite/index.js';
+import { finishContextExtractionRun } from '../storage/sqlite/index.js';
+import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
 import type { UnderstandingSourceItem } from '../user-context/sources/types.js';
+import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import { upsertUserFocus } from '../user-context/sources/repository.js';
 import { analyzeUnderstandingSources } from '../work-discovery/analyzer.js';
 import type { WorkDiscoveryProfileCandidate } from '../work-discovery/types.js';
@@ -109,6 +112,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
   agentId: string;
   sourceInstanceId: string;
   sourceRunId: string;
+  processingPolicy: 'local_only' | 'remote_allowed';
   memoryManager: MemoryManager;
   analyze?: typeof analyzeUnderstandingSources;
 }): Promise<{
@@ -125,7 +129,16 @@ export async function deriveConnectedSourceUnderstanding(input: {
   });
   const items = connectedItemsForUnderstanding(knowledgeItems);
   if (!items.length) return { created: 0, focusCount: 0, status: 'completed' };
-  const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
+  const extraction = claimRegisteredExtraction({
+    extractorId: 'connector-semantic', sourceRef: `understanding-source-run:${input.sourceRunId}`,
+    contentForHash: knowledgeItems.map((item) => `${item.id}:${item.sourceUpdatedAt ?? ''}`).join('\n'),
+    processingPolicy: input.processingPolicy, destination: 'remote_model',
+  });
+  if (!allowsRemoteSourceProcessing([input.processingPolicy]) || !extraction.shouldExecute) {
+    return { created: 0, focusCount: 0, status: 'completed' };
+  }
+  try {
+    const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
   const rawTexts = items.flatMap((item) => item.text ? [item.text] : []);
   const profileCandidates = analysis.profileCandidates
     .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawTexts));
@@ -135,19 +148,20 @@ export async function deriveConnectedSourceUnderstanding(input: {
   ].map((ref) => ref.startsWith('knowledge-source://') ? ref.slice('knowledge-source://'.length) : ''))]
     .filter(Boolean)
     .slice(0, 20);
-  const reviewed = profileCandidates.length
-    ? await input.memoryManager.applyUnderstandingCandidates(
-      profileCandidates.map(understandingCandidate),
-      {
-        agentId: input.agentId,
-        sourceItemIds,
-        sourceText: 'Bounded semantic synthesis from explicitly connected work sources.',
-        source: { provider: 'connected-sources', sourceInstanceId: input.sourceInstanceId },
-        reviewSource: 'background',
-      },
-    )
-    : { created: 0 };
-  const focuses = analysis.workThreadCandidates
+    const reviewed = profileCandidates.length
+      ? await input.memoryManager.applyUnderstandingCandidates(
+        profileCandidates.map(understandingCandidate),
+        {
+          agentId: input.agentId,
+          sourceItemIds,
+          sourceText: 'Bounded semantic synthesis from explicitly connected work sources.',
+          source: { provider: 'connected-sources', sourceInstanceId: input.sourceInstanceId },
+          reviewSource: 'background',
+          extractionRunId: extraction.run.id,
+        },
+      )
+      : { created: 0, writeOutputs: [] };
+    const focuses = analysis.workThreadCandidates
     .filter((candidate) => !hasLongVerbatimOverlap(candidate.title, rawTexts)
       && !hasLongVerbatimOverlap(candidate.summary, rawTexts))
     .map((candidate) => upsertUserFocus({
@@ -160,11 +174,29 @@ export async function deriveConnectedSourceUnderstanding(input: {
       evidenceRefs: candidate.evidenceRefs,
       sourceRunId: input.sourceRunId,
     }));
-  const sourceStatus = analysis.sourceStatuses.find((item) => item.sourceId === 'connected-work');
-  return {
-    created: reviewed.created,
-    focusCount: focuses.length,
-    status: sourceStatus?.status ?? 'failed',
-    ...(sourceStatus?.error ? { error: sourceStatus.error } : {}),
-  };
+    finishContextExtractionRun({
+      runId: extraction.run.id, status: 'completed',
+      outputs: [
+        ...(reviewed.writeOutputs ?? []).map((output) => ({
+          candidateKey: output.candidateKey,
+          ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
+          ...(output.versionId ? { versionId: output.versionId } : {}), outcome: output.outcome,
+        })),
+        ...focuses.map((focus) => ({
+          candidateKey: focus.canonicalKey, objectType: 'focus' as const, objectId: focus.id,
+          versionId: focus.versionId, outcome: 'created' as const,
+        })),
+      ],
+    });
+    const sourceStatus = analysis.sourceStatuses.find((item) => item.sourceId === 'connected-work');
+    return {
+      created: reviewed.created,
+      focusCount: focuses.length,
+      status: sourceStatus?.status ?? 'failed',
+      ...(sourceStatus?.error ? { error: sourceStatus.error } : {}),
+    };
+  } catch (error) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'extractor_failed' });
+    throw error;
+  }
 }

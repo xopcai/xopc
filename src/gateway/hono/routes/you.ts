@@ -8,11 +8,15 @@ import {
   getTurnPersonalization, getUnderstanding, getUserProfile,
   listCollaborationRules, listContextConsolidationRuns, listUnderstandingEvidence, listUnderstandings,
   recordContextFeedback, rejectUnderstanding, reviseCollaborationRule,
-  reviseUnderstanding, setCollaborationRuleStatus, setUnderstandingStatus, summarizeUserUnderstandingQuality,
+  reviseUnderstanding, setCollaborationRuleStatus, setUnderstandingStatus,
   updateUserProfile,
+  listContextExtractionRuns,
 } from '../../../storage/sqlite/index.js';
 import { UNDERSTANDING_KINDS, type CollaborationRule, type UnderstandingKind,
   type UnderstandingStatus, type UserContextScope } from '../../../user-context/domain.js';
+import { listContextObjects, type ContextObjectView } from '../../../user-context/context-objects.js';
+import { repairExtractedContext } from '../../../user-context/extraction/repair.js';
+import { listUserFocuses, updateUserFocus } from '../../../user-context/sources/repository.js';
 import { canonicalUnderstandingKey, findDuplicateUnderstanding } from '../../../user-context/understanding.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -25,6 +29,7 @@ const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
 ]);
 const RULE_STATUSES = new Set<CollaborationRule['status']>(['active', 'disabled', 'archived']);
 const FEEDBACK_RATINGS = new Set(['helpful', 'irrelevant', 'wrong', 'stale', 'sensitive']);
+const CONTEXT_OBJECT_VIEWS = new Set<ContextObjectView>(['current', 'review', 'history']);
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -82,10 +87,76 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
   authenticated.get('/api/you', (c) => c.json({
     profile: getUserProfile(),
     understandings: listUnderstandings(),
+    focuses: listUserFocuses(),
     rules: listCollaborationRules(),
     consolidation: { lastRun: listContextConsolidationRuns(1)[0] ?? null },
-    quality: summarizeUserUnderstandingQuality(),
   }));
+
+  authenticated.get('/api/you/context-objects', (c) => {
+    const view = c.req.query('view') ?? 'current';
+    if (!CONTEXT_OBJECT_VIEWS.has(view as ContextObjectView)) return c.json({ error: 'Invalid context object view' }, 400);
+    return c.json({ objects: listContextObjects(view as ContextObjectView) });
+  });
+
+  authenticated.get('/api/you/extraction-runs', (c) => c.json({
+    runs: listContextExtractionRuns({
+      ...(c.req.query('sourceRef') ? { sourceRef: c.req.query('sourceRef') } : {}),
+      ...(c.req.query('extractorId') ? { extractorId: c.req.query('extractorId') } : {}),
+      ...(c.req.query('extractorVersion') ? { extractorVersion: c.req.query('extractorVersion') } : {}),
+      limit: 100,
+    }),
+  }));
+
+  authenticated.post('/api/you/context-repair', write, async (c) => {
+    const body = await readBody(c);
+    if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+    const filter = Object.fromEntries(
+      ['runId', 'sourceRef', 'extractorId', 'extractorVersion', 'objectVersionId']
+        .flatMap((field) => typeof body[field] === 'string' && body[field].trim()
+          ? [[field, body[field].trim()]] : []),
+    );
+    if (!Object.keys(filter).length) return c.json({ error: 'At least one repair filter is required' }, 400);
+    return c.json({ result: repairExtractedContext(filter) });
+  });
+
+  authenticated.post('/api/you/context-objects/batch-review', write, async (c) => {
+    const body = await readBody(c);
+    const decisions = body?.decisions;
+    if (!Array.isArray(decisions) || decisions.length < 1 || decisions.length > 50) {
+      return c.json({ error: 'decisions must contain 1-50 items' }, 400);
+    }
+    const normalized: Array<{ objectType: 'focus' | 'understanding'; objectId: string; action: 'accept' | 'reject' | 'pause' }> = [];
+    const targets = new Set<string>();
+    for (const value of decisions) {
+      const item = asRecord(value);
+      const objectType = item?.objectType;
+      const objectId = nonEmptyString(item?.objectId, 200);
+      const action = item?.action;
+      if ((objectType !== 'focus' && objectType !== 'understanding') || !objectId
+        || (action !== 'accept' && action !== 'reject' && action !== 'pause')) {
+        return c.json({ error: 'Each decision must contain a valid objectType, objectId, and action' }, 400);
+      }
+      const exists = objectType === 'understanding'
+        ? Boolean(getUnderstanding(objectId))
+        : listUserFocuses().some((focus) => focus.id === objectId);
+      if (!exists) return c.json({ error: `Context object not found: ${objectId}` }, 404);
+      const target = `${objectType}:${objectId}`;
+      if (targets.has(target)) return c.json({ error: `Duplicate context object decision: ${objectId}` }, 400);
+      targets.add(target);
+      normalized.push({ objectType, objectId, action });
+    }
+    const objects = normalized.map(({ objectType, objectId, action }) => {
+      if (objectType === 'understanding') {
+        return action === 'accept'
+          ? setUnderstandingStatus(objectId, 'active', { explicitness: 'explicit', confidence: 1 })
+          : action === 'reject'
+            ? rejectUnderstanding(objectId, 'Rejected during context review')
+            : setUnderstandingStatus(objectId, 'needs_review');
+      }
+      return updateUserFocus(objectId, { status: action === 'accept' ? 'active' : action === 'reject' ? 'rejected' : 'paused' });
+    });
+    return c.json({ objects });
+  });
 
   authenticated.get('/api/you/profile', (c) => {
     const profile = getUserProfile();
@@ -243,7 +314,7 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const objectType = body.objectType;
     const objectId = body.objectId;
     if ((objectType === undefined) !== (objectId === undefined)
-      || (objectType !== undefined && !['profile', 'rule', 'understanding'].includes(String(objectType)))
+      || (objectType !== undefined && !['profile', 'rule', 'focus', 'understanding'].includes(String(objectType)))
       || (objectId !== undefined && typeof objectId !== 'string')) {
       return c.json({ error: 'objectType and objectId must be valid and provided together' }, 400);
     }
@@ -254,13 +325,17 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const rating = body.rating as 'helpful' | 'irrelevant' | 'wrong' | 'stale' | 'sensitive';
     recordContextFeedback({
       turnId, runId: run.runId, rating,
-      ...(objectType ? { objectType: objectType as 'profile' | 'rule' | 'understanding', objectId: objectId as string } : {}),
+      ...(objectType ? { objectType: objectType as 'profile' | 'rule' | 'focus' | 'understanding', objectId: objectId as string } : {}),
       ...(typeof body.reason === 'string' ? { reason: body.reason.slice(0, 500) } : {}),
     });
     if (objectType === 'understanding' && typeof objectId === 'string') {
       if (rating === 'wrong') rejectUnderstanding(objectId, 'Marked wrong from turn feedback');
       if (rating === 'stale') setUnderstandingStatus(objectId, 'stale');
       if (rating === 'sensitive') setUnderstandingStatus(objectId, 'needs_review');
+    }
+    if (objectType === 'focus' && typeof objectId === 'string') {
+      if (rating === 'wrong') updateUserFocus(objectId, { status: 'rejected' });
+      if (rating === 'stale' || rating === 'sensitive') updateUserFocus(objectId, { status: 'paused' });
     }
     return c.json({ ok: true });
   });

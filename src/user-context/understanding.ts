@@ -12,7 +12,7 @@ export function isSameUserContextScope(left: UserContextScope, right: UserContex
   return left.type === right.type && left.id === right.id;
 }
 
-const NEGATION = /\b(?:do not|don't|never|avoid|without)\b|(?:不要|不用|无需|从不|避免|禁止)/i;
+const NEGATION = /\b(?:do not|don't|not|never|avoid|without)\b|(?:不要|不用|无需|从不|避免|禁止)/i;
 
 function withoutNegation(statement: string): string {
   return statement.replace(NEGATION, '').replace(/\s+/g, ' ').trim();
