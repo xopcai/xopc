@@ -401,6 +401,17 @@ describe('SessionStore', () => {
       const result = await store.list({ search: 'alpha-session-keyword' });
       expect(result.items.map((session) => session.key)).toEqual([targetKey]);
     });
+
+    it('matches any meaningful term in a multi-keyword session search', async () => {
+      const targetKey = 'agent:main:webchat:default:direct:multi-keyword-search';
+      await store.saveMessages(targetKey, [
+        { role: 'user', content: '继续处理 xopc-platform 的部署工作', timestamp: Date.now() },
+      ]);
+
+      const result = await store.list({ search: 'xopc-platform 工作 用户' });
+
+      expect(result.items.map((session) => session.key)).toContain(targetKey);
+    });
   });
 
   describe('transcript document (synthetic)', () => {

@@ -147,6 +147,7 @@ describe('runGatewayAgent', () => {
   it('emits one global terminal event with safe session metadata', async () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const emitted: Array<{ type: string; payload: unknown }> = [];
+    const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
     const deps = {
       config: {},
       agentService: {
@@ -166,7 +167,9 @@ describe('runGatewayAgent', () => {
         getSessionMetadata: async () => ({ sessionId: 's1', name: 'Finish notifications' }),
       },
       emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
-      publishRealtime: () => {},
+      publishRealtime: (topic: string, event: string, data: unknown) => {
+        realtimeEvents.push({ topic, event, data });
+      },
       completeRealtimeTopic: () => {},
     } as unknown as RunGatewayAgentDeps;
 
@@ -194,6 +197,18 @@ describe('runGatewayAgent', () => {
         route: `/chat/${encodeURIComponent(sessionKey)}`,
       }),
     }]);
+    expect(realtimeEvents.filter((event) => event.topic === 'sessions')).toEqual([
+      {
+        topic: 'sessions',
+        event: 'run.started',
+        data: { sessionKey, runId: 'run-terminal' },
+      },
+      {
+        topic: 'sessions',
+        event: 'run.completed',
+        data: { sessionKey, runId: 'run-terminal', status: 'success' },
+      },
+    ]);
   });
 
 });

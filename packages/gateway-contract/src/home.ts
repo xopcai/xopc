@@ -110,7 +110,16 @@ export const HomeWorkbenchItemSchema = z.object({
   secondaryActions: z.array(HomeActionSchema).max(2).default([]),
 });
 
+export const HomeRunningConversationSchema = z.object({
+  sessionKey: z.string(),
+  runId: z.string(),
+  title: z.string().optional(),
+  agentId: z.string().optional(),
+  updatedAt: z.number(),
+});
+
 export const HomeResponseSchema = z.object({
+  runningConversations: z.array(HomeRunningConversationSchema).default([]),
   needsUser: z.array(HomeWorkbenchItemSchema),
   background: z.array(HomeWorkbenchItemSchema),
   backgroundCount: z.number().int().nonnegative(),
@@ -151,6 +160,7 @@ export type HomeDecision = z.infer<typeof HomeDecisionSchema>;
 export type HomeAttention = z.infer<typeof HomeAttentionSchema>;
 export type HomeAction = z.infer<typeof HomeActionSchema>;
 export type HomeWorkbenchItem = z.infer<typeof HomeWorkbenchItemSchema>;
+export type HomeRunningConversation = z.infer<typeof HomeRunningConversationSchema>;
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 export type TaskValueMetrics = z.infer<typeof TaskValueMetricsSchema>;
 
