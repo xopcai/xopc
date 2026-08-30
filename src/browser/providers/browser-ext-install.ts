@@ -18,11 +18,13 @@ import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { Config } from '../../config/schema.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import { resolveBinDir } from '../../config/paths.js';
 import { resolvePackageRoot } from '../../infra/update-check.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { createLogger } from '../../utils/logger.js';
+import { shouldRunExtensionBridgeServer } from '../backend-from-config.js';
 import { assertCacheDir } from '../cache-dir-policy.js';
 
 const log = createLogger('BrowserExtInstall');
@@ -380,8 +382,9 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   };
 }
 
-/** Gateway startup hook: ensure extension artifacts for the fixed extension backend. */
-export async function ensureBrowserExtensionOnStartup(_config: unknown): Promise<void> {
+/** Gateway startup hook: ensure artifacts only while the extension backend is active. */
+export async function ensureBrowserExtensionOnStartup(config: Config | undefined): Promise<void> {
+  if (!shouldRunExtensionBridgeServer(config)) return;
   await ensureBrowserExtensionArtifacts();
 }
 

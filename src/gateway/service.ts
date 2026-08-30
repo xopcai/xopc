@@ -1429,10 +1429,10 @@ export class GatewayService {
    * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
    */
   async reconcileBrowserExtensionServer(): Promise<void> {
-    const { shouldRunExtensionBridgeServer } = await import('../browser/backend-from-config.js');
-    const wantsExtension = shouldRunExtensionBridgeServer(this.config);
+    const { resolveExtensionBridgeServerConfig } = await import('../browser/backend-from-config.js');
+    const bridgeConfig = resolveExtensionBridgeServerConfig(this.config);
 
-    if (!wantsExtension) {
+    if (!bridgeConfig) {
       if (this.browserExtensionRelease) {
         await this.browserExtensionRelease();
         this.browserExtensionRelease = null;
@@ -1443,10 +1443,7 @@ export class GatewayService {
       return;
     }
 
-    const port = 19820;
-    const host = '127.0.0.1';
-    const connectionTimeout = undefined;
-    const commandTimeout = undefined;
+    const { port, host, connectionTimeout, commandTimeout } = bridgeConfig;
     const bindKey = `${host}:${port}`;
 
     if (this.browserExtensionRelease && this.browserExtensionBindKey === bindKey) {
