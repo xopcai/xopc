@@ -19,6 +19,7 @@ import {
 } from '@/features/chat/session/chat-session-store';
 import { hasPendingAgentRunForChat, setPendingAgentRun } from '@/features/chat/messages/message-sender';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { SessionManager, type SessionTimelineItem } from '@/features/chat/session/session-manager';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
@@ -59,6 +60,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       content: string,
       attachments?: PendingFollowUp['attachments'],
       levelOverride?: string,
+      contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
     ) => Promise<void>
   >(async () => {});

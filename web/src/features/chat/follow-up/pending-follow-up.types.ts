@@ -1,3 +1,5 @@
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
+
 /** Queued user drafts while a run is active (Cursor-style stack above the input). */
 
 export const MAX_PENDING_FOLLOW_UPS = 10;
@@ -20,6 +22,7 @@ export type PendingFollowUp = {
   attachments?: PendingFollowUpAttachment[];
   /** Thinking level captured when the row was added (used when flushed as a full turn). */
   thinkingLevel?: string;
+  contextRefs?: ComposerContextRef[];
   version: number;
   delivery: 'next' | 'steer';
   status: 'queued' | 'interrupted';
@@ -37,6 +40,24 @@ export function projectPendingFollowUps(inputs: readonly unknown[]): PendingFoll
       || (row.effectiveDelivery !== 'next' && row.effectiveDelivery !== 'steer')
       || (row.status !== 'queued' && row.status !== 'interrupted')
     ) return [];
+    const contextRefs = Array.isArray(row.contextRefs)
+      ? row.contextRefs.flatMap((value): ComposerContextRef[] => {
+          if (!value || typeof value !== 'object') return [];
+          const ref = value as Record<string, unknown>;
+          if (
+            ref.kind !== 'note'
+            || typeof ref.sourceId !== 'string'
+            || typeof ref.version !== 'string'
+            || typeof ref.title !== 'string'
+          ) return [];
+          return [{
+            kind: 'note',
+            sourceId: ref.sourceId,
+            expectedVersion: ref.version,
+            title: ref.title,
+          }];
+        })
+      : undefined;
     return [{
       id: row.id,
       clientMessageId: row.clientMessageId,
@@ -45,6 +66,7 @@ export function projectPendingFollowUps(inputs: readonly unknown[]): PendingFoll
         ? row.attachments as PendingFollowUp['attachments']
         : undefined,
       thinkingLevel: typeof row.thinking === 'string' ? row.thinking : undefined,
+      contextRefs: contextRefs?.length ? contextRefs : undefined,
       version: row.version,
       delivery: row.effectiveDelivery,
       status: row.status,

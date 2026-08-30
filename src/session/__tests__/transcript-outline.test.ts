@@ -4,6 +4,16 @@ import { buildSessionTimeline } from '../transcript-outline.js';
 import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 
 describe('transcript-outline', () => {
+  it('uses user-authored text for timeline and tree previews', () => {
+    const rows: TranscriptStoredRow[] = [{
+      role: 'user',
+      content: '<user-profile>\nPreferred name: micjoyce\n</user-profile>\n\n[2026-08-30 13:54 GMT+8] 看下note 内容',
+    } as TranscriptStoredRow];
+
+    const [item] = buildSessionTimeline(rows);
+    expect(item?.preview).toBe('看下note 内容');
+  });
+
   it('builds row-backed timeline items with display anchors', () => {
     const rows: TranscriptStoredRow[] = [
       {

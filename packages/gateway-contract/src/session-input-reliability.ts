@@ -5,11 +5,13 @@ export function sessionInputFingerprint(input: {
   content: string;
   thinking?: string;
   attachments?: unknown[];
+  contextRefs?: unknown[];
 }): string {
   const serialized = JSON.stringify([
     input.content,
     input.thinking ?? null,
     input.attachments ?? null,
+    input.contextRefs ?? null,
   ]);
   let fnvHash = 2166136261;
   let djbHash = 5381;

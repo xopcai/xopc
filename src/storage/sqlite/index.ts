@@ -103,6 +103,7 @@ export {
   findSessionInput,
   finishSessionInputRun,
   getSessionInputState,
+  getSessionInputById,
   insertSessionInput,
   mutateQueuedSessionInput,
   recoverSessionInputState,

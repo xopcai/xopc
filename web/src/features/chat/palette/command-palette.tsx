@@ -5,7 +5,7 @@ import {
   Root as TooltipRoot,
   Trigger as TooltipTrigger,
 } from '@radix-ui/react-tooltip';
-import { Sparkles, Zap } from 'lucide-react';
+import { NotebookPen, Sparkles, Zap } from 'lucide-react';
 import {
   Fragment,
   memo,
@@ -124,6 +124,7 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
 }) {
   const isSkill = item.kind === 'skill';
   const isAgent = item.kind === 'agent';
+  const isNote = item.kind === 'note';
   const icon = isAgent ? (
     <AgentAvatarDisplay
       agentId={item.name}
@@ -131,13 +132,15 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
       size={18}
       className="size-[18px] shrink-0"
     />
+  ) : isNote ? (
+    <NotebookPen className="size-3 shrink-0 text-accent-fg" aria-hidden />
   ) : isSkill ? (
     <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
   ) : (
     <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
   );
-  // Agents render as `name` (no leading slash); skills/commands keep the leading slash.
-  const nameLine = isAgent ? (
+  // Agents and Notes render as names; skills/commands keep the leading slash.
+  const nameLine = isAgent || isNote ? (
     showHighlight ? (
       <>{highlightFuzzyName(item.name, filterQuery)}</>
     ) : (
@@ -227,18 +230,22 @@ export const CommandPalette = memo(function CommandPalette({
   selectedIndex,
   noResults,
   grouped,
+  noteRowCount,
   skillRowCount,
   commandRowCount,
   query,
   skillsLabel,
   commandsLabel,
   agentsLabel,
+  notesLabel,
   groupedHasSkills,
   groupedHasCommands,
   groupedHasAgents,
+  groupedHasNotes,
   groupedSkillsShowMoreLabel,
   groupedCommandsShowMoreLabel,
   groupedAgentsShowMoreLabel,
+  groupedNotesShowMoreLabel,
   currentAgentId,
   currentBadgeLabel,
   runBusy,
@@ -252,6 +259,7 @@ export const CommandPalette = memo(function CommandPalette({
   onExpandSkills,
   onExpandCommands,
   onExpandAgents,
+  onExpandNotes,
   onSelectItem,
   panelRef,
 }: {
@@ -262,22 +270,27 @@ export const CommandPalette = memo(function CommandPalette({
   items: PaletteItem[];
   selectedIndex: number;
   noResults: string;
-  /** When true, show Skills / Commands / Agents section labels (query empty). */
+  /** When true, show section labels (query empty). */
   grouped: boolean;
-  /** Leading rows in `items` that are skills. */
+  /** Leading rows in `items` that are notes. */
+  noteRowCount: number;
+  /** Rows after notes that are skills. */
   skillRowCount: number;
-  /** Rows after skills that are commands; agents follow. */
+  /** Rows after notes and skills that are commands; agents follow. */
   commandRowCount: number;
   query: string;
   skillsLabel: string;
   commandsLabel: string;
   agentsLabel: string;
+  notesLabel: string;
   groupedHasSkills: boolean;
   groupedHasCommands: boolean;
   groupedHasAgents: boolean;
+  groupedHasNotes: boolean;
   groupedSkillsShowMoreLabel: string | null;
   groupedCommandsShowMoreLabel: string | null;
   groupedAgentsShowMoreLabel: string | null;
+  groupedNotesShowMoreLabel: string | null;
   /** Active session agent id; the matching agent row gets a "current" trailing badge. */
   currentAgentId?: string;
   /** Localized text for the "current" badge (e.g. "current" / "当前"). */
@@ -297,6 +310,7 @@ export const CommandPalette = memo(function CommandPalette({
   onExpandSkills: () => void;
   onExpandCommands: () => void;
   onExpandAgents: () => void;
+  onExpandNotes: () => void;
   /** Same behavior as choosing the row with Enter (skill pill / slash command / agent switch). */
   onSelectItem: (item: PaletteItem) => void;
 }) {
@@ -372,13 +386,35 @@ export const CommandPalette = memo(function CommandPalette({
       <div className="p-2.5 text-xs leading-normal text-fg-muted">{noResults}</div>
     ) : grouped ? (
       <>
-        {groupedHasSkills ? (
+        {groupedHasNotes ? (
           <>
+            <div className={sectionHeaderClass} aria-hidden>
+              {notesLabel}
+            </div>
+            {items.slice(0, noteRowCount).map((item, j) => (
+              <PaletteOptionRow key={item.id} item={item} index={j} {...optionRowProps} />
+            ))}
+            {groupedNotesShowMoreLabel ? (
+              <button
+                type="button"
+                className={showMoreClass}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onExpandNotes();
+                }}
+              >
+                {groupedNotesShowMoreLabel}
+              </button>
+            ) : null}
+          </>
+        ) : null}
+        {groupedHasSkills ? (
+          <div className={cn(groupedHasNotes && 'mt-1 border-t border-edge-subtle')}>
             <div className={sectionHeaderClass} aria-hidden>
               {skillsLabel}
             </div>
-            {items.slice(0, skillRowCount).map((item, j) => (
-              <PaletteOptionRow key={item.id} item={item} index={j} {...optionRowProps} />
+            {items.slice(noteRowCount, noteRowCount + skillRowCount).map((item, j) => (
+              <PaletteOptionRow key={item.id} item={item} index={noteRowCount + j} {...optionRowProps} />
             ))}
             {groupedSkillsShowMoreLabel ? (
               <button
@@ -392,24 +428,24 @@ export const CommandPalette = memo(function CommandPalette({
                 {groupedSkillsShowMoreLabel}
               </button>
             ) : null}
-          </>
+          </div>
         ) : null}
         {groupedHasCommands ? (
           <div
             className={cn(
-              groupedHasSkills && 'mt-1 border-t border-edge-subtle',
+              (groupedHasNotes || groupedHasSkills) && 'mt-1 border-t border-edge-subtle',
             )}
           >
             <div className={sectionHeaderClass} aria-hidden>
               {commandsLabel}
             </div>
             {items
-              .slice(skillRowCount, skillRowCount + commandRowCount)
+              .slice(noteRowCount + skillRowCount, noteRowCount + skillRowCount + commandRowCount)
               .map((item, j) => (
                 <PaletteOptionRow
                   key={item.id}
                   item={item}
-                  index={skillRowCount + j}
+                  index={noteRowCount + skillRowCount + j}
                   {...optionRowProps}
                 />
               ))}
@@ -430,19 +466,19 @@ export const CommandPalette = memo(function CommandPalette({
         {groupedHasAgents ? (
           <div
             className={cn(
-              (groupedHasSkills || groupedHasCommands) && 'mt-1 border-t border-edge-subtle',
+              (groupedHasNotes || groupedHasSkills || groupedHasCommands) && 'mt-1 border-t border-edge-subtle',
             )}
           >
             <div className={sectionHeaderClass} aria-hidden>
               {agentsLabel}
             </div>
             {items
-              .slice(skillRowCount + commandRowCount)
+              .slice(noteRowCount + skillRowCount + commandRowCount)
               .map((item, j) => (
                 <PaletteOptionRow
                   key={item.id}
                   item={item}
-                  index={skillRowCount + commandRowCount + j}
+                  index={noteRowCount + skillRowCount + commandRowCount + j}
                   {...optionRowProps}
                 />
               ))}

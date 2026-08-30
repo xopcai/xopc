@@ -7,6 +7,7 @@ import {
 } from 'react';
 
 import type { ClarifyPromptState } from '@/features/chat/composer/clarify-prompt';
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import {
   clearClarifyPromptSnapshot,
   readClarifyPromptSnapshot,
@@ -35,6 +36,7 @@ export type ChatFollowUpClarifyApi = {
   addPendingFollowUp: (
     content: string,
     attachments?: PendingFollowUp['attachments'],
+    contextRefs?: ComposerContextRef[],
   ) => Promise<void>;
   beginEditFollowUp: (id: string) => void;
   cancelEditFollowUp: () => void;
@@ -43,6 +45,7 @@ export type ChatFollowUpClarifyApi = {
     content: string,
     attachments?: PendingFollowUp['attachments'],
     levelOverride?: string,
+    contextRefs?: ComposerContextRef[],
   ) => void;
   removePendingFollowUp: (id: string) => void;
   movePendingFollowUp: (id: string, dir: 'up' | 'down') => void;
@@ -204,6 +207,7 @@ export function useChatFollowUpClarify(options: {
     async (
       content: string,
       attachments?: PendingFollowUp['attachments'],
+      contextRefs?: ComposerContextRef[],
     ) => {
       const trimmed = content.trim();
       if (!trimmed && !attachments?.length) return;
@@ -220,6 +224,7 @@ export function useChatFollowUpClarify(options: {
         body: JSON.stringify({
           clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
           attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
+          contextRefs: contextRefs?.map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),
         origin,
         }),
       });
@@ -251,6 +256,7 @@ export function useChatFollowUpClarify(options: {
       content: string,
       attachments?: PendingFollowUp['attachments'],
       levelOverride?: string,
+      contextRefs?: ComposerContextRef[],
     ) => {
       const trimmed = content.trim();
       const prev = pendingFollowUpsRef.current;
@@ -274,7 +280,9 @@ export function useChatFollowUpClarify(options: {
       void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`), {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: prev[i].version, content: trimmed || content,
-          attachments: attachments?.length ? attachments : undefined, thinking: effThinking }),
+          attachments: attachments?.length ? attachments : undefined, thinking: effThinking,
+          contextRefs: (contextRefs ?? []).map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),
+        }),
       }).then(async (res) => {
         const json = await res.json().catch(() => null) as { payload?: unknown } | null;
         applyState(json?.payload);
@@ -333,7 +341,7 @@ export function useChatFollowUpClarify(options: {
     const key = sessionKeyRef.current;
     if (!key) return;
     const row = pendingFollowUpsRef.current.find((r) => r.id === id);
-    if (!row?.text.trim() || row.attachments?.length) return;
+    if (!row?.text.trim() || row.attachments?.length || row.contextRefs?.length) return;
     setSteeringFollowUpId(id);
     try {
       const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {

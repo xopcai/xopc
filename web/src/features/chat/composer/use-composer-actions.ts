@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 
-import type { ComposerDraft, WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, ComposerDraft, WireAttachment } from '@/features/chat/composer/composer.types';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
@@ -16,6 +16,7 @@ function harvestDraft(opts: {
   getTextValue: () => string;
   getAttachmentCount: () => number;
   wireAttachmentsPayload: () => WireAttachment[];
+  getContextRefs: () => ComposerContextRef[];
 }): ComposerDraft | null {
   if (opts.voiceActive) {
     opts.cancelVoiceInput();
@@ -29,6 +30,7 @@ function harvestDraft(opts: {
   return {
     text,
     attachments: wirePayload,
+    contextRefs: opts.getContextRefs(),
   };
 }
 
@@ -42,22 +44,25 @@ export interface UseComposerActionsOptions {
   getTextValue: () => string;
   getAttachmentCount: () => number;
   wireAttachmentsPayload: () => WireAttachment[];
+  getContextRefs: () => ComposerContextRef[];
   getThinkingLevel: () => string;
 
-  onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string) => void;
-  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[]) => void | Promise<void>;
-  onSteeringInterrupt?: (text: string, attachments?: WireAttachment[]) => void;
+  onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void;
+  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
+  onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   onCommitEditFollowUp: (
     id: string,
     text: string,
     attachments?: PendingFollowUp['attachments'],
     thinkingLevel?: string,
+    contextRefs?: ComposerContextRef[],
   ) => void;
   onPendingFollowUpRemove: (id: string) => void;
   pendingFollowUpsCount: number;
 
   resetEditor: () => void;
   clearAttachments: () => void;
+  clearContextRefs: () => void;
   clearEditFollowUpRef: () => void;
   /** After a draft is committed (send, queue, interrupt); used for input history. */
   onUserTextCommitted?: (text: string) => void;
@@ -79,6 +84,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getTextValue,
     getAttachmentCount,
     wireAttachmentsPayload,
+    getContextRefs,
     getThinkingLevel,
     onSend,
     onAddPendingFollowUp,
@@ -88,6 +94,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     pendingFollowUpsCount,
     resetEditor,
     clearAttachments,
+    clearContextRefs,
     clearEditFollowUpRef,
     onUserTextCommitted,
   } = options;
@@ -96,6 +103,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     getTextValue,
     getAttachmentCount,
     wireAttachmentsPayload,
+    getContextRefs,
   };
   const followUpSubmissionRef = useRef(false);
 
@@ -112,10 +120,12 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
       getThinkingLevel(),
+      draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
     );
     onUserTextCommitted?.(draft.text);
     resetEditor();
     clearAttachments();
+    clearContextRefs();
   }, [
     runBusy,
     voiceActive,
@@ -125,9 +135,11 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onUserTextCommitted,
     resetEditor,
     clearAttachments,
+    clearContextRefs,
     getTextValue,
     getAttachmentCount,
     wireAttachmentsPayload,
+    getContextRefs,
   ]);
 
   const flushSteeringDraft = useCallback(async () => {
@@ -145,11 +157,13 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
         draft.text,
         draft.attachments.length > 0 ? draft.attachments : undefined,
         getThinkingLevel(),
+        draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
       );
       onUserTextCommitted?.(draft.text);
       clearEditFollowUpRef();
       resetEditor();
       clearAttachments();
+      clearContextRefs();
       return;
     }
 
@@ -165,10 +179,12 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       await onAddPendingFollowUp(
         draft.text,
         draft.attachments.length > 0 ? draft.attachments : undefined,
+        draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
       );
       onUserTextCommitted?.(draft.text);
       resetEditor();
       clearAttachments();
+      clearContextRefs();
     } catch (error) {
       showComposerNotification('error', m.followUpQueueSubmitFailed, {
         message: error instanceof Error ? error.message : String(error),
@@ -191,9 +207,11 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onUserTextCommitted,
     resetEditor,
     clearAttachments,
+    clearContextRefs,
     getTextValue,
     getAttachmentCount,
     wireAttachmentsPayload,
+    getContextRefs,
   ]);
 
   const interruptDraft = useCallback(() => {
@@ -208,6 +226,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onSteeringInterrupt(
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
+      draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
     );
     onUserTextCommitted?.(draft.text);
 
@@ -218,6 +237,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
 
     resetEditor();
     clearAttachments();
+    clearContextRefs();
   }, [
     runBusy,
     voiceActive,
@@ -229,9 +249,11 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     clearEditFollowUpRef,
     resetEditor,
     clearAttachments,
+    clearContextRefs,
     getTextValue,
     getAttachmentCount,
     wireAttachmentsPayload,
+    getContextRefs,
   ]);
 
   return { send, flushSteeringDraft, interruptDraft };

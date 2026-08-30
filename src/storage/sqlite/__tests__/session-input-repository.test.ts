@@ -4,13 +4,16 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  appendTranscriptEntry,
   cancelQueuedSessionInput,
   claimNextSessionInput,
   closeXopcDatabase,
+  ensureSessionRecord,
   findSessionInput,
   finishSessionInputRun,
   getSessionInputState,
   insertSessionInput,
+  loadTranscriptRowsForSession,
   mutateQueuedSessionInput,
   openXopcDatabase,
   recoverSessionInputState,
@@ -87,5 +90,65 @@ describe('session input repository', () => {
       ['running', 'interrupted'],
       ['queued', 'queued'],
     ]);
+  });
+
+  it('persists context snapshots without publishing their full text in queue state', () => {
+    insertSessionInput({
+      id: 'context-input', sessionKey, clientMessageId: 'client-context',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'compare', origin,
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan' }],
+      contextSnapshots: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan', text: 'private note body' }],
+    });
+
+    expect(getSessionInputState(sessionKey).inputs[0]).toMatchObject({
+      contextRefs: [{ sourceId: 'note-1', title: 'Plan' }],
+    });
+    expect(getSessionInputState(sessionKey).inputs[0]?.contextSnapshots).toBeUndefined();
+    expect(claimNextSessionInput(sessionKey, 'context-run')?.contextSnapshots?.[0]?.text)
+      .toBe('private note body');
+  });
+
+  it('copies safe context summaries to the persisted user message', () => {
+    ensureSessionRecord(sessionKey, dir);
+    insertSessionInput({
+      id: 'context-transcript', sessionKey, clientMessageId: 'client-context-transcript',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'compare', origin,
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan' }],
+      contextSnapshots: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan', text: 'private note body' }],
+    });
+    claimNextSessionInput(sessionKey, 'context-transcript-run');
+
+    appendTranscriptEntry(sessionKey, {
+      role: 'user',
+      content: 'compare',
+      turnId: 'context-transcript-run',
+    } as never);
+
+    expect(loadTranscriptRowsForSession(sessionKey)[0]).toMatchObject({
+      metadata: {
+        sourceContexts: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan' }],
+      },
+    });
+    expect(JSON.stringify(loadTranscriptRowsForSession(sessionKey)[0])).not.toContain('private note body');
+  });
+
+  it('updates or clears frozen context snapshots with a queued edit', () => {
+    const row = insertSessionInput({
+      id: 'context-edit', sessionKey, clientMessageId: 'client-context-edit',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'compare', origin,
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Old' }],
+      contextSnapshots: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Old', text: 'old body' }],
+    });
+
+    expect(mutateQueuedSessionInput({
+      sessionKey,
+      id: row.id,
+      version: row.version,
+      contextRefs: [],
+      contextSnapshots: [],
+    })).toBe(true);
+    const updated = findSessionInput(sessionKey, row.clientMessageId);
+    expect(updated?.contextRefs).toEqual([]);
+    expect(updated?.contextSnapshots).toEqual([]);
   });
 });

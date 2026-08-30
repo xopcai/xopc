@@ -10,6 +10,7 @@ import { isProviderConfiguredSync } from '../../providers/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import type { ThinkLevel } from '../transcript/thinking-types.js';
 import type { CompactionResult } from '../memory/compaction.js';
+import type { AgentSourceContext } from '../source-context/types.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   commandRegistry,
@@ -40,6 +41,7 @@ export interface CommandContext {
   isGroup: boolean;
   /** From inbound message metadata (thread/account, etc.) for continuation routing. */
   inboundMetadata?: Record<string, unknown>;
+  sourceContexts?: AgentSourceContext[];
 }
 
 export interface CommandHandlerConfig {
@@ -134,7 +136,7 @@ export class CommandHandler {
   ): UnifiedCommandContext {
     const skipBusOutbound = shouldSkipBusOutboundForChannel(context.channel);
 
-    return createCommandContext({
+    const commandContext = createCommandContext({
       sessionKey: context.sessionKey,
       source: context.channel as 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway',
       channelId: context.channel,
@@ -244,6 +246,8 @@ export class CommandHandler {
       getSessionContextReport: this.getSessionContextReport,
       workflowRunService: this.getWorkflowRunService?.(),
     });
+    commandContext.sourceContexts = context.sourceContexts;
+    return commandContext;
   }
 
   /**

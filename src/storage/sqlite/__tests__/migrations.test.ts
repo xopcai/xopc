@@ -12,6 +12,7 @@ import {
 import {
   applyPendingMigrations,
   inspectSchemaMigrationStatus,
+  resolveMigrationsDir,
   XOPC_DB_SCHEMA_VERSION,
 } from '../migrations/runner.js';
 import {
@@ -128,6 +129,54 @@ describe('SQLite migrations', () => {
     expect(status.pendingVersions).toEqual([2]);
     expect(status.hasMigrationGap).toBe(false);
     expect(readSchemaVersion(db)).toBe(1);
+  });
+
+  it('v132 backfills safe Note summaries into matching user transcript rows', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      CREATE TABLE transcripts (
+        session_id TEXT PRIMARY KEY,
+        session_key TEXT NOT NULL
+      );
+      CREATE TABLE transcript_entries (
+        entry_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        role TEXT,
+        payload_json TEXT NOT NULL
+      );
+      CREATE TABLE session_inputs (
+        id TEXT PRIMARY KEY,
+        session_key TEXT NOT NULL,
+        run_id TEXT,
+        context_refs_json TEXT
+      );
+      INSERT INTO transcripts(session_id, session_key) VALUES ('session-1', 'session-key-1');
+      INSERT INTO transcript_entries(entry_id, session_id, role, payload_json)
+      VALUES ('entry-1', 'session-1', 'user', '{"role":"user","content":"compare","turnId":"run-1"}');
+      INSERT INTO session_inputs(id, session_key, run_id, context_refs_json)
+      VALUES (
+        'input-1',
+        'session-key-1',
+        'run-1',
+        '[{"kind":"note","sourceId":"note-1","version":"1","title":"Plan"}]'
+      );
+    `);
+    setSchemaVersion(db, 131);
+
+    expect(applyPendingMigrations(db, {
+      migrationsDir: resolveMigrationsDir(),
+      targetVersion: 132,
+    })).toBe(132);
+
+    const row = db.prepare(`SELECT payload_json FROM transcript_entries WHERE entry_id = 'entry-1'`)
+      .get() as { payload_json: string };
+    expect(JSON.parse(row.payload_json)).toMatchObject({
+      content: 'compare',
+      metadata: {
+        sourceContexts: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan' }],
+      },
+    });
   });
 
   it('ensureXopcDatabaseSchema applies baseline then leaves version at release target', () => {

@@ -1,20 +1,15 @@
 import type { WireAttachment } from './composer.types';
 import type { Message, MessageAttachment, MessageContent, TextContent } from './messages.types';
-import { stripStartupContextForDisplay } from './wire-text-scrub';
+import { stripRuntimeContextForDisplay } from './wire-text-scrub';
 
-const ENVELOPE_TIMESTAMP_RE = /^\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}[^\]]*\]\s*/;
 let optimisticMessageSequence = 0;
 
 export function extractUserMessageText(content: MessageContent[]): string {
   return content
     .filter((b): b is TextContent => b.type === 'text')
-    .map((b) => stripEnvelopeTimestampPrefix(stripStartupContextForDisplay(b.text)))
+    .map((b) => stripRuntimeContextForDisplay(b.text))
     .join('\n\n')
     .trim();
-}
-
-function stripEnvelopeTimestampPrefix(text: string): string {
-  return text.replace(ENVELOPE_TIMESTAMP_RE, '');
 }
 
 export function messageAttachmentsToWire(attachments?: MessageAttachment[]): WireAttachment[] | undefined {

@@ -102,6 +102,34 @@ function stableWireContentKey(content: unknown): string {
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] {
+  const rows = asRecord(metadata)?.sourceContexts;
+  if (!Array.isArray(rows)) return undefined;
+  const refs = rows.flatMap((value): NonNullable<Message['contextRefs']> => {
+    const row = asRecord(value);
+    if (
+      !row
+      || row.kind !== 'note'
+      || typeof row.sourceId !== 'string'
+      || typeof row.version !== 'string'
+      || typeof row.title !== 'string'
+    ) return [];
+    return [{
+      kind: 'note',
+      sourceId: row.sourceId,
+      version: row.version,
+      title: row.title,
+      ...(typeof row.tokenEstimate === 'number' ? { tokenEstimate: row.tokenEstimate } : {}),
+      ...(row.truncated === true ? { truncated: true } : {}),
+    }];
+  });
+  return refs.length ? refs : undefined;
+}
+
 export function wireMessageStableKey(raw: Record<string, unknown>, index: number): string {
   const message = raw as WireMessage;
   const id = wireMessageId(message) ?? '';
@@ -742,6 +770,7 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
         role: roleTyped,
         content: applyStripToUserContent(roleTyped, normalizeContentBlocks(m.content)),
         attachments,
+        contextRefs: normalizeMessageContextRefs(m.metadata),
         timestamp: parseTimestamp(m.timestamp),
       });
       continue;

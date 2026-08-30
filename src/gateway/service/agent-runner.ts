@@ -30,6 +30,8 @@ import type { ClarifyStreamEvent } from '../clarify-bridge.js';
 import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
+import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
+import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   SessionInputCoordinator,
@@ -50,7 +52,10 @@ export interface GatewayAgentRunnerOptions {
   emit: (type: string, payload: unknown) => void;
   publishRealtime: (topic: string, event: string, data: unknown) => void;
   completeRealtimeTopic: (topic: string) => void;
+  resolveTurnContext: (ref: TurnContextRef) => Promise<AgentSourceContext | null>;
 }
+
+const MAX_TURN_CONTEXTS = 5;
 
 export class GatewayAgentRunner {
   private readonly opts: GatewayAgentRunnerOptions;
@@ -76,7 +81,7 @@ export class GatewayAgentRunner {
           input.origin,
           input.attachments,
           input.thinking,
-          { runId: input.runId },
+          { runId: input.runId, sourceContexts: input.sourceContexts },
         );
         let result: { status: string; summary: string } | undefined;
         while (true) {
@@ -99,6 +104,26 @@ export class GatewayAgentRunner {
           name: ref.name,
           size: ref.size,
         }));
+      },
+      prepareContexts: async (refs) => {
+        if (!refs?.length) return undefined;
+        const unique = new Map<string, TurnContextRef>();
+        for (const ref of refs) {
+          const sourceId = ref.sourceId.trim();
+          if (sourceId) unique.set(`${ref.kind}:${sourceId}`, { ...ref, sourceId });
+        }
+        if (unique.size > MAX_TURN_CONTEXTS) {
+          throw new Error(`A message can reference at most ${MAX_TURN_CONTEXTS} notes`);
+        }
+        const contexts = await Promise.all(
+          [...unique.values()].map((ref) => opts.resolveTurnContext(ref)),
+        );
+        if (contexts.some((context) => context === null)) {
+          throw new Error('A referenced note is no longer available');
+        }
+        return fitSourceContextsToBudget(
+          contexts.filter((context): context is AgentSourceContext => context !== null),
+        );
       },
       steer: (sessionKey, content) => opts.getAgentService().turnDispatcher.steerWebchatSession(sessionKey, content),
       emit: opts.emit,
@@ -154,7 +179,7 @@ export class GatewayAgentRunner {
     origin: TurnOrigin,
     attachments?: UserTurnAttachment[],
     thinking?: string,
-    runOptions?: { signal?: AbortSignal; runId?: string },
+    runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[] },
   ): AsyncGenerator<
     { type: string; [key: string]: unknown },
     { status: string; summary: string },
@@ -224,7 +249,8 @@ export class GatewayAgentRunner {
   }
 
   updateSessionInput(sessionKey: string, id: string, body: {
-    version: number; content?: string; attachments?: UserTurnAttachment[]; thinking?: string; position?: number;
+    version: number; content?: string; attachments?: UserTurnAttachment[]; contextRefs?: TurnContextRef[];
+    thinking?: string; position?: number;
   }) {
     return this.inputs.update(sessionKey, id, body);
   }

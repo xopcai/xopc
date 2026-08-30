@@ -20,6 +20,18 @@ function assistantMessage(content: unknown, extra: Partial<AgentMessage> = {}): 
 }
 
 describe('history replay rendering', () => {
+  it('hides runtime profile context in persisted user rows', () => {
+    const chatLog = new ChatLog();
+    appendHistoryToChatLog(chatLog, [{
+      role: 'user',
+      content: '<user-profile>\nPreferred name: micjoyce\n</user-profile>\n\n[2026-08-30 13:54 GMT+8] 看下note 内容',
+    }], false);
+
+    const rendered = stripAnsi(chatLog.render(100).join('\n'));
+    expect(rendered).toContain('看下note 内容');
+    expect(rendered).not.toContain('Preferred name');
+  });
+
   it('detects append-only history key updates', () => {
     expect(historyKeysHaveAppendOnlyPrefix(['a', 'b'], ['a', 'b', 'c'])).toBe(true);
     expect(historyKeysHaveAppendOnlyPrefix(['a', 'b'], ['a', 'x', 'c'])).toBe(false);

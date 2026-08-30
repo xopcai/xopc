@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import type { AgentSourceContext, SourceContextRefSummary } from '../../agent/source-context/types.js';
 
 import {
   buildSessionContextForLlm,
@@ -22,6 +23,8 @@ export type ReplaceLatestSessionTurnInput = {
   clientMessageId: string;
   content: string;
   attachments?: unknown[];
+  contextRefs?: SourceContextRefSummary[];
+  contextSnapshots?: AgentSourceContext[];
   thinking?: string;
   origin: TurnOrigin;
 };
@@ -178,14 +181,17 @@ export function replaceLatestSessionTurnAndQueueInput(
     db.prepare(
       `INSERT INTO session_inputs(id, session_key, client_message_id,
        requested_delivery, effective_delivery, status, content, attachments_json,
-       thinking, origin_json, position, target_run_id, version, created_at_ms, updated_at_ms)
-       VALUES (?, ?, ?, 'next', 'next', 'queued', ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
+       context_refs_json, context_snapshots_json, thinking, origin_json, position,
+       target_run_id, version, created_at_ms, updated_at_ms)
+       VALUES (?, ?, ?, 'next', 'next', 'queued', ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
     ).run(
       inputId,
       input.sessionKey,
       input.clientMessageId,
       input.content,
       input.attachments ? JSON.stringify(input.attachments) : null,
+      input.contextRefs ? JSON.stringify(input.contextRefs) : null,
+      input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : null,
       input.thinking ?? null,
       JSON.stringify(input.origin),
       maxPosition.value + 1,
