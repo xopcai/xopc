@@ -25,6 +25,7 @@ import {
   TaskDependencyError,
   TaskDependencyService,
 } from '../../../tasks/task-dependency-service.js';
+import { TaskDeletionService } from '../../../tasks/task-deletion-service.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskReadModelProjector } from '../../../tasks/task-read-model-projector.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
@@ -48,6 +49,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const projector = new TaskReadModelProjector();
   const signals = new TaskSignalService(() => deps.service.dispatchTaskRuns());
   const dependencies = new TaskDependencyService();
+  const deletion = new TaskDeletionService(tasks, runs);
   const handoffs = new TaskHandoffService({
     getConfig: () => deps.service.currentConfig,
     sessionIndex: deps.service.sessionIndexInstance,
@@ -249,6 +251,24 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (!updated) return c.json({ ok: false, error: 'Task changed or was not found' }, 409);
     deps.service.dispatchTaskEvents();
     return c.json({ ok: true, task: updated });
+  });
+
+  authenticated.delete('/api/tasks/:id', taskRateLimit, (c) => {
+    const taskId = c.req.param('id');
+    const result = deletion.delete(taskId);
+    if (result.ok === true) {
+      deps.service.dispatchTaskEvents();
+      return c.json({ ok: true, deleted: true, taskId });
+    }
+    if (result.reason === 'active_run') {
+      return c.json({
+        ok: false,
+        code: 'task_active',
+        error: 'Cancel the active TaskRun before deleting the Task',
+        runId: result.run.id,
+      }, 409);
+    }
+    return c.json({ ok: false, code: 'task_not_found', error: 'Task not found' }, 404);
   });
 
   authenticated.put('/api/tasks/:id/dependencies', taskRateLimit, async (c) => {

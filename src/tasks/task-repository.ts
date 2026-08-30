@@ -404,7 +404,52 @@ export class TaskRepository {
   }
 
   delete(taskId: string): boolean {
-    return getSqliteDatabase().prepare('DELETE FROM tasks WHERE task_id = ?').run(taskId).changes > 0;
+    return runSqliteWriteTransaction((db) => {
+      const task = db.prepare(
+        'SELECT project_id FROM tasks WHERE task_id = ?',
+      ).get(taskId) as { project_id: string | null } | undefined;
+      if (!task) return false;
+      const runIds = (db.prepare(
+        'SELECT run_id FROM task_runs WHERE task_id = ?',
+      ).all(taskId) as Array<{ run_id: string }>).map((row) => row.run_id);
+      db.prepare(
+        `DELETE FROM context_edges WHERE owner_kind = 'task' AND owner_id = ?`,
+      ).run(taskId);
+      db.prepare(
+        `DELETE FROM command_deduplication WHERE subject_kind = 'task' AND subject_id = ?`,
+      ).run(taskId);
+      db.prepare(
+        `DELETE FROM domain_outbox WHERE subject_kind = 'task' AND subject_id = ?`,
+      ).run(taskId);
+      const deleted = db.prepare('DELETE FROM tasks WHERE task_id = ?').run(taskId).changes > 0;
+      db.prepare(
+        `DELETE FROM context_snapshots WHERE owner_kind = 'task' AND owner_id = ?`,
+      ).run(taskId);
+      if (runIds.length > 0) {
+        db.prepare(
+          `DELETE FROM context_snapshots
+           WHERE owner_kind = 'task_run' AND owner_id IN (SELECT value FROM json_each(?))`,
+        ).run(JSON.stringify(runIds));
+      }
+      const deletedAt = Date.now();
+      db.prepare(
+        `INSERT INTO domain_outbox (
+          event_id, event_type, subject_kind, subject_id, correlation_id,
+          payload_json, created_at
+        ) VALUES (?, 'task.deleted.v1', 'task', ?, ?, ?, ?)`,
+      ).run(
+        randomUUID(),
+        taskId,
+        randomUUID(),
+        JSON.stringify({
+          taskId,
+          ...(task.project_id ? { projectId: task.project_id } : {}),
+          deletedAt,
+        }),
+        deletedAt,
+      );
+      return deleted;
+    });
   }
 
   private insertContract(db: ReturnType<typeof getSqliteDatabase>, contract: TaskContract): void {

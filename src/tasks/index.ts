@@ -16,6 +16,7 @@ export * from './task-context-repository.js';
 export * from './task-conversation-repository.js';
 export * from './task-handoff-service.js';
 export * from './task-dependency-service.js';
+export * from './task-deletion-service.js';
 export * from './task-read-model-projector.js';
 export * from './task-outbox-dispatcher.js';
 export * from './task-run-dispatcher.js';

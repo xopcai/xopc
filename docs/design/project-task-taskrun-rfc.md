@@ -855,6 +855,7 @@ The old `task.status_changed.v1` event is removed. New event types are:
 ```text
 task.created.v2
 task.updated.v2
+task.deleted.v1
 task.phase_changed.v1
 task.closed.v1
 task.reopened.v1

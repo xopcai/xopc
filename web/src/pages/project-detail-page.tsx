@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { TaskChangedEventSchema, type ProjectMonitoringUpdate, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
+import { TaskChangedEventSchema, TaskDeletedEventSchema, type ProjectMonitoringUpdate, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, GitBranch, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -817,10 +817,18 @@ export function ProjectDetailPage() {
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => void refreshOperatingView(), 120);
     };
+    const refreshForDeletedTask = (event: Event) => {
+      const parsed = TaskDeletedEventSchema.safeParse((event as CustomEvent<unknown>).detail);
+      if (!parsed.success || parsed.data.projectId !== projectId) return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void refreshOperatingView(), 120);
+    };
     window.addEventListener('task-changed-v2', refreshForTask);
+    window.addEventListener('task-deleted-v1', refreshForDeletedTask);
     return () => {
       window.clearTimeout(refreshTimer);
       window.removeEventListener('task-changed-v2', refreshForTask);
+      window.removeEventListener('task-deleted-v1', refreshForDeletedTask);
     };
   }, [projectId, refreshOperatingView]);
 

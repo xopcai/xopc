@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   TaskCreateRequestSchema,
   TaskChangedEventSchema,
+  TaskDeletedEventSchema,
   TaskSchema,
 } from './tasks.js';
 
@@ -86,5 +87,13 @@ describe('Task contracts', () => {
       source: 'agent',
       occurredAt: 10,
     })).toThrow();
+  });
+
+  it('validates task deletion notifications', () => {
+    expect(TaskDeletedEventSchema.parse({
+      taskId: 'task-1',
+      projectId: 'project-1',
+      deletedAt: 10,
+    })).toEqual({ taskId: 'task-1', projectId: 'project-1', deletedAt: 10 });
   });
 });
