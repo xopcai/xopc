@@ -54,7 +54,7 @@ export function AgentsScreen() {
   });
 
   const createMut = useMutation({
-    mutationFn: (agentId: string) => createSession(agentId),
+    mutationFn: (agentId: string) => createSession({ agentId }),
     onSuccess: (key) => {
       invalidateSessionLists(queryClient);
       openChat(router, key, { replace: true });

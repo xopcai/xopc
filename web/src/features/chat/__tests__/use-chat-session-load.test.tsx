@@ -70,6 +70,8 @@ describe('useChatSessionLoad', () => {
         dismissClarifyOnSessionLoad: vi.fn(),
         detachForNewConversation: vi.fn(),
         sessionKey,
+        sessionAgentId: 'main',
+        currentProjectId: null,
         hasMore: false,
       }));
       return null;
@@ -117,6 +119,8 @@ describe('useChatSessionLoad', () => {
         dismissClarifyOnSessionLoad: vi.fn(),
         detachForNewConversation: vi.fn(),
         sessionKey,
+        sessionAgentId: 'main',
+        currentProjectId: null,
         hasMore: false,
       }));
       return null;
@@ -177,6 +181,8 @@ describe('useChatSessionLoad', () => {
         dismissClarifyOnSessionLoad: vi.fn(),
         detachForNewConversation: vi.fn(),
         sessionKey,
+        sessionAgentId: 'main',
+        currentProjectId: null,
         hasMore: false,
       }));
       return null;

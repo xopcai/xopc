@@ -17,7 +17,7 @@ export function useHomeChatPrefetch(configured: boolean): void {
     if (!configured || !gatewayOnline) return;
 
     const timer = setTimeout(() => {
-      prefetchNewChatSession(defaultAgentId);
+      prefetchNewChatSession({ agentId: defaultAgentId, projectId: null });
       void queryClient.prefetchQuery({ queryKey: queryKeys.agents, queryFn: fetchChatAgents });
       void queryClient.prefetchQuery({
         queryKey: queryKeys.models(defaultAgentId),

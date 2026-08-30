@@ -9,6 +9,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createDefaultNewSessionPreferences,
+  modelPreferenceForAgent,
+  resolveNewSessionSpec,
+} from '@xopcai/gateway-contract';
 
 import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 
@@ -87,8 +92,41 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   });
 
   const localDefaultAgentId = usePreferencesStore((s) => s.defaultAgentId) ?? '';
-  const localSelectedModelRef = usePreferencesStore((s) => s.selectedModelRef);
-  const setSelectedModelRef = usePreferencesStore((s) => s.setSelectedModelRef);
+  const preferencesByGateway = usePreferencesStore((s) => s.newSessionPreferencesByGateway);
+  const rememberSelectedAgent = usePreferencesStore((s) => s.rememberSelectedAgent);
+  const rememberAgentModel = usePreferencesStore((s) => s.rememberAgentModel);
+  const rememberLastChatScope = usePreferencesStore((s) => s.rememberLastChatScope);
+  const newSessionPreferences = useMemo(
+    () => preferencesByGateway[activeGatewayId ?? '']
+      ?? createDefaultNewSessionPreferences(),
+    [activeGatewayId, preferencesByGateway],
+  );
+  const defaultAgentId = resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId);
+  const bootstrapSpec = useMemo(
+    () => resolveNewSessionSpec(
+      { origin: 'mobile-bootstrap', project: { kind: 'remember-last' } },
+      {
+        defaultAgentId,
+        selectedAgentId: newSessionPreferences.selectedAgentId,
+        lastChatScope: newSessionPreferences.lastChatScope,
+      },
+    ),
+    [defaultAgentId, newSessionPreferences],
+  );
+  const bootstrapInitialAgentConfig = useMemo(
+    () => {
+      const preference = modelPreferenceForAgent(newSessionPreferences, bootstrapSpec.agentId);
+      return preference
+        ? {
+            model: preference.modelRef,
+            ...(preference.thinkingLevel
+              ? { thinkingLevel: preference.thinkingLevel }
+              : {}),
+          }
+        : undefined;
+    },
+    [bootstrapSpec.agentId, newSessionPreferences],
+  );
 
   // ── Bootstrap ────────────────────────────────────────────
   // Shared ref for session key — bootstrap writes here, chatSession reads it.
@@ -99,8 +137,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const bootstrap = useChatPageBootstrap({
     urlSessionKey,
     gatewayOnline,
-    agentsData: agentsQuery.data,
-    localDefaultAgentId,
+    newSessionSpec: bootstrapSpec,
+    initialAgentConfig: bootstrapInitialAgentConfig,
     messages: m,
     activeSessionKeyRef,
     shouldNavigateToRoute: !embedded,
@@ -147,7 +185,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     enabled: true,
   });
 
-  const effectiveModelId = resolveEffectiveModelId(modelsQuery.data, localSelectedModelRef);
   const chatSession = useChatSession({ sessionKey, taskId: routeTaskId || undefined });
   const sessionAgentConfigQuery = useQuery({
     queryKey: queryKeys.sessionAgentConfig(sessionKey),
@@ -165,12 +202,28 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     chatSession.clearAllState();
   }, [embedded, overlaySessionKey, chatSession]);
 
-  // Sync session model override from agent-config when session changes.
+  const preferredModel = modelPreferenceForAgent(
+    newSessionPreferences,
+    currentSessionAgentId || defaultAgentId,
+  );
+  const effectiveModelId = resolveEffectiveModelId(
+    modelsQuery.data,
+    sessionAgentConfigQuery.data?.model || preferredModel?.modelRef || null,
+  );
+
+  // Opening an existing chat updates future new-chat context, not its model preference.
   useEffect(() => {
-    const cfg = sessionAgentConfigQuery.data;
-    if (!cfg?.model) return;
-    setSelectedModelRef(cfg.model);
-  }, [sessionAgentConfigQuery.data, setSelectedModelRef]);
+    if (!activeGatewayId || !currentSessionAgentId || !sessionHistoryQuery.data) return;
+    rememberSelectedAgent(activeGatewayId, currentSessionAgentId);
+    rememberLastChatScope(activeGatewayId, sessionContext.projectId ?? null);
+  }, [
+    activeGatewayId,
+    currentSessionAgentId,
+    rememberLastChatScope,
+    rememberSelectedAgent,
+    sessionContext.projectId,
+    sessionHistoryQuery.data,
+  ]);
 
   // Keep the shared ref in sync with chatSession's internal ref
   useEffect(() => {
@@ -314,10 +367,24 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleModelSelect = useCallback(
     (modelId: string) => {
-      setSelectedModelRef(modelId);
+      const agentId = currentSessionAgentId || defaultAgentId;
+      if (activeGatewayId && agentId) {
+        rememberAgentModel(activeGatewayId, agentId, {
+          modelRef: modelId,
+          thinkingLevel: sessionAgentConfigQuery.data?.thinkingLevel || undefined,
+        });
+      }
       if (sessionKey) void setSessionModelRef(sessionKey, modelId, routeTaskId || undefined).catch(() => {});
     },
-    [routeTaskId, sessionKey, setSelectedModelRef],
+    [
+      activeGatewayId,
+      currentSessionAgentId,
+      defaultAgentId,
+      rememberAgentModel,
+      routeTaskId,
+      sessionAgentConfigQuery.data?.thinkingLevel,
+      sessionKey,
+    ],
   );
 
   const handleAgentSelect = useCallback(
@@ -332,7 +399,21 @@ export function useChatPage(options: UseChatPageOptions = {}) {
                 queryFn: () => fetchTask(routeTaskId),
               })).task.version,
             )).activeSessionKey
-          : await takeNewChatSessionKey(agentId);
+          : await takeNewChatSessionKey(
+              { agentId, projectId: sessionContext.projectId ?? null },
+              (() => {
+                const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
+                return preference
+                  ? {
+                      model: preference.modelRef,
+                      ...(preference.thinkingLevel
+                        ? { thinkingLevel: preference.thinkingLevel }
+                        : {}),
+                    }
+                  : undefined;
+              })(),
+            );
+        if (activeGatewayId) rememberSelectedAgent(activeGatewayId, agentId);
         chatSession.activeSessionKeyRef.current = key;
         bootstrap.setPendingBootstrapKey(key);
         if (routeTaskId) {
@@ -345,7 +426,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
         chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
       });
     },
-    [embedded, queryClient, routeTaskId, router, chatSession, bootstrap],
+    [activeGatewayId, embedded, queryClient, routeTaskId, router, chatSession, bootstrap, newSessionPreferences, rememberSelectedAgent, sessionContext.projectId],
   );
 
   const handleNewChat = useCallback(() => {
@@ -353,9 +434,18 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     chatSession.cancelRecovery();
     chatSession.clearAllState();
 
-    const agentId = resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId);
+    const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
-      const key = await takeNewChatSessionKey(agentId);
+      const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
+      const key = await takeNewChatSessionKey(
+        { agentId, projectId: sessionContext.projectId ?? null },
+        preference
+          ? {
+              model: preference.modelRef,
+              ...(preference.thinkingLevel ? { thinkingLevel: preference.thinkingLevel } : {}),
+            }
+          : undefined,
+      );
       chatSession.activeSessionKeyRef.current = key;
       bootstrap.setPendingBootstrapKey(key);
       if (!embedded) {
@@ -364,7 +454,33 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     })().catch((err) => {
       chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
     });
-  }, [agentsQuery.data, embedded, localDefaultAgentId, router, chatSession, bootstrap]);
+  }, [currentSessionAgentId, defaultAgentId, embedded, router, chatSession, bootstrap, newSessionPreferences, sessionContext.projectId]);
+
+  const handleRemoveProject = useCallback(() => {
+    chatSession.activeSessionKeyRef.current = '';
+    chatSession.cancelRecovery();
+    chatSession.clearAllState();
+
+    const agentId = currentSessionAgentId || defaultAgentId;
+    void (async () => {
+      const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
+      const key = await takeNewChatSessionKey(
+        { agentId, projectId: null },
+        preference
+          ? {
+              model: preference.modelRef,
+              ...(preference.thinkingLevel ? { thinkingLevel: preference.thinkingLevel } : {}),
+            }
+          : undefined,
+      );
+      chatSession.activeSessionKeyRef.current = key;
+      bootstrap.setPendingBootstrapKey(key);
+      if (activeGatewayId) rememberLastChatScope(activeGatewayId, null);
+      if (!embedded) openChat(router, key, { replace: true });
+    })().catch((err) => {
+      chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
+    });
+  }, [activeGatewayId, bootstrap, chatSession, currentSessionAgentId, defaultAgentId, embedded, newSessionPreferences, rememberLastChatScope, router]);
 
   const queueFollowUpOrSend = useCallback(
     (text: string) => {
@@ -511,7 +627,13 @@ export function useChatPage(options: UseChatPageOptions = {}) {
         switchGateway(profileId);
         await syncAfterGatewaySettingsSave();
         const agentId = resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId);
-        const key = await takeNewChatSessionKey(agentId);
+        const targetPreferences = usePreferencesStore.getState()
+          .newSessionPreferencesByGateway[profileId] ?? createDefaultNewSessionPreferences();
+        const preference = modelPreferenceForAgent(targetPreferences, agentId);
+        const key = await takeNewChatSessionKey(
+          { agentId, projectId: null },
+          preference ? { model: preference.modelRef } : undefined,
+        );
         chatSession.activeSessionKeyRef.current = key;
         bootstrap.setPendingBootstrapKey(key);
         setGatewaySheetVisible(false);
@@ -599,6 +721,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
+    handleRemoveProject,
     handleStarterSend,
     handleStarterPrefill,
     handleComposerSend,

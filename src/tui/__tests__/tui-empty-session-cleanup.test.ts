@@ -4,7 +4,6 @@ import {
   cleanupAbandonedTuiSessions,
   deleteGeneratedTuiSessionIfEmpty,
   GENERATED_TUI_SESSION_SHELL_PATCH,
-  hideLegacyEmptyTuiSessions,
   isGeneratedTuiSessionKey,
 } from '../tui-empty-session-cleanup.js';
 
@@ -82,21 +81,5 @@ describe('TUI empty session cleanup', () => {
 
     await expect(cleanupAbandonedTuiSessions(client, 'agent:coder:main', 100_000)).resolves.toEqual([]);
     expect(deleteSession).not.toHaveBeenCalled();
-  });
-
-  it('hides legacy visible generated shells without hiding non-empty sessions', async () => {
-    const nonEmpty = 'agent:coder:tui-349a0524-cdc7-4495-b317-96b540c99c54';
-    const patchSession = vi.fn(async () => {});
-    const client = {
-      listSessions: vi.fn(async () => [
-        { key: GENERATED_KEY, messageCount: 0 },
-        { key: nonEmpty, messageCount: 1 },
-        { key: 'agent:coder:manual', messageCount: 0 },
-      ]),
-      patchSession,
-    };
-
-    await expect(hideLegacyEmptyTuiSessions(client)).resolves.toEqual([GENERATED_KEY]);
-    expect(patchSession).toHaveBeenCalledWith(GENERATED_KEY, GENERATED_TUI_SESSION_SHELL_PATCH);
   });
 });

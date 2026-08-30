@@ -32,7 +32,7 @@ import { focusedSessionKeyRef, useChatSessionRoute } from '@/features/chat/sessi
 import { useChatSessionStreaming } from '@/features/chat/session/use-chat-session-streaming';
 import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-session-window-events';
 
-/** @see docs/web/chat-session-semantics.md */
+/** @see docs/design/technical/new-session-preferences.md */
 export function useChatSession(options?: { fixedSessionKey?: string; taskId?: string }) {
   const navigate = useNavigate();
   const {
@@ -108,6 +108,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     onChatAgentChange,
     displayAgentId,
     showChatAgentSelector,
+    currentSessionProjectId,
   } = useChatSessionAgents({
     navigate,
     sessionKeyRef: focusedSessionKeyRef,
@@ -193,6 +194,8 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     dismissClarifyOnSessionLoad: fq.clearVisibleClarify,
     detachForNewConversation,
     sessionKey: focusedSessionKey,
+    sessionAgentId: displayAgentId,
+    currentProjectId: currentSessionProjectId,
     hasMore,
     taskId: options?.taskId,
   });

@@ -50,4 +50,42 @@ describe('openNewChatHandoff', () => {
       window.removeEventListener('session-updated', onSessionUpdated);
     }
   });
+
+  it('keeps different project requests independent and only applies the latest navigation', async () => {
+    let resolveFirst!: (session: SessionInfo) => void;
+    const first = new Promise<SessionInfo>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondSession = { ...createdSession, key: `${createdSession.key}_second`, projectId: 'p2' };
+    const sessionMgr = {
+      createSession: vi.fn(async ({ projectId }: { projectId?: string | null }) =>
+        projectId === 'p1' ? first : secondSession),
+    } as unknown as SessionManager;
+    const navigateToSession = vi.fn();
+
+    const firstOpen = openNewChatHandoff({
+      sessionMgr,
+      agentId: 'main',
+      projectId: 'p1',
+      forceNew: true,
+      navigateToSession,
+      onOpened: vi.fn(),
+    });
+    const secondOpen = openNewChatHandoff({
+      sessionMgr,
+      agentId: 'main',
+      projectId: 'p2',
+      forceNew: true,
+      navigateToSession,
+      onOpened: vi.fn(),
+    });
+
+    await secondOpen;
+    resolveFirst({ ...createdSession, projectId: 'p1' });
+    await firstOpen;
+
+    expect(sessionMgr.createSession).toHaveBeenCalledTimes(2);
+    expect(navigateToSession).toHaveBeenCalledOnce();
+    expect(navigateToSession).toHaveBeenCalledWith(secondSession.key, false, undefined);
+  });
 });

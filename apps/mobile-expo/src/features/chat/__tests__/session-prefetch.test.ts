@@ -12,6 +12,10 @@ vi.mock('../../../query/sessions', () => ({
   createSession: vi.fn(),
 }));
 
+vi.mock('../../../query/models', () => ({
+  setSessionInitialAgentConfig: vi.fn(),
+}));
+
 import { createSession } from '../../../query/sessions';
 import {
   prefetchNewChatSession,
@@ -24,8 +28,8 @@ const mockedCreate = vi.mocked(createSession);
 beforeEach(() => {
   resetSessionPrefetchCacheForTests();
   mockedCreate.mockReset();
-  mockedCreate.mockImplementation(async (agentId) => {
-    const id = (agentId ?? 'main').trim().toLowerCase() || 'main';
+  mockedCreate.mockImplementation(async (input = {}) => {
+    const id = (input.agentId ?? 'main').trim().toLowerCase() || 'main';
     return `agent:${id}:webchat:default:direct:server-owned`;
   });
 });
@@ -36,29 +40,29 @@ afterEach(() => {
 
 describe('server session prefetch', () => {
   it('takes a server-created session key', async () => {
-    await expect(takeNewChatSessionKey('main')).resolves.toBe(
+    await expect(takeNewChatSessionKey({ agentId: 'main', projectId: null })).resolves.toBe(
       'agent:main:webchat:default:direct:server-owned',
     );
     expect(mockedCreate).toHaveBeenCalledTimes(1);
-    expect(mockedCreate).toHaveBeenCalledWith('main');
+    expect(mockedCreate).toHaveBeenCalledWith({ agentId: 'main' });
   });
 
   it('prefetch then take reuses the prefetched server key', async () => {
-    prefetchNewChatSession('main');
-    await expect(takeNewChatSessionKey('main')).resolves.toBe(
+    prefetchNewChatSession({ agentId: 'main', projectId: null });
+    await expect(takeNewChatSessionKey({ agentId: 'main', projectId: null })).resolves.toBe(
       'agent:main:webchat:default:direct:server-owned',
     );
     expect(mockedCreate).toHaveBeenCalledTimes(1);
   });
 
   it('different agents cache independently', async () => {
-    prefetchNewChatSession('main');
-    prefetchNewChatSession('other');
+    prefetchNewChatSession({ agentId: 'main', projectId: null });
+    prefetchNewChatSession({ agentId: 'other', projectId: null });
 
-    await expect(takeNewChatSessionKey('main')).resolves.toBe(
+    await expect(takeNewChatSessionKey({ agentId: 'main', projectId: null })).resolves.toBe(
       'agent:main:webchat:default:direct:server-owned',
     );
-    await expect(takeNewChatSessionKey('other')).resolves.toBe(
+    await expect(takeNewChatSessionKey({ agentId: 'other', projectId: null })).resolves.toBe(
       'agent:other:webchat:default:direct:server-owned',
     );
     expect(mockedCreate).toHaveBeenCalledTimes(2);

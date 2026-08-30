@@ -358,6 +358,7 @@ export type CommandHandlerDeps = {
   extensionShortcuts?: TuiHotkeyExtensionShortcut[];
   currentAgentId?: string;
   setSession?: (rawKey: string) => Promise<void>;
+  newSession?: () => Promise<void>;
   resetSession?: () => Promise<void>;
   recoverStream?: () => void | Promise<void>;
   retryLastMessage?: () => void | Promise<void>;
@@ -638,6 +639,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
         ...(parsed.projectKind ? { projectKind: parsed.projectKind } : {}),
       });
       projects.attachSession(state.currentSessionKey, project.id);
+      state.sessionInfo.projectId = project.id;
       return `Created and attached project:\n${formatTuiProject(project)}`;
     }
 
@@ -647,11 +649,13 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
       const project = resolveTuiProject(projects, ref);
       if (!project) return `Project not found: ${ref}`;
       projects.attachSession(state.currentSessionKey, project.id);
+      state.sessionInfo.projectId = project.id;
       return `Attached current session to project: ${project.name}`;
     }
 
     if (subcommand === 'detach') {
       projects.detachSession(state.currentSessionKey);
+      state.sessionInfo.projectId = undefined;
       return 'Detached current session from project.';
     }
 
@@ -1408,9 +1412,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         void (async () => {
           try {
             await abortActive();
-            const uniqueKey = `tui-${randomUUID()}`;
-            if (setSession) {
-              await setSession(uniqueKey);
+            if (deps.newSession) {
+              await deps.newSession();
+              chatLog.addSystem(`new session: ${state.currentSessionKey}`);
+            } else if (setSession) {
+              await setSession(`tui-${randomUUID()}`);
               chatLog.addSystem(`new session: ${state.currentSessionKey}`);
             } else {
               chatLog.clearAll();

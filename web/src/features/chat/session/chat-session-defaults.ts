@@ -26,15 +26,3 @@ export function defaultSessionMeta(): DefaultSessionMeta {
     userContextMode: 'enabled',
   };
 }
-
-export const WEBCHAT_AGENT_STORAGE_KEY = 'xopc.webchat.agentId';
-
-export function readStoredWebchatAgentId(): string | null {
-  if (typeof globalThis.localStorage === 'undefined') return null;
-  try {
-    const v = globalThis.localStorage.getItem(WEBCHAT_AGENT_STORAGE_KEY)?.trim().toLowerCase();
-    return v || null;
-  } catch {
-    return null;
-  }
-}

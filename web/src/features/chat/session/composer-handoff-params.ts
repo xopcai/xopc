@@ -1,4 +1,5 @@
 import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
+import type { NewSessionProjectIntent } from '@xopcai/gateway-contract';
 
 export function buildComposerDraftSeed(skill: string, draft: string): string | null {
   const trimmedSkill = skill.trim();
@@ -47,8 +48,18 @@ export function searchParamsForComposerHandoff(search: string): string {
 }
 
 /** Project scope is consumed while creating `/chat/new`; it must not leak into the final chat URL. */
-export function projectIdForNewChatHandoff(search: string): string | null {
+export function projectIntentForNewChatHandoff(search: string): NewSessionProjectIntent {
   const raw = search.startsWith('?') ? search.slice(1) : search;
-  const projectId = new URLSearchParams(raw).get('projectId')?.trim();
-  return projectId || null;
+  const params = new URLSearchParams(raw);
+  const projectId = params.get('projectId')?.trim();
+  if (projectId) return { kind: 'project', projectId };
+  if (params.get('projectScope') === 'none') return { kind: 'none' };
+  return { kind: 'remember-last' };
+}
+
+export function newChatHrefForProject(projectId: string | null | undefined): string {
+  const normalized = projectId?.trim();
+  return normalized
+    ? `/chat/new?projectId=${encodeURIComponent(normalized)}`
+    : '/chat/new?projectScope=none';
 }

@@ -1,4 +1,5 @@
 import { resolveNewChatTarget } from '@/features/chat/session/resolve-new-chat-target';
+import { newSessionCacheKey, type SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { addWebchatEmptyShellToCache } from '@/features/chat/session/webchat-empty-shell-cache';
 
@@ -17,19 +18,34 @@ export type NewChatHandoffOpts = {
   routeSessionKey?: string | null;
   forceNew?: boolean;
   temporary?: boolean;
+  initialAgentConfig?: SessionInitialAgentConfig;
   navigateToSession: NewChatHandoffNavigate;
   onOpened: (sessionKey: string) => void;
   replaceNavigate?: boolean;
   search?: string;
 };
 
-let resolveInflight: Promise<string> | null = null;
+const inflightByScope = new Map<string, Promise<string>>();
+let latestHandoffGeneration = 0;
 
 /** Resolve reuse / noop / create; navigate when the target key changes. */
 export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
-  if (resolveInflight) {
-    return resolveInflight;
-  }
+  const scopeKey = newSessionCacheKey('web', {
+    agentId: opts.agentId?.trim() || 'main',
+    projectId: opts.projectId ?? null,
+  });
+  const cacheKey = `${scopeKey}:${opts.forceNew === true}:${opts.temporary === true}:${opts.search ?? ''}`;
+  const existing = inflightByScope.get(cacheKey);
+  if (existing) return existing;
+  const generation = ++latestHandoffGeneration;
+  const applyOpened = (sessionKey: string) => {
+    if (generation !== latestHandoffGeneration) return;
+    opts.onOpened(sessionKey);
+    const routeKey = opts.routeSessionKey?.trim() || null;
+    if (routeKey !== sessionKey) {
+      opts.navigateToSession(sessionKey, opts.replaceNavigate ?? false, opts.search);
+    }
+  };
 
   const pending = (async () => {
     const agentRaw = opts.agentId ?? undefined;
@@ -40,20 +56,23 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       currentSessionKey: opts.currentSessionKey,
       forceNew: opts.forceNew,
       temporary: opts.temporary,
+      initialAgentConfig: opts.initialAgentConfig,
     });
 
+    if (resolution.kind !== 'create' && opts.initialAgentConfig) {
+      await opts.sessionMgr.patchSessionAgentConfig(
+        resolution.sessionKey,
+        opts.initialAgentConfig,
+      );
+    }
+
     if (resolution.kind === 'noop') {
-      opts.onOpened(resolution.sessionKey);
-      const routeKey = opts.routeSessionKey?.trim() || null;
-      if (routeKey !== resolution.sessionKey) {
-        opts.navigateToSession(resolution.sessionKey, opts.replaceNavigate ?? false, opts.search);
-      }
+      applyOpened(resolution.sessionKey);
       return resolution.sessionKey;
     }
 
     if (resolution.kind === 'reuse') {
-      opts.onOpened(resolution.sessionKey);
-      opts.navigateToSession(resolution.sessionKey, opts.replaceNavigate ?? false, opts.search);
+      applyOpened(resolution.sessionKey);
       return resolution.sessionKey;
     }
 
@@ -69,18 +88,18 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       projectId: session.projectId,
       routing: session.routing,
     });
-    opts.onOpened(sessionKey);
-    opts.navigateToSession(sessionKey, opts.replaceNavigate ?? false, opts.search);
+    applyOpened(sessionKey);
     return sessionKey;
   })().finally(() => {
-    resolveInflight = null;
+    inflightByScope.delete(cacheKey);
   });
 
-  resolveInflight = pending;
+  inflightByScope.set(cacheKey, pending);
   return pending;
 }
 
 /** Reset inflight guard (tests). */
 export function resetNewChatHandoffInflightForTests(): void {
-  resolveInflight = null;
+  inflightByScope.clear();
+  latestHandoffGeneration = 0;
 }

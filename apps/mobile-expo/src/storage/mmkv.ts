@@ -13,7 +13,7 @@ export const KEYS = {
   clipboardHandledHashes: 'clipboard.handledHashes',
   clipboardLatestAppHash: 'clipboard.latestAppHash',
   defaultAgentId: 'prefs.defaultAgentId',
-  selectedModelRef: 'prefs.selectedModelRef',
+  newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
   mobileInstallationId: 'mobile.installationId',
   endpointId: 'endpointTools.endpointId',
   notificationsEnabled: 'prefs.notificationsEnabled',

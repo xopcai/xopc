@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createProjectSession,
   createSession,
   fetchSession,
   fetchSessionActiveRun,
@@ -36,6 +35,12 @@ vi.mock('../../stores/gateway-store', () => ({
   }),
 }));
 
+vi.mock('../../stores/preferences-store', () => ({
+  usePreferencesStore: Object.assign(vi.fn(), {
+    getState: vi.fn(() => ({ newSessionPreferencesByGateway: {} })),
+  }),
+}));
+
 const mockedApiFetch = vi.mocked(apiFetch);
 
 describe('createSession', () => {
@@ -53,7 +58,7 @@ describe('createSession', () => {
   });
 
   it('creates webchat sessions without client-generated peer ids', async () => {
-    await createSession('MainAgent');
+    await createSession({ agentId: 'MainAgent' });
 
     const [, init] = mockedApiFetch.mock.calls[0];
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -64,7 +69,7 @@ describe('createSession', () => {
   });
 
   it('does not send client session identity by default so empty sessions can be reused', async () => {
-    await createSession('MainAgent');
+    await createSession({ agentId: 'MainAgent' });
 
     const [, init] = mockedApiFetch.mock.calls[0];
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -73,7 +78,7 @@ describe('createSession', () => {
   });
 
   it('creates a project chat without overriding the project default agent', async () => {
-    await createProjectSession('  project-1  ');
+    await createSession({ projectId: '  project-1  ' });
 
     const [, init] = mockedApiFetch.mock.calls[0];
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;

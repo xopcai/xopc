@@ -117,11 +117,33 @@ export interface SessionResponse {
 }
 
 export interface SessionCreateResponse {
-  session?: {
-    key?: string;
+  session: {
+    key: string;
     sessionId?: string;
+    projectId?: string;
+    routing?: SessionRoutingMeta;
   };
-  reused?: boolean;
+}
+
+export interface SessionInitialAgentConfig {
+  model?: string;
+  thinkingLevel?: string;
+}
+
+export interface SessionCreateRequest {
+  channel?: string;
+  agentId?: string;
+  projectId?: string;
+  temporary?: boolean;
+  initialAgentConfig?: SessionInitialAgentConfig;
+}
+
+export interface SessionMetadataPatchRequest {
+  name?: string;
+  tags?: string[];
+  replaceTags?: boolean;
+  customData?: Record<string, unknown>;
+  projectId?: string | null;
 }
 
 export interface SessionActiveRunResponse {
@@ -289,12 +311,12 @@ export const sessionCreateResponseSchema = z
   .object({
     session: z
       .object({
-        key: z.string().optional(),
+        key: z.string(),
         sessionId: z.string().optional(),
+        projectId: z.string().optional(),
+        routing: sessionRoutingMetaSchema.optional(),
       })
-      .passthrough()
-      .optional(),
-    reused: z.boolean().optional(),
+      .passthrough(),
   })
   .passthrough();
 
@@ -440,7 +462,7 @@ export function normalizeSessionActiveRunResponse(raw: unknown): SessionActiveRu
 
 export function extractCreatedSessionKey(raw: unknown): string {
   const data = parseSessionCreateResponse(raw);
-  const key = data.session?.key;
+  const key = data.session.key;
   if (typeof key !== 'string' || !key.trim()) {
     throw new Error('Create session: missing key');
   }
@@ -546,6 +568,10 @@ export function buildSessionActionPath(
 
 export function buildCreateSessionPath(): string {
   return '/api/sessions';
+}
+
+export function buildSessionAgentConfigPath(key: string): string {
+  return `/api/sessions/${encodeURIComponent(key)}/agent-config`;
 }
 
 export function sessionListDedupeKey(query?: SessionListQuery): string {

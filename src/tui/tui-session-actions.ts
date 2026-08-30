@@ -29,6 +29,7 @@ export type SessionActionsContext = {
   historyLimit?: number;
   onAgentIdChange?: (agentId: string) => void;
   sessionSnapshot?: TuiSessionSnapshot;
+  onSessionInfoChange?: () => void;
 };
 
 export function createSessionActions(context: SessionActionsContext) {
@@ -44,6 +45,7 @@ export function createSessionActions(context: SessionActionsContext) {
     historyLimit = 200,
     onAgentIdChange,
     sessionSnapshot,
+    onSessionInfoChange,
   } = context;
 
   let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
@@ -60,6 +62,7 @@ export function createSessionActions(context: SessionActionsContext) {
   const runRefreshSessionInfo = async () => {
     try {
       state.sessionInfo = await client.getSessionInfo(state.currentSessionKey);
+      onSessionInfoChange?.();
       updateFooter();
       tui.requestRender();
     } catch {

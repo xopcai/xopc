@@ -1,4 +1,4 @@
-// Initial chat-session bootstrap. Product contract: docs/web/chat-session-semantics.md
+// Initial chat-session bootstrap. Product contract: docs/design/technical/new-session-preferences.md
 //   1. `/chat/new` — resolve reusable empty shell, else create a server-owned session.
 //   2. `/chat/:key` route — load that session and try to resume any in-flight agent run for it.
 //   3. No key in URL — pick the most-recent populated session (or fall back to creating one).
@@ -6,6 +6,10 @@
 // Cancellation: each render bumps `initGenRef` so a stale async chain won't apply its results.
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
+import {
+  modelPreferenceForAgent,
+  resolveNewSessionSpec,
+} from '@xopcai/gateway-contract';
 
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
@@ -13,10 +17,11 @@ import {
   getSessionMessages,
 } from '@/features/chat/session/chat-session-store';
 import {
-  projectIdForNewChatHandoff,
+  projectIntentForNewChatHandoff,
   searchParamsForComposerHandoff,
 } from '@/features/chat/session/composer-handoff-params';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
+import { readNewSessionPreferences } from '@/features/chat/session/new-session-preferences';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
 
@@ -131,14 +136,37 @@ export function useChatSessionInit(opts: {
 
     const createNewRouteSession = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
+      const preferences = readNewSessionPreferences();
       const aid = runtime.resolveAgentIdForPost();
+      const spec = resolveNewSessionSpec(
+        {
+          origin: 'web-route',
+          project: projectIntentForNewChatHandoff(request.newRouteLocationSearch),
+          agentId: aid,
+          forceNew: request.forceNewChat,
+        },
+        {
+          defaultAgentId: aid ?? 'main',
+          selectedAgentId: preferences.selectedAgentId,
+          lastChatScope: preferences.lastChatScope,
+        },
+      );
+      const modelPreference = modelPreferenceForAgent(preferences, spec.agentId);
       return openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,
-        agentId: aid,
+        agentId: spec.agentId,
         currentSessionKey: lastNonNewSessionKeyRef.current,
         routeSessionKey: null,
-        forceNew: request.forceNewChat,
-        projectId: projectIdForNewChatHandoff(request.newRouteLocationSearch),
+        forceNew: spec.forceNew,
+        projectId: spec.projectId,
+        initialAgentConfig: modelPreference
+          ? {
+              model: modelPreference.modelRef,
+              ...(modelPreference.thinkingLevel
+                ? { thinkingLevel: modelPreference.thinkingLevel }
+                : {}),
+            }
+          : undefined,
         navigateToSession: runtime.navigateToSession,
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(request.newRouteLocationSearch),

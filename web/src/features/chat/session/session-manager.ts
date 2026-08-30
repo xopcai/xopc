@@ -1,6 +1,8 @@
 import {
   buildSessionHistoryPath,
   parseSessionMessagePage,
+  type SessionCreateRequest,
+  type SessionInitialAgentConfig,
 } from '@xopcai/gateway-contract';
 
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -334,13 +336,19 @@ export class SessionManager {
     return pending;
   }
 
-  async createSession(options?: { agentId?: string; projectId?: string | null; temporary?: boolean }): Promise<SessionInfo> {
-    const body: Record<string, unknown> = { channel: 'webchat' };
+  async createSession(options?: {
+    agentId?: string;
+    projectId?: string | null;
+    temporary?: boolean;
+    initialAgentConfig?: SessionInitialAgentConfig;
+  }): Promise<SessionInfo> {
+    const body: SessionCreateRequest = { channel: 'webchat' };
     const raw = options?.agentId?.trim();
     if (raw) body.agentId = raw.toLowerCase();
     const projectId = options?.projectId?.trim();
     if (projectId) body.projectId = projectId;
     if (options?.temporary === true) body.temporary = true;
+    if (options?.initialAgentConfig) body.initialAgentConfig = options.initialAgentConfig;
     const res = await apiFetch(apiUrl('/api/sessions'), {
       method: 'POST',
       body: JSON.stringify(body),

@@ -638,6 +638,7 @@ export class EmbeddedBackend implements TuiBackend {
         contextUsagePercent: usage.usagePercent,
         effectiveWorkspacePath: cfg.effectiveWorkspacePath,
         workingDirectoryLocked: cfg.workingDirectoryLocked,
+        projectId: getSessionMetadata(sessionKey)?.projectId,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -673,6 +674,7 @@ export class EmbeddedBackend implements TuiBackend {
     patch: Record<string, unknown>,
   ): Promise<void> {
     const agent = await this.ensureAgent();
+    const hasProjectPatch = Object.prototype.hasOwnProperty.call(patch, 'projectId');
     const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
     const result = await agent.sessionConfig.patch(sessionKey, {
       model: typeof patch.model === 'string' ? patch.model : undefined,
@@ -688,6 +690,8 @@ export class EmbeddedBackend implements TuiBackend {
       await this.sessionIndexReady;
       await this.sessionIndex?.getStore().resolveTranscriptPath(sessionKey);
       new ProjectService().attachSession(sessionKey, projectId);
+    } else if (hasProjectPatch && patch.projectId === null) {
+      new ProjectService().detachSession(sessionKey);
     }
     const hiddenFromSessionList = typeof patch.hiddenFromSessionList === 'boolean'
       ? patch.hiddenFromSessionList

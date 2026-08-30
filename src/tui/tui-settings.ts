@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { resolveStateDir } from '../config/paths.js';
+import {
+  parseNewSessionPreferences,
+  type NewSessionPreferences,
+} from '@xopcai/gateway-contract';
 
 export type TuiThemeId = 'auto' | 'dark' | 'light' | (string & {});
 
@@ -31,6 +35,7 @@ export interface TuiSettings {
   clearOnShrink: boolean;
   /** Default transcript filter when opening `/tree`. */
   treeFilterMode: TreeFilterMode;
+  newSessionPreferencesByGateway: Record<string, NewSessionPreferences>;
 }
 
 export const DEFAULT_TUI_SETTINGS: TuiSettings = {
@@ -47,6 +52,7 @@ export const DEFAULT_TUI_SETTINGS: TuiSettings = {
   autocompleteMaxVisible: 5,
   clearOnShrink: false,
   treeFilterMode: 'default',
+  newSessionPreferencesByGateway: {},
 };
 
 const SETTINGS_PATH = join(resolveStateDir(), 'tui-settings.json');
@@ -103,6 +109,18 @@ function normalizeSettings(raw: unknown): TuiSettings {
   }
   if (isTreeFilterMode(obj.treeFilterMode)) {
     base.treeFilterMode = obj.treeFilterMode;
+  }
+  if (
+    obj.newSessionPreferencesByGateway
+    && typeof obj.newSessionPreferencesByGateway === 'object'
+    && !Array.isArray(obj.newSessionPreferencesByGateway)
+  ) {
+    base.newSessionPreferencesByGateway = Object.fromEntries(
+      Object.entries(obj.newSessionPreferencesByGateway).map(([gatewayId, preferences]) => [
+        gatewayId,
+        parseNewSessionPreferences(preferences),
+      ]),
+    );
   }
   return base;
 }
