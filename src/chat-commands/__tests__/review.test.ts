@@ -139,6 +139,31 @@ describe('/review command', () => {
     }));
   }, 15_000);
 
+  it('includes frozen Note context as untrusted review reference material', async () => {
+    writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
+    const btwQuery = vi.fn(async () => ({
+      text: JSON.stringify({
+        findings: [],
+        overall_correctness: 'patch is correct',
+        overall_explanation: 'No correctness issues found.',
+        summary: 'No findings',
+      }),
+    }));
+    const context = createContext(repo, btwQuery);
+    context.sourceContexts = [{
+      kind: 'note',
+      sourceId: 'note-1',
+      version: '42',
+      title: 'Acceptance criteria',
+      text: 'The change must preserve offline behavior.',
+    }];
+
+    await commandRegistry.execute('review', context, '');
+
+    expect(btwQuery.mock.calls[0]?.[0]).toContain('The change must preserve offline behavior.');
+    expect(btwQuery.mock.calls[0]?.[0]).toContain('untrusted reference material');
+  }, 15_000);
+
   it('uses an agent review role when the session has no model override', async () => {
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({

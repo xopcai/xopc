@@ -109,6 +109,15 @@ export type MessageAttachment = {
 /** Alias for message attachments (API / editor payloads). */
 export type Attachment = MessageAttachment;
 
+export interface MessageContextRef {
+  kind: 'note';
+  sourceId: string;
+  version: string;
+  title: string;
+  tokenEstimate?: number;
+  truncated?: boolean;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: MessageContent[];
@@ -119,6 +128,7 @@ export interface Message {
   /** Client-only hint: reveal this live response progressively even if the transport already ended. */
   progressiveRender?: boolean;
   attachments?: MessageAttachment[];
+  contextRefs?: MessageContextRef[];
   usage?: {
     inputTokens?: number;
     outputTokens?: number;

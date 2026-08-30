@@ -6,6 +6,7 @@ import {
   type PaletteApplyContext,
 } from '@/features/chat/composer/palette-item-handlers';
 import type { PaletteItem, SlashRange } from '@/features/chat/palette/command-palette.types';
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 
 const TEST_MAX_PENDING = 10;
 
@@ -24,6 +25,8 @@ function makeCtx(opts: {
   onAddPendingFollowUp?: (text: string) => void;
   onAbort?: () => void;
   onReviewLauncher?: () => void;
+  onAddContextRef?: PaletteApplyContext['callbacks']['onAddContextRef'];
+  contextRefs?: ComposerContextRef[];
 }): PaletteApplyContext & {
   resetEditor: ReturnType<typeof vi.fn>;
   clearAttachments: ReturnType<typeof vi.fn>;
@@ -33,6 +36,7 @@ function makeCtx(opts: {
   onAddPendingFollowUp: ReturnType<typeof vi.fn>;
   onAbort: ReturnType<typeof vi.fn>;
   onReviewLauncher: ReturnType<typeof vi.fn>;
+  onAddContextRef: ReturnType<typeof vi.fn>;
 } {
   const ref = valueRef(opts.initialText);
   const resetEditor: PaletteApplyContext['editor']['resetEditor'] = (nextOpts) => {
@@ -50,6 +54,7 @@ function makeCtx(opts: {
   const onAddPendingFollowUp = vi.fn(opts.onAddPendingFollowUp);
   const onAbort = vi.fn(opts.onAbort);
   const onReviewLauncher = vi.fn(opts.onReviewLauncher);
+  const onAddContextRef = vi.fn(opts.onAddContextRef);
 
   return {
     slashRange: opts.slashRange,
@@ -59,6 +64,7 @@ function makeCtx(opts: {
     thinkingLevel: opts.thinkingLevel ?? 'medium',
     editor: { valueRef: ref, resetEditor: resetEditorSpy },
     attachments: { clearAttachments },
+    contextRefs: { current: opts.contextRefs ?? [], clear: vi.fn() },
     callbacks: {
       onSend,
       onUserTextCommitted,
@@ -66,6 +72,7 @@ function makeCtx(opts: {
       onAddPendingFollowUp,
       onAbort,
       onReviewLauncher,
+      onAddContextRef,
     },
     resetEditor: resetEditorSpy,
     clearAttachments,
@@ -75,6 +82,7 @@ function makeCtx(opts: {
     onAddPendingFollowUp,
     onAbort,
     onReviewLauncher,
+    onAddContextRef,
   };
 }
 
@@ -135,6 +143,33 @@ const agentItem: PaletteItem = {
   category: 'agent',
 };
 
+const noteItem: PaletteItem = {
+  kind: 'note',
+  id: 'note:note-1',
+  name: 'Launch plan',
+  description: 'Plan snapshot',
+  noteRef: { sourceId: 'note-1', expectedVersion: '42' },
+};
+
+describe('palette-item-handlers / note', () => {
+  it('removes the slash token and adds a frozen Note reference', () => {
+    const ctx = makeCtx({
+      initialText: 'Use /launch as context',
+      slashRange: { start: 4, end: 11, query: 'launch' },
+    });
+    applyPaletteItem(noteItem, ctx);
+
+    expect(ctx.editor.valueRef.current).toBe('Use  as context');
+    expect(ctx.onAddContextRef).toHaveBeenCalledWith({
+      kind: 'note',
+      sourceId: 'note-1',
+      expectedVersion: '42',
+      title: 'Launch plan',
+    });
+    expect(ctx.onSend).not.toHaveBeenCalled();
+  });
+});
+
 describe('palette-item-handlers / skill', () => {
   it('replaces slash range with /skill:name pill text and a trailing space, places caret after', () => {
     const ctx = makeCtx({
@@ -173,6 +208,22 @@ describe('palette-item-handlers / command (acceptsArgs=false, idle)', () => {
     expect(ctx.resetEditor).toHaveBeenCalledWith();
     expect(ctx.onAddPendingFollowUp).not.toHaveBeenCalled();
     expect(ctx.onAbort).not.toHaveBeenCalled();
+  });
+
+  it('sends and clears selected Note context with an immediate command', () => {
+    const contextRef: ComposerContextRef = {
+      kind: 'note', sourceId: 'note-1', expectedVersion: '42', title: 'Plan',
+    };
+    const ctx = makeCtx({
+      initialText: '/n',
+      slashRange: { start: 0, end: 2, query: 'n' },
+      contextRefs: [contextRef],
+    });
+
+    applyPaletteItem(cmdNoArgs, ctx);
+
+    expect(ctx.onSend).toHaveBeenCalledWith('/new', undefined, 'medium', [contextRef]);
+    expect(ctx.contextRefs.clear).toHaveBeenCalledOnce();
   });
 
   it('blocked when slash is not at start of composer', () => {

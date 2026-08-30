@@ -11,6 +11,7 @@ const cmdFixtures: CommandEntry[] = [
     description: '',
     category: 'session',
     acceptsArgs: false,
+    acceptsContext: false,
     examples: [],
   },
 ];

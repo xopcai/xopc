@@ -8,7 +8,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
-import type { WireAttachment } from '@/features/chat/composer/composer.types';
+import type { WireAttachment, WireContextRef } from '@/features/chat/composer/composer.types';
 import type { Message, ProgressState } from '@/features/chat/messages/messages.types';
 import { userMessageFromStreamPayload } from '@/features/chat/messages/user-message-from-stream';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
@@ -278,6 +278,7 @@ export class MessageSender {
     callbacks?: MessagingCallbacks,
     taskId?: string,
     replaceTurnId?: string,
+    contextRefs?: WireContextRef[],
   ): Promise<void> {
     this._trackedRunId = undefined;
     this._abort = new AbortController();
@@ -289,7 +290,7 @@ export class MessageSender {
         : attachments;
 
     const origin = await waitForEndpointTurnClaim(this._abort.signal);
-    const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel })}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
+    const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs })}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
     const clientMessageId = claimSubmissionId(chatId, fingerprint);
     const res = await postSessionInput(
       apiUrl(taskId
@@ -304,6 +305,7 @@ export class MessageSender {
         attachments: capped,
         thinking: thinkingLevel,
         origin,
+        contextRefs,
       }),
       this._abort.signal,
       taskId ? chatId : undefined,

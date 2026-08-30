@@ -94,6 +94,39 @@ function isUserMessageRow(row: TranscriptStoredRow): boolean {
   return classified.entryKind === 'message' && classified.role === 'user';
 }
 
+function withSessionInputContextMetadata(
+  db: DatabaseSync,
+  sessionKey: string,
+  row: TranscriptStoredRow,
+): TranscriptStoredRow {
+  if (!isUserMessageRow(row)) return row;
+  const message = row as AgentMessage & { turnId?: unknown; metadata?: unknown };
+  const turnId = typeof message.turnId === 'string' ? message.turnId.trim() : '';
+  if (!turnId) return row;
+  const metadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+    ? message.metadata as Record<string, unknown>
+    : {};
+  if (Array.isArray(metadata.sourceContexts) && metadata.sourceContexts.length > 0) return row;
+
+  const input = db.prepare(
+    `SELECT context_refs_json FROM session_inputs
+     WHERE session_key = ? AND run_id = ? AND context_refs_json IS NOT NULL
+     LIMIT 1`,
+  ).get(sessionKey, turnId) as { context_refs_json: string } | undefined;
+  if (!input) return row;
+
+  try {
+    const sourceContexts = JSON.parse(input.context_refs_json) as unknown;
+    if (!Array.isArray(sourceContexts) || sourceContexts.length === 0) return row;
+    return {
+      ...message,
+      metadata: { ...metadata, sourceContexts },
+    } as unknown as TranscriptStoredRow;
+  } catch {
+    return row;
+  }
+}
+
 export function appendTranscriptEntry(
   sessionKey: string,
   row: TranscriptStoredRow,
@@ -107,11 +140,12 @@ export function appendTranscriptEntry(
     if (!sessionId) {
       throw new Error(`Session not found: ${sessionKey}`);
     }
-    const inserted = insertEntry(db, { sessionId, sessionKey, row });
-    if (classifyStoredRow(row).entryKind === 'message') {
+    const persistedRow = withSessionInputContextMetadata(db, sessionKey, row);
+    const inserted = insertEntry(db, { sessionId, sessionKey, row: persistedRow });
+    if (classifyStoredRow(persistedRow).entryKind === 'message') {
       const tokenDelta = opts?.tokenDelta ?? 0;
       const now = Date.now();
-      const hiddenUpdate = isUserMessageRow(row) ? `hidden_from_session_list = 0,` : '';
+      const hiddenUpdate = isUserMessageRow(persistedRow) ? `hidden_from_session_list = 0,` : '';
       db.prepare(
         `UPDATE sessions SET
           message_count = message_count + 1,

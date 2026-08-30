@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
+import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { replaceLatestSessionTurn, submitSessionInput } from './session-input-handler.js';
 
@@ -47,6 +48,10 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body.version !== 'number') return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
     const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+    const contextRefs = body.contextRefs === undefined
+      ? undefined
+      : parseTurnContextRefs(body.contextRefs);
+    if (contextRefs === null) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid Note context references' } }, 400);
     if (body.content !== undefined) {
       const contentError = validateWebchatContent(body.content);
       if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
@@ -57,10 +62,22 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
       version: body.version,
       content: typeof body.content === 'string' ? body.content : undefined,
       attachments: attachments as UserTurnAttachment[] | undefined,
+      contextRefs,
       thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
       position: typeof body.position === 'number' ? body.position : undefined,
     });
-    return result.ok ? c.json({ ok: true, payload: result.state }) : c.json({ ok: false, error: { code: 'CONFLICT', message: 'Input changed' }, payload: result.state }, 409);
+    return result.ok
+      ? c.json({ ok: true, payload: result.state })
+      : c.json({
+          ok: false,
+          error: {
+            code: result.contextUnavailable ? 'CONTEXT_UNAVAILABLE' : 'CONFLICT',
+            message: result.contextUnavailable
+              ? 'A referenced Note changed or is no longer available. Select it again.'
+              : 'Input changed',
+          },
+          payload: result.state,
+        }, 409);
   });
 
   authenticated.delete('/api/sessions/:sessionKey/inputs/:inputId', chatRateLimitMiddleware, (c) => {

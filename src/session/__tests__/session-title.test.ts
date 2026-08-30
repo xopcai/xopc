@@ -35,6 +35,12 @@ describe('provisionalTitleFromUserText', () => {
     expect(provisionalTitleFromUserText('[2026-01-15 10:00 UTC] 你好')).toBe('你好');
   });
 
+  it('ignores injected profile context before deriving the title', () => {
+    expect(provisionalTitleFromUserText(
+      '<user-profile>\nPreferred name: micjoyce\n</user-profile>\n\n[2026-08-30 13:54 GMT+8] 看下note 内容',
+    )).toBe('看下note 内容');
+  });
+
   it('uses skill arguments instead of the expanded skill header', () => {
     expect(
       provisionalTitleFromUserText(

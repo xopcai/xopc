@@ -1109,6 +1109,9 @@ export class SessionStore {
       if (Array.isArray(m.media) && m.media.length > 0) {
         row.media = m.media as Message['media'];
       }
+      if (m.metadata && typeof m.metadata === 'object') {
+        row.metadata = m.metadata;
+      }
       const rawUsage = m.usage as {
         input?: number;
         output?: number;

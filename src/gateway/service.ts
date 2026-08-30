@@ -434,6 +434,19 @@ export class GatewayService {
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
+      resolveTurnContext: async (ref) => {
+        if (ref.kind !== 'note') return null;
+        const note = await this.notesService.getNote(ref.sourceId);
+        if (!note || note.status === 'trashed') return null;
+        if (ref.expectedVersion && ref.expectedVersion !== String(note.updatedAt)) return null;
+        const context = await buildNoteAgentContext({
+          note,
+          notesService: this.notesService,
+          config: this.config,
+        });
+        const { images: _images, ...snapshot } = context;
+        return snapshot;
+      },
       emit: (type, payload) => this.emit(type, payload),
       publishRealtime: (topic, event, data) => {
         this.realtime.broker.publish(topic, event, data);

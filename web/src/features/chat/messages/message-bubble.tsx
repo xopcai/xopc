@@ -1,6 +1,7 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import type {
   ImageContent,
@@ -40,6 +41,8 @@ import {
   AssistantAttachmentList,
   AssistantTurnTasks,
 } from '@/features/chat/messages/assistant-turn-tasks';
+import { MessageNoteAttachments } from '@/features/chat/messages/message-note-attachments';
+import { withDetailReturnTo } from '@/lib/navigation-return';
 
 const messageActionIconButton = cn(
   'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
@@ -130,10 +133,16 @@ export const MessageBubble = memo(function MessageBubble({
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const roleLabel = isUser ? m.chat.you : isAssistant ? m.chat.assistant : m.chat.tool;
+  const openReferencedNote = useCallback((sourceId: string) => {
+    const returnTo = `${location.pathname}${location.search}`;
+    navigate(withDetailReturnTo(`/notes/${encodeURIComponent(sourceId)}`, returnTo));
+  }, [location.pathname, location.search, navigate]);
 
   const toolLabels = useMemo(
     () => ({ input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput }),
@@ -537,6 +546,15 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
+            {isUser && message.contextRefs?.length ? (
+              <MessageNoteAttachments
+                refs={message.contextRefs}
+                groupLabel={m.chat.commandPalette.noteContextLabel}
+                noteLabel={m.chat.commandPalette.notesSection}
+                truncatedLabel={m.chat.commandPalette.contextTruncated}
+                onOpen={(ref) => openReferencedNote(ref.sourceId)}
+              />
+            ) : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div

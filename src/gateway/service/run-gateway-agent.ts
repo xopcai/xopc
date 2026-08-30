@@ -33,6 +33,7 @@ import { coalesceThinkingDeltas } from '../chat-stream/thinking-delta-coalescer.
 import type { ChatStreamEvent } from '../chat-stream/protocol.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
+import type { AgentSourceContext } from '../../agent/source-context/types.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -60,7 +61,7 @@ export async function *runGatewayAgent(
   origin: TurnOrigin,
   attachments?: UserTurnAttachment[],
   thinking?: string,
-  runOptions?: { signal?: AbortSignal; runId?: string },
+  runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[] },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -203,7 +204,7 @@ export async function *runGatewayAgent(
           origin,
           prepared,
           thinking,
-          { signal: mergedSignal, runId },
+          { signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts },
         );
 
         const mappedEvents = (async function* (): AsyncGenerator<ChatStreamEvent> {

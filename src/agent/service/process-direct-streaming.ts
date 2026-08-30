@@ -1,5 +1,4 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import type { ImageContent } from '@earendil-works/pi-ai';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { Config } from '../../config/schema.js';
@@ -25,8 +24,12 @@ import { abortEmbeddedRun } from '../embedded/runs.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { ModelManager } from '../models/index.js';
-import { injectSourceContextIntoUserMessage } from '../source-context/injector.js';
-import { isSessionSourceBinding, type AgentSourceContextResolver } from '../source-context/types.js';
+import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
+import {
+  isSessionSourceBinding,
+  type AgentSourceContext,
+  type AgentSourceContextResolver,
+} from '../source-context/types.js';
 import type { ReviewOutput } from '../../review/review-types.js';
 
 import { AsyncQueue } from './async-queue.js';
@@ -106,6 +109,7 @@ export interface ProcessDirectStreamingInput {
   thinking?: string;
   signal?: AbortSignal;
   runId?: string;
+  sourceContexts?: AgentSourceContext[];
 }
 
 export type ProcessDirectStreamEvent = { type: string; [key: string]: unknown };
@@ -394,6 +398,7 @@ export async function* runProcessDirectStreaming(
               slashTraceRows.push(traceRow);
             }
           },
+          sourceContexts: input.sourceContexts,
         },
       );
       if (slash.matched) {
@@ -422,8 +427,8 @@ export async function* runProcessDirectStreaming(
       const skillTurn = deps.agentManager.prepareSkillTurn(sessionKey, mergedUserText);
       const textForAgent = skillTurn.text;
       const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, sessionKey);
-      let sourceEnrichedUserMessage: AgentMessage = userMessage;
-      let sourceImages: ImageContent[] | undefined;
+      const turnSourceContexts = input.sourceContexts ?? [];
+      const sourceContexts = [...turnSourceContexts];
       if (deps.sourceContextResolver) {
         const metadata = await deps.sessionStore.getMetadata(sessionKey).catch(() => null);
         const sourceBinding = metadata?.customData && typeof metadata.customData === 'object'
@@ -431,8 +436,11 @@ export async function* runProcessDirectStreaming(
           : undefined;
         if (isSessionSourceBinding(sourceBinding)) {
           const sourceContext = await deps.sourceContextResolver(sourceBinding, sessionKey);
-          sourceEnrichedUserMessage = injectSourceContextIntoUserMessage(userMessage, sourceContext);
-          sourceImages = sourceContext?.images;
+          if (sourceContext && !sourceContexts.some(
+            (context) => context.kind === sourceContext.kind && context.sourceId === sourceContext.sourceId,
+          )) {
+            sourceContexts.push(sourceContext);
+          }
         }
       }
 
@@ -448,7 +456,9 @@ export async function* runProcessDirectStreaming(
         }
       }
 
-      const pendingUserMessage = userMessage as TranscriptUserMessage;
+      const pendingUserMessage = (turnSourceContexts.length > 0
+        ? injectSourceContextsIntoUserMessage(userMessage, turnSourceContexts)
+        : userMessage) as TranscriptUserMessage;
       setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
 
       try {
@@ -465,9 +475,9 @@ export async function* runProcessDirectStreaming(
               },
               {
                 sessionKey,
-                userMessage: sourceEnrichedUserMessage,
+                userMessage,
                 abortSignal: signal,
-                sourceImages,
+                sourceContexts,
                 runId: input.runId,
                 onEvent: (embeddedEvent) => {
                   const event = { ...embeddedEvent };

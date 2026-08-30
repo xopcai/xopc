@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TUI } from '@earendil-works/pi-tui';
 
 import { formatAgentRunErrorForDisplay } from '../agent/client-error-format.js';
+import { stripRuntimeContextFromUserContent } from '../session/user-message-display.js';
 import type { ChatLog } from './components/chat-log.js';
 import { createAssistantMessageFromText } from './components/assistant-message.js';
 import { markRunEvent, markRunIdleAfterCompletion } from './tui-run-state.js';
@@ -220,12 +221,15 @@ export function dispatchAgentEvent(
     }
     case 'user_message': {
       const message = p.message as { content?: unknown } | undefined;
-      chatLog.addUser(Array.isArray(message?.content) || typeof message?.content === 'string' ? message.content : []);
+      const content = Array.isArray(message?.content) || typeof message?.content === 'string'
+        ? stripRuntimeContextFromUserContent(message.content)
+        : [];
+      chatLog.addUser(content);
       tui.requestRender();
       break;
     }
     case 'user_transcript': {
-      chatLog.addUser(String(p.text ?? ''));
+      chatLog.addUser(stripRuntimeContextFromUserContent(String(p.text ?? '')));
       tui.requestRender();
       break;
     }

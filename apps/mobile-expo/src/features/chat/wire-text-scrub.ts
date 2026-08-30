@@ -1,6 +1,8 @@
 // Text scrubbing applied to persisted user-message content so the UI re-renders
 // the original wire form (rather than the server-expanded skill/file bodies).
 
+import { stripRuntimeUserMessageEnvelope } from '@xopcai/gateway-contract';
+
 const STARTUP_CONTEXT_MARKER = '[Startup context loaded by runtime]';
 const STARTUP_MEMORY_TRUNCATED = '...[additional startup memory truncated]...';
 const STARTUP_MEMORY_END = 'END_QUOTED_NOTES';
@@ -39,6 +41,11 @@ export function stripStartupContextForDisplay(text: string): string {
   }
 
   return trimmed.slice(cutIndex).replace(/^\s+/, '');
+}
+
+/** Remove all model-only turn envelopes shared by gateway, Web, TUI, and mobile. */
+export function stripRuntimeContextForDisplay(text: string): string {
+  return stripRuntimeUserMessageEnvelope(stripStartupContextForDisplay(text));
 }
 
 function joinDisplayParts(...parts: string[]): string {

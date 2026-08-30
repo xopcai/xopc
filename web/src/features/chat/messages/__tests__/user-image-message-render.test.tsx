@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
@@ -51,12 +52,14 @@ describe('persisted user image message rendering', () => {
 
     act(() => {
       root.render(
-        <MessageBubble
-          message={message}
-          isStreaming={false}
-          progress={null}
-          readonly
-        />,
+        <MemoryRouter>
+          <MessageBubble
+            message={message}
+            isStreaming={false}
+            progress={null}
+            readonly
+          />
+        </MemoryRouter>,
       );
     });
 

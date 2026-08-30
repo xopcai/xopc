@@ -11,3 +11,4 @@ export * from './welcome-suggestions.js';
 export * from './home.js';
 export * from './tool-activity.js';
 export * from './automations.js';
+export * from './user-message-display.js';
