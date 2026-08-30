@@ -69,6 +69,16 @@ export interface UseComposerPickersReturn {
   applyAtMention: (item: AtMentionItem, opts?: { stayOpen?: boolean }) => void;
 }
 
+export function noteContextRefFromAtMentionItem(item: AtMentionItem): ComposerContextRef | null {
+  if (item.kind !== 'note') return null;
+  return {
+    kind: 'note',
+    sourceId: item.noteRef.sourceId,
+    expectedVersion: item.noteRef.expectedVersion,
+    title: item.name,
+  };
+}
+
 /**
  * Composes the slash palette and @-mention pickers, their mutual exclusion, the keyboard adapters,
  * and the outside-click dismiss for the slash palette. ChatComposer wires the returned `adapters`
@@ -111,13 +121,13 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     isComposing,
     currentAgentId,
     sessionKey,
-    selectedNoteIds: new Set(contextRefs.map((ref) => ref.sourceId)),
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
     sessionKey,
     slashPaletteOpen: palette.open,
     isComposing,
     precomputedAtRange: atRangeRaw,
+    selectedNoteIds: new Set(contextRefs.map((ref) => ref.sourceId)),
   });
 
   const shouldSyncSelection = palette.open || atPicker.open || atRangeRaw != null;
@@ -142,7 +152,6 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
         onAbort,
         onUnavailableSkill,
         onReviewLauncher,
-        onAddContextRef,
       },
     }),
     [
@@ -163,7 +172,6 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       onAbort,
       onUnavailableSkill,
       onReviewLauncher,
-      onAddContextRef,
     ],
   );
 
@@ -178,6 +186,19 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     (item: AtMentionItem, applyOpts?: { stayOpen?: boolean }) => {
       const range = atPicker.atRange;
       if (!range) return;
+      const noteContextRef = noteContextRefFromAtMentionItem(item);
+      if (noteContextRef) {
+        const insert = applyOpts?.stayOpen ? '@' : '';
+        const next = replaceRange(valueRef.current, range.start, range.end, insert);
+        resetEditor({
+          nextText: next,
+          caretOffset: range.start + insert.length,
+          focus: true,
+        });
+        onAddContextRef(noteContextRef);
+        return;
+      }
+      if (item.kind !== 'file') return;
       if (item.isBrowseUp) {
         const dir = browseDirFromQuery(range.query);
         const parentDir = browseParentDir(dir);
@@ -206,7 +227,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       const pos = range.start + insert.length;
       resetEditor({ nextText: next, caretOffset: pos, focus: true });
     },
-    [atPicker.atRange, sessionKey, valueRef, resetEditor],
+    [atPicker.atRange, onAddContextRef, sessionKey, valueRef, resetEditor],
   );
 
   // ── Outside-click dismiss for the slash palette ─────────────────

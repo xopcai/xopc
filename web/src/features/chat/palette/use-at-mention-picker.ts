@@ -3,10 +3,14 @@ import { useDebounce } from 'use-debounce';
 
 import { fetchWorkspaceBrowseEntries, searchWorkspaceFiles, type AtMentionItem } from '@/features/chat/palette/at-mention-api';
 import { getRecentAtPaths } from '@/features/chat/palette/at-mention-recent';
+import { listNotes } from '@/features/notes/notes-api';
+import { messages } from '@/i18n/messages';
 import { useAsyncResource } from '@/lib/use-async-resource';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const DEBOUNCE_MS = 150;
-const MAX_ITEMS = 15;
+const MAX_FILE_ITEMS = 10;
+const MAX_NOTE_ITEMS = 5;
 
 export interface AtRange {
   start: number;
@@ -70,11 +74,13 @@ export function useAtMentionPicker(
     sessionKey: string | null;
     slashPaletteOpen: boolean;
     isComposing?: boolean;
+    selectedNoteIds?: ReadonlySet<string>;
     /** When provided, skips internal `detectAtRange` computation. */
     precomputedAtRange?: AtRange | null;
   },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const language = useLocaleStore((s) => s.language);
 
   const atRange = useMemo(() => {
     if (options.precomputedAtRange !== undefined) {
@@ -93,6 +99,7 @@ export function useAtMentionPicker(
   const debouncedQuery = pickerActive ? debouncedQueryRaw : '';
 
   const sessionKey = options.sessionKey?.trim() ?? '';
+  const selectedNoteIdsKey = [...(options.selectedNoteIds ?? [])].sort().join('\0');
   const itemsResource = useAsyncResource(
     async () => {
       if (!sessionKey) {
@@ -103,11 +110,13 @@ export function useAtMentionPicker(
         const dir = browseDirFromQuery(debouncedQuery);
         const entries = await fetchWorkspaceBrowseEntries(dir, { sessionKey });
         const mapped = entries.map((e) => ({
+          kind: 'file' as const,
           name: e.name,
           relativePath: e.path,
           isDirectory: e.isDirectory,
         }));
         const browseUp: AtMentionItem = {
+          kind: 'file',
           name: '..',
           relativePath: '',
           isDirectory: true,
@@ -116,10 +125,18 @@ export function useAtMentionPicker(
         return dir ? [browseUp, ...mapped] : mapped;
       }
 
-      const raw = await searchWorkspaceFiles(debouncedQuery, {
-        sessionKey,
-        limit: MAX_ITEMS,
-      });
+      const [raw, notesPayload] = await Promise.all([
+        searchWorkspaceFiles(debouncedQuery, {
+          sessionKey,
+          limit: MAX_FILE_ITEMS,
+        }),
+        listNotes({
+          ...(debouncedQuery.trim() ? { search: debouncedQuery.trim() } : {}),
+          limit: MAX_NOTE_ITEMS,
+          sortBy: 'updatedAt',
+          sortOrder: 'desc',
+        }).catch(() => ({ items: [], total: 0 })),
+      ]);
       const recentPaths = getRecentAtPaths(sessionKey);
       const recentItems: AtMentionItem[] = [];
       const seen = new Set(raw.map((r) => r.relativePath));
@@ -128,6 +145,7 @@ export function useAtMentionPicker(
         seen.add(p);
         const base = p.replace(/\/$/, '').split('/').pop() ?? p;
         recentItems.push({
+          kind: 'file',
           name: base,
           relativePath: p,
           isDirectory: p.endsWith('/'),
@@ -135,9 +153,18 @@ export function useAtMentionPicker(
         });
         if (recentItems.length >= 5) break;
       }
-      return [...recentItems, ...raw];
+      const selectedNoteIds = options.selectedNoteIds ?? new Set<string>();
+      const noteItems: AtMentionItem[] = notesPayload.items
+        .filter((note) => note.status !== 'trashed' && !selectedNoteIds.has(note.id))
+        .map((note) => ({
+          kind: 'note',
+          name: note.title?.trim() || note.snippet?.trim() || messages(language).chat.commandPalette.untitledNote,
+          description: note.snippet?.trim() || '',
+          noteRef: { sourceId: note.id, expectedVersion: String(note.updatedAt) },
+        }));
+      return [...noteItems, ...recentItems, ...raw];
     },
-    [debouncedQuery, sessionKey],
+    [debouncedQuery, language, selectedNoteIdsKey, sessionKey],
     {
       enabled: pickerActive && Boolean(sessionKey),
       initial: [] as AtMentionItem[],
