@@ -8,6 +8,7 @@ import {
   importUnderstandingSources,
   reviewUnderstandingSourceProfile,
   type WorkDiscoveryProfileCandidate,
+  type WorkDiscoveryProcessingPolicy,
   type WorkDiscoveryRun,
   type WorkUnderstandingThread,
 } from './api';
@@ -29,7 +30,11 @@ type UnderstandingActivityState = {
   setDrawerOpen: (open: boolean) => void;
   finish: () => void;
   updateDirectoryRun: (run: WorkDiscoveryRun) => void;
-  collectSources: (workDiscoveryRunId: string | undefined, selectedSources: string[]) => Promise<void>;
+  collectSources: (
+    workDiscoveryRunId: string | undefined,
+    selectedSources: string[],
+    processingPolicy: WorkDiscoveryProcessingPolicy,
+  ) => Promise<void>;
   reviewMemory: (understandingId: string, accepted: boolean, statement?: string) => Promise<void>;
   reviewFocus: (focusId: string, accepted: boolean) => Promise<void>;
 };
@@ -96,7 +101,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         : directoryStatus === 'failed' && sourcesDone ? 'partial' : 'running',
     });
   },
-  collectSources: async (workDiscoveryRunId, selectedSources) => {
+  collectSources: async (workDiscoveryRunId, selectedSources, processingPolicy) => {
     const collect = window.electronAPI?.understandingSources?.collect;
     if (!collect || !selectedSources.length) return;
     set({
@@ -117,7 +122,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         ? [[result.sourceId, result.checkpoint] as const] : []));
       if (items.length) await waitForDirectoryUnderstanding(workDiscoveryRunId);
       const understanding = items.length
-        ? await importUnderstandingSources(items, workDiscoveryRunId, sourceCheckpoints)
+        ? await importUnderstandingSources(items, workDiscoveryRunId, processingPolicy, sourceCheckpoints)
         : { profileCandidates: [], workThreads: [], focuses: [], sourceStatuses: [] };
       for (const sourceStatus of understanding.sourceStatuses) {
         sources[sourceStatus.sourceId] = sourceStatus.status;

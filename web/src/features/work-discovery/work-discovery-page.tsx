@@ -27,6 +27,7 @@ import {
   type WorkDiscoveryCandidate,
   type WorkDiscoveryProfileCandidate,
   type WorkDiscoveryPreview,
+  type WorkDiscoveryProcessingTarget,
   type WorkDiscoveryRun,
   type WorkDiscoveryStage,
   type WorkDiscoverySuggestion,
@@ -76,6 +77,7 @@ export function WorkDiscoveryPage({
   const startFresh = searchParams.get('new') === '1';
   const [pageState, setPageState] = useState<PageState>('loading');
   const [preview, setPreview] = useState<WorkDiscoveryPreview | null>(null);
+  const [processingTarget, setProcessingTarget] = useState<WorkDiscoveryProcessingTarget | null>(null);
   const [run, setRun] = useState<WorkDiscoveryRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,12 +212,13 @@ export function WorkDiscoveryPage({
     setError(null);
     try {
       const discovered = await discoverWorkDiscoveryCandidates();
-      if (!discovered.length) {
+      setProcessingTarget(discovered.processingTarget);
+      if (!discovered.candidates.length) {
         setError(copy.noCandidates);
         return;
       }
-      setCandidates(discovered);
-      setSelectedCandidatePaths(new Set([discovered[0].rootPath]));
+      setCandidates(discovered.candidates);
+      setSelectedCandidatePaths(new Set([discovered.candidates[0].rootPath]));
       setPageState('candidates');
     } catch (cause) {
       setError(errorText(cause));
@@ -259,9 +262,10 @@ export function WorkDiscoveryPage({
     setBatchRunning(true);
     stopBatchRef.current = false;
     let sourceCollectionStarted = false;
+    const processingPolicy = processingTarget?.remoteModel ? 'remote_allowed' : 'local_only';
     try {
       const results = await runWorkDiscoveryBatch(selected, {
-        grantDirectory: grantUnderstandingWorkFolder,
+        grantDirectory: (rootPath) => grantUnderstandingWorkFolder(rootPath, processingPolicy),
         startRun: startWorkDiscoveryRun,
         fetchRun: fetchWorkDiscoveryRun,
         shouldStop: () => stopBatchRef.current,
@@ -269,7 +273,11 @@ export function WorkDiscoveryPage({
           trackBatchRun(next, index, total);
           if (!sourceCollectionStarted) {
             sourceCollectionStarted = true;
-            void useUnderstandingActivityStore.getState().collectSources(next.id, [...selectedSourceIds]);
+            void useUnderstandingActivityStore.getState().collectSources(
+              next.id,
+              [...selectedSourceIds],
+              processingPolicy,
+            );
           }
         },
         onError: (cause, candidate, index) => {
@@ -300,6 +308,7 @@ export function WorkDiscoveryPage({
     try {
       const next = await previewWorkDiscoveryFolder(rootPath);
       setPreview(next);
+      setProcessingTarget({ provider: next.provider, remoteModel: next.remoteModel });
       setPageState('consent');
     } catch (cause) {
       setError(errorText(cause));
@@ -407,10 +416,11 @@ export function WorkDiscoveryPage({
     setBatchRuns([]);
     setBatchPosition({ current: 0, total: 0 });
     try {
-      await grantUnderstandingWorkFolder(preview.canonicalRootPath);
+      const processingPolicy = preview.remoteModel ? 'remote_allowed' : 'local_only';
+      await grantUnderstandingWorkFolder(preview.canonicalRootPath, processingPolicy);
       const next = await startWorkDiscoveryRun(preview.canonicalRootPath);
       applyRun(next);
-      void useUnderstandingActivityStore.getState().collectSources(next.id, [...selectedSourceIds]);
+      void useUnderstandingActivityStore.getState().collectSources(next.id, [...selectedSourceIds], processingPolicy);
     } catch (cause) {
       setError(errorText(cause));
       setPageState('consent');
@@ -757,7 +767,12 @@ export function WorkDiscoveryPage({
             <div className={embedded ? 'shrink-0 border-t border-edge-subtle pt-4' : undefined}>
               <div className={`${embedded ? '' : 'mt-5 '}flex items-start gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3 text-xs leading-5 text-fg-muted`}>
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
-                <span>{copy.multiFolderPrivacyNote}</span>
+                <span>
+                  {copy.multiFolderPrivacyNote}{' '}
+                  {processingTarget?.remoteModel
+                    ? copy.providerDisclosure.replace('{{provider}}', processingTarget.provider)
+                    : copy.localDisclosure}
+                </span>
               </div>
               {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
               <div className={`${embedded ? 'mt-4' : 'mt-7'} flex flex-col gap-3 sm:flex-row-reverse`}>

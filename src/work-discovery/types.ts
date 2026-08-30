@@ -53,6 +53,7 @@ export interface WorkDiscoveryDirectorySource {
   displayName: string;
   status: 'active' | 'revoked';
   scope: { readOnly: true };
+  processingPolicy: 'local_only' | 'remote_allowed';
   fingerprint?: WorkDiscoveryPreview['fingerprint'];
   lastScannedAt?: number;
   createdAt: number;
