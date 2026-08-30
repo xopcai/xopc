@@ -25,7 +25,6 @@ function makeCtx(opts: {
   onAddPendingFollowUp?: (text: string) => void;
   onAbort?: () => void;
   onReviewLauncher?: () => void;
-  onAddContextRef?: PaletteApplyContext['callbacks']['onAddContextRef'];
   contextRefs?: ComposerContextRef[];
 }): PaletteApplyContext & {
   resetEditor: ReturnType<typeof vi.fn>;
@@ -36,7 +35,6 @@ function makeCtx(opts: {
   onAddPendingFollowUp: ReturnType<typeof vi.fn>;
   onAbort: ReturnType<typeof vi.fn>;
   onReviewLauncher: ReturnType<typeof vi.fn>;
-  onAddContextRef: ReturnType<typeof vi.fn>;
 } {
   const ref = valueRef(opts.initialText);
   const resetEditor: PaletteApplyContext['editor']['resetEditor'] = (nextOpts) => {
@@ -54,7 +52,6 @@ function makeCtx(opts: {
   const onAddPendingFollowUp = vi.fn(opts.onAddPendingFollowUp);
   const onAbort = vi.fn(opts.onAbort);
   const onReviewLauncher = vi.fn(opts.onReviewLauncher);
-  const onAddContextRef = vi.fn(opts.onAddContextRef);
 
   return {
     slashRange: opts.slashRange,
@@ -72,7 +69,6 @@ function makeCtx(opts: {
       onAddPendingFollowUp,
       onAbort,
       onReviewLauncher,
-      onAddContextRef,
     },
     resetEditor: resetEditorSpy,
     clearAttachments,
@@ -82,7 +78,6 @@ function makeCtx(opts: {
     onAddPendingFollowUp,
     onAbort,
     onReviewLauncher,
-    onAddContextRef,
   };
 }
 
@@ -142,33 +137,6 @@ const agentItem: PaletteItem = {
   description: 'Side agent',
   category: 'agent',
 };
-
-const noteItem: PaletteItem = {
-  kind: 'note',
-  id: 'note:note-1',
-  name: 'Launch plan',
-  description: 'Plan snapshot',
-  noteRef: { sourceId: 'note-1', expectedVersion: '42' },
-};
-
-describe('palette-item-handlers / note', () => {
-  it('removes the slash token and adds a frozen Note reference', () => {
-    const ctx = makeCtx({
-      initialText: 'Use /launch as context',
-      slashRange: { start: 4, end: 11, query: 'launch' },
-    });
-    applyPaletteItem(noteItem, ctx);
-
-    expect(ctx.editor.valueRef.current).toBe('Use  as context');
-    expect(ctx.onAddContextRef).toHaveBeenCalledWith({
-      kind: 'note',
-      sourceId: 'note-1',
-      expectedVersion: '42',
-      title: 'Launch plan',
-    });
-    expect(ctx.onSend).not.toHaveBeenCalled();
-  });
-});
 
 describe('palette-item-handlers / skill', () => {
   it('replaces slash range with /skill:name pill text and a trailing space, places caret after', () => {

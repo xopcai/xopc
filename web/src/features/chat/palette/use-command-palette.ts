@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDebounce } from 'use-debounce';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
 import { ABORT_CLASS_NAMES } from '@/features/chat/composer/palette-item-handlers';
 import { fetchCommandsCached, getChatSkillsCached } from '@/features/chat/palette/command-palette-api';
-import { listNotes } from '@/features/notes/notes-api';
 import {
   agentListDisplayDescription,
   agentListDisplayName,
@@ -205,7 +203,6 @@ export function useCommandPalette(
     isComposing?: boolean;
     currentAgentId?: string;
     sessionKey?: string | null;
-    selectedNoteIds?: ReadonlySet<string>;
   },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -214,7 +211,6 @@ export function useCommandPalette(
   const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
   const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
   const [groupedAgentsExpanded, setGroupedAgentsExpanded] = useState(false);
-  const [groupedNotesExpanded, setGroupedNotesExpanded] = useState(false);
   const language = useLocaleStore((s) => s.language);
 
   const slashRange = useMemo(
@@ -222,7 +218,6 @@ export function useCommandPalette(
     [value, cursor, options?.isComposing],
   );
   const paletteActive = Boolean(slashRange && !options?.suppress);
-  const [debouncedNoteQuery] = useDebounce(slashRange?.query.trim() ?? '', 120);
 
   useEffect(() => {
     const onConfigReload = (event: Event) => {
@@ -243,26 +238,19 @@ export function useCommandPalette(
 
   if (
     !paletteActive &&
-    (groupedSkillsExpanded || groupedCommandsExpanded || groupedAgentsExpanded || groupedNotesExpanded)
+    (groupedSkillsExpanded || groupedCommandsExpanded || groupedAgentsExpanded)
   ) {
     setGroupedSkillsExpanded(false);
     setGroupedCommandsExpanded(false);
     setGroupedAgentsExpanded(false);
-    setGroupedNotesExpanded(false);
   }
 
   const itemsResource = useAsyncResource(
     async () => {
-      const [commands, skillsPayload, agentsPayload, notesPayload] = await Promise.all([
+      const [commands, skillsPayload, agentsPayload] = await Promise.all([
         fetchCommandsCached(),
         getChatSkillsCached(options?.currentAgentId, options?.sessionKey),
         fetchChatAgents().catch(() => null),
-        listNotes({
-          ...(debouncedNoteQuery ? { search: debouncedNoteQuery } : {}),
-          limit: debouncedNoteQuery ? MAX_FLAT_PALETTE_ITEMS : 12,
-          sortBy: 'updatedAt',
-          sortOrder: 'desc',
-        }).catch(() => ({ items: [], total: 0 })),
       ]);
       const commandItems: PaletteItem[] = commands.map((c) => ({
         kind: 'command' as const,
@@ -300,20 +288,9 @@ export function useCommandPalette(
               aliases: [a.id, ...(a.name ? [a.name] : [])],
             }))
           : [];
-      const noteItems: PaletteItem[] = notesPayload.items
-        .filter((note) => note.status !== 'trashed')
-        .map((note) => ({
-          kind: 'note' as const,
-          id: `note:${note.id}`,
-          name: note.title?.trim() || note.snippet?.trim() || messages(language).chat.commandPalette.untitledNote,
-          description: note.snippet?.trim() || '',
-          category: 'note',
-          aliases: note.tags,
-          noteRef: { sourceId: note.id, expectedVersion: String(note.updatedAt) },
-        }));
-      return [...noteItems, ...skillItems, ...commandItems, ...agentItems];
+      return [...skillItems, ...commandItems, ...agentItems];
     },
-    [language, options?.currentAgentId, options?.sessionKey, skillsVersion, debouncedNoteQuery],
+    [language, options?.currentAgentId, options?.sessionKey, skillsVersion],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
   );
   const allItems = itemsResource.data;
@@ -336,7 +313,6 @@ export function useCommandPalette(
   const effectiveGroupedSkillsExpanded = paletteActive && grouped && groupedSkillsExpanded;
   const effectiveGroupedCommandsExpanded = paletteActive && grouped && groupedCommandsExpanded;
   const effectiveGroupedAgentsExpanded = paletteActive && grouped && groupedAgentsExpanded;
-  const effectiveGroupedNotesExpanded = paletteActive && grouped && groupedNotesExpanded;
 
   const expandGroupedSkills = useCallback(() => {
     setGroupedSkillsExpanded(true);
@@ -347,23 +323,16 @@ export function useCommandPalette(
   const expandGroupedAgents = useCallback(() => {
     setGroupedAgentsExpanded(true);
   }, []);
-  const expandGroupedNotes = useCallback(() => {
-    setGroupedNotesExpanded(true);
-  }, []);
-
   const {
     items,
-    noteRowCount,
     skillRowCount,
     commandRowCount,
     groupedHasSkills,
     groupedHasCommands,
     groupedHasAgents,
-    groupedHasNotes,
     groupedSkillsMoreCount,
     groupedCommandsMoreCount,
     groupedAgentsMoreCount,
-    groupedNotesMoreCount,
   } = useMemo(() => {
     const alreadyPicked = listSkillNamesInWire(value);
     const scored: Array<{ item: PaletteItem; rank: number }> = [];
@@ -376,9 +345,6 @@ export function useCommandPalette(
         continue;
       }
       if (item.kind === 'skill' && alreadyPicked.has(item.name)) {
-        continue;
-      }
-      if (item.kind === 'note' && item.noteRef && options?.selectedNoteIds?.has(item.noteRef.sourceId)) {
         continue;
       }
       if (item.kind === 'skill' && grouped && item.availability?.status !== 'available') {
@@ -400,7 +366,6 @@ export function useCommandPalette(
       const skills = scored.filter((s) => s.item.kind === 'skill').sort(sortByDefault).map((s) => s.item);
       const commands = scored.filter((s) => s.item.kind === 'command').sort(sortByDefault).map((s) => s.item);
       const agents = scored.filter((s) => s.item.kind === 'agent').sort(sortByDefault).map((s) => s.item);
-      const notes = scored.filter((s) => s.item.kind === 'note').sort(sortByDefault).map((s) => s.item);
 
       const visSkills = effectiveGroupedSkillsExpanded
         ? skills
@@ -411,9 +376,6 @@ export function useCommandPalette(
       const visAgents = effectiveGroupedAgentsExpanded
         ? agents
         : agents.slice(0, GROUPED_INITIAL_PER_SECTION);
-      const visNotes = effectiveGroupedNotesExpanded
-        ? notes
-        : notes.slice(0, GROUPED_INITIAL_PER_SECTION);
 
       const moreSkills = !effectiveGroupedSkillsExpanded
         ? Math.max(0, skills.length - GROUPED_INITIAL_PER_SECTION)
@@ -424,22 +386,16 @@ export function useCommandPalette(
       const moreAgents = !effectiveGroupedAgentsExpanded
         ? Math.max(0, agents.length - GROUPED_INITIAL_PER_SECTION)
         : 0;
-      const moreNotes = !effectiveGroupedNotesExpanded
-        ? Math.max(0, notes.length - GROUPED_INITIAL_PER_SECTION)
-        : 0;
       return {
-        items: [...visNotes, ...visSkills, ...visCommands, ...visAgents],
-        noteRowCount: visNotes.length,
+        items: [...visSkills, ...visCommands, ...visAgents],
         skillRowCount: visSkills.length,
         commandRowCount: visCommands.length,
         groupedHasSkills: skills.length > 0,
         groupedHasCommands: commands.length > 0,
         groupedHasAgents: agents.length > 0,
-        groupedHasNotes: notes.length > 0,
         groupedSkillsMoreCount: moreSkills,
         groupedCommandsMoreCount: moreCommands,
         groupedAgentsMoreCount: moreAgents,
-        groupedNotesMoreCount: moreNotes,
       };
     }
 
@@ -461,17 +417,14 @@ export function useCommandPalette(
 
     return {
       items: scored.slice(0, MAX_FLAT_PALETTE_ITEMS).map((s) => s.item),
-      noteRowCount: 0,
       skillRowCount: 0,
       commandRowCount: 0,
       groupedHasSkills: false,
       groupedHasCommands: false,
       groupedHasAgents: false,
-      groupedHasNotes: false,
       groupedSkillsMoreCount: 0,
       groupedCommandsMoreCount: 0,
       groupedAgentsMoreCount: 0,
-      groupedNotesMoreCount: 0,
     };
   }, [
     allItems,
@@ -481,10 +434,8 @@ export function useCommandPalette(
     effectiveGroupedCommandsExpanded,
     effectiveGroupedSkillsExpanded,
     effectiveGroupedAgentsExpanded,
-    effectiveGroupedNotesExpanded,
     query,
     value,
-    options?.selectedNoteIds,
   ]);
 
   const selectionKey = slashRange ? query : '';
@@ -517,22 +468,19 @@ export function useCommandPalette(
     agentsAllowed,
     /** `true` when the slash token has no filter text: show grouped sections. */
     grouped,
-    /** In grouped mode, Notes lead, followed by Skills, Commands, and Agents. */
-    noteRowCount,
+    /** In grouped mode, Skills lead, followed by Commands and Agents. */
     skillRowCount,
     commandRowCount,
     /** In grouped mode, whether the full (untruncated) lists include each kind. */
     groupedHasSkills,
     groupedHasCommands,
     groupedHasAgents,
-    groupedHasNotes,
     /** Hidden skill rows in that section when the section is collapsed. */
     groupedSkillsMoreCount,
     /** Hidden command rows in that section when the section is collapsed. */
     groupedCommandsMoreCount,
     /** Hidden agent rows in that section when the section is collapsed. */
     groupedAgentsMoreCount,
-    groupedNotesMoreCount,
     items,
     selectedIndex: resolvedSelectedIndex,
     query,
@@ -542,6 +490,5 @@ export function useCommandPalette(
     expandGroupedSkills,
     expandGroupedCommands,
     expandGroupedAgents,
-    expandGroupedNotes,
   };
 }

@@ -1,5 +1,6 @@
-import { FileText, Folder, Loader2 } from 'lucide-react';
+import { FileText, Folder, Loader2, NotebookPen } from 'lucide-react';
 import {
+  Fragment,
   memo,
   useCallback,
   useLayoutEffect,
@@ -98,6 +99,8 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   noResults,
   sessionKey,
   recentLabel,
+  filesLabel,
+  notesLabel,
   ariaLabel,
   onSelectItem,
   shiftHint,
@@ -111,6 +114,8 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   noResults: string;
   sessionKey: string | null;
   recentLabel: string;
+  filesLabel: string;
+  notesLabel: string;
   ariaLabel: string;
   onSelectItem: (item: AtMentionItem, meta?: { shiftKey?: boolean }) => void;
   shiftHint?: string;
@@ -137,6 +142,10 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       clearPreviewTimer();
       previewAbortRef.current += 1;
       const rid = previewAbortRef.current;
+      if (item.kind !== 'file') {
+        dispatchLayout({ type: 'set-hover', hoverPreview: null });
+        return;
+      }
       const relativePath = item.relativePath;
       if (!sessionKey?.trim() || item.isDirectory || item.isBrowseUp || !relativePath) {
         dispatchLayout({ type: 'set-hover', hoverPreview: null });
@@ -238,54 +247,69 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           <div className="px-3 py-2 text-sm text-fg-muted">{noResults}</div>
         ) : (
           <>
-            {items.map((item, i) => (
-              <div
-                key={`${item.relativePath}-${item.name}`}
-                id={`at-mention-${i}`}
-                role="option"
-                aria-selected={selectedIndex === i}
-                tabIndex={-1}
-                className={cn(
-                  'flex cursor-pointer items-start gap-2 px-3 py-2 text-left text-sm',
-                  selectedIndex === i ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:bg-surface-hover/80',
-                  item.isRecent && 'border-l-2 border-l-accent/60',
-                )}
-                onPointerDown={(e) => {
-                  if (e.pointerType === 'mouse' && e.button !== 0) return;
-                  e.preventDefault();
-                  onSelectItem(item, { shiftKey: e.shiftKey });
-                }}
-                onPointerEnter={(e) => schedulePreview(item, e.clientX, e.clientY)}
-                onPointerLeave={() => {
-                  clearPreviewTimer();
-                  previewAbortRef.current += 1;
-                  dispatchLayout({ type: 'set-hover', hoverPreview: null });
-                }}
-              >
-                <span className="mt-0.5 shrink-0">
-                  {item.isBrowseUp ? (
-                    <Folder className="size-3.5 text-fg-muted" aria-hidden />
-                  ) : item.isDirectory ? (
-                    <Folder className="size-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
-                  ) : (
-                    <FileText className={cn('size-3.5', fileExtColor(item.name))} aria-hidden />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="truncate">
-                      <NameWithHighlights name={item.name} query={query} />
+            {items.map((item, i) => {
+              const previousKind = items[i - 1]?.kind;
+              const sectionLabel = item.kind === 'note' ? notesLabel : filesLabel;
+              const isRecent = item.kind === 'file' && item.isRecent;
+              return (
+                <Fragment key={item.kind === 'note' ? `note:${item.noteRef.sourceId}` : `file:${item.relativePath}`}>
+                  {previousKind !== item.kind ? (
+                    <div className="border-t border-edge-subtle px-3 pb-1 pt-2 text-[0.65rem] font-medium uppercase tracking-wide text-fg-muted first:border-t-0">
+                      {sectionLabel}
+                    </div>
+                  ) : null}
+                  <div
+                    id={`at-mention-${i}`}
+                    role="option"
+                    aria-selected={selectedIndex === i}
+                    tabIndex={-1}
+                    className={cn(
+                      'flex cursor-pointer items-start gap-2 px-3 py-2 text-left text-sm',
+                      selectedIndex === i ? 'bg-surface-hover text-fg' : 'text-fg-subtle hover:bg-surface-hover/80',
+                      isRecent && 'border-l-2 border-l-accent/60',
+                    )}
+                    onPointerDown={(e) => {
+                      if (e.pointerType === 'mouse' && e.button !== 0) return;
+                      e.preventDefault();
+                      onSelectItem(item, { shiftKey: e.shiftKey });
+                    }}
+                    onPointerEnter={(e) => schedulePreview(item, e.clientX, e.clientY)}
+                    onPointerLeave={() => {
+                      clearPreviewTimer();
+                      previewAbortRef.current += 1;
+                      dispatchLayout({ type: 'set-hover', hoverPreview: null });
+                    }}
+                  >
+                    <span className="mt-0.5 shrink-0">
+                      {item.kind === 'note' ? (
+                        <NotebookPen className="size-3.5 text-accent-fg" aria-hidden />
+                      ) : item.isBrowseUp ? (
+                        <Folder className="size-3.5 text-fg-muted" aria-hidden />
+                      ) : item.isDirectory ? (
+                        <Folder className="size-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
+                      ) : (
+                        <FileText className={cn('size-3.5', fileExtColor(item.name))} aria-hidden />
+                      )}
                     </span>
-                    {item.isRecent ? (
-                      <span className="shrink-0 rounded bg-accent-soft px-1 py-0 text-[0.65rem] text-accent-fg">
-                        {recentLabel}
-                      </span>
-                    ) : null}
+                    <span className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="truncate">
+                          <NameWithHighlights name={item.name} query={query} />
+                        </span>
+                        {isRecent ? (
+                          <span className="shrink-0 rounded bg-accent-soft px-1 py-0 text-[0.65rem] text-accent-fg">
+                            {recentLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-fg-muted">
+                        {item.kind === 'note' ? item.description || notesLabel : item.relativePath || '—'}
+                      </div>
+                    </span>
                   </div>
-                  <div className="mt-0.5 truncate text-xs text-fg-muted">{item.relativePath || '—'}</div>
-                </span>
-              </div>
-            ))}
+                </Fragment>
+              );
+            })}
           </>
         )}
       </div>
