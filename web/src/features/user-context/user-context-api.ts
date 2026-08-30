@@ -27,6 +27,7 @@ export type UnderstandingStatus = 'candidate' | 'active' | 'needs_review' | 'sta
 
 export type UserUnderstanding = {
   id: string;
+  canonicalKey?: string;
   kind: UnderstandingKind;
   status: UnderstandingStatus;
   scope: UserContextScope;
@@ -36,9 +37,38 @@ export type UserUnderstanding = {
   disclosurePolicy: 'silent' | 'referenceable' | 'ask_before_reference';
   confidence: number;
   statement: string;
+  payload?: Record<string, unknown>;
   versionId: string;
+  validFrom?: number;
+  validTo?: number;
+  expiresAt?: number;
+  reviewAt?: number;
+  conflictGroupId?: string;
+  supersedesId?: string;
   createdAt: number;
   updatedAt: number;
+};
+
+export type ContextEvidence = {
+  id: string;
+  sourceType: 'conversation' | 'connector' | 'user' | 'runtime';
+  sourceInstanceId?: string;
+  sourceRef: string;
+  sourceRunId?: string;
+  sourceItemId?: string;
+  sessionId?: string;
+  turnId?: string;
+  messageId?: string;
+  contentHash?: string;
+  retentionPolicy?: 'metadata_only' | 'derived_only' | 'bounded_raw';
+  processingPolicy?: 'local_only' | 'remote_allowed';
+  extractorId?: string;
+  extractorVersion?: string;
+  redactedExcerpt?: string;
+  trustLevel: 'owner' | 'trusted' | 'untrusted';
+  observedAt: number;
+  ingestedAt: number;
+  createdAt: number;
 };
 
 export type CollaborationRule = {
@@ -199,6 +229,10 @@ export function updateUnderstanding(id: string, patch: { statement?: string; sta
     method: 'PATCH',
     body: JSON.stringify(patch),
   });
+}
+
+export function fetchUnderstandingEvidence(id: string): Promise<{ evidence: ContextEvidence[] }> {
+  return fetchJson(apiUrl(`/api/you/understandings/${encodeURIComponent(id)}/evidence`));
 }
 
 export function deleteUnderstanding(id: string): Promise<{ ok: true }> {
