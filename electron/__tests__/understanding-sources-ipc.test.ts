@@ -10,9 +10,9 @@ describe('understanding source selection', () => {
 
   it('filters source ids by the current platform', () => {
     expect(normalizeUnderstandingSourceIds([
-      'apple-calendar', 'unknown', 'apple-calendar', 'apple-notes', 'windows-recent-documents',
+      'apple-calendar', 'unknown', 'apple-calendar', 'apple-notes', 'apple-mail', 'windows-recent-documents',
       'local-recent-files', 'chromium-bookmarks',
-    ], 'darwin')).toEqual(['apple-calendar', 'apple-notes', 'local-recent-files', 'chromium-bookmarks']);
+    ], 'darwin')).toEqual(['apple-calendar', 'apple-notes', 'apple-mail', 'local-recent-files', 'chromium-bookmarks']);
     expect(normalizeUnderstandingSourceIds([
       'apple-calendar', 'windows-recent-documents', 'windows-recent-documents',
     ], 'win32')).toEqual(['windows-recent-documents']);

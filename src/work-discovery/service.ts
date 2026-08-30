@@ -438,7 +438,11 @@ export class WorkDiscoveryService {
 
     if (!changedSourceIds.size) {
       log.info({ runId, itemCount: items.length }, 'Understanding sources unchanged; analysis skipped');
-      return { profileCandidates: [], workThreads: [], focuses: [] };
+      return {
+        profileCandidates: [], workThreads: [], focuses: [],
+        sourceStatuses: [...new Set(items.map((item) => item.sourceId))]
+          .map((sourceId) => ({ sourceId, status: 'completed' as const })),
+      };
     }
     // Reuse every bounded item when any source changed so cross-source clusters remain coherent.
     const analysisItems = items;
@@ -456,15 +460,20 @@ export class WorkDiscoveryService {
         } } : {}),
         signal,
       });
+      const statusBySource = new Map(analysis.sourceStatuses.map((item) => [item.sourceId, item]));
       for (const [sourceId, sourceRunId] of sourceRuns) {
         if (!changedSourceIds.has(sourceId)) continue;
+        const sourceStatus = statusBySource.get(sourceId);
+        const completed = sourceStatus?.status === 'completed';
         updateUnderstandingSourceRun(sourceRunId, {
-          status: 'completed',
-          cursorAfter: checkpoints.get(sourceId)?.fingerprint,
+          status: sourceStatus?.status ?? 'failed',
+          ...(completed ? { cursorAfter: checkpoints.get(sourceId)?.fingerprint } : {}),
           itemsSeen: analysisItems.filter((item) => item.sourceId === sourceId).length,
+          ...(sourceStatus?.error ? { errorMessage: sourceStatus.error } : {}),
           completed: true,
           metadata: { sourceId },
         });
+        if (!completed) continue;
         const sourceRun = getUnderstandingSourceRun(sourceRunId);
         if (sourceRun) {
           const grant = sourceGrants.get(sourceId);
@@ -480,6 +489,7 @@ export class WorkDiscoveryService {
         if (!changedSourceIds.has(sourceId)) continue;
         updateUnderstandingSourceRun(sourceRunId, {
           status: signal?.aborted ? 'canceled' : 'failed',
+          itemsSeen: analysisItems.filter((item) => item.sourceId === sourceId).length,
           errorMessage: error instanceof Error ? error.message : String(error),
           completed: true,
         });
@@ -577,11 +587,18 @@ export class WorkDiscoveryService {
       sourceRunId: sourceRuns.get(candidate.evidenceRefs[0]?.split('://', 1)[0] ?? ''),
     }));
     const focuses = [...activityFocuses, ...modelFocuses];
-    log.info({ runId, itemCount: items.length, candidateCount: profileCandidates.length, focusCount: focuses.length }, 'Understanding sources analyzed');
+    log.info({
+      runId,
+      itemCount: items.length,
+      candidateCount: profileCandidates.length,
+      focusCount: focuses.length,
+      incompleteSourceCount: analysis.sourceStatuses.filter((item) => item.status !== 'completed').length,
+    }, 'Understanding sources analyzed');
     return {
       profileCandidates,
       workThreads,
       focuses,
+      sourceStatuses: analysis.sourceStatuses,
     };
   }
 

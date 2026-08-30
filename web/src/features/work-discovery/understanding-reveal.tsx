@@ -165,7 +165,7 @@ export function UnderstandingReveal({
     const starter = correction.trim();
     if (!starter) return;
     setConversationStarting(true);
-    const opened = await onStartConversation(starter, lowConfidence ? 'confirmed' : 'corrected');
+    const opened = await onStartConversation(starter, 'corrected');
     if (!opened) setConversationStarting(false);
   };
 

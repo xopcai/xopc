@@ -2,7 +2,6 @@ import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 
 import { normalizeNoteIndexEntry } from '../features/notes/note-title';
 
-import type { HomeData } from './home';
 import { queryKeys } from './keys';
 import type { Note, NoteIndexEntry, NotesListResult } from './notes';
 
@@ -37,14 +36,6 @@ export function noteToIndexEntry(note: Note): NoteIndexEntry {
   });
 }
 
-function patchHomeRecentlyOpened(prev: HomeData | undefined, entry: NoteIndexEntry): HomeData | undefined {
-  if (!prev) return undefined;
-  return {
-    ...prev,
-    recentlyOpened: prependUnique(prev.recentlyOpened, entry, HOME_RECENT_LIMIT),
-  };
-}
-
 function noteMatchesListFilters(
   entry: NoteIndexEntry,
   statusFilter: unknown,
@@ -59,17 +50,12 @@ function noteMatchesListFilters(
   return true;
 }
 
-/** Insert or bump a note in home + notes list caches without refetching. */
+/** Insert or bump a note in the home recent-notes + filtered list caches. */
 export function upsertNoteInListCaches(queryClient: QueryClient, entry: NoteIndexEntry): void {
-  queryClient.setQueriesData<HomeData>(
-    { queryKey: queryKeys.home },
-    (prev) => patchHomeRecentlyOpened(prev, entry),
-  );
-
   queryClient.setQueriesData<NotesListResult>(
     {
       queryKey: queryKeys.notesAll,
-      predicate: (query) => query.queryKey[1] === 'home-preview',
+      predicate: (query) => query.queryKey[1] === queryKeys.homeRecentNotes[1],
     },
     (prev) => {
       if (!prev?.items) return prev;
@@ -87,7 +73,7 @@ export function upsertNoteInListCaches(queryClient: QueryClient, entry: NoteInde
       queryKey: queryKeys.notesAll,
       predicate: (query) => {
         const key = query.queryKey;
-        if (key[1] === 'home-preview') return false;
+        if (key[1] === queryKeys.homeRecentNotes[1] || key[1] === queryKeys.homeInboxCount[1]) return false;
         if (key.length < 3) return true;
         return noteMatchesListFilters(entry, key[1], key[2]);
       },
@@ -110,6 +96,8 @@ export function upsertNoteInListCaches(queryClient: QueryClient, entry: NoteInde
       };
     },
   );
+
+  void queryClient.invalidateQueries({ queryKey: queryKeys.homeInboxCount });
 }
 
 function removeFromItems(items: NoteIndexEntry[], noteId: string): {
@@ -131,17 +119,6 @@ function removeFromItems(items: NoteIndexEntry[], noteId: string): {
 /** Optimistically remove a note from list caches; returns removed entry for undo. */
 export function removeNoteFromListCaches(queryClient: QueryClient, noteId: string): NoteIndexEntry | null {
   let removedEntry: NoteIndexEntry | null = null;
-
-  queryClient.setQueryData<HomeData>(queryKeys.home, (prev) => {
-    if (!prev) return prev;
-    const { items, removed } = removeFromItems(prev.recentlyOpened ?? [], noteId);
-    if (removed) removedEntry = removed;
-    const inboxCount =
-      removed?.status === 'inbox'
-        ? Math.max(0, (prev.inboxCount ?? 0) - 1)
-        : prev.inboxCount ?? 0;
-    return { ...prev, recentlyOpened: items, inboxCount };
-  });
 
   queryClient.setQueriesData<NotesListResult>(
     { queryKey: queryKeys.notesAll },
@@ -177,6 +154,8 @@ export function removeNoteFromListCaches(queryClient: QueryClient, noteId: strin
       return changed ? { ...prev, pages } : prev;
     },
   );
+
+  void queryClient.invalidateQueries({ queryKey: queryKeys.homeInboxCount });
 
   return removedEntry;
 }

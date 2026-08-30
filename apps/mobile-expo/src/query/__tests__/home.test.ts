@@ -48,11 +48,12 @@ describe('fetchHome', () => {
     const home = await fetchHome('en');
 
     expect(home).toMatchObject({
-      focusItems: [{ kind: 'decision' }],
-      recentlyOpened: [],
-      inboxCount: 0,
+      needsUser: [{ kind: 'decision' }],
+      background: [],
+      backgroundCount: 0,
     });
-    expect(home).not.toHaveProperty('recentSessions');
+    expect(home).not.toHaveProperty('recentlyOpened');
+    expect(home).not.toHaveProperty('inboxCount');
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/home?locale=en');
   });
 });

@@ -199,11 +199,13 @@ export async function importUnderstandingSources(items: Array<{
   profileCandidates: WorkDiscoveryProfileCandidate[];
   workThreads: WorkUnderstandingThread[];
   focuses: import('../user-context/user-context-api').UserFocus[];
+  sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
 }> {
   return fetchJson<{
     profileCandidates: WorkDiscoveryProfileCandidate[];
     workThreads: WorkUnderstandingThread[];
     focuses: import('../user-context/user-context-api').UserFocus[];
+    sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
   }>(
     apiUrl('/api/understanding/bootstrap'),
     { method: 'POST', body: JSON.stringify({ items, ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}), sourceCheckpoints }) },

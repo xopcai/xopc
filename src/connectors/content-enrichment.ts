@@ -72,6 +72,7 @@ function candidateFor(item: KnowledgeSourceItem): ConnectedContentCandidate | un
   const title = text(value.title) ?? text(value.subject);
   if (!title) return undefined;
   if (toolkit === 'gmail' && item.itemType === 'email') {
+    if (text(value.content)) return undefined;
     return { sourceItemId: item.id, sourceInstanceId: item.sourceInstanceId, toolkit, title, occurredAt: item.occurredAt };
   }
   const mimeType = text(item.metadata.mimeType) ?? text(value.mimeType);
@@ -91,10 +92,16 @@ function candidateFor(item: KnowledgeSourceItem): ConnectedContentCandidate | un
 
 export function listConnectedContentCandidates(options: {
   agentId: string;
+  sourceInstanceId?: string;
   limit?: number;
 }): ConnectedContentCandidate[] {
   const limit = Math.max(1, Math.min(20, options.limit ?? 10));
-  const items = listKnowledgeSourceItems({ agentId: options.agentId, includeDeleted: false, limit: 500 });
+  const items = listKnowledgeSourceItems({
+    agentId: options.agentId,
+    ...(options.sourceInstanceId ? { sourceInstanceId: options.sourceInstanceId } : {}),
+    includeDeleted: false,
+    limit: 500,
+  });
   const completedReads = new Set(items
     .map((item) => text(item.metadata.sourceMetadataItemId))
     .filter((id): id is string => Boolean(id)));

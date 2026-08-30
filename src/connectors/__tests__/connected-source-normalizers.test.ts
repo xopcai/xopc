@@ -3,6 +3,33 @@ import { describe, expect, it } from 'vitest';
 import { normalizeConnectedSourceResult } from '../connected-source-normalizers.js';
 
 describe('connected source normalizers', () => {
+  it('extracts bounded Gmail headers and plain-text payload content', () => {
+    const body = Buffer.from('Project Atlas is preparing the September launch.').toString('base64url');
+    const entities = normalizeConnectedSourceResult({
+      toolkit: 'gmail',
+      actionId: 'GMAIL_FETCH_EMAILS',
+      result: { data: { messages: [{
+        id: 'mail-1',
+        payload: {
+          headers: [
+            { name: 'Subject', value: 'Atlas launch review' },
+            { name: 'From', value: 'lead@example.com' },
+          ],
+          parts: [{ mimeType: 'text/plain', body: { data: body } }],
+        },
+      }] } },
+    });
+
+    expect(entities[0]).toMatchObject({
+      itemType: 'email',
+      value: {
+        subject: 'Atlas launch review',
+        sender: 'lead@example.com',
+        content: 'Project Atlas is preparing the September launch.',
+      },
+    });
+  });
+
   it('normalizes Google Drive metadata without reading file content', () => {
     const entities = normalizeConnectedSourceResult({
       toolkit: 'googledrive',
