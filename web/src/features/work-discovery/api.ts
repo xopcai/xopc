@@ -5,6 +5,14 @@ import type { UserFocus } from '@/features/user-context/user-context-api';
 export type WorkDiscoveryStatus = 'queued' | 'probing' | 'analyzing' | 'completed' | 'failed' | 'canceled';
 export type WorkDiscoveryStage = 'folder_structure' | 'recent_progress' | 'next_steps';
 
+export type WorkDiscoveryOnboardingSnapshot = {
+  enabled: boolean;
+  state: {
+    status: 'not_started' | 'in_progress' | 'completed' | 'dismissed';
+    activeRunId?: string;
+  };
+};
+
 export type WorkDiscoverySuggestion = {
   id: string;
   actionType: 'summarize_recent_work' | 'inspect_related_tests' | 'plan_next_step';
@@ -130,11 +138,8 @@ export type WorkDiscoveryCandidate = {
   evidence: string[];
 };
 
-export async function fetchWorkDiscoveryOnboarding() {
-  return fetchJson<{
-    enabled: boolean;
-    state: { status: 'not_started' | 'in_progress' | 'completed' | 'dismissed'; activeRunId?: string };
-  }>(apiUrl('/api/onboarding/work-discovery'));
+export async function fetchWorkDiscoveryOnboarding(): Promise<WorkDiscoveryOnboardingSnapshot> {
+  return fetchJson<WorkDiscoveryOnboardingSnapshot>(apiUrl('/api/onboarding/work-discovery'));
 }
 
 export async function dismissWorkDiscoveryOnboarding(): Promise<void> {

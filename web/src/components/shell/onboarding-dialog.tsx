@@ -1,9 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
-import { fetchWorkDiscoveryOnboarding } from '@/features/work-discovery/api';
+import {
+  deriveOnboardingExperienceState,
+  hasPendingWorkDiscovery,
+} from '@/features/onboarding/onboarding-experience-state';
+import {
+  dismissWorkDiscoveryOnboarding,
+  fetchWorkDiscoveryOnboarding,
+  type WorkDiscoveryOnboardingSnapshot,
+} from '@/features/work-discovery/api';
 import { WorkDiscoveryPage } from '@/features/work-discovery/work-discovery-page';
 import { useNeedsModelSetup } from '@/features/onboarding/use-needs-model-setup';
 import { messages } from '@/i18n/messages';
@@ -23,17 +31,36 @@ export function OnboardingDialog() {
   const navigate = useNavigate();
   const modelSetup = useNeedsModelSetup(Boolean(token));
   const isSettingsRoute = pathname.startsWith('/settings');
-  const [experienceStage, setExperienceStage] = useState<'setup' | 'work'>('setup');
-  const [activationOpen, setActivationOpen] = useState(false);
+  const [workDiscovery, setWorkDiscovery] = useState<WorkDiscoveryOnboardingSnapshot | null>(null);
+  const [experienceClosed, setExperienceClosed] = useState(false);
 
-  const open =
-    Boolean(token) &&
-    !isSettingsRoute &&
-    modelSetup.ready &&
-    ((modelSetup.needsSetup && !modelSetup.guideDismissed) || activationOpen);
+  useEffect(() => {
+    setExperienceClosed(false);
+    if (!token) {
+      setWorkDiscovery(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWorkDiscoveryOnboarding()
+      .then((snapshot) => {
+        if (!cancelled) setWorkDiscovery(snapshot);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [token]);
+
+  const experience = deriveOnboardingExperienceState({
+    authenticated: Boolean(token),
+    settingsRoute: isSettingsRoute,
+    modelSetupReady: modelSetup.ready,
+    needsModelSetup: modelSetup.needsSetup,
+    modelGuideDismissed: modelSetup.guideDismissed,
+    workDiscovery,
+    closed: experienceClosed,
+  });
 
   const closeExperience = () => {
-    setActivationOpen(false);
+    setExperienceClosed(true);
   };
 
   const leaveExperience = () => {
@@ -41,12 +68,18 @@ export function OnboardingDialog() {
     navigate('/chat');
   };
 
+  const dismissExperience = () => {
+    closeExperience();
+    modelSetup.dismissPermanently();
+    void dismissWorkDiscoveryOnboarding().catch(() => {});
+  };
+
   return (
     <Dialog.Root
-      open={open}
+      open={experience.open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) {
-          if (experienceStage === 'setup') modelSetup.dismissPermanently();
+          if (experience.stage === 'setup') dismissExperience();
           else leaveExperience();
         }
       }}
@@ -60,18 +93,15 @@ export function OnboardingDialog() {
         >
           <Dialog.Title className="sr-only">{m.onboarding.title}</Dialog.Title>
           <Dialog.Description className="sr-only">{m.onboarding.subtitle}</Dialog.Description>
-          {experienceStage === 'setup' ? (
+          {experience.stage === 'setup' ? (
             <OnboardingCard
               onComplete={async () => {
                 const workDiscovery = await fetchWorkDiscoveryOnboarding().catch(() => null);
-                if (workDiscovery?.enabled) {
-                  setExperienceStage('work');
-                  setActivationOpen(true);
-                }
+                setWorkDiscovery(workDiscovery);
                 await modelSetup.refresh();
-                if (!workDiscovery?.enabled) navigate('/chat');
+                if (!hasPendingWorkDiscovery(workDiscovery)) leaveExperience();
               }}
-              onDismiss={modelSetup.dismissPermanently}
+              onDismiss={dismissExperience}
               canDismiss
             />
           ) : (
