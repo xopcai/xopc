@@ -24,7 +24,7 @@ const SESSION_COLUMNS = `
   t.cwd AS cwd
 `;
 
-import { escapeFts5Query } from './fts.js';
+import { buildFts5SearchQuery } from './fts.js';
 
 const SESSION_FROM_JOIN = `
   FROM sessions s
@@ -229,7 +229,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   let searchKeys: string[] | null = null;
   if (query.search?.trim()) {
     const rawSearch = query.search.trim();
-    const ftsQuery = escapeFts5Query(rawSearch);
+    const ftsQuery = buildFts5SearchQuery(rawSearch);
     const ftsRows = db
       .prepare(
         `SELECT DISTINCT session_key FROM transcript_fts WHERE transcript_fts MATCH ? LIMIT 500`,

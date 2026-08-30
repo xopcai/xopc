@@ -22,6 +22,7 @@ import {
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import type { UnderstandingKind, UserContextScope, UserUnderstanding } from '../user-context/domain.js';
+import { focusLifecycle } from '../user-context/focus-lifecycle.js';
 import { clusterActivityTopics } from '../user-context/sources/activity-clustering.js';
 import {
   createUnderstandingSourceRun,
@@ -194,8 +195,7 @@ export function normalizeUnderstandingSourceItems(rawItems: unknown[]): Understa
 }
 function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingKind {
   if (category === 'preference') return 'preference';
-  if (category === 'workflow') return 'routine';
-  if (category === 'focus') return 'current_state';
+  if (category === 'routine') return 'routine';
   return 'project_context';
 }
 
@@ -223,7 +223,7 @@ function persistUnderstandingCandidate(
   const understanding = createUnderstanding({
     kind: understandingKind(candidate.category), canonicalKey, status: 'candidate', scope,
     explicitness: 'inferred',
-    durability: candidate.category === 'focus' ? 'ephemeral' : candidate.category === 'workflow' ? 'recurring' : 'durable',
+    durability: candidate.category === 'routine' ? 'recurring' : 'durable',
     sensitivity: 'normal', disclosurePolicy: 'referenceable',
     confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
     statement: candidate.statement, createdBy: 'runtime', changeReason: 'work discovery inference',
@@ -658,6 +658,7 @@ export class WorkDiscoveryService {
       confidence: topic.confidence,
       evidenceRefs: topic.evidenceRefs,
       sourceRunId: sourceRuns.get(topic.sourceIds[0] ?? ''),
+      ...focusLifecycle(topic.horizon),
     }));
     const modelFocuses = safeWorkThreadCandidates
       .filter((candidate) => !candidate.evidenceRefs.some((ref) => activityEvidence.has(ref)))
@@ -670,6 +671,7 @@ export class WorkDiscoveryService {
       confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
       evidenceRefs: candidate.evidenceRefs,
       sourceRunId: sourceRuns.get(candidate.evidenceRefs[0]?.split('://', 1)[0] ?? ''),
+      ...focusLifecycle(candidate.horizon),
     }));
     const focuses = [...activityFocuses, ...modelFocuses];
     log.info({
@@ -936,6 +938,7 @@ export class WorkDiscoveryService {
           confidence: thread.confidence,
           scope: { type: 'project', id: run.projectId },
           evidenceRefs: thread.evidenceIds,
+          ...focusLifecycle(thread.horizon),
         })
       ));
       const result = this.persistProfileCandidates(run, {
@@ -1127,6 +1130,7 @@ export class WorkDiscoveryService {
         scope: { type: 'project', id: run.projectId },
         explicitness: 'explicit',
         evidenceRefs: [`session://${createHash('sha256').update(run.sessionKey).digest('hex').slice(0, 16)}/recognition`],
+        ...focusLifecycle('current'),
       });
     }
     const investigation = getWorkUnderstandingInvestigationForRun(run.id);

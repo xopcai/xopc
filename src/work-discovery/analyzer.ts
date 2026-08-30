@@ -130,10 +130,9 @@ function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): Wo
   if (!value || typeof value !== 'object') return null;
   const item = value as Record<string, unknown>;
   const category = item.category === 'role'
-    || item.category === 'focus'
-    || item.category === 'technology'
-    || item.category === 'workflow'
+    || item.category === 'responsibility'
     || item.category === 'preference'
+    || item.category === 'routine'
     ? item.category
     : undefined;
   if (!category || typeof item.statement !== 'string') return null;
@@ -252,8 +251,9 @@ export async function analyzeWorkContext(input: {
     'You help a user resume real work in one explicitly selected local folder.',
     'Analyze only the supplied bounded snapshot. Never claim that you ran commands, tests, or inspected anything absent from it.',
     'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, conversationStarter, lowConfidence, and contextQuestion.',
-    'profileCandidates contains stable, useful facts about the user inferred from the supplied project evidence. Include every distinct fact with direct support; do not pad the list.',
-    'Each profile candidate has category (role, focus, technology, workflow, or preference), statement, confidence, and evidence.',
+    'profileCandidates contains only user-specific role, responsibility, preference, or routine facts that are directly supported and would remain useful outside this repository snapshot.',
+    'Do not put the project stack, packages, architecture, deployment setup, repository conventions, or current task in profileCandidates. Put project facts in projectSummary/currentState and current work in workThreads.',
+    'Each profile candidate has category (role, responsibility, preference, or routine), statement, confidence, and evidence.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,
     'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
     'workThreads contains every distinct evidence-backed work stream with topicKey, title, summary, horizon, status, confidence, and evidenceRefs. Do not merge unrelated streams to force a fixed count.',
@@ -418,7 +418,8 @@ async function analyzeUnderstandingBatch(input: {
     'Analyze one bounded batch from a source the user explicitly chose to connect.',
     'Return only one JSON object with profileCandidates and workThreads.',
     'Return at most 8 profileCandidates and at most 8 workThreads. Prefer the strongest distinct findings.',
-    'Each profile candidate has category (role, focus, technology, workflow, or preference), statement, confidence, evidence, and evidenceRefs.',
+    'profileCandidates contains only user-specific role, responsibility, preference, or routine facts with direct support. Current tasks belong in workThreads; project technologies, packages, architecture, and repository conventions are not user facts.',
+    'Each profile candidate has category (role, responsibility, preference, or routine), statement, confidence, evidence, and evidenceRefs.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,
     'Each work thread has topicKey, title, summary, status, horizon, confidence, and evidenceRefs.',
     'Every evidenceRefs value must be one of the supplied refs. Omit anything without direct support.',

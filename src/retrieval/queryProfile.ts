@@ -21,7 +21,19 @@ export interface RetrievalQueryProfile {
   identifiers: string[];
   intentKinds: string[];
   timeHints: RetrievalTimeHint[];
+  selfReview: boolean;
   scope: RetrievalScope;
+}
+
+const SELF_REVIEW_PATTERNS = [
+  /(?:你|xopc).{0,10}(?:了解|知道|认识|记得).{0,8}(?:我|用户)/i,
+  /介绍.{0,8}(?:你.{0,6})?(?:了解|知道|认识|记得).{0,4}的?我/i,
+  /\bwhat\s+(?:do\s+)?you\s+(?:know|remember)\s+about\s+me\b/i,
+  /\b(?:describe|introduce)\s+me\s+(?:from|based on)\s+(?:what|everything)\s+you\s+(?:know|remember)\b/i,
+];
+
+export function isSelfReviewQuery(query: string): boolean {
+  return SELF_REVIEW_PATTERNS.some((pattern) => pattern.test(query.normalize('NFKC')));
 }
 
 const INTENT_RULES: Array<{ kinds: string[]; pattern: RegExp }> = [
@@ -85,6 +97,7 @@ export function buildRetrievalQueryProfile(
     identifiers: extractRetrievalIdentifiers(normalized),
     intentKinds: [...new Set(intentKinds)],
     timeHints: uniqueTimeHints,
+    selfReview: isSelfReviewQuery(normalized),
     scope: { ...scope },
   };
 }

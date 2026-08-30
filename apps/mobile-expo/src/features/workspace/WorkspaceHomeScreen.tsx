@@ -46,6 +46,7 @@ import {
 } from '../../theme';
 import { AgentAvatar } from '../ai/AgentAvatar';
 import { readAgentUsage, sortHomeAgents, touchAgentUsage } from '../ai/agent-usage-cache';
+import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { resolveNoteListTitle } from '../notes/note-title';
 import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
@@ -53,13 +54,24 @@ import {
   homeGreetingPeriod,
   mobileRouteForHomeHref,
   rankHomeContinueCandidates,
+  rankHomeRunningCandidates,
   type HomeContinueCandidate,
+  type HomeRunningCandidate,
 } from './home-presentation';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
 import { useOptionalWorkspaceTransition } from './workspace-transition-context';
 
 type ContinueItem = {
+  id: string;
+  title: string;
+  meta: string;
+  summary?: string;
+  icon: string;
+  onPress: () => void;
+};
+
+type RunningItem = {
   id: string;
   title: string;
   meta: string;
@@ -143,6 +155,10 @@ export function WorkspaceHomeScreen() {
     queryKey: [...queryKeys.home, language],
     queryFn: () => fetchHome(language),
     enabled: configured,
+    refetchInterval: ({ state }) => state.data && (
+      state.data.runningConversations.length > 0
+      || state.data.background.some((item) => item.kind === 'running')
+    ) ? 5_000 : false,
   });
   const recentNotesQuery = useQuery({
     queryKey: queryKeys.homeRecentNotes,
@@ -186,6 +202,19 @@ export function WorkspaceHomeScreen() {
     homeReadyRecorded.current = true;
     recordPerformanceEvent('home_content_ready', Date.now() - mobileAppJsStartedAt);
   }, [configured, contentStillLoading]);
+
+  useEffect(() => {
+    const refreshRunningState = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsRecent });
+    };
+    const unsubscribeStarted = subscribeGatewayEvent('run.started', refreshRunningState);
+    const unsubscribeCompleted = subscribeGatewayEvent('run.completed', refreshRunningState);
+    return () => {
+      unsubscribeStarted();
+      unsubscribeCompleted();
+    };
+  }, [queryClient]);
 
   const remoteActionMutation = useMutation({
     mutationFn: async (action: RemoteHomeAction) => {
@@ -233,13 +262,73 @@ export function WorkspaceHomeScreen() {
     }
   }, [remoteActionMutation, router]);
 
+  const activeConversationKeys = useMemo(() => new Set(
+    (homeQuery.data?.runningConversations ?? []).map((item) => item.sessionKey),
+  ), [homeQuery.data?.runningConversations]);
+
+  const runningItems = useMemo<RunningItem[]>(() => {
+    const candidates: HomeRunningCandidate<RunningItem>[] = [];
+    const activeConversationRoutes = new Set(
+      (homeQuery.data?.runningConversations ?? []).map(
+        (conversation) => `/chat/${encodeURIComponent(conversation.sessionKey)}`,
+      ),
+    );
+
+    for (const conversation of homeQuery.data?.runningConversations ?? []) {
+      candidates.push({
+        id: `conversation:${conversation.runId}`,
+        kind: 'conversation',
+        updatedAt: conversation.updatedAt,
+        value: {
+          id: `conversation:${conversation.runId}`,
+          title: conversation.title?.trim() || hm.untitled,
+          meta: conversation.agentId
+            ? t(hm.runningConversationWithAgent, { agent: conversation.agentId })
+            : hm.runningConversation,
+          icon: 'message-processing-outline',
+          onPress: () => {
+            recordUsageEvent('home_continue_opened');
+            openChat(router, conversation.sessionKey);
+          },
+        },
+      });
+    }
+
+    for (const item of homeQuery.data?.background ?? []) {
+      if (item.kind !== 'running' || !item.openAction) continue;
+      const openAction = item.openAction;
+      if (
+        openAction.type === 'open'
+        && activeConversationRoutes.has(mobileRouteForHomeHref(openAction.href))
+      ) continue;
+      candidates.push({
+        id: item.id,
+        kind: 'work',
+        updatedAt: item.updatedAt,
+        value: {
+          id: item.id,
+          title: item.title,
+          meta: item.statusLabel
+            ? `${hm.runningWork} · ${item.statusLabel}`
+            : hm.runningWork,
+          summary: item.summary,
+          icon: 'progress-clock',
+          onPress: () => runHomeAction(openAction),
+        },
+      });
+    }
+
+    return rankHomeRunningCandidates(candidates);
+  }, [hm, homeQuery.data?.background, homeQuery.data?.runningConversations, router, runHomeAction]);
+
   const continueItems = useMemo<ContinueItem[]>(() => {
     const candidates: HomeContinueCandidate<ContinueItem>[] = [];
 
     for (const session of sessionsQuery.data?.items ?? []) {
+      if (activeConversationKeys.has(session.key)) continue;
       candidates.push({
         id: `session:${session.key}`,
-        kind: session.status === 'active' ? 'active_chat' : 'recent_chat',
+        kind: 'recent_chat',
         updatedAt: timestampMs(session.updatedAt),
         value: {
           id: `session:${session.key}`,
@@ -273,47 +362,8 @@ export function WorkspaceHomeScreen() {
       });
     }
 
-    for (const item of homeQuery.data?.background ?? []) {
-      if (item.kind !== 'running' || !item.openAction) continue;
-      const openAction = item.openAction;
-      candidates.push({
-        id: item.id,
-        kind: 'running_work',
-        updatedAt: item.updatedAt,
-        value: {
-          id: item.id,
-          title: item.title,
-          meta: item.statusLabel
-            ? `${hm.briefingMovingTitle} · ${item.statusLabel}`
-            : hm.briefingMovingTitle,
-          summary: item.summary,
-          icon: 'progress-clock',
-          onPress: () => runHomeAction(openAction),
-        },
-      });
-    }
-
-    for (const project of activeProjects(projectsQuery.data ?? []).filter((item) => item.operating.counts.moving > 0)) {
-      candidates.push({
-        id: `project:${project.id}`,
-        kind: 'running_work',
-        updatedAt: project.operating.updatedAt,
-        value: {
-          id: `project:${project.id}`,
-          title: project.name,
-          meta: t(hm.projectMovingMeta, { count: project.operating.counts.moving }),
-          summary: project.description,
-          icon: 'briefcase-outline',
-          onPress: () => {
-            recordUsageEvent('home_continue_opened');
-            router.push(`/projects/${project.id}`);
-          },
-        },
-      });
-    }
-
     return rankHomeContinueCandidates(candidates, undefined).slice(0, 3);
-  }, [hm, homeQuery.data?.background, projectsQuery.data, recentNotesQuery.data?.items, router, runHomeAction, sessionsQuery.data?.items]);
+  }, [activeConversationKeys, hm, recentNotesQuery.data?.items, router, sessionsQuery.data?.items]);
 
   const homeAgents = useMemo(() => sortHomeAgents(
     agentsQuery.data?.items ?? [],
@@ -406,6 +456,10 @@ export function WorkspaceHomeScreen() {
         {homeQuery.isError ? (
           <HomeLoadError onRetry={() => void homeQuery.refetch()} retrying={homeQuery.isFetching} />
         ) : null}
+        <RunningSection
+          items={runningItems}
+          loading={runningItems.length === 0 && homeQuery.isLoading}
+        />
         <ContinueSection
           items={continueItems}
           loading={continueItems.length === 0 && contentStillLoading}
@@ -519,6 +573,72 @@ function HomeLoadError({ onRetry, retrying }: { onRetry: () => void; retrying: b
         {retrying ? <ActivityIndicator size={16} color={colors.accent.primary} /> : null}
         <Text style={[styles.inlineRetryText, { color: colors.accent.primary }]}>{hm.retry}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function RunningSection({ items, loading }: { items: RunningItem[]; loading: boolean }) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  const [expanded, setExpanded] = useState(false);
+  if (loading) {
+    return <Section title={hm.sectionRunning}><ListSkeleton count={1} /></Section>;
+  }
+  if (items.length === 0) return null;
+  const visibleItems = expanded ? items : items.slice(0, 3);
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeadingRow}>
+        <View style={styles.sectionHeadingCopy}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{hm.sectionRunning}</Text>
+          <Text style={[
+            styles.sectionCount,
+            { color: colors.accent.primary, backgroundColor: colors.accent.soft },
+          ]}>{items.length}</Text>
+        </View>
+        {items.length > 3 ? (
+          <Pressable
+            style={styles.sectionAction}
+            onPress={() => setExpanded((value) => !value)}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>
+              {expanded ? hm.showLess : hm.viewAll}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={[
+        styles.runningList,
+        { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle },
+      ]}>
+        {visibleItems.map((item, index) => (
+          <Pressable
+            key={item.id}
+            style={({ pressed }) => [
+              styles.runningRow,
+              pressed && { backgroundColor: colors.surface.pressed },
+            ]}
+            onPress={item.onPress}
+            accessibilityRole="button"
+          >
+            <View style={[styles.runningIcon, { backgroundColor: colors.accent.soft }]}>
+              <Icon source={item.icon} size={20} color={colors.accent.primary} />
+            </View>
+            <View style={styles.rowCopy}>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+              <Text numberOfLines={1} style={[styles.runningMeta, { color: colors.accent.primary }]}>{item.meta}</Text>
+              {item.summary ? (
+                <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
+              ) : null}
+            </View>
+            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+            {index < visibleItems.length - 1 ? (
+              <View style={[styles.runningDivider, { backgroundColor: colors.border.subtle }]} />
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -948,6 +1068,11 @@ const styles = StyleSheet.create({
   sectionLink: { ...typography.caption, fontWeight: '600' },
   sectionBody: { gap: spacing.sm },
   groupedList: { borderRadius: radii.lg, overflow: 'hidden' },
+  runningList: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, overflow: 'hidden' },
+  runningRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  runningIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  runningMeta: { ...typography.caption, fontWeight: '600' },
+  runningDivider: { position: 'absolute', left: 66, right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
   continueFeatured: { minHeight: 106, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   continueIcon: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   continueCopy: { minWidth: 0, flex: 1, gap: spacing.xxs },

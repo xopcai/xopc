@@ -35,6 +35,8 @@ export interface GatewaySessionsApiOptions {
   getAgentService: () => AgentService;
   /** Read-only view of in-flight webchat runs (per session key → run id). */
   getActiveWebchatRunId: (sessionKey: string) => string | undefined;
+  /** Snapshot of all in-flight webchat runs for workspace briefing surfaces. */
+  listActiveWebchatRuns: () => Array<{ sessionKey: string; runId: string }>;
 }
 
 export class GatewaySessionsApi {
@@ -97,6 +99,10 @@ export class GatewaySessionsApi {
     const runId = this.opts.getActiveWebchatRunId(key)?.trim();
     if (!runId) return { active: false };
     return { active: true, runId };
+  }
+
+  listActiveRuns(): Array<{ sessionKey: string; runId: string }> {
+    return this.opts.listActiveWebchatRuns();
   }
 
   getMessagePage(

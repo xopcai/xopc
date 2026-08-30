@@ -13,9 +13,11 @@ import {
   getUserProfile,
   consumeContextConsent,
   listCollaborationRules,
+  listUnderstandings,
   listUnderstandingEvidence,
   recordContextRun,
 } from '../storage/sqlite/index.js';
+import { ProjectStore } from '../projects/project-store.js';
 import type { CollaborationRule, PersonalizationItem, UserUnderstanding } from './domain.js';
 import {
   getUnderstandingSourceGrant,
@@ -28,8 +30,23 @@ import { matchesUserContextScope } from './scope.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 6_000;
 const DEFAULT_MAX_RESULTS = 12;
+const SELF_REVIEW_MAX_CONTEXT_CHARS = 16_000;
+const SELF_REVIEW_MAX_RESULTS = 50;
 const MAX_FOCUS_RESULTS = 3;
 const MIN_RELEVANCE_SCORE = 0.25;
+
+function selfReviewScore(item: UserUnderstanding): number {
+  const authority = item.explicitness === 'explicit' ? 0.2 : item.explicitness === 'observed' ? 0.1 : 0;
+  const durable = item.durability === 'durable' ? 0.1 : item.durability === 'recurring' ? 0.05 : 0;
+  return Math.min(1, item.confidence * 0.7 + authority + durable);
+}
+
+function scopeLabel(scope: UserUnderstanding['scope'], projects: ProjectStore): string {
+  if (scope.type === 'global') return 'Global';
+  if (scope.type === 'project') return `Project: ${scope.id ? projects.get(scope.id)?.name ?? scope.id : 'unknown'}`;
+  if (scope.type === 'workspace') return `Workspace: ${scope.id ?? 'unknown'}`;
+  return 'This conversation';
+}
 
 export function prependAgentContext(message: AgentMessage, block: string): AgentMessage {
   if (!block) return message;
@@ -137,11 +154,20 @@ function renderContextBlock(params: {
   rules: CollaborationRule[];
   items: PlannedUserContextItem[];
   understandingSources: Map<string, string>;
+  selfReview: boolean;
+  projects: ProjectStore;
 }): string {
   const understandingItems = params.items.filter((item) => item.objectType === 'understanding');
   return [
+    params.selfReview ? [
+      '<user-context-review>',
+      'The user explicitly asked what xopc understands about them. This is a review of active, non-sensitive structured understanding across scopes.',
+      'Scope labels describe where each item applies. Do not present project facts as global personality traits.',
+      'An empty memory_search result does not mean structured user understanding is empty.',
+      '</user-context-review>',
+    ].join('\n') : '',
     params.profileLines.length ? `<user-profile>\n${params.profileLines.join('\n')}\n</user-profile>` : '',
-    params.focuses.length ? `<active-focuses>\n${params.focuses.map((focus) => `- ${focus.title}: ${focus.summary} (${focus.horizon})`).join('\n')}\n</active-focuses>` : '',
+    params.focuses.length ? `<active-focuses>\n${params.focuses.map((focus) => `- ${params.selfReview ? `[${scopeLabel(focus.scope, params.projects)}] ` : ''}${focus.title}: ${focus.summary} (${focus.horizon})`).join('\n')}\n</active-focuses>` : '',
     params.rules.length ? `<collaboration-contract>\n${params.rules.map((rule) => `- ${rule.statement}`).join('\n')}\n</collaboration-contract>` : '',
     understandingItems.length ? buildUserContextBlock(understandingItems.map((item) => (
       `- ${item.content}\n  Evidence: ${params.understandingSources.get(item.recordId) ?? 'Unknown source'}`
@@ -169,14 +195,18 @@ export class UserContextPlanner {
 
     const started = Date.now();
     const now = Date.now();
-    const maxResults = params.allocation?.maxResults ?? DEFAULT_MAX_RESULTS;
-    const maxChars = params.allocation?.maxChars ?? DEFAULT_MAX_CONTEXT_CHARS;
+    const requestedMaxResults = params.allocation?.maxResults;
+    const requestedMaxChars = params.allocation?.maxChars;
     const scopeInput = {
       sessionKey: params.sessionKey,
       workspaceId: params.workspaceId,
       ...(params.projectId ? { projectId: params.projectId } : {}),
     };
     const queryProfile = buildRetrievalQueryProfile(query, scopeInput);
+    const selfReview = queryProfile.selfReview;
+    const maxResults = requestedMaxResults ?? (selfReview ? SELF_REVIEW_MAX_RESULTS : DEFAULT_MAX_RESULTS);
+    const maxChars = requestedMaxChars ?? (selfReview ? SELF_REVIEW_MAX_CONTEXT_CHARS : DEFAULT_MAX_CONTEXT_CHARS);
+    const projects = new ProjectStore();
     const excluded = new Set(params.excludedRecordIds ?? []);
     const rejected: UserContextPlan['rejected'] = [];
     const consentRequests: UserContextPlan['consentRequests'] = [];
@@ -193,6 +223,8 @@ export class UserContextPlanner {
       rules: selectedRules,
       items,
       understandingSources,
+      selfReview,
+      projects,
       ...overrides,
     });
 
@@ -219,14 +251,18 @@ export class UserContextPlanner {
 
     const rankedFocuses = listUserFocuses(['active'])
       .map((focus) => ({ focus, score: focusScore(focus, query, scopeInput) }))
-      .sort((left, right) => right.score - left.score || right.focus.updatedAt - left.focus.updatedAt);
+      .sort((left, right) => selfReview
+        ? right.focus.confidence - left.focus.confidence || right.focus.updatedAt - left.focus.updatedAt
+        : right.score - left.score || right.focus.updatedAt - left.focus.updatedAt);
     for (const { focus, score } of rankedFocuses) {
       const source = focusSourceDescription(focus);
       let reason = focusRejectionReason(focus, scopeInput, now);
-      if (!reason && score <= MIN_RELEVANCE_SCORE) reason = 'low_score';
-      if (!reason && selectedFocuses.length >= MAX_FOCUS_RESULTS) reason = 'budget';
+      if (selfReview && reason === 'scope_mismatch') reason = undefined;
+      if (!reason && !selfReview && score <= MIN_RELEVANCE_SCORE) reason = 'low_score';
+      if (!reason && selectedFocuses.length >= (selfReview ? maxResults : MAX_FOCUS_RESULTS)) reason = 'budget';
       if (!reason && items.length >= maxResults) reason = 'budget';
-      const content = `${focus.title}: ${focus.summary} (${focus.horizon})`;
+      const focusScope = scopeLabel(focus.scope, projects);
+      const content = `${selfReview ? `[${focusScope}] ` : ''}${focus.title}: ${focus.summary} (${focus.horizon})`;
       const nextChars = render({ focuses: [...selectedFocuses, focus] }).length;
       if (!reason && nextChars > maxChars) reason = 'budget';
       if (reason) {
@@ -272,14 +308,18 @@ export class UserContextPlanner {
       traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'selected', reason: 'Active collaboration rule', content: rule.statement, sourceLabel: 'Your collaboration rule', origin: 'told_by_user', rank: index + 1, score: 1, injectedChars: addedChars });
     }
 
-    const ranked = this.retriever.retrieve({
-      query,
-      sessionKey: params.sessionKey,
-      workspaceId: params.workspaceId,
-      ...(params.projectId ? { projectId: params.projectId } : {}),
-      maxCandidates: Math.max(maxResults * 5, 50),
-    }).filter((result) => !excluded.has(result.understanding.id))
-      .map((result) => ({ item: result.understanding, score: result.score }));
+    const ranked = (selfReview
+      ? listUnderstandings(['active'])
+        .map((item) => ({ item, score: selfReviewScore(item) }))
+        .sort((left, right) => right.score - left.score || right.item.updatedAt - left.item.updatedAt)
+      : this.retriever.retrieve({
+        query,
+        sessionKey: params.sessionKey,
+        workspaceId: params.workspaceId,
+        ...(params.projectId ? { projectId: params.projectId } : {}),
+        maxCandidates: Math.max(maxResults * 5, 50),
+      }).map((result) => ({ item: result.understanding, score: result.score })))
+      .filter(({ item }) => !excluded.has(item.id));
     for (const { item, score } of ranked) {
       const source = sourceDescription(item);
       if (items.length >= maxResults) {
@@ -290,7 +330,8 @@ export class UserContextPlanner {
         continue;
       }
       let reason = rejectionReason(item, scopeInput, now, queryProfile.timeHints);
-      if (!reason && score <= MIN_RELEVANCE_SCORE) reason = 'low_score';
+      if (selfReview && reason === 'scope_mismatch') reason = undefined;
+      if (!reason && !selfReview && score <= MIN_RELEVANCE_SCORE) reason = 'low_score';
       if (!reason && item.disclosurePolicy === 'ask_before_reference') {
         const consentStatus = consumeContextConsent(item.id, params.sessionKey);
         if (consentStatus !== 'granted') {
@@ -313,7 +354,8 @@ export class UserContextPlanner {
         continue;
       }
       const plannedItem: PlannedUserContextItem = {
-        recordId: item.id, objectType: 'understanding', versionId: item.versionId, content: item.statement,
+        recordId: item.id, objectType: 'understanding', versionId: item.versionId,
+        content: selfReview ? `[${scopeLabel(item.scope, projects)}] ${item.statement}` : item.statement,
         score, section: sectionFor(item), citation: `user-context://${item.id}`, origin: source.origin, stability: item.confidence,
       };
       const nextSources = new Map(understandingSources).set(item.id, source.label);
