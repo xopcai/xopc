@@ -78,7 +78,6 @@ import {
   cleanupAbandonedTuiSessions,
   deleteGeneratedTuiSessionIfEmpty,
   GENERATED_TUI_SESSION_SHELL_PATCH,
-  hideLegacyEmptyTuiSessions,
   isGeneratedTuiSessionKey,
 } from './tui-empty-session-cleanup.js';
 import {
@@ -106,6 +105,13 @@ import {
 } from './theme-manager.js';
 import { editorTheme, theme } from './theme.js';
 import { loadTuiSettings, saveTuiSettings, type TuiSettings } from './tui-settings.js';
+import {
+  getTuiNewSessionPreferences,
+  rememberTuiAgentModel,
+  rememberTuiSessionContext,
+  tuiGatewayPreferenceKey,
+  tuiInitialAgentConfig,
+} from './tui-new-session-preferences.js';
 import { resolveFdPath } from './tui-fd-path.js';
 import packageJson from '../../package.json' with { type: 'json' };
 import { createSessionActions } from './tui-session-actions.js';
@@ -322,6 +328,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       sessionMainKey,
     });
   let tuiSettings = loadTuiSettings();
+  const newSessionPreferenceKey = isLocalMode
+    ? tuiGatewayPreferenceKey()
+    : tuiGatewayPreferenceKey(opts.url ?? 'http://localhost:3120');
   initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
   const state = createInitialState(startup.sessionKey);
   const generatedStartupSessionKey = !opts.session?.trim() && isGeneratedTuiSessionKey(startup.sessionKey)
@@ -955,8 +964,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const runExtensionNewSession = async (options?: TuiNewSessionOptions): Promise<TuiReplacementResult> => {
     await abortActive({ clearUi: false });
-    const targetKey = resolveSessionKey(`session-${randomUUID()}`);
-    await setSession(targetKey);
+    await startPreferredNewSession('session');
     await options?.setup?.(sessionSnapshot.manager());
     await runWithReplacementContext(options?.withSession);
     return { cancelled: false };
@@ -1282,6 +1290,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     onAgentIdChange: (agentId) => {
       currentAgentId = agentId;
     },
+    onSessionInfoChange: () => persistCurrentNewSessionContext(),
   });
 
   const {
@@ -1293,6 +1302,44 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     resetCurrentSession,
     clearChatForSessionSwitch,
   } = sessionActions;
+
+  const persistCurrentNewSessionContext = () => {
+    const current = getTuiNewSessionPreferences(tuiSettings, newSessionPreferenceKey);
+    const normalizedProjectId = state.sessionInfo.projectId?.trim() || null;
+    const currentProjectId = current.lastChatScope.kind === 'project'
+      ? current.lastChatScope.projectId
+      : null;
+    if (current.selectedAgentId === currentAgentId && currentProjectId === normalizedProjectId) {
+      return;
+    }
+    tuiSettings = rememberTuiSessionContext(tuiSettings, newSessionPreferenceKey, {
+      agentId: currentAgentId,
+      projectId: normalizedProjectId,
+    });
+    saveTuiSettings(tuiSettings);
+  };
+
+  const startPreferredNewSession = async (prefix = 'tui') => {
+    const projectId = state.sessionInfo.projectId?.trim() || undefined;
+    const targetKey = resolveSessionKey(`${prefix}-${randomUUID()}`);
+    await setSession(targetKey);
+    const initialAgentConfig = tuiInitialAgentConfig(
+      tuiSettings,
+      newSessionPreferenceKey,
+      currentAgentId,
+    );
+    if (initialAgentConfig || projectId) {
+      await client.patchSession(state.currentSessionKey, {
+        ...initialAgentConfig,
+        ...(projectId ? { projectId } : {}),
+        ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+          ? GENERATED_TUI_SESSION_SHELL_PATCH
+          : {}),
+      });
+      await refreshSessionInfo();
+    }
+    persistCurrentNewSessionContext();
+  };
 
   const refreshSessionInfoWithBorder = async () => {
     await refreshSessionInfo();
@@ -1451,6 +1498,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         thinkingLevel: level,
       });
       state.sessionInfo.thinkingLevel = level;
+      const currentModelRef = state.sessionInfo.modelProvider && state.sessionInfo.model
+        ? `${state.sessionInfo.modelProvider}/${state.sessionInfo.model}`
+        : state.sessionInfo.model;
+      if (currentModelRef) {
+        tuiSettings = rememberTuiAgentModel(
+          tuiSettings,
+          newSessionPreferenceKey,
+          currentAgentId,
+          { modelRef: currentModelRef, thinkingLevel: level },
+        );
+        saveTuiSettings(tuiSettings);
+      }
       await refreshSessionInfoWithBorder();
       updateFooter();
       chatLog.addStatus(theme.dim(`Thinking level: ${level}`));
@@ -1605,6 +1664,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await client.patchSession(state.currentSessionKey, { model: trimmed });
       state.sessionInfo.modelProvider = selected.provider;
       state.sessionInfo.model = selected.id;
+      tuiSettings = rememberTuiAgentModel(
+        tuiSettings,
+        newSessionPreferenceKey,
+        currentAgentId,
+        {
+          modelRef: trimmed,
+          ...(state.sessionInfo.thinkingLevel
+            ? { thinkingLevel: state.sessionInfo.thinkingLevel }
+            : {}),
+        },
+      );
+      saveTuiSettings(tuiSettings);
       if (selected.contextWindow != null) {
         state.sessionInfo.contextWindow = selected.contextWindow;
       }
@@ -2138,6 +2209,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await setSession(rawKey);
       await refreshStartupResources();
     },
+    newSession: async () => {
+      await startPreferredNewSession();
+      await refreshStartupResources();
+    },
     resetSession: resetCurrentSession,
     projectTrust: {
       cwd: process.cwd(),
@@ -2646,7 +2721,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         const errorMessage = err instanceof Error ? err.message : String(err);
         chatLog.addSystem(`Project not selected: ${errorMessage}`);
       }
+      if (!opts.session?.trim() && isGeneratedTuiSessionKey(state.currentSessionKey)) {
+        const initialAgentConfig = tuiInitialAgentConfig(
+          tuiSettings,
+          newSessionPreferenceKey,
+          currentAgentId,
+        );
+        if (initialAgentConfig || opts.thinking?.trim()) {
+          await client.patchSession(state.currentSessionKey, {
+            ...initialAgentConfig,
+            ...(opts.thinking?.trim() ? { thinkingLevel: opts.thinking.trim() } : {}),
+          });
+        }
+      }
       await refreshSessionInfoWithBorder();
+      persistCurrentNewSessionContext();
       try {
         const inputState = await client.getChatInputState(state.currentSessionKey);
         state.pendingInputCount = countPendingChatInputs(inputState.inputs);
@@ -2655,9 +2744,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });
-      void cleanupAbandonedTuiSessions(client, state.currentSessionKey)
-        .then(() => hideLegacyEmptyTuiSessions(client))
-        .catch(() => {});
+      void cleanupAbandonedTuiSessions(client, state.currentSessionKey).catch(() => {});
       showStartupCardOnce();
       void refreshStartupResources().then(() => {
         updateFooter();

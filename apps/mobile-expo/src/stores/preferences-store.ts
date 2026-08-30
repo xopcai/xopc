@@ -6,6 +6,15 @@
  */
 import { Appearance } from 'react-native';
 import { create } from 'zustand';
+import {
+  createDefaultNewSessionPreferences,
+  parseNewSessionPreferences,
+  withAgentModelPreference,
+  withLastChatScope,
+  withSelectedAgent,
+  type AgentModelPreference,
+  type NewSessionPreferences,
+} from '@xopcai/gateway-contract';
 
 import { KEYS, storage } from '../storage/mmkv';
 
@@ -22,8 +31,7 @@ export type PreferencesState = {
   resolvedTheme: 'light' | 'dark';
   /** App override for default agent; null = follow gateway defaultId. */
   defaultAgentId: string | null;
-  /** App override for chat LLM model ref; null = follow gateway default model. */
-  selectedModelRef: string | null;
+  newSessionPreferencesByGateway: Record<string, NewSessionPreferences>;
   /** Foreground clipboard intake prompt. */
   clipboardIntakeEnabled: boolean;
   /** Opt-in gateway push notifications. System permission is requested separately. */
@@ -34,7 +42,13 @@ export type PreferencesState = {
   setClipboardIntakeEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setDefaultAgentId: (agentId: string | null) => void;
-  setSelectedModelRef: (modelRef: string | null) => void;
+  rememberSelectedAgent: (gatewayId: string, agentId: string | null) => void;
+  rememberAgentModel: (
+    gatewayId: string,
+    agentId: string,
+    preference: AgentModelPreference | null,
+  ) => void;
+  rememberLastChatScope: (gatewayId: string, projectId: string | null) => void;
   /** Call once at app startup to hydrate from MMKV. */
   hydrate: () => void;
 };
@@ -61,6 +75,28 @@ function isValidThemePref(v: unknown): v is ThemePreference {
   return v === 'light' || v === 'dark' || v === 'system';
 }
 
+function readPreferencesByGateway(raw: string | undefined): Record<string, NewSessionPreferences> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).map(([gatewayId, value]) => [
+        gatewayId,
+        parseNewSessionPreferences(value),
+      ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writePreferencesByGateway(
+  preferencesByGateway: Record<string, NewSessionPreferences>,
+): void {
+  storage.set(KEYS.newSessionPreferencesByGateway, JSON.stringify(preferencesByGateway));
+}
+
 // ── Store ────────────────────────────────────────────────
 
 export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
@@ -69,7 +105,7 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   themePreference: 'system',
   resolvedTheme: resolveTheme('system'),
   defaultAgentId: null,
-  selectedModelRef: null,
+  newSessionPreferencesByGateway: {},
   clipboardIntakeEnabled: true,
   notificationsEnabled: false,
 
@@ -102,25 +138,51 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
     set({ defaultAgentId: normalized });
   },
 
-  setSelectedModelRef: (selectedModelRef) => {
-    const normalized = selectedModelRef?.trim() || null;
-    if (normalized) storage.set(KEYS.selectedModelRef, normalized);
-    else storage.delete(KEYS.selectedModelRef);
-    set({ selectedModelRef: normalized });
-  },
+  rememberSelectedAgent: (gatewayId, agentId) => set((state) => {
+    const current = state.newSessionPreferencesByGateway[gatewayId]
+      ?? createDefaultNewSessionPreferences();
+    const newSessionPreferencesByGateway = {
+      ...state.newSessionPreferencesByGateway,
+      [gatewayId]: withSelectedAgent(current, agentId),
+    };
+    writePreferencesByGateway(newSessionPreferencesByGateway);
+    return { newSessionPreferencesByGateway };
+  }),
+
+  rememberAgentModel: (gatewayId, agentId, preference) => set((state) => {
+    const current = state.newSessionPreferencesByGateway[gatewayId]
+      ?? createDefaultNewSessionPreferences();
+    const newSessionPreferencesByGateway = {
+      ...state.newSessionPreferencesByGateway,
+      [gatewayId]: withAgentModelPreference(current, agentId, preference),
+    };
+    writePreferencesByGateway(newSessionPreferencesByGateway);
+    return { newSessionPreferencesByGateway };
+  }),
+
+  rememberLastChatScope: (gatewayId, projectId) => set((state) => {
+    const current = state.newSessionPreferencesByGateway[gatewayId]
+      ?? createDefaultNewSessionPreferences();
+    const newSessionPreferencesByGateway = {
+      ...state.newSessionPreferencesByGateway,
+      [gatewayId]: withLastChatScope(current, projectId),
+    };
+    writePreferencesByGateway(newSessionPreferencesByGateway);
+    return { newSessionPreferencesByGateway };
+  }),
 
   hydrate: () => {
     const langRaw = storage.getString(KEYS.language);
     const themeRaw = storage.getString(KEYS.themePreference);
     const clipboardRaw = storage.getString(KEYS.clipboardIntakeEnabled);
     const agentRaw = storage.getString(KEYS.defaultAgentId);
-    const modelRaw = storage.getString(KEYS.selectedModelRef);
+    const preferencesByGatewayRaw = storage.getString(KEYS.newSessionPreferencesByGateway);
     const notificationsRaw = storage.getString(KEYS.notificationsEnabled);
     const language = isValidLanguage(langRaw) ? langRaw : 'en';
     const themePreference = isValidThemePref(themeRaw) ? themeRaw : 'system';
     const clipboardIntakeEnabled = clipboardRaw === undefined ? true : clipboardRaw !== 'false';
     const defaultAgentId = agentRaw?.trim().toLowerCase() || null;
-    const selectedModelRef = modelRaw?.trim() || null;
+    const newSessionPreferencesByGateway = readPreferencesByGateway(preferencesByGatewayRaw);
     const notificationsEnabled = notificationsRaw === 'true';
     syncAppearance(themePreference);
     set({
@@ -131,7 +193,7 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
       clipboardIntakeEnabled,
       notificationsEnabled,
       defaultAgentId,
-      selectedModelRef,
+      newSessionPreferencesByGateway,
     });
   },
 }));

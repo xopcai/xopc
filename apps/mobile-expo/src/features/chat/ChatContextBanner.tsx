@@ -13,11 +13,13 @@ import { useTheme } from '../../theme';
 type ChatContextBannerProps = {
   projectId?: string;
   taskId?: string;
+  onRemoveProject?: () => void;
 };
 
 export const ChatContextBanner = memo(function ChatContextBanner({
   projectId,
   taskId,
+  onRemoveProject,
 }: ChatContextBannerProps) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -83,11 +85,31 @@ export const ChatContextBanner = memo(function ChatContextBanner({
         </Text>
       </View>
       <Icon source="chevron-right" size={20} color={colors.text.tertiary} />
+      {projectId && !taskId && onRemoveProject ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={m.chat.removeProjectContext}
+          hitSlop={8}
+          onPress={(event) => {
+            event.stopPropagation();
+            onRemoveProject();
+          }}
+          style={styles.removeButton}
+        >
+          <Icon source="close" size={18} color={colors.text.tertiary} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
+  removeButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 30,
+    height: 30,
+  },
   banner: {
     minHeight: 64,
     marginHorizontal: 16,
