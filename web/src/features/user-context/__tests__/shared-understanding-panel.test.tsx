@@ -103,4 +103,28 @@ describe('SharedUnderstandingPanel', () => {
     expect(updateUnderstanding).toHaveBeenCalledWith('preference', { status: 'rejected' });
     expect(onRefresh).toHaveBeenCalledOnce();
   });
+
+  it('keeps the portrait hero balanced when many active focuses exist', async () => {
+    const focuses = [
+      activeFocus,
+      ...Array.from({ length: 5 }, (_, index) => ({
+        ...activeFocus,
+        id: `focus-${index}`,
+        versionId: `focus-${index}-v1`,
+        title: `进行中的关注 ${index + 1}`,
+        updatedAt: 10 + index,
+      })),
+      { ...activeFocus, id: 'duplicate', versionId: 'duplicate-v1' },
+    ];
+    await act(async () => root.render(<SharedUnderstandingPanel
+      focuses={focuses}
+      understandings={[preference]}
+      language="zh"
+      onRefresh={vi.fn().mockResolvedValue(undefined)}
+    />));
+
+    expect(container.textContent).toContain('+1 项进行中的关注');
+    expect(container.textContent).not.toContain('发布 XOPC 1.0');
+    expect(container.textContent).toContain('持续构成画像的理解');
+  });
 });
