@@ -481,8 +481,32 @@ function userMessageFromEvent(event: { [key: string]: unknown }): unknown {
     role: 'user',
     content: event.content ?? [],
     attachments: event.media,
+    metadata: userMessageDisplayMetadata(event.metadata),
     timestamp: typeof event.timestamp === 'number' ? event.timestamp : Date.now(),
   };
+}
+
+function userMessageDisplayMetadata(value: unknown): unknown {
+  const rows = asRecord(value)?.sourceContexts;
+  if (!Array.isArray(rows)) return undefined;
+  const sourceContexts = rows.flatMap((value) => {
+    const row = asRecord(value);
+    if (
+      row?.kind !== 'note'
+      || typeof row.sourceId !== 'string'
+      || typeof row.version !== 'string'
+      || typeof row.title !== 'string'
+    ) return [];
+    return [{
+      kind: 'note',
+      sourceId: row.sourceId,
+      version: row.version,
+      title: row.title,
+      ...(typeof row.tokenEstimate === 'number' ? { tokenEstimate: row.tokenEstimate } : {}),
+      ...(row.truncated === true ? { truncated: true } : {}),
+    }];
+  });
+  return sourceContexts.length > 0 ? { sourceContexts } : undefined;
 }
 
 function extractTextFromMessage(message: AgentMessage): string {

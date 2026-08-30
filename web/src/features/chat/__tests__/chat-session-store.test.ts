@@ -154,6 +154,34 @@ describe('useChatSessionStore', () => {
     ]);
   });
 
+  it('keeps optimistic Note refs when a partial realtime user row replaces it', () => {
+    const optimistic: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'analyze it' }],
+      contextRefs: [{
+        kind: 'note',
+        sourceId: 'note-1',
+        version: '42',
+        title: 'Launch plan',
+      }],
+      timestamp: 10,
+    };
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      messages: [optimistic],
+      sending: true,
+    });
+
+    useChatSessionStore.getState().appendUserMessageIfMissing(sessionKey, {
+      role: 'user',
+      content: [{ type: 'text', text: 'analyze it' }],
+      timestamp: 11,
+    });
+
+    expect(getChatSessionSnapshot(sessionKey)?.messages).toHaveLength(1);
+    expect(getChatSessionSnapshot(sessionKey)?.messages[0]?.contextRefs).toEqual(optimistic.contextRefs);
+  });
+
   it('setCommittedSnapshot preserves live slice messages', () => {
     useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
       ...idleSlice,
