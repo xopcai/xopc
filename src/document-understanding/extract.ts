@@ -1,10 +1,14 @@
 import { extname } from 'node:path';
 
+import AdmZip from 'adm-zip';
+
 export type DocumentExtractionResult =
-  | { ok: true; text: string; kind: 'plain' | 'pdf' }
+  | { ok: true; text: string; kind: 'plain' | 'pdf' | 'office' }
   | { ok: false; reason: string };
 
 const MAX_EXTRACTED_CHARS = 60_000;
+const MAX_OFFICE_XML_BYTES = 8 * 1024 * 1024;
+const MAX_OFFICE_TOTAL_XML_BYTES = 16 * 1024 * 1024;
 
 function truncate(text: string): string {
   return text.length > MAX_EXTRACTED_CHARS
@@ -62,6 +66,47 @@ function extractPdfText(buffer: Buffer): DocumentExtractionResult {
   return { ok: true, kind: 'pdf', text: truncate(text) };
 }
 
+function decodeXmlText(value: string): string {
+  return value
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'");
+}
+
+function officeXmlText(buffer: Buffer, extension: string): DocumentExtractionResult {
+  let zip: AdmZip;
+  try {
+    zip = new AdmZip(buffer);
+  } catch {
+    return { ok: false, reason: 'Office document archive is invalid.' };
+  }
+  const prefixes = extension === '.docx' ? ['word/document.xml']
+    : extension === '.pptx' ? ['ppt/slides/']
+      : ['xl/sharedStrings.xml', 'xl/worksheets/'];
+  const entries = zip.getEntries()
+    .filter((entry) => !entry.isDirectory
+      && entry.header.size <= MAX_OFFICE_XML_BYTES
+      && prefixes.some((prefix) => entry.entryName.startsWith(prefix)))
+    .sort((left, right) => left.entryName.localeCompare(right.entryName));
+  const parts: string[] = [];
+  let extractedBytes = 0;
+  for (const entry of entries) {
+    if (extractedBytes + entry.header.size > MAX_OFFICE_TOTAL_XML_BYTES) break;
+    extractedBytes += entry.header.size;
+    const xml = entry.getData().toString('utf8');
+    for (const match of xml.matchAll(/<(?:w:t|a:t|t)(?:\s[^>]*)?>([\s\S]*?)<\/(?:w:t|a:t|t)>/g)) {
+      const text = decodeXmlText((match[1] ?? '').replace(/<[^>]+>/g, '')).trim();
+      if (text) parts.push(text);
+    }
+  }
+  const text = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return text
+    ? { ok: true, kind: 'office', text: truncate(text) }
+    : { ok: false, reason: 'Office document extraction found no readable text.' };
+}
+
 export function extractDocumentText(params: {
   buffer: Buffer;
   fileName: string;
@@ -70,6 +115,9 @@ export function extractDocumentText(params: {
   const ext = extname(params.fileName).toLowerCase();
   const mime = params.mimeType?.toLowerCase() ?? '';
   if (mime === 'application/pdf' || ext === '.pdf') return extractPdfText(params.buffer);
-  if (mime.startsWith('text/')) return { ok: true, kind: 'plain', text: truncate(params.buffer.toString('utf8')) };
+  if (['.docx', '.pptx', '.xlsx'].includes(ext)) return officeXmlText(params.buffer, ext);
+  if (mime.startsWith('text/') || ['.csv', '.html', '.json', '.md', '.rtf', '.tsv', '.txt', '.xml'].includes(ext)) {
+    return { ok: true, kind: 'plain', text: truncate(params.buffer.toString('utf8')) };
+  }
   return { ok: false, reason: `No document extractor registered for ${params.mimeType || ext || 'unknown type'}.` };
 }

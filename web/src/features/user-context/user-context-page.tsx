@@ -18,7 +18,7 @@ import { fetchConnectorCatalog, fetchConnectorInstances, type ConnectorDefinitio
 import {
   createCollaborationRule, createUnderstanding, deleteCollaborationRule,
   deleteUnderstanding, deleteUserFocus, detectBrowserTimezone, fetchUserContext, fetchUserContextSettings,
-  fetchConnectedContentCandidates, fetchUnderstandingSourceGrants, fetchUserFocuses,
+  fetchConnectedContentCandidates, fetchUnderstandingSourceOverview, fetchUserFocuses,
   readConnectedContent,
   refreshUnderstandingSourceGrant,
   revokeUnderstandingSourceGrant,
@@ -28,7 +28,7 @@ import {
   type ContextConsolidationRun,
   type CollaborationRule, type ConnectedContentCandidate, type UnderstandingKind, type UserContextResponse,
   type UserContextSettings,
-  type UnderstandingSourceGrant, type UserFocus, type UserProfile, type UserUnderstanding,
+  type UnderstandingSourceGrant, type UnderstandingSourceRun, type UserFocus, type UserProfile, type UserUnderstanding,
   type UserUnderstandingQuality,
 } from './user-context-api';
 
@@ -61,9 +61,9 @@ const copy = {
     emptyUnderstanding: 'Nothing here yet. Tell xopc something explicitly, or confirm a suggestion after it learns one.',
     qualityTitle: 'Learning quality', qualityActive: 'Confirmed', qualityPending: 'Pending review', qualityAcceptance: '30-day acceptance', qualityRecall: 'Helpful recall', qualitySourceCoverage: 'Source coverage', qualityBootstrapTime: 'Median first sync', qualityNoData: 'Not enough feedback yet',
     emptyRules: 'No working agreements yet.', sourceExplicit: 'You said this directly', sourceInferred: 'Inferred — may be wrong', sourceObserved: 'Observed across prior work',
-    sourcesHint: 'Review every granted source, its access mode, retention, and last collection. Revoking stops future learning.', manageSources: 'Connect another source', authorizedSources: 'Authorized sources', connectorsTitle: 'Connectors', openConnector: 'Open connector', noSources: 'No sources are authorized.', noConnectors: 'No connectors are installed.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke source', revokeHint: 'Revoke this source and remove its derived understanding', confirmRevoke: 'Confirm revoke', revoking: 'Revoking…', revokeDone: 'Source revoked and derived understanding removed.', refresh: 'Update', refreshing: 'Updating…', refreshStarted: 'Update started.', actionFailed: 'Action failed', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only',
+    sourcesHint: 'Review every granted source, its latest learning result, access mode, and retention. Revoking stops future learning.', manageSources: 'Connect another source', authorizedSources: 'Authorized sources', connectorsTitle: 'Connectors', openConnector: 'Open connector', noSources: 'No sources are authorized.', noConnectors: 'No connectors are installed.', connected: 'Connected', unavailable: 'Needs attention', revoke: 'Revoke source', revokeHint: 'Revoke this source and remove its derived understanding', confirmRevoke: 'Confirm revoke', revoking: 'Revoking…', revokeDone: 'Source revoked and derived understanding removed.', refresh: 'Update', refreshing: 'Updating…', refreshStarted: 'Update started.', actionFailed: 'Action failed', once: 'One-time', continuous: 'Continuous', localOnly: 'Local only', derivedOnly: 'Derived understanding only', sourceQueued: 'Queued', sourceRunning: 'Learning', sourceCompleted: 'Learned', sourcePartial: 'Partially learned', sourceFailed: 'Learning failed', sourceNotRun: 'Not collected yet', sourceItems: 'items reviewed', sourceCandidates: 'candidates formed', sourceAccountUnavailable: 'The connected account is unavailable. Reconnect it and try again.', sourceSyncFailed: 'This source could not be synchronized. Try updating it again.', sourceAnalysisFailed: 'Content was collected, but deeper understanding could not be completed. Try again later.',
     focuses: 'Current focuses', focusHint: 'Candidate focuses never activate until you confirm them.', activate: 'Activate', pause: 'Pause', complete: 'Complete', noFocuses: 'No focus candidates yet.', focusCandidate: 'Suggested', focusActive: 'Active', focusPaused: 'Paused', focusCompleted: 'Completed', confidence: 'Confidence', confidenceHigh: 'High', confidenceMedium: 'Medium', confidenceLow: 'Low',
-    contentReadTitle: 'Optional deeper reading', contentReadHint: 'Metadata identified these recent items. Select up to 5 to explicitly allow one bounded content read; nothing is opened automatically.', readSelected: 'Read selected', reading: 'Reading…', contentReadDone: 'Selected content was read and indexed.',
+    contentReadTitle: 'Additional deeper reading', contentReadHint: 'These items still need content to add useful context. Select up to 5 for one bounded read.', readSelected: 'Read selected', reading: 'Reading…', contentReadDone: 'Selected content was read and indexed.',
     dreamingHint: 'A deterministic daily review checks expiry, contradictory evidence, and corroborated candidates. It never auto-activates an inference.', mode: 'Background review', on: 'On — propose for review', off: 'Off', reviewTime: 'Daily review time', evidenceThreshold: 'Supporting evidence required', scanLimit: 'Maximum items per run', lastRun: 'Last review', neverRun: 'Not run yet', runCompleted: 'Completed', runFailed: 'Failed', runRunning: 'Running', runItems: 'items',
     privacyHint: 'Choose how generic memory providers handle sensitive content. Structured user understanding applies stricter rules of its own.', sensitivePolicy: 'Sensitive memory writes', policyDeny: 'Do not store', policyConfirm: 'Ask before storing', policyAllow: 'Store when relevant', privacyWarning: 'Secret and regulated content is never stored as structured user understanding, regardless of this setting.',
     error: 'Could not load your context.', retry: 'Try again',
@@ -92,9 +92,9 @@ const copy = {
     emptyUnderstanding: '还没有内容。你可以直接告诉 xopc，或在它学到建议后进行确认。', emptyRules: '还没有协作约定。',
     qualityTitle: '学习质量', qualityActive: '已确认', qualityPending: '待审核', qualityAcceptance: '30 天采纳率', qualityRecall: '有效召回', qualitySourceCoverage: '来源覆盖率', qualityBootstrapTime: '首次同步中位耗时', qualityNoData: '反馈数据还不足',
     sourceExplicit: '由你直接告知', sourceInferred: '推断内容，可能有误', sourceObserved: '从过往工作中观察到',
-    sourcesHint: '查看每项授权的访问方式、保留策略和最近采集时间；撤销后将停止后续学习。', manageSources: '连接其他来源', authorizedSources: '已授权数据来源', connectorsTitle: '连接器', openConnector: '打开连接器', noSources: '尚未授权任何来源。', noConnectors: '尚未安装连接器。', connected: '已连接', unavailable: '需要处理', revoke: '撤销来源', revokeHint: '撤销此来源并删除由它产生的理解', confirmRevoke: '确认撤销', revoking: '正在撤销…', revokeDone: '已撤销来源并删除派生理解。', refresh: '更新', refreshing: '正在更新…', refreshStarted: '更新任务已开始。', actionFailed: '操作失败', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解',
+    sourcesHint: '查看每项授权最近一次学习结果、访问方式与保留策略；撤销后将停止后续学习。', manageSources: '连接其他来源', authorizedSources: '已授权数据来源', connectorsTitle: '连接器', openConnector: '打开连接器', noSources: '尚未授权任何来源。', noConnectors: '尚未安装连接器。', connected: '已连接', unavailable: '需要处理', revoke: '撤销来源', revokeHint: '撤销此来源并删除由它产生的理解', confirmRevoke: '确认撤销', revoking: '正在撤销…', revokeDone: '已撤销来源并删除派生理解。', refresh: '更新', refreshing: '正在更新…', refreshStarted: '更新任务已开始。', actionFailed: '操作失败', once: '仅一次', continuous: '持续更新', localOnly: '仅本地处理', derivedOnly: '仅保留派生理解', sourceQueued: '等待中', sourceRunning: '正在理解', sourceCompleted: '理解完成', sourcePartial: '部分完成', sourceFailed: '理解失败', sourceNotRun: '尚未采集', sourceItems: '项已检查', sourceCandidates: '项候选理解', sourceAccountUnavailable: '连接的账号不可用，请重新连接后重试。', sourceSyncFailed: '该来源同步失败，请再次更新。', sourceAnalysisFailed: '内容已采集，但深入理解未完成，请稍后重试。',
     focuses: '当前关注', focusHint: '候选关注不会自动生效，只有你确认后才会启用。', activate: '启用', pause: '暂停', complete: '完成', noFocuses: '还没有候选关注。', focusCandidate: '待确认', focusActive: '进行中', focusPaused: '已暂停', focusCompleted: '已完成', confidence: '置信度', confidenceHigh: '高', confidenceMedium: '中', confidenceLow: '低',
-    contentReadTitle: '可选的深入读取', contentReadHint: '元数据识别出这些近期条目。你可以选择最多 5 项，明确授权一次有界正文读取；系统不会自动打开内容。', readSelected: '读取所选内容', reading: '正在读取…', contentReadDone: '已读取并索引所选内容。',
+    contentReadTitle: '补充深入读取', contentReadHint: '这些条目还需要正文才能形成有用上下文。你可以选择最多 5 项进行一次有界读取。', readSelected: '读取所选内容', reading: '正在读取…', contentReadDone: '已读取并索引所选内容。',
     dreamingHint: '每天进行一次确定性复核，检查过期、矛盾证据和得到佐证的候选理解；推断内容不会自动生效。', mode: '后台复核', on: '开启并生成待审核项', off: '关闭', reviewTime: '每日复核时间', evidenceThreshold: '所需支持证据数', scanLimit: '每次最多检查', lastRun: '最近一次复核', neverRun: '尚未运行', runCompleted: '已完成', runFailed: '失败', runRunning: '运行中', runItems: '项',
     privacyHint: '选择通用记忆服务如何处理敏感内容；结构化用户理解有独立且更严格的规则。', sensitivePolicy: '敏感记忆写入', policyDeny: '不保存', policyConfirm: '保存前询问', policyAllow: '相关时允许保存', privacyWarning: '无论这里如何设置，秘密和受监管内容都不会保存为结构化用户理解。',
     error: '无法加载用户上下文。', retry: '重试',
@@ -529,15 +529,20 @@ function RulesPanel({ rules, language, t, onChanged }: { rules: CollaborationRul
   </div>;
 }
 
-type SourcesPanelData = { grants: UnderstandingSourceGrant[]; connectors: ConnectorInstance[]; catalog: ConnectorDefinition[] };
+type SourcesPanelData = {
+  grants: UnderstandingSourceGrant[];
+  latestRuns: Record<string, UnderstandingSourceRun>;
+  connectors: ConnectorInstance[];
+  catalog: ConnectorDefinition[];
+};
 
 async function fetchSourcesPanelData(): Promise<SourcesPanelData> {
-  const [grants, connectors, catalog] = await Promise.all([fetchUnderstandingSourceGrants(), fetchConnectorInstances(), fetchConnectorCatalog()]);
-  return { grants, connectors, catalog };
+  const [overview, connectors, catalog] = await Promise.all([fetchUnderstandingSourceOverview(), fetchConnectorInstances(), fetchConnectorCatalog()]);
+  return { ...overview, connectors, catalog };
 }
 
 function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
-  const { data, error, isLoading, mutate } = useSWR<SourcesPanelData>('you-understanding-sources', fetchSourcesPanelData);
+  const { data, error, isLoading, mutate } = useSWR<SourcesPanelData>('you-understanding-sources', fetchSourcesPanelData, { refreshInterval: 5_000 });
   const { data: contentCandidates = [], mutate: mutateContentCandidates } = useSWR<ConnectedContentCandidate[]>(
     'you-connected-content-candidates',
     fetchConnectedContentCandidates,
@@ -552,6 +557,22 @@ function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
   const grants = data?.grants ?? [];
   const instances = data?.connectors ?? [];
   const definitions = new Map((data?.catalog ?? []).map((definition) => [definition.id, definition]));
+  const latestRuns = data?.latestRuns ?? {};
+  const sourceRunLabel = (run: UnderstandingSourceRun | undefined) => !run ? t.sourceNotRun
+    : run.status === 'completed' ? t.sourceCompleted
+      : run.status === 'partial' ? t.sourcePartial
+        : run.status === 'failed' || run.status === 'canceled' ? t.sourceFailed
+          : run.status === 'running' ? t.sourceRunning : t.sourceQueued;
+  const sourceRunTone = (run: UnderstandingSourceRun | undefined) => !run
+    ? 'bg-surface-muted text-fg-muted'
+    : run.status === 'completed' ? 'bg-success-soft text-success'
+      : run.status === 'partial' ? 'bg-warning-soft text-warning'
+        : run.status === 'failed' || run.status === 'canceled' ? 'bg-danger/10 text-danger'
+          : 'bg-accent-soft text-accent-fg';
+  const sourceRunError = (error: string | undefined) => error === 'connected_account_unavailable'
+    ? t.sourceAccountUnavailable
+    : error === 'connected_source_sync_failed' ? t.sourceSyncFailed
+      : error === 'connected_source_analysis_failed' ? t.sourceAnalysisFailed : error;
   const definitionForGrant = (grant: UnderstandingSourceGrant) => {
     const normalizedName = grant.displayName.trim().toLocaleLowerCase();
     const matchingInstance = instances.find((instance) => instance.displayName.trim().toLocaleLowerCase() === normalizedName);
@@ -619,9 +640,13 @@ function SourcesPanel({ t }: { t: typeof copy.en | typeof copy.zh }) {
     <section className="space-y-2"><h2 className="text-sm font-semibold text-fg">{t.authorizedSources} · {grants.length}</h2>
       {grants.length ? <div className="grid gap-3 sm:grid-cols-2">{grants.map((grant) => {
         const definition = definitionForGrant(grant);
+        const run = latestRuns[grant.id];
+        const candidatesCreated = typeof run?.metadata.candidatesCreated === 'number' ? run.metadata.candidatesCreated : 0;
+        const runError = sourceRunError(run?.errorMessage
+          ?? (typeof run?.metadata.semanticError === 'string' ? run.metadata.semanticError : undefined));
         return <article key={grant.id} className="flex min-h-28 items-start gap-3 rounded-2xl border border-edge bg-surface-panel p-4">
           {definition ? <ConnectorLogo connector={definition} size="sm" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-base"><Database className="size-4 text-fg-muted" /></span>}
-          <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-fg">{grant.displayName}</p><p className="mt-1 text-xs leading-5 text-fg-subtle">{grant.accessMode === 'continuous' ? t.continuous : t.once} · {grant.processingPolicy === 'local_only' ? t.localOnly : grant.retentionPolicy === 'derived_only' ? t.derivedOnly : grant.retentionPolicy}</p>{grant.lastCollectedAt ? <p className="mt-1 text-xs text-fg-subtle">{new Date(grant.lastCollectedAt).toLocaleString()}</p> : null}</div>
+          <div className="min-w-0 flex-1"><div className="flex min-w-0 flex-wrap items-center gap-2"><p className="truncate text-sm font-medium text-fg">{grant.displayName}</p><span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${sourceRunTone(run)}`}>{sourceRunLabel(run)}</span></div><p className="mt-1 text-xs leading-5 text-fg-subtle">{grant.accessMode === 'continuous' ? t.continuous : t.once} · {grant.processingPolicy === 'local_only' ? t.localOnly : grant.retentionPolicy === 'derived_only' ? t.derivedOnly : grant.retentionPolicy}</p>{run ? <p className="mt-1 text-xs text-fg-subtle">{run.itemsSeen} {t.sourceItems}{candidatesCreated ? ` · ${candidatesCreated} ${t.sourceCandidates}` : ''} · {new Date(run.completedAt ?? run.startedAt).toLocaleString()}</p> : grant.lastCollectedAt ? <p className="mt-1 text-xs text-fg-subtle">{new Date(grant.lastCollectedAt).toLocaleString()}</p> : null}{runError ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-danger" title={runError}>{runError}</p> : null}</div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">{grant.accessMode === 'continuous' ? <Button variant="ghost" disabled={runningAction !== null} aria-busy={runningAction?.grantId === grant.id && runningAction.kind === 'refresh'} onClick={() => void refreshGrant(grant)}>{runningAction?.grantId === grant.id && runningAction.kind === 'refresh' ? <><Loader2 className="size-4 animate-spin" />{t.refreshing}</> : t.refresh}</Button> : null}<Button variant="ghost" className="text-danger" title={t.revokeHint} aria-label={`${t.revoke}: ${grant.displayName}`} disabled={runningAction !== null} aria-busy={runningAction?.grantId === grant.id && runningAction.kind === 'revoke'} onClick={() => void revokeGrant(grant)}>{runningAction?.grantId === grant.id && runningAction.kind === 'revoke' ? <><Loader2 className="size-4 animate-spin" />{t.revoking}</> : confirmingRevoke === grant.id ? t.confirmRevoke : t.revoke}</Button></div>
         </article>;
       })}</div> : <Empty>{t.noSources}</Empty>}

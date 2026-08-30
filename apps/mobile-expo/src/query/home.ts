@@ -9,12 +9,10 @@ export type { HomeAction, HomeAttention, HomeDecision, HomeWorkbenchItem as Home
 
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
-import type { NoteIndexEntry } from './notes';
-
 export interface HomeData {
-  focusItems: HomeWorkbenchItem[];
-  recentlyOpened: NoteIndexEntry[];
-  inboxCount: number;
+  needsUser: HomeWorkbenchItem[];
+  background: HomeWorkbenchItem[];
+  backgroundCount: number;
 }
 
 export async function fetchHome(language: Language): Promise<HomeData> {
@@ -23,9 +21,9 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const raw = await res.json() as unknown;
   const core = parseHomeResponse(raw);
   return {
-    focusItems: [...core.needsUser, ...core.background],
-    recentlyOpened: [],
-    inboxCount: 0,
+    needsUser: core.needsUser,
+    background: core.background,
+    backgroundCount: core.backgroundCount,
   };
 }
 

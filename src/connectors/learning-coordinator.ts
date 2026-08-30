@@ -30,12 +30,15 @@ import type { UnderstandingSourceCategory, UnderstandingSourceRun } from '../use
 import { getConnectorDefinition } from './catalog.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { connectorIdentityKey, normalizeConnectorIdentity } from './connector-identity.js';
+import { deriveConnectedSourceUnderstanding } from './connected-source-understanding.js';
 import { ingestComposioConnectedSource } from './connected-source-ingestion.js';
+import { listConnectedContentCandidates, readConnectedContent } from './content-enrichment.js';
 import { buildConnectorLearningArguments, getConnectorLearningPlan } from './learning-recipes.js';
 
 const log = createLogger('ConnectorLearning');
 const CONNECTED_ACCOUNT_UNAVAILABLE = 'connected_account_unavailable';
 const CONNECTED_SOURCE_SYNC_FAILED = 'connected_source_sync_failed';
+const CONNECTED_SOURCE_ANALYSIS_FAILED = 'connected_source_analysis_failed';
 
 function learningFailureCode(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -241,6 +244,22 @@ export function startConnectorLearningCoordinator(options: {
       itemsSeen += synced.itemsSeen;
       itemsIndexed += synced.itemsIndexed;
     }
+    const enrichmentErrors: string[] = [];
+    if (plan.toolkit === 'googledrive') {
+      const candidates = listConnectedContentCandidates({
+        agentId: job.agentId,
+        sourceInstanceId: job.sourceInstanceId,
+        limit: 5,
+      });
+      if (candidates.length) {
+        const enriched = await readConnectedContent({
+          agentId: job.agentId,
+          sourceItemIds: candidates.map((candidate) => candidate.sourceItemId),
+        });
+        enrichmentErrors.push(...enriched.failed.map((failure) => failure.error));
+        itemsIndexed += enriched.completed;
+      }
+    }
     if (listConnectorLearningJobs({ accountId: job.accountId, limit: 100 })
       .find((candidate) => candidate.id === job.id)?.status === 'paused') return;
     publish(updateConnectorLearningJob(job.id, {
@@ -263,22 +282,45 @@ export function startConnectorLearningCoordinator(options: {
         sourceRunId: sourceRun.id,
       });
     }
+    let semantic: Awaited<ReturnType<typeof deriveConnectedSourceUnderstanding>> = {
+      created: 0,
+      focusCount: 0,
+      status: 'completed',
+    };
+    try {
+      semantic = await deriveConnectedSourceUnderstanding({
+        config: options.getConfig(),
+        agentId: job.agentId,
+        sourceInstanceId: job.sourceInstanceId,
+        sourceRunId: sourceRun.id,
+        memoryManager: options.getMemoryManager(),
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      semantic = { created: 0, focusCount: 0, status: 'failed', error: CONNECTED_SOURCE_ANALYSIS_FAILED };
+      log.warn({ err: error, jobId: job.id, connectorId: job.connectorId }, `Connected source semantic analysis failed: ${errorMessage}`);
+    }
+    const candidatesCreated = understanding.created + semantic.created + semantic.focusCount;
+    const incomplete = enrichmentErrors.length > 0 || semantic.status !== 'completed';
     const completed = updateConnectorLearningJob(job.id, {
       status: 'completed',
       phase: 'completed',
-      candidatesCreated: understanding.created,
+      candidatesCreated,
       nextRunAt: null,
       finished: true,
     });
     updateUnderstandingSourceRun(sourceRun.id, {
-      status: 'completed',
+      status: incomplete ? 'partial' : 'completed',
       itemsSeen,
       cursorAfter: new Date().toISOString(),
       completed: true,
       metadata: {
         ...sourceRun.metadata,
         itemsIndexed,
-        candidatesCreated: understanding.created,
+        candidatesCreated,
+        semanticStatus: semantic.status,
+        ...(semantic.error ? { semanticError: semantic.error } : {}),
+        ...(enrichmentErrors.length ? { enrichmentFailureCount: enrichmentErrors.length } : {}),
       },
     });
     updateUnderstandingSourceGrantCheckpoint(sourceRun.grantId, {
@@ -328,7 +370,7 @@ export function startConnectorLearningCoordinator(options: {
           if (definition?.runtime.type === 'composio' && definition.runtime.role === 'toolkit') {
             const sourceRun = ensureUnderstandingSourceRun(job, definition.runtime.toolkit, definition.displayName);
             updateUnderstandingSourceRun(sourceRun.id, {
-              status: 'failed', errorMessage, completed: true,
+              status: 'failed', errorMessage: learningFailureCode(err), completed: true,
             });
           }
           log.warn({ err, jobId: job.id, connectorId: job.connectorId }, `Connector learning failed: ${errorMessage}`);

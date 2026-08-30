@@ -10,7 +10,7 @@ import type { ChatMessages } from '@/i18n/messages';
 
 import { PcmWavRecorder } from './pcm-wav-recorder';
 
-export type VoiceInputPhase = 'idle' | 'preparing' | 'requesting' | 'recording' | 'transcribing' | 'error';
+export type VoiceInputPhase = 'idle' | 'preparing' | 'requesting' | 'starting' | 'recording' | 'transcribing' | 'error';
 
 const MAX_RECORDING_MS = 120_000;
 const READINESS_POLL_MS = 1_000;
@@ -23,7 +23,20 @@ function formatElapsed(sec: number): string {
 }
 
 function isCaptureStartingOrRecording(phase: VoiceInputPhase): boolean {
-  return phase === 'requesting' || phase === 'recording';
+  return phase === 'requesting' || phase === 'starting' || phase === 'recording';
+}
+
+function isCapturePending(phase: VoiceInputPhase): boolean {
+  return phase === 'requesting' || phase === 'starting';
+}
+
+async function getMicrophonePermissionState(): Promise<PermissionState | null> {
+  if (!navigator.permissions?.query) return null;
+  try {
+    return (await navigator.permissions.query({ name: 'microphone' })).state;
+  } catch {
+    return null;
+  }
 }
 
 export interface UseComposerVoiceInputOptions {
@@ -169,23 +182,30 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
     // Consume the queued capture before changing phase. Otherwise the readiness effect
     // observes `requesting` with the queue still set and starts another permission request.
     pendingCaptureRef.current = false;
-    updatePhase('requesting');
+    updatePhase('starting');
     try {
       const electronSystem = window.electronAPI?.system;
-      if (electronSystem) {
+      const permissionState = await getMicrophonePermissionState();
+      if (!isCapturePending(phaseRef.current)) return;
+      if (electronSystem && permissionState !== 'granted') {
+        updatePhase('requesting');
         const permission = await electronSystem.requestMicrophone();
         const requiresMacosReauthorization =
           window.electronAPI?.platform === 'darwin' && permission.status !== 'granted';
         if (permission.status === 'denied' || requiresMacosReauthorization) {
           throw new Error('Microphone permission denied');
         }
-        if (phaseRef.current !== 'requesting') return;
+        if (!isCapturePending(phaseRef.current)) return;
+      } else if (!electronSystem && permissionState !== 'granted') {
+        updatePhase('requesting');
       }
+      if (!isCapturePending(phaseRef.current)) return;
+      updatePhase('starting');
       window.dispatchEvent(new Event('xopc-voice-recording-start'));
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      if (phaseRef.current !== 'requesting') {
+      if (!isCapturePending(phaseRef.current)) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
@@ -197,7 +217,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
           setAudioLevel(Math.min(1, level * 8));
         },
       });
-      if (phaseRef.current !== 'requesting') {
+      if (!isCapturePending(phaseRef.current)) {
         recorder.cancel();
         stopVoiceMediaStreamTracks();
         return;
@@ -209,7 +229,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       updatePhase('recording');
       startTimer();
     } catch {
-      const shouldReportFailure = phaseRef.current === 'requesting';
+      const shouldReportFailure = isCapturePending(phaseRef.current);
       pendingCaptureRef.current = false;
       resetCaptureState();
       updatePhase('idle');

@@ -107,6 +107,64 @@ describe('work discovery analyzer', () => {
     });
   });
 
+  it('keeps evidence-backed understanding when next-step confidence is low', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        projectSummary: 'A TypeScript product repository.',
+        currentState: 'The exact next objective is unclear.',
+        uncertainties: ['The next milestone is not explicit.'],
+        lowConfidence: true,
+        suggestions: [],
+        contextQuestion: 'Which milestone matters now?',
+        profileCandidates: [{
+          category: 'technology',
+          statement: 'Works on a TypeScript product.',
+          confidence: 'high',
+          evidence: ['README.md describes the TypeScript product.'],
+        }],
+        workThreads: [{
+          topicKey: 'typescript-product',
+          title: 'TypeScript product',
+          summary: 'The repository contains active TypeScript product work.',
+          horizon: 'ongoing',
+          status: 'active',
+          confidence: 'high',
+          evidenceRefs: ['README.md'],
+        }],
+      }) }],
+      stopReason: 'stop',
+    } as never);
+
+    const analysis = await analyzeWorkContext({ config: {} as never, snapshot });
+
+    expect(analysis.result).toMatchObject({
+      lowConfidence: true,
+      projectSummary: 'A TypeScript product repository.',
+      profileCandidates: [expect.objectContaining({ statement: 'Works on a TypeScript product.' })],
+      workThreadCandidates: [expect.objectContaining({ topicKey: 'typescript-product' })],
+    });
+  });
+
+  it('keeps profile candidates for a normal manual scan without candidate context', async () => {
+    const parsed = JSON.parse(validAnalysisJson()) as Record<string, unknown>;
+    parsed.profileCandidates = [{
+      category: 'workflow',
+      statement: 'Maintains current project notes in the repository.',
+      confidence: 'medium',
+      evidence: ['README.md contains current project notes.'],
+    }];
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(parsed) }],
+      stopReason: 'stop',
+    } as never);
+
+    const analysis = await analyzeWorkContext({ config: {} as never, snapshot });
+
+    expect(analysis.result.profileCandidates).toEqual([
+      expect.objectContaining({ statement: 'Maintains current project notes in the repository.' }),
+    ]);
+  });
+
   it('validates understanding profile candidates against initialized evidence refs', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({
@@ -174,5 +232,72 @@ describe('work discovery analyzer', () => {
 
     expect(analysis.profileCandidates).toHaveLength(7);
     expect(analysis.workThreadCandidates).toHaveLength(4);
+  });
+
+  it('keeps successful sources when another source fails', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockRejectedValueOnce(new Error('provider unavailable'))
+      .mockResolvedValueOnce({
+        content: [{ type: 'text', text: JSON.stringify({
+          profileCandidates: [{
+            category: 'focus',
+            statement: 'Plans work from calendar commitments.',
+            confidence: 'medium',
+            evidence: ['A current calendar commitment was found.'],
+            evidenceRefs: ['apple-calendar://calendar-1'],
+          }],
+          workThreads: [],
+        }) }],
+        stopReason: 'stop',
+      } as never);
+    const items: UnderstandingSourceItem[] = [
+      {
+        id: 'note-1', sourceId: 'apple-notes', type: 'note', title: 'Project note',
+        ownerAttribution: 'user', sensitivity: 'personal', evidenceRef: 'apple-notes://note-1',
+      },
+      {
+        id: 'calendar-1', sourceId: 'apple-calendar', type: 'calendar_event', title: 'Project review',
+        ownerAttribution: 'user', sensitivity: 'personal', evidenceRef: 'apple-calendar://calendar-1',
+      },
+    ];
+
+    const analysis = await analyzeUnderstandingSources({ config: {} as never, items });
+
+    expect(analysis.profileCandidates).toHaveLength(1);
+    expect(analysis.sourceStatuses).toEqual([
+      expect.objectContaining({ sourceId: 'apple-notes', status: 'failed' }),
+      { sourceId: 'apple-calendar', status: 'completed' },
+    ]);
+  });
+
+  it('splits and recovers a batch when model output is truncated', async () => {
+    const resultFor = (ref: string, statement: string) => ({
+      content: [{ type: 'text', text: JSON.stringify({
+        profileCandidates: [{
+          category: 'focus', statement, confidence: 'medium', evidence: ['Supported item.'], evidenceRefs: [ref],
+        }],
+        workThreads: [],
+      }) }],
+      stopReason: 'stop',
+    });
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce({ content: [{ type: 'text', text: '{"profileCandidates":[' }], stopReason: 'length' } as never)
+      .mockResolvedValueOnce(resultFor('apple-notes://note-1', 'Advances the first project.') as never)
+      .mockResolvedValueOnce(resultFor('apple-notes://note-2', 'Advances the second project.') as never);
+    const items: UnderstandingSourceItem[] = [1, 2].map((index) => ({
+      id: `note-${index}`,
+      sourceId: 'apple-notes',
+      type: 'note',
+      title: `Project note ${index}`,
+      ownerAttribution: 'user',
+      sensitivity: 'personal',
+      evidenceRef: `apple-notes://note-${index}`,
+    }));
+
+    const analysis = await analyzeUnderstandingSources({ config: {} as never, items });
+
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(3);
+    expect(analysis.profileCandidates).toHaveLength(2);
+    expect(analysis.sourceStatuses).toEqual([{ sourceId: 'apple-notes', status: 'completed' }]);
   });
 });

@@ -15,6 +15,10 @@ import {
   upsertConnectorConnection,
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
+import {
+  listUnderstandingSourceGrants,
+  listUnderstandingSourceRuns,
+} from '../../user-context/sources/repository.js';
 import type { MemoryManager } from '../../agent/memory/manager.js';
 
 const { ingestComposioConnectedSource } = vi.hoisted(() => ({
@@ -113,8 +117,8 @@ describe('connector learning coordinator', () => {
       { cursor: encodeConnectedSourceCursor({ checkpoint: '2026-08-01T00:00:00.000Z', pageToken: 'gmail-page-2' }) },
       { email: 'owner@example.com' },
     )).toMatchObject({
-      max_results: 100,
-      include_payload: false,
+      max_results: 30,
+      include_payload: true,
       verbose: false,
       query: `after:${Math.floor(Date.parse('2026-08-01T00:00:00.000Z') / 1_000)} -in:spam -in:trash`,
       page_token: 'gmail-page-2',
@@ -203,6 +207,11 @@ describe('connector learning coordinator', () => {
       expect(listConnectorLearningJobs({ connectionId: 'gmail-work' })[0]).toMatchObject({
         status: 'failed',
         error: 'connected_account_unavailable',
+      });
+      const grant = listUnderstandingSourceGrants()[0]!;
+      expect(listUnderstandingSourceRuns(grant.id, 1)[0]).toMatchObject({
+        status: 'failed',
+        errorMessage: 'connected_account_unavailable',
       });
     } finally {
       coordinator.stop();

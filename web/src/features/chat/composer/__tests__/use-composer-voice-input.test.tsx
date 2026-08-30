@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   ready: false,
   fetchVoiceReadiness: vi.fn(),
   showComposerNotification: vi.fn(),
+  startRecorder: vi.fn(),
 }));
 
 vi.mock('@/features/chat/composer/voice-transcribe-api', () => ({
@@ -22,7 +23,7 @@ vi.mock('@/features/chat/composer/composer-notifications', () => ({
 }));
 
 vi.mock('@/features/chat/composer/pcm-wav-recorder', () => ({
-  PcmWavRecorder: { start: vi.fn() },
+  PcmWavRecorder: { start: mocks.startRecorder },
 }));
 
 import {
@@ -57,9 +58,54 @@ describe('useComposerVoiceInput', () => {
         : { state: 'preparing', provider: 'xopc-local', modelId: 'sensevoice-small' }
     ));
     mocks.showComposerNotification.mockReset();
+    mocks.startRecorder.mockReset();
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: undefined,
+    });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
+  });
+
+  it('skips the Electron permission request when microphone access is already granted', async () => {
+    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
+    const requestMicrophone = vi.fn();
+    window.electronAPI = {
+      platform: 'darwin',
+      system: { requestMicrophone },
+    } as unknown as NonNullable<Window['electronAPI']>;
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: vi.fn(async () => ({ state: 'granted' as const })) },
+    });
+    const stopTrack = vi.fn();
+    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
+    const getUserMedia = vi.fn(async () => stream);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    const cancel = vi.fn();
+    mocks.startRecorder.mockResolvedValue({ cancel });
+
+    function Harness() {
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await voice.startVoiceInput();
+    });
+
+    expect(requestMicrophone).not.toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(mocks.startRecorder).toHaveBeenCalledWith(stream, expect.any(Object));
+    expect(voice.phase).toBe('recording');
   });
 
   afterEach(() => {

@@ -9,7 +9,7 @@ const COMMON: UnderstandingSourceDefinition[] = [
   },
   {
     id: 'local-recent-files', category: 'recent_documents', platform: 'all', displayName: 'Recent files',
-    description: 'Read-only metadata for recent documents on Desktop, Documents, and Downloads.',
+    description: 'Bounded text from recent readable documents on Desktop, Documents, and Downloads.',
     availability: 'available', permission: 'not_requested', defaultAccessMode: 'once',
     supportedAccessModes: ['once'], recommended: true, sensitive: true,
   },
@@ -54,13 +54,14 @@ const COMMON: UnderstandingSourceDefinition[] = [
 const PLATFORM: Record<Exclude<UnderstandingSourcePlatform, 'all'>, UnderstandingSourceDefinition[]> = {
   darwin: [
     ['apple-notes', 'notes', 'Apple Notes', 'Recent unlocked notes selected through macOS Automation', true],
+    ['apple-mail', 'mail', 'Apple Mail', 'Recent inbox and sent-message content selected through macOS Automation', true],
     ['apple-calendar', 'calendar', 'Apple Calendar', 'Recent and upcoming calendar events', true],
     ['apple-reminders', 'tasks', 'Apple Reminders', 'Open and recently completed reminders', true],
   ].map(([id, category, displayName, description, sensitive]) => ({
     id: String(id), category: category as UnderstandingSourceDefinition['category'], platform: 'darwin',
     displayName: String(displayName), description: String(description), availability: 'available',
     permission: 'not_requested', defaultAccessMode: 'once', supportedAccessModes: ['once'],
-    recommended: category !== 'notes', sensitive: Boolean(sensitive),
+    recommended: category !== 'notes' && category !== 'mail', sensitive: Boolean(sensitive),
   })),
   win32: [{
     id: 'windows-recent-documents', category: 'recent_documents', platform: 'win32',

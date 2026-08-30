@@ -800,6 +800,7 @@
     "voicePreparing": "正在准备本地中文语音…",
     "voicePreparingProgress": "正在准备本地中文语音… {progress}%",
     "voiceRequestingMicrophone": "正在等待麦克风权限…",
+    "voiceStartingMicrophone": "正在启动麦克风…",
     "voicePreparationFailed": "本地语音准备失败，可重试",
     "voiceNeedsPreparation": "需要准备本地语音模型",
     "voiceRetry": "重新转写",

@@ -197,10 +197,10 @@ describe('connected source ingestion', () => {
 
     expect(result.itemsSeen).toBe(2);
     expect(executeWithPolicy).toHaveBeenCalledTimes(3);
-    expect(executeWithPolicy.mock.calls[0]?.[0]).toMatchObject({ args: { max_results: 100 } });
-    expect(executeWithPolicy.mock.calls[1]?.[0]).toMatchObject({ args: { max_results: 50 } });
+    expect(executeWithPolicy.mock.calls[0]?.[0]).toMatchObject({ args: { max_results: 30 } });
+    expect(executeWithPolicy.mock.calls[1]?.[0]).toMatchObject({ args: { max_results: 15 } });
     expect(executeWithPolicy.mock.calls[2]?.[0]).toMatchObject({
-      args: { max_results: 50, page_token: 'page-2' },
+      args: { max_results: 15, page_token: 'page-2' },
     });
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({ status: 'succeeded', itemsSeen: 2 });
   });

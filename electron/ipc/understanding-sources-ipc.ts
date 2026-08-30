@@ -31,6 +31,7 @@ function localCatalog(platform = process.platform): UnderstandingSourceDefinitio
   ];
   if (platform === 'darwin') return [...common,
     definition('apple-notes', 'notes', 'Apple Notes', 'darwin', true, false),
+    definition('apple-mail', 'mail', 'Apple Mail', 'darwin', true, false),
     definition('apple-calendar', 'calendar', 'Apple Calendar', 'darwin', true, true),
     definition('apple-reminders', 'tasks', 'Apple Reminders', 'darwin', true, true),
   ];
@@ -54,7 +55,7 @@ function definition(
   return {
     id, category, platform, displayName,
     description: category === 'recent_documents'
-      ? 'Read-only metadata for recently used documents'
+      ? 'Read-only bounded text for recently used readable documents'
       : `Read-only ${displayName} context selected by the user`,
     availability: 'available', permission: sensitive ? 'not_requested' : 'granted',
     defaultAccessMode: 'once', supportedAccessModes: ['once'], recommended, sensitive,
@@ -76,6 +77,30 @@ const rows = safe(() => app.notes(), []).map((note) => {
     group: container ? String(safe(() => container.name(), '')) : '', text: locked ? '' : String(safe(() => note.plaintext(), '')),
     occurredAt: time(safe(() => note.creationDate(), null)), modifiedAt: time(safe(() => note.modificationDate(), null)) };
 }).filter((row) => row.id && row.text).sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0)).slice(0, ${SOURCE_LIMIT});
+JSON.stringify(rows);`;
+  if (source === 'apple-mail') return `${JXA_HELPERS}
+const app = Application('Mail');
+const min = Date.now() - 30 * 86400000;
+const rows = safe(() => app.accounts(), []).flatMap((account) => {
+  const accountName = String(safe(() => account.name(), 'Mail'));
+  const boxes = [
+    { box: safe(() => account.inbox(), null), name: 'Inbox', ownerAttribution: 'other', dateKey: 'dateReceived' },
+    { box: safe(() => account.sentMailbox(), null), name: 'Sent', ownerAttribution: 'user', dateKey: 'dateSent' },
+  ];
+  return boxes.flatMap((entry) => {
+    if (!entry.box) return [];
+    const messages = safe(() => entry.box.messages.whose({ [entry.dateKey]: { _greaterThan: new Date(min) } })(), []);
+    return messages.slice(0, ${SOURCE_LIMIT}).map((message) => ({
+      id: String(safe(() => message.messageId(), safe(() => message.id(), ''))),
+      title: String(safe(() => message.subject(), 'Untitled message')),
+      group: accountName + ' · ' + entry.name,
+      text: String(safe(() => message.content(), '')),
+      occurredAt: time(safe(() => entry.dateKey === 'dateSent' ? message.dateSent() : message.dateReceived(), null)),
+      ownerAttribution: entry.ownerAttribution,
+    }));
+  });
+}).filter((row) => row.id && row.occurredAt && row.occurredAt >= min)
+  .sort((a, b) => b.occurredAt - a.occurredAt).slice(0, ${SOURCE_LIMIT});
 JSON.stringify(rows);`;
   if (source === 'apple-calendar') return `${JXA_HELPERS}
 const app = Application('Calendar');
@@ -109,6 +134,7 @@ function execText(command: string, args: string[], timeout = 25_000): Promise<st
 }
 
 function itemType(sourceId: LocalSourceId): UnderstandingSourceItem['type'] {
+  if (sourceId === 'apple-mail') return 'mail';
   if (sourceId === 'apple-calendar') return 'calendar_event';
   if (sourceId === 'apple-reminders') return 'task';
   if (sourceId === 'apple-notes') return 'note';
@@ -134,7 +160,9 @@ function normalize(sourceId: LocalSourceId, raw: unknown): UnderstandingSourceIt
       ...(number('modifiedAt') ? { modifiedAt: number('modifiedAt') } : {}),
       ...(number('startsAt') ? { startsAt: number('startsAt') } : {}),
       ...(number('endsAt') ? { endsAt: number('endsAt') } : {}),
-      ownerAttribution: sourceId === 'apple-calendar' ? 'unknown' : 'user',
+      ownerAttribution: row.ownerAttribution === 'user' || row.ownerAttribution === 'other'
+        ? row.ownerAttribution
+        : sourceId === 'apple-calendar' ? 'unknown' : 'user',
       sensitivity: sourceId.includes('recent-documents') ? 'normal' : 'personal',
       evidenceRef: `${sourceId}://${encodeURIComponent(id)}`,
     } satisfies UnderstandingSourceItem];
