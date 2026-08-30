@@ -54,7 +54,7 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
       </div>
       <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', APP_CHROME_NO_DRAG_CLASS)}>
         {end}
-        <UnderstandingStatusButton persistent={pathname === '/you'} />
+        {pathname === '/you' ? <UnderstandingStatusButton persistent /> : null}
       </div>
     </header>
   );
