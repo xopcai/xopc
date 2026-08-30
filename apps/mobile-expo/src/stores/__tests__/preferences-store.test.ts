@@ -26,7 +26,7 @@ vi.mock('../../storage/mmkv', () => ({
     themePreference: 'prefs.themePreference',
     clipboardIntakeEnabled: 'prefs.clipboardIntakeEnabled',
     defaultAgentId: 'prefs.defaultAgentId',
-    selectedModelRef: 'prefs.selectedModelRef',
+    newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
   },
   storage: {
     getString: (key: string) => memory.get(key),
@@ -51,7 +51,7 @@ function resetStore(): void {
     themePreference: 'system',
     resolvedTheme: 'light',
     defaultAgentId: null,
-    selectedModelRef: null,
+    newSessionPreferencesByGateway: {},
     clipboardIntakeEnabled: true,
   });
 }
@@ -80,5 +80,27 @@ describe('usePreferencesStore', () => {
 
     expect(usePreferencesStore.getState().hydrated).toBe(true);
     expect(usePreferencesStore.getState().clipboardIntakeEnabled).toBe(false);
+  });
+
+  it('keeps new-session model and project preferences isolated by gateway and agent', () => {
+    const store = usePreferencesStore.getState();
+    store.rememberSelectedAgent('gateway-a', 'Coder');
+    store.rememberAgentModel('gateway-a', 'Coder', {
+      modelRef: 'openai/gpt-test',
+      thinkingLevel: 'high',
+    });
+    store.rememberLastChatScope('gateway-a', 'project-1');
+    store.rememberAgentModel('gateway-b', 'main', { modelRef: 'local/model' });
+
+    const preferences = usePreferencesStore.getState().newSessionPreferencesByGateway;
+    expect(preferences['gateway-a']).toMatchObject({
+      selectedAgentId: 'coder',
+      modelByAgent: {
+        coder: { modelRef: 'openai/gpt-test', thinkingLevel: 'high' },
+      },
+      lastChatScope: { kind: 'project', projectId: 'project-1' },
+    });
+    expect(preferences['gateway-b']?.modelByAgent.main?.modelRef).toBe('local/model');
+    expect(memory.get(KEYS.newSessionPreferencesByGateway)).toContain('openai/gpt-test');
   });
 });

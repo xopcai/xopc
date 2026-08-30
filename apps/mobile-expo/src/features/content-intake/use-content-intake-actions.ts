@@ -69,7 +69,7 @@ export function useContentIntakeActions(
   const exploreInChat = useCallback(
     (candidate: ContentIntakeCandidate | null) => {
       if (!candidate || saving) return;
-      void takeNewChatSessionKey(defaultAgentId)
+      void takeNewChatSessionKey({ agentId: defaultAgentId, projectId: null })
         .then((sessionKey) => {
           setContentChatIntake({
             sessionKey,

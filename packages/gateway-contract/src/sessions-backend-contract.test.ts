@@ -143,7 +143,6 @@ describe('sessions backend response contract', () => {
         key: ' agent:main:webchat:default:direct:chat_new ',
         sessionId: 'sess_new',
       },
-      reused: false,
     })).toBe('agent:main:webchat:default:direct:chat_new');
   });
 

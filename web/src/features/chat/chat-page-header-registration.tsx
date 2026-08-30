@@ -1,4 +1,4 @@
-import { Plus, ShieldOff, SquareTerminal } from 'lucide-react';
+import { Plus, SquareTerminal } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -16,6 +16,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
+import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -32,7 +33,7 @@ type ChatPageHeaderRegistrationProps = {
   canChangeWorkspace?: boolean;
   workspaceDisabled?: boolean;
   onWorkspaceChange?: (path: string) => Promise<void>;
-  onCreateTemporarySession?: () => void;
+  projectId?: string | null;
 };
 
 /**
@@ -51,7 +52,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   canChangeWorkspace = false,
   workspaceDisabled = false,
   onWorkspaceChange,
-  onCreateTemporarySession,
+  projectId,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
   const { sessionKey: routeSessionKey } = useParams();
@@ -101,7 +102,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
       className: 'bg-surface-panel',
       startExtra: showNewChatLink ? (
         <Link
-          to="/chat/new"
+          to={newChatHrefForProject(projectId)}
           state={{ forceNewChat: true }}
           className={cn(
             'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-panel text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
@@ -157,17 +158,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               {m.chat.temporarySession}
             </span>
           ) : null}
-          {onCreateTemporarySession ? (
-            <button
-              type="button"
-              className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
-              title={m.chat.newTemporarySessionHint}
-              aria-label={m.chat.newTemporarySession}
-              onClick={onCreateTemporarySession}
-            >
-              <ShieldOff className="size-4" />
-            </button>
-          ) : null}
           {activeSessionKey && window.electronAPI?.terminal ? (
             <button
               type="button"
@@ -208,11 +198,10 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentNoMatches,
     m.chat.temporarySession,
     m.chat.temporarySessionHint,
-    m.chat.newTemporarySession,
-    m.chat.newTemporarySessionHint,
     m.chat.terminal.open,
     terminalShortcut,
     m.sidebar.newTask,
+    projectId,
     terminalPanelOpen,
     activeSessionKey,
     workspacePath,
@@ -220,7 +209,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     canChangeWorkspace,
     workspaceDisabled,
     onWorkspaceChange,
-    onCreateTemporarySession,
     toggleTerminalPanel,
     setPageHeader,
   ]);

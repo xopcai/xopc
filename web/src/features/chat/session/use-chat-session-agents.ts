@@ -10,11 +10,13 @@ import {
 import type { NavigateFunction } from 'react-router-dom';
 import useSWR from 'swr';
 
-import {
-  readStoredWebchatAgentId,
-  WEBCHAT_AGENT_STORAGE_KEY,
-} from '@/features/chat/session/chat-session-defaults';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
+import {
+  readNewSessionPreferences,
+  rememberLastChatScope,
+  rememberSelectedAgent,
+} from '@/features/chat/session/new-session-preferences';
 import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
 import { getSessionDetail } from '@/features/sessions/session-api';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -52,11 +54,13 @@ export function useChatSessionAgents(opts: {
     return () => window.removeEventListener('config-reload', onConfigReload);
   }, [mutateChatAgents]);
 
-  const [preferredAgentId, setPreferredAgentId] = useState<string | null>(() =>
-    readStoredWebchatAgentId(),
+  const [preferredAgentId, setPreferredAgentId] = useState<string | null>(
+    () => readNewSessionPreferences().selectedAgentId ?? null,
   );
   const chatAgentsRef = useRef(chatAgentsData ?? null);
-  const preferredAgentIdRef = useRef<string | null>(readStoredWebchatAgentId());
+  const preferredAgentIdRef = useRef<string | null>(
+    readNewSessionPreferences().selectedAgentId ?? null,
+  );
 
   useEffect(() => {
     chatAgentsRef.current = chatAgentsData ?? null;
@@ -91,18 +95,17 @@ export function useChatSessionAgents(opts: {
     (id: string) => {
       const next = id.trim().toLowerCase();
       setPreferredAgentId(next);
-      try {
-        globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, next);
-      } catch {
-        /* noop */
-      }
+      rememberSelectedAgent(next);
       const curKey = sessionKeyRef.current;
       const curAgent = curKey ? currentSessionAgentId || preferredAgentIdRef.current : null;
       if (curAgent !== next) {
-        navigate('/chat/new', { replace: false });
+        navigate(newChatHrefForProject(currentSession?.projectId), {
+          replace: false,
+          state: { agentId: next },
+        });
       }
     },
-    [currentSessionAgentId, navigate, sessionKeyRef],
+    [currentSession?.projectId, currentSessionAgentId, navigate, sessionKeyRef],
   );
 
   useEffect(() => {
@@ -121,12 +124,13 @@ export function useChatSessionAgents(opts: {
     if (!agentFromSession || preferredAgentIdRef.current === agentFromSession) return;
     preferredAgentIdRef.current = agentFromSession;
     setPreferredAgentId(agentFromSession);
-    try {
-      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentFromSession);
-    } catch {
-      /* noop */
-    }
+    rememberSelectedAgent(agentFromSession);
   }, [currentSessionAgentId, sessionKey]);
+
+  useLayoutEffect(() => {
+    if (!sessionKey || !currentSession) return;
+    rememberLastChatScope(currentSession.projectId);
+  }, [currentSession, sessionKey]);
 
   useLayoutEffect(() => {
     if (!isNewRoute) return;
@@ -135,11 +139,7 @@ export function useChatSessionAgents(opts: {
     if (!aid) return;
     preferredAgentIdRef.current = aid;
     setPreferredAgentId(aid);
-    try {
-      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, aid);
-    } catch {
-      /* noop */
-    }
+    rememberSelectedAgent(aid);
   }, [isNewRoute, locationState]);
 
   const displayAgentId = useMemo(
@@ -160,5 +160,6 @@ export function useChatSessionAgents(opts: {
     onChatAgentChange,
     displayAgentId,
     showChatAgentSelector,
+    currentSessionProjectId: currentSession?.projectId ?? null,
   };
 }

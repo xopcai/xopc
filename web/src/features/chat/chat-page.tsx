@@ -946,7 +946,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         sessionKey={session.sessionKey}
         workspacePath={session.effectiveWorkspacePath}
         userContextMode={session.userContextMode}
-        onCreateTemporarySession={() => void session.createNewSession({ forceNew: true, temporary: true })}
+        projectId={scopedProject?.id}
         canChangeWorkspace={canChangeWorkingDirectory}
         workspaceDisabled={isSessionTransitioning || stream.sending || stream.streaming}
         onWorkspaceChange={session.onSessionWorkingDirectoryChange}
@@ -960,6 +960,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
             projectLabel={m.chat.scopeProject}
             workspaceLabel={m.chat.scopeWorkspace}
             returnTo={pathname}
+            removeLabel={m.chat.scopeRemoveProject}
+            onRemove={() => void session.createNewSession({ forceNew: true, projectId: null })}
           />
         ) : null}
         {!embedded && taskId ? <TaskSessionScopeBar taskId={taskId} /> : null}

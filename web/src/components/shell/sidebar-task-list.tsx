@@ -1029,7 +1029,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     try {
       await deleteSession(key);
       if (activeSessionKey === key) {
-        navigate('/chat/new');
+        navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
       }
       refreshSidebar();
     } catch {
@@ -1321,7 +1321,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               isCollapsed={inboxCollapsed}
               onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
               onCreateChat={() => {
-                navigate('/chat/new');
+                navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
                 onNavigate?.();
               }}
               onLoadMore={loadMoreInbox}

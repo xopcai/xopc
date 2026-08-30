@@ -52,6 +52,14 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('/new delegates to the preference-aware session factory when available', async () => {
+    const newSession = vi.fn(async () => {});
+    const { handler, setSession } = makeHandler({ newSession });
+    handler('/new');
+    await vi.waitFor(() => expect(newSession).toHaveBeenCalledOnce());
+    expect(setSession).not.toHaveBeenCalled();
+  });
+
   it('/reset calls resetSession and does not forward slash to agent', async () => {
     const { handler, sendMessage, resetSession } = makeHandler();
     handler('/reset');

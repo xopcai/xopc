@@ -571,6 +571,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         name?: string;
         estimatedTokens?: number;
         customData?: Record<string, unknown>;
+        projectId?: string;
       };
       let session: SessionRow | undefined;
 
@@ -580,6 +581,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         if (session) {
           if (session.name) out.displayName = session.name;
           if (session.estimatedTokens != null) out.totalTokens = session.estimatedTokens;
+          if (session.projectId?.trim()) out.projectId = session.projectId.trim();
         }
       }
 
@@ -984,6 +986,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Session config patch failed (${res.status})`);
     }
+    const hasProjectPatch = Object.prototype.hasOwnProperty.call(patch, 'projectId');
     const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
     const hiddenFromSessionList = typeof patch.hiddenFromSessionList === 'boolean'
       ? patch.hiddenFromSessionList
@@ -991,9 +994,9 @@ export class GatewayRealtimeBackend implements TuiBackend {
     const customData = patch.customData && typeof patch.customData === 'object' && !Array.isArray(patch.customData)
       ? patch.customData as Record<string, unknown>
       : undefined;
-    if (projectId || hiddenFromSessionList !== undefined || customData !== undefined) {
+    if (hasProjectPatch || hiddenFromSessionList !== undefined || customData !== undefined) {
       const metadataPatch = {
-        ...(projectId ? { projectId } : {}),
+        ...(hasProjectPatch ? { projectId: projectId || null } : {}),
         ...(hiddenFromSessionList !== undefined ? { hiddenFromSessionList } : {}),
         ...(customData ? { customData } : {}),
       };

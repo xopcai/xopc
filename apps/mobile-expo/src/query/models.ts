@@ -122,6 +122,20 @@ export async function setSessionModelRef(
   throw new Error(errBody.error ?? formatApiHttpError(res.status, res.statusText));
 }
 
+export async function setSessionInitialAgentConfig(
+  sessionKey: string,
+  config: { model?: string; thinkingLevel?: string },
+): Promise<void> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  if (res.ok) return;
+  const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+  throw new Error(errBody.error ?? formatApiHttpError(res.status, res.statusText));
+}
+
 /** Fetch the session's agent-config (model override, thinking level, etc.). */
 export async function fetchSessionAgentConfig(
   sessionKey: string,

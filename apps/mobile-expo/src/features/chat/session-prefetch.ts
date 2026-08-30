@@ -1,4 +1,11 @@
+import {
+  newSessionCacheKey,
+  type ResolvedNewSessionSpec,
+  type SessionInitialAgentConfig,
+} from '@xopcai/gateway-contract';
+
 import { createSession } from '../../query/sessions';
+import { setSessionInitialAgentConfig } from '../../query/models';
 import { useGatewayStore } from '../../stores/gateway-store';
 
 const TTL_MS = 5 * 60_000;
@@ -11,8 +18,8 @@ type PrefetchedEntry = {
 const cache = new Map<string, PrefetchedEntry>();
 const pendingCreates = new Map<string, Promise<string>>();
 
-function cacheKeyOf(agentId: string | undefined): string {
-  return (agentId ?? 'main').trim().toLowerCase() || 'main';
+function cacheKeyOf(spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>): string {
+  return newSessionCacheKey(useGatewayStore.getState().activeGatewayId ?? 'default', spec);
 }
 
 function dropExpired(now: number): void {
@@ -21,17 +28,27 @@ function dropExpired(now: number): void {
   }
 }
 
-async function createServerSession(agentId: string | undefined): Promise<string> {
+async function createServerSession(
+  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  initialAgentConfig?: SessionInitialAgentConfig,
+): Promise<string> {
   await useGatewayStore.getState().refreshActiveBaseUrl();
-  return createSession(agentId);
+  return createSession({
+    agentId: spec.agentId,
+    ...(spec.projectId ? { projectId: spec.projectId } : {}),
+    ...(initialAgentConfig ? { initialAgentConfig } : {}),
+  });
 }
 
-function startCreate(agentId: string | undefined): Promise<string> {
-  const key = cacheKeyOf(agentId);
+function startCreate(
+  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  initialAgentConfig?: SessionInitialAgentConfig,
+): Promise<string> {
+  const key = cacheKeyOf(spec);
   const existing = pendingCreates.get(key);
   if (existing) return existing;
 
-  const promise = createServerSession(agentId).then((sessionKey) => {
+  const promise = createServerSession(spec, initialAgentConfig).then((sessionKey) => {
     cache.set(key, { sessionKey, expiresAt: Date.now() + TTL_MS });
     pendingCreates.delete(key);
     return sessionKey;
@@ -43,24 +60,30 @@ function startCreate(agentId: string | undefined): Promise<string> {
   return promise;
 }
 
-export function prefetchNewChatSession(agentId?: string): void {
+export function prefetchNewChatSession(
+  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+): void {
   const now = Date.now();
   dropExpired(now);
-  const key = cacheKeyOf(agentId);
+  const key = cacheKeyOf(spec);
   if (cache.has(key) || pendingCreates.has(key)) return;
-  void startCreate(agentId).catch(() => {});
+  void startCreate(spec).catch(() => {});
 }
 
-export async function takeNewChatSessionKey(agentId?: string): Promise<string> {
+export async function takeNewChatSessionKey(
+  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  initialAgentConfig?: SessionInitialAgentConfig,
+): Promise<string> {
   const now = Date.now();
   dropExpired(now);
-  const key = cacheKeyOf(agentId);
+  const key = cacheKeyOf(spec);
   const cached = cache.get(key);
   if (cached) {
     cache.delete(key);
+    if (initialAgentConfig) await setSessionInitialAgentConfig(cached.sessionKey, initialAgentConfig);
     return cached.sessionKey;
   }
-  const sessionKey = await startCreate(agentId);
+  const sessionKey = await startCreate(spec, initialAgentConfig);
   cache.delete(key);
   return sessionKey;
 }
