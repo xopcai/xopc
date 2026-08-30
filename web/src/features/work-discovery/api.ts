@@ -30,7 +30,7 @@ export type WorkDiscoverySuggestion = {
 export type WorkDiscoveryProfileCandidate = {
   id: string;
   understandingId?: string;
-  category: 'role' | 'focus' | 'technology' | 'workflow' | 'preference';
+  category: 'role' | 'responsibility' | 'preference' | 'routine';
   statement: string;
   confidence: 'high' | 'medium' | 'low';
   evidence: string[];

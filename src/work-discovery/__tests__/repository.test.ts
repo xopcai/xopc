@@ -123,7 +123,7 @@ describe('work discovery repository', () => {
         profileCandidates: [{
           id: 'candidate-1',
           understandingId: record.id,
-          category: 'technology',
+          category: 'role',
           statement: record.statement,
           confidence: 'high',
           evidence: ['package.json'],

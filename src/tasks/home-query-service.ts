@@ -53,6 +53,15 @@ interface HomeGatewayPort {
   readonly automationServiceInstance: AutomationService;
   readonly projects: ProjectService;
   readonly proactiveInbox: ProactiveInboxService;
+  readonly sessions: {
+    listActiveRuns(): Array<{ sessionKey: string; runId: string }>;
+    getSession(key: string): Promise<{
+      name?: string;
+      updatedAt: string;
+      lastInteractionAt?: string;
+      routing?: { agentId?: string };
+    } | null>;
+  };
   createWorkflowRunService(): WorkflowRunService;
 }
 
@@ -378,14 +387,33 @@ export class HomeQueryService {
       .createRunStore(defaultAgent?.id ?? agents.defaultId);
     const nowMs = Date.now();
     const tasks = this.#tasks.list({ limit: 60 });
+    const activeRuns = this.service.sessions.listActiveRuns();
 
-    const [workflowRuns, automations, automationRuns, projects, connectorApprovals] = await Promise.all([
+    const [workflowRuns, automations, automationRuns, projects, connectorApprovals, activeRunSessions] = await Promise.all([
       workflowRunStore.listRunSummaries(20),
       this.service.automationServiceInstance.list(),
       this.service.automationServiceInstance.listRuns({ limit: 10 }),
       this.service.projects.list({ limit: 500 }),
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
+      Promise.all(activeRuns.map(async (run) => ({
+        ...run,
+        session: await this.service.sessions.getSession(run.sessionKey),
+      }))),
     ]);
+    const runningConversations = activeRunSessions
+      .filter((item) => Boolean(item.session))
+      .map((item) => {
+        const session = item.session!;
+        const updatedAt = Date.parse(session.lastInteractionAt ?? session.updatedAt);
+        return {
+          sessionKey: item.sessionKey,
+          runId: item.runId,
+          ...(session.name?.trim() ? { title: session.name.trim() } : {}),
+          ...(session.routing?.agentId ? { agentId: session.routing.agentId } : {}),
+          updatedAt: Number.isFinite(updatedAt) ? updatedAt : nowMs,
+        };
+      })
+      .sort((left, right) => right.updatedAt - left.updatedAt);
     const activeTasks = tasks.filter((task) => task.phase !== 'closed');
     const projectsById = new Map(projects.items.map((project) => [project.id, project]));
     const activeWorkflowRuns = workflowRuns
@@ -515,6 +543,7 @@ export class HomeQueryService {
 
     return {
       ...workbench,
+      runningConversations,
       decisions,
       attentionPolicy: governed.policy,
     };

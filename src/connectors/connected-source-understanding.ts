@@ -7,6 +7,7 @@ import type { KnowledgeSourceItem } from '../knowledge/types.js';
 import { listKnowledgeSourceItems } from '../storage/sqlite/index.js';
 import { finishContextExtractionRun } from '../storage/sqlite/index.js';
 import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
+import { focusLifecycle } from '../user-context/focus-lifecycle.js';
 import type { UnderstandingSourceItem } from '../user-context/sources/types.js';
 import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import { upsertUserFocus } from '../user-context/sources/repository.js';
@@ -81,8 +82,7 @@ export function connectedItemsForUnderstanding(items: KnowledgeSourceItem[]): Un
 
 function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingCandidate['kind'] {
   if (category === 'preference') return 'preference';
-  if (category === 'workflow') return 'routine';
-  if (category === 'focus') return 'current_state';
+  if (category === 'routine') return 'routine';
   return 'project_context';
 }
 
@@ -93,9 +93,9 @@ function understandingCandidate(candidate: WorkDiscoveryProfileCandidate): Under
     content: candidate.statement,
     canonicalKey: `connected-semantic:${candidate.category}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`,
     confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
-    importance: candidate.category === 'focus' ? 0.8 : 0.68,
+    importance: 0.68,
     explicitness: 'inferred',
-    durability: candidate.category === 'focus' ? 'ephemeral' : candidate.category === 'workflow' ? 'recurring' : 'durable',
+    durability: candidate.category === 'routine' ? 'recurring' : 'durable',
     sensitivity: 'personal',
     disclosurePolicy: 'referenceable',
   };
@@ -173,6 +173,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
       confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
       evidenceRefs: candidate.evidenceRefs,
       sourceRunId: input.sourceRunId,
+      ...focusLifecycle(candidate.horizon),
     }));
     finishContextExtractionRun({
       runId: extraction.run.id, status: 'completed',

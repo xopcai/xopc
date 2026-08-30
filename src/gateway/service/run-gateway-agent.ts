@@ -159,9 +159,6 @@ export async function *runGatewayAgent(
       if (taskRun) captureTaskEvent(event);
       if (channel === 'webchat') {
         publishRealtime(`run:${runId}`, event.type, event);
-        if (event.type === 'run_start') {
-          publishRealtime('sessions', 'run.started', { sessionKey: streamSessionKey, runId });
-        }
       }
       yield event;
     }
@@ -195,6 +192,7 @@ export async function *runGatewayAgent(
       if (!activeWebchatRunBySession.has(sessionKey)) {
         activeWebchatRunBySession.set(sessionKey, runId);
         registeredActiveWebchatRun = true;
+        publishRealtime('sessions', 'run.started', { sessionKey, runId });
       }
       let streamError: string | undefined;
       try {
@@ -252,6 +250,7 @@ export async function *runGatewayAgent(
       } finally {
         if (registeredActiveWebchatRun && activeWebchatRunBySession.get(sessionKey) === runId) {
           activeWebchatRunBySession.delete(sessionKey);
+          publishRealtime('sessions', 'run.completed', { sessionKey, runId, status: terminalStatus });
         }
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);

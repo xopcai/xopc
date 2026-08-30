@@ -179,6 +179,39 @@ describe('SQLite migrations', () => {
     });
   });
 
+  it('v133 archives legacy project facts without removing user-facing history', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      CREATE TABLE user_understandings (
+        canonical_key TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO user_understandings(canonical_key, status, updated_at) VALUES
+        ('work-discovery:technology:one', 'active', 1),
+        ('work-discovery:workflow:two', 'candidate', 1),
+        ('work-discovery:focus:three', 'needs_review', 1),
+        ('work-discovery:preference:four', 'active', 1),
+        ('work-discovery:role:five', 'active', 1);
+    `);
+    setSchemaVersion(db, 132);
+
+    expect(applyPendingMigrations(db, {
+      migrationsDir: resolveMigrationsDir(),
+      targetVersion: 133,
+    })).toBe(133);
+
+    expect(db.prepare('SELECT canonical_key, status FROM user_understandings ORDER BY canonical_key').all())
+      .toEqual([
+        { canonical_key: 'work-discovery:focus:three', status: 'archived' },
+        { canonical_key: 'work-discovery:preference:four', status: 'active' },
+        { canonical_key: 'work-discovery:role:five', status: 'active' },
+        { canonical_key: 'work-discovery:technology:one', status: 'archived' },
+        { canonical_key: 'work-discovery:workflow:two', status: 'archived' },
+      ]);
+  });
+
   it('ensureXopcDatabaseSchema applies baseline then leaves version at release target', () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-schema-'));
     const dbPath = join(dir, 'xopc.db');
