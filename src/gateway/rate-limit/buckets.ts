@@ -102,10 +102,13 @@ class BucketRegistry {
     return this.authFailureLimiter;
   }
 
-  /** Sensitive admin / mutation endpoints — 15 req / 60 s per client IP. */
+  /** Authenticated admin / mutation endpoints — 150 req / 60 s per client IP. */
   strictApi(): RateLimiter {
     if (!this.strictApiLimiter) {
-      this.strictApiLimiter = new RateLimiter({ maxRequests: 15, windowMs: 60_000 });
+      // The web console shares this bucket across many independent settings and
+      // user-context actions. Keep a runaway-client brake without penalizing a
+      // normal burst of authenticated UI mutations.
+      this.strictApiLimiter = new RateLimiter({ maxRequests: 150, windowMs: 60_000 });
     }
     return this.strictApiLimiter;
   }
