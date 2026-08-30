@@ -45,6 +45,7 @@ import {
   TaskDependencyError,
   TaskDependencyService,
 } from '../../tasks/task-dependency-service.js';
+import { TaskDeletionService } from '../../tasks/task-deletion-service.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
@@ -58,7 +59,7 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
-      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit, task list/get/create/update_dependencies/add_context/remove_context/command, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
+      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -202,7 +203,7 @@ function deliveryForXopcResult(
   result: unknown,
   dryRun: boolean,
 ): ProductDeliveryEnvelope | undefined {
-  if (dryRun || command === 'list') return undefined;
+  if (dryRun || command === 'list' || command === 'delete') return undefined;
   const resultRecord = record(result);
   if (!resultRecord || resultRecord.ok === false) return undefined;
 
@@ -783,6 +784,21 @@ async function handleNote(
     return note ? { ok: true, note } : { ok: false, error: `Note not found: ${id}` };
   }
 
+  if (command === 'delete') {
+    const id = trimString(args.noteId) ?? trimString(args.id);
+    if (!id) return { ok: false, error: 'noteId is required' };
+    if (dryRun) {
+      const note = await notes.getNote(id);
+      return note
+        ? { ok: true, dryRun: true, action: 'delete_note', noteId: id, note }
+        : { ok: false, error: `Note not found: ${id}` };
+    }
+    const removed = await notes.deleteNote(id);
+    return removed
+      ? { ok: true, removed: true, noteId: id }
+      : { ok: false, error: `Note not found: ${id}` };
+  }
+
   return { ok: false, error: `Unsupported note command: ${command}` };
 }
 
@@ -797,6 +813,7 @@ async function handleTask(
   const context = new TaskContextRepository();
   const runs = new TaskRunRepository();
   const projector = new TaskReadModelProjector();
+  const deletion = new TaskDeletionService(tasks, runs);
 
   if (command === 'list') {
     const projectId = currentProjectId(args, deps);
@@ -842,6 +859,21 @@ async function handleTask(
       receipts: runs.listReceipts(id),
       waits: runs.listActiveWaits(id),
     };
+  }
+
+  if (command === 'delete') {
+    const id = trimString(args.taskId) ?? trimString(args.id);
+    if (!id) return { ok: false, error: 'taskId is required' };
+    const result = dryRun ? deletion.inspect(id) : deletion.delete(id);
+    if (result.ok === true) {
+      if (!dryRun) deps.dispatchTaskEvents?.();
+      return dryRun
+        ? { ok: true, dryRun: true, action: 'delete_task', taskId: id, task: result.task }
+        : { ok: true, removed: true, taskId: id };
+    }
+    return result.reason === 'active_run'
+      ? { ok: false, error: 'Cancel the active TaskRun before deleting the Task', runId: result.run.id }
+      : { ok: false, error: `Task not found: ${id}` };
   }
 
   if (command === 'create') {
