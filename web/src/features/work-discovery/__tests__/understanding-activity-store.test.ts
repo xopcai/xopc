@@ -44,7 +44,11 @@ describe('understanding activity store', () => {
       },
     } as unknown as ElectronAPI;
 
-    await useUnderstandingActivityStore.getState().collectSources(undefined, ['local-recent-files']);
+    await useUnderstandingActivityStore.getState().collectSources(
+      undefined,
+      ['local-recent-files'],
+      'remote_allowed',
+    );
 
     expect(useUnderstandingActivityStore.getState()).toMatchObject({
       status: 'partial',

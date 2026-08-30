@@ -2,6 +2,7 @@ import {
   getUnderstandingSourceGrant,
   listUnderstandingSourceGrants,
   revokeUnderstandingSourceGrant,
+  updateUnderstandingSourceGrantPolicies,
   upsertUnderstandingSourceGrant,
 } from '../user-context/sources/repository.js';
 
@@ -24,6 +25,7 @@ function directorySource(grant: ReturnType<typeof getUnderstandingSourceGrant>):
     displayName: grant.displayName,
     status: grant.status,
     scope: { readOnly: true },
+    processingPolicy: grant.processingPolicy,
     ...(fingerprint(grant.checkpoint) ? { fingerprint: fingerprint(grant.checkpoint) } : {}),
     ...(grant.lastCollectedAt != null ? { lastScannedAt: grant.lastCollectedAt } : {}),
     createdAt: grant.createdAt,
@@ -46,12 +48,13 @@ export function upsertWorkDiscoveryDirectorySource(input: {
   rootPath: string;
   displayName: string;
   fingerprint?: WorkDiscoveryPreview['fingerprint'];
+  processingPolicy?: 'local_only' | 'remote_allowed';
   scanned?: boolean;
   nowMs?: number;
 }): WorkDiscoveryDirectorySource {
   const existing = listUnderstandingSourceGrants({ includeRevoked: true })
     .find((grant) => grant.adapterId === ADAPTER_ID && grant.config.rootPath === input.rootPath);
-  const grant = upsertUnderstandingSourceGrant({
+  let grant = upsertUnderstandingSourceGrant({
     sourceKey: `local-work-folder:${input.rootPath}`,
     adapterId: ADAPTER_ID,
     category: 'files',
@@ -59,7 +62,7 @@ export function upsertWorkDiscoveryDirectorySource(input: {
     displayName: input.displayName,
     accessMode: 'continuous',
     retentionPolicy: 'derived_only',
-    processingPolicy: 'local_only',
+    processingPolicy: input.processingPolicy ?? existing?.processingPolicy ?? 'local_only',
     config: { rootPath: input.rootPath, readOnly: true },
     checkpoint: input.fingerprint
       ? { ...existing?.checkpoint, fingerprint: input.fingerprint }
@@ -67,6 +70,12 @@ export function upsertWorkDiscoveryDirectorySource(input: {
     ...(input.scanned ? { lastCollectedAt: input.nowMs ?? Date.now() } : {}),
     ...(input.nowMs != null ? { nowMs: input.nowMs } : {}),
   });
+  if (input.processingPolicy && grant.processingPolicy !== input.processingPolicy) {
+    grant = updateUnderstandingSourceGrantPolicies(grant.id, {
+      processingPolicy: input.processingPolicy,
+      ...(input.nowMs != null ? { nowMs: input.nowMs } : {}),
+    }) ?? grant;
+  }
   return directorySource(grant)!;
 }
 

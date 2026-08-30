@@ -203,6 +203,7 @@ describe('work discovery repository', () => {
     const source = upsertWorkDiscoveryDirectorySource({
       rootPath: '/workspace',
       displayName: 'workspace',
+      processingPolicy: 'remote_allowed',
       fingerprint: {
         branch: 'main',
         changedFileCount: 2,
@@ -213,7 +214,12 @@ describe('work discovery repository', () => {
     });
 
     expect(listWorkDiscoveryDirectorySources()).toEqual([
-      expect.objectContaining({ id: source.id, rootPath: '/workspace', scope: { readOnly: true } }),
+      expect.objectContaining({
+        id: source.id,
+        rootPath: '/workspace',
+        scope: { readOnly: true },
+        processingPolicy: 'remote_allowed',
+      }),
     ]);
     expect(revokeWorkDiscoveryDirectorySource(source.id, 20)).toMatchObject({ status: 'revoked', updatedAt: 20 });
     expect(listWorkDiscoveryDirectorySources()).toEqual([]);

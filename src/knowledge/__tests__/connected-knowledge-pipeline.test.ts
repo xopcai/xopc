@@ -155,4 +155,39 @@ describe('ConnectedKnowledgePipeline', () => {
     expect(listMemoryRecords({ providerId: 'connected-knowledge', kind: 'daily_note' })[0]?.status)
       .toBe('archived');
   });
+
+  it('deletes expired bounded raw items, item memories, and empty daily summaries together', async () => {
+    const sourceInstanceId = 'composio:composio-gmail:gmail-retention';
+    const items = upsertKnowledgeSourceItems([{
+      sourceInstanceId,
+      collectionScope: 'messages',
+      externalId: 'old-message',
+      itemType: 'gmail:message',
+      occurredAt: '2026-06-01T08:00:00.000Z',
+      contentHash: 'old-hash',
+      normalizedText: 'Old content that must expire with the bounded source item.',
+      metadata: { connectorId: 'composio-gmail' },
+      synthesisPipeline: 'connected_knowledge',
+    }, {
+      sourceInstanceId,
+      collectionScope: 'messages',
+      externalId: 'new-message',
+      itemType: 'gmail:message',
+      occurredAt: '2026-08-01T08:00:00.000Z',
+      contentHash: 'new-hash',
+      normalizedText: 'Recent content remains available.',
+      metadata: { connectorId: 'composio-gmail' },
+      synthesisPipeline: 'connected_knowledge',
+    }]).items;
+    await pipeline.processPending(sourceInstanceId);
+
+    const result = pipeline.pruneBoundedRetention(sourceInstanceId, Date.parse('2026-07-01T00:00:00.000Z'));
+
+    expect(result).toEqual({ rawDeleted: 1, derivedDeleted: 2 });
+    expect(listKnowledgeSourceItems({ sourceInstanceId }).map((item) => item.externalId)).toEqual(['new-message']);
+    expect(getMemoryRecord(`knowledge:${items[0]!.id}`)).toBeNull();
+    expect(getMemoryRecord(`knowledge:${items[1]!.id}`)).not.toBeNull();
+    expect(listMemoryRecords({ providerId: 'connected-knowledge', kind: 'daily_note' }))
+      .toEqual([expect.objectContaining({ content: expect.stringContaining('Recent content') })]);
+  });
 });
