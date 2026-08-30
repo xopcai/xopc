@@ -66,6 +66,39 @@ describe('ChatStreamMapper', () => {
     });
   });
 
+  it('maps Note context summaries to the realtime user message', () => {
+    const m = mapper();
+    const sourceContexts = [{
+      kind: 'note',
+      sourceId: 'note-1',
+      version: '42',
+      title: 'Launch plan',
+      text: 'private Note contents',
+    }];
+    const [event] = m.map({
+      type: 'user_message',
+      content: [{ type: 'text', text: 'analyze it' }],
+      metadata: { sourceContexts },
+    });
+
+    expect(event).toMatchObject({
+      type: 'user_message',
+      payload: {
+        message: {
+          metadata: {
+            sourceContexts: [{
+              kind: 'note',
+              sourceId: 'note-1',
+              version: '42',
+              title: 'Launch plan',
+            }],
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain('private Note contents');
+  });
+
   it('adds ambient-safe feedback to progress without inferring from its private message', () => {
     const m = mapper();
     const [progress] = m.map({
