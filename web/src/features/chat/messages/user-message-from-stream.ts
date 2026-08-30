@@ -20,6 +20,7 @@ export function userMessageFromStreamPayload(parsed: Record<string, unknown>): M
         content: parsed.content,
         media: parsed.media,
         attachments: parsed.attachments,
+        metadata: parsed.metadata,
         timestamp,
       },
     ]);

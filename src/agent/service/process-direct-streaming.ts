@@ -27,6 +27,7 @@ import type { ModelManager } from '../models/index.js';
 import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
 import {
   isSessionSourceBinding,
+  summarizeSourceContext,
   type AgentSourceContext,
   type AgentSourceContextResolver,
 } from '../source-context/types.js';
@@ -450,6 +451,9 @@ export async function* runProcessDirectStreaming(
           timestamp: userMessage.timestamp ?? Date.now(),
           content: readAgentMessageContent(userMessage),
           media: userMessage.media,
+          metadata: turnSourceContexts.length > 0
+            ? { sourceContexts: turnSourceContexts.map(summarizeSourceContext) }
+            : undefined,
         });
         if (textForAgent.trim()) {
           deps.enqueueProvisionalSessionTitle?.(sessionKey, textForAgent);

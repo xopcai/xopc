@@ -56,6 +56,29 @@ describe('userMessageFromStreamPayload', () => {
     expect(msg?.turnId).toBe('turn-1');
   });
 
+  it('parses Note context summaries from a realtime user message', () => {
+    const msg = userMessageFromStreamPayload({
+      content: 'analyze it',
+      metadata: {
+        sourceContexts: [{
+          kind: 'note',
+          sourceId: 'note-1',
+          version: '42',
+          title: 'Launch plan',
+          tokenEstimate: 120,
+        }],
+      },
+    });
+
+    expect(msg?.contextRefs).toEqual([{
+      kind: 'note',
+      sourceId: 'note-1',
+      version: '42',
+      title: 'Launch plan',
+      tokenEstimate: 120,
+    }]);
+  });
+
   it('parses user_transcript text shortcut', () => {
     const msg = userMessageFromStreamPayload({ text: 'voice line', timestamp: 9 });
     expect(msg?.content[0]).toEqual({ type: 'text', text: 'voice line' });

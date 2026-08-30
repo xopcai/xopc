@@ -622,13 +622,16 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         }
         const last = current.messages[current.messages.length - 1];
         if (last && shouldReplaceOptimisticUserRow(last, message)) {
+          const replacement = message.contextRefs?.length || !last.contextRefs?.length
+            ? message
+            : { ...message, contextRefs: last.contextRefs };
           return {
             sessions: {
               ...state.sessions,
               [key]: {
                 ...current,
                 messages: cloneMessages(
-                  mergeConsecutiveAssistantMessages([...current.messages.slice(0, -1), message]),
+                  mergeConsecutiveAssistantMessages([...current.messages.slice(0, -1), replacement]),
                 ),
               },
             },
