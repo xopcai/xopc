@@ -188,7 +188,7 @@ For \`update\`, patch fields may be direct args or nested under \`args.patch\`. 
 ## Tasks
 
 Commands: \`list\`, \`get\`, \`create\`, \`update_dependencies\`, \`add_context\`,
-\`remove_context\`, and \`command\`.
+\`remove_context\`, \`command\`, and \`delete\`.
 
 Task phases are \`backlog\`, \`ready\`, \`active\`, \`review\`, and \`closed\`.
 Operational state is projected separately as \`idle\`, \`queued\`, \`running\`, \`waiting\`,
@@ -198,6 +198,15 @@ free-form status update.
 \`task.get\` returns the Task, its projected \`model\`, dependencies, dependents, context,
 authority grants, TaskRuns, receipts, and waits.
 The projected model is the correct source for current operational state and attention items.
+
+\`delete\` permanently removes the Task and its contracts, waits, context links, TaskRuns,
+receipts, and Task-owned execution records. It does not delete linked Sessions, workspace files,
+or external artifacts. Cancel an active TaskRun before deletion, and use \`dryRun: true\` when
+the user's intent is ambiguous.
+
+\`\`\`json
+{ "mode": "task", "command": "delete", "args": { "taskId": "task_id" }, "dryRun": true }
+\`\`\`
 
 ### Capture or start
 
@@ -333,7 +342,7 @@ Do not guess commands such as retry, force-complete, heartbeat, or transition; t
 
 ## Notes
 
-Commands: \`list\`, \`get\`, \`create\`, \`append\`, \`preview_edit\`, and \`update\`.
+Commands: \`list\`, \`get\`, \`create\`, \`append\`, \`preview_edit\`, \`update\`, and \`delete\`.
 Use Notes for durable prose and reference material, not as a Task substitute. Prefer \`append\`
 when preserving user content. Use \`preview_edit\` before a canonical rewrite.
 
@@ -343,6 +352,14 @@ when preserving user content. Use \`preview_edit\` before a canonical rewrite.
 
 \`\`\`json
 { "mode": "note", "command": "append", "args": { "noteId": "note_id", "heading": "AI synthesis", "content": "..." } }
+\`\`\`
+
+Use \`update\` with \`status: "trashed"\` for a recoverable removal. \`delete\` permanently
+removes the Note and its stored snapshots and media; use \`dryRun: true\` first when the
+user's intent is ambiguous.
+
+\`\`\`json
+{ "mode": "note", "command": "delete", "args": { "noteId": "note_id" }, "dryRun": true }
 \`\`\`
 
 ## Local apps and settings

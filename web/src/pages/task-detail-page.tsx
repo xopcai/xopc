@@ -3,10 +3,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,7 +17,7 @@ import { fetchProjectOperatingView } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
 import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
-import { commandTask, handoffTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { cancelTaskRun, commandTask, deleteTask, handoffTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
@@ -184,7 +185,7 @@ function readTaskChatPanelPercent(): number {
 type DetailStatusKey = 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
 type VerificationStatus = 'passed' | 'failed' | 'unverified';
 type TaskEditConflict = 'title' | 'description' | null;
-type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies';
+type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delegateAgentId' | 'dependencies' | 'delete';
 
 function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
@@ -214,12 +215,14 @@ function TextList({ items, empty, verificationByCriterion }: {
   })}</ul>;
 }
 
-function TaskDetailView({ taskId, presentation, backgroundPath }: {
+function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   taskId: string;
   presentation: 'page' | 'modal';
   backgroundPath?: string;
+  onDeleted?: () => void;
 }) {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const language = useLocaleStore((state) => state.language);
   const token = useGatewayStore((state) => state.token);
   const copy = useMemo(() => taskCopy(language), [language]);
@@ -258,6 +261,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
   const detailRef = useRef<TaskDetail | undefined>(detail);
   const [editConflict, setEditConflict] = useState<TaskEditConflict>(null);
   const [recentChange, setRecentChange] = useState<TaskChangedEvent | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const dependencyPickerLabels = useMemo(() => ({
     link: copy.linkDependencies,
     linked: copy.linkedDependencies,
@@ -291,6 +295,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     setEditingTitle(false);
     setEditingDescription(false);
     setRecentChange(null);
+    setDeleteDialogOpen(false);
   }, [taskId]);
 
   useEffect(() => {
@@ -534,6 +539,20 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
     }
   }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
 
+  const removeTask = useCallback(async () => {
+    setOperationPending('delete', true);
+    setError(null);
+    try {
+      await deleteTask(taskId);
+      if (onDeleted) onDeleted();
+      else navigate(returnPath, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : copy.actionFailed);
+    } finally {
+      setOperationPending('delete', false);
+    }
+  }, [copy.actionFailed, navigate, onDeleted, returnPath, setOperationPending, taskId]);
+
   useLayoutEffect(() => {
     if (presentation === 'modal') return;
     setPageHeader({
@@ -586,6 +605,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
 
   const canMovePhase = detail.allowedCommands.includes('move');
   const commandPending = pendingOperations.has('command');
+  const deletePending = pendingOperations.has('delete');
+  const activeRun = detail.runs.find((run) => ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
+  const deleteBlocked = activeRun !== undefined;
   const taskActions = (
     <div className="flex flex-wrap gap-2">
       {canSchedule ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
@@ -594,7 +616,38 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
       {canApprove ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
       {canReopen ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
       {!activeWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
-      {detail.task.phase !== 'closed' ? <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-40 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"><DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void execute({ type: 'close', resolution: 'cancelled' })}>{copy.cancelTask}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root> : null}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending || deletePending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={6} className="z-[100] min-w-44 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+            {activeRun ? (
+              <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => {
+                setOperationPending('command', true);
+                setError(null);
+                void mutateDetail(cancelTaskRun(taskId, activeRun.id, activeRun.version), { revalidate: false })
+                  .catch(() => setError(copy.actionFailed))
+                  .finally(() => setOperationPending('command', false));
+              }}>{copy.cancelActiveRun}</DropdownMenu.Item>
+            ) : null}
+            {activeRun ? <DropdownMenu.Separator className="my-1 h-px bg-edge" /> : null}
+            {detail.task.phase !== 'closed' ? (
+              <>
+                <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => void execute({ type: 'close', resolution: 'cancelled' })}>{copy.cancelTask}</DropdownMenu.Item>
+                <DropdownMenu.Separator className="my-1 h-px bg-edge" />
+              </>
+            ) : null}
+            <DropdownMenu.Item className="cursor-pointer rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover focus:bg-surface-hover" onSelect={() => {
+              if (deleteBlocked) {
+                setError(copy.deleteActiveTaskBlocked);
+                return;
+              }
+              setDeleteDialogOpen(true);
+            }}>{copy.deleteTask}</DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 
@@ -806,6 +859,19 @@ function TaskDetailView({ taskId, presentation, backgroundPath }: {
           </div>
         )}
       </aside>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title={copy.deleteTaskTitle}
+        description={copy.deleteTaskDescription.replace('{{title}}', detail.task.title)}
+        confirmLabel={copy.confirmDeleteTask}
+        cancelLabel={copy.keepTask}
+        destructive
+        onConfirm={() => {
+          setDeleteDialogOpen(false);
+          void removeTask();
+        }}
+        onCancel={() => setDeleteDialogOpen(false)}
+      />
     </div>
   );
 }
@@ -909,7 +975,10 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
             </div>
           </header>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} />
+            <TaskDetailView taskId={taskId} presentation="modal" backgroundPath={backgroundPath} onDeleted={() => {
+              setPreviewPath(null);
+              onClose();
+            }} />
           </div>
         </Dialog.Content>
         {previewPath ? (

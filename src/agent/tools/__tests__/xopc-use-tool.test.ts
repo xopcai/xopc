@@ -169,6 +169,29 @@ describe('xopc_use tool', () => {
     expect(missingProject).toEqual({ ok: false, error: 'Project not found: missing-project' });
   });
 
+  it('deletes an automation without delivering a stale product link', async () => {
+    const automation = await automations.create({
+      name: 'Disposable automation',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'This automation will be deleted.' },
+    });
+    const tool = createXopcUseTool({ getAutomationService: () => automations });
+
+    const result = await tool.execute('call-automation-delete', {
+      mode: 'automation',
+      command: 'delete',
+      args: { automationId: automation.id },
+    });
+
+    expect(parseToolJson(result)).toMatchObject({
+      ok: true,
+      removed: true,
+      automation: { id: automation.id },
+    });
+    expect(result.details.delivery).toBeUndefined();
+    expect(await automations.get(automation.id)).toBeNull();
+  });
+
   it('resolves an existing workspace project', async () => {
     const workspaceRoot = mkdtempSync(join(stateDir, 'workspace-'));
     const project = projects.create({ name: 'Workspace Project', workspaceRoot });
@@ -284,6 +307,49 @@ describe('xopc_use tool', () => {
     expect(appended.note.markdown).toContain('Initial idea');
     expect(appended.note.markdown).toContain('## Review');
     expect(appended.note.markdown).toContain('Add preview before overwrite.');
+  });
+
+  it('previews and permanently deletes a note', async () => {
+    const note = await notes.createNote({
+      title: 'Disposable',
+      markdown: 'Remove this note.',
+      capturedVia: { channel: 'web' },
+    });
+    const tool = createXopcUseTool({
+      getNotesService: () => notes,
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+
+    const preview = parseToolJson(await tool.execute('call-note-delete-preview', {
+      mode: 'note',
+      command: 'delete',
+      dryRun: true,
+      args: { noteId: note.id },
+    }));
+    expect(preview).toMatchObject({
+      ok: true,
+      dryRun: true,
+      action: 'delete_note',
+      noteId: note.id,
+      note: { id: note.id, title: 'Disposable' },
+    });
+    expect(await notes.getNote(note.id)).not.toBeNull();
+
+    const deletedResult = await tool.execute('call-note-delete', {
+      mode: 'note',
+      command: 'delete',
+      args: { noteId: note.id },
+    });
+    expect(parseToolJson(deletedResult)).toEqual({ ok: true, removed: true, noteId: note.id });
+    expect(deletedResult.details.delivery).toBeUndefined();
+    expect(await notes.getNote(note.id)).toBeNull();
+
+    const missing = parseToolJson(await tool.execute('call-note-delete-missing', {
+      mode: 'note',
+      command: 'delete',
+      args: { noteId: note.id },
+    }));
+    expect(missing).toEqual({ ok: false, error: `Note not found: ${note.id}` });
   });
 
   it('creates and lists notes in the current session project', async () => {
@@ -442,6 +508,52 @@ describe('xopc_use tool', () => {
     expect(detail.context).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: context.edge.id, title: 'Launch plan' }),
     ]));
+  });
+
+  it('previews and permanently deletes an idle task', async () => {
+    const dispatchTaskEvents = vi.fn();
+    const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
+      getCurrentSessionKey: () => SESSION_KEY,
+      dispatchTaskEvents,
+    });
+    const created = parseToolJson(await tool.execute('call-task-delete-create', {
+      mode: 'task',
+      command: 'create',
+      args: { objective: 'Delete this captured Task' },
+    }));
+    const taskId = created.task.id as string;
+
+    const preview = parseToolJson(await tool.execute('call-task-delete-preview', {
+      mode: 'task',
+      command: 'delete',
+      dryRun: true,
+      args: { taskId },
+    }));
+    expect(preview).toMatchObject({
+      ok: true,
+      dryRun: true,
+      action: 'delete_task',
+      taskId,
+      task: { id: taskId },
+    });
+    dispatchTaskEvents.mockClear();
+
+    const deletedResult = await tool.execute('call-task-delete', {
+      mode: 'task',
+      command: 'delete',
+      args: { taskId },
+    });
+    expect(parseToolJson(deletedResult)).toEqual({ ok: true, removed: true, taskId });
+    expect(deletedResult.details.delivery).toBeUndefined();
+    expect(dispatchTaskEvents).toHaveBeenCalledOnce();
+
+    const missing = parseToolJson(await tool.execute('call-task-delete-get', {
+      mode: 'task',
+      command: 'get',
+      args: { taskId },
+    }));
+    expect(missing).toEqual({ ok: false, error: `Task not found: ${taskId}` });
   });
 
   it('cancels a TaskRun with optimistic concurrency and records a receipt', async () => {
