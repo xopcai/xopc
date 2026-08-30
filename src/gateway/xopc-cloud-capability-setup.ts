@@ -7,9 +7,10 @@ import {
   prepareUpdateGlobalDefaults,
 } from './global-defaults-admin.js';
 
-type CloudCapability = 'vision' | 'image-generation' | 'stt' | 'tts';
+type CloudCapability = 'chat' | 'vision' | 'image-generation' | 'stt' | 'tts';
 
 export interface XopcCloudCapabilitySelection {
+  chat: string;
   vision: string;
   imageGeneration: string;
   stt: string;
@@ -27,6 +28,10 @@ export type ApplyXopcCloudCapabilitySetupResult =
 
 function supportsCapability(model: CatalogModel, capability: CloudCapability): boolean {
   if (model.availability !== 'available') return false;
+  if (capability === 'chat') {
+    return model.kind === 'language'
+      && (model.operations.includes('chat.completions') || model.operations.includes('responses'));
+  }
   if (capability === 'vision') {
     return model.kind === 'language' && model.input.includes('image');
   }
@@ -45,7 +50,9 @@ function recommendedModel(
   source: CatalogSource,
   capability: CloudCapability,
 ): CatalogModel | undefined {
-  const recommendation = source.recommended?.[capability];
+  const recommendation = capability === 'chat'
+    ? source.recommendedModel ?? undefined
+    : source.recommended?.[capability];
   return source.models
     .filter((model) => supportsCapability(model, capability))
     .sort((left, right) => compareCatalogModels(left, right, recommendation))[0];
@@ -54,21 +61,24 @@ function recommendedModel(
 export function selectXopcCloudCapabilities(
   source: CatalogSource,
 ): { selection?: XopcCloudCapabilitySelection; missing: CloudCapability[] } {
+  const chat = recommendedModel(source, 'chat');
   const vision = recommendedModel(source, 'vision');
   const imageGeneration = recommendedModel(source, 'image-generation');
   const stt = recommendedModel(source, 'stt');
   const tts = recommendedModel(source, 'tts');
   const missing: CloudCapability[] = [];
+  if (!chat) missing.push('chat');
   if (!vision) missing.push('vision');
   if (!imageGeneration) missing.push('image-generation');
   if (!stt) missing.push('stt');
   if (!tts) missing.push('tts');
-  if (!vision || !imageGeneration || !stt || !tts || !tts.tts?.defaultVoice) {
+  if (!chat || !vision || !imageGeneration || !stt || !tts || !tts.tts?.defaultVoice) {
     return { missing };
   }
   return {
     missing,
     selection: {
+      chat: chat.id,
       vision: vision.id,
       imageGeneration: imageGeneration.id,
       stt: stt.id,
@@ -78,7 +88,7 @@ export function selectXopcCloudCapabilities(
   };
 }
 
-/** Build one atomic config update for every managed XOPC Cloud media capability. */
+/** Build one atomic config update for the managed XOPC Cloud chat and media capabilities. */
 export function prepareXopcCloudCapabilitySetup(
   config: Config,
   source: CatalogSource,
@@ -97,9 +107,18 @@ export function prepareXopcCloudCapabilitySetup(
   const presetId = normalized.agents.defaultPreset;
   const preset = normalized.agents.capabilityPresets[presetId];
   const currentModels = preset?.models;
+  const defaultRole = currentModels?.defaultRole ?? 'deep';
   const defaultsUpdate = prepareUpdateGlobalDefaults(normalized, {
     models: {
       ...currentModels,
+      defaultRole,
+      roles: {
+        ...(currentModels?.roles ?? {}),
+        [defaultRole]: {
+          ...currentModels?.roles?.[defaultRole],
+          model: `xopc-cloud/${selection.chat}`,
+        },
+      },
       imageModel: {
         ...currentModels?.imageModel,
         primary: `xopc-cloud/${selection.vision}`,

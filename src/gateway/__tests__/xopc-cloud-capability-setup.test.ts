@@ -40,6 +40,7 @@ function source(models: CatalogModel[]): CatalogSource {
 }
 
 const completeCatalog = source([
+  model({ id: 'chat', kind: 'language' }),
   model({ id: 'vision-other', kind: 'language', input: ['text', 'image'], priority: 0 }),
   model({ id: 'vision-recommended', kind: 'language', input: ['text', 'image'], priority: 10 }),
   model({ id: 'image-recommended', kind: 'image', output: ['image'], operations: ['images.generate'] }),
@@ -63,10 +64,11 @@ const completeCatalog = source([
 ]);
 
 describe('XOPC Cloud capability setup', () => {
-  it('selects the Cloud recommendation for all four capabilities', () => {
+  it('selects the Cloud recommendation for every managed capability', () => {
     expect(selectXopcCloudCapabilities(completeCatalog)).toEqual({
       missing: [],
       selection: {
+        chat: 'chat',
         vision: 'vision-recommended',
         imageGeneration: 'image-recommended',
         stt: 'stt-recommended',
@@ -76,7 +78,7 @@ describe('XOPC Cloud capability setup', () => {
     });
   });
 
-  it('writes STT, TTS, image understanding, and image generation in one config', () => {
+  it('writes chat, STT, TTS, image understanding, and image generation in one config', () => {
     const config = ConfigSchema.parse({
       agents: {
         capabilityPresets: {
@@ -86,7 +88,7 @@ describe('XOPC Cloud capability setup', () => {
             version: 1,
             models: {
               defaultRole: 'deep',
-              roles: { deep: { model: 'xopc-cloud/chat' } },
+              roles: { deep: { model: 'deepseek/deepseek-v4-flash' } },
             },
           },
         },
@@ -136,5 +138,12 @@ describe('XOPC Cloud capability setup', () => {
     const prepared = prepareXopcCloudCapabilitySetup(ConfigSchema.parse({}), incomplete);
 
     expect(prepared).toMatchObject({ ok: false, missing: ['image-generation'] });
+  });
+
+  it('requires an available chat model before reporting setup success', () => {
+    const incomplete = source(completeCatalog.models.filter((entry) => entry.kind !== 'language'));
+    const prepared = prepareXopcCloudCapabilitySetup(ConfigSchema.parse({}), incomplete);
+
+    expect(prepared).toMatchObject({ ok: false, missing: ['chat', 'vision'] });
   });
 });
