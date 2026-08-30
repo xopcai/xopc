@@ -138,6 +138,13 @@ export type WorkDiscoveryCandidate = {
   evidence: string[];
 };
 
+export type WorkDiscoveryProcessingTarget = {
+  provider: string;
+  remoteModel: boolean;
+};
+
+export type WorkDiscoveryProcessingPolicy = 'local_only' | 'remote_allowed';
+
 export async function fetchWorkDiscoveryOnboarding(): Promise<WorkDiscoveryOnboardingSnapshot> {
   return fetchJson<WorkDiscoveryOnboardingSnapshot>(apiUrl('/api/onboarding/work-discovery'));
 }
@@ -157,11 +164,17 @@ export async function previewWorkDiscoveryFolder(rootPath: string): Promise<Work
   return response.preview;
 }
 
-export async function discoverWorkDiscoveryCandidates(): Promise<WorkDiscoveryCandidate[]> {
-  const response = await fetchJson<{ candidates: WorkDiscoveryCandidate[] }>(apiUrl('/api/work-discovery/candidates'), {
+export async function discoverWorkDiscoveryCandidates(): Promise<{
+  candidates: WorkDiscoveryCandidate[];
+  processingTarget: WorkDiscoveryProcessingTarget;
+}> {
+  const response = await fetchJson<{
+    candidates: WorkDiscoveryCandidate[];
+    processingTarget: WorkDiscoveryProcessingTarget;
+  }>(apiUrl('/api/work-discovery/candidates'), {
     method: 'POST',
   });
-  return response.candidates;
+  return { candidates: response.candidates, processingTarget: response.processingTarget };
 }
 
 export type WorkDiscoveryDirectorySource = {
@@ -171,16 +184,20 @@ export type WorkDiscoveryDirectorySource = {
   displayName: string;
   status: 'active' | 'revoked';
   scope: { readOnly: true };
+  processingPolicy: WorkDiscoveryProcessingPolicy;
   fingerprint?: WorkDiscoveryPreview['fingerprint'];
   lastScannedAt?: number;
   createdAt: number;
   updatedAt: number;
 };
 
-export async function grantUnderstandingWorkFolder(rootPath: string): Promise<WorkDiscoveryDirectorySource> {
+export async function grantUnderstandingWorkFolder(
+  rootPath: string,
+  processingPolicy: WorkDiscoveryProcessingPolicy,
+): Promise<WorkDiscoveryDirectorySource> {
   const response = await fetchJson<{ source: WorkDiscoveryDirectorySource }>(apiUrl('/api/understanding/sources/work-folders'), {
     method: 'POST',
-    body: JSON.stringify({ rootPath }),
+    body: JSON.stringify({ rootPath, processingPolicy }),
   });
   return response.source;
 }
@@ -200,7 +217,9 @@ export async function importUnderstandingSources(items: Array<{
   ownerAttribution: 'user' | 'other' | 'shared' | 'unknown';
   sensitivity: 'normal' | 'personal' | 'secret' | 'regulated';
   evidenceRef: string;
-}>, workDiscoveryRunId?: string, sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>): Promise<{
+}>, workDiscoveryRunId: string | undefined,
+processingPolicy: WorkDiscoveryProcessingPolicy,
+sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>): Promise<{
   profileCandidates: WorkDiscoveryProfileCandidate[];
   workThreads: WorkUnderstandingThread[];
   focuses: import('../user-context/user-context-api').UserFocus[];
@@ -213,7 +232,15 @@ export async function importUnderstandingSources(items: Array<{
     sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
   }>(
     apiUrl('/api/understanding/bootstrap'),
-    { method: 'POST', body: JSON.stringify({ items, ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}), sourceCheckpoints }) },
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        items,
+        processingPolicy,
+        ...(workDiscoveryRunId ? { workDiscoveryRunId } : {}),
+        sourceCheckpoints,
+      }),
+    },
   );
 }
 
@@ -238,10 +265,12 @@ export async function startWorkDiscoveryRun(rootPath: string): Promise<WorkDisco
   return response.run;
 }
 
-export async function startQuickWorkDiscoveryRun(): Promise<WorkDiscoveryRun> {
+export async function startQuickWorkDiscoveryRun(
+  processingPolicy: WorkDiscoveryProcessingPolicy,
+): Promise<WorkDiscoveryRun> {
   const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl('/api/work-discovery/quick-runs'), {
     method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), processingPolicy }),
   });
   return response.run;
 }

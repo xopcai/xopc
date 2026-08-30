@@ -244,6 +244,8 @@ export {
 export {
   appendMemorySignal,
   appendMemoryTraceEvent,
+  countMemoryRecordsBySourceInstanceId,
+  deleteMemoryRecordsBySourceInstanceId,
   deleteMemoryRecord,
   getMemoryProviderState,
   getMemoryTurnFeedback,
@@ -274,8 +276,10 @@ export {
 export {
   attachMemoryEvidence,
   claimKnowledgeSourceItems,
+  countKnowledgeSourceItems,
   completeKnowledgeSourceItemSynthesis,
   deleteMemoryEvidenceForRecord,
+  deleteKnowledgeSourceItems,
   finishKnowledgeSyncRun,
   getKnowledgeConsumerWatermark,
   getKnowledgeSourceCursor,

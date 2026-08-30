@@ -9,6 +9,7 @@ import type {
   KnowledgeSyncRunStatus,
   KnowledgeSynthesisPipeline,
   KnowledgeSynthesisStatus,
+  KnowledgeRetentionClass,
 } from '../../knowledge/types.js';
 import type { MemoryEvidence, MemoryEvidenceRelation } from '../../agent/memory/types.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
@@ -431,6 +432,8 @@ export function listKnowledgeSourceItems(options: {
   collectionScope?: string;
   itemType?: string;
   synthesisStatus?: KnowledgeSynthesisStatus;
+  retentionClass?: KnowledgeRetentionClass;
+  retentionBeforeMs?: number;
   occurredAfterMs?: number;
   occurredBeforeMs?: number;
   orderBy?: 'recency_desc' | 'occurred_asc';
@@ -460,6 +463,14 @@ export function listKnowledgeSourceItems(options: {
     where.push('synthesis_status = ?');
     params.push(options.synthesisStatus);
   }
+  if (options.retentionClass) {
+    where.push('retention_class = ?');
+    params.push(options.retentionClass);
+  }
+  if (options.retentionBeforeMs !== undefined) {
+    where.push('COALESCE(source_updated_at, occurred_at, updated_at) < ?');
+    params.push(options.retentionBeforeMs);
+  }
   if (options.occurredAfterMs !== undefined) {
     where.push('occurred_at > ?');
     params.push(options.occurredAfterMs);
@@ -482,6 +493,19 @@ export function listKnowledgeSourceItems(options: {
     )
     .all(...params, limit, offset) as KnowledgeSourceItemRow[];
   return rows.map(sourceItemFromRow);
+}
+
+export function countKnowledgeSourceItems(sourceInstanceId: string): number {
+  const row = getSqliteDatabase().prepare(
+    'SELECT COUNT(*) AS count FROM knowledge_source_items WHERE source_instance_id = ?',
+  ).get(sourceInstanceId) as { count: number };
+  return Number(row.count);
+}
+
+export function deleteKnowledgeSourceItems(sourceInstanceId: string): number {
+  return runSqliteWriteTransaction((db) => Number(db.prepare(
+    'DELETE FROM knowledge_source_items WHERE source_instance_id = ?',
+  ).run(sourceInstanceId).changes));
 }
 
 export function pruneBoundedKnowledgeSourceItems(

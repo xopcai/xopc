@@ -76,7 +76,7 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     if (!service.isEnabled()) return c.json({ ok: false, error: 'Work discovery is disabled' }, 404);
     try {
       const candidates = await service.discoverCandidates(c.req.raw.signal);
-      return c.json({ ok: true, candidates });
+      return c.json({ ok: true, candidates, processingTarget: service.getModelProcessingTarget() });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }
@@ -86,9 +86,13 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     if (!service.isEnabled()) return c.json({ ok: false, error: 'Work discovery is disabled' }, 404);
     const body = await c.req.json().catch(() => null);
     const idempotencyKey = stringField(body, 'idempotencyKey');
+    const processingPolicy = stringField(body, 'processingPolicy');
     if (!idempotencyKey) return c.json({ ok: false, error: 'Missing idempotencyKey' }, 400);
+    if (processingPolicy !== 'local_only' && processingPolicy !== 'remote_allowed') {
+      return c.json({ ok: false, error: 'Explicit processingPolicy is required' }, 400);
+    }
     try {
-      const run = await service.startQuickRun({ idempotencyKey });
+      const run = await service.startQuickRun({ idempotencyKey, processingPolicy });
       return c.json({ ok: true, run }, 202);
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
