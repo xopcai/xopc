@@ -53,6 +53,7 @@ export class TunnelService extends EventEmitter {
   private lastError: string | null = null;
   private state: TunnelStatus['state'] = 'disconnected';
   private reconnectAttempt = 0;
+  private reconnectTask: Promise<void> | null = null;
   private stopping = false;
   private startContext: { gatewayPort: number; gatewayToken: string } | null = null;
   private frpcDownload: FrpcDownloadProgress | null = null;
@@ -292,15 +293,18 @@ export class TunnelService extends EventEmitter {
     heartbeatIntervalMs: number,
   ): Promise<void> {
     if (this.frpcHandle) {
-      await this.frpcHandle.kill();
+      const previousHandle = this.frpcHandle;
       this.frpcHandle = null;
+      await previousHandle.kill();
     }
 
     const handle = spawnFrpcProcess(frpcBin, configPath);
     this.frpcHandle = handle;
 
     handle.onExit((code, signal) => {
-      if (this.stopping) return;
+      // Replacing frpc intentionally kills the previous handle. Ignore that
+      // stale exit instead of turning it into another reconnect attempt.
+      if (this.stopping || this.frpcHandle !== handle) return;
       log.warn({ code, signal, pid: handle.pid }, 'frpc process exited');
       this.clearHeartbeat();
       this.frpcHandle = null;
@@ -319,32 +323,51 @@ export class TunnelService extends EventEmitter {
     heartbeatIntervalMs: number,
   ): Promise<void> {
     if (this.stopping) return;
+    if (this.reconnectTask) return this.reconnectTask;
+
+    const task = this.runReconnectLoop(frpcBin, configPath, broker, state, heartbeatIntervalMs)
+      .finally(() => {
+        if (this.reconnectTask === task) this.reconnectTask = null;
+      });
+    this.reconnectTask = task;
+    return task;
+  }
+
+  private async runReconnectLoop(
+    frpcBin: string,
+    configPath: string,
+    broker: TunnelBrokerClient,
+    state: PersistedTunnelState,
+    heartbeatIntervalMs: number,
+  ): Promise<void> {
     const maxAttempts = 5;
-    this.reconnectAttempt += 1;
-    if (this.reconnectAttempt > maxAttempts) {
-      this.state = 'error';
-      this.lastError = 'frpc reconnect failed after maximum attempts';
-      log.error({ attempts: maxAttempts }, this.lastError);
-      this.emit('tunnel:error', this.lastError);
-      return;
-    }
+    while (!this.stopping) {
+      this.reconnectAttempt += 1;
+      if (this.reconnectAttempt > maxAttempts) {
+        this.state = 'error';
+        this.lastError = 'frpc reconnect failed after maximum attempts';
+        log.error({ attempts: maxAttempts }, this.lastError);
+        this.emit('tunnel:error', this.lastError);
+        return;
+      }
 
-    this.state = 'reconnecting';
-    this.setStartPhase('reconnecting_frpc', { publicUrl: state.publicUrl ?? null });
-    const delayMs = Math.min(16_000, 1000 * 2 ** (this.reconnectAttempt - 1));
-    log.info({ attempt: this.reconnectAttempt, delayMs }, 'Scheduling frpc reconnect');
-    await new Promise((r) => setTimeout(r, delayMs));
-    if (this.stopping) return;
+      this.state = 'reconnecting';
+      this.setStartPhase('reconnecting_frpc', { publicUrl: state.publicUrl ?? null });
+      const delayMs = Math.min(16_000, 1000 * 2 ** (this.reconnectAttempt - 1));
+      log.info({ attempt: this.reconnectAttempt, delayMs }, 'Scheduling frpc reconnect');
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      if (this.stopping) return;
 
-    try {
-      await this.spawnAndWait(frpcBin, configPath, broker, state, heartbeatIntervalMs);
-      this.clearStartProgress();
-      this.state = 'connected';
-      this.reconnectAttempt = 0;
-      this.emit('tunnel:connected');
-    } catch (err) {
-      this.lastError = err instanceof Error ? err.message : String(err);
-      void this.scheduleReconnect(frpcBin, configPath, broker, state, heartbeatIntervalMs);
+      try {
+        await this.spawnAndWait(frpcBin, configPath, broker, state, heartbeatIntervalMs);
+        this.clearStartProgress();
+        this.state = 'connected';
+        this.reconnectAttempt = 0;
+        this.emit('tunnel:connected');
+        return;
+      } catch (err) {
+        this.lastError = err instanceof Error ? err.message : String(err);
+      }
     }
   }
 

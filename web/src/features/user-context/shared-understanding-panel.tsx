@@ -36,6 +36,7 @@ const COPY = {
     noUnderstanding: 'No confirmed understanding yet. Add one directly or review a suggestion.',
     selectedDetail: 'Selected understanding', focusDetail: 'Selected focus', scope: 'Scope', source: 'Origin',
     global: 'Across xopc', workspace: 'Workspace', project: 'Project', session: 'Conversation',
+    active: 'Active', horizonCurrent: 'Right now', horizonOngoing: 'Ongoing', horizonLongTerm: 'Long term', moreFocuses: 'more active focuses',
     explicit: 'Told by you', observed: 'Observed over time', inferred: 'Inferred — may be wrong',
     validSince: 'Valid since', validUntil: 'Valid until', updated: 'Updated', reviewDue: 'Review due',
     edit: 'Edit', save: 'Save', cancel: 'Cancel', pause: 'Pause', complete: 'Complete', archive: 'Archive', incorrect: 'Not true',
@@ -57,6 +58,7 @@ const COPY = {
     noUnderstanding: '还没有已确认的理解。你可以直接添加，或确认一条建议。',
     selectedDetail: '选中的理解', focusDetail: '选中的关注', scope: '适用范围', source: '形成方式',
     global: '全局适用', workspace: '工作区', project: '项目', session: '当前对话',
+    active: '生效中', horizonCurrent: '当下', horizonOngoing: '持续推进', horizonLongTerm: '长期方向', moreFocuses: '项进行中的关注',
     explicit: '由你直接告知', observed: '从长期共事中观察到', inferred: '推断内容，可能有误',
     validSince: '开始成立', validUntil: '有效至', updated: '最近更新', reviewDue: '建议复核',
     edit: '编辑', save: '保存', cancel: '取消', pause: '暂停', complete: '完成', archive: '归档', incorrect: '不正确',
@@ -138,6 +140,9 @@ function PortraitView({ focuses, understandings, language, t, onRefresh }: {
   const [selectionKey, setSelectionKey] = useState(initialSelection ? `${initialSelection.type}:${initialSelection.item.id}` : '');
   const selection = resolveSelection(selectionKey, focuses, understandings) ?? initialSelection;
   const leadFocus = focuses[0];
+  const compactedFocuses = compactFocuses(focuses);
+  const visibleFocuses = compactedFocuses.slice(0, 5);
+  const hiddenFocusCount = Math.max(0, compactedFocuses.length - visibleFocuses.length);
 
   useEffect(() => {
     if (selection || !initialSelection) return;
@@ -150,24 +155,30 @@ function PortraitView({ focuses, understandings, language, t, onRefresh }: {
     <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-panel">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/45 to-transparent" aria-hidden="true" />
       <div className="grid gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12 lg:px-10 lg:py-11">
-        <div className="min-w-0">
+        <div className="flex min-h-[18rem] min-w-0 flex-col">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent"><Sparkles className="size-3.5" />{t.portraitHint}</div>
           {leadFocus ? <>
             <button type="button" className="mt-7 block max-w-3xl text-left" onClick={() => setSelectionKey(`focus:${leadFocus.id}`)}>
               <h2 className="text-2xl font-semibold leading-tight tracking-tight text-fg sm:text-3xl">{leadFocus.title}</h2>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-fg-muted sm:text-base">{leadFocus.summary}</p>
             </button>
-            <p className="mt-7 text-xs text-fg-subtle">{t.updated} · {formatDate(leadFocus.updatedAt, language)}</p>
+            <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-8 text-xs text-fg-subtle">
+              <span className="inline-flex items-center gap-1.5 text-fg-muted"><span className="size-1.5 rounded-full bg-success" />{t.active}</span>
+              <span>{horizonLabel(leadFocus.horizon, t)}</span>
+              <span>{scopeLabel(leadFocus.scope, t)}</span>
+              <span>{t.updated} · {formatDate(leadFocus.updatedAt, language)}</span>
+            </div>
           </> : <p className="mt-7 max-w-2xl text-base leading-7 text-fg-muted">{t.noFocus}</p>}
         </div>
-        <div className="rounded-2xl border border-edge bg-surface-base/70 p-5">
+        <div className="self-start rounded-2xl border border-edge bg-surface-base/70 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-fg-subtle">{t.importantNow}</p>
           {focuses.length ? <div className="mt-4 space-y-1">
-            {focuses.map((focus, index) => <button key={focus.id} type="button" onClick={() => setSelectionKey(`focus:${focus.id}`)} className={`group flex w-full items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors ${selection?.type === 'focus' && selection.item.id === focus.id ? 'bg-accent-soft' : 'hover:bg-surface-hover'}`}>
+            {visibleFocuses.map((focus, index) => <button key={focus.id} type="button" onClick={() => setSelectionKey(`focus:${focus.id}`)} className={`group flex w-full items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors ${selection?.type === 'focus' && selection.item.id === focus.id ? 'bg-accent-soft' : 'hover:bg-surface-hover'}`}>
               <span className={`mt-2 size-1.5 shrink-0 rounded-full ${index === 0 ? 'bg-accent' : 'bg-success'}`} />
               <span className="min-w-0 flex-1"><span className="line-clamp-2 text-sm leading-6 text-fg">{focus.title}</span><span className="mt-0.5 block text-[11px] text-fg-subtle">{formatDate(focus.updatedAt, language)}</span></span>
               <ChevronRight className="mt-1 size-3.5 shrink-0 text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100" />
             </button>)}
+            {hiddenFocusCount ? <p className="border-t border-edge px-2.5 pt-3 text-[11px] text-fg-subtle">+{hiddenFocusCount} {t.moreFocuses}</p> : null}
           </div> : <p className="mt-4 text-sm leading-6 text-fg-muted">{t.noFocus}</p>}
         </div>
       </div>
@@ -202,6 +213,16 @@ function resolveSelection(key: string, focuses: UserFocus[], understandings: Use
     return item ? { type: 'understanding', item } : null;
   }
   return null;
+}
+
+function compactFocuses(focuses: UserFocus[]): UserFocus[] {
+  const seenTitles = new Set<string>();
+  return focuses.filter((focus) => {
+    const key = focus.title.trim().toLocaleLowerCase();
+    if (seenTitles.has(key)) return false;
+    seenTitles.add(key);
+    return true;
+  });
 }
 
 function PortraitDetail({ selection, language, t, onRefresh }: {
@@ -357,6 +378,12 @@ function timelineLabel(status: UserFocus['status'] | UserUnderstanding['status']
 function scopeLabel(scope: UserFocus['scope'], t: Copy): string {
   const base = scope.type === 'global' ? t.global : scope.type === 'workspace' ? t.workspace : scope.type === 'project' ? t.project : t.session;
   return scope.id ? `${base} · ${scope.id}` : base;
+}
+
+function horizonLabel(horizon: UserFocus['horizon'], t: Copy): string {
+  if (horizon === 'long_term') return t.horizonLongTerm;
+  if (horizon === 'ongoing') return t.horizonOngoing;
+  return t.horizonCurrent;
 }
 
 function formatDate(timestamp: number, language: 'en' | 'zh', includeYear = false): string {
