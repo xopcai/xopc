@@ -1,6 +1,11 @@
 // Text scrubbing applied to persisted user-message content so the UI re-renders
 // the original wire form (rather than the server-expanded skill/file bodies).
 
+import {
+  stripRuntimeUserMessageEnvelope,
+  stripSourceContextsEnvelope,
+} from '@xopcai/gateway-contract';
+
 const STARTUP_CONTEXT_MARKER = '[Startup context loaded by runtime]';
 const STARTUP_MEMORY_TRUNCATED = '...[additional startup memory truncated]...';
 const STARTUP_MEMORY_END = 'END_QUOTED_NOTES';
@@ -108,10 +113,16 @@ export function stripMediaAttachedClaimCheck(text: string): string {
 /** Full user-bubble scrub for persisted transcript text. */
 export function stripUserMessageForDisplay(text: string): string {
   let out = stripStartupContextForDisplay(text);
+  out = stripRuntimeUserMessageEnvelope(out);
   out = stripExpandedAtFileBlocks(out);
   out = stripMediaAttachedClaimCheck(out);
   out = stripImageUnderstandingContext(out);
   return collapseExpandedSkillBlockForDisplay(out);
+}
+
+/** Remove message-level source snapshots; summary refs are rendered as chips from metadata. */
+export function stripSourceContextsForDisplay(text: string): string {
+  return stripSourceContextsEnvelope(text);
 }
 
 const IMAGE_UNDERSTANDING_CONTEXT_RE =

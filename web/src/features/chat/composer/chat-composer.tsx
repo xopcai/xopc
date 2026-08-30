@@ -8,6 +8,7 @@ import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
+import { ComposerContextChips } from '@/features/chat/composer/composer-context-chips';
 import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
@@ -22,7 +23,12 @@ import {
   type WorkspaceTrustState,
 } from '@/features/chat/palette/command-palette-api';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
-import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
+import {
+  interpolate,
+  MAX_COMPOSER_CONTEXT_REFS,
+  type ComposerContextRef,
+  type WireAttachment,
+} from '@/features/chat/composer/composer.types';
 import type { FillChatComposerDetail } from '@/features/chat/composer/fill-composer-dispatch';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
 import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome-suggestions';
@@ -119,10 +125,10 @@ export const ChatComposer = memo(function ChatComposer({
   thinkingLevel: string;
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void;
-  onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string) => void;
+  onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void;
   onAbort: () => void;
-  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[]) => void | Promise<void>;
-  onSteeringInterrupt?: (text: string, attachments?: WireAttachment[]) => void;
+  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
+  onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   pendingFollowUps: PendingFollowUp[];
   editingFollowUpId: string | null;
   onBeginEditFollowUp: (id: string) => void;
@@ -132,6 +138,7 @@ export const ChatComposer = memo(function ChatComposer({
     text: string,
     attachments?: PendingFollowUp['attachments'],
     thinkingLevel?: string,
+    contextRefs?: ComposerContextRef[],
   ) => void;
   onPendingFollowUpRemove: (id: string) => void;
   onPendingFollowUpMove: (id: string, dir: 'up' | 'down') => void;
@@ -157,6 +164,7 @@ export const ChatComposer = memo(function ChatComposer({
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [contextRefs, setContextRefs] = useState<ComposerContextRef[]>([]);
   const [workspaceTrustPrompt, setWorkspaceTrustPrompt] = useState<WorkspaceTrustState | null>(null);
   const [workspaceTrustDismissedFor, setWorkspaceTrustDismissedFor] = useState<string | null>(null);
   const [workspaceTrustSaving, setWorkspaceTrustSaving] = useState(false);
@@ -203,12 +211,30 @@ export const ChatComposer = memo(function ChatComposer({
 
   const att = useComposerAttachments({ chat: m.chat });
   const onExternalTextReplace = useCallback((detail?: FillChatComposerDetail) => {
+    setContextRefs(detail?.contextRefs ?? []);
     if (detail?.attachments) {
       att.setAttachments(detail.attachments.map(composerAttachmentFromWire));
       return;
     }
     att.clearAttachments();
   }, [att.clearAttachments, att.setAttachments]);
+
+  useEffect(() => {
+    setContextRefs([]);
+  }, [sessionKey]);
+
+  const addContextRef = useCallback((ref: ComposerContextRef) => {
+    setContextRefs((current) => {
+      if (current.some((item) => item.sourceId === ref.sourceId)) return current;
+      if (current.length >= MAX_COMPOSER_CONTEXT_REFS) {
+        showComposerNotification('warning', m.chat.commandPalette.contextLimitReached, {
+          max: MAX_COMPOSER_CONTEXT_REFS,
+        });
+        return current;
+      }
+      return [...current, ref];
+    });
+  }, [m.chat.commandPalette.contextLimitReached]);
 
   const onUnavailableSkill = useCallback(
     (item: import('@/features/chat/palette/command-palette.types').PaletteItem) => {
@@ -274,10 +300,11 @@ export const ChatComposer = memo(function ChatComposer({
 
   const sendReviewCommand = useCallback(
     (command: string) => {
-      onSendRef.current(command, undefined, thinkingLevelRef.current);
+      onSendRef.current(command, undefined, thinkingLevelRef.current, contextRefs);
       onUserTextCommitted?.(command);
+      setContextRefs([]);
     },
-    [onUserTextCommitted],
+    [contextRefs, onUserTextCommitted],
   );
 
   const pickers = useComposerPickers({
@@ -295,12 +322,15 @@ export const ChatComposer = memo(function ChatComposer({
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
+    contextRefs,
+    onAddContextRef: addContextRef,
     onUnavailableSkill,
     onReviewLauncher: openReviewLauncher,
     onAddPendingFollowUp,
     onAbort,
     pendingFollowUpsCount: pendingFollowUps.length,
     maxPendingFollowUps: MAX_PENDING_FOLLOW_UPS,
+    clearContextRefs: () => setContextRefs([]),
     commandPalettePanelRef,
   });
 
@@ -384,6 +414,7 @@ export const ChatComposer = memo(function ChatComposer({
     getTextValue: () => editor.valueRef.current,
     getAttachmentCount: () => att.attachmentsRef.current.length,
     wireAttachmentsPayload: att.wireAttachmentsPayload,
+    getContextRefs: () => contextRefs,
     getThinkingLevel: () => thinkingLevelRef.current,
     onSend,
     onAddPendingFollowUp,
@@ -395,6 +426,7 @@ export const ChatComposer = memo(function ChatComposer({
       editor.resetEditor();
     },
     clearAttachments: att.clearAttachments,
+    clearContextRefs: () => setContextRefs([]),
     clearEditFollowUpRef,
     onUserTextCommitted,
   });
@@ -403,6 +435,7 @@ export const ChatComposer = memo(function ChatComposer({
     if (!editingFollowUpId) {
       if (lastLoadedEditFollowUpIdRef.current) {
         att.clearAttachments();
+        setContextRefs([]);
         editor.resetEditor();
         lastLoadedEditFollowUpIdRef.current = null;
       }
@@ -421,6 +454,7 @@ export const ChatComposer = memo(function ChatComposer({
       onThinkingChange(row.thinkingLevel);
     }
     att.setAttachments(wireFollowUpAttachmentsToComposer(row.attachments ?? []));
+    setContextRefs(row.contextRefs ?? []);
     editor.resetEditor({ nextText: row.text, focus: true });
   }, [
     att.clearAttachments,
@@ -560,6 +594,12 @@ export const ChatComposer = memo(function ChatComposer({
         onRemove={att.removeAttachment}
       />
 
+      <ComposerContextChips
+        refs={contextRefs}
+        label={m.chat.commandPalette.noteContextLabel}
+        onRemove={(sourceId) => setContextRefs((current) => current.filter((ref) => ref.sourceId !== sourceId))}
+      />
+
 
       <div className="flex min-h-0 shrink-0 flex-col">
         <input
@@ -600,15 +640,18 @@ export const ChatComposer = memo(function ChatComposer({
             selectedIndex={pickers.palette.selectedIndex}
             noResults={pickers.palette.loadError ?? m.chat.commandPalette.noResults}
             grouped={pickers.palette.loadError ? false : pickers.palette.grouped}
+            noteRowCount={pickers.palette.loadError ? 0 : pickers.palette.noteRowCount}
             skillRowCount={pickers.palette.loadError ? 0 : pickers.palette.skillRowCount}
             commandRowCount={pickers.palette.loadError ? 0 : pickers.palette.commandRowCount}
             query={pickers.palette.query}
             skillsLabel={m.chat.commandPalette.skillsSection}
             commandsLabel={m.chat.commandPalette.commandsSection}
             agentsLabel={m.chat.commandPalette.agentsSection}
+            notesLabel={m.chat.commandPalette.notesSection}
             groupedHasSkills={pickers.palette.loadError ? false : pickers.palette.groupedHasSkills}
             groupedHasCommands={pickers.palette.loadError ? false : pickers.palette.groupedHasCommands}
             groupedHasAgents={pickers.palette.loadError ? false : pickers.palette.groupedHasAgents}
+            groupedHasNotes={pickers.palette.loadError ? false : pickers.palette.groupedHasNotes}
             groupedSkillsShowMoreLabel={
               pickers.palette.loadError || !pickers.palette.grouped
                 ? null
@@ -630,9 +673,17 @@ export const ChatComposer = memo(function ChatComposer({
                   ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedAgentsMoreCount })
                   : null
             }
+            groupedNotesShowMoreLabel={
+              pickers.palette.loadError || !pickers.palette.grouped
+                ? null
+                : pickers.palette.groupedNotesMoreCount > 0
+                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedNotesMoreCount })
+                  : null
+            }
             onExpandSkills={pickers.palette.expandGroupedSkills}
             onExpandCommands={pickers.palette.expandGroupedCommands}
             onExpandAgents={pickers.palette.expandGroupedAgents}
+            onExpandNotes={pickers.palette.expandGroupedNotes}
             currentAgentId={currentAgentId}
             currentBadgeLabel={m.chat.commandPalette.currentBadge}
             runBusy={runBusy}

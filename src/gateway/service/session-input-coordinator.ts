@@ -4,11 +4,17 @@ import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { UserTurnAttachment } from '../user-turn-input.js';
 import {
+  summarizeSourceContext,
+  type AgentSourceContext,
+  type TurnContextRef,
+} from '../../agent/source-context/types.js';
+import {
   cancelQueuedSessionInput,
   claimNextSessionInput,
   findSessionInput,
   finishSessionInputRun,
   getSessionInputState,
+  getSessionInputById,
   insertSessionInput,
   mutateQueuedSessionInput,
   recoverSessionInputState,
@@ -24,12 +30,26 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('SessionInputCoordinator');
 const MAX_PENDING_INPUTS = 10;
 
+function contextRefsMatchFrozenSnapshot(
+  requested: readonly TurnContextRef[],
+  frozen: SessionInputState['inputs'][number]['contextRefs'],
+): boolean {
+  if (requested.length !== (frozen?.length ?? 0)) return false;
+  return requested.every((ref, index) => {
+    const snapshot = frozen?.[index];
+    return snapshot?.kind === ref.kind
+      && snapshot.sourceId === ref.sourceId
+      && ref.expectedVersion === snapshot.version;
+  });
+}
+
 export type SubmitSessionInput = {
   sessionKey: string;
   clientMessageId: string;
   delivery: SessionInputDelivery;
   content: string;
   attachments?: UserTurnAttachment[];
+  contextRefs?: TurnContextRef[];
   thinking?: string;
   origin: TurnOrigin;
 };
@@ -49,6 +69,7 @@ export class SessionInputCoordinator {
       sessionKey: string;
       content: string;
       attachments?: UserTurnAttachment[];
+      sourceContexts?: AgentSourceContext[];
       thinking?: string;
       origin: TurnOrigin;
     }) => Promise<{ status: string; summary: string }>;
@@ -56,6 +77,7 @@ export class SessionInputCoordinator {
       sessionKey: string,
       attachments?: UserTurnAttachment[],
     ) => Promise<UserTurnAttachment[] | undefined>;
+    prepareContexts: (contextRefs?: TurnContextRef[]) => Promise<AgentSourceContext[] | undefined>;
     steer: (sessionKey: string, content: string) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
@@ -87,7 +109,7 @@ export class SessionInputCoordinator {
 
   async submit(input: SubmitSessionInput): Promise<
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' }
+    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' }
   > {
     const sessionKey = input.sessionKey.trim();
     return this.runSubmissionExclusive(sessionKey, () => this.submitLocked({ ...input, sessionKey }));
@@ -98,7 +120,7 @@ export class SessionInputCoordinator {
     beforeReplace: () => Promise<void>,
   ): Promise<
     | { ok: true; effectiveDelivery: 'next'; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' }
+    | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' | 'CONTEXT_UNAVAILABLE' }
   > {
     const sessionKey = input.sessionKey.trim();
     return this.runSubmissionExclusive(sessionKey, async () => {
@@ -120,12 +142,21 @@ export class SessionInputCoordinator {
 
       await beforeReplace();
       const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
+      let sourceContexts: AgentSourceContext[] | undefined;
+      try {
+        sourceContexts = await this.deps.prepareContexts(input.contextRefs);
+      } catch (err) {
+        log.warn({ err, sessionKey }, 'Session input context preparation failed');
+        return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
+      }
       const result = replaceLatestSessionTurnAndQueueInput({
         sessionKey,
         targetTurnId,
         clientMessageId,
         content,
         attachments,
+        contextRefs: sourceContexts?.map(summarizeSourceContext),
+        contextSnapshots: sourceContexts,
         thinking: input.thinking,
         origin: input.origin,
       });
@@ -150,7 +181,7 @@ export class SessionInputCoordinator {
 
   private async submitLocked(input: SubmitSessionInput): Promise<
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' }
+    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' }
   > {
     const sessionKey = input.sessionKey;
     const clientMessageId = input.clientMessageId.trim();
@@ -169,11 +200,19 @@ export class SessionInputCoordinator {
     }
 
     const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
+    let sourceContexts: AgentSourceContext[] | undefined;
+    try {
+      sourceContexts = await this.deps.prepareContexts(input.contextRefs);
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Session input context preparation failed');
+      return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
+    }
     const runtime = this.snapshot(sessionKey);
     const canSteer = input.origin.type !== 'endpoint'
       && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
-      && !attachments?.length;
+      && !attachments?.length
+      && !sourceContexts?.length;
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
     const row = insertSessionInput({
       id: crypto.randomUUID(),
@@ -184,6 +223,8 @@ export class SessionInputCoordinator {
       status: canSteer ? 'injecting' : 'queued',
       content,
       attachments,
+      contextRefs: sourceContexts?.map(summarizeSourceContext),
+      contextSnapshots: sourceContexts,
       thinking: input.thinking,
       origin: input.origin,
       targetRunId: canSteer ? runtime.activeRunId : undefined,
@@ -219,6 +260,7 @@ export class SessionInputCoordinator {
             sessionKey,
             content: input.content,
             attachments: input.attachments as UserTurnAttachment[] | undefined,
+            sourceContexts: input.contextSnapshots,
             thinking: input.thinking,
             origin: input.origin,
           });
@@ -241,12 +283,32 @@ export class SessionInputCoordinator {
   }
 
   async update(sessionKey: string, id: string, body: {
-    version: number; content?: string; attachments?: UserTurnAttachment[]; thinking?: string; position?: number;
-  }): Promise<{ ok: boolean; state: SessionInputState }> {
+    version: number; content?: string; attachments?: UserTurnAttachment[]; contextRefs?: TurnContextRef[];
+    thinking?: string; position?: number;
+  }): Promise<{ ok: boolean; state: SessionInputState; contextUnavailable?: boolean }> {
     const attachments = body.attachments === undefined
       ? undefined
       : await this.deps.prepareAttachments(sessionKey, body.attachments);
-    const ok = mutateQueuedSessionInput({ sessionKey, id, ...body, attachments });
+    let sourceContexts: AgentSourceContext[] | undefined;
+    if (body.contextRefs !== undefined) {
+      const existing = getSessionInputById(sessionKey, id);
+      if (!contextRefsMatchFrozenSnapshot(body.contextRefs, existing?.contextRefs)) {
+        try {
+          sourceContexts = await this.deps.prepareContexts(body.contextRefs) ?? [];
+        } catch (err) {
+          log.warn({ err, sessionKey, inputId: id }, 'Queued input context preparation failed');
+          return { ok: false, contextUnavailable: true, state: this.snapshot(sessionKey) };
+        }
+      }
+    }
+    const ok = mutateQueuedSessionInput({
+      sessionKey,
+      id,
+      ...body,
+      attachments,
+      contextRefs: sourceContexts?.map(summarizeSourceContext),
+      contextSnapshots: sourceContexts,
+    });
     return { ok, state: ok ? this.publish(sessionKey) : this.snapshot(sessionKey) };
   }
 

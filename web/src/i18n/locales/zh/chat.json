@@ -1080,8 +1080,13 @@
       "exited": "进程已退出，代码 {{code}}"
     },
     "commandPalette": {
-      "noResults": "没有匹配的命令或技能",
-      "placeholder": "搜索技能与命令…",
+      "noResults": "没有匹配的 Note、命令或技能",
+      "placeholder": "搜索 Note、技能与命令…",
+      "notesSection": "Note",
+      "untitledNote": "未命名 Note",
+      "noteContextLabel": "引用的 Note",
+      "contextLimitReached": "每条消息最多引用 {{max}} 个 Note",
+      "contextTruncated": "该 Note 上下文已截断以适配上下文预算",
       "skillsSection": "技能",
       "commandsSection": "命令",
       "agentsSection": "智能体",

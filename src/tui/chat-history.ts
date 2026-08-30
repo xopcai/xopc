@@ -3,6 +3,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { HistoryMessage } from './tui-backend.js';
 import { ChatLog } from './components/chat-log.js';
 import { createAssistantMessageFromText } from './components/assistant-message.js';
+import { stripRuntimeContextFromUserMessage } from '../session/user-message-display.js';
 
 export function historyMessageKey(message: HistoryMessage, index: number): string {
   if (message.id) return `id:${message.id}`;
@@ -119,7 +120,7 @@ export function appendHistoryToChatLog(
     }
 
     if (hm.role === 'user') {
-      chatLog.addUser(historyContentText(hm.content), {
+      chatLog.addUser(stripRuntimeContextFromUserMessage(historyContentText(hm.content)), {
         displayIndex,
         historyIndex,
         role: 'user',

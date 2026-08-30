@@ -5,7 +5,7 @@ import {
   stripExpandedAtFileBlocks,
   stripImageUnderstandingContext,
   stripInboundFileMachineText,
-  stripStartupContextForDisplay,
+  stripRuntimeContextForDisplay,
 } from './wire-text-scrub';
 
 export { stripInboundFileMachineText } from './wire-text-scrub';
@@ -110,7 +110,7 @@ export function applyStripToUserContent(
   if (role !== 'user' && role !== 'user-with-attachments') return blocks;
   const mapped = blocks.map((b) => {
     if (b.type === 'text' && typeof b.text === 'string') {
-      let stripped = stripStartupContextForDisplay(b.text);
+      let stripped = stripRuntimeContextForDisplay(b.text);
       stripped = stripExpandedAtFileBlocks(stripped);
       stripped = stripInboundFileMachineText(stripped);
       stripped = stripImageUnderstandingContext(stripped);

@@ -3,7 +3,10 @@ import type { Context } from 'hono';
 
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
+import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+const MAX_TURN_CONTEXTS = 5;
 
 export async function submitSessionInput(
   c: Context,
@@ -15,6 +18,10 @@ export async function submitSessionInput(
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+  const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
+  if (contextRefs === null) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid notes` } }, 400);
+  }
   const content = typeof body.content === 'string' ? body.content : '';
   const contentError = validateWebchatContent(content);
   if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
@@ -33,13 +40,14 @@ export async function submitSessionInput(
     delivery,
     content,
     attachments: attachments as UserTurnAttachment[] | undefined,
+    contextRefs,
     thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
     origin: { type: 'endpoint', endpointId: origin.data.endpointId },
   });
   if (result.ok === false) {
     return c.json(
-      { ok: false, error: { code: result.code, message: 'Input was not accepted' } },
-      result.code === 'QUEUE_FULL' ? 409 : 400,
+      { ok: false, error: { code: result.code, message: result.code === 'CONTEXT_UNAVAILABLE' ? 'A referenced Note changed or is no longer available. Select it again.' : 'Input was not accepted' } },
+      result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
     );
   }
   return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
@@ -56,6 +64,10 @@ export async function replaceLatestSessionTurn(
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
+  const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
+  if (contextRefs === null) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid notes` } }, 400);
+  }
   const content = typeof body.content === 'string' ? body.content : '';
   const contentError = validateWebchatContent(content);
   if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
@@ -74,6 +86,7 @@ export async function replaceLatestSessionTurn(
     delivery: 'next',
     content,
     attachments: attachments as UserTurnAttachment[] | undefined,
+    contextRefs,
     thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
     origin: { type: 'endpoint', endpointId: origin.data.endpointId },
   });
@@ -83,8 +96,10 @@ export async function replaceLatestSessionTurn(
       ? 'Only the latest user turn can be replaced'
       : result.code === 'SESSION_BUSY'
         ? 'Session has pending input'
-        : result.code === 'TARGET_NOT_FOUND'
-          ? 'User turn was not found'
+      : result.code === 'TARGET_NOT_FOUND'
+        ? 'User turn was not found'
+        : result.code === 'CONTEXT_UNAVAILABLE'
+          ? 'A referenced Note changed or is no longer available. Select it again.'
           : 'Replacement input was not accepted';
     return c.json({ ok: false, error: { code: result.code, message } }, status);
   }

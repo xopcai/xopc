@@ -22,11 +22,23 @@ export interface WireAttachment {
   durationSeconds?: number;
 }
 
+export interface ComposerContextRef {
+  kind: 'note';
+  sourceId: string;
+  expectedVersion: string;
+  title: string;
+}
+
+export type WireContextRef = Pick<ComposerContextRef, 'kind' | 'sourceId' | 'expectedVersion'>;
+
+export const MAX_COMPOSER_CONTEXT_REFS = 5;
+
 // ── Draft harvest result (shared by send / flush / interrupt) ───────
 
 export interface ComposerDraft {
   text: string;
   attachments: WireAttachment[];
+  contextRefs: ComposerContextRef[];
 }
 
 // ── Editor reset options ────────────────────────────────────────────

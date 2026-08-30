@@ -2,7 +2,7 @@ import { useCallback, type RefObject } from 'react';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { createAgentStreamMessagingCallbacks, readStreamingBubbleFromStore } from '@/features/chat/messages/agent-stream-messaging-callbacks';
-import type { WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
 import {
@@ -54,6 +54,7 @@ export function useChatSessionStreaming(deps: {
       content: string,
       attachments?: PendingFollowUp['attachments'],
       levelOverride?: string,
+      contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
     ) => Promise<void>
   >;
@@ -238,7 +239,7 @@ export function useChatSessionStreaming(deps: {
   );
 
   const interruptAndSend = useCallback(
-    async (content: string, attachments?: WireAttachment[], levelOverride?: string) => {
+    async (content: string, attachments?: WireAttachment[], levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
       if (!content.trim() && !attachments?.length) return;
       if (!sendingRef.current && !streamingRef.current && !chatRunManager.isSending) {
         return;
@@ -263,7 +264,7 @@ export function useChatSessionStreaming(deps: {
       streamingRef.current = false;
       finalizeMessage();
       queueMicrotask(() => {
-        void sendMessageRef.current(content, attachments, effectiveThinking);
+        void sendMessageRef.current(content, attachments, effectiveThinking, contextRefs);
       });
     },
     [
@@ -284,6 +285,7 @@ export function useChatSessionStreaming(deps: {
       content: string,
       attachments?: WireAttachment[],
       levelOverride?: string,
+      contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
     ) => {
       if (!sessionKey) return;
@@ -331,6 +333,12 @@ export function useChatSessionStreaming(deps: {
           role: 'user',
           content: content ? [{ type: 'text', text: content }] : [],
           attachments,
+          contextRefs: contextRefs?.map((ref) => ({
+            kind: ref.kind,
+            sourceId: ref.sourceId,
+            version: ref.expectedVersion,
+            title: ref.title,
+          })),
           timestamp: Date.now(),
         },
       ] as Message[];
@@ -389,6 +397,7 @@ export function useChatSessionStreaming(deps: {
           sendStreamCallbacks,
           taskId,
           replaceTurnId,
+          contextRefs,
         );
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
@@ -429,7 +438,8 @@ export function useChatSessionStreaming(deps: {
       content: string,
       attachments?: WireAttachment[],
       levelOverride?: string,
-    ) => sendMessage(content, attachments, levelOverride, turnId),
+      contextRefs?: ComposerContextRef[],
+    ) => sendMessage(content, attachments, levelOverride, contextRefs, turnId),
     [sendMessage],
   );
 
@@ -502,7 +512,13 @@ export function useChatSessionStreaming(deps: {
       if (!text.trim() && !wireAtt?.length) return;
 
       if (!msg.turnId) return;
-      void sendMessageRef.current(text, wireAtt, undefined, msg.turnId).catch(() => {
+      const contextRefs = msg.contextRefs?.map((ref) => ({
+        kind: ref.kind,
+        sourceId: ref.sourceId,
+        expectedVersion: ref.version,
+        title: ref.title,
+      }));
+      void sendMessageRef.current(text, wireAtt, undefined, contextRefs, msg.turnId).catch(() => {
         void loadSessionById(key, 0);
       });
     },

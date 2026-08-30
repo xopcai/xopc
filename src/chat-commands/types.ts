@@ -18,6 +18,7 @@ import type {
   WorkflowRunServiceLike,
   WorkflowRunServiceResult,
 } from '../workflows/service/workflow-run-service.types.js';
+import type { AgentSourceContext } from '../agent/source-context/types.js';
 
 // ============================================================================
 // Unified Message Format (Platform Agnostic)
@@ -112,6 +113,8 @@ export interface CommandDefinition {
   scope: CommandScope[];
   /** Whether command accepts arguments */
   acceptsArgs?: boolean;
+  /** Whether command consumes frozen message-level source context. */
+  acceptsContext?: boolean;
   /** Example usage */
   examples?: string[];
   /** Handler function */
@@ -182,6 +185,7 @@ export interface CommandContext {
   // === Configuration ===
   /** Bot configuration */
   config: Config;
+  sourceContexts?: AgentSourceContext[];
   
   // === Reply API ===
   /** Send a text reply */

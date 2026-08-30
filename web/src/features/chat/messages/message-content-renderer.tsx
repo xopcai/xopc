@@ -32,8 +32,7 @@ import type {
 } from '@/features/chat/messages/tool-action-cluster';
 import type { ToolCardLabels } from '@/features/chat/tool-results/tool-result-cards';
 import { UserMessageSegments } from '@/features/chat/messages/user-message-segments';
-import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
-import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
+import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
 import {
@@ -429,9 +428,7 @@ function renderTextOrImageBlock(
 ) {
   if (block.type === 'text') {
     if (isUser) {
-      const displayText = stripEnvelopeTimestampPrefix(
-        stripStartupContextForDisplay(block.text ?? ''),
-      );
+      const displayText = stripUserMessageForDisplay(block.text ?? '');
       return (
         <div key={key} className="min-w-0">
           <UserMessageSegments text={displayText} />

@@ -5,14 +5,13 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
-import { stripSessionStartupContextFromUserText } from '../agent/reply/startup-context.js';
-import { stripEnvelopeTimestampPrefix } from '../channels/envelope-timestamp.js';
 import { isCronSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { createLogger } from '../utils/logger.js';
 import { readAgentMessageContent } from '../agent/memory/agent-message-access.js';
 import type { SessionStore } from './store.js';
+import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 
 const log = createLogger('SessionAutoTitle');
 
@@ -96,9 +95,9 @@ function stripSkillCommandForTitle(text: string): string {
 
 function normalizeUserTextForTitle(raw: string): string {
   return stripSkillCommandForTitle(
-    stripExpandedSkillBlockForTitle(
-      stripMediaClaimChecks(
-        stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw)),
+      stripExpandedSkillBlockForTitle(
+        stripMediaClaimChecks(
+        stripRuntimeContextFromUserMessage(raw),
       ),
     ),
   ).trim();

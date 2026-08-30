@@ -14,6 +14,15 @@ describe('session input reliability', () => {
     expect(changed).not.toBe(first);
   });
 
+  it('includes message context references', () => {
+    const plain = sessionInputFingerprint({ content: 'hello' });
+    const withNote = sessionInputFingerprint({
+      content: 'hello',
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '42' }],
+    });
+    expect(withNote).not.toBe(plain);
+  });
+
   it('retries only transient HTTP statuses', () => {
     expect(shouldRetrySessionInputStatus(408)).toBe(true);
     expect(shouldRetrySessionInputStatus(429)).toBe(true);

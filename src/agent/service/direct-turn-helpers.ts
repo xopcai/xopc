@@ -10,6 +10,8 @@ import crypto from 'node:crypto';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
+import type { AgentSourceContext } from '../source-context/types.js';
+import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
 
 import { commandRegistry } from '../../chat-commands/index.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
@@ -80,6 +82,7 @@ export async function tryRunSlashCommand(
   options?: {
     skipResetCommands?: boolean;
     emitEvent?: (event: CommandStreamEvent) => void | Promise<void>;
+    sourceContexts?: AgentSourceContext[];
   },
 ): Promise<SlashCommandTask> {
   const parsed = parseSlashCommand(content);
@@ -92,6 +95,14 @@ export async function tryRunSlashCommand(
   if (!commandRegistry.has(parsed.command)) {
     return { matched: false, aggregatedText: '' };
   }
+  const command = commandRegistry.findByName(parsed.command);
+  if (options?.sourceContexts?.length && !command?.acceptsContext) {
+    return {
+      matched: true,
+      aggregatedText: `Command /${parsed.command} does not accept Note context. Remove the Note reference or use it with a regular prompt.`,
+      command: parsed.command,
+    };
+  }
   try {
     const { aggregatedText, metadata } = await deps.commandHandler.executeCommandAndAggregateReply(
       parsed.command,
@@ -103,6 +114,7 @@ export async function tryRunSlashCommand(
         senderId: ctx.senderId ?? '',
         isGroup: ctx.isGroup ?? false,
         inboundMetadata: ctx.inboundMetadata ?? {},
+        sourceContexts: options?.sourceContexts,
       },
       { emitEvent: options?.emitEvent },
     );
@@ -131,6 +143,7 @@ export interface RunDirectAgentTurnInput {
   abortSignal?: AbortSignal;
   deadlineAtMs?: number;
   sourceImages?: ImageContent[];
+  sourceContexts?: AgentSourceContext[];
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }
 
@@ -155,8 +168,13 @@ export async function runDirectAgentTurn(
     input.sessionKey,
     turnId,
   );
-  const userMessageForModel = prependAgentContext(
+  const sourceContexts = input.sourceContexts ?? [];
+  const sourceEnrichedMessage = injectSourceContextsIntoUserMessage(
     userContext.modelMessage,
+    sourceContexts,
+  );
+  const userMessageForModel = prependAgentContext(
+    sourceEnrichedMessage,
     buildTaskExecutionDirective(input.sessionKey),
   );
   if (userContext.consentRequests.length > 0) {
@@ -172,7 +190,10 @@ export async function runDirectAgentTurn(
     message: input.userMessage as TranscriptUserMessage,
     modelRef,
   });
-  const sourceImages = resolveImageHandlingStrategy(modelRef) === 'native' ? (input.sourceImages ?? []) : [];
+  const contextImages = sourceContexts.flatMap((context) => context.images ?? []);
+  const sourceImages = resolveImageHandlingStrategy(modelRef) === 'native'
+    ? [...(input.sourceImages ?? []), ...contextImages]
+    : [];
   const llmImages = [...llmTurn.images, ...sourceImages];
 
   const result = await runEmbeddedTurnForSession({

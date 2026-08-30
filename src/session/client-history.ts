@@ -1,4 +1,5 @@
 import type { Message } from './types.js';
+import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 import { buildTranscriptOutline } from './transcript-outline.js';
 
@@ -13,6 +14,15 @@ export interface ClientHistoryMessage {
   /** Persisted inbound attachment metadata used by chat clients to reload media. */
   media?: Message['media'];
   timestamp?: number;
+  /** Whitelisted display metadata; never includes source snapshot text. */
+  metadata?: { sourceContexts: Array<{
+    kind: 'note';
+    sourceId: string;
+    version: string;
+    title: string;
+    tokenEstimate?: number;
+    truncated?: boolean;
+  }> };
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
   tokensBefore?: number;
   tokensAfter?: number;
@@ -43,6 +53,31 @@ export interface ClientHistoryMessage {
     isError?: boolean;
     details?: unknown;
   }>;
+}
+
+function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['metadata'] {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+  const rows = (metadata as Record<string, unknown>).sourceContexts;
+  if (!Array.isArray(rows)) return undefined;
+  const sourceContexts = rows.flatMap((value): NonNullable<ClientHistoryMessage['metadata']>['sourceContexts'] => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const row = value as Record<string, unknown>;
+    if (
+      row.kind !== 'note'
+      || typeof row.sourceId !== 'string'
+      || typeof row.version !== 'string'
+      || typeof row.title !== 'string'
+    ) return [];
+    return [{
+      kind: 'note',
+      sourceId: row.sourceId,
+      version: row.version,
+      title: row.title,
+      ...(typeof row.tokenEstimate === 'number' ? { tokenEstimate: row.tokenEstimate } : {}),
+      ...(row.truncated === true ? { truncated: true } : {}),
+    }];
+  });
+  return sourceContexts.length ? { sourceContexts } : undefined;
 }
 
 export function flattenMessageContent(content: string | unknown[]): string {
@@ -197,8 +232,11 @@ export function messagesToClientHistory(
         ...(typeof (m as unknown as { turnId?: unknown }).turnId === 'string'
           ? { turnId: (m as unknown as { turnId: string }).turnId }
           : {}),
-        content: text,
+        content: m.role === 'user' ? stripRuntimeContextFromUserMessage(text) : text,
         ...(m.media?.length ? { media: m.media } : {}),
+        ...(sourceContextDisplayMetadata(m.metadata)
+          ? { metadata: sourceContextDisplayMetadata(m.metadata) }
+          : {}),
         timestamp: parseTimestamp(m.timestamp),
       });
       continue;
@@ -237,6 +275,7 @@ type HistoryMessageRow = {
   toolCalls?: unknown;
   isError?: boolean;
   details?: unknown;
+  metadata?: unknown;
 };
 
 function asHistoryMessageRow(row: TranscriptStoredRow): HistoryMessageRow | null {
@@ -615,8 +654,13 @@ export function transcriptRowsToClientHistory(
         ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
         role: messageRow.role,
         kind: 'message',
-        content: flattenMessageContent(messageRow.content ?? ''),
+        content: messageRow.role === 'user'
+          ? stripRuntimeContextFromUserMessage(flattenMessageContent(messageRow.content ?? ''))
+          : flattenMessageContent(messageRow.content ?? ''),
         ...(messageRow.media?.length ? { media: messageRow.media } : {}),
+        ...(sourceContextDisplayMetadata(messageRow.metadata)
+          ? { metadata: sourceContextDisplayMetadata(messageRow.metadata) }
+          : {}),
         ...(displayIndex !== undefined ? { displayIndex } : {}),
         timestamp: parseTimestampValue(messageRow.timestamp),
       });

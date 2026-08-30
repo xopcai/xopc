@@ -661,6 +661,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           args[0],
           args[1],
           args[2],
+          args[3],
         );
       }
       return stream.sendMessage(...args);
@@ -674,6 +675,12 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     dispatchFillChatComposer(
       extractUserMessagePlainText(message.content),
       messageAttachmentsToWire(message.attachments),
+      message.contextRefs?.map((ref) => ({
+        kind: ref.kind,
+        sourceId: ref.sourceId,
+        expectedVersion: ref.version,
+        title: ref.title,
+      })),
     );
   }, []);
 
@@ -1169,13 +1176,13 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={followUp.addPendingFollowUp}
-                onSteeringInterrupt={(text, atts) => void stream.interruptAndSend(text, atts)}
+                onSteeringInterrupt={(text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}
                 pendingFollowUps={followUp.pendingFollowUps}
                 editingFollowUpId={followUp.editingFollowUpId}
                 onBeginEditFollowUp={followUp.beginEditFollowUp}
                 onCancelEditFollowUp={followUp.cancelEditFollowUp}
-                onCommitEditFollowUp={(id, text, atts, level) =>
-                  void followUp.commitEditFollowUp(id, text, atts, level)
+                onCommitEditFollowUp={(id, text, atts, level, contextRefs) =>
+                  void followUp.commitEditFollowUp(id, text, atts, level, contextRefs)
                 }
                 onPendingFollowUpRemove={followUp.removePendingFollowUp}
                 onPendingFollowUpMove={followUp.movePendingFollowUp}

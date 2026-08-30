@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 
-import type { ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
 import type {
   PaletteItem,
   PaletteItemKind,
@@ -39,18 +39,23 @@ export interface PaletteApplyContext {
     resetEditor: (opts?: ResetEditorOptions) => void;
   };
   attachments: { clearAttachments: () => void };
+  contextRefs: {
+    current: ComposerContextRef[];
+    clear: () => void;
+  };
   callbacks: {
-    onSend: (text: string, atts?: WireAttachment[], thinking?: string) => void;
+    onSend: (text: string, atts?: WireAttachment[], thinking?: string, contextRefs?: ComposerContextRef[]) => void;
     onUserTextCommitted?: (text: string) => void;
     /** Agent switch handler — wired by chat-page (writes localStorage + navigates to /chat/new). */
     onChatAgentChange?: (agentId: string) => void;
     /** Used when runBusy and command is `acceptsArgs=false` non-abort: queue as follow-up. */
-    onAddPendingFollowUp?: (text: string, atts?: WireAttachment[]) => void | Promise<void>;
+    onAddPendingFollowUp?: (text: string, atts?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
     /** Used when runBusy and command is abort-class: stop the current generation. */
     onAbort?: () => void;
     onUnavailableSkill?: (item: PaletteItem) => void;
     /** Opens the structured review launcher for the built-in `/review` command. */
     onReviewLauncher?: () => void;
+    onAddContextRef?: (ref: ComposerContextRef) => void;
   };
 }
 
@@ -120,17 +125,27 @@ const applyCommandItem: PaletteItemHandler = (item, ctx) => {
     // typing `/cmd` in the editor and pressing Enter while runBusy.
     if (!ctx.callbacks.onAddPendingFollowUp) return;
     if (ctx.pendingFollowUpsCount >= ctx.maxPendingFollowUps) return;
-    void ctx.callbacks.onAddPendingFollowUp(cmd, undefined);
+    if (ctx.contextRefs.current.length) {
+      void ctx.callbacks.onAddPendingFollowUp(cmd, undefined, ctx.contextRefs.current);
+    } else {
+      void ctx.callbacks.onAddPendingFollowUp(cmd, undefined);
+    }
     ctx.callbacks.onUserTextCommitted?.(cmd);
     ctx.attachments.clearAttachments();
+    ctx.contextRefs.clear();
     ctx.editor.resetEditor();
     return;
   }
 
   // Idle: send immediately (unchanged from prior behavior).
-  ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel);
+  if (ctx.contextRefs.current.length) {
+    ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel, ctx.contextRefs.current);
+  } else {
+    ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel);
+  }
   ctx.callbacks.onUserTextCommitted?.(cmd);
   ctx.attachments.clearAttachments();
+  ctx.contextRefs.clear();
   ctx.editor.resetEditor();
 };
 
@@ -150,10 +165,24 @@ const applyAgentItem: PaletteItemHandler = (item, ctx) => {
   ctx.callbacks.onChatAgentChange(item.name);
 };
 
+const applyNoteItem: PaletteItemHandler = (item, ctx) => {
+  const range = ctx.slashRange;
+  if (!range || !item.noteRef || !ctx.callbacks.onAddContextRef) return;
+  const next = replaceRange(ctx.editor.valueRef.current, range.start, range.end, '');
+  ctx.editor.resetEditor({ nextText: next, caretOffset: range.start, focus: true });
+  ctx.callbacks.onAddContextRef({
+    kind: 'note',
+    sourceId: item.noteRef.sourceId,
+    expectedVersion: item.noteRef.expectedVersion,
+    title: item.name,
+  });
+};
+
 export const paletteItemHandlers: Record<PaletteItemKind, PaletteItemHandler> = {
   skill: applySkillItem,
   command: applyCommandItem,
   agent: applyAgentItem,
+  note: applyNoteItem,
 };
 
 export function applyPaletteItem(item: PaletteItem, ctx: PaletteApplyContext): void {

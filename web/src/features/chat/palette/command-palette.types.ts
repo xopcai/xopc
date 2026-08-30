@@ -1,4 +1,4 @@
-export type PaletteItemKind = 'skill' | 'command' | 'agent';
+export type PaletteItemKind = 'skill' | 'command' | 'agent' | 'note';
 
 export type CommandCategory = 'session' | 'model' | 'system' | 'tool' | 'extension';
 
@@ -9,6 +9,7 @@ export interface CommandEntry {
   description: string;
   category: CommandCategory;
   acceptsArgs: boolean;
+  acceptsContext: boolean;
   examples: string[];
 }
 
@@ -24,6 +25,7 @@ export interface PaletteItem {
   source?: string;
   aliases?: string[];
   acceptsArgs?: boolean;
+  acceptsContext?: boolean;
   /** Current agent skill availability; only set for `kind === 'skill'`. */
   availability?: {
     status: SkillAvailabilityStatus;
@@ -31,6 +33,11 @@ export interface PaletteItem {
   };
   /** Agent avatar URL (only used by `kind === 'agent'` rows). */
   avatar?: string;
+  /** Frozen Note identity used to create a message-level context reference. */
+  noteRef?: {
+    sourceId: string;
+    expectedVersion: string;
+  };
 }
 
 export interface SlashRange {
