@@ -261,7 +261,7 @@ export function InstallConnectorDialog({
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100vh-2rem,36rem)] w-[min(100%-2rem,min(92vw,42rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
             'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
           )}
         >

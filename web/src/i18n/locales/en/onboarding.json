@@ -94,7 +94,15 @@
         "workFolder": "Work folder",
         "projectFiles": "Project files",
         "recentChanges": "Recent changes",
-        "gitState": "Git state"
+        "gitState": "Git state",
+        "filesScanned": "{{count}} files found",
+        "changedFiles": "{{count}} changed files",
+        "changedFile": "Changed file",
+        "contextFile": "Read for context",
+        "structureFile": "Project structure",
+        "recentArea": "Recent work area",
+        "scanningFiles": "Scanning project structure",
+        "checkingChanges": "Checking Git activity"
       },
       "cancelAnalysis": "Cancel analysis",
       "foundTitle": "What I found",

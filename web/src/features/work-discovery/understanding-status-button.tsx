@@ -38,10 +38,12 @@ export function UnderstandingStatusButton({
     + (state.directoryRun?.status === 'completed' && !state.directoryRun.feedback?.recognitionDecision ? 1 : 0);
 
   useEffect(() => {
-    if (!state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
+    if (location.pathname !== '/you' || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
     const timer = window.setTimeout(state.finish, 800);
     return () => window.clearTimeout(timer);
-  }, [pendingCount, state.drawerOpen, state.finish, state.status]);
+  }, [location.pathname, pendingCount, state.drawerOpen, state.finish, state.status]);
+
+  if (location.pathname !== '/you') return null;
 
   const preloadWorkDiscovery = () => {
     if (persistent) void loadWorkDiscoveryOverlay();

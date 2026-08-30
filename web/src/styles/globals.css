@@ -755,6 +755,47 @@ html.dark {
 .xopc-source-convergence-particles i:nth-child(6) { --particle-x: -10rem; --particle-y: 2rem; animation-delay: -2.7s; }
 .xopc-source-convergence-particles i:nth-child(7) { --particle-x: 1rem; --particle-y: -8rem; animation-delay: -3.2s; }
 .xopc-source-convergence-particles i:nth-child(8) { --particle-x: -2rem; --particle-y: 8rem; animation-delay: -3.7s; }
+.xopc-source-convergence-particles i:nth-child(9) { --particle-x: 13rem; --particle-y: -1rem; animation-delay: -1.45s; }
+.xopc-source-convergence-particles i:nth-child(10) { --particle-x: -13rem; --particle-y: -1rem; animation-delay: -2.45s; }
+.xopc-source-convergence-particles i:nth-child(11) { --particle-x: 8rem; --particle-y: 7rem; animation-delay: -3.45s; }
+.xopc-source-convergence-particles i:nth-child(12) { --particle-x: -7rem; --particle-y: -7rem; animation-delay: -0.95s; }
+
+.xopc-source-convergence-meteors {
+  z-index: 1;
+  overflow: hidden;
+}
+
+.xopc-source-convergence-meteors i {
+  --meteor-duration: 5.4s;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-accent) 88%, white);
+  box-shadow: 0 0 9px color-mix(in oklab, var(--color-accent) 70%, transparent);
+  opacity: 0;
+  animation: xopc-source-convergence-meteor var(--meteor-duration) var(--meteor-delay) cubic-bezier(.34, 0, .28, 1) infinite;
+}
+
+.xopc-source-convergence-meteors i::before {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  width: var(--meteor-tail, 4.5rem);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-accent) 72%, transparent));
+  content: "";
+  transform: translateY(-50%);
+}
+
+.xopc-source-convergence-meteors i:nth-child(1) { --meteor-x: -15rem; --meteor-y: -8rem; --meteor-angle: 28deg; --meteor-delay: -1s; }
+.xopc-source-convergence-meteors i:nth-child(2) { --meteor-x: 14rem; --meteor-y: -9rem; --meteor-angle: 147deg; --meteor-delay: -3.1s; --meteor-duration: 6.1s; }
+.xopc-source-convergence-meteors i:nth-child(3) { --meteor-x: 16rem; --meteor-y: 5rem; --meteor-angle: -163deg; --meteor-delay: -4.5s; --meteor-tail: 3.5rem; }
+.xopc-source-convergence-meteors i:nth-child(4) { --meteor-x: -14rem; --meteor-y: 7rem; --meteor-angle: -27deg; --meteor-delay: -2.2s; --meteor-duration: 5.8s; }
+.xopc-source-convergence-meteors i:nth-child(5) { --meteor-x: 5rem; --meteor-y: -11rem; --meteor-angle: 114deg; --meteor-delay: -5.2s; --meteor-tail: 3rem; }
+.xopc-source-convergence-meteors i:nth-child(6) { --meteor-x: -4rem; --meteor-y: 11rem; --meteor-angle: -70deg; --meteor-delay: -.25s; --meteor-duration: 6.4s; }
 
 @keyframes xopc-onboarding-dialog-in {
   from { opacity: 0; transform: scale(1.018); }
@@ -860,6 +901,19 @@ html.dark {
   100% { opacity: 0; transform: translate(0, 0) scale(1.35); }
 }
 
+@keyframes xopc-source-convergence-meteor {
+  0%, 14% {
+    opacity: 0;
+    transform: translate(var(--meteor-x), var(--meteor-y)) rotate(var(--meteor-angle)) scale(.72);
+  }
+  20% { opacity: .92; }
+  76% { opacity: .68; }
+  92%, 100% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(var(--meteor-angle)) scale(.25);
+  }
+}
+
 @media (max-width: 480px) {
   .xopc-source-convergence-signal[data-position="0"] { --xopc-source-x: -8.2rem !important; --xopc-source-y: -5.6rem !important; }
   .xopc-source-convergence-signal[data-position="1"] { --xopc-source-x: -1.8rem !important; --xopc-source-y: -7.6rem !important; }
@@ -894,8 +948,13 @@ html.dark {
   .xopc-source-convergence-signal,
   .xopc-source-convergence-chip,
   .xopc-source-convergence-core-glow,
-  .xopc-source-convergence-particles i {
+  .xopc-source-convergence-particles i,
+  .xopc-source-convergence-meteors i {
     animation: none;
+  }
+
+  .xopc-source-convergence-meteors {
+    display: none;
   }
 
   .xopc-source-convergence-signal {
