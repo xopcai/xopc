@@ -1109,8 +1109,9 @@
     },
     "atMention": {
       "noResults": "No matches",
-      "placeholder": "Search files…",
-      "searchError": "Failed to search workspace",
+      "placeholder": "Search references…",
+      "searchError": "Failed to search references",
+      "notes": "Notes",
       "files": "Files",
       "folders": "Folders",
       "recentFiles": "Recent",

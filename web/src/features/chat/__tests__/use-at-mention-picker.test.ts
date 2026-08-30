@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { detectAtRange } from '@/features/chat/palette/use-at-mention-picker';
+import { noteContextRefFromAtMentionItem } from '@/features/chat/composer/use-composer-pickers';
 
 describe('detectAtRange', () => {
   it('returns range and query after @', () => {
@@ -31,5 +32,30 @@ describe('detectAtRange', () => {
 
   it('returns null when no @ before caret', () => {
     expect(detectAtRange('plain', 5)).toBeNull();
+  });
+});
+
+describe('Note @ mention context', () => {
+  it('maps a Note item to a frozen composer context reference', () => {
+    expect(noteContextRefFromAtMentionItem({
+      kind: 'note',
+      name: 'Launch plan',
+      description: 'Plan snapshot',
+      noteRef: { sourceId: 'note-1', expectedVersion: '42' },
+    })).toEqual({
+      kind: 'note',
+      sourceId: 'note-1',
+      expectedVersion: '42',
+      title: 'Launch plan',
+    });
+  });
+
+  it('does not treat files as Note context', () => {
+    expect(noteContextRefFromAtMentionItem({
+      kind: 'file',
+      name: 'README.md',
+      relativePath: 'README.md',
+      isDirectory: false,
+    })).toBeNull();
   });
 });

@@ -2,7 +2,8 @@ import { listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/work
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export interface AtMentionItem {
+export interface AtMentionFileItem {
+  kind: 'file';
   name: string;
   /** Workspace-relative path, or empty for browse-up row. */
   relativePath: string;
@@ -10,6 +11,18 @@ export interface AtMentionItem {
   isBrowseUp?: boolean;
   isRecent?: boolean;
 }
+
+export interface AtMentionNoteItem {
+  kind: 'note';
+  name: string;
+  description: string;
+  noteRef: {
+    sourceId: string;
+    expectedVersion: string;
+  };
+}
+
+export type AtMentionItem = AtMentionFileItem | AtMentionNoteItem;
 
 interface SearchResponse {
   ok: boolean;
@@ -19,14 +32,15 @@ interface SearchResponse {
 }
 
 const EMPTY_QUERY_CACHE_TTL_MS = 30_000;
-let emptyQueryCache: { key: string; at: number; items: AtMentionItem[] } | null = null;
+let emptyQueryCache: { key: string; at: number; items: AtMentionFileItem[] } | null = null;
 
 function cacheKey(sessionKey: string): string {
   return sessionKey.trim();
 }
 
-function mapFileEntries(entries: Array<{ name: string; path: string; isDirectory: boolean }>): AtMentionItem[] {
+function mapFileEntries(entries: Array<{ name: string; path: string; isDirectory: boolean }>): AtMentionFileItem[] {
   return entries.map((e) => ({
+    kind: 'file',
     name: e.name,
     relativePath: e.path,
     isDirectory: e.isDirectory,
@@ -37,7 +51,7 @@ function mapFileEntries(entries: Array<{ name: string; path: string; isDirectory
 export async function searchWorkspaceFiles(
   query: string,
   options: { sessionKey?: string; agentId?: string; limit?: number },
-): Promise<AtMentionItem[]> {
+): Promise<AtMentionFileItem[]> {
   const sk = options.sessionKey?.trim();
   const aid = options.agentId?.trim();
   const limit = options.limit ?? 15;

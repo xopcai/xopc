@@ -628,6 +628,8 @@ export const ChatComposer = memo(function ChatComposer({
             noResults={pickers.atPicker.error ?? m.chat.atMention.noResults}
             sessionKey={sessionKey}
             recentLabel={m.chat.atMention.recentBadge}
+            filesLabel={m.chat.atMention.files}
+            notesLabel={m.chat.atMention.notes}
             ariaLabel={m.chat.atMention.placeholder}
             shiftHint={m.chat.atMention.shiftHint}
             onSelectItem={(it, meta) => pickers.applyAtMention(it, { stayOpen: meta?.shiftKey === true })}
@@ -640,18 +642,15 @@ export const ChatComposer = memo(function ChatComposer({
             selectedIndex={pickers.palette.selectedIndex}
             noResults={pickers.palette.loadError ?? m.chat.commandPalette.noResults}
             grouped={pickers.palette.loadError ? false : pickers.palette.grouped}
-            noteRowCount={pickers.palette.loadError ? 0 : pickers.palette.noteRowCount}
             skillRowCount={pickers.palette.loadError ? 0 : pickers.palette.skillRowCount}
             commandRowCount={pickers.palette.loadError ? 0 : pickers.palette.commandRowCount}
             query={pickers.palette.query}
             skillsLabel={m.chat.commandPalette.skillsSection}
             commandsLabel={m.chat.commandPalette.commandsSection}
             agentsLabel={m.chat.commandPalette.agentsSection}
-            notesLabel={m.chat.commandPalette.notesSection}
             groupedHasSkills={pickers.palette.loadError ? false : pickers.palette.groupedHasSkills}
             groupedHasCommands={pickers.palette.loadError ? false : pickers.palette.groupedHasCommands}
             groupedHasAgents={pickers.palette.loadError ? false : pickers.palette.groupedHasAgents}
-            groupedHasNotes={pickers.palette.loadError ? false : pickers.palette.groupedHasNotes}
             groupedSkillsShowMoreLabel={
               pickers.palette.loadError || !pickers.palette.grouped
                 ? null
@@ -673,17 +672,9 @@ export const ChatComposer = memo(function ChatComposer({
                   ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedAgentsMoreCount })
                   : null
             }
-            groupedNotesShowMoreLabel={
-              pickers.palette.loadError || !pickers.palette.grouped
-                ? null
-                : pickers.palette.groupedNotesMoreCount > 0
-                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedNotesMoreCount })
-                  : null
-            }
             onExpandSkills={pickers.palette.expandGroupedSkills}
             onExpandCommands={pickers.palette.expandGroupedCommands}
             onExpandAgents={pickers.palette.expandGroupedAgents}
-            onExpandNotes={pickers.palette.expandGroupedNotes}
             currentAgentId={currentAgentId}
             currentBadgeLabel={m.chat.commandPalette.currentBadge}
             runBusy={runBusy}
