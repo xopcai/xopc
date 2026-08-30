@@ -29,6 +29,7 @@ describe('defaultSelectedLocalSourceIds', () => {
       source('local-recent-files'),
       source('chromium-bookmarks'),
       source('apple-notes'),
+      source('apple-mail'),
       source('apple-calendar'),
       source('apple-reminders'),
     ]);
@@ -37,6 +38,7 @@ describe('defaultSelectedLocalSourceIds', () => {
       'local-recent-files',
       'chromium-bookmarks',
       'apple-notes',
+      'apple-mail',
       'apple-calendar',
       'apple-reminders',
     ]);
