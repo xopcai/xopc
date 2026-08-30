@@ -26,7 +26,8 @@ import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { suggestionFromExample, TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
+import { TabCompletionInput, TabCompletionTextarea } from '@/components/ui/tab-completion-input';
+import { suggestionFromExample } from '@/components/ui/tab-completion-input.utils';
 import {
   createLocalApp,
   getLocalApp,

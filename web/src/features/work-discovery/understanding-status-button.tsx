@@ -27,7 +27,7 @@ export function UnderstandingStatusButton({
   persistent?: boolean;
 }) {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname, search } = useLocation();
   const language = useLocaleStore((state) => state.language);
   const state = useUnderstandingActivityStore();
   const [reviewing, setReviewing] = useState(false);
@@ -38,12 +38,12 @@ export function UnderstandingStatusButton({
     + (state.directoryRun?.status === 'completed' && !state.directoryRun.feedback?.recognitionDecision ? 1 : 0);
 
   useEffect(() => {
-    if (location.pathname !== '/you' || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
+    if (pathname !== '/you' || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
     const timer = window.setTimeout(state.finish, 800);
     return () => window.clearTimeout(timer);
-  }, [location.pathname, pendingCount, state.drawerOpen, state.finish, state.status]);
+  }, [pathname, pendingCount, state.drawerOpen, state.finish, state.status]);
 
-  if (location.pathname !== '/you') return null;
+  if (pathname !== '/you') return null;
 
   const preloadWorkDiscovery = () => {
     if (persistent) void loadWorkDiscoveryOverlay();
@@ -54,7 +54,7 @@ export function UnderstandingStatusButton({
       navigate('/onboarding/workspace?new=1');
       return;
     }
-    navigate({ pathname: location.pathname, search: openWorkDiscoveryOverlaySearch(location.search) });
+    navigate({ pathname, search: openWorkDiscoveryOverlaySearch(search) });
   };
 
   if (state.status === 'idle') {

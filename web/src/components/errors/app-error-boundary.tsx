@@ -2,24 +2,17 @@ import { Component, useMemo, useState, type ErrorInfo, type ReactNode } from 're
 import { useRouteError } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import { webBuildInfo } from '@/lib/build-info';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { getLanguage, type StoredLanguage } from '@/lib/storage';
 
-const OFFICIAL_DOWNLOAD_URLS: Record<StoredLanguage, string> = {
-  en: 'https://xopc.ai/en#download',
-  zh: 'https://xopc.ai/zh#download',
-};
+import {
+  buildAppErrorReport,
+  officialDownloadUrl,
+  type AppErrorSource,
+} from './app-error-boundary.utils';
 
 const GITHUB_BUG_REPORT_URL =
   'https://github.com/xopcai/xopc/issues/new?template=bug_report.yml&title=%5BBug%5D%3A%20Desktop%20renderer%20error';
-
-export type AppErrorSource =
-  | 'bootstrap'
-  | 'react'
-  | 'route'
-  | 'window.error'
-  | 'unhandledrejection';
 
 type ErrorFallbackCopy = {
   eyebrow: string;
@@ -67,66 +60,6 @@ const COPY: Record<StoredLanguage, ErrorFallbackCopy> = {
     openFailed: '无法打开系统浏览器，请访问 xopc.ai 下载最新版本。',
   },
 };
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.stack || error.message;
-  if (typeof error === 'string') return error;
-  try {
-    return JSON.stringify(error, null, 2);
-  } catch {
-    return String(error);
-  }
-}
-
-export function officialDownloadUrl(language: StoredLanguage = getLanguage()): string {
-  return OFFICIAL_DOWNLOAD_URLS[language];
-}
-
-function safePageLocation(): string {
-  const route = window.location.hash.replace(/^#\/?/, '').split(/[/?]/, 1)[0];
-  return `${window.location.origin}${window.location.pathname}${route ? `#/${route}` : ''}`;
-}
-
-export function buildAppErrorReport({
-  error,
-  source,
-  componentStack,
-  capturedAt = new Date(),
-}: {
-  error: unknown;
-  source: AppErrorSource;
-  componentStack?: string;
-  capturedAt?: Date;
-}): string {
-  const surface = window.electronAPI ? 'Electron desktop app' : 'Gateway web UI';
-  const platform = window.electronAPI?.platform ?? navigator.platform ?? 'unknown';
-  const commit = webBuildInfo.commit === 'unknown' ? 'unknown' : webBuildInfo.commit.slice(0, 12);
-  const sections = [
-    '# xopc renderer error report',
-    '',
-    `- xopc web version: ${webBuildInfo.version}`,
-    `- Commit: ${commit}`,
-    `- Build time: ${webBuildInfo.buildTimeIso}`,
-    `- Captured at: ${capturedAt.toISOString()}`,
-    `- Source: ${source}`,
-    `- Surface: ${surface}`,
-    `- Platform: ${platform}`,
-    `- Language: ${getLanguage()}`,
-    `- Page: ${safePageLocation()}`,
-    `- User agent: ${navigator.userAgent}`,
-    '',
-    '## Error',
-    '',
-    '```text',
-    errorMessage(error),
-    '```',
-  ];
-
-  if (componentStack?.trim()) {
-    sections.push('', '## React component stack', '', '```text', componentStack.trim(), '```');
-  }
-  return sections.join('\n');
-}
 
 async function openExternalPage(url: string): Promise<string | null> {
   const openExternalUrl = window.electronAPI?.shell?.openExternalUrl;

@@ -10,25 +10,11 @@ import {
 } from '@/lib/settings-shell-layer-context';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function padDatePart(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-export function toDatePickerValue(date: Date): string {
-  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
-}
-
-export function parseDatePickerValue(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const date = new Date(year, month, day, 12);
-  return date.getFullYear() === year && date.getMonth() === month && date.getDate() === day
-    ? date
-    : null;
-}
+import {
+  displayDatePickerValue,
+  parseDatePickerValue,
+  toDatePickerValue,
+} from './date-picker.utils';
 
 function calendarDays(month: Date, weekStartsOn: 0 | 1): Date[] {
   const first = new Date(month.getFullYear(), month.getMonth(), 1, 12);
@@ -37,19 +23,6 @@ function calendarDays(month: Date, weekStartsOn: 0 | 1): Date[] {
     { length: 42 },
     (_, index) => new Date(first.getFullYear(), first.getMonth(), 1 - leadingDays + index, 12),
   );
-}
-
-function displayValue(value: string, language: 'en' | 'zh'): string {
-  const date = parseDatePickerValue(value);
-  if (!date) return '';
-  if (language === 'zh') {
-    return `${date.getFullYear()}/${padDatePart(date.getMonth() + 1)}/${padDatePart(date.getDate())}`;
-  }
-  return new Intl.DateTimeFormat('en', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
 }
 
 export function DatePicker({
@@ -124,7 +97,7 @@ export function DatePicker({
           )}
         >
           <span className={cn('min-w-0 truncate tabular-nums', !value && 'text-fg-subtle')}>
-            {displayValue(value, language) || placeholder || (language === 'zh' ? '选择日期' : 'Select date')}
+            {displayDatePickerValue(value, language) || placeholder || (language === 'zh' ? '选择日期' : 'Select date')}
           </span>
           <CalendarDays className="size-4 shrink-0 text-fg-muted" aria-hidden />
         </button>

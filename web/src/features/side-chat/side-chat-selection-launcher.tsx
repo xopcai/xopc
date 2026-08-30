@@ -2,12 +2,12 @@ import { MessageSquarePlus, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { messages as getMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { disposeSideChatClient } from './side-chat-api';
+import { addSelectionToMainChat } from './side-chat-selection-actions';
 
 const MAX_SELECTION_CHARS = 32_000;
 const POPOVER_WIDTH = 264;
@@ -142,10 +142,6 @@ export function SideChatSelectionLauncher() {
       </button>
     </div>
   );
-}
-
-export function addSelectionToMainChat(text: string): void {
-  dispatchFillChatComposer(text);
 }
 
 function nodeElement(node: Node | null): Element | null {
