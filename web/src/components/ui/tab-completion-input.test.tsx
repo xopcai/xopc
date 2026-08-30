@@ -4,7 +4,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { suggestionFromExample, TabCompletionInput, TabCompletionTextarea } from './tab-completion-input';
+import { TabCompletionInput, TabCompletionTextarea } from './tab-completion-input';
+import { suggestionFromExample } from './tab-completion-input.utils';
 
 describe('TabCompletionInput', () => {
   let container: HTMLDivElement;
