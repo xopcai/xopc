@@ -4,6 +4,7 @@ import type { Config } from '../../config/schema.js';
 import {
   cloakBrowserConfigFromAgentDefaults,
   resolveBrowserBackendFromConfig,
+  resolveExtensionBridgeServerConfig,
   shouldRunExtensionBridgeServer,
 } from '../backend-from-config.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
@@ -172,6 +173,39 @@ describe('shouldRunExtensionBridgeServer', () => {
     expect(
       shouldRunExtensionBridgeServer(cfg({ backend: 'cdp', cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' })),
     ).toBe(false);
+  });
+});
+
+describe('resolveExtensionBridgeServerConfig', () => {
+  it('uses extension listener defaults', () => {
+    expect(resolveExtensionBridgeServerConfig(cfg({ enabled: true }))).toEqual({
+      host: '127.0.0.1',
+      port: 19820,
+      commandTimeout: 30_000,
+    });
+  });
+
+  it('uses configured extension listener options', () => {
+    expect(resolveExtensionBridgeServerConfig(cfg({
+      enabled: true,
+      backend: 'extension',
+      commandTimeout: 45,
+      extension: {
+        host: 'localhost',
+        port: 19999,
+        connectionTimeout: 5_000,
+      },
+    }))).toEqual({
+      host: 'localhost',
+      port: 19999,
+      connectionTimeout: 5_000,
+      commandTimeout: 45_000,
+    });
+  });
+
+  it('returns null when extension backend is inactive', () => {
+    expect(resolveExtensionBridgeServerConfig(cfg({ enabled: false }))).toBeNull();
+    expect(resolveExtensionBridgeServerConfig(cfg({ backend: 'local' }))).toBeNull();
   });
 });
 
