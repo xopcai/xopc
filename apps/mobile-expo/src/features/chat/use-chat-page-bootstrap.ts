@@ -6,18 +6,18 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
+import type { ResolvedNewSessionSpec, SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 
 import { openChat } from '../../lib/navigation';
 
-import { resolveEffectiveDefaultAgentId } from '../../query/agents';
 import { takeNewChatSessionKey } from './session-prefetch';
 import type { useMessages } from '../../i18n/messages';
 
 export type ChatBootstrapDeps = {
   urlSessionKey: string;
   gatewayOnline: boolean;
-  agentsData: Parameters<typeof resolveEffectiveDefaultAgentId>[0];
-  localDefaultAgentId: string;
+  newSessionSpec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>;
+  initialAgentConfig?: SessionInitialAgentConfig;
   messages: ReturnType<typeof useMessages>;
   /** Shared mutable ref — bootstrap writes the new session key here so callers stay in sync. */
   activeSessionKeyRef: React.MutableRefObject<string>;
@@ -40,8 +40,8 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
   const {
     urlSessionKey,
     gatewayOnline,
-    agentsData,
-    localDefaultAgentId,
+    newSessionSpec,
+    initialAgentConfig,
     messages,
     activeSessionKeyRef,
     shouldNavigateToRoute = true,
@@ -69,13 +69,11 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
       activeSessionKeyRef.current = '';
     }
 
-    const agentId = resolveEffectiveDefaultAgentId(agentsData, localDefaultAgentId);
-    if (!agentId) return;
     autoSessionAttemptedRef.current = true;
     setCreatingInitialSession(true);
     setBootstrapError(null);
 
-    void takeNewChatSessionKey(agentId)
+    void takeNewChatSessionKey(newSessionSpec, initialAgentConfig)
       .then((key) => {
         activeSessionKeyRef.current = key;
         setPendingBootstrapKey(key);
@@ -90,7 +88,7 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
       .finally(() => {
         setCreatingInitialSession(false);
       });
-  }, [urlSessionKey, gatewayOnline, agentsData, localDefaultAgentId, messages.sessions.bootstrapFailed, router, activeSessionKeyRef, shouldNavigateToRoute]);
+  }, [urlSessionKey, gatewayOnline, newSessionSpec, initialAgentConfig, messages.sessions.bootstrapFailed, router, activeSessionKeyRef, shouldNavigateToRoute]);
 
   // Auto-start on first mount when gateway is online
   useEffect(() => {

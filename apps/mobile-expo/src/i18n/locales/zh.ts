@@ -252,6 +252,7 @@ export const zh: MessageBundle = {
   // ── 聊天界面 ────────────────────────────────────────────
   chat: {
     contextProjectLabel: '项目上下文',
+    removeProjectContext: '从新对话中移除项目',
     contextTaskLabel: '任务上下文',
     contextActive: '上下文已生效',
     openContext: '打开上下文',

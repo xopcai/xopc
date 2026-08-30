@@ -15,6 +15,9 @@ import {
   type SessionRoutingMeta as GatewaySessionRoutingMeta,
   type SessionStatus as GatewaySessionStatus,
   type SessionsListResponse,
+  type SessionCreateRequest,
+  modelPreferenceForAgent,
+  createDefaultNewSessionPreferences,
 } from '@xopcai/gateway-contract';
 
 import { apiFetch, formatApiHttpError } from '../api/client';
@@ -23,6 +26,8 @@ import {
   writeCachedSessions,
 } from '../features/gateway/sessions-cache';
 import { useGatewayStore } from '../stores/gateway-store';
+import { usePreferencesStore } from '../stores/preferences-store';
+import { setSessionInitialAgentConfig } from './models';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -190,25 +195,51 @@ export async function fetchSessionMessagePage(
   return parseSessionMessagePage(await res.json());
 }
 
-async function createSessionRequest(input: { agentId?: string; projectId?: string }): Promise<string> {
-  const body: Record<string, unknown> = { channel: 'webchat' };
+export async function createSession(
+  input: Omit<SessionCreateRequest, 'channel'> = {},
+): Promise<string> {
+  const body: SessionCreateRequest = { channel: 'webchat' };
   if (input.agentId?.trim()) body.agentId = input.agentId.trim().toLowerCase();
   if (input.projectId?.trim()) body.projectId = input.projectId.trim();
+  if (input.temporary === true) body.temporary = true;
+  const gatewayId = useGatewayStore.getState().activeGatewayId ?? '';
+  const preferences = usePreferencesStore.getState()
+    .newSessionPreferencesByGateway[gatewayId] ?? createDefaultNewSessionPreferences();
+  const requestedPreference = body.agentId
+    ? modelPreferenceForAgent(preferences, body.agentId)
+    : undefined;
+  body.initialAgentConfig = input.initialAgentConfig ?? (requestedPreference
+    ? {
+        model: requestedPreference.modelRef,
+        ...(requestedPreference.thinkingLevel
+          ? { thinkingLevel: requestedPreference.thinkingLevel }
+          : {}),
+      }
+    : undefined);
   const res = await apiFetch(buildCreateSessionPath(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
-  return extractCreatedSessionKey(await res.json());
-}
-
-export async function createSession(agentId?: string): Promise<string> {
-  return createSessionRequest({ agentId });
-}
-
-export async function createProjectSession(projectId: string, agentId?: string): Promise<string> {
-  return createSessionRequest({ agentId, projectId });
+  const raw = await res.json();
+  const sessionKey = extractCreatedSessionKey(raw);
+  if (!body.initialAgentConfig) {
+    const routedAgentId = (raw as { session?: { routing?: { agentId?: unknown } } })
+      .session?.routing?.agentId;
+    const routedPreference = typeof routedAgentId === 'string'
+      ? modelPreferenceForAgent(preferences, routedAgentId)
+      : undefined;
+    if (routedPreference) {
+      await setSessionInitialAgentConfig(sessionKey, {
+        model: routedPreference.modelRef,
+        ...(routedPreference.thinkingLevel
+          ? { thinkingLevel: routedPreference.thinkingLevel }
+          : {}),
+      });
+    }
+  }
+  return sessionKey;
 }
 
 // ── Session actions ──────────────────────────────────────────────

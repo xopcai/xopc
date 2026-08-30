@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>移动端会话管理 · 代码梳理与改进建议</title>
+<meta name="description" content="apps/mobile-expo/src/query/sessions.ts 会话操作与缓存策略梳理，及 6 条改进建议" />
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --bg-soft: #efece4;
+    --ink: #23211c;
+    --ink-soft: #57534a;
+    --ink-faint: #8a8578;
+    --line: #dcd7cb;
+    --card: #fffdf8;
+    --accent: #b45309;
+    --accent-soft: #f5e6d3;
+    --accent-ink: #7c3a04;
+    --code-bg: #1f1d18;
+    --code-ink: #e8e4d8;
+    --ok: #3f6212;
+    --warn: #a16207;
+    --bad: #b91c1c;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "Noto Serif SC", Georgia, serif;
+    --sans: "Avenir Next", "Futura", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    --mono: "SFMono-Regular", "JetBrains Mono", "Menlo", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 99; opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .04 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 28px; }
+
+  /* ── Header ── */
+  header.hero {
+    padding: 84px 0 48px;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(60% 120% at 85% -20%, rgba(180,83,9,.14), transparent 60%),
+      radial-gradient(50% 100% at 0% 0%, rgba(120,113,108,.08), transparent 55%);
+    position: relative;
+  }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent-ink); font-weight: 600;
+    border: 1px solid var(--accent-soft); background: var(--accent-soft);
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 22px;
+  }
+  .kicker .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  h1 {
+    font-family: var(--serif); font-weight: 700;
+    font-size: clamp(34px, 5.4vw, 54px); line-height: 1.14; letter-spacing: -.015em;
+    max-width: 15em;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+  .sub { margin-top: 18px; color: var(--ink-soft); font-size: 16.5px; max-width: 42em; }
+  .meta {
+    margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    font-size: 13px; color: var(--ink-faint);
+  }
+  .meta .chip {
+    border: 1px solid var(--line); background: var(--card);
+    padding: 4px 11px; border-radius: 999px; font-family: var(--mono); font-size: 12px;
+  }
+  .toc {
+    margin-top: 30px; padding: 18px 22px; border: 1px solid var(--line);
+    border-radius: 14px; background: var(--card); font-size: 14px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px;
+  }
+  .toc strong { grid-column: 1 / -1; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+  .toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid transparent; }
+  .toc a:hover { color: var(--accent-ink); border-bottom-color: var(--accent); }
+  .toc .n { color: var(--accent); font-family: var(--mono); font-size: 12px; margin-right: 6px; }
+
+  /* ── Sections ── */
+  section { padding: 52px 0 8px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 26px; }
+  .sec-num {
+    font-family: var(--serif); font-style: italic; font-size: 30px; color: var(--accent);
+    line-height: 1;
+  }
+  h2 { font-family: var(--serif); font-size: 27px; font-weight: 700; letter-spacing: -.01em; }
+  .sec-note { color: var(--ink-faint); font-size: 13.5px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px;
+  }
+  .card h3 { font-size: 15.5px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 9px; }
+  .card h3 .ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: none; }
+  .card p, .card li { font-size: 14.5px; color: var(--ink-soft); }
+  .card ul { list-style: none; margin-top: 4px; }
+  .card ul li { padding-left: 20px; position: relative; margin-top: 8px; }
+  .card ul li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-family: var(--mono); font-size: 12.5px; top: 1px; }
+
+  .read { background: var(--accent-soft); border-color: #e8cfae; }
+  .read h3 .ic { background: #fff; color: var(--accent-ink); }
+  .write { background: #f0efe9; border-color: #ddd8ca; }
+  .write h3 .ic { background: #fff; color: var(--ink); }
+  .write ul li::before { color: var(--ink-faint); }
+
+  /* cache strip */
+  .cache-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+  .cache-item {
+    flex: 1 1 200px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--card); padding: 14px 16px;
+  }
+  .cache-item .k { font-family: var(--mono); font-size: 12.5px; color: var(--accent-ink); font-weight: 600; }
+  .cache-item .v { font-size: 13px; color: var(--ink-soft); margin-top: 5px; }
+  .cache-item .scope { display: inline-block; margin-top: 8px; font-size: 11px; font-family: var(--mono); background: var(--bg-soft); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; color: var(--ink-faint); }
+
+  /* priority list */
+  .prio { counter-reset: p; list-style: none; margin-top: 6px; }
+  .prio > li {
+    position: relative; counter-increment: p;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 20px 22px 18px 66px; margin-top: 14px;
+  }
+  .prio > li::before {
+    content: counter(p); position: absolute; left: 20px; top: 20px;
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--ink); color: var(--bg); font-family: var(--serif);
+    font-size: 16px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .prio .tag {
+    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    border-radius: 6px; padding: 2px 8px; margin-left: 10px; vertical-align: 2px;
+  }
+  .tag.p1 { background: #fde8e8; color: var(--bad); }
+  .tag.p2 { background: #fef3c7; color: var(--warn); }
+  .prio h3 { font-size: 16px; font-weight: 700; display: inline; }
+  .prio p { font-size: 14px; color: var(--ink-soft); margin-top: 9px; }
+  .prio .why { font-size: 13px; color: var(--ink-faint); margin-top: 6px; }
+  .prio .why b { color: var(--accent-ink); font-weight: 600; }
+  .prio code.inline {
+    font-family: var(--mono); font-size: 12.5px; background: var(--bg-soft);
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; color: var(--accent-ink);
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink); border-radius: 12px;
+    padding: 16px 18px; margin-top: 12px; overflow-x: auto;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
+  }
+  pre .c { color: #8a8578; font-style: italic; }
+  pre .k { color: #e0a458; }
+  pre .s { color: #a8c99a; }
+  pre .f { color: #d9c78f; }
+
+  /* flow diagram */
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-top: 20px; }
+  .flow .node {
+    flex: 1 1 130px; border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+    padding: 10px 12px; font-size: 12.5px; text-align: center; color: var(--ink-soft);
+  }
+  .flow .node b { display: block; font-size: 13px; color: var(--ink); font-family: var(--mono); margin-bottom: 3px; }
+  .flow .arrow { align-self: center; color: var(--accent); font-size: 16px; flex: none; padding: 0 2px; }
+
+  footer { padding: 60px 0 80px; margin-top: 40px; border-top: 1px solid var(--line); color: var(--ink-faint); font-size: 13px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  @media (max-width: 640px) {
+    .grid2 { grid-template-columns: 1fr; }
+    .toc { grid-template-columns: 1fr; }
+    header.hero { padding: 56px 0 36px; }
+    section { padding: 40px 0 6px; }
+    .prio > li { padding-left: 56px; }
+    .prio > li::before { left: 14px; width: 28px; height: 28px; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="kicker"><span class="dot"></span>Code Review · 代码梳理</span>
+    <h1>移动端会话管理：<br /><em>操作清单</em>与<em>缓存策略</em>梳理</h1>
+    <p class="sub">对 <code style="font-family:var(--mono);font-size:.9em;background:var(--bg-soft);border:1px solid var(--line);border-radius:5px;padding:1px 7px">apps/mobile-expo/src/query/sessions.ts</code> 已实现的会话操作、MMKV 缓存与 react-query 联动做一次盘点，并给出按优先级排序的改进建议。</p>
+    <div class="meta">
+      <span class="chip">sessions.ts</span>
+      <span class="chip">react-query</span>
+      <span class="chip">MMKV cache</span>
+      <span class="chip">gateway-contract</span>
+      <span style="margin-left:auto">2026-08-30</span>
+    </div>
+
+    <nav class="toc">
+      <strong>目录</strong>
+      <a href="#overview"><span class="n">01</span>总览</a>
+      <a href="#ops"><span class="n">02</span>已实现的会话操作</a>
+      <a href="#cache"><span class="n">03</span>缓存策略</a>
+      <a href="#improve"><span class="n">04</span>改进建议（6 条）</a>
+      <a href="#next"><span class="n">05</span>建议的行动顺序</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 01 总览 -->
+  <section id="overview">
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>总览</h2>
+      <span class="sec-note">读取侧 5 个函数 · 写入侧 7 个函数</span>
+    </div>
+    <p style="color:var(--ink-soft);font-size:15px;max-width:52em">
+      文件以 <b style="color:var(--ink)">gateway-contract</b> 的路径构建与响应解析函数为契约层，配合 <b style="color:var(--ink)">react-query</b> 做服务端状态、<b style="color:var(--ink)">MMKV</b> 做冷启动占位缓存。核心思路：<em style="color:var(--accent-ink)">让抽屉和聊天屏在冷启动瞬间先渲染上次数据，实时请求在后台补全</em>。
+    </p>
+    <div class="flow">
+      <div class="node"><b>UI / Hooks</b>SessionsScreen · use-chat-session<br/>use-session-history</div>
+      <div class="arrow">⇄</div>
+      <div class="node"><b>query/sessions.ts</b>契约解析 · 动作函数<br/>缓存写入条件</div>
+      <div class="arrow">⇄</div>
+      <div class="node"><b>gateway-contract</b>path 构建 · Zod 解析<br/>类型定义</div>
+      <div class="arrow">⇄</div>
+      <div class="node"><b>Gateway API</b>REST /api/sessions<br/>realtime WS</div>
+    </div>
+    <div class="cache-strip">
+      <div class="cache-item"><div class="k">placeholderData</div><div class="v">MMKV 会话列表 → 抽屉冷启动即渲染</div><div class="scope">scope: profileId</div></div>
+      <div class="cache-item"><div class="k">sessionHistory</div><div class="v">历史消息头页缓存</div><div class="scope">scope: profileId + sessionKey</div></div>
+      <div class="cache-item"><div class="k">sessionDetail</div><div class="v">详情缓存</div><div class="scope">scope: profileId + sessionKey</div></div>
+    </div>
+  </section>
+
+  <!-- 02 操作清单 -->
+  <section id="ops">
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>已实现的会话操作</h2>
+      <span class="sec-note">全部基于 gateway-contract 的路径构建</span>
+    </div>
+    <div class="grid2">
+      <div class="card read">
+        <h3><span class="ic">R</span>查询类（读）</h3>
+        <ul>
+          <li><b>fetchSessionsList</b> — 分页列表，支持 search / channel / sortBy=updatedAt</li>
+          <li><b>readPlaceholderSessions</b> — 读 MMKV 占位数据（react-query placeholderData）</li>
+          <li><b>fetchSession</b> — 会话详情，404 → null</li>
+          <li><b>fetchSessionActiveRun</b> — active run 状态，无 key / 404 → { active:false }</li>
+          <li><b>fetchSessionMessagePage</b> — 历史消息分页（before 游标）</li>
+        </ul>
+      </div>
+      <div class="card write">
+        <h3><span class="ic">W</span>动作类（写）</h3>
+        <ul>
+          <li><b>createSession</b> — 创建 + 注入新会话偏好（model / thinkingLevel）</li>
+          <li><b>deleteSession</b> — 删除</li>
+          <li><b>renameSession</b> — 重命名</li>
+          <li><b>archiveSession / unarchiveSession</b> — 归档 / 取消归档</li>
+          <li><b>pinSession / unpinSession</b> — 置顶 / 取消置顶</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:16px;font-size:13.5px;color:var(--ink-faint)">
+      ↑ createSession 还会从 preferences-store 读取按 gateway 保存的偏好（选中 agent、模型、思考级别），必要时对路由到的 agent 二次 PATCH initialAgentConfig。
+    </p>
+  </section>
+
+  <!-- 03 缓存策略 -->
+  <section id="cache">
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>缓存策略</h2>
+      <span class="sec-note">MMKV 持久化 + react-query 内存态</span>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3><span class="ic" style="background:var(--accent-soft);color:var(--accent-ink)">C</span>MMKV 持久化缓存</h3>
+        <ul>
+          <li>列表：仅 <code class="inline" style="font-family:var(--mono);font-size:12px">offset===0 &amp;&amp; !search</code> 时写入，按 profileId 分键</li>
+          <li>历史 / 详情：按 profileId + sessionKey 分键（每会话独立 scope）</li>
+          <li>统一 TTL 1 小时（query-cache.ts 默认）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="ic" style="background:var(--bg-soft);color:var(--ink)">Q</span>react-query 联动</h3>
+        <ul>
+          <li>动作后 → refreshList() → resetQueries(sessionsAll) 重拉第一页</li>
+          <li>聊天收尾 → mergeLatestSessionHistoryPage 就地合并 + invalidateSessionLists（仅标脏）</li>
+          <li>冷启动 → placeholderData 立即渲染，实时请求后台补全</li>
+        </ul>
+      </div>
+    </div>
+    <pre><code><span class="c">// 缓存写入条件（fetchSessionsList 内）</span>
+<span class="k">if</span> (offset === <span class="s">0</span> &amp;&amp; !search) {
+  writeCachedSessions(activeGatewayId, items);  <span class="c">// 仅无过滤的第一页</span>
+}</code></pre>
+  </section>
+
+  <!-- 04 改进建议 -->
+  <section id="improve">
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <h2>改进建议</h2>
+      <span class="sec-note">按优先级排序 · 前两条影响正确性</span>
+    </div>
+    <ol class="prio">
+      <li>
+        <h3>动作函数校验响应体 ok / error</h3><span class="tag p1">高</span>
+        <p>delete / rename / archive 等只检查 <code class="inline">res.ok</code>（HTTP 状态）。但契约已提供 <code class="inline">parseSessionActionResponse</code> / <code class="inline">parseSessionRenameResponse</code>，协议可能返回 <b>HTTP 200 但 body <code class="inline">{ ok:false, error:'…' }</code></b>，现在会被静默当成成功。</p>
+        <pre><code>const parsed = parseSessionRenameResponse(await res.json());
+<span class="k">if</span> (parsed.ok === <span class="s">false</span> || parsed.renamed === <span class="s">false</span>) {
+  <span class="k">throw new</span> <span class="f">Error</span>(parsed.error ?? <span class="s">'Rename failed'</span>);
+}</code></pre>
+        <p class="why"><b>收益：</b>消除静默失败；同一模式应用到全部 6 个动作函数。</p>
+      </li>
+      <li>
+        <h3>删除 / 归档后清理该会话的详情与历史缓存</h3><span class="tag p1">高</span>
+        <p>列表缓存会在动作后经 refreshList 覆写，但 <b>sessionDetail / sessionHistory 的 MMKV scope 不会同步清理</b>。删除会话后，若用户冷启动并命中旧缓存，可能看到已删除会话的历史。</p>
+        <pre><code><span class="c">// deleteSession 成功后</span>
+clearCachedSessionDetail(profileId, key);
+<span class="c">// + 清除该 key 的 sessionHistory scope</span></code></pre>
+        <p class="why"><b>收益：</b>避免删除/归档后冷启动渲染陈旧会话内容。</p>
+      </li>
+      <li>
+        <h3>统一失效语义：invalidate vs refresh</h3><span class="tag p2">中</span>
+        <p>列表失效逻辑散落三处（infinite-list-sync / workspace-sync / use-chat-session），且语义不同：<code class="inline">invalidateSessionLists</code> 用 <code class="inline">refetchType:'none'</code> 只标脏不重拉。聊天发完一条消息后，抽屉的 <b>updatedAt 排序可能不实时</b>。</p>
+        <p class="why"><b>收益：</b>明确“发消息后需强制刷新排序”，而不是仅标脏；收敛为单一入口。</p>
+      </li>
+      <li>
+        <h3>缓存写入的 channel 语义统一</h3><span class="tag p2">中</span>
+        <p><code class="inline">fetchSessionsList</code> 的 channel 默认是 <code class="inline">undefined → 'webchat'</code>，而 SessionsScreen 传 <code class="inline">null</code>（全量）。缓存写入条件不区分 channel —— 若未来某调用方以 webchat 拉第一页，会覆盖全量缓存，抽屉数据范围漂移。</p>
+        <pre><code><span class="c">// 建议：仅 channel === null（全量）时写入列表缓存</span>
+<span class="k">if</span> (offset === <span class="s">0</span> &amp;&amp; !search &amp;&amp; channel === <span class="s">null</span>) { … }</code></pre>
+        <p class="why"><b>收益：</b>缓存数据范围与“抽屉应显示的内容”保持一致。</p>
+      </li>
+      <li>
+        <h3>时效敏感数据不应共用 1 小时 TTL</h3><span class="tag p2">中</span>
+        <p>active-run、archived / pinned 状态变化快，1 小时 TTL 会让冷启动看到过期状态。建议为这类数据提供更短的 <code class="inline">maxAgeMs</code>，或状态变化时主动 clear。</p>
+        <p class="why"><b>收益：</b>冷启动展示的状态更接近真实。</p>
+      </li>
+      <li>
+        <h3>健壮性小修</h3><span class="tag p2">低</span>
+        <p>createSession 里“路由后补 PATCH”逻辑可读性略绕（用 <code class="inline">if (!body.initialAgentConfig)</code> 判断）；动作函数的 key 未统一 trim。可抽一个 <code class="inline">resolveAgentConfig</code> 辅助函数。</p>
+        <p class="why"><b>收益：</b>降低后续维护时的误解成本。</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- 05 行动顺序 -->
+  <section id="next">
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <h2>建议的行动顺序</h2>
+    </div>
+    <div class="card" style="padding:22px 26px">
+      <ol style="list-style:none;counter-reset:s">
+        <li style="counter-increment:s;padding-left:40px;position:relative;margin-top:14px;font-size:14.5px;color:var(--ink-soft)">
+          <span style="position:absolute;left:0;top:0;width:26px;height:26px;border-radius:8px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:14px;counter-reset:none">1</span>
+          <b style="color:var(--ink)">先做 #1 响应体校验</b> — 改动小、收益确定，消除静默失败隐患。
+        </li>
+        <li style="counter-increment:s;padding-left:40px;position:relative;margin-top:14px;font-size:14.5px;color:var(--ink-soft)">
+          <span style="position:absolute;left:0;top:0;width:26px;height:26px;border-radius:8px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:14px">2</span>
+          <b style="color:var(--ink)">再做 #2 缓存清理</b> — 删除/归档后同步清详情与历史缓存。
+        </li>
+        <li style="counter-increment:s;padding-left:40px;position:relative;margin-top:14px;font-size:14.5px;color:var(--ink-soft)">
+          <span style="position:absolute;left:0;top:0;width:26px;height:26px;border-radius:8px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:14px">3</span>
+          <b style="color:var(--ink)">随后处理 #3 / #4 / #5</b> — 统一失效语义、channel 与 TTL 策略。
+        </li>
+        <li style="counter-increment:s;padding-left:40px;position:relative;margin-top:14px;font-size:14.5px;color:var(--ink-soft)">
+          <span style="position:absolute;left:0;top:0;width:26px;height:26px;border-radius:8px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:14px">4</span>
+          <b style="color:var(--ink)">#6 随重构顺手做</b> — 不单独阻塞。
+        </li>
+      </ol>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>xopc · apps/mobile-expo 会话管理代码梳理</span>
+    <span>@micjoyce · 2026-08-30</span>
+  </div>
+</footer>
+
+</body>
+</html>

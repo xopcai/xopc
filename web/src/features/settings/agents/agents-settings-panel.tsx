@@ -1,4 +1,4 @@
-import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
+import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 
@@ -77,12 +77,8 @@ export function AgentsSettingsPanel() {
             onOpenAgent={(id) => vm.navigate(agentsAppDetailPath(id))}
             onChatWithAgent={(id) => {
               const agentId = id.trim().toLowerCase();
-              try {
-                globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentId);
-              } catch {
-                /* noop */
-              }
-              vm.navigate('/chat/new', { state: { agentId } });
+              rememberSelectedAgent(agentId);
+              vm.navigate('/chat/new?projectScope=none', { state: { agentId } });
             }}
             busy={vm.busy}
           />

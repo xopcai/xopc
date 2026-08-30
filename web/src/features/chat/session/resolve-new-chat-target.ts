@@ -1,4 +1,5 @@
 import type { SessionInfo } from '@/features/chat/chat.types';
+import type { SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 import {
   pickReusableEmptyShell,
   isReusableEmptyShell,
@@ -57,6 +58,7 @@ export async function resolveNewChatTarget(opts: {
   currentSessionKey?: string | null;
   forceNew?: boolean;
   temporary?: boolean;
+  initialAgentConfig?: SessionInitialAgentConfig;
 }): Promise<NewChatResolution> {
   const agentId = normalizeAgentId(opts.agentId);
   const projectId = opts.projectId?.trim() || undefined;
@@ -67,6 +69,7 @@ export async function resolveNewChatTarget(opts: {
       agentId,
       ...(projectId ? { projectId } : {}),
       ...(opts.temporary ? { temporary: true } : {}),
+      ...(opts.initialAgentConfig ? { initialAgentConfig: opts.initialAgentConfig } : {}),
     });
     return { kind: 'create', sessionKey: session.key, session };
   }
@@ -85,6 +88,10 @@ export async function resolveNewChatTarget(opts: {
     return { kind: 'reuse', sessionKey: reusable.key, session: reusable };
   }
 
-  const session = await opts.sessionMgr.createSession({ agentId, projectId });
+  const session = await opts.sessionMgr.createSession({
+    agentId,
+    projectId,
+    ...(opts.initialAgentConfig ? { initialAgentConfig: opts.initialAgentConfig } : {}),
+  });
   return { kind: 'create', sessionKey: session.key, session };
 }

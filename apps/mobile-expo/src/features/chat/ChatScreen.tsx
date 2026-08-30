@@ -91,6 +91,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
+    handleRemoveProject,
     handleStarterPrefill,
     handleComposerSend,
     handleUserMessageCopy,
@@ -154,6 +155,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
       <ChatContextBanner
         projectId={sessionContext.projectId}
         taskId={sessionContext.taskId}
+        onRemoveProject={handleRemoveProject}
       />
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>

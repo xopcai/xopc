@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildComposerDraftSeed,
   newChatAutoSendHref,
-  projectIdForNewChatHandoff,
+  newChatHrefForProject,
+  projectIntentForNewChatHandoff,
   searchParamsForComposerHandoff,
 } from '@/features/chat/session/composer-handoff-params';
 
@@ -35,9 +36,12 @@ describe('composer handoff params', () => {
     expect(
       searchParamsForComposerHandoff('?attachmentHandoff=file-1&projectId=project-1'),
     ).toBe('?attachmentHandoff=file-1');
-    expect(projectIdForNewChatHandoff('?attachmentHandoff=file-1&projectId=project-1')).toBe(
-      'project-1',
-    );
+    expect(projectIntentForNewChatHandoff('?attachmentHandoff=file-1&projectId=project-1'))
+      .toEqual({ kind: 'project', projectId: 'project-1' });
+    expect(projectIntentForNewChatHandoff('?projectScope=none')).toEqual({ kind: 'none' });
+    expect(projectIntentForNewChatHandoff('')).toEqual({ kind: 'remember-last' });
+    expect(newChatHrefForProject('project-1')).toBe('/chat/new?projectId=project-1');
+    expect(newChatHrefForProject(null)).toBe('/chat/new?projectScope=none');
   });
 
   it('preserves an immediate-send attachment payload while resolving a new chat route', () => {

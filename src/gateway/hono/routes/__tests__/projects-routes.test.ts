@@ -318,6 +318,34 @@ describe('project association routes', () => {
     expect(detachSession).not.toHaveBeenCalled();
   });
 
+  it('detaches a session when projectId is explicitly null', async () => {
+    const patch = vi.fn(async () => ({ ok: true as const }));
+    const detachSession = vi.fn();
+    const getSession = vi.fn(async () => ({
+      key: 'agent:main:webchat:default:direct:s1',
+      projectId: undefined,
+    }));
+    const app = registerSessionRouteApp({
+      sessions: { patch, getSession } as unknown as GatewayService['sessions'],
+      projects: {
+        get: vi.fn(),
+        attachSession: vi.fn(),
+        detachSession,
+      } as unknown as GatewayService['projects'],
+    });
+
+    const res = await app.request('/api/sessions/agent:main:webchat:default:direct:s1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: null }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(patch).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1', {});
+    expect(detachSession).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1');
+    expect(getSession).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1');
+  });
+
   it('creates project sessions with the project default agent when no agent is explicit', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Agent Project', defaultAgentId: 'coder' });
@@ -353,6 +381,48 @@ describe('project association routes', () => {
     expect(body.session.routing?.agentId).toBe('coder');
     expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
     expect(listSessions).not.toHaveBeenCalled();
+  });
+
+  it('applies initial agent config before returning a created session', async () => {
+    const patchAgentConfig = vi.fn(async () => ({ ok: true as const }));
+    const getSession = vi.fn(async (key: string) => ({
+      key,
+      routing: { agentId: 'main' },
+    }));
+    const app = registerSessionRouteApp({
+      currentConfig: ConfigSchema.parse({}),
+      projects: {
+        get: vi.fn(),
+        attachSession: vi.fn(),
+      } as unknown as GatewayService['projects'],
+      sessions: {
+        patchAgentConfig,
+        getSession,
+      } as unknown as GatewayService['sessions'],
+      sessionIndexInstance: {
+        saveMessages: vi.fn(async (sessionKey: string) => {
+          ensureSessionRecord(sessionKey, process.cwd());
+        }),
+      } as unknown as GatewayService['sessionIndexInstance'],
+    });
+
+    const res = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        initialAgentConfig: { model: ' openai/gpt-test ', thinkingLevel: ' high ' },
+        temporary: true,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(patchAgentConfig).toHaveBeenCalledOnce();
+    expect(patchAgentConfig).toHaveBeenCalledWith(expect.any(String), {
+      model: 'openai/gpt-test',
+      thinkingLevel: 'high',
+      userContextMode: 'temporary',
+    });
+    expect(patchAgentConfig.mock.invocationCallOrder[0]).toBeLessThan(getSession.mock.invocationCallOrder[0]!);
   });
 
   it('creates a fresh project chat even when an empty shell already exists', async () => {
@@ -404,8 +474,7 @@ describe('project association routes', () => {
     });
 
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { reused?: boolean; session: { key: string } };
-    expect(body.reused).toBeUndefined();
+    const body = (await res.json()) as { session: { key: string } };
     expect(body.session.key).not.toBe(existingKey);
     expect(saveMessages).toHaveBeenCalledOnce();
     expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);

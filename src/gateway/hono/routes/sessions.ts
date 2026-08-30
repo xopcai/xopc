@@ -151,7 +151,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // POST /api/sessions - Create a new session. Empty-shell reuse is a client concern.
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    const channel = body.channel || 'webchat';
+    const channel = typeof body.channel === 'string' && body.channel.trim() ? body.channel.trim() : 'webchat';
     const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
     const routingCfg = service.currentConfig;
     if (projectId && !service.projects.get(projectId)) {
@@ -163,36 +163,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
       projectId,
     });
-
-    // If a specific chat_id is provided, use it (for advanced use cases).
-    if (body.chat_id) {
-      const sessionKey = buildSessionKey({
-        agentId,
-        source: channel,
-        accountId: 'default',
-        peerKind: 'direct',
-        peerId: body.chat_id,
-      });
-
-      await service.sessionIndexInstance.saveMessages(sessionKey, [], {
-        metadata: buildDirectSessionMetadata({
-          agentId,
-          source: channel,
-          accountId: 'default',
-          peerId: body.chat_id,
-        }),
-      });
-      if (projectId) {
-        service.projects.attachSession(sessionKey, projectId);
-      }
-      if (body.temporary === true) {
-        await service.sessions.patchAgentConfig(sessionKey, { userContextMode: 'temporary' });
-      }
-      const session = await service.sessions.getSession(sessionKey);
-      return c.json({ session }, 201);
-    }
-
-    const chatId = `chat_${randomUUID()}`;
+    const requestedChatId = typeof body.chat_id === 'string' && body.chat_id.trim()
+      ? body.chat_id.trim()
+      : undefined;
+    const chatId = requestedChatId ?? `chat_${randomUUID()}`;
     const sessionKey = buildSessionKey({
       agentId,
       source: channel,
@@ -213,8 +187,25 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (projectId) {
       service.projects.attachSession(sessionKey, projectId);
     }
-    if (body.temporary === true) {
-      await service.sessions.patchAgentConfig(sessionKey, { userContextMode: 'temporary' });
+    const rawInitialConfig = body.initialAgentConfig && typeof body.initialAgentConfig === 'object'
+      ? body.initialAgentConfig as Record<string, unknown>
+      : {};
+    const model = typeof rawInitialConfig.model === 'string' && rawInitialConfig.model.trim()
+      ? rawInitialConfig.model.trim()
+      : undefined;
+    const thinkingLevel = typeof rawInitialConfig.thinkingLevel === 'string' && rawInitialConfig.thinkingLevel.trim()
+      ? rawInitialConfig.thinkingLevel.trim()
+      : undefined;
+    const initialAgentConfig = {
+      ...(model ? { model } : {}),
+      ...(thinkingLevel ? { thinkingLevel } : {}),
+      ...(body.temporary === true ? { userContextMode: 'temporary' as const } : {}),
+    };
+    if (Object.keys(initialAgentConfig).length > 0) {
+      const result = await service.sessions.patchAgentConfig(sessionKey, initialAgentConfig);
+      if (!result.ok) {
+        return c.json({ ok: false, error: result.error }, 400);
+      }
     }
     const session = await service.sessions.getSession(sessionKey);
     return c.json({ session }, 201);

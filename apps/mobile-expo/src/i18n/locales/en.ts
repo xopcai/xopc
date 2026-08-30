@@ -252,6 +252,7 @@ export const en = {
   // ── Chat screen ─────────────────────────────────────────
   chat: {
     contextProjectLabel: 'Project context',
+    removeProjectContext: 'Remove project from new chat',
     contextTaskLabel: 'Task context',
     contextActive: 'Context is active',
     openContext: 'Open context',

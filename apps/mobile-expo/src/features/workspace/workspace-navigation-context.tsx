@@ -48,7 +48,7 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
   const lastAgentIdRef = useRef<string | undefined>(undefined);
 
   const prefetchAskAiSession = useCallback(() => {
-    prefetchNewChatSession(defaultAgentId);
+    prefetchNewChatSession({ agentId: defaultAgentId, projectId: null });
   }, [defaultAgentId]);
 
   const registerFinalizeHandler = useCallback(
@@ -65,7 +65,7 @@ export function WorkspaceNavigationProvider({ children }: WorkspaceNavigationPro
     openingAskAiRef.current = true;
     dispatchAskAi({ type: 'start' });
 
-    void takeNewChatSessionKey(targetAgentId)
+    void takeNewChatSessionKey({ agentId: targetAgentId, projectId: null })
       .then((sessionKey) => {
         openChat(router, sessionKey);
         dispatchAskAi({ type: 'succeed' });
@@ -121,7 +121,7 @@ export function useWorkspaceNavigation(): WorkspaceNavigationValue {
     lastAgentIdRef.current = targetAgentId;
     openingAskAiRef.current = true;
     dispatchAskAi({ type: 'start' });
-    void takeNewChatSessionKey(targetAgentId)
+    void takeNewChatSessionKey({ agentId: targetAgentId, projectId: null })
       .then((sessionKey) => {
         openChat(router, sessionKey);
         dispatchAskAi({ type: 'succeed' });
@@ -142,7 +142,7 @@ export function useWorkspaceNavigation(): WorkspaceNavigationValue {
         dismissAskAiError: () => dispatchAskAi({ type: 'dismiss' }),
         isOpeningAskAi: askAiState.status === 'pending',
         askAiError: askAiState.status === 'error' ? askAiState.message : null,
-        prefetchAskAiSession: () => prefetchNewChatSession(defaultAgentId),
+        prefetchAskAiSession: () => prefetchNewChatSession({ agentId: defaultAgentId, projectId: null }),
         registerFinalizeHandler: () => {},
       },
     [askAiState, ctx, defaultAgentId, openAskAi],

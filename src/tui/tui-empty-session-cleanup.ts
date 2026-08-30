@@ -46,16 +46,3 @@ export async function cleanupAbandonedTuiSessions(
   }
   return deleted;
 }
-
-export async function hideLegacyEmptyTuiSessions(
-  client: Pick<TuiBackend, 'listSessions' | 'patchSession'>,
-): Promise<string[]> {
-  const sessions = await client.listSessions();
-  const hidden: string[] = [];
-  for (const session of sessions) {
-    if (session.messageCount !== 0 || !isGeneratedTuiSessionKey(session.key)) continue;
-    await client.patchSession(session.key, GENERATED_TUI_SESSION_SHELL_PATCH);
-    hidden.push(session.key);
-  }
-  return hidden;
-}

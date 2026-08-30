@@ -26,7 +26,7 @@ import {
   type ProjectFileEntry,
   type ProjectSession,
 } from '../../query/projects';
-import { createProjectSession, useGatewayConfigured } from '../../query/sessions';
+import { createSession, useGatewayConfigured } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { resolveNoteListTitle } from '../notes/note-title';
 
@@ -98,7 +98,7 @@ export function ProjectOperatingScreen() {
     enabled: configured && Boolean(projectId),
   });
   const createChat = useMutation({
-    mutationFn: () => createProjectSession(projectId),
+    mutationFn: () => createSession({ projectId }),
     onSuccess: (sessionKey) => {
       setCreateMenuVisible(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectSessions(projectId) });

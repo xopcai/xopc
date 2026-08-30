@@ -83,6 +83,7 @@ export interface SessionInfo {
   displayName?: string;
   effectiveWorkspacePath?: string;
   workingDirectoryLocked?: boolean;
+  projectId?: string;
 }
 
 /** Mutable state bag for the TUI runtime. */

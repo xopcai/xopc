@@ -1,4 +1,4 @@
-import { FolderKanban } from 'lucide-react';
+import { FolderKanban, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import type { Project } from '@/features/projects/api';
@@ -10,12 +10,16 @@ export function ChatProjectScopeBar({
   projectLabel,
   workspaceLabel,
   returnTo,
+  onRemove,
+  removeLabel,
 }: {
   project: Project;
   workspace?: string | null;
   projectLabel: string;
   workspaceLabel: string;
   returnTo: string;
+  onRemove: () => void;
+  removeLabel: string;
 }) {
   const effectiveWorkspace = project.effectiveWorkspaceRoot || project.workspaceRoot || workspace?.trim();
   return (
@@ -33,6 +37,15 @@ export function ChatProjectScopeBar({
             · {workspaceLabel}: {effectiveWorkspace}
           </span>
         ) : null}
+        <button
+          type="button"
+          className="ml-auto inline-flex size-6 shrink-0 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg"
+          title={removeLabel}
+          aria-label={removeLabel}
+          onClick={onRemove}
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
       </div>
     </div>
   );

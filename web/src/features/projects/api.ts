@@ -1,5 +1,13 @@
-import { ProjectMonitoringPolicySchema, ProjectOperatingViewSchema, type ProjectMonitoringPolicy, type ProjectMonitoringUpdate, type ProjectOperatingView } from '@xopcai/gateway-contract';
+import {
+  modelPreferenceForAgent,
+  ProjectMonitoringPolicySchema,
+  ProjectOperatingViewSchema,
+  type ProjectMonitoringPolicy,
+  type ProjectMonitoringUpdate,
+  type ProjectOperatingView,
+} from '@xopcai/gateway-contract';
 
+import { readNewSessionPreferences } from '@/features/chat/session/new-session-preferences';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -392,9 +400,43 @@ export async function searchProjectFiles(projectId: string, query: string, limit
 }
 
 export async function createProjectSession(projectId: string, agentId?: string): Promise<ProjectSession> {
+  const preferences = readNewSessionPreferences();
+  const requestedPreference = agentId
+    ? modelPreferenceForAgent(preferences, agentId)
+    : undefined;
   const res = await fetchJson<{ session: ProjectSession }>(apiUrl('/api/sessions'), {
     method: 'POST',
-    body: JSON.stringify({ projectId, ...(agentId ? { agentId } : {}) }),
+    body: JSON.stringify({
+      projectId,
+      ...(agentId ? { agentId } : {}),
+      ...(requestedPreference
+        ? {
+            initialAgentConfig: {
+              model: requestedPreference.modelRef,
+              ...(requestedPreference.thinkingLevel
+                ? { thinkingLevel: requestedPreference.thinkingLevel }
+                : {}),
+            },
+          }
+        : {}),
+    }),
   });
+  if (!requestedPreference) {
+    const routedAgentId = res.session.routing?.agentId;
+    const routedPreference = routedAgentId
+      ? modelPreferenceForAgent(preferences, routedAgentId)
+      : undefined;
+    if (routedPreference) {
+      await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(res.session.key)}/agent-config`), {
+        method: 'PATCH',
+        body: JSON.stringify({
+          model: routedPreference.modelRef,
+          ...(routedPreference.thinkingLevel
+            ? { thinkingLevel: routedPreference.thinkingLevel }
+            : {}),
+        }),
+      });
+    }
+  }
   return res.session;
 }

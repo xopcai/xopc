@@ -27,7 +27,7 @@ import { buildSettingsFieldHits } from '@/features/search/global-command-palette
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
-import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
+import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { searchWorkspaceFiles } from '@/features/chat/palette/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
@@ -75,15 +75,11 @@ function selectChatAgentFromPalette(
 ) {
   const next = agentId.trim().toLowerCase();
   if (!next) return;
-  try {
-    globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, next);
-  } catch {
-    /* noop */
-  }
+  rememberSelectedAgent(next);
   if (pathname.startsWith('/chat')) {
     window.dispatchEvent(new CustomEvent('xopc-set-chat-agent', { detail: { agentId: next } }));
   } else {
-    navigate('/chat/new', { state: { agentId: next } });
+    navigate('/chat/new?projectScope=none', { state: { agentId: next } });
   }
   close();
 }

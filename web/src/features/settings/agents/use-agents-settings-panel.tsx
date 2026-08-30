@@ -38,7 +38,7 @@ import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
 import { useAgentsSkillsCatalog } from './hooks/use-agents-skills-catalog';
 import { useAgentsToolsSkillsLocalState } from './hooks/use-agents-tools-skills-local-state';
-import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
+import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 
 import type { AgentPanel } from './utils';
 import {
@@ -706,13 +706,10 @@ export function useAgentsSettingsPanel() {
     if (!selected) return;
     if (!(await flushCurrentPanel())) return;
     profileFiles.saveProfileMarkdownDebounced.flush();
-    // Set agent in localStorage and navigate to a new chat
-    try {
-      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, selected.id);
-    } catch {
-      /* noop */
-    }
-    navigate('/chat/new', { state: { agentId: selected.id, fromAgentEditor: true } });
+    rememberSelectedAgent(selected.id);
+    navigate('/chat/new?projectScope=none', {
+      state: { agentId: selected.id, fromAgentEditor: true },
+    });
   }, [selected, flushCurrentPanel, profileFiles.saveProfileMarkdownDebounced, navigate]);
 
   const editorPanelProps: AgentsEditorPanelContentProps = {

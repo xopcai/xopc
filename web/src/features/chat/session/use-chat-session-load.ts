@@ -1,6 +1,7 @@
 import { useCallback, useRef, type RefObject } from 'react';
 
 import type { SessionInfo } from '@/features/chat/chat.types';
+import { modelPreferenceForAgent } from '@xopcai/gateway-contract';
 import { type Message, coerceReasoningLevel } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
@@ -12,6 +13,10 @@ import {
 import { buildSessionNotFoundErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
+import {
+  readNewSessionPreferences,
+  rememberAgentModel,
+} from '@/features/chat/session/new-session-preferences';
 
 export function useChatSessionLoad(deps: {
   sessionMgrRef: RefObject<SessionManager>;
@@ -29,6 +34,8 @@ export function useChatSessionLoad(deps: {
   detachForNewConversation: () => void;
 
   sessionKey: string | null;
+  sessionAgentId: string;
+  currentProjectId: string | null;
   taskId?: string;
   hasMore: boolean;
 }) {
@@ -46,6 +53,8 @@ export function useChatSessionLoad(deps: {
     dismissClarifyOnSessionLoad,
     detachForNewConversation,
     sessionKey,
+    sessionAgentId,
+    currentProjectId,
     taskId,
     hasMore,
   } = deps;
@@ -305,12 +314,16 @@ export function useChatSessionLoad(deps: {
         if (taskId) await sessionMgrRef.current.patchTaskConversationModel(taskId, modelId);
         else await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { model: modelId });
         store().patchSessionMeta(sessionKey, { model: modelId });
+        rememberAgentModel(sessionAgentId, {
+          modelRef: modelId,
+          thinkingLevel: store().sessions[sessionKey]?.thinkingLevel,
+        });
         void refreshModelThinkingSupport(modelId);
       } catch (e) {
         store().setShellError(e instanceof Error ? e.message : 'Failed to switch model');
       }
     },
-    [sessionKey, taskId, sessionMgrRef, refreshModelThinkingSupport],
+    [sessionAgentId, sessionKey, taskId, sessionMgrRef, refreshModelThinkingSupport],
   );
 
   const onSessionThinkingLevelChange = useCallback(
@@ -320,11 +333,13 @@ export function useChatSessionLoad(deps: {
         store().setShellError(null);
         await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { thinkingLevel: level });
         store().patchSessionMeta(sessionKey, { thinkingLevel: level });
+        const modelRef = store().sessions[sessionKey]?.model;
+        if (modelRef) rememberAgentModel(sessionAgentId, { modelRef, thinkingLevel: level });
       } catch (e) {
         store().setShellError(e instanceof Error ? e.message : 'Failed to update thinking level');
       }
     },
-    [sessionKey, sessionMgrRef],
+    [sessionAgentId, sessionKey, sessionMgrRef],
   );
   const onSessionWorkingDirectoryChange = useCallback(
     async (path: string) => {
@@ -350,6 +365,10 @@ export function useChatSessionLoad(deps: {
       historyBeforeCursorRef.current = null;
       store().setShellError(null);
       const aid = resolveAgentIdForPost();
+      const modelPreference = modelPreferenceForAgent(
+        readNewSessionPreferences(),
+        aid ?? 'main',
+      );
       await openNewChatHandoff({
         sessionMgr: sessionMgrRef.current,
         agentId: aid,
@@ -357,7 +376,15 @@ export function useChatSessionLoad(deps: {
         routeSessionKey: sessionKey,
         forceNew: opts?.forceNew,
         temporary: opts?.temporary,
-        projectId: opts?.projectId,
+        projectId: opts?.projectId === undefined ? currentProjectId : opts.projectId,
+        initialAgentConfig: modelPreference
+          ? {
+              model: modelPreference.modelRef,
+              ...(modelPreference.thinkingLevel
+                ? { thinkingLevel: modelPreference.thinkingLevel }
+                : {}),
+            }
+          : undefined,
         navigateToSession,
         onOpened: (key) => {
           store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
@@ -370,6 +397,7 @@ export function useChatSessionLoad(deps: {
       detachForNewConversation,
       navigateToSession,
       resolveAgentIdForPost,
+      currentProjectId,
       sessionKey,
       sessionMgrRef,
       applySessionAgentConfig,
