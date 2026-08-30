@@ -11,6 +11,7 @@ export type DefaultSessionMeta = {
   modelSupportsThinking: boolean;
   effectiveWorkspacePath: string;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  userContextMode: 'enabled' | 'off' | 'temporary';
 };
 
 export function defaultSessionMeta(): DefaultSessionMeta {
@@ -22,6 +23,7 @@ export function defaultSessionMeta(): DefaultSessionMeta {
     modelSupportsThinking: false,
     effectiveWorkspacePath: '',
     workspaceSource: 'agent_default_root',
+    userContextMode: 'enabled',
   };
 }
 

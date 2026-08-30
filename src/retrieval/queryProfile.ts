@@ -15,6 +15,7 @@ export interface RetrievalScope {
 
 export interface RetrievalQueryProfile {
   normalized: string;
+  expanded: string;
   terms: string[];
   cjkBigrams: string[];
   identifiers: string[];
@@ -57,6 +58,13 @@ const TIME_RULES: Array<{ hint: RetrievalTimeHint; pattern: RegExp }> = [
   { hint: 'future', pattern: /\b(?:future|next|later|upcoming)\b|未来|下次|之后|即将/i },
 ];
 
+const TIME_EXPANSIONS: Record<RetrievalTimeHint, string> = {
+  current: 'now current active today 现在 当前 今天',
+  recent: 'recent recently latest 近期 最近 最新',
+  historical: 'previous before history past 之前 以前 历史 上次',
+  future: 'future next later upcoming 未来 下次 之后 即将',
+};
+
 export function buildRetrievalQueryProfile(
   query: string,
   scope: RetrievalScope = {},
@@ -68,13 +76,15 @@ export function buildRetrievalQueryProfile(
   const timeHints = TIME_RULES
     .filter((rule) => rule.pattern.test(normalized))
     .map((rule) => rule.hint);
+  const uniqueTimeHints = [...new Set(timeHints)];
   return {
     normalized,
+    expanded: [normalized, ...uniqueTimeHints.map((hint) => TIME_EXPANSIONS[hint])].join(' ').trim(),
     terms: extractLexicalTerms(normalized),
     cjkBigrams: extractCjkBigrams(normalized),
     identifiers: extractRetrievalIdentifiers(normalized),
     intentKinds: [...new Set(intentKinds)],
-    timeHints: [...new Set(timeHints)],
+    timeHints: uniqueTimeHints,
     scope: { ...scope },
   };
 }

@@ -63,7 +63,7 @@ type ResponseFeedbackReason = (typeof RESPONSE_FEEDBACK_REASONS)[number];
 type ResponsePersonalContext = {
   id: string;
   statement: string;
-  origin: 'told_by_you' | 'observed' | 'inferred' | 'connected_source';
+  origin: 'told_by_user' | 'observed' | 'inferred' | 'connected_source';
   sourceName: string;
 };
 
@@ -417,13 +417,13 @@ export const MessageBubble = memo(function MessageBubble({
   const loadResponseFeedback = useCallback(() => {
     if (!message.turnId || responseFeedbackLoaded || responseFeedbackBusy) return;
     setResponseFeedbackBusy(true);
-    void fetchJson<{ personalization: { items: Array<{ objectType: string; objectId: string; decision: string; content: string; sourceLabel: string }> } }>(
+    void fetchJson<{ personalization: { items: Array<{ objectType: string; objectId: string; decision: string; content: string; sourceLabel: string; origin: ResponsePersonalContext['origin'] }> } }>(
       apiUrl(`/api/you/turns/${encodeURIComponent(message.turnId)}/personalization`),
     )
       .then((result) => {
         setResponsePersonalContext(result.personalization.items
-          .filter((item) => item.objectType === 'understanding' && item.decision === 'selected')
-          .map((item) => ({ id: item.objectId, statement: item.content, origin: 'inferred' as const, sourceName: item.sourceLabel })));
+          .filter((item) => (item.objectType === 'understanding' || item.objectType === 'focus') && item.decision === 'selected')
+          .map((item) => ({ id: `${item.objectType}:${item.objectId}`, statement: item.content, origin: item.origin, sourceName: item.sourceLabel })));
       })
       .catch(() => undefined)
       .finally(() => {

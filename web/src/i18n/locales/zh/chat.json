@@ -14,6 +14,10 @@
     "agentNoMatches": "没有匹配的智能体",
     "thinkingLevel": "思考级别",
     "newSession": "新对话",
+    "temporarySession": "临时会话",
+    "temporarySessionHint": "本会话不会读取或更新共享理解。",
+    "newTemporarySession": "新建临时会话",
+    "newTemporarySessionHint": "开始一个不会读取或更新共享理解的会话。",
     "timelineTitle": "时间线",
     "timelineTurn": "第 {{count}} 轮",
     "timelineMessageFallback": "消息",
@@ -982,7 +986,7 @@
     "messageWhyThisAnswer": "为什么这个回答考虑了你的情况",
     "messageWhyThisAnswerHint": "这些允许使用的个人上下文影响了本次回答。",
     "messageContextOrigins": {
-      "told_by_you": "你亲自告诉我的",
+      "told_by_user": "你亲自告诉我的",
       "observed": "从多次协作中注意到的",
       "inferred": "我的理解",
       "connected_source": "来自 {{source}}"

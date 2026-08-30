@@ -124,6 +124,7 @@ describe('structured user context repository', () => {
         reason: 'Relevant communication preference',
         content: 'Lead with the conclusion.',
         sourceLabel: 'You told xopc',
+        origin: 'told_by_user',
         rank: 1,
         score: 0.9,
         injectedChars: 42,
@@ -143,7 +144,7 @@ describe('structured user context repository', () => {
       budget: 2_000, durationMs: 4,
       items: [{
         objectType: 'profile', objectId: 'profile', decision: 'selected', reason: 'Updated plan',
-        content: 'Preferred name: Mic', sourceLabel: 'You provided this directly', injectedChars: 19,
+        content: 'Preferred name: Mic', sourceLabel: 'You provided this directly', origin: 'told_by_user', injectedChars: 19,
       }],
     });
     expect(repeatedRunId).toBe(runId);

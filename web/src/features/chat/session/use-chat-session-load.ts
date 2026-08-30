@@ -83,6 +83,7 @@ export function useChatSessionLoad(deps: {
           reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
           effectiveWorkspacePath: cfg.effectiveWorkspacePath,
           workspaceSource: cfg.workspaceSource,
+          userContextMode: cfg.userContextMode,
         });
         void refreshModelThinkingSupport(cfg.model);
       } catch {
@@ -200,6 +201,7 @@ export function useChatSessionLoad(deps: {
               reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
               effectiveWorkspacePath: cfg.effectiveWorkspacePath,
               workspaceSource: cfg.workspaceSource,
+              userContextMode: cfg.userContextMode,
             });
             void refreshModelThinkingSupport(cfg.model);
             return loaded;
@@ -342,7 +344,7 @@ export function useChatSessionLoad(deps: {
     [applySessionAgentConfig, sessionKey, sessionMgrRef],
   );
   const createNewSession = useCallback(
-    async (opts?: { forceNew?: boolean; projectId?: string | null }) => {
+    async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean }) => {
       dismissClarifyOnSessionLoad();
       detachForNewConversation();
       historyBeforeCursorRef.current = null;
@@ -354,6 +356,7 @@ export function useChatSessionLoad(deps: {
         currentSessionKey: sessionKey,
         routeSessionKey: sessionKey,
         forceNew: opts?.forceNew,
+        temporary: opts?.temporary,
         projectId: opts?.projectId,
         navigateToSession,
         onOpened: (key) => {

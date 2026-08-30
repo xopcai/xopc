@@ -23,12 +23,14 @@ describe('patchSessionAgentConfigView', () => {
         effective: 'off',
         source: 'session',
       },
+      userContextMode: 'temporary',
     });
 
     const slice = useChatSessionStore.getState().sessions[sessionKey];
     expect(slice?.model).toBe('openai/gpt-4o');
     expect(slice?.thinkingLevel).toBe('high');
     expect(slice?.reasoningLevel).toBe('on');
+    expect(slice?.userContextMode).toBe('temporary');
   });
 
   it('uses explicit session key so metadata survives focused-key lag after /chat/new', () => {

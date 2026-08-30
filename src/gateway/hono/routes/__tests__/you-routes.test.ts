@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   closeXopcDatabase, openXopcDatabase, recordContextRun, resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
+import { upsertUserFocus } from '../../../../user-context/sources/repository.js';
 import { registerYouRoutes } from '../you.js';
 
 describe('structured user context routes', () => {
@@ -50,10 +51,16 @@ describe('structured user context routes', () => {
     });
     expect(rule.status).toBe(201);
 
+    upsertUserFocus({
+      canonicalKey: 'focus:ship', title: 'Ship xopc', summary: 'Prepare the release',
+      horizon: 'current', status: 'active', confidence: 1, evidenceRefs: [],
+    });
+
     const response = await app.request('/api/you');
     await expect(response.json()).resolves.toMatchObject({
       profile: { callName: 'Mic', timezone: 'Asia/Shanghai' },
       understandings: [{ kind: 'preference', statement: 'Lead with the conclusion.', status: 'active' }],
+      focuses: [{ title: 'Ship xopc', status: 'active' }],
       rules: [{ category: 'execution', statement: 'Run tests before handoff.', status: 'active' }],
     });
   });
@@ -94,7 +101,7 @@ describe('structured user context routes', () => {
       turnId: 'turn-1', sessionKey: 'session-1', query: 'test', budget: 100, durationMs: 1,
       items: [{
         objectType: 'understanding', objectId: 'known', decision: 'selected', reason: 'test',
-        content: 'Known context', sourceLabel: 'test', injectedChars: 13,
+        content: 'Known context', sourceLabel: 'test', origin: 'inferred', injectedChars: 13,
       }],
     });
     const feedback = await app.request('/api/you/turns/turn-1/feedback', {
@@ -108,5 +115,53 @@ describe('structured user context routes', () => {
       body: JSON.stringify({ decision: 'once' }),
     });
     expect(consent.status).toBe(404);
+  });
+
+  it('lists evidence-first review objects and applies batch decisions', async () => {
+    const focus = upsertUserFocus({
+      canonicalKey: 'focus:review', title: 'Review launch', summary: 'Prepare the launch review',
+      horizon: 'current', status: 'candidate', confidence: 0.72, evidenceRefs: ['source://launch'],
+    });
+    const review = await app.request('/api/you/context-objects?view=review');
+    expect(review.status).toBe(200);
+    await expect(review.json()).resolves.toMatchObject({
+      objects: [{
+        objectType: 'focus', objectId: focus.id, status: 'candidate', origin: 'inferred',
+        evidence: [{ sourceRef: 'source://launch' }],
+      }],
+    });
+
+    const decision = await app.request('/api/you/context-objects/batch-review', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decisions: [{ objectType: 'focus', objectId: focus.id, action: 'accept' }] }),
+    });
+    expect(decision.status).toBe(200);
+    await expect(decision.json()).resolves.toMatchObject({ objects: [{ id: focus.id, status: 'active' }] });
+    await expect((await app.request('/api/you/context-objects?view=current')).json()).resolves.toMatchObject({
+      objects: [expect.objectContaining({ objectType: 'focus', objectId: focus.id, status: 'active' })],
+    });
+  });
+
+  it('accepts focus feedback only when the focus shaped the turn', async () => {
+    const focus = upsertUserFocus({
+      canonicalKey: 'focus:feedback', title: 'Feedback target', summary: 'Target focus',
+      horizon: 'current', status: 'active', confidence: 1, evidenceRefs: [],
+    });
+    recordContextRun({
+      turnId: 'turn-focus', sessionKey: 'session-1', query: 'target', budget: 100, durationMs: 1,
+      items: [{
+        objectType: 'focus', objectId: focus.id, decision: 'selected', reason: 'test',
+        content: 'Feedback target: Target focus', sourceLabel: 'You set this focus',
+        origin: 'told_by_user', injectedChars: 29,
+      }],
+    });
+    const response = await app.request('/api/you/turns/turn-focus/feedback', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rating: 'wrong', objectType: 'focus', objectId: focus.id }),
+    });
+    expect(response.status).toBe(200);
+    await expect((await app.request('/api/you')).json()).resolves.toMatchObject({
+      focuses: [expect.objectContaining({ id: focus.id, status: 'rejected' })],
+    });
   });
 });

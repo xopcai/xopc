@@ -14,7 +14,7 @@ export type UserContextRejectionReason =
 
 export interface PlannedUserContextItem {
   recordId: string;
-  objectType: 'profile' | 'rule' | 'understanding';
+  objectType: 'profile' | 'rule' | 'focus' | 'understanding';
   versionId?: string;
   content: string;
   score: number;

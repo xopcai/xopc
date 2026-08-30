@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   closeXopcDatabase,
   createUnderstanding,
+  createContextEvidence,
+  linkUnderstandingEvidence,
   openXopcDatabase,
   recordContextFeedback,
   recordContextRun,
@@ -103,7 +105,7 @@ describe('UserUnderstandingRetriever', () => {
           turnId, sessionKey: 'session-1', query: 'alpha deployment checklist', budget: 1_000, durationMs: 1,
           items: [{
             objectType: 'understanding', objectId: item.id, versionId: item.versionId,
-            decision: 'selected', reason: 'test', content: item.statement, sourceLabel: 'test', injectedChars: 10,
+            decision: 'selected', reason: 'test', content: item.statement, sourceLabel: 'test', origin: 'inferred', injectedChars: 10,
           }],
         });
         recordContextFeedback({ turnId, runId, objectType: 'understanding', objectId: item.id, rating });
@@ -117,5 +119,32 @@ describe('UserUnderstandingRetriever', () => {
     const irrelevantResult = results.find((item) => item.understanding.id === irrelevant.id);
     expect(helpfulResult?.reasons).toContain('feedback');
     expect(helpfulResult!.score).toBeGreaterThan(irrelevantResult!.score);
+  });
+
+  it('diversifies equally relevant inferred results across connected sources', () => {
+    const createFrom = (key: string, instance: string) => {
+      const item = createUnderstanding({
+        kind: 'project_context', canonicalKey: key, status: 'active', scope: { type: 'global' },
+        explicitness: 'inferred', durability: 'durable', sensitivity: 'normal',
+        disclosurePolicy: 'referenceable', confidence: 0.8,
+        statement: `Atlas release checklist signal ${key}.`, createdBy: 'runtime', changeReason: 'test',
+      });
+      const evidence = createContextEvidence({
+        sourceType: 'connector', sourceInstanceId: instance, sourceRef: `${instance}:${key}`,
+        trustLevel: 'untrusted', observedAt: Date.now(),
+      });
+      linkUnderstandingEvidence(item.versionId, evidence.id, 'supports', 0.8);
+      return item;
+    };
+    const first = createFrom('atlas:a1', 'source-a');
+    const second = createFrom('atlas:a2', 'source-a');
+    const other = createFrom('atlas:b1', 'source-b');
+
+    const results = new UserUnderstandingRetriever().retrieve({
+      query: 'Atlas release checklist signal', sessionKey: 'session-1', workspaceId: '/repo', maxCandidates: 2,
+    });
+    const ids = results.map((result) => result.understanding.id);
+    expect(ids).toContain(other.id);
+    expect(ids.some((id) => id === first.id || id === second.id)).toBe(true);
   });
 });

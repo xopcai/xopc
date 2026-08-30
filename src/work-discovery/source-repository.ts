@@ -59,7 +59,7 @@ export function upsertWorkDiscoveryDirectorySource(input: {
     displayName: input.displayName,
     accessMode: 'continuous',
     retentionPolicy: 'derived_only',
-    processingPolicy: 'remote_allowed',
+    processingPolicy: 'local_only',
     config: { rootPath: input.rootPath, readOnly: true },
     checkpoint: input.fingerprint
       ? { ...existing?.checkpoint, fingerprint: input.fingerprint }

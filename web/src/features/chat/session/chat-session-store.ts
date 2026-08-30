@@ -37,6 +37,7 @@ export type ChatSessionSlice = {
   modelSupportsThinking: boolean;
   effectiveWorkspacePath: string;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  userContextMode: 'enabled' | 'off' | 'temporary';
   historyStatus: SessionHistoryStatus;
   messages: Message[];
   hasMore: boolean;
@@ -73,6 +74,7 @@ type ChatSessionStoreActions = {
         | 'modelSupportsThinking'
         | 'effectiveWorkspacePath'
         | 'workspaceSource'
+        | 'userContextMode'
       >
     >,
   ) => void;
@@ -219,6 +221,7 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     modelSupportsThinking: slice.modelSupportsThinking,
     effectiveWorkspacePath: slice.effectiveWorkspacePath,
     workspaceSource: slice.workspaceSource,
+    userContextMode: slice.userContextMode,
     historyStatus: slice.historyStatus,
     messages: cloneMessages(slice.messages),
     hasMore: slice.hasMore,
@@ -245,6 +248,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
   | 'modelSupportsThinking'
   | 'effectiveWorkspacePath'
   | 'workspaceSource'
+  | 'userContextMode'
 > {
   if (!current) return defaultSessionMeta();
   return {
@@ -255,6 +259,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
     modelSupportsThinking: current.modelSupportsThinking,
     effectiveWorkspacePath: current.effectiveWorkspacePath,
     workspaceSource: current.workspaceSource,
+    userContextMode: current.userContextMode,
   };
 }
 

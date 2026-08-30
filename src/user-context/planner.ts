@@ -1,24 +1,35 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { parseSessionKey } from '../routing/session-key.js';
 
 import type { UserContextPlan, PlannedUserContextItem, UserContextRejectionReason } from '../agent/memory/context/types.js';
 import { readAgentMessageContent } from '../agent/memory/agent-message-access.js';
 import { buildUserContextBlock } from '../agent/memory/context-fence.js';
+import { buildRetrievalQueryProfile } from '../retrieval/queryProfile.js';
+import { retrievalLexicalSimilarity } from '../retrieval/textFeatures.js';
 import {
   ensureContextConsent,
   getUserProfile,
   consumeContextConsent,
   listCollaborationRules,
+  listUnderstandingEvidence,
   recordContextRun,
 } from '../storage/sqlite/index.js';
 import type { CollaborationRule, PersonalizationItem, UserUnderstanding } from './domain.js';
-import { listUserFocuses } from './sources/repository.js';
+import {
+  getUnderstandingSourceGrant,
+  getUnderstandingSourceRun,
+  listUserFocuses,
+} from './sources/repository.js';
+import type { UserFocus } from './sources/types.js';
 import { UserUnderstandingRetriever } from './retriever.js';
 import { matchesUserContextScope } from './scope.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 6_000;
 const DEFAULT_MAX_RESULTS = 12;
+const MAX_FOCUS_RESULTS = 3;
+const MIN_RELEVANCE_SCORE = 0.25;
 
 export function prependAgentContext(message: AgentMessage, block: string): AgentMessage {
   if (!block) return message;
@@ -44,37 +55,98 @@ function sectionFor(item: UserUnderstanding): PlannedUserContextItem['section'] 
   return 'task';
 }
 
-function originFor(item: UserUnderstanding): PlannedUserContextItem['origin'] {
-  if (item.explicitness === 'explicit') return 'told_by_user';
-  if (item.explicitness === 'observed') return 'observed';
-  return 'inferred';
+function sourceDescription(item: UserUnderstanding): {
+  origin: PlannedUserContextItem['origin'];
+  label: string;
+} {
+  if (item.explicitness === 'explicit') return { origin: 'told_by_user', label: 'You told xopc' };
+  const connected = listUnderstandingEvidence(item.id).find((evidence) => evidence.sourceType === 'connector');
+  if (connected) {
+    return { origin: 'connected_source', label: connected.sourceInstanceId ?? 'Connected source' };
+  }
+  if (item.explicitness === 'observed') return { origin: 'observed', label: 'Observed across prior work' };
+  return { origin: 'inferred', label: 'An inference that may be wrong' };
 }
 
-function sourceLabel(item: UserUnderstanding): string {
-  if (item.explicitness === 'explicit') return 'You told xopc';
-  if (item.explicitness === 'observed') return 'Observed across prior work';
-  return 'An inference that may be wrong';
+function focusSourceDescription(focus: UserFocus): {
+  origin: PersonalizationItem['origin'];
+  label: string;
+} {
+  if (focus.explicitness === 'explicit') return { origin: 'told_by_user', label: 'You set this focus' };
+  const sourceRun = focus.sourceRunId ? getUnderstandingSourceRun(focus.sourceRunId) : null;
+  const grant = sourceRun ? getUnderstandingSourceGrant(sourceRun.grantId) : null;
+  if (grant?.adapterId.startsWith('connector:')) {
+    return { origin: 'connected_source', label: grant.displayName };
+  }
+  if (focus.explicitness === 'observed') return { origin: 'observed', label: 'Observed across prior work' };
+  return { origin: 'inferred', label: 'Suggested from prior work' };
 }
 
 function rejectionReason(
   item: UserUnderstanding,
   input: { sessionKey: string; workspaceId: string; projectId?: string },
   now: number,
+  timeHints: string[],
 ): UserContextRejectionReason | undefined {
-  if (item.status === 'needs_review' || item.status === 'stale' || item.status === 'candidate') return 'needs_review';
-  if (item.status === 'archived' || item.status === 'rejected') return 'disabled';
+  const historical = timeHints.includes('historical') && item.validTo !== undefined;
+  if (item.status === 'needs_review' || item.status === 'candidate' || (item.status === 'stale' && !historical)) return 'needs_review';
+  if (item.status === 'rejected' || (item.status === 'archived' && !historical)) return 'disabled';
   if (!matchesUserContextScope(item.scope, input)) return 'scope_mismatch';
-  if (item.validFrom && item.validFrom > now) return 'not_yet_valid';
-  if ((item.validTo && item.validTo < now) || (item.expiresAt && item.expiresAt < now)) return 'expired';
+  if (item.validFrom && item.validFrom > now && !timeHints.includes('future')) return 'not_yet_valid';
+  if (((item.validTo && item.validTo < now) || (item.expiresAt && item.expiresAt < now)) && !historical) return 'expired';
   if (item.sensitivity === 'secret' || item.sensitivity === 'regulated') return 'sensitive';
   if (item.conflictGroupId) return 'conflict';
   return undefined;
 }
 
-function ruleMatches(rule: CollaborationRule, input: { sessionKey: string; workspaceId: string; projectId?: string; channel?: string }): boolean {
+function ruleMatches(rule: CollaborationRule, input: { sessionKey: string; workspaceId: string; projectId?: string; channel?: string; agentId?: string }): boolean {
   if (rule.status !== 'active' || !matchesUserContextScope(rule.scope, input)) return false;
   const channel = typeof rule.conditions.channel === 'string' ? rule.conditions.channel : undefined;
-  return !channel || channel === input.channel;
+  const agentId = typeof rule.conditions.agentId === 'string' ? rule.conditions.agentId : undefined;
+  return (!channel || channel === input.channel) && (!agentId || agentId === input.agentId);
+}
+
+function focusRejectionReason(
+  focus: UserFocus,
+  input: { sessionKey: string; workspaceId: string; projectId?: string },
+  now: number,
+): UserContextRejectionReason | undefined {
+  if (focus.status !== 'active') return 'disabled';
+  if (!matchesUserContextScope(focus.scope, input)) return 'scope_mismatch';
+  if (focus.validFrom && focus.validFrom > now) return 'not_yet_valid';
+  if (focus.validTo && focus.validTo < now) return 'expired';
+  if (focus.sensitivity === 'secret' || focus.sensitivity === 'regulated') return 'sensitive';
+  if (focus.disclosurePolicy === 'ask_before_reference') return 'requires_consent';
+  return undefined;
+}
+
+function focusScore(focus: UserFocus, query: string, scopeInput: {
+  sessionKey: string;
+  workspaceId: string;
+  projectId?: string;
+}): number {
+  const profile = buildRetrievalQueryProfile(query, scopeInput);
+  const lexical = retrievalLexicalSimilarity(profile.normalized, `${focus.title} ${focus.summary}`);
+  const scoped = focus.scope.type !== 'global' && matchesUserContextScope(focus.scope, scopeInput);
+  return Math.min(1, lexical * 0.75 + focus.confidence * 0.15 + (scoped ? 0.25 : 0));
+}
+
+function renderContextBlock(params: {
+  profileLines: string[];
+  focuses: UserFocus[];
+  rules: CollaborationRule[];
+  items: PlannedUserContextItem[];
+  understandingSources: Map<string, string>;
+}): string {
+  const understandingItems = params.items.filter((item) => item.objectType === 'understanding');
+  return [
+    params.profileLines.length ? `<user-profile>\n${params.profileLines.join('\n')}\n</user-profile>` : '',
+    params.focuses.length ? `<active-focuses>\n${params.focuses.map((focus) => `- ${focus.title}: ${focus.summary} (${focus.horizon})`).join('\n')}\n</active-focuses>` : '',
+    params.rules.length ? `<collaboration-contract>\n${params.rules.map((rule) => `- ${rule.statement}`).join('\n')}\n</collaboration-contract>` : '',
+    understandingItems.length ? buildUserContextBlock(understandingItems.map((item) => (
+      `- ${item.content}\n  Evidence: ${params.understandingSources.get(item.recordId) ?? 'Unknown source'}`
+    )).join('\n')) : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 export class UserContextPlanner {
@@ -104,12 +176,25 @@ export class UserContextPlanner {
       workspaceId: params.workspaceId,
       ...(params.projectId ? { projectId: params.projectId } : {}),
     };
+    const queryProfile = buildRetrievalQueryProfile(query, scopeInput);
     const excluded = new Set(params.excludedRecordIds ?? []);
     const rejected: UserContextPlan['rejected'] = [];
     const consentRequests: UserContextPlan['consentRequests'] = [];
     const traceItems: PersonalizationItem[] = [];
     const items: PlannedUserContextItem[] = [];
+    const selectedFocuses: UserFocus[] = [];
+    const selectedRules: CollaborationRule[] = [];
+    const understandingSources = new Map<string, string>();
     let usedChars = 0;
+
+    const render = (overrides: Partial<Parameters<typeof renderContextBlock>[0]> = {}) => renderContextBlock({
+      profileLines,
+      focuses: selectedFocuses,
+      rules: selectedRules,
+      items,
+      understandingSources,
+      ...overrides,
+    });
 
     const profile = getUserProfile();
     const profileLines = [
@@ -122,25 +207,69 @@ export class UserContextPlanner {
     ].filter(Boolean);
     if (profileLines.length) {
       const content = profileLines.join('\n');
-      traceItems.push({ objectType: 'profile', objectId: 'profile', decision: 'selected', reason: 'User-provided profile', content, sourceLabel: 'You provided this directly', rank: 0, score: 1, injectedChars: content.length });
-      usedChars += content.length;
+      const nextChars = render().length;
+      if (nextChars <= maxChars) {
+        traceItems.push({ objectType: 'profile', objectId: 'profile', decision: 'selected', reason: 'User-provided profile', content, sourceLabel: 'You provided this directly', origin: 'told_by_user', rank: 0, score: 1, injectedChars: nextChars });
+        usedChars = nextChars;
+      } else {
+        profileLines.length = 0;
+        traceItems.push({ objectType: 'profile', objectId: 'profile', decision: 'budget_exceeded', reason: 'Context budget reached', content, sourceLabel: 'You provided this directly', origin: 'told_by_user', injectedChars: 0 });
+      }
     }
 
-    const activeFocusLines = listUserFocuses(['active']).slice(0, 5).map((focus) => (
-      `- ${focus.title}: ${focus.summary} (${focus.horizon})`
-    ));
-    if (activeFocusLines.length) usedChars += activeFocusLines.join('\n').length;
-
-    const rules = listCollaborationRules().filter((rule) => ruleMatches(rule, { ...scopeInput, channel: params.channel }));
-    const selectedRules: CollaborationRule[] = [];
-    for (const [index, rule] of rules.entries()) {
-      if (usedChars + rule.statement.length > maxChars) {
-        traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'budget_exceeded', reason: 'Context budget reached', content: rule.statement, sourceLabel: 'Your collaboration rule', injectedChars: 0 });
+    const rankedFocuses = listUserFocuses(['active'])
+      .map((focus) => ({ focus, score: focusScore(focus, query, scopeInput) }))
+      .sort((left, right) => right.score - left.score || right.focus.updatedAt - left.focus.updatedAt);
+    for (const { focus, score } of rankedFocuses) {
+      const source = focusSourceDescription(focus);
+      let reason = focusRejectionReason(focus, scopeInput, now);
+      if (!reason && score <= MIN_RELEVANCE_SCORE) reason = 'low_score';
+      if (!reason && selectedFocuses.length >= MAX_FOCUS_RESULTS) reason = 'budget';
+      if (!reason && items.length >= maxResults) reason = 'budget';
+      const content = `${focus.title}: ${focus.summary} (${focus.horizon})`;
+      const nextChars = render({ focuses: [...selectedFocuses, focus] }).length;
+      if (!reason && nextChars > maxChars) reason = 'budget';
+      if (reason) {
+        rejected.push({ recordId: focus.id, reason });
+        traceItems.push({
+          objectType: 'focus', objectId: focus.id, versionId: focus.versionId,
+          decision: reason === 'budget' ? 'budget_exceeded' : reason === 'requires_consent' ? 'needs_consent'
+            : reason === 'scope_mismatch' ? 'scope_mismatch' : reason === 'expired' ? 'expired'
+              : reason === 'sensitive' ? 'sensitive' : reason === 'disabled' ? 'disabled' : 'irrelevant',
+          reason, content, sourceLabel: source.label, origin: source.origin,
+          score, injectedChars: 0,
+        });
         continue;
       }
-      usedChars += rule.statement.length;
+      const addedChars = nextChars - usedChars;
+      usedChars = nextChars;
+      selectedFocuses.push(focus);
+      items.push({
+        recordId: focus.id, objectType: 'focus', versionId: focus.versionId, content, score, section: 'task',
+        citation: `user-focus://${focus.id}`,
+        origin: source.origin,
+        stability: focus.confidence,
+      });
+      traceItems.push({
+        objectType: 'focus', objectId: focus.id, versionId: focus.versionId, decision: 'selected', reason: 'Relevant active focus',
+        content, sourceLabel: source.label, origin: source.origin,
+        rank: items.length, score, injectedChars: addedChars,
+      });
+    }
+
+    const rules = listCollaborationRules().filter((rule) => ruleMatches(rule, {
+      ...scopeInput, channel: params.channel, agentId: parseSessionKey(params.sessionKey)?.agentId,
+    }));
+    for (const [index, rule] of rules.entries()) {
+      const nextChars = render({ rules: [...selectedRules, rule] }).length;
+      if (nextChars > maxChars) {
+        traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'budget_exceeded', reason: 'Context budget reached', content: rule.statement, sourceLabel: 'Your collaboration rule', origin: 'told_by_user', injectedChars: 0 });
+        continue;
+      }
+      const addedChars = nextChars - usedChars;
+      usedChars = nextChars;
       selectedRules.push(rule);
-      traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'selected', reason: 'Active collaboration rule', content: rule.statement, sourceLabel: 'Your collaboration rule', rank: index + 1, score: 1, injectedChars: rule.statement.length });
+      traceItems.push({ objectType: 'rule', objectId: rule.id, versionId: rule.revisionId, decision: 'selected', reason: 'Active collaboration rule', content: rule.statement, sourceLabel: 'Your collaboration rule', origin: 'told_by_user', rank: index + 1, score: 1, injectedChars: addedChars });
     }
 
     const ranked = this.retriever.retrieve({
@@ -152,15 +281,16 @@ export class UserContextPlanner {
     }).filter((result) => !excluded.has(result.understanding.id))
       .map((result) => ({ item: result.understanding, score: result.score }));
     for (const { item, score } of ranked) {
+      const source = sourceDescription(item);
       if (items.length >= maxResults) {
         rejected.push({ recordId: item.id, reason: 'budget' });
         traceItems.push({ objectType: 'understanding', objectId: item.id, versionId: item.versionId,
           decision: 'budget_exceeded', reason: 'Maximum result count reached', content: item.statement,
-          sourceLabel: sourceLabel(item), score, injectedChars: 0 });
+          sourceLabel: source.label, origin: source.origin, score, injectedChars: 0 });
         continue;
       }
-      let reason = rejectionReason(item, scopeInput, now);
-      if (!reason && score < 0.25) reason = 'low_score';
+      let reason = rejectionReason(item, scopeInput, now, queryProfile.timeHints);
+      if (!reason && score <= MIN_RELEVANCE_SCORE) reason = 'low_score';
       if (!reason && item.disclosurePolicy === 'ask_before_reference') {
         const consentStatus = consumeContextConsent(item.id, params.sessionKey);
         if (consentStatus !== 'granted') {
@@ -179,27 +309,28 @@ export class UserContextPlanner {
               : reason === 'sensitive' ? 'sensitive'
                 : reason === 'scope_mismatch' ? 'scope_mismatch'
                   : reason === 'disabled' ? 'disabled' : 'irrelevant',
-          reason, content: item.statement, sourceLabel: sourceLabel(item), score, injectedChars: 0 });
+          reason, content: item.statement, sourceLabel: source.label, origin: source.origin, score, injectedChars: 0 });
         continue;
       }
-      if (usedChars + item.statement.length > maxChars) {
+      const plannedItem: PlannedUserContextItem = {
+        recordId: item.id, objectType: 'understanding', versionId: item.versionId, content: item.statement,
+        score, section: sectionFor(item), citation: `user-context://${item.id}`, origin: source.origin, stability: item.confidence,
+      };
+      const nextSources = new Map(understandingSources).set(item.id, source.label);
+      const nextChars = render({ items: [...items, plannedItem], understandingSources: nextSources }).length;
+      if (nextChars > maxChars) {
         rejected.push({ recordId: item.id, reason: 'budget' });
-        traceItems.push({ objectType: 'understanding', objectId: item.id, versionId: item.versionId, decision: 'budget_exceeded', reason: 'Context budget reached', content: item.statement, sourceLabel: sourceLabel(item), score, injectedChars: 0 });
+        traceItems.push({ objectType: 'understanding', objectId: item.id, versionId: item.versionId, decision: 'budget_exceeded', reason: 'Context budget reached', content: item.statement, sourceLabel: source.label, origin: source.origin, score, injectedChars: 0 });
         continue;
       }
-      usedChars += item.statement.length;
-      items.push({ recordId: item.id, objectType: 'understanding', versionId: item.versionId, content: item.statement,
-        score, section: sectionFor(item), citation: `user-context://${item.id}`, origin: originFor(item), stability: item.confidence });
-      traceItems.push({ objectType: 'understanding', objectId: item.id, versionId: item.versionId, decision: 'selected', reason: 'Relevant to this request', content: item.statement, sourceLabel: sourceLabel(item), rank: items.length, score, injectedChars: item.statement.length });
+      const addedChars = nextChars - usedChars;
+      usedChars = nextChars;
+      understandingSources.set(item.id, source.label);
+      items.push(plannedItem);
+      traceItems.push({ objectType: 'understanding', objectId: item.id, versionId: item.versionId, decision: 'selected', reason: 'Relevant to this request', content: item.statement, sourceLabel: source.label, origin: source.origin, rank: items.length, score, injectedChars: addedChars });
     }
 
-    const sections = [
-      profileLines.length ? `<user-profile>\n${profileLines.join('\n')}\n</user-profile>` : '',
-      activeFocusLines.length ? `<active-focuses>\n${activeFocusLines.join('\n')}\n</active-focuses>` : '',
-      selectedRules.length ? `<collaboration-contract>\n${selectedRules.map((rule) => `- ${rule.statement}`).join('\n')}\n</collaboration-contract>` : '',
-      items.length ? buildUserContextBlock(items.map((item) => `- ${item.content}\n  Evidence: ${traceItems.find((trace) => trace.objectId === item.recordId)?.sourceLabel}`).join('\n')) : '',
-    ].filter(Boolean);
-    const block = sections.join('\n\n');
+    const block = render();
     recordContextRun({ turnId: params.turnId, sessionKey: params.sessionKey, query, budget: maxChars,
       durationMs: Date.now() - started, items: traceItems });
     return { traceId, modelMessage: prependAgentContext(params.userMessage, block), items, rejected, consentRequests,

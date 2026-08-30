@@ -14,6 +14,10 @@
     "agentNoMatches": "No matching agents",
     "thinkingLevel": "Thinking",
     "newSession": "New chat",
+    "temporarySession": "Temporary",
+    "temporarySessionHint": "This session neither reads nor updates shared understanding.",
+    "newTemporarySession": "New temporary chat",
+    "newTemporarySessionHint": "Start a chat that neither reads nor updates shared understanding.",
     "timelineTitle": "Timeline",
     "timelineTurn": "Turn {{count}}",
     "timelineMessageFallback": "Message",
@@ -982,7 +986,7 @@
     "messageWhyThisAnswer": "Why this answer was personalized",
     "messageWhyThisAnswerHint": "These parts of your personal context were allowed to shape the response.",
     "messageContextOrigins": {
-      "told_by_you": "You told me",
+      "told_by_user": "You told me",
       "observed": "Noticed across your work",
       "inferred": "My interpretation",
       "connected_source": "From {{source}}"

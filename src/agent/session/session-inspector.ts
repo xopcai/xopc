@@ -79,6 +79,7 @@ export interface SessionAgentConfigView {
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
   workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  userContextMode: 'enabled' | 'off' | 'temporary';
 }
 
 export class SessionInspector {
@@ -257,6 +258,7 @@ export class SessionInspector {
       verboseLevel,
       effectiveWorkspacePath,
       workingDirectoryLocked: Boolean(projectWorkspace || hasSessionWorkspaceOverride),
+      userContextMode: sc?.userContextMode ?? 'enabled',
       workspaceSource: projectWorkspace
         ? 'project'
         : hasSessionWorkspaceOverride

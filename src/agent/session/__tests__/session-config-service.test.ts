@@ -130,4 +130,21 @@ describe('SessionConfigService project workspace', () => {
     expect(result).toEqual({ ok: true });
     expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBe('off');
   });
+
+  it('persists temporary user-context mode and rejects unknown modes', async () => {
+    ensureSessionRecord(SESSION_KEY, process.cwd());
+    const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
+    const service = new SessionConfigService({
+      sessionStore: { load: vi.fn(async () => []) } as never,
+      sessionConfigStore,
+      modelManager: {} as never,
+      agentManager: {} as never,
+      getConfig: () => minimalConfig,
+    });
+
+    expect(await service.patch(SESSION_KEY, { userContextMode: 'temporary' })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(SESSION_KEY))?.userContextMode).toBe('temporary');
+    expect(await service.patch(SESSION_KEY, { userContextMode: 'invalid' as never }))
+      .toEqual({ ok: false, error: 'Invalid user context mode' });
+  });
 });

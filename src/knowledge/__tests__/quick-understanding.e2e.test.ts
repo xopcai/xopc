@@ -14,6 +14,7 @@ import {
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
 } from '../../storage/sqlite/index.js';
+import { claimRegisteredExtraction } from '../../user-context/extraction/registry.js';
 import { ConnectedKnowledgePipeline } from '../connected-knowledge-pipeline.js';
 import { ConnectedUnderstandingPipeline } from '../connected-understanding-pipeline.js';
 
@@ -79,7 +80,11 @@ describe('quick understanding end to end', () => {
 
     const memory = new MemoryManager();
     memory.addProvider(new BuiltinMemoryProvider());
-    const understanding = await new ConnectedUnderstandingPipeline(memory).process('main');
+    const extraction = claimRegisteredExtraction({
+      extractorId: 'connector-structural', sourceRef: 'test:quick-understanding', contentForHash: 'fixture',
+      processingPolicy: 'local_only', destination: 'deterministic',
+    });
+    const understanding = await new ConnectedUnderstandingPipeline(memory).process('main', extraction.run.id);
     expect(understanding.created).toBe(1);
     const project = listUnderstandings().find((item) => item.kind === 'project_context');
     expect(project).toMatchObject({ status: 'candidate', explicitness: 'inferred' });

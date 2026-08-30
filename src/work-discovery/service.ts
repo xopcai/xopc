@@ -29,6 +29,7 @@ import {
   updateUnderstandingSourceRun,
   updateUnderstandingSourceGrantCheckpoint,
 } from '../user-context/sources/repository.js';
+import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import type { UnderstandingSourceCategory, UnderstandingSourceItem } from '../user-context/sources/types.js';
 import { isLocalUnderstandingSourceId } from '../user-context/sources/local-source-contract.js';
 import { createLogger } from '../utils/logger.js';
@@ -405,7 +406,7 @@ export class WorkDiscoveryService {
         displayName: sourceId,
         accessMode: 'once',
         retentionPolicy: 'derived_only',
-        processingPolicy: 'remote_allowed',
+        processingPolicy: 'local_only',
         config: { readOnly: true },
       });
       sourceGrants.set(sourceId, grant);
@@ -450,16 +451,26 @@ export class WorkDiscoveryService {
     const linkedRun = runId ? getWorkDiscoveryRun(runId) : null;
     let analysis: Awaited<ReturnType<typeof analyzeUnderstandingSources>>;
     try {
-      analysis = await analyzeUnderstandingSources({
-        config: this.options.getConfig(), items: analysisItems,
-        ...(linkedRun?.result ? { workContext: {
-          projectSummary: linkedRun.result.projectSummary,
-          currentState: linkedRun.result.currentState,
-          uncertainties: linkedRun.result.uncertainties,
-          workThreads: linkedRun.result.workThreads,
-        } } : {}),
-        signal,
-      });
+      const remoteAllowed = allowsRemoteSourceProcessing(
+        [...changedSourceIds].map((sourceId) => sourceGrants.get(sourceId)?.processingPolicy ?? 'local_only'),
+      );
+      analysis = remoteAllowed
+        ? await analyzeUnderstandingSources({
+          config: this.options.getConfig(), items: analysisItems,
+          ...(linkedRun?.result ? { workContext: {
+            projectSummary: linkedRun.result.projectSummary,
+            currentState: linkedRun.result.currentState,
+            uncertainties: linkedRun.result.uncertainties,
+            workThreads: linkedRun.result.workThreads,
+          } } : {}),
+          signal,
+        })
+        : {
+          modelRef: 'local-only',
+          profileCandidates: [],
+          workThreadCandidates: [],
+          sourceStatuses: [...changedSourceIds].map((sourceId) => ({ sourceId, status: 'completed' as const })),
+        };
       const statusBySource = new Map(analysis.sourceStatuses.map((item) => [item.sourceId, item]));
       for (const [sourceId, sourceRunId] of sourceRuns) {
         if (!changedSourceIds.has(sourceId)) continue;
@@ -837,7 +848,7 @@ export class WorkDiscoveryService {
           horizon: thread.horizon,
           status: 'candidate',
           confidence: thread.confidence,
-          projectId: run.projectId,
+          scope: { type: 'project', id: run.projectId },
           evidenceRefs: thread.evidenceIds,
         })
       ));
@@ -1027,7 +1038,8 @@ export class WorkDiscoveryService {
         horizon: 'current',
         status: 'active',
         confidence: 1,
-        projectId: run.projectId,
+        scope: { type: 'project', id: run.projectId },
+        explicitness: 'explicit',
         evidenceRefs: [`session://${createHash('sha256').update(run.sessionKey).digest('hex').slice(0, 16)}/recognition`],
       });
     }

@@ -9,7 +9,7 @@ vi.mock('../api', () => ({
 
 vi.mock('../../user-context/user-context-api', () => ({
   updateUnderstanding: vi.fn(),
-  updateUserFocusStatus: vi.fn(),
+  updateUserFocus: vi.fn(),
 }));
 
 import type { ElectronAPI } from '@/types/electron';

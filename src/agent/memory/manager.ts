@@ -56,7 +56,6 @@ export class MemoryManager {
   private pluginProvidersLoaded = false;
   private readonly understanding: UserUnderstandingService;
   private readonly memoryRuntime?: MemoryRuntime;
-  private readonly lastTurnSourceItem = new Map<string, string>();
   private readonly sessionContexts = new Map<string, MemoryProviderInitOptions>();
 
   constructor(options: MemoryManagerOptions = {}) {
@@ -152,9 +151,6 @@ export class MemoryManager {
       projectId: options?.projectId,
       correctionTargetRecordIds: options?.correctionTargetRecordIds,
     });
-    if (options?.sessionId && review.sourceItemId) {
-      this.lastTurnSourceItem.set(options.sessionId, review.sourceItemId);
-    }
     return review;
   }
 
@@ -198,15 +194,15 @@ export class MemoryManager {
       projectId?: string;
       sourceItemId?: string;
       sourceItemIds?: string[];
+      evidenceIds?: string[];
       sourceText?: string;
       source?: MemoryRecord['source'];
       reviewSource?: 'turn' | 'background';
+      extractionRunId?: string;
     } = {},
   ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
     const sessionContext = context.sessionKey ? this.sessionContexts.get(context.sessionKey) : undefined;
-    const sourceItemId = context.sourceItemId ?? (context.sessionKey
-      ? this.lastTurnSourceItem.get(context.sessionKey)
-      : undefined);
+    const sourceItemId = context.sourceItemId;
     const result = await this.understanding.applyCandidates(candidates, {
       ...context,
       workspaceId: context.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
@@ -417,7 +413,6 @@ export class MemoryManager {
   }
 
   async shutdownAll(): Promise<void> {
-    this.lastTurnSourceItem.clear();
     this.sessionContexts.clear();
     for (const p of [...this.providers].reverse()) {
       try {

@@ -124,6 +124,7 @@ describe('connected source understanding input', () => {
       agentId: 'main',
       sourceInstanceId,
       sourceRunId: sourceRun.id,
+      processingPolicy: grant.processingPolicy,
       memoryManager: { applyUnderstandingCandidates } as unknown as MemoryManager,
       analyze: vi.fn(async ({ items }) => ({
         modelRef: 'test/model',
@@ -149,5 +150,36 @@ describe('connected source understanding input', () => {
       canonicalKey: 'connected-focus:atlas-launch',
       sourceRunId: sourceRun.id,
     })]);
+  });
+
+  it('does not send local-only source content to semantic analysis', async () => {
+    const analyze = vi.fn();
+    const sourceInstanceId = 'local:notes';
+    upsertKnowledgeSourceItems([{
+      sourceInstanceId,
+      collectionScope: 'notes',
+      externalId: 'note-1',
+      itemType: 'document',
+      contentHash: 'hash-local',
+      normalizedText: JSON.stringify({ title: 'Private note', content: 'Never upload this.' }),
+      metadata: { agentId: 'main' },
+      sensitivity: 'personal',
+      retentionClass: 'bounded',
+      synthesisPipeline: 'connected_knowledge',
+      synthesisStatus: 'pending',
+    }]);
+
+    const result = await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}),
+      agentId: 'main',
+      sourceInstanceId,
+      sourceRunId: 'run-local',
+      processingPolicy: 'local_only',
+      memoryManager: {} as MemoryManager,
+      analyze,
+    });
+
+    expect(result).toEqual({ created: 0, focusCount: 0, status: 'completed' });
+    expect(analyze).not.toHaveBeenCalled();
   });
 });
