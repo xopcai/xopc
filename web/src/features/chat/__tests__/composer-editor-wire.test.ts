@@ -69,6 +69,7 @@ const slashCmdFixtures: CommandEntry[] = [
     description: '',
     category: 'session',
     acceptsArgs: true,
+    acceptsContext: false,
     examples: [],
   },
 ];

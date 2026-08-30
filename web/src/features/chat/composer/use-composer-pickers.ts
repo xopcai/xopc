@@ -6,7 +6,7 @@ import {
   type PaletteApplyContext,
 } from '@/features/chat/composer/palette-item-handlers';
 import type { PickerKeyAdapter } from '@/features/chat/composer/picker-key-adapter';
-import type { ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
 import { useDismissOnOutsideClick } from '@/features/chat/composer/use-dismiss-on-outside-click';
 import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
 import { recordRecentAtPath } from '@/features/chat/palette/at-mention-recent';
@@ -33,21 +33,24 @@ export interface UseComposerPickersOptions {
   resetEditor: (opts?: ResetEditorOptions) => void;
   clearAttachments: () => void;
 
-  onSend: (text: string, atts?: WireAttachment[], thinking?: string) => void;
+  onSend: (text: string, atts?: WireAttachment[], thinking?: string, contextRefs?: ComposerContextRef[]) => void;
   onUserTextCommitted?: (text: string) => void;
   /** Optional: when set, palette can offer agent rows that switch the active session agent. */
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; used to resolve skill availability in `/` palette. */
   currentAgentId?: string;
+  contextRefs: ComposerContextRef[];
+  onAddContextRef: (ref: ComposerContextRef) => void;
   onUnavailableSkill?: (item: PaletteItem) => void;
   onReviewLauncher?: () => void;
   /** When runBusy and command is `acceptsArgs=false` non-abort: queue the command. */
-  onAddPendingFollowUp?: (text: string, atts?: WireAttachment[]) => void | Promise<void>;
+  onAddPendingFollowUp?: (text: string, atts?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
   /** When runBusy and command is abort-class: stop the current generation. */
   onAbort?: () => void;
   /** Treat as stream-like for command-queue/disable decisions even when not currently streaming. */
   pendingFollowUpsCount: number;
   maxPendingFollowUps: number;
+  clearContextRefs: () => void;
 
   /** Anchor for the slash-palette outside-click dismiss (the floating panel itself). */
   commandPalettePanelRef: RefObject<HTMLDivElement | null>;
@@ -87,12 +90,15 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     onUserTextCommitted,
     onChatAgentChange,
     currentAgentId,
+    contextRefs,
+    onAddContextRef,
     onUnavailableSkill,
     onReviewLauncher,
     onAddPendingFollowUp,
     onAbort,
     pendingFollowUpsCount,
     maxPendingFollowUps,
+    clearContextRefs,
     commandPalettePanelRef,
   } = opts;
 
@@ -105,6 +111,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     isComposing,
     currentAgentId,
     sessionKey,
+    selectedNoteIds: new Set(contextRefs.map((ref) => ref.sourceId)),
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
     sessionKey,
@@ -126,6 +133,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       thinkingLevel,
       editor: { valueRef, resetEditor },
       attachments: { clearAttachments },
+      contextRefs: { current: contextRefs, clear: clearContextRefs },
       callbacks: {
         onSend,
         onUserTextCommitted,
@@ -134,6 +142,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
         onAbort,
         onUnavailableSkill,
         onReviewLauncher,
+        onAddContextRef,
       },
     }),
     [
@@ -145,6 +154,8 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       valueRef,
       resetEditor,
       clearAttachments,
+      contextRefs,
+      clearContextRefs,
       onSend,
       onUserTextCommitted,
       onChatAgentChange,
@@ -152,6 +163,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       onAbort,
       onUnavailableSkill,
       onReviewLauncher,
+      onAddContextRef,
     ],
   );
 

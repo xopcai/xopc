@@ -92,6 +92,36 @@ Short description.
 });
 
 describe('parseSessionMessages startup context', () => {
+  it('strips profile, Note, and timestamp envelopes from persisted user rows', () => {
+    const ui = parseSessionMessages([{
+      role: 'user',
+      content: [
+        '<source_contexts>',
+        '<source_context kind="note" id="n1" version="1">Note</source_context>',
+        '</source_contexts>',
+        '',
+        '<user_message>',
+        '<user-profile>',
+        'Preferred name: micjoyce',
+        '</user-profile>',
+        '',
+        '[2026-08-30 13:54 GMT+8] 看下note 内容',
+        '</user_message>',
+      ].join('\n'),
+      metadata: {
+        sourceContexts: [{
+          kind: 'note', sourceId: 'n1', version: '1', title: 'Launch plan', truncated: true,
+        }],
+      },
+      timestamp: 1,
+    }]);
+
+    expect(extractUserMessageText(ui[0]?.content ?? [])).toBe('看下note 内容');
+    expect(ui[0]?.contextRefs).toEqual([{
+      kind: 'note', sourceId: 'n1', version: '1', title: 'Launch plan', truncated: true,
+    }]);
+  });
+
   it('keeps image media without exposing generated image descriptions', () => {
     const ui = parseSessionMessages([
       {

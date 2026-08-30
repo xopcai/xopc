@@ -94,11 +94,21 @@ export type MessageAttachment = {
   path?: string;
 };
 
+export interface MessageContextRef {
+  kind: 'note';
+  sourceId: string;
+  version: string;
+  title: string;
+  tokenEstimate?: number;
+  truncated?: boolean;
+}
+
 export interface Message {
   id?: string;
   role: 'user' | 'assistant' | 'user-with-attachments';
   content: MessageContent[];
   attachments?: MessageAttachment[];
+  contextRefs?: MessageContextRef[];
   usage?: {
     inputTokens?: number;
     outputTokens?: number;

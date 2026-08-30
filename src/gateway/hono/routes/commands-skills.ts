@@ -63,6 +63,7 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
         category: cmd.category,
         scope: cmd.scope,
         acceptsArgs: cmd.acceptsArgs ?? false,
+        acceptsContext: cmd.acceptsContext ?? false,
         examples: cmd.examples ?? [],
       }));
     const extensionCommands = all

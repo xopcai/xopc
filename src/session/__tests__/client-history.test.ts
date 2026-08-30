@@ -5,6 +5,15 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
+  it('removes model-only context envelopes from user messages', () => {
+    const history = messagesToClientHistory([{
+      role: 'user',
+      content: '<user-profile>\nPreferred name: micjoyce\n</user-profile>\n\n[2026-08-30 13:54 GMT+8] 看下note 内容',
+    } as never]);
+
+    expect(history[0]?.content).toBe('看下note 内容');
+  });
+
   it('preserves turn ids used by edit-and-resend', () => {
     const rows = [
       { role: 'user', content: 'hello', turnId: 'turn-1' },
@@ -15,6 +24,25 @@ describe('messagesToClientHistory', () => {
       { role: 'user', turnId: 'turn-1' },
       { role: 'assistant', turnId: 'turn-1' },
     ]);
+  });
+
+  it('exposes only safe source context summaries for user-message chips', () => {
+    const rows = [{
+      role: 'user',
+      content: 'question',
+      metadata: {
+        sourceContexts: [{
+          kind: 'note', sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
+        }],
+        internalSecret: 'do-not-expose',
+      },
+    }] as never[];
+
+    expect(transcriptRowsToClientHistory(rows)[0]?.metadata).toEqual({
+      sourceContexts: [{
+        kind: 'note', sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
+      }],
+    });
   });
 
   const imageMedia = {

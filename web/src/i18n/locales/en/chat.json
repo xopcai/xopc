@@ -1080,8 +1080,13 @@
       "exited": "Process exited with code {{code}}"
     },
     "commandPalette": {
-      "noResults": "No matching commands or skills",
-      "placeholder": "Search skills and commands…",
+      "noResults": "No matching Notes, commands, or skills",
+      "placeholder": "Search Notes, skills, and commands…",
+      "notesSection": "Notes",
+      "untitledNote": "Untitled Note",
+      "noteContextLabel": "Referenced Notes",
+      "contextLimitReached": "A message can reference up to {{max}} Notes",
+      "contextTruncated": "This Note context was truncated to fit the context budget",
       "skillsSection": "Skills",
       "commandsSection": "Commands",
       "agentsSection": "Agents",

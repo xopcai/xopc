@@ -41,6 +41,7 @@ export interface Message {
     uri: string;
     path: string;
   }>;
+  metadata?: unknown;
 }
 
 /** Session status enum */

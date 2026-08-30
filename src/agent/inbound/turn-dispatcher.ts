@@ -48,7 +48,7 @@ import {
   type RunProcessDirectDeps,
 } from '../service/process-direct-one-shot.js';
 import { maybeEmitWebchatTts } from '../service/webchat-tts.js';
-import type { AgentSourceContextResolver } from '../source-context/types.js';
+import type { AgentSourceContext, AgentSourceContextResolver } from '../source-context/types.js';
 
 export interface TurnDispatcherConfig {
   log: ContextualLogger;
@@ -90,6 +90,7 @@ export interface ProcessDirectOptions {
   signal?: AbortSignal;
   runId?: string;
   deadlineAtMs?: number;
+  sourceContexts?: AgentSourceContext[];
 }
 
 export class TurnDispatcher {
@@ -129,7 +130,7 @@ export class TurnDispatcher {
     origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
-    options?: { signal?: AbortSignal; runId?: string },
+    options?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[] },
   ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
@@ -139,6 +140,7 @@ export class TurnDispatcher {
       thinking,
       signal: options?.signal,
       runId: options?.runId,
+      sourceContexts: options?.sourceContexts,
     });
   }
 

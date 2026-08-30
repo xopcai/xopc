@@ -1,4 +1,5 @@
 import type { MediaRef } from '../media/types.js';
+import type { TurnContextRef } from '../agent/source-context/types.js';
 
 export interface UserTurnAttachment {
   id?: string;
@@ -15,6 +16,7 @@ export interface UserTurnAttachment {
 export interface UserTurnInput {
   text: string;
   attachments?: UserTurnAttachment[];
+  contextRefs?: TurnContextRef[];
 }
 
 export function mediaRefsToUserTurnAttachments(media: MediaRef[] | undefined): UserTurnAttachment[] | undefined {

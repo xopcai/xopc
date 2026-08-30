@@ -15,6 +15,7 @@ const sampleCommands: CommandEntry[] = [
     description: '',
     category: 'session',
     acceptsArgs: false,
+    acceptsContext: false,
     examples: [],
   },
   {
@@ -24,6 +25,7 @@ const sampleCommands: CommandEntry[] = [
     description: '',
     category: 'system',
     acceptsArgs: false,
+    acceptsContext: false,
     examples: [],
   },
 ];

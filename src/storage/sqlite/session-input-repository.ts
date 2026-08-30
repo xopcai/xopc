@@ -1,6 +1,8 @@
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
+import type { AgentSourceContext, SourceContextRefSummary } from '../../agent/source-context/types.js';
+
 export type SessionInputDelivery = 'next' | 'steer';
 export type SessionInputStatus =
   | 'queued' | 'running' | 'injecting'
@@ -15,6 +17,8 @@ export type SessionInput = {
   status: SessionInputStatus;
   content: string;
   attachments?: unknown[];
+  contextRefs?: SourceContextRefSummary[];
+  contextSnapshots?: AgentSourceContext[];
   thinking?: string;
   origin: TurnOrigin;
   position: number;
@@ -38,6 +42,7 @@ type InputRow = {
   id: string; session_key: string; client_message_id: string;
   requested_delivery: SessionInputDelivery; effective_delivery: SessionInputDelivery;
   status: SessionInputStatus; content: string; attachments_json: string | null;
+  context_refs_json: string | null; context_snapshots_json: string | null;
   thinking: string | null; origin_json: string; position: number; target_run_id: string | null;
   run_id: string | null; version: number; error: string | null;
   created_at_ms: number; updated_at_ms: number;
@@ -49,6 +54,8 @@ function mapInput(row: InputRow): SessionInput {
     requestedDelivery: row.requested_delivery, effectiveDelivery: row.effective_delivery,
     status: row.status, content: row.content,
     attachments: row.attachments_json ? JSON.parse(row.attachments_json) as unknown[] : undefined,
+    contextRefs: row.context_refs_json ? JSON.parse(row.context_refs_json) as SourceContextRefSummary[] : undefined,
+    contextSnapshots: row.context_snapshots_json ? JSON.parse(row.context_snapshots_json) as AgentSourceContext[] : undefined,
     thinking: row.thinking ?? undefined, position: row.position,
     origin: turnOriginSchema.parse(JSON.parse(row.origin_json)),
     targetRunId: row.target_run_id ?? undefined, runId: row.run_id ?? undefined,
@@ -58,7 +65,8 @@ function mapInput(row: InputRow): SessionInput {
 }
 
 const SELECT_INPUTS = `SELECT id, session_key, client_message_id, requested_delivery,
-  effective_delivery, status, content, attachments_json, thinking, origin_json, position,
+  effective_delivery, status, content, attachments_json, context_refs_json, context_snapshots_json,
+  thinking, origin_json, position,
   target_run_id, run_id, version, error, created_at_ms, updated_at_ms
   FROM session_inputs`;
 
@@ -88,7 +96,10 @@ export function getSessionInputState(sessionKey: string): SessionInputState {
     revision: runtime?.revision ?? 0,
     activeRunId: runtime?.active_run_id ?? undefined,
     activeInputId: runtime?.active_input_id ?? undefined,
-    inputs: rows.map(mapInput),
+    inputs: rows.map((row) => {
+      const { contextSnapshots: _contextSnapshots, ...input } = mapInput(row);
+      return input;
+    }),
   };
 }
 
@@ -98,10 +109,17 @@ export function findSessionInput(sessionKey: string, clientMessageId: string): S
   return row ? mapInput(row) : undefined;
 }
 
+export function getSessionInputById(sessionKey: string, id: string): SessionInput | undefined {
+  const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE session_key = ? AND id = ?`)
+    .get(sessionKey, id) as InputRow | undefined;
+  return row ? mapInput(row) : undefined;
+}
+
 export function insertSessionInput(input: {
   id: string; sessionKey: string; clientMessageId: string;
   requestedDelivery: SessionInputDelivery; effectiveDelivery: SessionInputDelivery;
   status: 'queued' | 'injecting'; content: string; attachments?: unknown[];
+  contextRefs?: SourceContextRefSummary[]; contextSnapshots?: AgentSourceContext[];
   thinking?: string; origin: TurnOrigin; targetRunId?: string;
 }): SessionInput {
   return runSqliteWriteTransaction((db) => {
@@ -114,11 +132,14 @@ export function insertSessionInput(input: {
       .get(input.sessionKey) as { value: number };
     db.prepare(`INSERT INTO session_inputs(id, session_key, client_message_id,
       requested_delivery, effective_delivery, status, content, attachments_json,
-      thinking, origin_json, position, target_run_id, version, created_at_ms, updated_at_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+      context_refs_json, context_snapshots_json, thinking, origin_json, position,
+      target_run_id, version, created_at_ms, updated_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
       .run(input.id, input.sessionKey, input.clientMessageId, input.requestedDelivery,
         input.effectiveDelivery, input.status, input.content,
         input.attachments ? JSON.stringify(input.attachments) : null,
+        input.contextRefs ? JSON.stringify(input.contextRefs) : null,
+        input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : null,
         input.thinking ?? null, JSON.stringify(input.origin), max.value + 1,
         input.targetRunId ?? null, now, now);
     bumpRevision(db, input.sessionKey);
@@ -180,7 +201,17 @@ export function setSessionInputStatus(id: string, status: SessionInputStatus, pa
   });
 }
 
-export function mutateQueuedSessionInput(input: { sessionKey: string; id: string; version: number; content?: string; attachments?: unknown[]; thinking?: string; position?: number }): boolean {
+export function mutateQueuedSessionInput(input: {
+  sessionKey: string;
+  id: string;
+  version: number;
+  content?: string;
+  attachments?: unknown[];
+  contextRefs?: SourceContextRefSummary[];
+  contextSnapshots?: AgentSourceContext[];
+  thinking?: string;
+  position?: number;
+}): boolean {
   return runSqliteWriteTransaction((db) => {
     const row = db.prepare(`${SELECT_INPUTS} WHERE id = ? AND session_key = ?`).get(input.id, input.sessionKey) as InputRow | undefined;
     if (!row || row.status !== 'queued' || row.version !== input.version) return false;
@@ -193,9 +224,12 @@ export function mutateQueuedSessionInput(input: { sessionKey: string; id: string
       const stmt = db.prepare(`UPDATE session_inputs SET position = ?, version = version + 1, updated_at_ms = ? WHERE id = ?`);
       ordered.forEach((item, index) => stmt.run(index + 1, now, item.id));
     } else {
-      db.prepare(`UPDATE session_inputs SET content = ?, attachments_json = ?, thinking = ?, version = version + 1,
+      db.prepare(`UPDATE session_inputs SET content = ?, attachments_json = ?, context_refs_json = ?,
+        context_snapshots_json = ?, thinking = ?, version = version + 1,
         updated_at_ms = ? WHERE id = ?`).run(input.content ?? row.content,
           input.attachments ? JSON.stringify(input.attachments) : row.attachments_json,
+          input.contextRefs ? JSON.stringify(input.contextRefs) : row.context_refs_json,
+          input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : row.context_snapshots_json,
           input.thinking ?? row.thinking, now, input.id);
     }
     bumpRevision(db, input.sessionKey);

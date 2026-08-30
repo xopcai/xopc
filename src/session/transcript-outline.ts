@@ -9,6 +9,7 @@ import {
   isTranscriptSummaryMessageEntry,
   type TranscriptStoredRow,
 } from './session-context-for-llm.js';
+import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 
 export type SessionTimelineItemKind =
   | 'turn'
@@ -317,7 +318,10 @@ function rowPreview(row: TranscriptStoredRow): string {
   if (record?.type === 'compaction') {
     return truncateText(stringValue(record.summary) ?? 'compaction checkpoint');
   }
-  const preview = contentPreview(record?.content);
+  const content = contentText(record?.content);
+  const preview = truncateText(record?.role === 'user'
+    ? stripRuntimeContextFromUserMessage(content)
+    : content);
   if (record?.role === 'assistant' && !preview) {
     if (record.stopReason === 'aborted') {
       return '(aborted)';
@@ -360,7 +364,10 @@ function rowContentText(row: TranscriptStoredRow): string | undefined {
   if (record?.type === 'compaction') {
     return stringValue(record.summary);
   }
-  const text = contentText(record?.content).trim();
+  const rawText = contentText(record?.content);
+  const text = (record?.role === 'user'
+    ? stripRuntimeContextFromUserMessage(rawText)
+    : rawText).trim();
   return text ? text : undefined;
 }
 

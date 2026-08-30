@@ -5,8 +5,9 @@
  * Assistant messages: left-aligned, markdown rendering, thinking/tool blocks.
  */
 import { memo, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Icon, Text } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 
 import { AssistantStepsBlock } from './AssistantStepsBlock';
 import { AssistantDeliverablesCard } from './AssistantDeliverablesCard';
@@ -38,6 +39,7 @@ import {
   buildAssistantTurnViewModel,
   type AssistantActivityPresentation,
 } from './assistant-turn-view-model';
+import { openNoteDetail } from '../../lib/navigation';
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -299,6 +301,7 @@ export const MessageBubble = memo(function MessageBubble({
   onAssistantRegenerate?: () => void;
 }) {
   const m = useMessages();
+  const router = useRouter();
   const language = usePreferencesStore((state) => state.language);
   const { colors, isDark } = useTheme();
   const isUser = message.role === 'user' || message.role === 'user-with-attachments';
@@ -568,6 +571,42 @@ export const MessageBubble = memo(function MessageBubble({
               },
             ]}
           >
+            {message.contextRefs?.length ? (
+              <View style={styles.noteReferenceList} accessibilityLabel={m.chat.referencedNotes}>
+                {message.contextRefs.map((ref) => (
+                  <Pressable
+                    key={`${ref.kind}:${ref.sourceId}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={m.chat.openReferencedNote.replace('{{title}}', ref.title)}
+                    onPress={() => openNoteDetail(router, ref.sourceId)}
+                    style={({ pressed }) => [
+                      styles.noteReferenceCard,
+                      {
+                        borderColor: pressed ? colors.accent.primary : colors.border.default,
+                        backgroundColor: colors.surface.panel,
+                        opacity: pressed ? 0.82 : 1,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.noteReferenceIcon, { backgroundColor: colors.accent.soft }]}>
+                      <Icon source="note-text-outline" size={18} color={colors.accent.primary} />
+                    </View>
+                    <View style={styles.noteReferenceText}>
+                      <Text style={[styles.noteReferenceKind, { color: colors.text.secondary }]}>
+                        {m.chat.referencedNote}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.noteReferenceTitle, { color: colors.text.primary }]}
+                      >
+                        {ref.title}
+                      </Text>
+                    </View>
+                    <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             {userAudio.length > 0 ? (
               <View style={styles.userVoiceStack}>
                 {userAudio.map((block, i) => (
@@ -635,6 +674,39 @@ export const MessageBubble = memo(function MessageBubble({
 });
 
 const styles = StyleSheet.create({
+  noteReferenceList: {
+    gap: 6,
+  },
+  noteReferenceCard: {
+    minWidth: 220,
+    maxWidth: 280,
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  noteReferenceIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noteReferenceText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  noteReferenceKind: {
+    ...typography.micro,
+  },
+  noteReferenceTitle: {
+    ...typography.label,
+    fontWeight: '600',
+  },
   userVoiceStack: {
     alignItems: 'flex-end',
     gap: 8,

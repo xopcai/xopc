@@ -9,6 +9,7 @@ import {
   appendTranscriptEntry,
   closeXopcDatabase,
   ensureSessionRecord,
+  getSessionInputById,
   loadTranscriptRowsForSession,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
@@ -41,6 +42,7 @@ describe('SessionInputCoordinator', () => {
       sessionExists: async () => true,
       execute,
       prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
       steer: async () => false,
       emit: (_type, payload) => emitted.push(payload),
     });
@@ -76,6 +78,7 @@ describe('SessionInputCoordinator', () => {
       sessionExists: async () => true,
       execute,
       prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
       steer: async () => false,
       emit: () => {},
     });
@@ -104,6 +107,7 @@ describe('SessionInputCoordinator', () => {
       sessionExists: async () => true,
       execute: () => new Promise<{ status: string; summary: string }>((resolve) => { complete = resolve; }),
       prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
       steer: async () => true,
       emit: () => {},
     });
@@ -119,6 +123,70 @@ describe('SessionInputCoordinator', () => {
     complete({ status: 'ok', summary: 'done' });
     await expect(coordinator.waitForCompletion(sessionKey, 'steer-1')).resolves.toBeUndefined();
     expect(coordinator.snapshot(sessionKey).inputs).toEqual([]);
+  });
+
+  it('keeps the frozen Note snapshot when queued text is edited without changing its refs', async () => {
+    const completions: Array<(value: { status: string; summary: string }) => void> = [];
+    const execute = vi.fn(() => new Promise<{ status: string; summary: string }>((resolve) => {
+      completions.push(resolve);
+    }));
+    const prepareContexts = vi.fn(async (refs?: Array<{
+      kind: 'note'; sourceId: string; expectedVersion?: string;
+    }>) => (
+      refs?.length
+        ? [{
+            kind: 'note' as const,
+            sourceId: refs[0]!.sourceId,
+            version: refs[0]!.expectedVersion ?? 'v1',
+            title: 'Frozen note',
+            text: 'original snapshot',
+          }]
+        : undefined
+    ));
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute,
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts,
+      steer: async () => false,
+      emit: () => {},
+    });
+
+    await coordinator.submit({
+      sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active', origin,
+    });
+    await coordinator.submit({
+      sessionKey,
+      clientMessageId: 'queued-note',
+      delivery: 'next',
+      content: 'before edit',
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: 'v1' }],
+      origin,
+    });
+
+    const queued = coordinator.snapshot(sessionKey).inputs.find((input) => input.clientMessageId === 'queued-note');
+    expect(queued).toBeDefined();
+    const updated = await coordinator.update(sessionKey, queued!.id, {
+      version: queued!.version,
+      content: 'after edit',
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: 'v1' }],
+    });
+
+    expect(updated.ok).toBe(true);
+    expect(prepareContexts).toHaveBeenCalledTimes(2);
+    expect(getSessionInputById(sessionKey, queued!.id)).toMatchObject({
+      content: 'after edit',
+      contextSnapshots: [{ sourceId: 'note-1', version: 'v1', text: 'original snapshot' }],
+    });
+
+    completions.shift()?.({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls[1]?.[0]).toMatchObject({
+      content: 'after edit',
+      sourceContexts: [{ sourceId: 'note-1', version: 'v1', text: 'original snapshot' }],
+    });
+    completions.shift()?.({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
   });
 
   it('runs replacement cleanup before atomically queuing the edited latest turn', async () => {
@@ -139,6 +207,7 @@ describe('SessionInputCoordinator', () => {
       sessionExists: async () => true,
       execute,
       prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
       steer: async () => false,
       emit: () => {},
     });

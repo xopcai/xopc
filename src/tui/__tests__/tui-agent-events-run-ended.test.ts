@@ -19,6 +19,24 @@ beforeEach(() => {
 });
 
 describe('dispatchAgentEvent lifecycle', () => {
+  it('hides runtime context in live user-message events', () => {
+    const state = createInitialState('sk');
+    const chatLog = { addUser: vi.fn() };
+    const tui = { requestRender: vi.fn() };
+    const content = '<user-profile>\nPreferred name: micjoyce\n</user-profile>\n\n[2026-08-30 13:54 GMT+8] 看下note 内容';
+
+    dispatchAgentEvent(
+      'user_message',
+      envelope('user_message', 'r1', { message: { content } }),
+      state,
+      chatLog as never,
+      tui as never,
+      vi.fn(),
+    );
+
+    expect(chatLog.addUser).toHaveBeenCalledWith('看下note 内容');
+  });
+
   it('tracks assistant messages through run_start and assistant_delta', () => {
     const state = createInitialState('sk');
     const chatLog = {
