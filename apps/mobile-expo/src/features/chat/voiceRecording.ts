@@ -9,6 +9,7 @@ import {
   setAudioModeAsync,
 } from 'expo-audio';
 import type { AudioRecorder, RecordingOptions } from 'expo-audio';
+import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { pauseActiveAudioPlayback } from '../voice/audio-playback-coordinator';
@@ -38,11 +39,24 @@ export class VoiceRecordingError extends Error {
   }
 }
 
-export type VoiceTranscriptionFailureKind = 'decoder_unavailable' | 'runtime_unavailable' | 'unknown';
+export type VoiceTranscriptionFailureKind =
+  | 'decoder_unavailable'
+  | 'not_configured'
+  | 'runtime_unavailable'
+  | 'unknown';
+
+/**
+ * HIGH_QUALITY records at 128kbps. Eight minutes stays comfortably below the
+ * mobile 10MB attachment read limit, including container overhead.
+ */
+export const MAX_VOICE_RECORDING_MS = 8 * 60 * 1000;
 
 export function classifyVoiceTranscriptionFailure(error: unknown): VoiceTranscriptionFailureKind {
   const message = error instanceof Error ? error.message : String(error);
-  if (/ffmpeg|audio decoder|unsupported_audio_codec/i.test(message)) return 'decoder_unavailable';
+  if (/ffmpeg|audio decoder|unsupported[_ ]audio[_ ]codec/i.test(message)) return 'decoder_unavailable';
+  if (/stt.+not configured|enable stt|speech.to.text.+disabled/i.test(message)) {
+    return 'not_configured';
+  }
   if (/local voice runtime|sherpa|voice model|model.+not installed/i.test(message)) {
     return 'runtime_unavailable';
   }
@@ -67,9 +81,17 @@ function startMeteringPoll(
 ): void {
   stopMeteringPoll(rec);
   const poll = () => {
-    if (!rec.isRecording) return;
-    const status = rec.getStatus();
-    onStatus(status.metering, status.durationMillis ?? 0);
+    if (!rec.isRecording) {
+      stopMeteringPoll(rec);
+      return;
+    }
+    try {
+      const status = rec.getStatus();
+      onStatus(status.metering, status.durationMillis ?? 0);
+    } catch {
+      // The native recorder may be released between the timer tick and getStatus().
+      stopMeteringPoll(rec);
+    }
   };
   poll();
   meteringPolls.set(rec, setInterval(poll, METERING_POLL_MS));
@@ -79,6 +101,7 @@ type RecordingPlatform = 'ios' | 'android';
 
 export function nativeRecordingOptionsForPlatform(
   platform: RecordingPlatform,
+  directory?: RecordingOptions['directory'],
 ): Partial<RecordingOptions> {
   const preset = {
     ...RecordingPresets.HIGH_QUALITY,
@@ -90,6 +113,7 @@ export function nativeRecordingOptionsForPlatform(
     numberOfChannels: preset.numberOfChannels,
     bitRate: preset.bitRate,
     isMeteringEnabled: preset.isMeteringEnabled,
+    ...(directory ? { directory } : {}),
   };
 
   if (platform === 'ios') {
@@ -127,8 +151,20 @@ export async function requestMicPermission(): Promise<MicrophonePermissionResult
   }
 }
 
+async function restorePlaybackAudioMode(): Promise<void> {
+  try {
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+    });
+  } catch {
+    // Restoring playback must not turn a completed recording into a failure.
+  }
+}
+
 export async function beginRecording(
   onStatus: (metering: number | undefined, durationMillis: number) => void,
+  options?: { persistent?: boolean },
 ): Promise<ExpoRecording> {
   pauseActiveAudioPlayback();
   try {
@@ -141,17 +177,21 @@ export async function beginRecording(
   }
 
   const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
-  const recorder = new AudioModule.AudioRecorder(nativeRecordingOptionsForPlatform(platform));
+  const recorder = new AudioModule.AudioRecorder(
+    nativeRecordingOptionsForPlatform(platform, options?.persistent ? 'document' : undefined),
+  );
   try {
     await recorder.prepareToRecordAsync();
   } catch (error) {
     recorder.release();
+    await restorePlaybackAudioMode();
     throw new VoiceRecordingError('prepare', error);
   }
   try {
     recorder.record();
   } catch (error) {
     recorder.release();
+    await restorePlaybackAudioMode();
     throw new VoiceRecordingError('start', error);
   }
   startMeteringPoll(recorder, onStatus);
@@ -159,6 +199,7 @@ export async function beginRecording(
 }
 
 export async function discardRecording(rec: ExpoRecording): Promise<void> {
+  const uri = rec.uri;
   stopMeteringPoll(rec);
   try {
     if (rec.isRecording) await rec.stop();
@@ -166,6 +207,18 @@ export async function discardRecording(rec: ExpoRecording): Promise<void> {
     /* already unloaded / too short on Android */
   } finally {
     rec.release();
+    deleteRecordingFile(uri ?? rec.uri);
+    await restorePlaybackAudioMode();
+  }
+}
+
+export function deleteRecordingFile(uri: string | null | undefined): void {
+  if (!uri) return;
+  try {
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch {
+    // Cleanup is best effort; never turn a successful capture into a failure.
   }
 }
 
@@ -186,6 +239,7 @@ export async function finishRecording(rec: ExpoRecording): Promise<{ uri: string
     throw new VoiceRecordingError('stop', error);
   } finally {
     rec.release();
+    await restorePlaybackAudioMode();
   }
 }
 

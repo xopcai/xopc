@@ -3,7 +3,7 @@ import { apiUrl } from '@/lib/url';
 
 export type ShareReachability = 'public' | 'lan' | 'local-only';
 
-export type ShareKind = 'file' | 'directory';
+export type ShareKind = 'file' | 'directory' | 'note';
 
 export type ShareDirectoryMeta = {
   mode: 'browse' | 'zip-only';
@@ -30,6 +30,10 @@ export type ShareItem = {
   fileSize: number;
   mimeType: string;
   directory: ShareDirectoryMeta | null;
+  sourceNoteId?: string;
+  sourceVersion?: number;
+  snapshotRevision?: number;
+  attachmentCount?: number;
 };
 
 export type ShareListResponse = {
@@ -44,7 +48,7 @@ export type CreateShareParams = {
   description?: string;
   sessionKey?: string;
   agentId?: string;
-  kind?: ShareKind;
+  kind?: Exclude<ShareKind, 'note'>;
   directoryMode?: 'browse' | 'zip-only';
   followSymlinks?: boolean;
   maxFileCount?: number;

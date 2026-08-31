@@ -19,7 +19,7 @@ import { createLogger } from '../utils/logger.js';
 import { loadPlaywrightCoreModule } from '../browser/providers/playwright-doctor.js';
 import { getShareStore } from './share-store.js';
 import { getSiteShareStore } from './site-share-store.js';
-import type { ShareRecord, ShareThumbnailConfig } from './share-types.js';
+import type { WorkspaceShareRecord, ShareThumbnailConfig } from './share-types.js';
 import type { SiteShareRecord } from './site-share-types.js';
 
 const log = createLogger('share-thumbnail');
@@ -124,7 +124,8 @@ async function runThumbnail(
   try {
     let bytes: Buffer;
     if (task.scope === 'file') {
-      bytes = await renderForFile(target as ShareRecord, ctx);
+      if (!('kind' in target) || target.kind === 'note') return;
+      bytes = await renderForFile(target as WorkspaceShareRecord, ctx);
     } else {
       bytes = await renderForSite(target as SiteShareRecord, ctx);
     }
@@ -145,7 +146,7 @@ async function runThumbnail(
   }
 }
 
-async function renderForFile(record: ShareRecord, ctx: ThumbnailRenderContext): Promise<Buffer> {
+async function renderForFile(record: WorkspaceShareRecord, ctx: ThumbnailRenderContext): Promise<Buffer> {
   if (record.kind === 'directory') {
     return placeholderPng(record.fileName, 'folder');
   }

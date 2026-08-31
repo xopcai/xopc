@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { xopcCloudOAuthProvider } from './xopc-cloud.js';
+import { xopcCloudOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
 
 const nativeFetch = globalThis.fetch;
 
@@ -58,6 +58,44 @@ describe('xopcCloudOAuthProvider', () => {
       userCode: 'ABCD-EFGH',
       verificationUri: 'https://console.test/oauth/device?user_code=ABCD-EFGH',
     }));
+  });
+
+  it('requests only tunnel registration scope for tunnel setup', async () => {
+    vi.useFakeTimers();
+    process.env.XOPC_CONSOLE_URL = 'https://console.test/';
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      const body = new URLSearchParams(String(init?.body));
+      if (url.endsWith('/oauth/device_authorization')) {
+        expect(body.get('scope')).toBe('tunnel:register');
+        return Response.json({
+          device_code: 'tunnel-device-code',
+          user_code: 'TUNL-KEYS',
+          verification_uri: 'https://console.test/oauth/device',
+          verification_uri_complete: 'https://console.test/oauth/device?user_code=TUNL-KEYS',
+          expires_in: 600,
+          interval: 1,
+        });
+      }
+      return Response.json({
+        access_token: 'tunnel-access-token',
+        refresh_token: 'tunnel-refresh-token',
+        expires_in: 900,
+        scope: 'tunnel:register',
+      });
+    }));
+
+    const login = xopcTunnelOAuthProvider.login({
+      onAuth: vi.fn(),
+      onDeviceCode: vi.fn(),
+      onPrompt: async () => '',
+      onSelect: async () => 'device_code',
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(login).resolves.toMatchObject({
+      access: 'tunnel-access-token',
+      scope: ['tunnel:register'],
+    });
   });
 
   it('completes authorization code login with PKCE through a loopback callback', async () => {

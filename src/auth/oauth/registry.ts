@@ -6,7 +6,7 @@ import { kimiCodingOAuthProvider } from './kimi-coding.js';
 import { minimaxCnOAuthProvider } from './minimax-cn.js';
 import { minimaxOAuthProvider } from './minimax.js';
 import { openaiCodexOAuthProvider } from './openai-codex.js';
-import { xopcCloudOAuthProvider } from './xopc-cloud.js';
+import { xopcCloudOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
 import type { OAuthProviderInterface } from './types.js';
 
 export interface OAuthProviderDefinition {
@@ -28,6 +28,7 @@ function definition(provider: OAuthProviderInterface, displayName = provider.nam
 
 export const OAUTH_PROVIDER_DEFINITIONS: Readonly<Record<string, OAuthProviderDefinition>> = {
   'xopc-cloud': { ...definition(xopcCloudOAuthProvider), oauthOnly: true },
+  'xopc-tunnel': { ...definition(xopcTunnelOAuthProvider), oauthOnly: true },
   anthropic: definition(anthropicOAuthProvider, 'Anthropic (Claude)'),
   minimax: definition(minimaxOAuthProvider, 'MiniMax (幂维智能)'),
   'minimax-cn': { ...definition(minimaxCnOAuthProvider, 'MiniMax CN'), urlPrompt: '🌐 请在浏览器中打开以下 URL:\n' },

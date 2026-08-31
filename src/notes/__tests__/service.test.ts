@@ -134,6 +134,36 @@ describe('NotesService markdown sync and AI edit', () => {
     expect(note.remoteVersion).toBe(1);
   });
 
+  it('reuses full note captures for the same idempotency key', async () => {
+    const first = await service.createNote(
+      { markdown: 'Original media capture', capturedVia: { channel: 'app' } },
+      'media-request-1',
+    );
+    const replay = await service.createNote(
+      { markdown: 'Duplicate retry', capturedVia: { channel: 'app' } },
+      'media-request-1',
+    );
+
+    expect(replay.id).toBe(first.id);
+    expect(replay.markdown).toBe('Original media capture');
+  });
+
+  it('reuses a note attachment for the same idempotency key', async () => {
+    const note = await service.createNote(
+      { kind: 'voice', capturedVia: { channel: 'app' } },
+      'voice-request-1',
+    );
+    const first = await service.addAttachment(note.id, {
+      name: 'voice.m4a', buffer: Buffer.from('audio'), mimeType: 'audio/mp4',
+    }, 'voice-request-1');
+    const replay = await service.addAttachment(note.id, {
+      name: 'voice.m4a', buffer: Buffer.from('audio'), mimeType: 'audio/mp4',
+    }, 'voice-request-1');
+
+    expect(replay?.id).toBe(first?.id);
+    expect((await service.getNote(note.id))?.attachments).toHaveLength(1);
+  });
+
   it('publishes product events when notes are created and updated', async () => {
     const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
     const unsubscribe = onAutomationProductEvent((event) => {

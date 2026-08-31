@@ -1,4 +1,4 @@
-import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Search, Share2, Sparkles } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -24,11 +24,13 @@ import {
   updateNote,
   type NoteSnapshot,
   type NoteSnapshotEntry,
+  type Note,
 } from './notes-api';
 import { NoteImageLightboxProvider, useNoteImageLightbox } from './note-image-lightbox';
 import { NoteHistoryPanel } from './note-history-panel';
 import { NoteMarkdownView } from './note-markdown-view';
 import { NoteBreakdownPanel } from './note-breakdown-panel';
+import { NoteShareDialog } from './note-share-dialog';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
@@ -164,6 +166,8 @@ function NoteDetailPanelInner({
   const [catalyzing, setCatalyzing] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareNote, setShareNote] = useState<Note | null>(null);
   const titleInitRef = useRef(false);
   const titleComposingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -342,6 +346,41 @@ function NoteDetailPanelInner({
     };
   }, [language, n.titlePlaceholder, note?.markdown, noteId, previewSnapshot, title]);
 
+  const flushPendingSave = useCallback(async (): Promise<Note | null> => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+    debounceRef.current = null;
+    titleDebounceRef.current = null;
+    const markdown = pendingMarkdownRef.current;
+    const pendingTitle = pendingTitleRef.current;
+    pendingMarkdownRef.current = null;
+    pendingTitleRef.current = null;
+    const patch: Partial<Note> = {};
+    if (markdown !== null) patch.markdown = markdown;
+    if (pendingTitle !== null) patch.title = pendingTitle;
+    if (Object.keys(patch).length === 0) return note ?? null;
+    setSaving(true);
+    try {
+      const saved = await updateNote(noteId, patch);
+      await mutate(saved, { revalidate: false });
+      onSaved?.();
+      return saved;
+    } catch (err) {
+      setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, [mutate, n.saveFailed, n.saveFailedHint, note, noteId, onSaved]);
+
+  const handleShare = useCallback(async () => {
+    setActionError(null);
+    const saved = await flushPendingSave();
+    if (!saved) return;
+    setShareNote(saved);
+    setShareDialogOpen(true);
+  }, [flushPendingSave]);
+
   const headerEnd = useMemo(
     () => (
       <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
@@ -366,6 +405,14 @@ function NoteDetailPanelInner({
           }}
           showLabel
         />
+        <button
+          type="button"
+          onClick={() => void handleShare()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+        >
+          <Share2 className="size-3.5" aria-hidden />
+          {language === 'zh' ? '分享' : 'Share'}
+        </button>
         <button
           type="button"
           onClick={handleBreakdownClick}
@@ -432,6 +479,8 @@ function NoteDetailPanelInner({
       n.readAloudResume,
       n.readAloudRetry,
       getNoteReadAloudInput,
+      handleShare,
+      language,
     ],
   );
 
@@ -550,6 +599,7 @@ function NoteDetailPanelInner({
   ) : null;
 
   return (
+    <>
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
       {/* Editor */}
       <div className="mx-auto flex min-h-0 min-w-0 w-full max-w-[60rem] flex-1 flex-col">
@@ -778,5 +828,7 @@ function NoteDetailPanelInner({
         </div>
       </div>
     </div>
+    {shareNote ? <NoteShareDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={shareNote} /> : null}
+    </>
   );
 }

@@ -15,6 +15,7 @@ export const VoiceRecordingOverlay = memo(function VoiceRecordingOverlay({
   zone,
   transcribing,
   meterSamples,
+  durationMillis,
   centerHint,
   textHint,
   textGlyph,
@@ -26,6 +27,7 @@ export const VoiceRecordingOverlay = memo(function VoiceRecordingOverlay({
   zone: VoiceRecordingZone;
   transcribing: boolean;
   meterSamples: number[];
+  durationMillis?: number;
   centerHint: string;
   textHint: string;
   textGlyph: string;
@@ -66,7 +68,12 @@ export const VoiceRecordingOverlay = memo(function VoiceRecordingOverlay({
               {transcribing ? (
                 <ActivityIndicator size="small" color={accent} />
               ) : (
-                <VoiceMeterBars samples={meterSamples} accentColor={colors.semantic.success} trackColor={waveTrack} />
+                <>
+                  <VoiceMeterBars samples={meterSamples} accentColor={colors.semantic.success} trackColor={waveTrack} />
+                  <Text style={[styles.duration, { color: colors.text.secondary }]}>
+                    {formatRecordingDuration(durationMillis ?? 0)}
+                  </Text>
+                </>
               )}
             </View>
             <Text style={[styles.mainHint, { color: mainHintColor }]} numberOfLines={2}>
@@ -123,6 +130,13 @@ export const VoiceRecordingOverlay = memo(function VoiceRecordingOverlay({
   );
 });
 
+function formatRecordingDuration(durationMillis: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMillis / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -159,6 +173,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     maxWidth: 280,
+  },
+  duration: {
+    marginTop: 10,
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '600',
   },
   actionBand: {
     flexDirection: 'row',

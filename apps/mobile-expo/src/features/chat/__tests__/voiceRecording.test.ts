@@ -46,6 +46,13 @@ vi.mock('expo-audio', () => ({
   setAudioModeAsync: vi.fn(async () => {}),
 }));
 
+vi.mock('expo-file-system', () => ({
+  File: class File {
+    exists = false;
+    delete = vi.fn();
+  },
+}));
+
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
@@ -53,6 +60,7 @@ vi.mock('react-native', () => ({
 import {
   getRecordingPermissionsAsync,
   requestRecordingPermissionsAsync,
+  setAudioModeAsync,
 } from 'expo-audio';
 
 import {
@@ -72,6 +80,10 @@ describe('classifyVoiceTranscriptionFailure', () => {
     )).toBe('decoder_unavailable');
     expect(classifyVoiceTranscriptionFailure(new Error('sherpa-onnx-node is not installed')))
       .toBe('runtime_unavailable');
+    expect(classifyVoiceTranscriptionFailure(new Error('HTTP 503: STT is not configured')))
+      .toBe('not_configured');
+    expect(classifyVoiceTranscriptionFailure(new Error('unsupported audio codec')))
+      .toBe('decoder_unavailable');
     expect(classifyVoiceTranscriptionFailure(new Error('request timed out'))).toBe('unknown');
   });
 });
@@ -109,6 +121,13 @@ describe('nativeRecordingOptionsForPlatform', () => {
     expect(options).not.toHaveProperty('ios');
     expect(options).not.toHaveProperty('android');
   });
+
+  it('stores durable capture recordings in the document directory', () => {
+    expect(nativeRecordingOptionsForPlatform('ios', 'document')).toMatchObject({
+      extension: '.m4a',
+      directory: 'document',
+    });
+  });
 });
 
 describe('readRecordingDurationMillis', () => {
@@ -132,6 +151,10 @@ describe('readRecordingDurationMillis', () => {
 });
 
 describe('finishRecording', () => {
+  beforeEach(() => {
+    vi.mocked(setAudioModeAsync).mockClear();
+  });
+
   it('captures duration before stop clears recorder state', async () => {
     const recorder = {
       uri: 'file:///tmp/recording.m4a',
@@ -151,6 +174,10 @@ describe('finishRecording', () => {
     expect(recorder.stop).toHaveBeenCalledOnce();
     expect(recorder.release).toHaveBeenCalledOnce();
     expect(recorder.getStatus).toHaveBeenCalledBefore(recorder.stop as never);
+    expect(setAudioModeAsync).toHaveBeenLastCalledWith({
+      allowsRecording: false,
+      playsInSilentMode: true,
+    });
   });
 
   it('releases the recorder and reports the stop phase when Android stop fails', async () => {
