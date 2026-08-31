@@ -8,7 +8,7 @@ import {
   buildTunnelConsentRecord,
   hasValidTunnelConsent,
 } from './consent.js';
-import { isMaskedTunnelSecretPatchValue } from './env.js';
+import { getTunnelRegistrationSecretMeta, isMaskedTunnelSecretPatchValue } from './env.js';
 
 const TunnelConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
@@ -49,6 +49,8 @@ export function mergeTunnelConfigPatch(
 
   if (parsed.data.registrationSecret === null) {
     delete next.registrationSecret;
+    next.enabled = false;
+    next.autoStart = false;
   }
 
   if (parsed.data.autoStart === true) {
@@ -92,13 +94,14 @@ export function setTunnelEnabledInConfig(config: Config, enabled: boolean): void
 }
 
 /**
- * Clear stale tunnel flags when consent is missing or outdated (Phase 2: config/runtime alignment).
+ * Clear stale tunnel flags when consent or broker credentials cannot support a start.
  * Returns true when `config.tunnel` was modified.
  */
 export function sanitizeTunnelConfig(config: Config): boolean {
   const tunnel = config.tunnel;
   if (!tunnel) return false;
-  if (hasValidTunnelConsent(config)) return false;
+  const brokerReady = getTunnelRegistrationSecretMeta(config).configured;
+  if (hasValidTunnelConsent(config) && brokerReady) return false;
 
   let changed = false;
   if (tunnel.enabled) {

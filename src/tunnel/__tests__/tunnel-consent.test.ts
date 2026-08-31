@@ -76,6 +76,35 @@ describe('tunnel consent', () => {
     expect(cfg.tunnel?.autoStart).toBe(false);
   });
 
+  it('sanitizeTunnelConfig clears enabled and autoStart when a public broker key is missing', () => {
+    const cfg = baseConfig({
+      enabled: true,
+      autoStart: true,
+      consent: {
+        version: CURRENT_TUNNEL_CONSENT_VERSION,
+        acceptedAt: new Date().toISOString(),
+      },
+    });
+    expect(sanitizeTunnelConfig(cfg)).toBe(true);
+    expect(cfg.tunnel?.enabled).toBe(false);
+    expect(cfg.tunnel?.autoStart).toBe(false);
+  });
+
+  it('sanitizeTunnelConfig keeps local development tunnel flags without a key', () => {
+    const cfg = baseConfig({
+      enabled: true,
+      autoStart: true,
+      brokerUrl: 'http://127.0.0.1:7100/api',
+      consent: {
+        version: CURRENT_TUNNEL_CONSENT_VERSION,
+        acceptedAt: new Date().toISOString(),
+      },
+    });
+    expect(sanitizeTunnelConfig(cfg)).toBe(false);
+    expect(cfg.tunnel?.enabled).toBe(true);
+    expect(cfg.tunnel?.autoStart).toBe(true);
+  });
+
   it('mergeTunnelConfigPatch rejects autoStart without enabled', () => {
     const cfg = baseConfig({
       consent: {
@@ -97,6 +126,23 @@ describe('tunnel consent', () => {
 
     expect(mergeTunnelConfigPatch(cfg, { registrationSecret: null }).ok).toBe(true);
     expect(cfg.tunnel?.registrationSecret).toBeUndefined();
+  });
+
+  it('clearing the registration secret disables tunnel startup flags', () => {
+    const cfg = baseConfig({
+      enabled: true,
+      autoStart: true,
+      registrationSecret: 'broker-secret',
+      consent: {
+        version: CURRENT_TUNNEL_CONSENT_VERSION,
+        acceptedAt: new Date().toISOString(),
+      },
+    });
+
+    expect(mergeTunnelConfigPatch(cfg, { registrationSecret: null }).ok).toBe(true);
+    expect(cfg.tunnel?.registrationSecret).toBeUndefined();
+    expect(cfg.tunnel?.enabled).toBe(false);
+    expect(cfg.tunnel?.autoStart).toBe(false);
   });
 
 });

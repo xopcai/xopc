@@ -139,8 +139,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   }, [cfgData]);
 
   const brokerSecretConfiguredInConfig = isMaskedKey(brokerSecretFromConfig);
-  const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
-  const brokerReady = status?.registrationSecret?.configured === true;
+  const brokerReady = status?.registrationSecret?.configured ?? brokerSecretConfiguredInConfig;
 
   useEffect(() => {
     const onTunnelStatus = () => {
@@ -290,7 +289,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         patch: { brokerSecretDraft: '', brokerSecretNotice: t.brokerSecretCleared },
       });
       void revalidateGatewayConfig();
-      await mutStatus();
+      await Promise.all([pairQr.refreshQr(), mutStatus()]);
     } catch (e) {
       dispatchUi({
         type: 'patch',
@@ -299,7 +298,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     } finally {
       dispatchUi({ type: 'patch', patch: { savingBrokerSecret: false } });
     }
-  }, [mutStatus, t.brokerSecretCleared]);
+  }, [mutStatus, pairQr.refreshQr, t.brokerSecretCleared]);
 
   const authorizeBrokerSecret = useCallback(async () => {
     const popup = reserveOAuthAuthorizationWindow();
@@ -403,7 +402,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const brokerSecretBlock = (
     <BrokerSecretSetupSection
       t={t}
-      brokerSecretMissing={brokerSecretMissing}
+      brokerSecretReady={brokerReady}
       brokerSecretConfiguredInConfig={brokerSecretConfiguredInConfig}
       brokerSecretMaskedValue={brokerSecretConfiguredInConfig ? brokerSecretFromConfig : ''}
       brokerSecretDraft={brokerSecretDraft}

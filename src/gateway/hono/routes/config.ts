@@ -1,6 +1,7 @@
 import type { Context, Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
+import { getTunnelService } from '../../../tunnel/tunnel-service.js';
 import { prepareLocalVoiceModelAfterProviderSwitch } from '../../../voice/local/provider-switch.js';
 import { enumerateLanGatewayCandidates } from '../../host.js';
 import { buildSafeWebConfigPayload } from '../lib/config-payload.js';
@@ -82,6 +83,20 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     const finalGwCheck = validateGatewayAfterPatch(config, body);
     if (finalGwCheck.ok === false) {
       return c.json({ ok: false, error: finalGwCheck.error }, finalGwCheck.status as 400 | 500);
+    }
+
+    const clearsTunnelRegistrationSecret =
+      body?.tunnel &&
+      typeof body.tunnel === 'object' &&
+      !Array.isArray(body.tunnel) &&
+      body.tunnel.registrationSecret === null;
+    if (clearsTunnelRegistrationSecret) {
+      try {
+        await getTunnelService().stop();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return c.json({ ok: false, error: `Failed to stop tunnel before clearing key: ${message}` }, 500);
+      }
     }
 
     const result = await service.saveConfig(config);

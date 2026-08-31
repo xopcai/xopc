@@ -157,11 +157,22 @@ export function normalizeDesktopOAuthReturnPath(value: unknown): string | undefi
   return path;
 }
 
-function desktopOAuthReturnUrl(sessionId: string, returnPath: unknown): string {
+const DESKTOP_OAUTH_CALLBACK_PATHS: Readonly<Record<string, string>> = {
+  'xopc-cloud': 'model-connected',
+  'xopc-tunnel': 'tunnel-connected',
+};
+
+export function buildDesktopOAuthReturnUrl(
+  provider: string,
+  sessionId: string,
+  returnPath: unknown,
+): string | undefined {
+  const callbackPath = DESKTOP_OAUTH_CALLBACK_PATHS[provider];
+  if (!callbackPath) return undefined;
   const params = new URLSearchParams({ request_id: sessionId });
   const normalizedReturnPath = normalizeDesktopOAuthReturnPath(returnPath);
   if (normalizedReturnPath) params.set('return_path', normalizedReturnPath);
-  return `xopc://cloud/model-connected?${params.toString()}`;
+  return `xopc://cloud/${callbackPath}?${params.toString()}`;
 }
 
 function cancelOAuthSession(session: OAuthSession, message = 'OAuth flow cancelled'): void {
@@ -255,12 +266,13 @@ export function createOAuthAsyncHandler(service: GatewayService) {
     }
 
     const sessionId = generateSessionId();
+    const returnToAppUrl = body.client === 'desktop'
+      ? buildDesktopOAuthReturnUrl(provider, sessionId, body.returnPath)
+      : undefined;
     const session: OAuthSession = {
       id: sessionId,
       provider,
-      ...(body.client === 'desktop' && provider === 'xopc-cloud'
-        ? { returnToAppUrl: desktopOAuthReturnUrl(sessionId, body.returnPath) }
-        : {}),
+      ...(returnToAppUrl ? { returnToAppUrl } : {}),
       preferredLoginMethod: preferredOAuthLoginMethod({
         provider,
         requestedMethod: body.loginMethod,

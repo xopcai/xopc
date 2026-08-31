@@ -10,6 +10,13 @@ describe('Electron navigation policy', () => {
       kind: 'internal-deep-link',
       url: 'xopc://open?kind=session&id=session-1',
     });
+    expect(decideElectronNavigation(
+      CURRENT,
+      'xopc://cloud/tunnel-connected?request_id=request-1',
+    )).toEqual({
+      kind: 'internal-deep-link',
+      url: 'xopc://cloud/tunnel-connected?request_id=request-1',
+    });
     expect(decideElectronNavigation(CURRENT, 'http://127.0.0.1:18790/#/chat/session-1')).toEqual({
       kind: 'same-origin',
       route: '/chat/session-1',
