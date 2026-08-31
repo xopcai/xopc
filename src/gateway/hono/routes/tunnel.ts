@@ -15,6 +15,8 @@ import {
   getTunnelRegistrationSecretMeta,
   readTunnelRegistrationSecretFromConfigOnly,
   resolveTunnelBrokerUrl,
+  TUNNEL_REGISTRATION_SECRET_REQUIRED_CODE,
+  TunnelRegistrationSecretError,
 } from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
 import { createPairingSecret, exchangePairingSecretOnce, getCachedPairingExchange } from '../../../tunnel/pairing.js';
@@ -43,7 +45,7 @@ import { getClientIpFromHeaders } from '../../security/loopback.js';
 
 async function configureTunnelFromService(
   deps: AuthenticatedRouteDeps,
-  opts?: { force?: boolean },
+  opts?: { force?: boolean; deferWellKnownFetch?: boolean },
 ): Promise<void> {
   await configureTunnelFromGatewayConfig(deps.service.currentConfig, opts);
 }
@@ -54,6 +56,11 @@ function enrichTunnelStatus(config: Config, status: ReturnType<ReturnType<typeof
   const registrationSecret = getTunnelRegistrationSecretMeta(config, process.env, brokerUrl);
   return {
     ...status,
+    config: {
+      ...status.config,
+      autoStart: config.tunnel?.autoStart ?? false,
+      brokerUrl,
+    },
     consentRequired: consent.consentRequired,
     consent: {
       currentVersion: consent.currentVersion,
@@ -228,7 +235,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   const tunnelMutationLimit = createTunnelMutationRateLimitMiddleware();
 
   authenticated.get('/api/tunnel/pair/context', async (c) => {
-    await configureTunnelFromService(deps);
     const config = deps.service.currentConfig as Config;
     const status = tunnel.getStatus();
     const context = buildMobilePairContext({
@@ -289,7 +295,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.post('/api/tunnel/pair', tunnelMutationLimit, async (c) => {
-    await configureTunnelFromService(deps);
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);
 
@@ -378,7 +383,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/tunnel/status', async (c) => {
-    await configureTunnelFromService(deps);
     const config = deps.service.currentConfig as Config;
     return c.json(enrichTunnelStatus(config, tunnel.getStatus()));
   });
@@ -462,7 +466,12 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     try {
       const qr = await tunnel.start(port, token);
       setTunnelEnabledInConfig(config, true);
-      await deps.service.saveConfig(config);
+      const saved = await deps.service.saveConfig(config);
+      if (!saved.saved) {
+        await tunnel.stop();
+        setTunnelEnabledInConfig(config, false);
+        return c.json({ error: saved.error ?? 'Failed to save tunnel state' }, 500);
+      }
       const status = tunnel.getStatus();
       return c.json({
         publicUrl: qr.publicUrl,
@@ -472,12 +481,18 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      if (err instanceof TunnelRegistrationSecretError) {
+        return c.json(
+          { error: message, code: TUNNEL_REGISTRATION_SECRET_REQUIRED_CODE },
+          400,
+        );
+      }
       return c.json({ error: message }, 500);
     }
   });
 
   authenticated.post('/api/tunnel/stop', tunnelMutationLimit, async (c) => {
-    await configureTunnelFromService(deps);
+    await configureTunnelFromService(deps, { force: true, deferWellKnownFetch: true });
     const config = deps.service.currentConfig as Config;
     let release = false;
     try {
@@ -488,12 +503,14 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const { released } = await tunnel.stop({ release });
     setTunnelEnabledInConfig(config, false);
-    await deps.service.saveConfig(config);
+    const saved = await deps.service.saveConfig(config);
+    if (!saved.saved) {
+      return c.json({ error: saved.error ?? 'Failed to save tunnel state' }, 500);
+    }
     return c.json({ ok: true, released });
   });
 
   authenticated.get('/api/tunnel/qr', async (c) => {
-    await configureTunnelFromService(deps);
     const gateway = deps.service.currentConfig.gateway;
     const port = gateway.port ?? 18790;
     const host = resolveGatewayEffectiveHost(deps.service.currentConfig);
@@ -504,7 +521,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/tunnel/transport-status', async (c) => {
-    await configureTunnelFromService(deps);
     return c.json({
       transport: { tls: 'broker_terminated' as const },
     });

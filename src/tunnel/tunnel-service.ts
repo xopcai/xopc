@@ -9,6 +9,7 @@ import { writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
 import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
 import { createPairingSecret } from './pairing.js';
+import { TunnelRegistrationSecretError } from './env.js';
 import {
   canResumePersistedTunnel,
   persistedFromRegistration,
@@ -23,7 +24,7 @@ const log = createLogger('Tunnel');
 
 export type TunnelServiceConfig = {
   brokerUrl: string;
-  registrationSecret: string;
+  registrationSecret?: string;
   autoStart: boolean;
   gatewayHost: string;
   frpSubdomainHost: string;
@@ -275,6 +276,10 @@ export class TunnelService extends EventEmitter {
       }
     }
 
+    if (!cfg.registrationSecret) {
+      throw new TunnelRegistrationSecretError(cfg.brokerUrl);
+    }
+
     return broker.register({
       brokerUrl: resolveBrokerApiBase(cfg.brokerUrl),
       registrationSecret: cfg.registrationSecret,
@@ -389,6 +394,9 @@ export class TunnelService extends EventEmitter {
         const cfg = this.serviceConfig;
         if (!ctx || !cfg) return;
         try {
+          if (!cfg.registrationSecret) {
+            throw new TunnelRegistrationSecretError(cfg.brokerUrl);
+          }
           const registration = await broker.register({
             brokerUrl: resolveBrokerApiBase(cfg.brokerUrl),
             registrationSecret: cfg.registrationSecret,

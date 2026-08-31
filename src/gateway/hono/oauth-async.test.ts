@@ -3,11 +3,34 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GatewayService } from '../service.js';
 import { ConfigSchema } from '../../config/schema.js';
 import {
+  buildDesktopOAuthReturnUrl,
   buildOAuthCompletionReadiness,
   normalizeDesktopOAuthReturnPath,
   refreshModelCatalogAfterOAuth,
   resolveOAuthLoginMethodPreference,
 } from './oauth-async.js';
+
+describe('buildDesktopOAuthReturnUrl', () => {
+  it('uses a dedicated Electron callback for tunnel authorization', () => {
+    expect(buildDesktopOAuthReturnUrl(
+      'xopc-tunnel',
+      'oauth-test',
+      '/settings/remote-access?tab=public',
+    )).toBe(
+      'xopc://cloud/tunnel-connected?request_id=oauth-test&return_path=%2Fsettings%2Fremote-access%3Ftab%3Dpublic',
+    );
+  });
+
+  it('keeps model authorization on its dedicated callback', () => {
+    expect(buildDesktopOAuthReturnUrl('xopc-cloud', 'oauth-test', undefined)).toBe(
+      'xopc://cloud/model-connected?request_id=oauth-test',
+    );
+  });
+
+  it('does not create Electron callbacks for unrelated OAuth providers', () => {
+    expect(buildDesktopOAuthReturnUrl('google-gemini-cli', 'oauth-test', '/chat')).toBeUndefined();
+  });
+});
 
 describe('normalizeDesktopOAuthReturnPath', () => {
   it('accepts internal routes and rejects external or malformed paths', () => {

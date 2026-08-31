@@ -30,10 +30,14 @@ export { fetchTunnelWellKnown, clearTunnelWellKnownCache } from './well-known.js
 export type { TunnelWellKnownConfig, TunnelWellKnownTransport } from './well-known.js';
 export {
   getTunnelRegistrationSecretMeta,
-  isProductionTunnelBroker,
+  isLocalDevelopmentTunnelBroker,
   isMaskedTunnelSecretPatchValue,
   resolveTunnelBrokerUrl,
+  resolveOptionalTunnelRegistrationSecret,
   resolveTunnelRegistrationSecret,
+  TUNNEL_REGISTRATION_SECRET_REQUIRED_CODE,
+  tunnelRegistrationSecretRequiredMessage,
+  TunnelRegistrationSecretError,
 } from './env.js';
 export type { TunnelRegistrationSecretMeta, TunnelRegistrationSecretSource } from './env.js';
 export { logTunnelAudit } from './tunnel-audit.js';

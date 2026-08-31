@@ -17,6 +17,12 @@ describe('xopcDeepLinkToRoute', () => {
     expect(xopcDeepLinkToRoute(
       'xopc://cloud/model-connected?request_id=request-1&return_path=%2Fchat%3Fonboarding%3D1',
     )).toBe('/chat?onboarding=1');
+    expect(xopcDeepLinkToRoute('xopc://cloud/tunnel-connected?request_id=request-2')).toBe(
+      '/settings/remote-access?tab=public',
+    );
+    expect(xopcDeepLinkToRoute(
+      'xopc://cloud/tunnel-connected?request_id=request-2&return_path=%2Fsettings%2Fremote-access%3Ftab%3Dpublic',
+    )).toBe('/settings/remote-access?tab=public');
   });
 
   it('rejects malformed and unsupported links', () => {
@@ -25,6 +31,7 @@ describe('xopcDeepLinkToRoute', () => {
     expect(xopcDeepLinkToRoute('xopc://open?kind=file&id=file-1')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://unknown/path')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://cloud/model-connected')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://cloud/tunnel-connected')).toBeNull();
     expect(xopcDeepLinkToRoute(
       'xopc://cloud/model-connected?request_id=request-1&return_path=%2F%2Fevil.example',
     )).toBe('/settings/capabilities/models');
@@ -35,6 +42,9 @@ describe('xopcDeepLinkToRoute', () => {
     expect(xopcDeepLinkTarget(
       'xopc://cloud/model-connected?request_id=request-1&return_path=%2Fchat',
     )).toEqual({ route: '/chat', focusOnlyWhenReady: true });
+    expect(xopcDeepLinkTarget(
+      'xopc://cloud/tunnel-connected?request_id=request-2&return_path=%2Fsettings%2Fremote-access%3Ftab%3Dpublic',
+    )).toEqual({ route: '/settings/remote-access?tab=public', focusOnlyWhenReady: true });
     expect(xopcDeepLinkTarget('xopc://settings/appearance')).toEqual({
       route: '/settings/appearance',
     });

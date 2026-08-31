@@ -30,7 +30,10 @@ export function xopcDeepLinkTarget(value: string): XopcDeepLinkTarget | null {
       return { route: `/settings${path}${url.search}${url.hash}` };
     }
 
-    if (url.hostname === 'cloud' && url.pathname === '/model-connected') {
+    if (
+      url.hostname === 'cloud' &&
+      (url.pathname === '/model-connected' || url.pathname === '/tunnel-connected')
+    ) {
       const requestId = url.searchParams.get('request_id')?.trim();
       if (!requestId) return null;
       const returnPath = url.searchParams.get('return_path')?.trim();
@@ -44,7 +47,12 @@ export function xopcDeepLinkTarget(value: string): XopcDeepLinkTarget | null {
       ) {
         return { route: returnPath, focusOnlyWhenReady: true };
       }
-      return { route: '/settings/capabilities/models', focusOnlyWhenReady: true };
+      return {
+        route: url.pathname === '/tunnel-connected'
+          ? '/settings/remote-access?tab=public'
+          : '/settings/capabilities/models',
+        focusOnlyWhenReady: true,
+      };
     }
 
     return null;
