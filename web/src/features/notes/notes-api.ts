@@ -206,6 +206,70 @@ export async function deleteNote(id: string): Promise<void> {
   await fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
+export interface NoteShareItem {
+  id: string;
+  kind: 'note';
+  fileName: string;
+  shareUrl: string;
+  lanUrl: string | null;
+  reachability: 'public' | 'lan' | 'local-only';
+  reachabilityHint: string | null;
+  createdAt: string;
+  expiresAt: string;
+  viewCount: number;
+  maxViews: number | null;
+  revoked: boolean;
+  expired: boolean;
+  description: string | null;
+  sourceVersion: number;
+  snapshotRevision: number;
+  attachmentCount: number;
+  stale: boolean;
+}
+
+export interface CreateNoteShareInput {
+  expectedNoteVersion: number;
+  attachmentIds?: string[];
+  ttlMs?: number;
+  maxViews?: number | null;
+  description?: string;
+}
+
+export async function listNoteShares(id: string): Promise<{ items: NoteShareItem[]; total: number; noteVersion: number }> {
+  return fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}/shares`));
+}
+
+export async function createNoteShare(id: string, input: CreateNoteShareInput): Promise<{
+  ok: true;
+  payload: {
+    id: string;
+    kind: 'note';
+    shareUrl: string;
+    lanUrl: string | null;
+    reachability: NoteShareItem['reachability'];
+    reachabilityHint: string | null;
+    expiresAt: string;
+    maxViews: number | null;
+    sourceNoteId: string;
+    sourceVersion: number;
+    snapshotRevision: number;
+    attachmentCount: number;
+    fileName: string;
+  };
+}> {
+  return fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}/shares`), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function refreshNoteShare(id: string, shareId: string, input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds'>): Promise<void> {
+  await fetchJson(apiUrl(`/api/notes/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}/refresh`), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function catalyzeNote(id: string): Promise<{ note: Note; report: NoteCatalysisReport }> {
   return fetchJson<{ note: Note; report: NoteCatalysisReport }>(
     apiUrl(`/api/notes/${encodeURIComponent(id)}/catalyze`),

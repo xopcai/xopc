@@ -11,46 +11,27 @@ import {
 } from '../env.js';
 
 describe('resolveTunnelRegistrationSecret', () => {
-  it('prefers env over config and dev default', () => {
+  it('uses the configured secret', () => {
     expect(
-      resolveTunnelRegistrationSecret(
-        { XOPC_TUNNEL_REGISTRATION_SECRET: 'prod-secret' },
-        'https://frp.xopc.ai/api',
-        'config-secret',
-      ),
-    ).toBe('prod-secret');
-  });
-
-  it('uses config secret when env is unset', () => {
-    expect(
-      resolveTunnelRegistrationSecret({}, 'https://frp.xopc.ai/api', 'from-config'),
+      resolveTunnelRegistrationSecret('https://frp.xopc.ai/api', 'from-config'),
     ).toBe('from-config');
   });
 
   it('allows dev default for localhost broker', () => {
     expect(
-      resolveTunnelRegistrationSecret({}, 'http://127.0.0.1:7100/api'),
+      resolveTunnelRegistrationSecret('http://127.0.0.1:7100/api'),
     ).toBe('dev-registration-secret');
   });
 
-  it('requires env or config for production broker host', () => {
+  it('requires config for the production broker host', () => {
     expect(() =>
-      resolveTunnelRegistrationSecret({}, 'https://frp.xopc.ai/api'),
+      resolveTunnelRegistrationSecret('https://frp.xopc.ai/api'),
     ).toThrow(/registration secret/i);
   });
 });
 
 describe('getTunnelRegistrationSecretMeta', () => {
-  it('reports env source when env is set', () => {
-    expect(
-      getTunnelRegistrationSecretMeta(
-        { tunnel: { registrationSecret: 'cfg' } } as Config,
-        { XOPC_TUNNEL_REGISTRATION_SECRET: 'env' },
-      ),
-    ).toEqual({ configured: true, source: 'env' });
-  });
-
-  it('reports config source when only config is set', () => {
+  it('reports config source when configured', () => {
     expect(
       getTunnelRegistrationSecretMeta(
         { tunnel: { registrationSecret: 'cfg' } } as Config,
@@ -75,8 +56,8 @@ describe('maskTunnelSecretForWeb', () => {
 });
 
 describe('isMaskedTunnelSecretPatchValue', () => {
-  it('accepts legacy sentinels and variable-length bullet masks', () => {
-    expect(isMaskedTunnelSecretPatchValue('***')).toBe(true);
+  it('accepts variable-length bullet masks', () => {
+    expect(isMaskedTunnelSecretPatchValue('***')).toBe(false);
     expect(isMaskedTunnelSecretPatchValue('••••••••••••')).toBe(true);
     expect(isMaskedTunnelSecretPatchValue('••••••••••••••••••••')).toBe(true);
     expect(isMaskedTunnelSecretPatchValue('real-secret')).toBe(false);

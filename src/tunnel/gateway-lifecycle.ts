@@ -39,7 +39,6 @@ function applyTunnelServiceFromGatewayConfig(config: Config, brokerUrl: string):
   let registrationSecret: string;
   try {
     registrationSecret = resolveTunnelRegistrationSecret(
-      process.env,
       brokerUrl,
       config.tunnel?.registrationSecret,
     );

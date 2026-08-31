@@ -233,6 +233,44 @@ function SharePolicyFields({
 
       <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
         <div className="mb-4">
+          <h3 className="text-sm font-semibold text-fg">{t.policyNoteSection}</h3>
+          <p className="mt-0.5 text-xs text-fg-muted">{t.policyNoteSectionHint}</p>
+        </div>
+        <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            className="ui-checkbox"
+            checked={form.noteEnabled}
+            onChange={(e) => onChange({ noteEnabled: e.target.checked })}
+          />
+          {t.policyNoteEnabled}
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <NumberField
+            id="share-note-max-size-mb"
+            label={t.policyNoteMaxTotalSizeMb}
+            hint={t.policyNoteMaxTotalSizeHint}
+            value={form.noteMaxTotalSizeMb}
+            min={1}
+            max={2_048}
+            disabled={!form.enabled || !form.noteEnabled}
+            onChange={(noteMaxTotalSizeMb) => onChange({ noteMaxTotalSizeMb })}
+          />
+          <NumberField
+            id="share-note-max-attachments"
+            label={t.policyNoteMaxAttachmentCount}
+            hint={t.policyNoteMaxAttachmentCountHint}
+            value={form.noteMaxAttachmentCount}
+            min={0}
+            max={500}
+            disabled={!form.enabled || !form.noteEnabled}
+            onChange={(noteMaxAttachmentCount) => onChange({ noteMaxAttachmentCount })}
+          />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
+        <div className="mb-4">
           <h3 className="text-sm font-semibold text-fg">{t.policySiteSection}</h3>
           <p className="mt-0.5 text-xs text-fg-muted">{t.policySiteSectionHint}</p>
         </div>

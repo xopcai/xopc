@@ -45,6 +45,9 @@ export type ApiFetchOptions = RequestInit & {
   /** Force single-route even when route confidence is low. Used inside
    * dual-fire path to avoid recursion. */
   noDualFire?: boolean;
+  /** Retry once after actively re-resolving LAN vs tunnel. Only enable for
+   * idempotent operations or writes protected by an Idempotency-Key. */
+  recoverRouteOnNetworkError?: boolean;
 };
 
 function isIdempotent(method: string | undefined): boolean {
@@ -75,17 +78,23 @@ export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Re
     return dualFireFetch(path, init ?? { method: 'GET' });
   }
 
-  const headers = new Headers(init?.headers);
-  if (!headers.has('Content-Type') && init?.body != null && typeof init.body === 'string') {
+  const configuredTimeoutMs = init?.timeoutMs;
+  const recoverRouteOnNetworkError = init?.recoverRouteOnNetworkError ?? false;
+  const requestInit: RequestInit = { ...init };
+  delete (requestInit as ApiFetchOptions).timeoutMs;
+  delete (requestInit as ApiFetchOptions).noDualFire;
+  delete (requestInit as ApiFetchOptions).recoverRouteOnNetworkError;
+  const headers = new Headers(requestInit.headers);
+  if (!headers.has('Content-Type') && requestInit.body != null && typeof requestInit.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const url = useGatewayStore.getState().apiUrl(path);
   const controller = new AbortController();
-  const timeoutMs = init?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  const timeoutMs = configuredTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const callerSignal = init?.signal;
+  const callerSignal = requestInit.signal;
   const onCallerAbort = () => controller.abort();
   if (callerSignal) {
     if (callerSignal.aborted) controller.abort();
@@ -95,8 +104,34 @@ export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Re
   let res: Response;
   const startedAt = Date.now();
   try {
-    res = await fetch(url, { ...init, headers, signal: controller.signal });
+    res = await fetch(url, { ...requestInit, headers, signal: controller.signal });
   } catch (err) {
+    clearTimeout(timer);
+    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+    if (recoverRouteOnNetworkError && !callerSignal?.aborted) {
+      try {
+        const recoveredBaseUrl = await useGatewayStore.getState().refreshActiveBaseUrl();
+        recordConnectionEvent({
+          kind: 'apiFetch',
+          ok: Boolean(recoveredBaseUrl),
+          url,
+          reason: recoveredBaseUrl ? 'route-recovery' : 'route-recovery-failed',
+          network: getNetworkSnapshot().key,
+        });
+        if (recoveredBaseUrl) {
+          return apiFetch(path, {
+            ...requestInit,
+            headers,
+            timeoutMs,
+            noDualFire: true,
+            recoverRouteOnNetworkError: false,
+          });
+        }
+      } catch {
+        // Preserve the original transport failure below; it best describes
+        // the operation the user initiated.
+      }
+    }
     const kind = classifyFetchError(err);
     recordConnectionEvent({
       kind: 'apiFetch',

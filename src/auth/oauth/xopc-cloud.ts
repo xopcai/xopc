@@ -8,7 +8,8 @@ import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } fr
 
 const CLIENT_ID = 'xopc-native';
 const DEFAULT_CONSOLE_URL = 'https://console.xopc.ai';
-const DEFAULT_SCOPE = 'models:read models:invoke account:usage connectors:read connectors:manage connectors:execute offline_access';
+const MODEL_SERVICE_SCOPE = 'models:read models:invoke account:usage connectors:read connectors:manage connectors:execute offline_access';
+const TUNNEL_REGISTRATION_SCOPE = 'tunnel:register';
 const CALLBACK_PATH = '/oauth/callback';
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
 
@@ -246,7 +247,7 @@ function callbackHtml(
 </html>`;
 }
 
-async function loginWithBrowser(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+async function loginWithBrowser(callbacks: OAuthLoginCallbacks, scope: string): Promise<OAuthCredentials> {
   if (callbacks.signal?.aborted) {
     throw callbacks.signal.reason instanceof Error ? callbacks.signal.reason : new Error('XOPC OAuth login cancelled');
   }
@@ -317,7 +318,7 @@ async function loginWithBrowser(callbacks: OAuthLoginCallbacks): Promise<OAuthCr
     response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: redirectUri,
-    scope: DEFAULT_SCOPE,
+    scope,
     code_challenge: challenge,
     code_challenge_method: 'S256',
     state,
@@ -355,13 +356,13 @@ async function loginWithBrowser(callbacks: OAuthLoginCallbacks): Promise<OAuthCr
   }
 }
 
-async function loginWithDeviceCode(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+async function loginWithDeviceCode(callbacks: OAuthLoginCallbacks, scope: string): Promise<OAuthCredentials> {
   const response = await fetch(`${consoleUrl()}/oauth/device_authorization`, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
     body: new URLSearchParams({
       client_id: CLIENT_ID,
-      scope: DEFAULT_SCOPE,
+      scope,
       device_name: hostname() || 'XOPC client',
       client_type: 'cli',
     }),
@@ -400,15 +401,20 @@ async function loginWithDeviceCode(callbacks: OAuthLoginCallbacks): Promise<OAut
   throw new Error('XOPC OAuth authorization expired');
 }
 
-async function login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+async function login(
+  callbacks: OAuthLoginCallbacks,
+  options: { scope: string; serviceName: string },
+): Promise<OAuthCredentials> {
   const method = await callbacks.onSelect({
-    message: 'Choose how to authorize XOPC Model Service',
+    message: `Choose how to authorize ${options.serviceName}`,
     options: [
       { id: 'browser', label: 'Browser (recommended for this device)' },
       { id: 'device_code', label: 'Device code (remote or headless)' },
     ],
   });
-  return method === 'device_code' ? loginWithDeviceCode(callbacks) : loginWithBrowser(callbacks);
+  return method === 'device_code'
+    ? loginWithDeviceCode(callbacks, options.scope)
+    : loginWithBrowser(callbacks, options.scope);
 }
 
 async function refreshToken(current: OAuthCredentials, signal?: AbortSignal): Promise<OAuthCredentials> {
@@ -422,11 +428,29 @@ async function refreshToken(current: OAuthCredentials, signal?: AbortSignal): Pr
   return credentials(body);
 }
 
-export const xopcCloudOAuthProvider: OAuthProviderInterface = {
+function createXopcOAuthProvider(options: {
+  id: string;
+  name: string;
+  scope: string;
+}): OAuthProviderInterface {
+  return {
+    id: options.id,
+    name: options.name,
+    loginMethods: ['browser', 'device_code'],
+    login: (callbacks) => login(callbacks, { scope: options.scope, serviceName: options.name }),
+    refreshToken,
+    getApiKey: (value) => value.access,
+  };
+}
+
+export const xopcCloudOAuthProvider = createXopcOAuthProvider({
   id: 'xopc-cloud',
   name: 'XOPC Model Service',
-  loginMethods: ['browser', 'device_code'],
-  login,
-  refreshToken,
-  getApiKey: (value) => value.access,
-};
+  scope: MODEL_SERVICE_SCOPE,
+});
+
+export const xopcTunnelOAuthProvider = createXopcOAuthProvider({
+  id: 'xopc-tunnel',
+  name: 'XOPC Public Tunnel',
+  scope: TUNNEL_REGISTRATION_SCOPE,
+});

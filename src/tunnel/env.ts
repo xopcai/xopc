@@ -2,9 +2,7 @@ import type { Config } from '../config/schema.js';
 
 const DEV_REGISTRATION_SECRET = 'dev-registration-secret';
 
-export const TUNNEL_MASKED_SECRET_SENTINELS = ['***', '••••••••••••'] as const;
-
-export type TunnelRegistrationSecretSource = 'env' | 'config' | 'dev_default' | 'missing';
+export type TunnelRegistrationSecretSource = 'config' | 'dev_default' | 'missing';
 
 export type TunnelRegistrationSecretMeta = {
   configured: boolean;
@@ -36,7 +34,6 @@ export function maskTunnelSecretForWeb(secret: string): string {
 }
 
 export function isMaskedTunnelSecretPatchValue(value: string): boolean {
-  if ((TUNNEL_MASKED_SECRET_SENTINELS as readonly string[]).includes(value)) return true;
   return /^•+$/.test(value);
 }
 
@@ -63,10 +60,6 @@ export function getTunnelRegistrationSecretMeta(
   env: NodeJS.ProcessEnv = process.env,
   brokerUrl?: string,
 ): TunnelRegistrationSecretMeta {
-  if (env.XOPC_TUNNEL_REGISTRATION_SECRET?.trim()) {
-    return { configured: true, source: 'env' };
-  }
-
   if (config?.tunnel?.registrationSecret?.trim()) {
     return { configured: true, source: 'config' };
   }
@@ -81,25 +74,22 @@ export function getTunnelRegistrationSecretMeta(
 
 /**
  * Registration secret for Tunnel Broker register API.
- * Priority: env `XOPC_TUNNEL_REGISTRATION_SECRET` → `tunnel.registrationSecret` in config → dev default (non-production brokers only).
+ * Resolve `tunnel.registrationSecret` from config, with a development default for local brokers.
  */
 export function resolveTunnelRegistrationSecret(
-  env: NodeJS.ProcessEnv = process.env,
   brokerUrl?: string,
   configSecret?: string,
 ): string {
-  const fromEnv = env.XOPC_TUNNEL_REGISTRATION_SECRET?.trim();
-  if (fromEnv) return fromEnv;
-
   const fromConfig = configSecret?.trim();
   if (fromConfig) return fromConfig;
 
-  const effectiveUrl = effectiveBrokerUrl(brokerUrl, env);
+  const effectiveUrl = effectiveBrokerUrl(brokerUrl, process.env);
 
   if (isProductionTunnelBroker(effectiveUrl)) {
     throw new Error(
       'Tunnel registration secret is required for the production broker (frp.xopc.ai). ' +
-        'Create a Tunnel Registration Key at https://console.xopc.ai/keys/tunnel and save it under Remote access → Public internet.',
+        'Authorize XOPC from Remote access → Public internet, or create a Tunnel Registration Key at ' +
+        'https://console.xopc.ai/access/client and save it there manually.',
     );
   }
 

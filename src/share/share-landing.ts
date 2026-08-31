@@ -1,5 +1,5 @@
 import type { DirectoryListing, DirectoryListingEntry } from './share-store.js';
-import type { ShareRecord } from './share-types.js';
+import type { NoteShareRecord, ShareRecord } from './share-types.js';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -54,6 +54,39 @@ export interface ShareLandingOgOptions {
   title?: string;
   /** Description override (default: type + size). */
   description?: string;
+}
+
+/** Lightweight public shell for Note shares. Crawlers get metadata; browsers continue to the SPA preview. */
+export function renderNoteShareLandingPage(
+  record: NoteShareRecord,
+  previewUrl: string,
+  options?: { og?: ShareLandingOgOptions },
+): string {
+  const title = escapeHtml(record.fileName);
+  const description = escapeHtml(record.description ?? 'A Note shared via xopc');
+  const target = escapeHtml(previewUrl);
+  const ogTags = renderOgTags({
+    title,
+    description,
+    url: options?.og?.absoluteShareUrl ?? null,
+    image: options?.og?.absoluteThumbnailUrl ?? null,
+  });
+  return `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+${ogTags}
+<title>${title} — xopc Share</title>
+<meta http-equiv="refresh" content="0;url=${target}">
+</head>
+<body>
+<p><a href="${target}">Open shared Note</a></p>
+<script>location.replace(${JSON.stringify(previewUrl)})</script>
+</body>
+</html>`;
 }
 
 /** Render the file download confirmation landing page (does not consume downloadCount). */

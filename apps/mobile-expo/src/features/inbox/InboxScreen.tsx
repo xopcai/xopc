@@ -29,12 +29,11 @@ import { decideAgentJudgment, fetchAgentJudgments, transitionAgentJudgment, type
 import { useGatewayConfigured } from '../../query/sessions';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { invalidateHomeFeed } from '../../query/workspace-sync';
-import { captureWorkspaceText } from '../../sync/workspace-sync';
+import { captureWorkspaceText, captureWorkspaceVoice } from '../../sync/workspace-sync';
 import { NOTE_KIND_ICONS } from '../notes/note-list-display';
 import { radii, spacing, typography, useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 import {
   captureNoteWithComposerAttachment,
-  captureNoteWithVoice,
 } from '../notes/capture-note-media';
 import { QuickCaptureComposer } from '../notes/QuickCaptureComposer';
 import {
@@ -151,13 +150,13 @@ export function InboxScreen() {
       if (payload.type === 'attachment') {
         return captureNoteWithComposerAttachment(payload.attachment, captureText);
       }
-      return captureNoteWithVoice(payload);
+      return captureWorkspaceVoice(payload);
     },
     onSuccess: async (result, payload) => {
       recordUsageEvent('capture_completed');
       setCaptureText('');
       await invalidateInbox();
-      if (payload.type === 'text' && 'synced' in result && !result.synced) {
+      if ((payload.type === 'text' || payload.type === 'voice') && 'synced' in result && !result.synced) {
         setSnackMsg(pm.savedOffline);
       }
     },

@@ -6,7 +6,7 @@ import { pipeline as pipelineAsync } from 'node:stream/promises';
 import { createDeflateRaw, crc32 } from 'node:zlib';
 
 import { isPathUnderWorkspace } from '../gateway/workspace-editor-path.js';
-import type { ShareRecord } from './share-types.js';
+import type { DirectoryShareRecord } from './share-types.js';
 
 // ── Minimal streaming ZIP encoder (ZIP64-aware) ───────────────────────────────
 //
@@ -340,7 +340,7 @@ export interface PlanDirectoryOpts {
 }
 
 export async function planDirectoryFiles(
-  record: ShareRecord,
+  record: DirectoryShareRecord,
   opts: PlanDirectoryOpts,
 ): Promise<ZipPlanFile[]> {
   if (record.kind !== 'directory') return [];

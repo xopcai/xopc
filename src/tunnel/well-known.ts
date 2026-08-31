@@ -29,7 +29,7 @@ function brokerOrigin(brokerUrl: string): string {
 
 /**
  * Fetch `/.well-known/tunnel-config` (broker URL, frp endpoints, frpc version).
- * Registration secret is never published here — use `XOPC_TUNNEL_REGISTRATION_SECRET`.
+ * Registration secrets are never published here.
  */
 export async function fetchTunnelWellKnown(brokerUrl: string): Promise<TunnelWellKnownConfig> {
   const origin = brokerOrigin(brokerUrl);

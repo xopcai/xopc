@@ -32,8 +32,10 @@ import { resolveReverseProxyPublicUrl } from '../../public-url.js';
 import { validatePublicUrl } from '../../../config/public-url.js';
 import {
   applyTunnelConsentToConfig,
+  mergeTunnelConfigPatch,
   setTunnelEnabledInConfig,
 } from '../../../tunnel/tunnel-config.js';
+import { provisionTunnelRegistrationKey } from '../../../tunnel/xopc-cloud-registration.js';
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
@@ -409,6 +411,30 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
         valid: consent.valid,
       },
     });
+  });
+
+  authenticated.post('/api/tunnel/registration-key', tunnelMutationLimit, async (c) => {
+    const config = deps.service.currentConfig as Config;
+    try {
+      const registrationSecret = await provisionTunnelRegistrationKey();
+      const merged = mergeTunnelConfigPatch(config, { registrationSecret });
+      if (merged.ok === false) {
+        return c.json({ ok: false, error: merged.message }, 400);
+      }
+      const saved = await deps.service.saveConfig(config);
+      if (!saved.saved) {
+        return c.json({ ok: false, error: saved.error ?? 'Failed to save tunnel registration key' }, 500);
+      }
+      logTunnelAudit(
+        'tunnel.registration_authorized',
+        { phase: 'oauth_exchange' },
+        'Tunnel registration key created through XOPC OAuth',
+      );
+      return c.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return c.json({ ok: false, error: message }, 502);
+    }
   });
 
   authenticated.post('/api/tunnel/start', tunnelMutationLimit, async (c) => {

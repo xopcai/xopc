@@ -1,4 +1,5 @@
-export type ShareKind = 'file' | 'directory';
+export type WorkspaceShareKind = 'file' | 'directory';
+export type ShareKind = WorkspaceShareKind | 'note';
 
 export interface ShareDirectoryMeta {
   /** 'browse' shows a file tree; 'zip-only' hides structure and only offers ZIP. */
@@ -11,22 +12,14 @@ export interface ShareDirectoryMeta {
   maxDepth: number;
 }
 
-export interface ShareRecord {
+interface ShareRecordBase {
   /** Unique identifier (UUIDv4) for management. */
   id: string;
   /** Cryptographically secure URL token (base64url, 32 bytes). */
   token: string;
-  /** Resolved absolute path at creation time. */
-  absolutePath: string;
-  /** Workspace-relative POSIX path (for display). */
-  workspaceRelativePath: string;
-  /** Workspace root at creation time (for download-time re-validation). */
-  workspaceRoot: string;
-  /** File or directory inode at creation time (TOCTOU protection). */
-  inode: number;
-  /** Discriminator for downstream branching ('file' | 'directory'). */
+  /** Discriminator for downstream branching. */
   kind: ShareKind;
-  /** Original file/folder name (basename). */
+  /** Public display name. Retained as fileName for API compatibility. */
   fileName: string;
   /**
    * For files: file size in bytes (snapshot at creation).
@@ -59,6 +52,45 @@ export interface ShareRecord {
   thumbnailFailedAt?: string;
 }
 
+interface WorkspaceShareRecordBase extends ShareRecordBase {
+  kind: WorkspaceShareKind;
+  /** Resolved absolute path at creation time. */
+  absolutePath: string;
+  /** Workspace-relative POSIX path (for display). */
+  workspaceRelativePath: string;
+  /** Workspace root at creation time (for download-time re-validation). */
+  workspaceRoot: string;
+  /** File or directory inode at creation time (TOCTOU protection). */
+  inode: number;
+}
+
+export interface FileShareRecord extends WorkspaceShareRecordBase {
+  kind: 'file';
+  directory?: undefined;
+}
+
+export interface DirectoryShareRecord extends WorkspaceShareRecordBase {
+  kind: 'directory';
+  directory: ShareDirectoryMeta;
+}
+
+export interface NoteShareRecord extends ShareRecordBase {
+  kind: 'note';
+  /** Notes are state-owned objects, not workspace paths. */
+  workspaceRelativePath: '';
+  sourceNoteId: string;
+  sourceVersion: number;
+  artifactRelativePath: string;
+  attachmentCount: number;
+  snapshotRevision: number;
+  /** Private HMAC key for short-lived public asset tickets. */
+  assetTicketSecret: string;
+  directory?: undefined;
+}
+
+export type WorkspaceShareRecord = FileShareRecord | DirectoryShareRecord;
+export type ShareRecord = WorkspaceShareRecord | NoteShareRecord;
+
 export interface CreateShareParams {
   /** Workspace-relative file path. */
   path: string;
@@ -73,7 +105,7 @@ export interface CreateShareParams {
   /** Agent id to resolve workspace root. */
   agentId?: string;
   /** Force directory share semantics (overrides auto-detection). */
-  kind?: ShareKind;
+  kind?: WorkspaceShareKind;
   /** Directory: browse vs zip-only. Defaults to 'browse'. */
   directoryMode?: 'browse' | 'zip-only';
   /** Directory: cap on entry count at scan time. */
@@ -87,7 +119,7 @@ export interface CreateShareParams {
 }
 
 export interface ShareStoreData {
-  version: 1;
+  version: 1 | 2;
   shares: ShareRecord[];
 }
 
@@ -124,6 +156,16 @@ export interface ShareThumbnailConfig {
   internalGatewayUrl?: string;
 }
 
+export interface ShareNoteConfig {
+  enabled: boolean;
+  maxMarkdownBytes: number;
+  maxAttachmentCount: number;
+  maxAttachmentSize: number;
+  maxTotalSize: number;
+  assetTicketTtlMs: number;
+  revokeOnSourceDelete: boolean;
+}
+
 export interface ShareConfig {
   enabled: boolean;
   defaultTtlMs: number;
@@ -133,6 +175,7 @@ export interface ShareConfig {
   inlinePreviewMimes: string[];
   directory: ShareDirectoryConfig;
   thumbnail: ShareThumbnailConfig;
+  note: ShareNoteConfig;
 }
 
 /** Default share configuration values. */
@@ -170,5 +213,14 @@ export const SHARE_CONFIG_DEFAULTS: ShareConfig = {
     viewportHeight: 630,
     generationTimeoutMs: 8_000,
     failureCooldownMs: 5 * 60_000,
+  },
+  note: {
+    enabled: true,
+    maxMarkdownBytes: 2 * 1024 * 1024,
+    maxAttachmentCount: 50,
+    maxAttachmentSize: 100 * 1024 * 1024,
+    maxTotalSize: 250 * 1024 * 1024,
+    assetTicketTtlMs: 10 * 60_000,
+    revokeOnSourceDelete: true,
   },
 };
