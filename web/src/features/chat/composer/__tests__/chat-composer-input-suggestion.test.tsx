@@ -77,4 +77,52 @@ describe('ChatComposerInput contextual suggestion', () => {
     expect(secondTab.defaultPrevented).toBe(false);
     expect(acceptEmptySuggestion).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the editor DOM mounted while voice status temporarily hides it', () => {
+    const editorRef = { current: null } as MutableRefObject<HTMLDivElement | null>;
+    const valueRef = { current: 'draft text' };
+    const kbdRef = {
+      current: {
+        adapters: [],
+        send: vi.fn(),
+        runBusy: false,
+        pendingFollowUpsCount: 0,
+        editingFollowUpId: null,
+        onCancelEditFollowUp: vi.fn(),
+        attachmentsLen: 0,
+        isComposing: false,
+        valueRef,
+        adjustHeight: vi.fn(),
+        editorRef,
+      },
+    } as MutableRefObject<ComposerKbdContext>;
+    const render = (hidden: boolean) => (
+      <ChatComposerInput
+        editorRef={editorRef}
+        disabled={false}
+        hidden={hidden}
+        placeholder="Message"
+        onWireInput={() => {}}
+        adjustHeight={() => {}}
+        processFiles={async () => {}}
+        processPastedText={async () => {}}
+        setIsComposing={() => {}}
+        kbdRef={kbdRef}
+        chatMessages={{ clipboardFileTypeUnsupported: 'Unsupported' }}
+      />
+    );
+
+    act(() => root.render(render(false)));
+    const editor = editorRef.current;
+    if (editor) editor.textContent = 'draft text';
+
+    act(() => root.render(render(true)));
+    expect(editorRef.current).toBe(editor);
+    expect(editorRef.current?.hidden).toBe(true);
+
+    act(() => root.render(render(false)));
+    expect(editorRef.current).toBe(editor);
+    expect(editorRef.current?.textContent).toBe('draft text');
+    expect(editorRef.current?.hidden).toBe(false);
+  });
 });
