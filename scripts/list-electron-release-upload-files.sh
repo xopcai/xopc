@@ -12,7 +12,7 @@ if [[ ! -d "$ROOT" ]]; then
 fi
 
 find "$ROOT" -type f \( \
-  -name '*.exe' -o \
+  -name 'xopc-*.exe' -o \
   -name '*.dmg' -o \
   -name '*.zip' -o \
   -name '*.AppImage' -o \
@@ -22,7 +22,5 @@ find "$ROOT" -type f \( \
   -name 'latest*.yml' \
 \) \
   ! -path '*/win-unpacked/*' \
-  ! -name 'elevate.exe' \
-  ! -name 'rg.exe' \
   ! -name 'builder-*.yml' \
   | sort
