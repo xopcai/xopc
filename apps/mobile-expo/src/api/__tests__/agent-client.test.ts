@@ -59,7 +59,12 @@ vi.mock('../../storage/mmkv', () => ({
   pendingRunStorageKey: (sessionKey: string) => `pending:${sessionKey}`,
 }));
 
-import { AgentMessageSender, AgentStreamReplayExpiredError, transcribeVoice } from '../agent-client';
+import {
+  AgentMessageSender,
+  AgentStreamReplayExpiredError,
+  refineVoiceTranscript,
+  transcribeVoice,
+} from '../agent-client';
 import { readUriAsBase64 } from '../../features/chat/attachment-file-io';
 import {
   clearMobileEndpointTurnClaim,
@@ -67,8 +72,18 @@ import {
 } from '../../features/endpoint-tools/turn-claim';
 
 describe('AgentMessageSender voice message', () => {
-  it('waits for the local recording to be read and the attachment input to be sent', async () => {
-    vi.mocked(readUriAsBase64).mockResolvedValue({ content: 'YWJj', size: 3 });
+  beforeEach(() => {
+    testState.memory.clear();
+    testState.apiFetch.mockReset();
+    vi.mocked(readUriAsBase64).mockReset();
+    clearMobileEndpointTurnClaim();
+  });
+
+  afterEach(() => {
+    clearMobileEndpointTurnClaim();
+  });
+
+  it('queues the native recording URI without materializing base64', async () => {
     const sender = new AgentMessageSender();
     const sendMessage = vi.spyOn(sender, 'sendMessage').mockResolvedValue(undefined);
 
@@ -81,10 +96,7 @@ describe('AgentMessageSender voice message', () => {
       'session-a',
     );
 
-    expect(readUriAsBase64).toHaveBeenCalledWith(
-      'file:///data/user/0/ai.xopc.xopc/cache/Audio/recording.m4a',
-      'voice.m4a',
-    );
+    expect(readUriAsBase64).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(
       '',
       'session-a',
@@ -93,24 +105,67 @@ describe('AgentMessageSender voice message', () => {
         type: 'voice',
         mimeType: 'audio/mp4',
         name: 'voice.m4a',
-        size: 3,
+        localUri: 'file:///data/user/0/ai.xopc.xopc/cache/Audio/recording.m4a',
         durationSeconds: 1.25,
       })],
       undefined,
     );
   });
 
-  it('materializes transcription audio instead of passing a native file URI to multipart fetch', async () => {
-    vi.mocked(readUriAsBase64).mockResolvedValue({ content: 'YWJj', size: 3 });
+  it('uploads voice bytes once and submits only the media reference', async () => {
+    publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
+    testState.apiFetch.mockImplementation(async (path, init) => {
+      if (path === '/api/media') {
+        return new Response(JSON.stringify({
+          ok: true,
+          payload: {
+            uri: 'media://inbound/voice---id.m4a',
+            name: 'voice.m4a',
+            mimeType: 'audio/mp4',
+            size: 3,
+          },
+        }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      const body = JSON.parse(String(init?.body)) as { clientMessageId: string };
+      return new Response(JSON.stringify({
+        ok: true,
+        payload: { state: { inputs: [{ id: 'input-1', clientMessageId: body.clientMessageId }] } },
+      }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    try {
+      await new AgentMessageSender().sendVoiceMessage({
+        uri: 'file:///documents/voice.m4a',
+        durationMillis: 1_250,
+        mimeType: 'audio/mp4',
+      }, 'session-a');
+    } finally {
+      clearMobileEndpointTurnClaim();
+    }
+
+    expect(readUriAsBase64).not.toHaveBeenCalled();
+    expect(testState.apiFetch.mock.calls[0]?.[0]).toBe('/api/media');
+    const sessionCall = testState.apiFetch.mock.calls.find(([path]) => path === '/api/sessions/session-a/inputs');
+    const submitted = JSON.parse(String(sessionCall?.[1]?.body)) as {
+      attachments: Array<{ uri?: string; data?: string; localUri?: string }>;
+    };
+    expect(submitted.attachments).toEqual([
+      expect.objectContaining({ uri: 'media://inbound/voice---id.m4a' }),
+    ]);
+    expect(submitted.attachments[0]).not.toHaveProperty('data');
+    expect(submitted.attachments[0]).not.toHaveProperty('localUri');
+  });
+
+  it('posts transcription audio as a native multipart file', async () => {
     testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
       ok: true,
-      payload: { raw: 'hello' },
+      payload: { text: 'hello', refinementAvailable: false },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     await expect(transcribeVoice('file:///documents/voice.m4a', 'audio/mp4'))
-      .resolves.toEqual({ raw: 'hello' });
+      .resolves.toEqual({ text: 'hello', refinementAvailable: false });
 
-    expect(readUriAsBase64).toHaveBeenCalledWith('file:///documents/voice.m4a', 'voice.m4a');
+    expect(readUriAsBase64).not.toHaveBeenCalled();
     const options = testState.apiFetch.mock.calls[0]?.[1];
     expect(options).toMatchObject({
       method: 'POST',
@@ -118,9 +173,19 @@ describe('AgentMessageSender voice message', () => {
       recoverRouteOnNetworkError: true,
     });
     expect(options?.body).toBeInstanceOf(FormData);
-    const part = (options?.body as FormData).get('audio');
-    expect(part).toBeInstanceOf(Blob);
-    expect(await (part as Blob).text()).toBe('abc');
+  });
+
+  it('refines an already returned transcript through the separate endpoint', async () => {
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      payload: { text: 'Hello, world.' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    await expect(refineVoiceTranscript('hello world')).resolves.toBe('Hello, world.');
+    expect(testState.apiFetch).toHaveBeenCalledWith('/api/voice/transcriptions/refine', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ text: 'hello world' }),
+    }));
   });
 });
 

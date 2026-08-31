@@ -1,5 +1,7 @@
 const CODE_FENCE_RE = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
 const SENTENCE_RE = /[^。！？!?.\n]+[。！？!?.]?|\n+/g;
+const FIRST_CHUNK_MAX_CHARS = 80;
+const FOLLOWING_CHUNK_MAX_CHARS = 240;
 
 /** Convert assistant Markdown into natural speech without code, URLs, or hidden delivery metadata. */
 export function buildSpeakableText(markdown: string): string {
@@ -20,11 +22,10 @@ export function buildSpeakableText(markdown: string): string {
     .trim();
 }
 
-/** Split text on sentence boundaries so each request stays comfortably below the server limit. */
-export function splitSpeakableText(text: string, maxChars = 420): string[] {
+/** Keep the first sentence small for fast first audio, then pack later speech more densely. */
+export function splitSpeakableText(text: string): string[] {
   const normalized = text.trim();
   if (!normalized) return [];
-  const limit = Math.max(20, maxChars);
   const units = normalized.match(SENTENCE_RE) ?? [normalized];
   const chunks: string[] = [];
   let current = '';
@@ -35,17 +36,24 @@ export function splitSpeakableText(text: string, maxChars = 420): string[] {
     current = '';
   };
 
+  const firstUnit = units.shift()?.trim() ?? '';
+  if (firstUnit) {
+    for (let offset = 0; offset < firstUnit.length; offset += FIRST_CHUNK_MAX_CHARS) {
+      chunks.push(firstUnit.slice(offset, offset + FIRST_CHUNK_MAX_CHARS).trim());
+    }
+  }
+
   for (const rawUnit of units) {
     const unit = rawUnit.trim();
     if (!unit) continue;
-    if (unit.length > limit) {
+    if (unit.length > FOLLOWING_CHUNK_MAX_CHARS) {
       pushCurrent();
-      for (let offset = 0; offset < unit.length; offset += limit) {
-        chunks.push(unit.slice(offset, offset + limit).trim());
+      for (let offset = 0; offset < unit.length; offset += FOLLOWING_CHUNK_MAX_CHARS) {
+        chunks.push(unit.slice(offset, offset + FOLLOWING_CHUNK_MAX_CHARS).trim());
       }
       continue;
     }
-    if (current && current.length + unit.length > limit) pushCurrent();
+    if (current && current.length + unit.length > FOLLOWING_CHUNK_MAX_CHARS) pushCurrent();
     current += unit;
   }
   pushCurrent();

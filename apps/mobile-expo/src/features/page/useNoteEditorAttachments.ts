@@ -144,7 +144,6 @@ export function useNoteEditorAttachments({
         localUri: queued.localUri,
         name: queued.name,
         mimeType: queued.mimeType,
-        content: queued.content,
         durationMillis: queued.durationMillis,
       });
       setSnackMsg(messages.added);

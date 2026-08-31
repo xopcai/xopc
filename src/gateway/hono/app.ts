@@ -193,6 +193,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const DEFAULT_API_BODY_MAX = 1 * 1024 * 1024;
   const SKILL_UPLOAD_BODY_MAX = 10 * 1024 * 1024;
   const NOTE_MEDIA_BODY_MAX = 25 * 1024 * 1024;
+  const MEDIA_UPLOAD_BODY_MAX = 33 * 1024 * 1024;
   const VOICE_TRANSCRIBE_BODY_MAX = 26 * 1024 * 1024;
   const SESSION_INPUT_BODY_MAX = maxSessionInputRequestBodyBytes();
 
@@ -239,6 +240,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         ? SKILL_UPLOAD_BODY_MAX
         : c.req.path === '/api/voice/transcriptions'
           ? VOICE_TRANSCRIBE_BODY_MAX
+          : c.req.path === '/api/media' && c.req.method === 'POST'
+            ? MEDIA_UPLOAD_BODY_MAX
           : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
             ? NOTE_MEDIA_BODY_MAX
             : isProjectFileUploadRequest(c.req.path, c.req.method, contentType)

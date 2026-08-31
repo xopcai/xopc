@@ -37,36 +37,19 @@ describe('uploadNoteMedia', () => {
     } as Response);
   });
 
-  it('falls back to base64 content when native localUri upload fails', async () => {
+  it('does not retry a failed native upload through base64', async () => {
     platform.OS = 'ios';
-    mockedApiFetch
-      .mockRejectedValueOnce(new Error('local file unavailable'))
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          attachment: {
-            id: 'att-1',
-            type: 'image',
-            mimeType: 'image/png',
-            fileName: 'photo.png',
-            size: 4,
-            relativePath: 'notes/note-1/att-1.png',
-          },
-        }),
-      } as Response);
+    mockedApiFetch.mockRejectedValueOnce(new Error('local file unavailable'));
 
     await expect(uploadNoteMedia('note-1', {
       localUri: 'file:///tmp/missing-photo.png',
       name: 'photo.png',
       mimeType: 'image/png',
       content: btoa('data'),
-    })).resolves.toEqual(expect.objectContaining({ id: 'att-1' }));
+    })).rejects.toThrow('local file unavailable');
 
-    expect(mockedApiFetch).toHaveBeenCalledTimes(2);
+    expect(mockedApiFetch).toHaveBeenCalledTimes(1);
     expect(mockedApiFetch.mock.calls[0][1]?.body).toBeInstanceOf(FormData);
-    const fallbackFile = (mockedApiFetch.mock.calls[1][1]?.body as FormData).get('file') as File;
-    expect(fallbackFile.name).toBe('photo.png');
-    expect(await fallbackFile.text()).toBe('data');
   });
 });
 
@@ -117,7 +100,8 @@ describe('captureNote attachments', () => {
     expect(form.get('projectId')).toBe('project-1');
   });
 
-  it('uses the materialized audio bytes and enables safe route recovery for idempotent capture', async () => {
+  it('uses the native audio URI and enables safe route recovery for idempotent capture', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await captureNote({
       kind: 'voice',
       idempotencyKey: 'voice-operation-1',
@@ -136,9 +120,8 @@ describe('captureNote attachments', () => {
       headers: { 'Idempotency-Key': 'voice-operation-1' },
       recoverRouteOnNetworkError: true,
     });
-    const file = (init?.body as FormData).get('file') as File;
-    expect(file).toBeInstanceOf(File);
-    expect(await file.text()).toBe('audio-data');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });
 

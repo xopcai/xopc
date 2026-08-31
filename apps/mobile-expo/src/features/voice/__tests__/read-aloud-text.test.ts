@@ -17,11 +17,18 @@ describe('read aloud text', () => {
     ].join('\n\n'))).toBe('标题\n\n访问 官网。\n\n图片 架构图');
   });
 
-  it('splits long speech on sentence and hard boundaries', () => {
-    expect(splitSpeakableText('第一句话。第二句话很长。abcdefghijklmnopqrstuvwxy.', 20)).toEqual([
-      '第一句话。第二句话很长。',
-      'abcdefghijklmnopqrst',
-      'uvwxy.',
+  it('keeps the first sentence isolated for fast first audio', () => {
+    expect(splitSpeakableText('第一句话。第二句话很长。第三句话。')).toEqual([
+      '第一句话。',
+      '第二句话很长。第三句话。',
+    ]);
+  });
+
+  it('hard-splits an oversized first sentence at 80 characters', () => {
+    expect(splitSpeakableText(`${'a'.repeat(81)}.第二句。`)).toEqual([
+      'a'.repeat(80),
+      'a.',
+      '第二句。',
     ]);
   });
 
