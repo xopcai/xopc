@@ -19,9 +19,11 @@ describe('voice-transcribe-api', () => {
   });
 
   it('uploads browser recordings as multipart without base64 expansion', async () => {
-    fetchJson.mockResolvedValue({ payload: { raw: 'hello' } });
+    fetchJson.mockResolvedValue({ payload: { text: 'hello', refinementAvailable: false } });
 
-    await transcribeVoiceBlob(new Blob(['audio'], { type: 'audio/webm;codecs=opus' }), 'audio/webm');
+    await expect(
+      transcribeVoiceBlob(new Blob(['audio'], { type: 'audio/webm;codecs=opus' }), 'audio/webm'),
+    ).resolves.toEqual({ text: 'hello', refinementAvailable: false });
 
     const [url, init] = fetchJson.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/api/voice/transcriptions');

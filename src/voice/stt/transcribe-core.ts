@@ -39,6 +39,13 @@ function classifyFailureReason(reason: string | undefined): STTProviderFailureRe
   if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('aborted')) {
     return 'timeout';
   }
+  if (
+    lower.includes('empty transcription')
+    || lower.includes('no speech')
+    || lower.includes('no voice detected')
+  ) {
+    return 'no_speech';
+  }
   if (lower.includes('unsupported') || lower.includes('format') || lower.includes('audio decoder')) {
     return 'unsupported_format';
   }
@@ -102,8 +109,21 @@ export async function transcribe(
     result.decision.attachments[0];
   const attempts = (attachmentDecision?.attempts ?? []).map(toAttempt);
   const attemptedProviders = attempts.map((a) => a.provider);
+  const primaryProvider = providersWithLanguage[0]!.id;
 
   if (!attachmentDecision?.chosen) {
+    const noSpeechAttempt = attempts.findLast((attempt) => attempt.reasonCode === 'no_speech');
+    if (noSpeechAttempt) {
+      log.debug({ attempts, attemptedProviders }, 'STT completed without recognized speech');
+      const fallbackFrom = noSpeechAttempt.provider !== primaryProvider ? primaryProvider : undefined;
+      return {
+        text: '',
+        provider: noSpeechAttempt.provider,
+        attempts,
+        ...(fallbackFrom ? { fallbackFrom } : {}),
+        attemptedProviders,
+      };
+    }
     log.error({ attempts, attemptedProviders }, 'All STT providers failed');
     const lastFailure = attempts.findLast((attempt) => attempt.task === 'failed');
     throw new STTTranscriptionError(
@@ -117,7 +137,6 @@ export async function transcribe(
   if (!output) {
     throw new Error('STT runner returned chosen attempt but no output text');
   }
-  const primaryProvider = providersWithLanguage[0]!.id;
   const fallbackFrom =
     chosen.provider && chosen.provider !== primaryProvider ? primaryProvider : undefined;
 

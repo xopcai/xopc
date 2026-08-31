@@ -16,6 +16,7 @@ type VoiceCaptureFailureKind = 'permission' | 'device' | 'recorder';
 
 const MAX_RECORDING_MS = 120_000;
 const READINESS_POLL_MS = 1_000;
+const MIN_SPEECH_FRAMES = 2;
 
 function formatElapsed(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return '0:00';
@@ -89,6 +90,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   const lastRecordingRef = useRef<Blob | null>(null);
   const pendingCaptureRef = useRef(false);
   const recordStartPerfRef = useRef<number | null>(null);
+  const speechFrameCountRef = useRef(0);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoConfirmRef = useRef<() => void>(() => {});
   const onTranscriptRef = useRef(onTranscript);
@@ -142,9 +144,14 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       finishIdle();
       return;
     }
+    if (speechFrameCountRef.current < MIN_SPEECH_FRAMES) {
+      showComposerNotification('warning', m.voiceTranscribeEmpty);
+      finishIdle();
+      return;
+    }
     try {
       const payload = await transcribeVoiceBlob(blob, 'audio/wav');
-      const text = (payload.refined ?? payload.raw).trim();
+      const text = payload.text.trim();
       if (!text) {
         showComposerNotification('warning', m.voiceTranscribeEmpty);
         finishIdle();
@@ -232,9 +239,11 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       const startedAt = performance.now();
       recordStartPerfRef.current = startedAt;
       startStage = 'recorder';
+      speechFrameCountRef.current = 0;
       const recorder = await PcmWavRecorder.start(stream, {
-        onAudioLevel: ({ level }) => {
+        onAudioLevel: ({ level, speaking }) => {
           setAudioLevel(Math.min(1, level * 8));
+          if (speaking) speechFrameCountRef.current += 1;
         },
       });
       if (!isCapturePending(phaseRef.current)) {

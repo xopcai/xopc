@@ -2,8 +2,8 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export interface VoiceTranscribeResult {
-  raw: string;
-  refined?: string;
+  text: string;
+  refinementAvailable: boolean;
   language?: string;
   provider?: string;
   latencyMs?: number;
