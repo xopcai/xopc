@@ -321,7 +321,7 @@ export function HomePage() {
     const attachmentsHandoff = wireAttachments.length > 0
       ? createComposerPayloadHandoff(wireAttachments)
       : undefined;
-    const href = newChatAutoSendHref(intent, attachmentsHandoff);
+    const href = newChatAutoSendHref(intent, attachmentsHandoff, { projectScope: 'none' });
     if (!href) return;
     setConversationOpen(false);
     setIntent('');

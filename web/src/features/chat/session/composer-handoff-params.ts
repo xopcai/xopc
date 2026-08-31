@@ -10,7 +10,11 @@ export function buildComposerDraftSeed(skill: string, draft: string): string | n
   return trimmedDraft || null;
 }
 
-export function newChatAutoSendHref(draft: string, attachmentsHandoff?: string): string | null {
+export function newChatAutoSendHref(
+  draft: string,
+  attachmentsHandoff?: string,
+  options?: { projectScope?: 'none' | 'remember-last' },
+): string | null {
   const trimmedDraft = draft.trim();
   const trimmedAttachmentsHandoff = attachmentsHandoff?.trim() ?? '';
   if (!trimmedDraft && !trimmedAttachmentsHandoff) return null;
@@ -18,6 +22,7 @@ export function newChatAutoSendHref(draft: string, attachmentsHandoff?: string):
   if (trimmedDraft) params.set('draft', trimmedDraft);
   params.set('autoSend', '1');
   if (trimmedAttachmentsHandoff) params.set('attachmentsHandoff', trimmedAttachmentsHandoff);
+  if (options?.projectScope === 'none') params.set('projectScope', 'none');
   return `/chat/new?${params.toString()}`;
 }
 
