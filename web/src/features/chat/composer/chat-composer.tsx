@@ -700,27 +700,27 @@ export const ChatComposer = memo(function ChatComposer({
               onConfirm={voice.confirmVoiceInput}
               onRetry={voice.retryVoiceInput}
             />
-          ) : (
-            <ChatComposerInput
-              editorRef={editor.editorRef}
-              disabled={disabled}
-              ariaLabel={m.chat.inputPlaceholder}
-              placeholder={
-                contextualPlaceholder ?? (runBusyState
-                  ? editingFollowUpId
-                    ? m.chat.inputPlaceholderSteeringEdit
-                    : m.chat.inputPlaceholderSteering
-                  : m.chat.inputPlaceholder)
-              }
-              onWireInput={onWireInputClearWalk}
-              adjustHeight={editor.adjustHeight}
-              processFiles={att.processFiles}
-              processPastedText={att.processPastedText}
-              setIsComposing={editor.setIsComposing}
-              kbdRef={kbdRef}
-              chatMessages={m.chat}
-            />
-          )}
+          ) : null}
+          <ChatComposerInput
+            editorRef={editor.editorRef}
+            disabled={disabled}
+            hidden={voice.voiceActive && voice.phase !== 'error'}
+            ariaLabel={m.chat.inputPlaceholder}
+            placeholder={
+              contextualPlaceholder ?? (runBusyState
+                ? editingFollowUpId
+                  ? m.chat.inputPlaceholderSteeringEdit
+                  : m.chat.inputPlaceholderSteering
+                : m.chat.inputPlaceholder)
+            }
+            onWireInput={onWireInputClearWalk}
+            adjustHeight={editor.adjustHeight}
+            processFiles={att.processFiles}
+            processPastedText={att.processPastedText}
+            setIsComposing={editor.setIsComposing}
+            kbdRef={kbdRef}
+            chatMessages={m.chat}
+          />
         </div>
 
         <ComposerToolbar

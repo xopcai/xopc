@@ -11,11 +11,12 @@ const mocks = vi.hoisted(() => ({
   fetchVoiceReadiness: vi.fn(),
   showComposerNotification: vi.fn(),
   startRecorder: vi.fn(),
+  transcribeVoiceBlob: vi.fn(),
 }));
 
 vi.mock('@/features/chat/composer/voice-transcribe-api', () => ({
   fetchVoiceReadiness: mocks.fetchVoiceReadiness,
-  transcribeVoiceBlob: vi.fn(),
+  transcribeVoiceBlob: mocks.transcribeVoiceBlob,
 }));
 
 vi.mock('@/features/chat/composer/composer-notifications', () => ({
@@ -36,6 +37,7 @@ const chat = {
   voiceMicUnavailable: 'Microphone device unavailable',
   voiceRecorderFailed: 'Recorder failed',
   voicePreparationFailed: 'Local model is not ready',
+  voiceTranscribeEmpty: 'No speech detected',
 } as ChatMessages;
 
 async function flushEffectsUntil(predicate: () => boolean): Promise<void> {
@@ -61,6 +63,7 @@ describe('useComposerVoiceInput', () => {
     ));
     mocks.showComposerNotification.mockReset();
     mocks.startRecorder.mockReset();
+    mocks.transcribeVoiceBlob.mockReset();
     Object.defineProperty(navigator, 'permissions', {
       configurable: true,
       value: undefined,
@@ -108,6 +111,80 @@ describe('useComposerVoiceInput', () => {
     expect(getUserMedia).toHaveBeenCalledTimes(1);
     expect(mocks.startRecorder).toHaveBeenCalledWith(stream, expect.any(Object));
     expect(voice.phase).toBe('recording');
+  });
+
+  it('places a successful gateway transcript in the draft and returns to the editor', async () => {
+    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
+    mocks.transcribeVoiceBlob.mockResolvedValue({
+      text: 'recognized text',
+      refinementAvailable: false,
+    });
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(async () => stream) },
+    });
+    mocks.startRecorder.mockImplementation(async (_stream, options) => {
+      options.onAudioLevel({ level: 0.05, speaking: true });
+      options.onAudioLevel({ level: 0.05, speaking: true });
+      return {
+        cancel: vi.fn(),
+        stop: vi.fn(async () => new Blob([new Uint8Array(64)], { type: 'audio/wav' })),
+      };
+    });
+    const onTranscript = vi.fn();
+
+    function Harness() {
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript });
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await voice.startVoiceInput();
+    });
+    act(() => voice.confirmVoiceInput());
+    await flushEffectsUntil(() => voice.phase === 'idle');
+
+    expect(mocks.transcribeVoiceBlob).toHaveBeenCalledWith(expect.any(Blob), 'audio/wav');
+    expect(onTranscript).toHaveBeenCalledWith('recognized text');
+    expect(voice.phase).toBe('idle');
+    expect(voice.hasRetainedRecording).toBe(false);
+  });
+
+  it('does not upload a silent recording for transcription', async () => {
+    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(async () => stream) },
+    });
+    mocks.startRecorder.mockResolvedValue({
+      cancel: vi.fn(),
+      stop: vi.fn(async () => new Blob([new Uint8Array(64)], { type: 'audio/wav' })),
+    });
+
+    function Harness() {
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
+      return null;
+    }
+
+    await act(async () => {
+      root.render(<Harness />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await voice.startVoiceInput();
+    });
+    act(() => voice.confirmVoiceInput());
+    await flushEffectsUntil(() => voice.phase === 'idle');
+
+    expect(mocks.transcribeVoiceBlob).not.toHaveBeenCalled();
+    expect(mocks.showComposerNotification).toHaveBeenCalledWith('warning', 'No speech detected');
+    expect(voice.phase).toBe('idle');
   });
 
   it('reports recorder initialization failures separately from permission denial', async () => {
