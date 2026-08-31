@@ -120,6 +120,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
     if (prev?.role === 'assistant') {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
+      if (m.completedAt != null) prev.completedAt = m.completedAt;
       if (m.renderKey) prev.renderKey = m.renderKey;
       if (m.turnId) prev.turnId = m.turnId;
       if (m.progressiveRender) prev.progressiveRender = true;

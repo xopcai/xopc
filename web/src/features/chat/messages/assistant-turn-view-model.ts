@@ -93,14 +93,11 @@ export function buildAssistantTurnViewModel({
   const failedToolCount = toolBlocks.filter(
     (tool) => tool.status === 'error' || tool.activity?.status === 'failed',
   ).length;
-  const timing = getActivityTiming(allActivityBlocks);
-  const activityActive =
-    isStreaming &&
-    allActivityBlocks.some(
-      (block) =>
-        (block.type === 'thinking' && Boolean(block.streaming)) ||
-        (block.type === 'tool_use' && (block.status === 'running' || block.activity?.status === 'running')),
-    );
+  const activityActive = isStreaming && allActivityBlocks.length > 0;
+  const activityEndedAt = !isStreaming
+    ? message.completedAt ?? message.timestamp
+    : undefined;
+  const timing = getActivityTiming(allActivityBlocks, activityEndedAt);
   const imageBlocks = (message.content ?? []).filter(
     (block): block is ImageContent =>
       block.type === 'image' && Boolean(block.source?.data),
