@@ -7,6 +7,7 @@ describe('xopcDeepLinkToRoute', () => {
     expect(xopcDeepLinkToRoute('xopc://open?kind=local_app&id=app%2Freading+list')).toBe(
       '/open?kind=local_app&id=app%2Freading+list',
     );
+    expect(xopcDeepLinkToRoute('xopc://open?kind=note&id=note-1')).toBe('/notes/note-1');
     expect(xopcDeepLinkToRoute('xopc://settings/appearance?tab=theme')).toBe(
       '/settings/appearance?tab=theme',
     );
@@ -20,6 +21,8 @@ describe('xopcDeepLinkToRoute', () => {
 
   it('rejects malformed and unsupported links', () => {
     expect(xopcDeepLinkToRoute('xopc://open?kind=local_app')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://open?kind=unknown&id=item-1')).toBeNull();
+    expect(xopcDeepLinkToRoute('xopc://open?kind=file&id=file-1')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://unknown/path')).toBeNull();
     expect(xopcDeepLinkToRoute('xopc://cloud/model-connected')).toBeNull();
     expect(xopcDeepLinkToRoute(

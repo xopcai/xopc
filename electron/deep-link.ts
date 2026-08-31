@@ -1,3 +1,8 @@
+import {
+  parseProductReferenceDeepLink,
+  productReferenceOpenRoute,
+} from '@xopcai/gateway-contract';
+
 export interface XopcDeepLinkTarget {
   route: string;
   /** Keep live renderer state (for example an in-progress onboarding wizard) intact. */
@@ -10,10 +15,14 @@ export function xopcDeepLinkTarget(value: string): XopcDeepLinkTarget | null {
     if (url.protocol !== 'xopc:') return null;
 
     if (url.hostname === 'open') {
-      const kind = url.searchParams.get('kind')?.trim();
-      const id = url.searchParams.get('id')?.trim();
-      if (!kind || !id) return null;
-      return { route: `/open?${new URLSearchParams({ kind, id }).toString()}` };
+      const reference = parseProductReferenceDeepLink(value);
+      if (!reference) return null;
+      const route = productReferenceOpenRoute({
+        ...reference,
+        title: reference.id,
+        capabilities: ['open'],
+      });
+      return route ? { route } : null;
     }
 
     if (url.hostname === 'settings') {

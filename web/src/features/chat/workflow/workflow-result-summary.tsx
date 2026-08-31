@@ -33,7 +33,6 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
       <MarkdownView
         content={result.summary}
         className="workflow-result-markdown"
-        openHttpLinksInNewTab
       />
 
       {(result.sections ?? []).map((section, index) => (
@@ -68,7 +67,7 @@ function TextBlock({ heading, text }: { heading: string; text: string }) {
   return (
     <section className="min-w-0">
       <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{heading}</div>
-      <MarkdownView content={text} compact className="mt-2" openHttpLinksInNewTab />
+      <MarkdownView content={text} compact className="mt-2" />
     </section>
   );
 }

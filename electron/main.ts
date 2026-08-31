@@ -54,6 +54,7 @@ import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cr
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { registerDesktopPetIpc } from './desktop-pet/ipc.js';
 import { normalizeExternalHttpUrl } from './external-url.js';
+import { decideElectronNavigation } from './navigation-policy.js';
 import {
   destroyDesktopPetWindow,
   initDesktopPetWindow,
@@ -66,7 +67,7 @@ import {
   getRendererCrashPageDataUrl,
   getStartupRecoveryPageDataUrl,
 } from './loading-page.js';
-import { isEmbeddedGatewayLoopbackUrl, isEmbeddedGatewaySiteShareUrl } from './loopback-url.js';
+import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
 import {
   checkForUpdates,
   getUpdateStatus,
@@ -354,66 +355,35 @@ const devWindowIcon = join(import.meta.dirname, '../../electron/resources/icon.p
  */
 function attachExternalUrlHandlers(win: BrowserWindow): void {
   const wc = win.webContents;
+  const openExternal = (url: string) => {
+    void shell.openExternal(url).catch((error) => {
+      console.warn(`[main] Failed to open external URL: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  };
 
   wc.setWindowOpenHandler((details) => {
-    try {
-      const next = new URL(details.url);
-      if (next.protocol === 'xopc:') {
-        handleDeepLink(details.url);
-        return { action: 'deny' };
-      }
-      if (next.protocol !== 'http:' && next.protocol !== 'https:') {
-        return { action: 'allow' };
-      }
-      if (isEmbeddedGatewaySiteShareUrl(details.url)) {
-        void shell.openExternal(details.url);
-        return { action: 'deny' };
-      }
-      const curHref = wc.getURL();
-      if (!curHref || curHref === 'about:blank') {
-        return { action: 'allow' };
-      }
-      const cur = new URL(curHref);
-      if (next.origin === cur.origin) {
-        if (next.hash.startsWith('#/')) navigateMainWindow(next.hash.slice(1));
-        return { action: 'deny' };
-      }
-      if (isEmbeddedGatewayLoopbackUrl(details.url)) {
-        void shell.openExternal(details.url);
-        return { action: 'deny' };
-      }
-      void shell.openExternal(details.url);
-      return { action: 'deny' };
-    } catch {
-      /* ignore */
+    const decision = decideElectronNavigation(wc.getURL(), details.url);
+    if (decision.kind === 'internal-deep-link') {
+      handleDeepLink(decision.url);
+    } else if (decision.kind === 'same-origin' && decision.route) {
+      navigateMainWindow(decision.route);
+    } else if (decision.kind === 'external-http') {
+      openExternal(decision.url);
     }
-    return { action: 'allow' };
+    return { action: 'deny' };
   });
 
   wc.on('will-navigate', (event, navigationUrl) => {
-    try {
-      const next = new URL(navigationUrl);
-      if (next.protocol === 'xopc:') {
-        event.preventDefault();
-        handleDeepLink(navigationUrl);
-        return;
-      }
-      if (next.protocol !== 'http:' && next.protocol !== 'https:') return;
-      // Startup: data: loading page → http://127.0.0.1:<port>/ must stay in-window.
-      // Without this, Windows Electron preventDefault() leaves a blank white shell while
-      // the gateway UI opens in the system browser.
-      if (isEmbeddedGatewayLoopbackUrl(navigationUrl)) {
-        return;
-      }
-      const curHref = wc.getURL();
-      if (!curHref || curHref === 'about:blank') return;
-      const cur = new URL(curHref);
-      if (next.origin !== cur.origin) {
-        event.preventDefault();
-        void shell.openExternal(navigationUrl);
-      }
-    } catch {
-      /* ignore */
+    const decision = decideElectronNavigation(wc.getURL(), navigationUrl);
+    if (decision.kind === 'same-origin' && !decision.route) return;
+
+    event.preventDefault();
+    if (decision.kind === 'internal-deep-link') {
+      handleDeepLink(decision.url);
+    } else if (decision.kind === 'same-origin' && decision.route) {
+      navigateMainWindow(decision.route);
+    } else if (decision.kind === 'external-http') {
+      openExternal(decision.url);
     }
   });
 }

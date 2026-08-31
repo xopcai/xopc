@@ -10,7 +10,9 @@ export const NOTE_TASK_ITEM_OPTIONS = { nested: true };
 
 export const NOTE_LINK_OPTIONS = {
   autolink: true,
+  protocols: ['xopc'],
   openOnClick: false,
+  enableClickSelection: true,
 };
 
 export const NOTE_MARKDOWN_OPTIONS = {

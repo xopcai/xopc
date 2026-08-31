@@ -1,8 +1,3 @@
-import {
-  parseProductReferenceDeepLink,
-  productReferenceOpenRoute,
-} from '@xopcai/gateway-contract';
-
 const KNOWN_FILE_EXT =
   'png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|tsx|jsx|yaml|yml|toml|xml';
 
@@ -25,17 +20,6 @@ export type WorkspaceFileLinkTarget = {
   kind: 'workspace-relative' | 'absolute';
 };
 
-export function xopcSettingsUrlToRoute(raw: string): string | null {
-  try {
-    const u = new URL(raw);
-    if (u.protocol !== 'xopc:' || u.hostname !== 'settings') return null;
-    const path = u.pathname === '/' ? '' : u.pathname;
-    return `/settings${path}${u.search}${u.hash}`;
-  } catch {
-    return null;
-  }
-}
-
 export function xopcWorkspaceFileUrlToHref(raw: string): string | null {
   try {
     const u = new URL(raw);
@@ -47,30 +31,15 @@ export function xopcWorkspaceFileUrlToHref(raw: string): string | null {
   }
 }
 
-function xopcUrlToInternalHref(raw: string): string {
-  const reference = parseProductReferenceDeepLink(raw);
-  const productRoute = reference
-    ? productReferenceOpenRoute({
-      ...reference,
-      title: reference.id,
-      capabilities: ['open'],
-    })
-    : null;
-  if (productRoute) return `#${productRoute}`;
-  return xopcSettingsUrlToRoute(raw)
-    ?? xopcWorkspaceFileUrlToHref(raw)
-    ?? raw;
-}
-
-export function rewriteXopcSettingsLinksInMarkdown(markdown: string): string {
-  const xopcUrlPattern = String.raw`xopc:\/\/(?:settings|workspace\/file|open\?)[^\s[\]()<>"']*`;
+export function rewriteWorkspaceFileLinksInMarkdown(markdown: string): string {
+  const xopcUrlPattern = String.raw`xopc:\/\/workspace\/file[^\s[\]()<>"']*`;
   const markdownLinkPattern = new RegExp(String.raw`\[([^\]\n]*)\]\((${xopcUrlPattern})\)`, 'gi');
   const bareUrlPattern = new RegExp(xopcUrlPattern, 'gi');
   const rewrittenLinks = markdown.replace(markdownLinkPattern, (_match, label: string, raw: string) => {
     const normalizedLabel = /^xopc:\/\//i.test(label.trim()) ? 'Open in xopc' : label;
-    return `[${normalizedLabel}](${xopcUrlToInternalHref(raw)})`;
+    return `[${normalizedLabel}](${xopcWorkspaceFileUrlToHref(raw) ?? raw})`;
   });
-  return rewrittenLinks.replace(bareUrlPattern, xopcUrlToInternalHref);
+  return rewrittenLinks.replace(bareUrlPattern, (raw) => xopcWorkspaceFileUrlToHref(raw) ?? raw);
 }
 
 export function parseWorkspaceFileLinkTarget(raw: string): WorkspaceFileLinkTarget | null {
@@ -248,24 +217,5 @@ export function linkWorkspaceFileMentions(root: HTMLElement): void {
       frag.appendChild(doc.createTextNode(text.slice(cursor)));
     }
     node.parentNode?.replaceChild(frag, node);
-  }
-}
-
-/** Marks explicit absolute HTTP(S) links to open separately; app-relative links stay in-window. */
-export function openHttpLinksInNewTab(root: HTMLElement): void {
-  for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
-    const href = anchor.getAttribute('href');
-    if (!href || !/^https?:\/\//i.test(href)) continue;
-    try {
-      const url = new URL(href);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
-      anchor.target = '_blank';
-      const rel = new Set(anchor.rel.split(/\s+/).filter(Boolean));
-      rel.add('noopener');
-      rel.add('noreferrer');
-      anchor.rel = [...rel].join(' ');
-    } catch {
-      /* Ignore malformed URLs. */
-    }
   }
 }
