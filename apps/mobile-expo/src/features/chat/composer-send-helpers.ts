@@ -15,17 +15,21 @@ export function extractUserMessageText(content: MessageContent[]): string {
 export function messageAttachmentsToWire(attachments?: MessageAttachment[]): WireAttachment[] | undefined {
   if (!attachments?.length) return undefined;
   const wire = attachments
-    .map((a) => ({
-      type: a.type ?? 'document',
-      mimeType: a.mimeType,
-      data: a.data ?? a.content,
-      uri: a.uri,
-      localUri: a.localUri,
-      name: a.name,
-      size: a.size,
-      workspaceRelativePath: a.workspaceRelativePath,
-      durationSeconds: a.durationSeconds,
-    }))
+    .map((a) => {
+      const type = a.type ?? 'document';
+      const isAudio = type === 'voice' || a.mimeType?.startsWith('audio/');
+      return {
+        type,
+        mimeType: a.mimeType,
+        data: isAudio ? undefined : a.data ?? a.content,
+        uri: a.uri,
+        localUri: a.localUri,
+        name: a.name,
+        size: a.size,
+        workspaceRelativePath: a.workspaceRelativePath,
+        durationSeconds: a.durationSeconds,
+      };
+    })
     .filter((a) => Boolean(a.data || a.uri || a.localUri || a.workspaceRelativePath));
   return wire.length ? wire : undefined;
 }

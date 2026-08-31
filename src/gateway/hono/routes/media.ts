@@ -1,10 +1,11 @@
 import type { Hono } from 'hono';
 
 import { pendingTranscriptReferencesMediaUri } from '../../../agent/inbound/attachment-pipeline.js';
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
 import { readMediaReference } from '../../../media/media-reference.js';
 import { messagesReferenceMediaUri } from '../../../media/session-references.js';
 import { parseMediaUri } from '../../../media/uri.js';
-import { mimeTypeFromMediaPath } from '../../../media/store.js';
+import { mimeTypeFromMediaPath, saveMediaBuffer } from '../../../media/store.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
@@ -14,6 +15,39 @@ const log = createGatewayRouteLogger('Media');
 
 export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const tasks = new TaskRepository();
+
+  authenticated.post('/api/media', deps.strictRateLimitMiddleware, async (c) => {
+    const form = await c.req.formData().catch(() => null);
+    const file = form?.get('file');
+    if (!(file instanceof Blob)) {
+      return c.json({ ok: false, error: { message: 'Missing required file field: file' } }, 400);
+    }
+    if (file.size === 0) {
+      return c.json({ ok: false, error: { message: 'Uploaded file is empty' } }, 400);
+    }
+    if (file.size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
+      return c.json({ ok: false, error: { message: 'Uploaded file exceeds 32 MB limit' } }, 413);
+    }
+    const name = 'name' in file && typeof file.name === 'string' && file.name.trim()
+      ? file.name.trim()
+      : `upload-${Date.now()}`;
+    const saved = await saveMediaBuffer(Buffer.from(await file.arrayBuffer()), {
+      bucket: 'inbound',
+      contentType: file.type || 'application/octet-stream',
+      maxBytes: MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
+      originalFilename: name,
+    });
+    return c.json({
+      ok: true,
+      payload: {
+        uri: saved.uri,
+        mimeType: saved.contentType,
+        name,
+        size: saved.size,
+      },
+    }, 201);
+  });
+
   authenticated.get('/api/media/read', async (c) => {
     const uriRaw = c.req.query('uri');
     if (!uriRaw || typeof uriRaw !== 'string') {

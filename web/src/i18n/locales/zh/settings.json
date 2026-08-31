@@ -430,6 +430,7 @@
       "discoveringModels": "发现中…",
       "discoverModelsHint": "无法从该端点发现模型，请手动填写模型 ID。",
       "noResults": "没有匹配的服务商",
+      "recommended": "推荐",
       "step1Title": "选择服务商",
       "step2BuiltinTitle": "配置服务商",
       "step2CustomTitle": "添加自定义模型服务",

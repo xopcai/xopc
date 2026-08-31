@@ -40,9 +40,10 @@ function resolveWireAttachmentType(att: ComposerAttachment): string {
 export function composerAttachmentsToWire(attachments: ComposerAttachment[]): WireAttachment[] {
   return attachments
     .map((a) => {
-      const data = a.content.replace(/\s/g, '') || undefined;
+      const type = resolveWireAttachmentType(a);
+      const data = type === 'voice' ? undefined : a.content.replace(/\s/g, '') || undefined;
       const wire: WireAttachment = {
-        type: resolveWireAttachmentType(a),
+        type,
         mimeType: a.mimeType,
         name: a.name,
         size: a.size,
@@ -54,5 +55,5 @@ export function composerAttachmentsToWire(attachments: ComposerAttachment[]): Wi
       };
       return wire;
     })
-    .filter((a) => Boolean(a.data || a.uri || a.workspaceRelativePath));
+    .filter((a) => Boolean(a.data || a.uri || a.localUri || a.workspaceRelativePath));
 }

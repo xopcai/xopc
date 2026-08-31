@@ -198,11 +198,11 @@ export interface CaptureNoteInput {
 export type CaptureNoteResult = { note: { id: string } & Partial<Note> };
 
 async function appendCaptureAttachment(form: FormData, attachment: CaptureNoteAttachment): Promise<void> {
-  if (attachment.data) {
+  if (attachment.localUri) {
+    form.append('file', { uri: attachment.localUri, name: attachment.fileName, type: attachment.mimeType } as unknown as Blob);
+  } else if (attachment.data) {
     const blob = await fetch(`data:${attachment.mimeType};base64,${attachment.data.replace(/\s/g, '')}`).then((res) => res.blob());
     form.append('file', blob, attachment.fileName);
-  } else if (attachment.localUri) {
-    form.append('file', { uri: attachment.localUri, name: attachment.fileName, type: attachment.mimeType } as unknown as Blob);
   } else {
     throw new Error('Create note media: missing file content');
   }
@@ -318,12 +318,7 @@ export async function uploadNoteMedia(
   }
 
   if (input.localUri) {
-    try {
-      return await uploadForm(formWithNativeUri());
-    } catch (error) {
-      if (!input.content) throw error;
-      return uploadForm(await formWithContent());
-    }
+    return uploadForm(formWithNativeUri());
   }
   return uploadForm(await formWithContent());
 }

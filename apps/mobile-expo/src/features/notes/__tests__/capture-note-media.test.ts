@@ -5,12 +5,9 @@ vi.mock('../../../query/notes', () => ({
   updateNote: vi.fn(),
 }));
 
-vi.mock('../../chat/attachment-file-io', () => ({
-  readUriAsBase64: vi.fn(),
-}));
-
 vi.mock('../../../api/agent-client', () => ({
   transcribeVoice: vi.fn(),
+  refineVoiceTranscript: vi.fn(),
 }));
 
 vi.mock('../../chat/voiceRecording', () => ({
@@ -18,7 +15,6 @@ vi.mock('../../chat/voiceRecording', () => ({
 }));
 
 import { captureNote, updateNote } from '../../../query/notes';
-import { readUriAsBase64 } from '../../chat/attachment-file-io';
 import { transcribeVoice } from '../../../api/agent-client';
 import {
   captureNoteWithComposerAttachment,
@@ -29,7 +25,6 @@ import {
 
 const mockedCaptureNote = vi.mocked(captureNote);
 const mockedUpdateNote = vi.mocked(updateNote);
-const mockedReadUriAsBase64 = vi.mocked(readUriAsBase64);
 const mockedTranscribeVoice = vi.mocked(transcribeVoice);
 
 describe('capture note media', () => {
@@ -37,22 +32,22 @@ describe('capture note media', () => {
     vi.clearAllMocks();
   });
 
-  it('prepares queued voice payloads with base64 size and optional transcript', async () => {
-    mockedReadUriAsBase64.mockResolvedValue({ content: 'YXVkaW8=', size: 6 });
-    mockedTranscribeVoice.mockResolvedValue({ raw: ' raw note ', refined: ' refined note ' });
+  it('prepares queued voice payloads with a native URI and provider transcript', async () => {
+    mockedTranscribeVoice.mockResolvedValue({
+      text: ' raw note ',
+      refinementAvailable: false,
+    });
 
     await expect(prepareVoiceCapturePayload({
       uri: 'file:///tmp/voice.m4a',
       durationMillis: 2400,
       mimeType: 'audio/mp4',
     })).resolves.toEqual({
-      content: 'YXVkaW8=',
-      size: 6,
       name: 'voice.m4a',
       mimeType: 'audio/mp4',
       localUri: 'file:///tmp/voice.m4a',
       durationMillis: 2400,
-      transcript: 'refined note',
+      transcript: 'raw note',
     });
   });
 
@@ -132,10 +127,9 @@ describe('capture note media', () => {
     });
 
     await captureNoteWithQueuedVoice({
-      content: 'YXVkaW8=',
-      size: 8,
       name: 'voice.m4a',
       mimeType: 'audio/mp4',
+      localUri: 'file:///documents/voice.m4a',
       durationMillis: 3200,
       transcript: 'call mom',
     });
@@ -146,8 +140,7 @@ describe('capture note media', () => {
       attachments: [{
         mimeType: 'audio/mp4',
         fileName: 'voice.m4a',
-        localUri: undefined,
-        data: 'YXVkaW8=',
+        localUri: 'file:///documents/voice.m4a',
         duration: 3,
       }],
     });
@@ -158,7 +151,6 @@ describe('capture note media', () => {
   });
 
   it('saves the original voice memo before optional transcription and uses an idempotency key', async () => {
-    mockedReadUriAsBase64.mockResolvedValue({ content: 'YXVkaW8=', size: 6 });
     mockedCaptureNote.mockResolvedValue({
       note: {
         id: 'note-voice',
@@ -187,7 +179,10 @@ describe('capture note media', () => {
       updatedAt: 2,
       capturedVia: { channel: 'app' },
     }));
-    mockedTranscribeVoice.mockResolvedValue({ raw: 'remember this' });
+    mockedTranscribeVoice.mockResolvedValue({
+      text: 'remember this',
+      refinementAvailable: false,
+    });
 
     await captureNoteWithVoice({
       uri: 'file:///documents/voice.m4a',

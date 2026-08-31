@@ -66,10 +66,60 @@ export class AgentStreamReplayExpiredError extends Error {
 
 async function materializeAttachments(attachments: WireAttachment[]): Promise<WireAttachment[]> {
   return Promise.all(attachments.map(async ({ localUri, ...attachment }) => {
+    const isAudio = attachment.type === 'voice' || attachment.mimeType?.startsWith('audio/');
+    if (isAudio) {
+      const audioAttachment = { ...attachment };
+      delete audioAttachment.data;
+      if (audioAttachment.uri || audioAttachment.workspaceRelativePath) return audioAttachment;
+      if (!localUri) throw new Error('Audio attachment is missing a native file URI');
+      const uploaded = await uploadMediaFile({
+        uri: localUri,
+        name: audioAttachment.name ?? 'voice.m4a',
+        mimeType: audioAttachment.mimeType ?? 'audio/mp4',
+      });
+      return { ...audioAttachment, ...uploaded };
+    }
     if (!localUri || attachment.uri || attachment.workspaceRelativePath) return attachment;
     const { content, size } = await readUriAsBase64(localUri, attachment.name);
     return { ...attachment, data: content, size };
   }));
+}
+
+async function uploadMediaFile(input: {
+  uri: string;
+  name: string;
+  mimeType: string;
+}): Promise<{ uri: string; name: string; mimeType: string; size: number }> {
+  const form = new FormData();
+  form.append('file', {
+    uri: input.uri,
+    name: input.name,
+    type: input.mimeType,
+  } as unknown as Blob);
+  const res = await apiFetch('/api/media', {
+    method: 'POST',
+    body: form,
+    timeoutMs: 60_000,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
+  }
+  const json = await res.json() as {
+    ok?: boolean;
+    payload?: { uri?: string; name?: string; mimeType?: string; size?: number };
+    error?: { message?: string };
+  };
+  const payload = json.payload;
+  if (!json.ok || !payload?.uri || !payload.name || !payload.mimeType || typeof payload.size !== 'number') {
+    throw new Error(json.error?.message ?? 'Media upload failed');
+  }
+  return {
+    uri: payload.uri,
+    name: payload.name,
+    mimeType: payload.mimeType,
+    size: payload.size,
+  };
 }
 
 export type VoiceMessagePayload = {
@@ -80,15 +130,12 @@ export type VoiceMessagePayload = {
 };
 
 export interface VoiceTranscribeResult {
-  raw: string;
-  refined?: string;
+  text: string;
+  refinementAvailable: boolean;
   language?: string;
 }
 
-/**
- * Transcribe audio via gateway STT + optional LLM refine.
- * Returns { raw, refined?, language? }.
- */
+/** Transcribe audio through the gateway and return provider text immediately. */
 export async function transcribeVoice(
   uri: string,
   mimeType: string,
@@ -99,11 +146,8 @@ export async function transcribeVoice(
       : mimeType.includes('mpeg') ? 'mp3'
         : 'm4a';
   const name = `voice.${extension}`;
-  const { content } = await readUriAsBase64(uri, name);
-  const audio = await fetch(`data:${mimeType};base64,${content.replace(/\s/g, '')}`)
-    .then((res) => res.blob());
   const form = new FormData();
-  form.append('audio', audio, name);
+  form.append('audio', { uri, name, type: mimeType } as unknown as Blob);
   if (options?.language) form.append('language', options.language);
   const res = await apiFetch('/api/voice/transcriptions', {
     method: 'POST',
@@ -122,6 +166,23 @@ export async function transcribeVoice(
     throw new Error(json.error?.message ?? 'Transcription failed');
   }
   return json.payload;
+}
+
+export async function refineVoiceTranscript(text: string): Promise<string> {
+  const res = await apiFetch('/api/voice/transcriptions/refine', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+    timeoutMs: 60_000,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
+  }
+  const json = await res.json() as { ok?: boolean; payload?: { text?: string }; error?: { message?: string } };
+  if (!json.ok || typeof json.payload?.text !== 'string') {
+    throw new Error(json.error?.message ?? 'Transcript refinement failed');
+  }
+  return json.payload.text;
 }
 
 export async function submitClarifyResponse(
@@ -393,17 +454,14 @@ export class AgentMessageSender {
   ): Promise<void> {
     const mimeType = payload.mimeType || 'audio/mp4';
     const name = payload.name || (mimeType.includes('mpeg') ? 'voice.mp3' : 'voice.m4a');
-    const { content, size } = await readUriAsBase64(payload.uri, name);
     const secs = payload.durationMillis / 1000;
     const durationSeconds =
       Number.isFinite(secs) && secs >= 0.05 ? Math.round(secs * 1000) / 1000 : undefined;
     const wire: WireAttachment = {
       type: 'voice',
       mimeType,
-      data: content,
       localUri: payload.uri,
       name,
-      size,
       ...(durationSeconds != null ? { durationSeconds } : {}),
     };
     return this.sendMessage('', sessionKey, callbacks, [wire], taskId);
