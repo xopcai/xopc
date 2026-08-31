@@ -13,6 +13,7 @@ vi.mock('expo-audio', () => ({
       stop = vi.fn(async () => {
         this.isRecording = false;
       });
+      release = vi.fn();
       prepareToRecordAsync = vi.fn(async () => {});
     },
   },
@@ -35,6 +36,12 @@ vi.mock('expo-audio', () => ({
       },
     },
   },
+  getRecordingPermissionsAsync: vi.fn(async () => ({
+    status: 'granted',
+    granted: true,
+    canAskAgain: true,
+    expires: 'never',
+  })),
   requestRecordingPermissionsAsync: vi.fn(async () => ({ granted: true })),
   setAudioModeAsync: vi.fn(async () => {}),
 }));
@@ -43,7 +50,19 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
-import { beginRecording, finishRecording, nativeRecordingOptionsForPlatform, readRecordingDurationMillis } from '../voiceRecording';
+import {
+  getRecordingPermissionsAsync,
+  requestRecordingPermissionsAsync,
+} from 'expo-audio';
+
+import {
+  beginRecording,
+  finishRecording,
+  nativeRecordingOptionsForPlatform,
+  readRecordingDurationMillis,
+  requestMicPermission,
+  VoiceRecordingError,
+} from '../voiceRecording';
 
 describe('nativeRecordingOptionsForPlatform', () => {
   it('flattens iOS recording preset fields for native AudioRecorder', () => {
@@ -110,6 +129,7 @@ describe('finishRecording', () => {
         .mockReturnValueOnce({ durationMillis: 0 }),
       currentTime: 1.5,
       stop: vi.fn().mockResolvedValue(undefined),
+      release: vi.fn(),
     };
 
     await expect(finishRecording(recorder as never)).resolves.toEqual({
@@ -117,7 +137,70 @@ describe('finishRecording', () => {
       durationMillis: 1500,
     });
     expect(recorder.stop).toHaveBeenCalledOnce();
+    expect(recorder.release).toHaveBeenCalledOnce();
     expect(recorder.getStatus).toHaveBeenCalledBefore(recorder.stop as never);
+  });
+
+  it('releases the recorder and reports the stop phase when Android stop fails', async () => {
+    const recorder = {
+      uri: null,
+      getStatus: vi.fn(() => ({ durationMillis: 800 })),
+      currentTime: 0.8,
+      stop: vi.fn().mockRejectedValue(new Error('MediaRecorder stop failed')),
+      release: vi.fn(),
+    };
+
+    await expect(finishRecording(recorder as never)).rejects.toMatchObject({
+      name: 'VoiceRecordingError',
+      phase: 'stop',
+    });
+    expect(recorder.release).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requestMicPermission', () => {
+  beforeEach(() => {
+    vi.mocked(getRecordingPermissionsAsync).mockReset();
+    vi.mocked(requestRecordingPermissionsAsync).mockReset();
+  });
+
+  it('does not open a second prompt when permission is already granted', async () => {
+    vi.mocked(getRecordingPermissionsAsync).mockResolvedValue({
+      status: 'granted',
+      granted: true,
+      canAskAgain: true,
+      expires: 'never',
+    } as never);
+
+    await expect(requestMicPermission()).resolves.toEqual({
+      granted: true,
+      canAskAgain: true,
+      requested: false,
+    });
+    expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('preserves canAskAgain when Android has permanently denied access', async () => {
+    vi.mocked(getRecordingPermissionsAsync).mockResolvedValue({
+      status: 'denied',
+      granted: false,
+      canAskAgain: false,
+      expires: 'never',
+    } as never);
+
+    await expect(requestMicPermission()).resolves.toEqual({
+      granted: false,
+      canAskAgain: false,
+      requested: false,
+    });
+    expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('wraps native permission failures with their stage', async () => {
+    vi.mocked(getRecordingPermissionsAsync).mockRejectedValue(new Error('native module mismatch'));
+
+    await expect(requestMicPermission()).rejects.toEqual(expect.any(VoiceRecordingError));
+    await expect(requestMicPermission()).rejects.toMatchObject({ phase: 'permission' });
   });
 });
 

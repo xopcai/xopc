@@ -74,6 +74,8 @@ export async function mergeVoiceTranscriptsIntoUserText(
     try {
       const r = await transcribe(buf, sttConfig, {
         language: sttConfig.provider === 'alibaba' ? 'zh' : undefined,
+        mime: att.mimeType,
+        fileName: att.name,
       });
       transcripts.push(r.text.trim() || '[Voice: no speech detected]');
     } catch {

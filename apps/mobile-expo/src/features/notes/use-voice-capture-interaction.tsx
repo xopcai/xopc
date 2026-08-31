@@ -31,6 +31,10 @@ function voiceZoneFromGesture(dx: number): VoiceRecordingZone {
   return 'center';
 }
 
+function reportVoiceFailure(phase: string, error: unknown): void {
+  console.warn(`[VoiceRecording] ${phase} failed`, error);
+}
+
 export type VoiceCapturePayload = {
   uri: string;
   durationMillis: number;
@@ -101,6 +105,19 @@ export function useVoiceCaptureInteraction({
     setMeterSamples([]);
   }, []);
 
+  const ensureMicAccess = useCallback(async (): Promise<boolean> => {
+    try {
+      const permission = await requestMicPermission();
+      if (permission.granted) return true;
+      setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
+      return false;
+    } catch (error) {
+      reportVoiceFailure('permission', error);
+      setSnack(cm.voicePermissionCheckFailed);
+      return false;
+    }
+  }, [cm]);
+
   const finalizeRecordingInteraction = useCallback(async () => {
     const rec = recordingRef.current;
     const shouldDiscard = cancelZoneRef.current;
@@ -117,49 +134,54 @@ export function useVoiceCaptureInteraction({
       return;
     }
 
+    let uri: string | null;
+    let durationMillis: number;
     try {
-      const { uri, durationMillis } = await finishRecording(rec);
-      if (durationMillis < MIN_VOICE_MS) {
-        setSnack(cm.voiceTooShort);
-        onSettled?.();
-        return;
-      }
-      if (!uri) {
-        setSnack(cm.voiceRecordingFailed);
-        onSettled?.();
-        return;
-      }
-
-      const mimeType = inferRecordingMimeType(uri);
-
-      if (releaseZone === 'text') {
-        setTranscribing(true);
-        try {
-          const result = await transcribeVoice(uri, mimeType);
-          const text = (result.refined || result.raw).trim();
-          if (text) {
-            const current = valueRef.current.trim();
-            const nextText = current ? `${current} ${text}` : text;
-            onChangeText(nextText);
-            onTextReady?.(nextText);
-            onSettled?.();
-          } else {
-            setSnack(cm.voiceNoSpeechDetected);
-          }
-        } catch {
-          setSnack(cm.voiceTranscribeFailed);
-        } finally {
-          setTranscribing(false);
-        }
-        return;
-      }
-
-      onVoiceCapture({ uri, durationMillis, mimeType });
-      onSettled?.();
-    } catch {
+      ({ uri, durationMillis } = await finishRecording(rec));
+    } catch (error) {
+      reportVoiceFailure('stop', error);
       setSnack(cm.voiceRecordingFailed);
       onSettled?.();
+      return;
     }
+    if (durationMillis < MIN_VOICE_MS) {
+      setSnack(cm.voiceTooShort);
+      onSettled?.();
+      return;
+    }
+    if (!uri) {
+      setSnack(cm.voiceRecordingFailed);
+      onSettled?.();
+      return;
+    }
+
+    const mimeType = inferRecordingMimeType(uri);
+
+    if (releaseZone === 'text') {
+      setTranscribing(true);
+      try {
+        const result = await transcribeVoice(uri, mimeType);
+        const text = (result.refined || result.raw).trim();
+        if (text) {
+          const current = valueRef.current.trim();
+          const nextText = current ? `${current} ${text}` : text;
+          onChangeText(nextText);
+          onTextReady?.(nextText);
+          onSettled?.();
+        } else {
+          setSnack(cm.voiceNoSpeechDetected);
+        }
+      } catch (error) {
+        reportVoiceFailure('transcribe', error);
+        setSnack(cm.voiceTranscribeFailed);
+      } finally {
+        setTranscribing(false);
+      }
+      return;
+    }
+
+    onVoiceCapture({ uri, durationMillis, mimeType });
+    onSettled?.();
   }, [cm, onChangeText, onSettled, onTextReady, onVoiceCapture, resetInteractionState]);
 
   const startGrantFlow = useCallback(() => {
@@ -176,12 +198,11 @@ export function useVoiceCaptureInteraction({
     grantInFlightRef.current = true;
 
     void (async () => {
-      const ok = await requestMicPermission();
+      const ok = await ensureMicAccess();
       if (!ok) {
         grantInFlightRef.current = false;
         interactionStartedRef.current = false;
         setStarting(false);
-        setSnack(cm.voicePermissionDenied);
         return;
       }
       try {
@@ -200,14 +221,15 @@ export function useVoiceCaptureInteraction({
         grantInFlightRef.current = false;
         setStarting(false);
         setHudOpen(true);
-      } catch {
+      } catch (error) {
+        reportVoiceFailure('start', error);
         grantInFlightRef.current = false;
         interactionStartedRef.current = false;
         setStarting(false);
-        setSnack(cm.voiceRecordingFailed);
+        setSnack(cm.voiceRecordingStartFailed);
       }
     })();
-  }, [cm, disabled, enabled, submitting, transcribing]);
+  }, [cm, disabled, enabled, ensureMicAccess, submitting, transcribing]);
 
   const canCaptureVoice = enabled && !disabled && !submitting && !transcribing;
 
