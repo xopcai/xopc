@@ -26,7 +26,6 @@ import {
   getUnderstandingSourceGrant,
   listUnderstandingSourceRuns,
   upsertUnderstandingSourceGrant,
-  upsertUserFocus,
   updateUnderstandingSourceGrantCheckpoint,
   updateUnderstandingSourceRun,
 } from '../user-context/sources/repository.js';
@@ -284,27 +283,13 @@ export function startConnectorLearningCoordinator(options: {
       try {
         understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
           .process(job.agentId, structuralExtraction.run.id);
-        const structuralFocuses = understanding.createdRecords
-          .filter((item) => item.kind === 'project_context')
-          .map((record) => upsertUserFocus({
-            canonicalKey: `connector-focus:${job.accountId}:${record.id}`,
-            title: record.content.slice(0, 120), summary: record.content, horizon: 'ongoing',
-            status: 'candidate', confidence: 0.72, evidenceRefs: [`connector-account:${job.accountId}`],
-            sourceRunId: sourceRun.id,
-          }));
         finishContextExtractionRun({
           runId: structuralExtraction.run.id, status: 'completed',
-          outputs: [
-            ...(understanding.writeOutputs ?? []).map((output) => ({
-              candidateKey: output.candidateKey,
-              ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
-              ...(output.versionId ? { versionId: output.versionId } : {}), outcome: output.outcome,
-            })),
-            ...structuralFocuses.map((focus) => ({
-              candidateKey: focus.canonicalKey, objectType: 'focus' as const, objectId: focus.id,
-              versionId: focus.versionId, outcome: 'created' as const,
-            })),
-          ],
+          outputs: (understanding.writeOutputs ?? []).map((output) => ({
+            candidateKey: output.candidateKey,
+            ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
+            ...(output.versionId ? { versionId: output.versionId } : {}), outcome: output.outcome,
+          })),
         });
       } catch (error) {
         finishContextExtractionRun({

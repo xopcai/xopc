@@ -8,6 +8,7 @@ vi.mock('../user-context-api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../user-context-api')>();
   return {
     ...actual,
+    batchReviewContextObjects: vi.fn().mockResolvedValue({ objects: [] }),
     createUnderstanding: vi.fn(),
     fetchUnderstandingEvidence: vi.fn().mockResolvedValue({ evidence: [] }),
     updateUnderstanding: vi.fn().mockResolvedValue({ understanding: {} }),
@@ -15,7 +16,7 @@ vi.mock('../user-context-api', async (importOriginal) => {
   };
 });
 
-import { updateUnderstanding, updateUserFocus, type UserFocus, type UserUnderstanding } from '../user-context-api';
+import { batchReviewContextObjects, updateUnderstanding, type UserFocus, type UserUnderstanding } from '../user-context-api';
 import { SharedUnderstandingPanel } from '../shared-understanding-panel';
 
 const activeFocus: UserFocus = {
@@ -51,7 +52,7 @@ describe('SharedUnderstandingPanel', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps current focus separate from the one-at-a-time review queue', async () => {
+  it('keeps current focus separate from a bounded review batch', async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
     await act(async () => root.render(<SharedUnderstandingPanel
       focuses={[activeFocus, candidateFocus]}
@@ -72,7 +73,9 @@ describe('SharedUnderstandingPanel', () => {
     const confirm = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent === '是的');
     await act(async () => confirm?.click());
-    expect(updateUserFocus).toHaveBeenCalledWith('candidate', { status: 'active' });
+    expect(batchReviewContextObjects).toHaveBeenCalledWith([{
+      objectType: 'focus', objectId: 'candidate', action: 'accept',
+    }]);
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
@@ -126,5 +129,71 @@ describe('SharedUnderstandingPanel', () => {
     expect(container.textContent).toContain('+1 项进行中的关注');
     expect(container.textContent).not.toContain('发布 XOPC 1.0');
     expect(container.textContent).toContain('持续构成画像的理解');
+  });
+
+  it('reviews a bounded batch instead of presenting the whole backlog as progress', async () => {
+    const candidates = Array.from({ length: 10 }, (_, index) => ({
+      ...candidateFocus,
+      id: `candidate-${index + 1}`,
+      versionId: `candidate-${index + 1}-v1`,
+      title: `候选关注 ${index + 1}`,
+      summary: `候选摘要 ${index + 1}`,
+      updatedAt: 10 + index,
+    }));
+    await act(async () => root.render(<SharedUnderstandingPanel
+      focuses={[activeFocus, ...candidates]}
+      understandings={[preference]}
+      language="zh"
+      onRefresh={vi.fn().mockResolvedValue(undefined)}
+    />));
+
+    const reviewTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((button) => button.textContent?.includes('待确认'));
+    await act(async () => reviewTab?.click());
+    expect(container.textContent).toContain('本批 8 组');
+    expect(container.textContent).toContain('其余 2 条建议保持不生效');
+    expect(container.textContent).toContain('候选关注 10');
+    expect(container.textContent).not.toContain('候选关注 1候选摘要 1');
+
+    const nextBatch = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === '换一批');
+    await act(async () => nextBatch?.click());
+    expect(container.textContent).toContain('候选关注 1');
+  });
+
+  it('keeps candidates out of the timeline and reveals older changes on demand', async () => {
+    const activeUnderstandings = Array.from({ length: 14 }, (_, index) => ({
+      ...preference,
+      id: `understanding-${index + 1}`,
+      versionId: `understanding-${index + 1}-v1`,
+      statement: `已确认理解 ${index + 1}`,
+      updatedAt: 100 + index,
+    }));
+    const candidateUnderstanding: UserUnderstanding = {
+      ...preference,
+      id: 'understanding-candidate',
+      versionId: 'understanding-candidate-v1',
+      status: 'candidate',
+      statement: '尚未进入画像的候选',
+      updatedAt: 1_000,
+    };
+    await act(async () => root.render(<SharedUnderstandingPanel
+      focuses={[activeFocus]}
+      understandings={[...activeUnderstandings, candidateUnderstanding]}
+      language="zh"
+      onRefresh={vi.fn().mockResolvedValue(undefined)}
+    />));
+
+    const changesTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((button) => button.textContent?.includes('最近变化'));
+    await act(async () => changesTab?.click());
+    expect(container.textContent).toContain('当前展示最近 12 条变化');
+    expect(container.textContent).not.toContain('尚未进入画像的候选');
+    expect([...container.querySelectorAll('p')].some((element) => element.textContent === '已确认理解 1')).toBe(false);
+
+    const showMore = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === '继续展开');
+    await act(async () => showMore?.click());
+    expect([...container.querySelectorAll('p')].some((element) => element.textContent === '已确认理解 1')).toBe(true);
   });
 });
