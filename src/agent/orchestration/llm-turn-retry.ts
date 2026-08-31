@@ -7,6 +7,8 @@
 
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { isContextOverflowError } from './context-overflow.js';
+
 const TRANSIENT_LLM_ERROR_SUBSTRINGS = [
   'fetch failed',
   'econnreset',
@@ -24,6 +26,16 @@ const TRANSIENT_LLM_ERROR_SUBSTRINGS = [
 export function isTransientLlmErrorMessage(message: string): boolean {
   const lower = message.toLowerCase();
   return TRANSIENT_LLM_ERROR_SUBSTRINGS.some((s) => lower.includes(s));
+}
+
+export type LlmFailureKind = 'transient_network' | 'context_overflow' | 'aborted' | 'permanent';
+
+export function classifyLlmFailure(message: string): LlmFailureKind {
+  const normalized = message.trim().toLowerCase();
+  if (normalized === 'aborted' || normalized.includes('aborterror')) return 'aborted';
+  if (isContextOverflowError(message)) return 'context_overflow';
+  if (isTransientLlmErrorMessage(message)) return 'transient_network';
+  return 'permanent';
 }
 
 export function getLastAssistantMessage(messages: AgentMessage[]): AgentMessage | undefined {
@@ -87,10 +99,30 @@ export function stripTrailingErrorAssistantMessages(messages: AgentMessage[]): A
 export interface RetryTransientTurnOptions {
   /** Extra turns after a failed assistant message (default 2). */
   maxContinues?: number;
+  /** Initial deterministic backoff. Each later retry doubles it. */
+  baseDelayMs?: number;
+  signal?: AbortSignal;
   sessionKey: string;
   log: {
     warn: (obj: Record<string, unknown>, msg: string) => void;
   };
+}
+
+async function waitForRetryDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  if (delayMs <= 0) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**
@@ -102,6 +134,7 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
   options: RetryTransientTurnOptions,
 ): Promise<void> {
   const maxContinues = options.maxContinues ?? 2;
+  const baseDelayMs = Math.max(0, options.baseDelayMs ?? 300);
   let continues = 0;
 
   while (continues < maxContinues) {
@@ -114,25 +147,30 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
       return;
     }
     const errMsg = String((last as { errorMessage?: string }).errorMessage || '');
-    if (!isTransientLlmErrorMessage(errMsg)) {
+    const failureKind = classifyLlmFailure(errMsg);
+    if (failureKind !== 'transient_network') {
       options.log.warn(
-        { sessionKey: options.sessionKey, errorMessage: errMsg },
+        { sessionKey: options.sessionKey, errorMessage: errMsg, failureKind },
         'Assistant turn ended with error (not retrying as transient)',
       );
       return;
     }
 
     continues += 1;
+    const retryDelayMs = baseDelayMs * (2 ** (continues - 1));
     options.log.warn(
       {
         sessionKey: options.sessionKey,
         errorMessage: errMsg,
+        failureKind,
         continueAttempt: continues,
         maxContinues,
+        retryDelayMs,
       },
       'LLM request failed with a transient network error; retrying the same turn. If this persists, check outbound HTTPS to the provider API and HTTP(S)_PROXY.',
     );
 
+    await waitForRetryDelay(retryDelayMs, options.signal);
     const trimmed = stripTrailingErrorAssistantMessages(agent.state.messages);
     agent.state.messages = trimmed;
     await agent.continue();

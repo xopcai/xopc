@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import {
+  classifyLlmFailure,
   getAssistantTurnErrorMessage,
   isTransientLlmErrorMessage,
   stripTrailingErrorAssistantMessages,
@@ -14,6 +15,13 @@ describe('llm-turn-retry', () => {
     expect(isTransientLlmErrorMessage('TypeError: fetch failed')).toBe(true);
     expect(isTransientLlmErrorMessage('ECONNRESET')).toBe(true);
     expect(isTransientLlmErrorMessage('Invalid API key')).toBe(false);
+  });
+
+  it('classifies retry and recovery decisions', () => {
+    expect(classifyLlmFailure('TypeError: fetch failed')).toBe('transient_network');
+    expect(classifyLlmFailure('maximum context length exceeded')).toBe('context_overflow');
+    expect(classifyLlmFailure('AbortError')).toBe('aborted');
+    expect(classifyLlmFailure('Invalid API key')).toBe('permanent');
   });
 
   it('strips trailing error assistant messages', () => {
@@ -62,11 +70,37 @@ describe('llm-turn-retry', () => {
       sessionKey: 'sk',
       log: { warn: vi.fn() },
       maxContinues: 1,
+      baseDelayMs: 0,
     });
 
     expect(replaceMessages).toHaveBeenCalledWith([user]);
     expect(continueFn).toHaveBeenCalledTimes(1);
     expect(waitForIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not continue a transient failure after cancellation', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('Aborted', 'AbortError'));
+    const agent = {
+      state: {
+        messages: [{
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          errorMessage: 'fetch failed',
+          timestamp: 1,
+        }],
+      },
+      continue: vi.fn(),
+      waitForIdle: vi.fn(),
+    } as unknown as import('@earendil-works/pi-agent-core').Agent;
+
+    await expect(maybeRetryTurnAfterTransientLlmFailure(agent, {
+      sessionKey: 'sk',
+      log: { warn: vi.fn() },
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(agent.continue).not.toHaveBeenCalled();
   });
 
   it('isAssistantTurnFailed reflects last assistant stopReason', () => {

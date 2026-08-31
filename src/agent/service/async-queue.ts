@@ -3,25 +3,62 @@
  *
  * Replaces the ad-hoc `eventQueue + resolveWaiting` single-slot pattern that
  * the streaming direct turn used to manage run events. The previous pattern was
- * lossy if two pushes landed before the single waiter resumed; this queue keeps
- * the buffer growing until consumed, and closes cleanly so the iterator drains.
+ * lossy if two pushes landed before the single waiter resumed; this queue buffers
+ * until consumed, supports an explicit bound, and drains cleanly on close.
  */
+export interface AsyncQueueOptions<T> {
+  /** Maximum buffer size. Lossy events are evicted; critical-only overflow fails fast. */
+  maxBuffered?: number;
+  isDroppable?: (value: T) => boolean;
+}
+
+export class AsyncQueueOverflowError extends Error {
+  constructor(readonly maxBuffered: number) {
+    super(`Async queue exceeded its ${maxBuffered}-event buffer`);
+    this.name = 'AsyncQueueOverflowError';
+  }
+}
+
 export class AsyncQueue<T> implements AsyncIterable<T> {
   private readonly buffer: T[] = [];
   private readonly waiters: Array<(value: T | typeof CLOSE_SENTINEL) => void> = [];
   private closed = false;
+  private dropped = 0;
+
+  constructor(private readonly options: AsyncQueueOptions<T> = {}) {}
 
   /** Push a value to the queue. No-op when the queue is closed. */
-  push(value: T): void {
+  push(value: T): boolean {
     if (this.closed) {
-      return;
+      return false;
     }
     const waiter = this.waiters.shift();
     if (waiter) {
       waiter(value);
-      return;
+      return true;
+    }
+
+    const maxBuffered = this.options.maxBuffered;
+    if (maxBuffered && this.buffer.length >= maxBuffered) {
+      const droppableIndex = this.options.isDroppable
+        ? this.buffer.findIndex(this.options.isDroppable)
+        : -1;
+      if (droppableIndex >= 0) {
+        this.buffer.splice(droppableIndex, 1);
+        this.dropped += 1;
+      } else if (this.options.isDroppable?.(value)) {
+        this.dropped += 1;
+        return false;
+      } else {
+        throw new AsyncQueueOverflowError(maxBuffered);
+      }
     }
     this.buffer.push(value);
+    return true;
+  }
+
+  get droppedCount(): number {
+    return this.dropped;
   }
 
   /** Close the queue. Pending iterators drain any buffered values and then complete. */

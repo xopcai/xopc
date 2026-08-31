@@ -8,6 +8,7 @@ import type {
 
 import type { SessionStore } from '../../session/store.js';
 import type { EmbeddedTranscriptRuntime } from './transcript-runtime.js';
+import type { AgentTurnPolicy } from '../orchestration/agent-turn-policy.js';
 
 export type EmbeddedStreamEvent =
   | { type: 'agent_start'; runId?: string }
@@ -69,6 +70,7 @@ export type RunXopcEmbeddedTurnParams = {
   sessionStore?: SessionStore;
   transcriptRuntime?: EmbeddedTranscriptRuntime;
   timeoutMs: number;
+  turnPolicy?: AgentTurnPolicy;
   abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
   images?: ImageContent[];
@@ -78,6 +80,8 @@ export type RunXopcEmbeddedTurnParams = {
 
 export type RunXopcEmbeddedTurnResult = {
   ok: boolean;
+  /** False for harness failures that must not trigger another model attempt. */
+  retryable?: boolean;
   errorMessage?: string;
   lastAssistantText?: string;
 };
