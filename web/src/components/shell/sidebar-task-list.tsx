@@ -20,6 +20,7 @@ import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
+import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/sidebar-session-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
@@ -941,6 +942,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
     return out;
   }, [inboxItems, projectGroups]);
+  const visibleSessionKeys = useMemo(
+    () => new Set(items.map((session) => session.key)),
+    [items],
+  );
 
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
 
@@ -992,13 +997,23 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       }
       refreshSidebar();
     };
+    const onSessionTranscriptUpdated = (e: Event) => {
+      if (shouldRefreshSidebarForTranscriptUpdate(
+        (e as CustomEvent<unknown>).detail,
+        visibleSessionKeys,
+      )) {
+        refreshSidebar();
+      }
+    };
     window.addEventListener('session-updated', onSessionUpdated);
     window.addEventListener('session-created', onSessionListRefresh);
+    window.addEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     return () => {
       window.removeEventListener('session-updated', onSessionUpdated);
       window.removeEventListener('session-created', onSessionListRefresh);
+      window.removeEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     };
-  }, [token, refreshSidebar]);
+  }, [token, refreshSidebar, visibleSessionKeys]);
 
   useEffect(() => {
     if (!token || !activeSessionKey || !data) return;
