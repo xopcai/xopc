@@ -39,6 +39,7 @@ export interface ComposerKbdContext {
 export const ChatComposerInput = memo(function ChatComposerInput({
   editorRef,
   disabled,
+  hidden,
   placeholder,
   ariaLabel,
   onWireInput,
@@ -51,6 +52,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
 }: {
   editorRef: MutableRefObject<HTMLDivElement | null>;
   disabled: boolean;
+  hidden?: boolean;
   placeholder: string;
   ariaLabel?: string;
   onWireInput: (wire: string, caret: number) => void;
@@ -65,6 +67,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
   return (
     <div
       ref={editorRef}
+      hidden={hidden}
       role="textbox"
       aria-multiline="true"
       aria-label={ariaLabel ?? placeholder}

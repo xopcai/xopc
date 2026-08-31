@@ -57,6 +57,7 @@ export type STTProviderFailureReason =
   | 'success'
   | 'not_configured'
   | 'timeout'
+  | 'no_speech'
   | 'provider_error'
   | 'unsupported_format'
   | 'unknown';
