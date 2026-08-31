@@ -1,11 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ChevronUp, FolderInput, Loader2 } from 'lucide-react';
+import { ChevronUp, FolderInput, FolderPlus, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useReducer } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { Button } from '@/components/ui/button';
-import { getHostFsMeta, listHostFs, type HostFsEntry, type HostFsListPayload } from '@/features/fs/host-fs-api';
+import {
+  createHostFsDirectory,
+  getHostFsMeta,
+  listHostFs,
+  type HostFsEntry,
+  type HostFsListPayload,
+} from '@/features/fs/host-fs-api';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
@@ -48,6 +54,10 @@ type PickerUi = {
   listLoading: boolean;
   listError: string | null;
   manualPath: string;
+  createFolderOpen: boolean;
+  createFolderName: string;
+  createFolderLoading: boolean;
+  createFolderError: string | null;
 };
 
 const initialPickerUi: PickerUi = {
@@ -56,6 +66,10 @@ const initialPickerUi: PickerUi = {
   listLoading: false,
   listError: null,
   manualPath: '',
+  createFolderOpen: false,
+  createFolderName: '',
+  createFolderLoading: false,
+  createFolderError: null,
 };
 
 export function WorkingDirectoryPickerModal({
@@ -66,8 +80,19 @@ export function WorkingDirectoryPickerModal({
   wd,
 }: Props) {
   const manualId = useId();
+  const createFolderId = useId();
   const [ui, dispatch] = useReducer(uiPatchReducer<PickerUi>, initialPickerUi);
-  const { metaHostname, listState, listLoading, listError, manualPath } = ui;
+  const {
+    metaHostname,
+    listState,
+    listLoading,
+    listError,
+    manualPath,
+    createFolderOpen,
+    createFolderName,
+    createFolderLoading,
+    createFolderError,
+  } = ui;
 
   const refreshFromPath = useCallback(async (pathArg?: string) => {
     dispatch({ type: 'patch', patch: { listLoading: true, listError: null } });
@@ -101,7 +126,16 @@ export function WorkingDirectoryPickerModal({
   useEffect(() => {
     if (!open) return;
     const initial = initialAbsolutePath?.trim() ?? '';
-    dispatch({ type: 'patch', patch: { manualPath: initial } });
+    dispatch({
+      type: 'patch',
+      patch: {
+        manualPath: initial,
+        createFolderOpen: false,
+        createFolderName: '',
+        createFolderLoading: false,
+        createFolderError: null,
+      },
+    });
     let cancelled = false;
     void (async () => {
       dispatch({ type: 'patch', patch: { listLoading: true, listError: null } });
@@ -156,6 +190,41 @@ export function WorkingDirectoryPickerModal({
   const canUseCurrentFolder =
     Boolean(listState) && listState!.currentPath !== '' && !listLoading && !listError;
 
+  const canCreateFolder = canUseCurrentFolder && !createFolderLoading;
+
+  const cancelCreateFolder = () => {
+    dispatch({
+      type: 'patch',
+      patch: { createFolderOpen: false, createFolderName: '', createFolderError: null },
+    });
+  };
+
+  const onCreateFolder = async () => {
+    const name = createFolderName.trim();
+    if (!listState || listState.currentPath === '' || !name || createFolderLoading) return;
+    dispatch({ type: 'patch', patch: { createFolderLoading: true, createFolderError: null } });
+    try {
+      const createdPath = await createHostFsDirectory(listState.currentPath, name);
+      dispatch({
+        type: 'patch',
+        patch: { createFolderOpen: false, createFolderName: '', createFolderError: null },
+      });
+      await refreshFromPath(createdPath);
+    } catch (e) {
+      const status = (e as { status?: number } | null)?.status;
+      const message = status === 409
+        ? wd.pickerCreateFolderExists
+        : status === 400
+          ? wd.pickerCreateFolderInvalid
+          : status === 403
+            ? wd.pickerCreateFolderPermission
+            : wd.pickerCreateFolderError;
+      dispatch({ type: 'patch', patch: { createFolderError: message } });
+    } finally {
+      dispatch({ type: 'patch', patch: { createFolderLoading: false } });
+    }
+  };
+
   const onUseFolder = async () => {
     if (!listState || listState.currentPath === '') return;
     try {
@@ -185,7 +254,7 @@ export function WorkingDirectoryPickerModal({
         <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[101] flex max-h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
+            'fixed left-1/2 top-1/2 z-[101] flex h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
             'dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -217,7 +286,76 @@ export function WorkingDirectoryPickerModal({
               >
                 {listLoading && !listState ? wd.pickerLoading : currentDisplayPath || '—'}
               </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0 gap-1 px-2 py-1.5 text-xs"
+                disabled={!canCreateFolder}
+                onClick={() => dispatch({
+                  type: 'patch',
+                  patch: { createFolderOpen: true, createFolderName: '', createFolderError: null },
+                })}
+                title={wd.pickerNewFolder}
+              >
+                <FolderPlus className="size-4" aria-hidden />
+                {wd.pickerNewFolder}
+              </Button>
             </div>
+
+            {createFolderOpen ? (
+              <div className="rounded-lg border border-edge-subtle bg-surface-base p-2">
+                <label htmlFor={createFolderId} className="text-xs font-medium text-fg-muted">
+                  {wd.pickerNewFolderName}
+                </label>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <input
+                    id={createFolderId}
+                    type="text"
+                    value={createFolderName}
+                    onChange={(e) => dispatch({
+                      type: 'patch',
+                      patch: { createFolderName: e.target.value, createFolderError: null },
+                    })}
+                    className={inputClassName()}
+                    autoFocus
+                    autoComplete="off"
+                    spellCheck={false}
+                    disabled={createFolderLoading}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && createFolderName.trim()) {
+                        e.preventDefault();
+                        void onCreateFolder();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelCreateFolder();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="shrink-0"
+                    disabled={createFolderLoading}
+                    onClick={cancelCreateFolder}
+                  >
+                    {wd.pickerCreateFolderCancel}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="shrink-0"
+                    disabled={!createFolderName.trim() || createFolderLoading}
+                    onClick={() => void onCreateFolder()}
+                  >
+                    {createFolderLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    {wd.pickerCreateFolder}
+                  </Button>
+                </div>
+                {createFolderError ? (
+                  <p className="mt-1.5 text-xs text-danger" role="alert">{createFolderError}</p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div
               className={cn(
