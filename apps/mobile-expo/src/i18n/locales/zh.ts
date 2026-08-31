@@ -593,6 +593,8 @@ export const zh: MessageBundle = {
     voiceTranscribing: '识别中…',
     voiceNoSpeechDetected: '未检测到语音内容。',
     voiceTranscribeFailed: '语音识别失败，请重试。',
+    voiceDecoderUnavailable: '网关缺少音频解码器，无法识别手机录音；请在网关主机安装 ffmpeg。',
+    voiceRuntimeUnavailable: '网关本地语音运行时不可用，请检查本地语音模型和 Sherpa 引擎。',
     voiceSendUnavailable: '语音发送暂不可用。',
     voiceSendFailed: '语音发送失败，请检查连接后重试。',
     audioPlay: '播放语音',
