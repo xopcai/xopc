@@ -4,10 +4,12 @@ import type { Config } from '../../config/schema.js';
 import {
   getTunnelRegistrationSecretMeta,
   isMaskedTunnelSecretPatchValue,
-  isProductionTunnelBroker,
+  isLocalDevelopmentTunnelBroker,
   maskTunnelSecretForWeb,
   readTunnelRegistrationSecretFromConfigOnly,
+  resolveOptionalTunnelRegistrationSecret,
   resolveTunnelRegistrationSecret,
+  TunnelRegistrationSecretError,
 } from '../env.js';
 
 describe('resolveTunnelRegistrationSecret', () => {
@@ -26,7 +28,19 @@ describe('resolveTunnelRegistrationSecret', () => {
   it('requires config for the production broker host', () => {
     expect(() =>
       resolveTunnelRegistrationSecret('https://frp.xopc.ai/api'),
+    ).toThrow(TunnelRegistrationSecretError);
+  });
+
+  it('requires config for a custom public broker', () => {
+    expect(() =>
+      resolveTunnelRegistrationSecret('https://broker.example.com/api'),
     ).toThrow(/registration secret/i);
+  });
+
+  it('resolves no startup secret when a public broker is not configured', () => {
+    expect(
+      resolveOptionalTunnelRegistrationSecret('https://frp.xopc.ai/api'),
+    ).toBeUndefined();
   });
 });
 
@@ -44,6 +58,12 @@ describe('getTunnelRegistrationSecretMeta', () => {
   it('reports missing for production broker without secret', () => {
     expect(
       getTunnelRegistrationSecretMeta(undefined, {}, 'https://frp.xopc.ai/api'),
+    ).toEqual({ configured: false, source: 'missing' });
+  });
+
+  it('reports missing for a custom public broker without secret', () => {
+    expect(
+      getTunnelRegistrationSecretMeta(undefined, {}, 'https://broker.example.com/api'),
     ).toEqual({ configured: false, source: 'missing' });
   });
 });
@@ -78,12 +98,16 @@ describe('readTunnelRegistrationSecretFromConfigOnly', () => {
   });
 });
 
-describe('isProductionTunnelBroker', () => {
-  it('detects frp.xopc.ai', () => {
-    expect(isProductionTunnelBroker('https://frp.xopc.ai/api')).toBe(true);
+describe('isLocalDevelopmentTunnelBroker', () => {
+  it('does not treat frp.xopc.ai as local development', () => {
+    expect(isLocalDevelopmentTunnelBroker('https://frp.xopc.ai/api')).toBe(false);
   });
 
-  it('treats localhost as non-production', () => {
-    expect(isProductionTunnelBroker('http://localhost:7100')).toBe(false);
+  it('detects localhost', () => {
+    expect(isLocalDevelopmentTunnelBroker('http://localhost:7100')).toBe(true);
+  });
+
+  it('does not treat an arbitrary public broker as local development', () => {
+    expect(isLocalDevelopmentTunnelBroker('https://broker.example.com/api')).toBe(false);
   });
 });

@@ -15,7 +15,7 @@ const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/access/clie
 
 export type BrokerSecretSetupProps = {
   t: TunnelSettingsMessages;
-  brokerSecretMissing: boolean;
+  brokerSecretReady: boolean;
   brokerSecretConfiguredInConfig: boolean;
   brokerSecretMaskedValue: string;
   brokerSecretDraft: string;
@@ -41,7 +41,7 @@ const initialBrokerSecretUi: BrokerSecretUi = {
 
 export function BrokerSecretSetupSection({
   t,
-  brokerSecretMissing,
+  brokerSecretReady,
   brokerSecretConfiguredInConfig,
   brokerSecretMaskedValue,
   brokerSecretDraft,
@@ -57,8 +57,8 @@ export function BrokerSecretSetupSection({
   sectionRef,
 }: BrokerSecretSetupProps) {
   const inputId = useId();
-  const needsSetup = brokerSecretMissing;
-  const ready = !needsSetup;
+  const ready = brokerSecretReady;
+  const needsSetup = !ready;
 
   const [ui, dispatch] = useReducer(uiPatchReducer<BrokerSecretUi>, initialBrokerSecretUi);
   const { reconfiguring } = ui;

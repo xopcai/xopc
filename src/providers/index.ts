@@ -17,7 +17,7 @@ import {
 	type CredentialResolverOptions,
 } from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
-import { getOAuthProviderIds } from '../auth/oauth/registry.js';
+import { getModelOAuthProviderIds } from '../auth/oauth/registry.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import {
@@ -170,7 +170,7 @@ export function getAllProviders(): string[] {
 		providers.add(plugin.id);
 	}
 
-	for (const provider of getOAuthProviderIds()) {
+	for (const provider of getModelOAuthProviderIds()) {
 		providers.add(provider);
 	}
 
