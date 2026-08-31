@@ -25,6 +25,8 @@ describe('composer handoff params', () => {
     expect(newChatAutoSendHref('   ')).toBeNull();
     expect(newChatAutoSendHref('  ', 'payload-1'))
       .toBe('/chat/new?autoSend=1&attachmentsHandoff=payload-1');
+    expect(newChatAutoSendHref('Start from workbench', undefined, { projectScope: 'none' }))
+      .toBe('/chat/new?draft=Start+from+workbench&autoSend=1&projectScope=none');
   });
 
   it('preserves both params while resolving a new chat route', () => {
