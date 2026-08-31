@@ -77,4 +77,46 @@ describe('exec_command tool', () => {
       await rm(workspace, { recursive: true, force: true });
     }
   });
+
+  it('bounds captured output before constructing the result', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
+    try {
+      const tool = createExecCommandTool(workspace);
+      const node = JSON.stringify(process.execPath);
+      const result = await tool.execute('tc4', {
+        cmd: `${node} -e "process.stdout.write('x'.repeat(200000))"`,
+        timeoutMs: 10_000,
+        maxOutputChars: 10_000,
+      });
+
+      expect(result.details.status).toBe('success');
+      expect(result.details.captureTruncated).toBe(true);
+      expect(result.details.totalOutputBytes).toBe(200_000);
+      expect(result.details.stdout.length).toBeLessThanOrEqual(10_000);
+      expect(result.details.aggregatedOutput.length).toBeLessThanOrEqual(10_000);
+      expect((result.content[0] as { text: string }).text).toContain('Earlier command output was discarded');
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it.runIf(process.platform !== 'win32')('kills descendant processes when the command times out', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
+    try {
+      const marker = join(workspace, 'orphan-marker');
+      const grandchild = `setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'alive'), 1500); setInterval(() => {}, 1000);`;
+      const parent = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setInterval(() => {}, 1000);`;
+      const tool = createExecCommandTool(workspace);
+      const result = await tool.execute('tc5', {
+        cmd: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(parent)}`,
+        timeoutMs: 1_000,
+      });
+
+      expect(result.details.status).toBe('timed_out');
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      await expect(import('node:fs/promises').then(({ access }) => access(marker))).rejects.toThrow();
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
 });
