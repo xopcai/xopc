@@ -257,7 +257,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             streaming={chat.streaming}
             onSend={handleComposerSend}
             keyboardVisible={keyboardVisible}
-            onSendVoice={(payload) => void chat.sendVoice(payload)}
+            onSendVoice={(payload) => chat.sendVoice(payload)}
             onAbort={chat.abort}
             placeholder={m.chat.inputPlaceholder}
             suggestionDraft={composerSuggestion}

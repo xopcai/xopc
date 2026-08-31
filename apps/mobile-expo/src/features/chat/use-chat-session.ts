@@ -737,6 +737,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         setStreaming(false);
         streamingRef.current = false;
         setProgress(null);
+        throw e;
       }
     },
     [

@@ -71,6 +71,10 @@ function voiceZoneFromGesture(dx: number): VoiceRecordingZone {
   return 'center';
 }
 
+function reportVoiceFailure(phase: string, error: unknown): void {
+  console.warn(`[VoiceRecording] ${phase} failed`, error);
+}
+
 type InputMode = 'text' | 'voice';
 
 export const ChatComposer = memo(function ChatComposer({
@@ -218,6 +222,19 @@ export const ChatComposer = memo(function ChatComposer({
   const skipDraftPersistSessionKeyRef = useRef<string | null>(null);
 
   const runBusy = streaming || disabled;
+
+  const ensureMicAccess = useCallback(async (): Promise<boolean> => {
+    try {
+      const permission = await requestMicPermission();
+      if (permission.granted) return true;
+      setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
+      return false;
+    } catch (error) {
+      reportVoiceFailure('permission', error);
+      setSnack(cm.voicePermissionCheckFailed);
+      return false;
+    }
+  }, [cm]);
   const hasDraft = canSendComposerDraft(draft, att.attachments.length);
 
   const clearEditFollowUpRef = useCallback(() => {
@@ -397,51 +414,61 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
 
+    let uri: string | null;
+    let durationMillis: number;
     try {
-      const { uri, durationMillis } = await finishRecording(rec);
-      if (durationMillis < MIN_VOICE_MS) {
-        setSnack(cm.voiceTooShort);
-        return;
-      }
-      if (!uri) {
-        setSnack(cm.voiceRecordingFailed);
-        return;
-      }
+      ({ uri, durationMillis } = await finishRecording(rec));
+    } catch (error) {
+      reportVoiceFailure('stop', error);
+      setSnack(cm.voiceRecordingFailed);
+      return;
+    }
+    if (durationMillis < MIN_VOICE_MS) {
+      setSnack(cm.voiceTooShort);
+      return;
+    }
+    if (!uri) {
+      setSnack(cm.voiceRecordingFailed);
+      return;
+    }
 
-      const mimeType = inferRecordingMimeType(uri);
+    const mimeType = inferRecordingMimeType(uri);
 
-      if (releaseZone === 'text') {
-        setTranscribing(true);
-        try {
-          const result = await transcribeVoice(uri, mimeType);
-          const text = result.refined || result.raw;
-          if (text.trim()) {
-            const currentDraft = draftRef.current;
-            const nextDraft = currentDraft.trim()
-              ? `${currentDraft.trim()} ${text.trim()}`
-              : text.trim();
-            updateDraft(nextDraft);
-            setMode('text');
-            requestAnimationFrame(() => inputRef.current?.focus());
-          } else {
-            setSnack(cm.voiceNoSpeechDetected);
-          }
-        } catch {
-          setSnack(cm.voiceTranscribeFailed);
-        } finally {
-          setTranscribing(false);
+    if (releaseZone === 'text') {
+      setTranscribing(true);
+      try {
+        const result = await transcribeVoice(uri, mimeType);
+        const text = result.refined || result.raw;
+        if (text.trim()) {
+          const currentDraft = draftRef.current;
+          const nextDraft = currentDraft.trim()
+            ? `${currentDraft.trim()} ${text.trim()}`
+            : text.trim();
+          updateDraft(nextDraft);
+          setMode('text');
+          requestAnimationFrame(() => inputRef.current?.focus());
+        } else {
+          setSnack(cm.voiceNoSpeechDetected);
         }
-        return;
+      } catch (error) {
+        reportVoiceFailure('transcribe', error);
+        setSnack(cm.voiceTranscribeFailed);
+      } finally {
+        setTranscribing(false);
       }
+      return;
+    }
 
-      if (onSendVoice) {
+    if (onSendVoice) {
+      try {
         await onSendVoice({ uri, durationMillis, mimeType });
         setMode('text');
-      } else {
-        setSnack(cm.voiceSendUnavailable);
+      } catch (error) {
+        reportVoiceFailure('send', error);
+        setSnack(cm.voiceSendFailed);
       }
-    } catch {
-      setSnack(cm.voiceRecordingFailed);
+    } else {
+      setSnack(cm.voiceSendUnavailable);
     }
   }, [cm, onSendVoice, updateDraft]);
 
@@ -457,10 +484,9 @@ export const ChatComposer = memo(function ChatComposer({
     grantInFlightRef.current = true;
 
     void (async () => {
-      const ok = await requestMicPermission();
+      const ok = await ensureMicAccess();
       if (!ok) {
         grantInFlightRef.current = false;
-        setSnack(cm.voicePermissionDenied);
         return;
       }
       try {
@@ -476,12 +502,13 @@ export const ChatComposer = memo(function ChatComposer({
         readyRef.current = true;
         grantInFlightRef.current = false;
         setHudOpen(true);
-      } catch {
+      } catch (error) {
+        reportVoiceFailure('start', error);
         grantInFlightRef.current = false;
-        setSnack(cm.voiceRecordingFailed);
+        setSnack(cm.voiceRecordingStartFailed);
       }
     })();
-  }, [cm, disabled, streaming, transcribing]);
+  }, [cm, disabled, ensureMicAccess, streaming, transcribing]);
 
   const canCaptureVoice = mode === 'voice' && !disabled && !streaming && !transcribing;
 
@@ -598,8 +625,17 @@ export const ChatComposer = memo(function ChatComposer({
 
   const toggleMode = useCallback(() => {
     if (disabled || streaming || hudOpen || transcribing) return;
-    setMode((prev) => (prev === 'text' ? 'voice' : 'text'));
-  }, [disabled, streaming, hudOpen, transcribing]);
+    if (mode === 'voice') {
+      setMode('text');
+      return;
+    }
+    if (grantInFlightRef.current) return;
+    grantInFlightRef.current = true;
+    void ensureMicAccess().then((ok) => {
+      grantInFlightRef.current = false;
+      if (ok) setMode('voice');
+    });
+  }, [disabled, ensureMicAccess, hudOpen, mode, streaming, transcribing]);
 
   const openAttachmentSheet = useCallback(() => {
     if (disabled) return;

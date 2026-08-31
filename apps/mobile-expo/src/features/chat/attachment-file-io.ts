@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 
 import {
@@ -35,7 +36,40 @@ export class AttachmentFileError extends Error {
   }
 }
 
+function base64ByteLength(base64: string): number {
+  const compact = base64.replace(/\s/g, '');
+  if (!compact) return 0;
+  const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
+  return Math.floor((compact.length * 3) / 4) - padding;
+}
+
+function validateAttachmentSize(size: number, fileName?: string): void {
+  if (size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
+    throw new AttachmentFileError('File too large', 'too_large', fileName);
+  }
+  if (size === 0) {
+    throw new AttachmentFileError('Failed to read file', 'read_failed', fileName);
+  }
+}
+
 export async function readUriAsBase64(uri: string, fileName?: string): Promise<{ content: string; size: number }> {
+  if (/^(file|content):\/\//i.test(uri)) {
+    try {
+      const file = new File(uri);
+      if (!file.exists) {
+        throw new AttachmentFileError('Failed to read file', 'read_failed', fileName);
+      }
+      validateAttachmentSize(file.size, fileName);
+      const content = await file.base64();
+      const size = file.size || base64ByteLength(content);
+      validateAttachmentSize(size, fileName);
+      return { content: content.replace(/\s/g, ''), size };
+    } catch (error) {
+      if (error instanceof AttachmentFileError) throw error;
+      throw new AttachmentFileError('Failed to read file', 'read_failed', fileName);
+    }
+  }
+
   let res: Response;
   try {
     res = await fetch(uri);
@@ -47,12 +81,7 @@ export async function readUriAsBase64(uri: string, fileName?: string): Promise<{
   }
   const buffer = await res.arrayBuffer();
   const size = buffer.byteLength;
-  if (size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
-    throw new AttachmentFileError('File too large', 'too_large', fileName);
-  }
-  if (size === 0) {
-    throw new AttachmentFileError('Failed to read file', 'read_failed', fileName);
-  }
+  validateAttachmentSize(size, fileName);
   return { content: arrayBufferToBase64(buffer), size };
 }
 
@@ -60,13 +89,6 @@ async function loadFromUri(uri: string, name: string, mimeType?: string): Promis
   const { content, size } = await readUriAsBase64(uri, name);
   const resolvedMime = mimeType || mimeTypeFromFileName(name);
   return composerAttachmentFromBase64({ uri, name, mimeType: resolvedMime, content, size });
-}
-
-function base64ByteLength(base64: string): number {
-  const compact = base64.replace(/\s/g, '');
-  if (!compact) return 0;
-  const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
-  return Math.floor((compact.length * 3) / 4) - padding;
 }
 
 function loadFromImagePickerAsset(

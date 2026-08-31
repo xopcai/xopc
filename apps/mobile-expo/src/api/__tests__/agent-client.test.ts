@@ -60,10 +60,46 @@ vi.mock('../../storage/mmkv', () => ({
 }));
 
 import { AgentMessageSender, AgentStreamReplayExpiredError } from '../agent-client';
+import { readUriAsBase64 } from '../../features/chat/attachment-file-io';
 import {
   clearMobileEndpointTurnClaim,
   publishMobileEndpointTurnClaim,
 } from '../../features/endpoint-tools/turn-claim';
+
+describe('AgentMessageSender voice message', () => {
+  it('waits for the local recording to be read and the attachment input to be sent', async () => {
+    vi.mocked(readUriAsBase64).mockResolvedValue({ content: 'YWJj', size: 3 });
+    const sender = new AgentMessageSender();
+    const sendMessage = vi.spyOn(sender, 'sendMessage').mockResolvedValue(undefined);
+
+    await sender.sendVoiceMessage(
+      {
+        uri: 'file:///data/user/0/ai.xopc.xopc/cache/Audio/recording.m4a',
+        durationMillis: 1_250,
+        mimeType: 'audio/mp4',
+      },
+      'session-a',
+    );
+
+    expect(readUriAsBase64).toHaveBeenCalledWith(
+      'file:///data/user/0/ai.xopc.xopc/cache/Audio/recording.m4a',
+      'voice.m4a',
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      '',
+      'session-a',
+      undefined,
+      [expect.objectContaining({
+        type: 'voice',
+        mimeType: 'audio/mp4',
+        name: 'voice.m4a',
+        size: 3,
+        durationSeconds: 1.25,
+      })],
+      undefined,
+    );
+  });
+});
 
 describe('AgentMessageSender local detach', () => {
   beforeEach(() => {

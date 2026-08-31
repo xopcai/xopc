@@ -3,6 +3,7 @@
  */
 import {
   AudioModule,
+  getRecordingPermissionsAsync,
   RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
@@ -13,6 +14,29 @@ import { Platform } from 'react-native';
 import { pauseActiveAudioPlayback } from '../voice/audio-playback-coordinator';
 
 export type ExpoRecording = AudioRecorder;
+
+export type MicrophonePermissionResult = {
+  granted: boolean;
+  canAskAgain: boolean;
+  requested: boolean;
+};
+
+export type VoiceRecordingFailurePhase =
+  | 'permission'
+  | 'audio_mode'
+  | 'prepare'
+  | 'start'
+  | 'stop';
+
+export class VoiceRecordingError extends Error {
+  constructor(
+    readonly phase: VoiceRecordingFailurePhase,
+    cause: unknown,
+  ) {
+    super(`Voice recording failed during ${phase}`, { cause });
+    this.name = 'VoiceRecordingError';
+  }
+}
 
 /** expo-audio only emits recordingStatusUpdate on finish/error — poll for live metering. */
 const METERING_POLL_MS = 100;
@@ -70,24 +94,55 @@ export function nativeRecordingOptionsForPlatform(
   } as Partial<RecordingOptions>;
 }
 
-export async function requestMicPermission(): Promise<boolean> {
-  const { granted } = await requestRecordingPermissionsAsync();
-  return granted;
+export async function requestMicPermission(): Promise<MicrophonePermissionResult> {
+  try {
+    const current = await getRecordingPermissionsAsync();
+    if (current.granted || !current.canAskAgain) {
+      return {
+        granted: current.granted,
+        canAskAgain: current.canAskAgain,
+        requested: false,
+      };
+    }
+
+    const requested = await requestRecordingPermissionsAsync();
+    return {
+      granted: requested.granted,
+      canAskAgain: requested.canAskAgain,
+      requested: true,
+    };
+  } catch (error) {
+    throw new VoiceRecordingError('permission', error);
+  }
 }
 
 export async function beginRecording(
   onStatus: (metering: number | undefined, durationMillis: number) => void,
 ): Promise<ExpoRecording> {
   pauseActiveAudioPlayback();
-  await setAudioModeAsync({
-    allowsRecording: true,
-    playsInSilentMode: true,
-  });
+  try {
+    await setAudioModeAsync({
+      allowsRecording: true,
+      playsInSilentMode: true,
+    });
+  } catch (error) {
+    throw new VoiceRecordingError('audio_mode', error);
+  }
 
   const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
   const recorder = new AudioModule.AudioRecorder(nativeRecordingOptionsForPlatform(platform));
-  await recorder.prepareToRecordAsync();
-  recorder.record();
+  try {
+    await recorder.prepareToRecordAsync();
+  } catch (error) {
+    recorder.release();
+    throw new VoiceRecordingError('prepare', error);
+  }
+  try {
+    recorder.record();
+  } catch (error) {
+    recorder.release();
+    throw new VoiceRecordingError('start', error);
+  }
   startMeteringPoll(recorder, onStatus);
   return recorder;
 }
@@ -98,6 +153,8 @@ export async function discardRecording(rec: ExpoRecording): Promise<void> {
     if (rec.isRecording) await rec.stop();
   } catch {
     /* already unloaded / too short on Android */
+  } finally {
+    rec.release();
   }
 }
 
@@ -111,8 +168,14 @@ export function readRecordingDurationMillis(rec: ExpoRecording): number {
 export async function finishRecording(rec: ExpoRecording): Promise<{ uri: string | null; durationMillis: number }> {
   const durationMillis = readRecordingDurationMillis(rec);
   stopMeteringPoll(rec);
-  await rec.stop();
-  return { uri: rec.uri, durationMillis };
+  try {
+    await rec.stop();
+    return { uri: rec.uri, durationMillis };
+  } catch (error) {
+    throw new VoiceRecordingError('stop', error);
+  } finally {
+    rec.release();
+  }
 }
 
 export function inferRecordingMimeType(uri: string | null): string {
