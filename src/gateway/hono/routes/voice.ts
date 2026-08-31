@@ -1,12 +1,8 @@
 /**
  * Voice routes — POST /api/voice/transcriptions (multipart).
  *
- * The endpoints share one execution path that:
- *   1. Runs the configured STT provider and fallback chain
- *   2. Optionally runs LLM refine on the raw transcript
- *   3. Returns { raw, refined?, language }
- *
- * LLM refinement is opt-in through `voice.input.refinement`.
+ * Transcription returns the provider text immediately. Optional LLM cleanup
+ * uses a separate endpoint so it never delays the raw transcript.
  */
 
 import type { Context, Hono } from 'hono';
@@ -562,16 +558,13 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
         fileName: input.fileName,
         signal: c.req.raw.signal,
       });
-      const raw = result.text;
       const detectedLanguage = result.language ?? input.language;
-      const refined = raw.trim()
-        ? await refineTranscript(raw, config, c.req.raw.signal)
-        : undefined;
+      const refinementAvailable = (config.voice?.input?.refinement?.mode ?? 'off') !== 'off';
       return c.json({
         ok: true,
         payload: {
-          raw,
-          ...(refined ? { refined } : {}),
+          text: result.text,
+          refinementAvailable,
           ...(detectedLanguage ? { language: detectedLanguage } : {}),
           provider: result.provider,
           attempts: result.attempts,
@@ -598,6 +591,19 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { code: 'provider_error', message: `Transcription failed: ${msg}` } }, 502);
     }
   };
+
+  authenticated.post('/api/voice/transcriptions/refine', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null) as { text?: unknown } | null;
+    const text = typeof body?.text === 'string' ? body.text.trim() : '';
+    if (!text) {
+      return c.json({ ok: false, error: { message: 'Missing transcript text' } }, 400);
+    }
+    if (text.length > 20_000) {
+      return c.json({ ok: false, error: { message: 'Transcript text exceeds 20000 character limit' } }, 413);
+    }
+    const refined = await refineTranscript(text, service.currentConfig as Config, c.req.raw.signal);
+    return c.json({ ok: true, payload: { text: refined ?? text } });
+  });
 
   /** Multipart endpoint used by browser and future native clients. */
   authenticated.post('/api/voice/transcriptions', strictRateLimitMiddleware, async (c) => {

@@ -1,5 +1,4 @@
 import type { ComposerAttachment } from '../chat/composer.types';
-import { readUriAsBase64 } from '../chat/attachment-file-io';
 import { inferRecordingMimeType } from '../chat/voiceRecording';
 import { transcribeVoice } from '../../api/agent-client';
 import {
@@ -12,11 +11,9 @@ import {
 } from '../../query/notes';
 
 export type QueuedVoiceCapture = {
-  content: string;
-  size: number;
   name: string;
   mimeType: string;
-  localUri?: string;
+  localUri: string;
   durationMillis: number;
   transcript?: string;
 };
@@ -89,17 +86,15 @@ async function patchCaptureMarkdown(
 }
 
 export function voiceCaptureAttachment(params: {
-  content: string;
   name: string;
   mimeType: string;
-  localUri?: string;
+  localUri: string;
   durationMillis: number;
 }): CaptureNoteAttachment {
   return {
     mimeType: params.mimeType,
     fileName: params.name,
     localUri: params.localUri,
-    data: params.content,
     duration: Math.max(1, Math.round(params.durationMillis / 1000)),
   };
 }
@@ -131,7 +126,7 @@ export async function captureNoteWithVoice(payload: {
   let result = await captureNoteWithQueuedVoice(queued, options);
   try {
     const transcription = await transcribeVoice(payload.uri, queued.mimeType);
-    const transcript = (transcription.refined || transcription.raw).trim();
+    const transcript = transcription.text.trim();
     const attachment = result.note.attachments?.find((att) => att.type === 'audio')
       ?? result.note.attachments?.[0];
     if (transcript && attachment) {
@@ -153,21 +148,18 @@ export async function prepareVoiceCapturePayload(payload: {
 }, options: { transcribe?: boolean } = {}): Promise<QueuedVoiceCapture> {
   const mimeType = payload.mimeType || inferRecordingMimeType(payload.uri);
   const name = mimeType.includes('mpeg') ? 'voice.mp3' : 'voice.m4a';
-  const { content, size } = await readUriAsBase64(payload.uri, name);
 
   let transcript: string | undefined;
   if (options.transcribe !== false) {
     try {
       const result = await transcribeVoice(payload.uri, mimeType);
-      transcript = (result.refined || result.raw).trim() || undefined;
+      transcript = result.text.trim() || undefined;
     } catch {
       /* STT optional — still save the recording */
     }
   }
 
   return {
-    content,
-    size,
     name,
     mimeType,
     localUri: payload.uri,
@@ -186,7 +178,6 @@ export async function captureNoteWithQueuedVoice(
     ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
     attachments: [
       voiceCaptureAttachment({
-        content: payload.content,
         name: payload.name,
         mimeType: payload.mimeType,
         localUri: payload.localUri,

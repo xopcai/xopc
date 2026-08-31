@@ -430,6 +430,7 @@
       "discoveringModels": "Discovering…",
       "discoverModelsHint": "Could not discover models from this endpoint. Add model IDs manually.",
       "noResults": "No matching providers",
+      "recommended": "Recommended",
       "step1Title": "Choose a provider",
       "step2BuiltinTitle": "Configure provider",
       "step2CustomTitle": "Add custom model service",
