@@ -116,6 +116,30 @@ describe('captureNote attachments', () => {
     const form = mockedApiFetch.mock.calls[0][1]?.body as FormData;
     expect(form.get('projectId')).toBe('project-1');
   });
+
+  it('uses the materialized audio bytes and enables safe route recovery for idempotent capture', async () => {
+    await captureNote({
+      kind: 'voice',
+      idempotencyKey: 'voice-operation-1',
+      attachments: [{
+        fileName: 'voice.m4a',
+        mimeType: 'audio/mp4',
+        localUri: 'file:///documents/voice.m4a',
+        data: btoa('audio-data'),
+        duration: 2,
+      }],
+    });
+
+    const [, init] = mockedApiFetch.mock.calls[0];
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'voice-operation-1' },
+      recoverRouteOnNetworkError: true,
+    });
+    const file = (init?.body as FormData).get('file') as File;
+    expect(file).toBeInstanceOf(File);
+    expect(await file.text()).toBe('audio-data');
+  });
 });
 
 describe('captureNote project', () => {

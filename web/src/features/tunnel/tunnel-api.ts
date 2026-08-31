@@ -32,7 +32,7 @@ export type TunnelStatusResponse = {
   };
   registrationSecret?: {
     configured: boolean;
-    source: 'env' | 'config' | 'dev_default' | 'missing';
+    source: 'config' | 'dev_default' | 'missing';
   };
   config: {
     autoStart: boolean;
@@ -107,6 +107,13 @@ export async function fetchTunnelStatus(): Promise<TunnelStatusResponse> {
 
 export async function recordTunnelConsent(): Promise<void> {
   await fetchJson(apiUrl('/api/tunnel/consent'), { method: 'POST', body: JSON.stringify({}) });
+}
+
+export async function provisionTunnelRegistrationKey(): Promise<void> {
+  await fetchJson(apiUrl('/api/tunnel/registration-key'), {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 }
 
 export async function startTunnel(): Promise<TunnelStartResponse> {

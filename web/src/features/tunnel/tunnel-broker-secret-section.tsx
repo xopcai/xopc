@@ -11,20 +11,22 @@ import { revealTunnelRegistrationSecret } from '@/features/tunnel/tunnel-api';
 import { cn } from '@/lib/cn';
 import type { TunnelSettingsMessages } from '@/i18n/messages';
 
-const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/keys/tunnel';
+const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/access/client';
 
 export type BrokerSecretSetupProps = {
   t: TunnelSettingsMessages;
-  brokerSecretFromEnv: boolean;
   brokerSecretMissing: boolean;
   brokerSecretConfiguredInConfig: boolean;
   brokerSecretMaskedValue: string;
   brokerSecretDraft: string;
   savingBrokerSecret: boolean;
+  authorizingBrokerSecret: boolean;
+  brokerSecretAuthorizationUrl: string | null;
   brokerSecretNotice: string | null;
   copyFailedLabel: string;
   onDraftChange: (value: string) => void;
   onSave: () => void;
+  onAuthorize: () => void;
   onClear: () => void;
   sectionRef?: RefObject<HTMLDivElement | null>;
 };
@@ -39,28 +41,30 @@ const initialBrokerSecretUi: BrokerSecretUi = {
 
 export function BrokerSecretSetupSection({
   t,
-  brokerSecretFromEnv,
   brokerSecretMissing,
   brokerSecretConfiguredInConfig,
   brokerSecretMaskedValue,
   brokerSecretDraft,
   savingBrokerSecret,
+  authorizingBrokerSecret,
+  brokerSecretAuthorizationUrl,
   brokerSecretNotice,
   copyFailedLabel,
   onDraftChange,
   onSave,
+  onAuthorize,
   onClear,
   sectionRef,
 }: BrokerSecretSetupProps) {
   const inputId = useId();
-  const needsSetup = brokerSecretMissing && !brokerSecretFromEnv;
+  const needsSetup = brokerSecretMissing;
   const ready = !needsSetup;
 
   const [ui, dispatch] = useReducer(uiPatchReducer<BrokerSecretUi>, initialBrokerSecretUi);
   const { reconfiguring } = ui;
 
   const showStoredKeyRow =
-    brokerSecretConfiguredInConfig && !brokerSecretFromEnv && !reconfiguring && !brokerSecretDraft.trim();
+    brokerSecretConfiguredInConfig && !reconfiguring && !brokerSecretDraft.trim();
 
   const secretLabels = {
     show: t.showKey,
@@ -109,20 +113,38 @@ export function BrokerSecretSetupSection({
               ) : null}
             </div>
 
-            <a
-              href={TUNNEL_CONSOLE_REGISTRATION_KEY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              {t.brokerSecretConsoleLink}
-              <ExternalLink className="size-3" aria-hidden />
-            </a>
+            {needsSetup || reconfiguring ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  disabled={savingBrokerSecret || authorizingBrokerSecret}
+                  onClick={onAuthorize}
+                >
+                  {authorizingBrokerSecret ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {authorizingBrokerSecret ? t.brokerSecretAuthorizing : t.brokerSecretAuthorize}
+                </Button>
+                <a
+                  href={TUNNEL_CONSOLE_REGISTRATION_KEY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {t.brokerSecretConsoleLink}
+                  <ExternalLink className="size-3" aria-hidden />
+                </a>
+              </div>
+            ) : null}
 
-            {brokerSecretFromEnv ? (
-              <p className="rounded-lg bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted shadow-surface">
-                {t.brokerSecretEnvHint}
-              </p>
+            {authorizingBrokerSecret && brokerSecretAuthorizationUrl ? (
+              <a
+                href={brokerSecretAuthorizationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
+              >
+                {t.brokerSecretOpenAuthorization}
+                <ExternalLink className="size-3" aria-hidden />
+              </a>
             ) : null}
 
             {showStoredKeyRow ? (
@@ -176,7 +198,7 @@ export function BrokerSecretSetupSection({
                     {savingBrokerSecret ? <Loader2 className="size-4 animate-spin" /> : null}
                     {needsSetup ? t.brokerSecretSaveAndContinue : t.brokerSecretSave}
                   </Button>
-                  {brokerSecretConfiguredInConfig || brokerSecretFromEnv ? (
+                  {brokerSecretConfiguredInConfig ? (
                     <Button type="button" variant="ghost" disabled={savingBrokerSecret} onClick={onClear}>
                       {t.brokerSecretClear}
                     </Button>

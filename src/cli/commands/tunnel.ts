@@ -45,7 +45,6 @@ function configureTunnel(ctx: CLIContext): void {
   getTunnelService().configure({
     brokerUrl,
     registrationSecret: resolveTunnelRegistrationSecret(
-      process.env,
       brokerUrl,
       config.tunnel?.registrationSecret,
     ),
@@ -202,7 +201,7 @@ function createTunnelCommand(ctx: CLIContext): Command {
 
   secretCmd
     .command('set')
-    .description('Save tunnel.registrationSecret to xopc.json (env XOPC_TUNNEL_REGISTRATION_SECRET overrides at runtime)')
+    .description('Save tunnel.registrationSecret to xopc.json')
     .argument('[secret]', 'Registration secret (prompts securely when omitted in a TTY)')
     .option('--stdin', 'Read secret from stdin (single line, trimmed)')
     .action(async (secretArg: string | undefined, opts: { stdin?: boolean }) => {
@@ -212,11 +211,6 @@ function createTunnelCommand(ctx: CLIContext): Command {
           stdin: opts.stdin,
         });
         await saveTunnelRegistrationSecret(ctx, secret);
-        if (process.env.XOPC_TUNNEL_REGISTRATION_SECRET?.trim()) {
-          console.log(
-            'Note: XOPC_TUNNEL_REGISTRATION_SECRET is set in the environment and overrides the saved config at runtime.',
-          );
-        }
         console.log(`Saved tunnel registration secret to ${ctx.configPath}.`);
       } catch (err) {
         const em = err instanceof Error ? err.message : String(err);
@@ -349,7 +343,7 @@ function createTunnelCommand(ctx: CLIContext): Command {
           console.log(`# Self-hosted FRP broker sketch for ${domain}`);
           console.log('# 1. Run frps with vhost HTTP/HTTPS and a registration token');
           console.log(`# 2. Point tunnel.brokerUrl to https://${domain}/api`);
-          console.log(`# 3. Set XOPC_TUNNEL_REGISTRATION_SECRET in the gateway environment`);
+          console.log('# 3. Save the broker registration key as tunnel.registrationSecret');
           console.log('');
           console.log(JSON.stringify({
             frps: {
@@ -359,7 +353,7 @@ function createTunnelCommand(ctx: CLIContext): Command {
             },
             broker: {
               apiUrl: `https://${domain}/api`,
-              registrationSecretEnv: 'XOPC_TUNNEL_REGISTRATION_SECRET',
+              registrationSecretConfig: 'tunnel.registrationSecret',
             },
           }, null, 2));
         }),

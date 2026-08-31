@@ -31,6 +31,33 @@ describe('notes routes', () => {
     );
   });
 
+  it('forwards the full capture idempotency key to the notes service', async () => {
+    const app = new Hono();
+    const createNote = vi.fn().mockResolvedValue({ id: 'note-voice', markdown: '', attachments: [] });
+    registerNotesRoutes(app, {
+      service: {
+        projects: { get: vi.fn() },
+        notesServiceInstance: { createNote },
+      },
+      strictRateLimitMiddleware: async (_c, next) => next(),
+    } as never);
+
+    const res = await app.request('/api/notes', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'voice-request-1',
+      },
+      body: JSON.stringify({ kind: 'voice', channel: 'app', platform: 'ios' }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'voice',
+      capturedVia: { channel: 'app', platform: 'ios' },
+    }), 'voice-request-1');
+  });
+
   it('returns a stable note_not_found code when patching a missing note', async () => {
     const app = new Hono();
     registerNotesRoutes(app, {

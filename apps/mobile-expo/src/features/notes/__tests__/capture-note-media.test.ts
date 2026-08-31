@@ -22,6 +22,7 @@ import { readUriAsBase64 } from '../../chat/attachment-file-io';
 import { transcribeVoice } from '../../../api/agent-client';
 import {
   captureNoteWithComposerAttachment,
+  captureNoteWithVoice,
   captureNoteWithQueuedVoice,
   prepareVoiceCapturePayload,
 } from '../capture-note-media';
@@ -152,6 +153,56 @@ describe('capture note media', () => {
     });
     expect(mockedUpdateNote).toHaveBeenCalledWith('note-voice', {
       markdown: 'call mom\n\n[Voice memo 0:03](xopc-attachment://notes/note-voice/audio-1)',
+      kind: 'voice',
+    });
+  });
+
+  it('saves the original voice memo before optional transcription and uses an idempotency key', async () => {
+    mockedReadUriAsBase64.mockResolvedValue({ content: 'YXVkaW8=', size: 6 });
+    mockedCaptureNote.mockResolvedValue({
+      note: {
+        id: 'note-voice',
+        markdown: '',
+        attachments: [{
+          id: 'audio-1',
+          type: 'audio',
+          mimeType: 'audio/mp4',
+          fileName: 'voice.m4a',
+          size: 6,
+          relativePath: 'voice.m4a',
+          duration: 2,
+        }],
+      },
+    });
+    mockedUpdateNote.mockImplementation(async (_id, patch) => ({
+      id: 'note-voice',
+      kind: 'voice',
+      status: 'inbox',
+      markdown: String(patch.markdown ?? ''),
+      attachments: [{
+        id: 'audio-1', type: 'audio', mimeType: 'audio/mp4', fileName: 'voice.m4a',
+        size: 6, relativePath: 'voice.m4a', duration: 2,
+      }],
+      createdAt: 1,
+      updatedAt: 2,
+      capturedVia: { channel: 'app' },
+    }));
+    mockedTranscribeVoice.mockResolvedValue({ raw: 'remember this' });
+
+    await captureNoteWithVoice({
+      uri: 'file:///documents/voice.m4a',
+      durationMillis: 2_000,
+      mimeType: 'audio/mp4',
+    }, { idempotencyKey: 'operation-1' });
+
+    expect(mockedCaptureNote).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'voice',
+      idempotencyKey: 'operation-1',
+    }));
+    expect(mockedCaptureNote.mock.invocationCallOrder[0])
+      .toBeLessThan(mockedTranscribeVoice.mock.invocationCallOrder[0]);
+    expect(mockedUpdateNote).toHaveBeenLastCalledWith('note-voice', {
+      markdown: 'remember this\n\n[Voice memo 0:02](xopc-attachment://notes/note-voice/audio-1)',
       kind: 'voice',
     });
   });

@@ -21,6 +21,10 @@ export type QueuedVoiceCapture = {
   transcript?: string;
 };
 
+export type VoiceCaptureOptions = {
+  idempotencyKey?: string;
+};
+
 function kindForComposerAttachment(att: ComposerAttachment): NoteKind {
   if (att.type === 'image' || att.mimeType.startsWith('image/')) return 'media';
   return 'mixed';
@@ -120,26 +124,45 @@ export async function captureNoteWithVoice(payload: {
   uri: string;
   durationMillis: number;
   mimeType: string;
-}): Promise<CaptureNoteResult> {
-  const queued = await prepareVoiceCapturePayload(payload);
-  return captureNoteWithQueuedVoice(queued);
+}, options: VoiceCaptureOptions = {}): Promise<CaptureNoteResult> {
+  // Persist the original audio before invoking STT. A slow or unavailable
+  // transcription provider must never prevent a voice memo from being saved.
+  const queued = await prepareVoiceCapturePayload(payload, { transcribe: false });
+  let result = await captureNoteWithQueuedVoice(queued, options);
+  try {
+    const transcription = await transcribeVoice(payload.uri, queued.mimeType);
+    const transcript = (transcription.refined || transcription.raw).trim();
+    const attachment = result.note.attachments?.find((att) => att.type === 'audio')
+      ?? result.note.attachments?.[0];
+    if (transcript && attachment) {
+      const reference = voiceMarkdownForAttachment(result.note.id, attachment);
+      const markdown = appendMarkdownReference(transcript, reference);
+      result = await patchCaptureMarkdown(result, markdown, 'voice');
+    }
+  } catch {
+    // STT is enrichment. The original recording and its playable reference
+    // have already been durably saved.
+  }
+  return result;
 }
 
 export async function prepareVoiceCapturePayload(payload: {
   uri: string;
   durationMillis: number;
   mimeType: string;
-}): Promise<QueuedVoiceCapture> {
+}, options: { transcribe?: boolean } = {}): Promise<QueuedVoiceCapture> {
   const mimeType = payload.mimeType || inferRecordingMimeType(payload.uri);
   const name = mimeType.includes('mpeg') ? 'voice.mp3' : 'voice.m4a';
   const { content, size } = await readUriAsBase64(payload.uri, name);
 
   let transcript: string | undefined;
-  try {
-    const result = await transcribeVoice(payload.uri, mimeType);
-    transcript = (result.refined || result.raw).trim() || undefined;
-  } catch {
-    /* STT optional — still save the recording */
+  if (options.transcribe !== false) {
+    try {
+      const result = await transcribeVoice(payload.uri, mimeType);
+      transcript = (result.refined || result.raw).trim() || undefined;
+    } catch {
+      /* STT optional — still save the recording */
+    }
   }
 
   return {
@@ -155,10 +178,12 @@ export async function prepareVoiceCapturePayload(payload: {
 
 export async function captureNoteWithQueuedVoice(
   payload: QueuedVoiceCapture,
+  options: VoiceCaptureOptions = {},
 ): Promise<CaptureNoteResult> {
   const result = await captureNote({
     text: payload.transcript ?? '',
     kind: 'voice',
+    ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
     attachments: [
       voiceCaptureAttachment({
         content: payload.content,
@@ -173,5 +198,9 @@ export async function captureNoteWithQueuedVoice(
   if (!attachment) return result;
   const reference = voiceMarkdownForAttachment(result.note.id, attachment);
   const markdown = appendMarkdownReference(result.note.markdown ?? payload.transcript, reference);
+  if (options.idempotencyKey) {
+    const note = await updateNote(result.note.id, { markdown, kind: 'voice' });
+    return { note };
+  }
   return patchCaptureMarkdown(result, markdown, 'voice');
 }

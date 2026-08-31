@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { PanResponder } from 'react-native';
 
@@ -14,9 +14,11 @@ import {
 import {
   beginRecording,
   classifyVoiceTranscriptionFailure,
+  deleteRecordingFile,
   discardRecording,
   finishRecording,
   inferRecordingMimeType,
+  MAX_VOICE_RECORDING_MS,
   meteringToLevel,
   requestMicPermission,
   type ExpoRecording,
@@ -68,6 +70,7 @@ export function useVoiceCaptureInteraction({
   feedback: ReactNode;
   panHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
   onPress: () => void;
+  prepare: () => Promise<boolean>;
   active: boolean;
   transcribing: boolean;
 } {
@@ -76,6 +79,7 @@ export function useVoiceCaptureInteraction({
   const [hudOpen, setHudOpen] = useState(false);
   const [voiceZone, setVoiceZone] = useState<VoiceRecordingZone>('center');
   const [meterSamples, setMeterSamples] = useState<number[]>([]);
+  const [durationMillis, setDurationMillis] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [snack, setSnack] = useState('');
@@ -89,8 +93,21 @@ export function useVoiceCaptureInteraction({
   const interactionStartedRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justFinalizedAtRef = useRef(0);
+  const maxDurationReachedRef = useRef(false);
+  const finalizeRef = useRef<() => void>(() => {});
   const valueRef = useRef(value);
+  const mountedRef = useRef(true);
   valueRef.current = value;
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+    abortStartRef.current = true;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+    const recording = recordingRef.current;
+    recordingRef.current = null;
+    if (recording) void discardRecording(recording);
+  }, []);
 
   const resetInteractionState = useCallback(() => {
     recordingRef.current = null;
@@ -100,21 +117,25 @@ export function useVoiceCaptureInteraction({
     cancelZoneRef.current = false;
     releaseZoneRef.current = 'center';
     interactionStartedRef.current = false;
+    maxDurationReachedRef.current = false;
     setStarting(false);
     setHudOpen(false);
     setVoiceZone('center');
     setMeterSamples([]);
+    setDurationMillis(0);
   }, []);
 
   const ensureMicAccess = useCallback(async (): Promise<boolean> => {
     try {
       const permission = await requestMicPermission();
       if (permission.granted) return true;
-      setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
+      if (mountedRef.current) {
+        setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
+      }
       return false;
     } catch (error) {
       reportVoiceFailure('permission', error);
-      setSnack(cm.voicePermissionCheckFailed);
+      if (mountedRef.current) setSnack(cm.voicePermissionCheckFailed);
       return false;
     }
   }, [cm]);
@@ -146,6 +167,7 @@ export function useVoiceCaptureInteraction({
       return;
     }
     if (durationMillis < MIN_VOICE_MS) {
+      deleteRecordingFile(uri);
       setSnack(cm.voiceTooShort);
       onSettled?.();
       return;
@@ -178,12 +200,15 @@ export function useVoiceCaptureInteraction({
         setSnack(
           failure === 'decoder_unavailable'
             ? cm.voiceDecoderUnavailable
+            : failure === 'not_configured'
+              ? cm.voiceSttNotConfigured
             : failure === 'runtime_unavailable'
               ? cm.voiceRuntimeUnavailable
               : cm.voiceTranscribeFailed,
         );
       } finally {
-        setTranscribing(false);
+        deleteRecordingFile(uri);
+        if (mountedRef.current) setTranscribing(false);
       }
       return;
     }
@@ -191,6 +216,7 @@ export function useVoiceCaptureInteraction({
     onVoiceCapture({ uri, durationMillis, mimeType });
     onSettled?.();
   }, [cm, onChangeText, onSettled, onTextReady, onVoiceCapture, resetInteractionState]);
+  finalizeRef.current = () => void finalizeRecordingInteraction();
 
   const startGrantFlow = useCallback(() => {
     if (!enabled || disabled || submitting || transcribing || grantInFlightRef.current) return;
@@ -200,8 +226,10 @@ export function useVoiceCaptureInteraction({
     cancelZoneRef.current = false;
     releaseZoneRef.current = 'center';
     interactionStartedRef.current = true;
+    maxDurationReachedRef.current = false;
     setVoiceZone('center');
     setMeterSamples([]);
+    setDurationMillis(0);
     setStarting(true);
     grantInFlightRef.current = true;
 
@@ -214,11 +242,24 @@ export function useVoiceCaptureInteraction({
         return;
       }
       try {
-        const rec = await beginRecording((metering) => {
-          setMeterSamples((prev) => [...prev.slice(-47), meteringToLevel(metering)]);
-        });
-        if (abortStartRef.current) {
+        const rec = await beginRecording((metering, nextDurationMillis) => {
+          if (mountedRef.current) {
+            setMeterSamples((prev) => [...prev.slice(-47), meteringToLevel(metering)]);
+            setDurationMillis(nextDurationMillis);
+            if (
+              nextDurationMillis >= MAX_VOICE_RECORDING_MS
+              && !maxDurationReachedRef.current
+              && recordingRef.current
+            ) {
+              maxDurationReachedRef.current = true;
+              setSnack(cm.voiceMaxDurationReached);
+              finalizeRef.current();
+            }
+          }
+        }, { persistent: true });
+        if (!mountedRef.current || abortStartRef.current) {
           await discardRecording(rec);
+          if (!mountedRef.current) return;
           grantInFlightRef.current = false;
           interactionStartedRef.current = false;
           setStarting(false);
@@ -230,6 +271,7 @@ export function useVoiceCaptureInteraction({
         setStarting(false);
         setHudOpen(true);
       } catch (error) {
+        if (!mountedRef.current) return;
         reportVoiceFailure('start', error);
         grantInFlightRef.current = false;
         interactionStartedRef.current = false;
@@ -240,6 +282,11 @@ export function useVoiceCaptureInteraction({
   }, [cm, disabled, enabled, ensureMicAccess, submitting, transcribing]);
 
   const canCaptureVoice = enabled && !disabled && !submitting && !transcribing;
+
+  const prepare = useCallback(async () => {
+    if (disabled || submitting || transcribing) return false;
+    return ensureMicAccess();
+  }, [disabled, ensureMicAccess, submitting, transcribing]);
 
   const handlePress = useCallback(() => {
     if (Date.now() - justFinalizedAtRef.current < 250) return;
@@ -329,6 +376,7 @@ export function useVoiceCaptureInteraction({
           zone={voiceZone}
           transcribing={transcribing}
           meterSamples={meterSamples}
+          durationMillis={durationMillis}
           centerHint={cm.voiceReleaseCenterHint}
           textHint={cm.voiceReleaseTextHint}
           textGlyph={cm.voiceTextGlyph}
@@ -348,6 +396,7 @@ export function useVoiceCaptureInteraction({
     ),
     panHandlers: panResponder.panHandlers,
     onPress: handlePress,
+    prepare,
     active: starting || hudOpen || transcribing,
     transcribing,
   };

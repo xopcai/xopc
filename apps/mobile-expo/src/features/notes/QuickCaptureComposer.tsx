@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -45,6 +45,12 @@ export function QuickCaptureComposer({
   const { chat: cm } = useMessages();
   const [mode, setMode] = useState<InputMode>('text');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [preparingVoice, setPreparingVoice] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const accent = colors.accent.primary;
   const surface = colors.surface.panel;
@@ -59,13 +65,26 @@ export function QuickCaptureComposer({
     disabled,
     submitting,
     enabled: canCaptureVoice,
-    onSettled: () => setMode('text'),
+    onSettled: () => {
+      if (mountedRef.current) setMode('text');
+    },
   });
 
   const toggleMode = useCallback(() => {
-    if (disabled || submitting || voice.active || voice.transcribing) return;
-    setMode((prev) => (prev === 'text' ? 'voice' : 'text'));
-  }, [disabled, submitting, voice.active, voice.transcribing]);
+    if (disabled || submitting || preparingVoice || voice.active || voice.transcribing) return;
+    if (mode === 'voice') {
+      setMode('text');
+      return;
+    }
+    setPreparingVoice(true);
+    void voice.prepare()
+      .then((granted) => {
+        if (granted && mountedRef.current) setMode('voice');
+      })
+      .finally(() => {
+        if (mountedRef.current) setPreparingVoice(false);
+      });
+  }, [disabled, mode, preparingVoice, submitting, voice]);
 
   const sheetItems = useMemo(
     () => [
@@ -82,11 +101,13 @@ export function QuickCaptureComposer({
         styles.toolBtn,
         {
           backgroundColor: pressed ? colors.surface.hover : colors.surface.input,
-          opacity: disabled || submitting ? 0.54 : 1,
+          opacity: disabled || submitting || preparingVoice ? 0.54 : 1,
         },
       ]}
       onPress={toggleMode}
-      disabled={disabled || submitting}
+      disabled={disabled || submitting || preparingVoice}
+      hitSlop={4}
+      accessibilityRole="button"
       accessibilityLabel={mode === 'text' ? 'Switch to voice input' : 'Switch to keyboard'}
     >
       <Icon
@@ -108,6 +129,8 @@ export function QuickCaptureComposer({
       ]}
       onPress={() => setSheetOpen(true)}
       disabled={disabled || submitting}
+      hitSlop={4}
+      accessibilityRole="button"
       accessibilityLabel={cm.attachFile}
     >
       <Icon
@@ -124,6 +147,7 @@ export function QuickCaptureComposer({
       onPress={onSubmit}
       disabled={!canSubmit}
       hitSlop={8}
+      accessibilityRole="button"
       accessibilityLabel={cm.send}
     >
       <Icon source="arrow-up" size={20} color={colors.text.inverse} />

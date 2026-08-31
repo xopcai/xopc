@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import type { Hono } from 'hono';
@@ -10,6 +11,13 @@ import { buildSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { CaptureChannel, CaptureSource, Note, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { extractToken } from '../../auth.js';
+import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
+import { resolveReverseProxyPublicUrl } from '../../public-url.js';
+import { getShareStore } from '../../../share/share-store.js';
+import { resolveShareUrl } from '../../../share/share-url.js';
+import { NoteShareService, NoteShareVersionConflictError } from '../../../share/note-share-service.js';
+import type { ShareConfig } from '../../../share/share-types.js';
 
 const VALID_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
 const VALID_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
@@ -17,6 +25,11 @@ const VALID_CHANNELS = new Set<CaptureChannel>(['app', 'web', 'electron', 'tui',
 
 function noteNotFound() {
   return { error: 'Note not found', code: 'note_not_found' };
+}
+
+function readIdempotencyKey(value: string | undefined): string | undefined {
+  const key = value?.trim();
+  return key || undefined;
 }
 
 function parseCaptureSource(body: Record<string, unknown>): CaptureSource {
@@ -49,6 +62,22 @@ function noteThreadName(note: Note): string {
 export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const objectLinks = new ObjectLinkService();
+  const shareConfig = (): Partial<ShareConfig> => {
+    const gateway = service.currentConfig?.gateway as Record<string, unknown> | undefined;
+    const raw = gateway?.share;
+    return raw && typeof raw === 'object' ? raw as Partial<ShareConfig> : {};
+  };
+  const shareStore = () => {
+    const store = getShareStore(shareConfig());
+    store.updateConfig(shareConfig());
+    return store;
+  };
+  const noteShares = () => new NoteShareService(shareStore(), service.notesServiceInstance);
+  const shareUrlContext = () => ({
+    gatewayHost: resolveGatewayEffectiveHost(service.currentConfig),
+    gatewayPort: service.currentConfig?.gateway?.port ?? 18790,
+    reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
+  });
 
   const linkNoteToProject = (note: Note, projectId: string | undefined): void => {
     if (!projectId) return;
@@ -71,7 +100,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ error: 'Missing required field: text' }, 400);
     }
     const source = parseCaptureSource(body);
-    const idempotencyKey = c.req.header('idempotency-key')?.trim();
+    const idempotencyKey = readIdempotencyKey(c.req.header('idempotency-key'));
     if (idempotencyKey && idempotencyKey.length > 200) {
       return c.json({ error: 'Idempotency-Key is too long' }, 400);
     }
@@ -110,6 +139,10 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   // POST /api/notes — full create (JSON or multipart)
   authenticated.post('/api/notes', async (c) => {
     const contentType = c.req.header('content-type') || '';
+    const idempotencyKey = readIdempotencyKey(c.req.header('idempotency-key'));
+    if (idempotencyKey && idempotencyKey.length > 200) {
+      return c.json({ error: 'Idempotency-Key is too long' }, 400);
+    }
 
     if (contentType.includes('multipart/form-data')) {
       let body: Record<string, unknown>;
@@ -131,7 +164,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
         tags: tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
         capturedVia: source,
-      });
+      }, idempotencyKey);
       linkNoteToProject(note, projectId);
 
       const file = body.file;
@@ -161,7 +194,8 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
             buffer: buf,
             mimeType,
             duration: Number.isFinite(duration) ? duration : undefined,
-          });
+            retainWithoutReference: kindRaw === 'voice',
+          }, idempotencyKey);
         }
       }
 
@@ -186,7 +220,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       tags: tagsRaw,
       capturedVia: source,
       pinned: body.pinned === true,
-    });
+    }, idempotencyKey);
     linkNoteToProject(note, projectId);
     return c.json({ note }, 201);
   });
@@ -387,6 +421,108 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ note });
   });
 
+  authenticated.get('/api/notes/:id/shares', async (c) => {
+    const note = await service.notesServiceInstance.getNote(c.req.param('id'));
+    if (!note) return c.json(noteNotFound(), 404);
+    const shares = noteShares();
+    const now = Date.now();
+    const items = shares.list(note.id).map((record) => {
+      const resolved = resolveShareUrl(record.token, shareUrlContext());
+      return {
+        id: record.id,
+        kind: 'note' as const,
+        fileName: record.fileName,
+        shareUrl: resolved.shareUrl,
+        lanUrl: resolved.lanUrl,
+        reachability: resolved.reachability,
+        reachabilityHint: resolved.reachabilityHint,
+        createdAt: record.createdAt,
+        expiresAt: record.expiresAt,
+        viewCount: record.downloadCount,
+        maxViews: record.maxViews,
+        revoked: record.revoked,
+        expired: now >= new Date(record.expiresAt).getTime(),
+        description: record.description ?? null,
+        sourceVersion: record.sourceVersion,
+        snapshotRevision: record.snapshotRevision,
+        attachmentCount: record.attachmentCount,
+        stale: note.updatedAt > record.sourceVersion,
+      };
+    });
+    return c.json({ items, total: items.length, noteVersion: note.updatedAt });
+  });
+
+  authenticated.post('/api/notes/:id/shares', async (c) => {
+    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
+    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const shares = noteShares();
+    try {
+      const record = await shares.create(c.req.param('id'), {
+        expectedNoteVersion: typeof body.expectedNoteVersion === 'number' ? body.expectedNoteVersion : undefined,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : undefined,
+        ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : undefined,
+        maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined,
+        description: typeof body.description === 'string' ? body.description.trim() || undefined : undefined,
+        gatewayTokenHash: createHash('sha256').update(gatewayToken, 'utf8').digest('hex').slice(0, 12),
+      });
+      const resolved = resolveShareUrl(record.token, shareUrlContext());
+      return c.json({
+        ok: true,
+        payload: {
+          id: record.id,
+          kind: record.kind,
+          shareUrl: resolved.shareUrl,
+          lanUrl: resolved.lanUrl,
+          reachability: resolved.reachability,
+          reachabilityHint: resolved.reachabilityHint,
+          expiresAt: record.expiresAt,
+          maxViews: record.maxViews,
+          sourceNoteId: record.sourceNoteId,
+          sourceVersion: record.sourceVersion,
+          snapshotRevision: record.snapshotRevision,
+          attachmentCount: record.attachmentCount,
+          fileName: record.fileName,
+        },
+      }, 201);
+    } catch (err) {
+      if (err instanceof NoteShareVersionConflictError) {
+        return c.json({ ok: false, error: { code: 'note_version_conflict', message: err.message, currentVersion: err.currentVersion } }, 409);
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, message === 'Note not found' ? 404 : 400);
+    }
+  });
+
+  authenticated.post('/api/notes/:id/shares/:shareId/refresh', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const shares = noteShares();
+    try {
+      const record = await shares.refresh(c.req.param('id'), c.req.param('shareId'), {
+        expectedNoteVersion: typeof body.expectedNoteVersion === 'number' ? body.expectedNoteVersion : undefined,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : undefined,
+      });
+      const resolved = resolveShareUrl(record.token, shareUrlContext());
+      return c.json({ ok: true, payload: {
+        id: record.id,
+        shareUrl: resolved.shareUrl,
+        sourceVersion: record.sourceVersion,
+        snapshotRevision: record.snapshotRevision,
+        attachmentCount: record.attachmentCount,
+      } });
+    } catch (err) {
+      if (err instanceof NoteShareVersionConflictError) {
+        return c.json({ ok: false, error: { code: 'note_version_conflict', message: err.message, currentVersion: err.currentVersion } }, 409);
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, message === 'Note share not found' || message === 'Note not found' ? 404 : 400);
+    }
+  });
+
   // PATCH /api/notes/:id — update
   authenticated.patch('/api/notes/:id', async (c) => {
     const id = c.req.param('id');
@@ -408,11 +544,13 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   // DELETE /api/notes/:id — delete note
   authenticated.delete('/api/notes/:id', async (c) => {
     const id = c.req.param('id');
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     const removed = await service.notesServiceInstance.deleteNote(id);
     if (!removed) {
       return c.json(noteNotFound(), 404);
     }
-    return c.json({ deleted: true });
+    const revokedShares = body.revokeShares === false ? 0 : await noteShares().revokeForNote(id);
+    return c.json({ deleted: true, revokedShares });
   });
 
   // GET /api/notes/:id/history — list version snapshots

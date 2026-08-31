@@ -40,6 +40,9 @@ export interface OfflineQueueOptions<T> {
   processor: OperationProcessor<T>;
   /** Max retries before marking as dead-letter. Default: 5. */
   maxRetries?: number;
+  /** Connectivity outages may stay pending indefinitely without exhausting
+   * the retry budget. Defaults to counting every failure. */
+  shouldCountRetry?: (error: unknown) => boolean;
 }
 
 export interface OfflineQueue<T> {
@@ -83,7 +86,7 @@ function parseJson<R>(raw: string | undefined): R | null {
 }
 
 export function createOfflineQueue<T>(options: OfflineQueueOptions<T>): OfflineQueue<T> {
-  const { namespace, processor, maxRetries = 5 } = options;
+  const { namespace, processor, maxRetries = 5, shouldCountRetry = () => true } = options;
   const idsKey = `${namespace}:ids`;
   const deadLetterIdsKey = `${namespace}:dead-letter-ids`;
   const opPrefix = `${namespace}:op:`;
@@ -193,7 +196,7 @@ export function createOfflineQueue<T>(options: OfflineQueueOptions<T>): OfflineQ
           deleteOp(id);
           flushed++;
         } catch (error) {
-          operation.retryCount++;
+          if (shouldCountRetry(error)) operation.retryCount++;
           if (operation.retryCount >= maxRetries) {
             moveToDeadLetter(operation, errorReason(error));
           } else {

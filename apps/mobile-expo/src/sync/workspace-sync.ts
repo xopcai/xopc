@@ -5,6 +5,9 @@ import {
   recordNoteOpen,
   updateNote,
 } from '../query/notes';
+import { isGatewayConnectivityError } from '../api/gateway-error';
+import { captureNoteWithVoice } from '../features/notes/capture-note-media';
+import { deleteRecordingFile } from '../features/chat/voiceRecording';
 
 import { createOfflineQueue, type DeadLetterOperation, type QueuedOperation } from './offline-queue';
 import {
@@ -15,6 +18,7 @@ import {
 
 export type WorkspaceSyncOperation =
   | { type: 'capture'; text: string; channel: 'app' | 'clipboard' | 'share' }
+  | { type: 'capture_voice'; uri: string; durationMillis: number; mimeType: string }
   | { type: 'update_note'; noteId: string; patch: Record<string, unknown> }
   | { type: 'delete_note'; noteId: string }
   | { type: 'move_note'; noteId: string; groupId: string | null }
@@ -24,6 +28,12 @@ const WORKSPACE_SYNC_MAX_RETRIES = 8;
 const captureResultRequests = new Set<string>();
 const captureResultIds = new Map<string, string>();
 let flushPromise: Promise<number> | null = null;
+
+function shouldCountWorkspaceRetry(error: unknown): boolean {
+  return !isGatewayConnectivityError(error)
+    || !['offline-network', 'offline-device', 'no-route', 'reverse-proxy-unreachable']
+      .includes(error.kind);
+}
 
 function rememberCaptureResult(operationId: string, noteId: string): void {
   if (!captureResultRequests.has(operationId)) return;
@@ -42,6 +52,14 @@ async function processWorkspaceOperation(operation: QueuedOperation<WorkspaceSyn
           channel: payload.channel,
           idempotencyKey: operation.id,
         })).note.id);
+        break;
+      case 'capture_voice':
+        rememberCaptureResult(operation.id, (await captureNoteWithVoice({
+          uri: payload.uri,
+          durationMillis: payload.durationMillis,
+          mimeType: payload.mimeType,
+        }, { idempotencyKey: operation.id })).note.id);
+        deleteRecordingFile(payload.uri);
         break;
       case 'update_note':
         await updateNote(payload.noteId, payload.patch);
@@ -62,9 +80,10 @@ async function processWorkspaceOperation(operation: QueuedOperation<WorkspaceSyn
     }
     removeSyncJournalEntry(operation.id);
   } catch (error) {
+    const retryCount = operation.retryCount + (shouldCountWorkspaceRetry(error) ? 1 : 0);
     updateSyncJournalEntry(operation.id, {
-      state: operation.retryCount + 1 >= WORKSPACE_SYNC_MAX_RETRIES ? 'failed' : 'pending',
-      retryCount: operation.retryCount + 1,
+      state: retryCount >= WORKSPACE_SYNC_MAX_RETRIES ? 'failed' : 'pending',
+      retryCount,
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
@@ -75,6 +94,7 @@ const workspaceSyncQueue = createOfflineQueue<WorkspaceSyncOperation>({
   namespace: 'workspace:sync',
   processor: processWorkspaceOperation,
   maxRetries: WORKSPACE_SYNC_MAX_RETRIES,
+  shouldCountRetry: shouldCountWorkspaceRetry,
 });
 
 export type WorkspaceSyncStatus = {
@@ -111,13 +131,19 @@ export function getWorkspaceSyncStatus(): WorkspaceSyncStatus {
 export function queueWorkspaceOperation(operation: WorkspaceSyncOperation): string {
   const operationId = workspaceSyncQueue.enqueue(operation);
   const entityId = 'noteId' in operation ? operation.noteId : `local:${operationId}`;
-  const kind = operation.type === 'capture' ? 'create_note' : operation.type;
+  const kind = operation.type === 'capture' || operation.type === 'capture_voice'
+    ? 'create_note'
+    : operation.type;
   appendSyncJournalEntry({
     id: operationId,
     entity: 'note',
     entityId,
     kind,
-    payload: operation.type === 'capture' ? { text: operation.text } : operation,
+    payload: operation.type === 'capture'
+      ? { text: operation.text }
+      : operation.type === 'capture_voice'
+        ? { kind: 'voice', durationMillis: operation.durationMillis, mimeType: operation.mimeType }
+        : operation,
     localVersion: 1,
     dependsOn: [],
   });
@@ -136,12 +162,47 @@ export function queueWorkspaceCapture(input: WorkspaceCaptureInput): string {
   return queueWorkspaceOperation({ type: 'capture', text, channel: input.channel });
 }
 
+export type WorkspaceVoiceCaptureInput = {
+  uri: string;
+  durationMillis: number;
+  mimeType: string;
+};
+
+export function queueWorkspaceVoiceCapture(input: WorkspaceVoiceCaptureInput): string {
+  if (!input.uri.trim()) throw new Error('Voice capture URI is required');
+  return queueWorkspaceOperation({
+    type: 'capture_voice',
+    uri: input.uri,
+    durationMillis: input.durationMillis,
+    mimeType: input.mimeType,
+  });
+}
+
 export async function captureWorkspaceText(input: WorkspaceCaptureInput): Promise<{
   operationId: string;
   synced: boolean;
   noteId?: string;
 }> {
   const operationId = queueWorkspaceCapture(input);
+  captureResultRequests.add(operationId);
+  try {
+    await flushPendingWorkspaceOperations();
+    const synced = !workspaceSyncQueue.pending().some((operation) => operation.id === operationId)
+      && !workspaceSyncQueue.deadLetters().some((operation) => operation.id === operationId);
+    const noteId = captureResultIds.get(operationId);
+    return { operationId, synced, ...(noteId ? { noteId } : {}) };
+  } finally {
+    captureResultRequests.delete(operationId);
+    captureResultIds.delete(operationId);
+  }
+}
+
+export async function captureWorkspaceVoice(input: WorkspaceVoiceCaptureInput): Promise<{
+  operationId: string;
+  synced: boolean;
+  noteId?: string;
+}> {
+  const operationId = queueWorkspaceVoiceCapture(input);
   captureResultRequests.add(operationId);
   try {
     await flushPendingWorkspaceOperations();
@@ -186,25 +247,35 @@ export function retryWorkspaceSyncDeadLetter(operationId: string): boolean {
 }
 
 export function removeWorkspaceSyncOperation(operationId: string): void {
+  const operation = workspaceSyncQueue.pending().find((item) => item.id === operationId);
+  if (operation?.payload.type === 'capture_voice') deleteRecordingFile(operation.payload.uri);
   workspaceSyncQueue.remove(operationId);
   removeSyncJournalEntry(operationId);
   notifyWorkspaceSyncStatus();
 }
 
 export function removeWorkspaceSyncDeadLetter(operationId: string): void {
+  const operation = workspaceSyncQueue.deadLetters().find((item) => item.id === operationId);
+  if (operation?.payload.type === 'capture_voice') deleteRecordingFile(operation.payload.uri);
   workspaceSyncQueue.removeDeadLetter(operationId);
   removeSyncJournalEntry(operationId);
   notifyWorkspaceSyncStatus();
 }
 
 export function clearWorkspaceSyncQueue(): void {
-  workspaceSyncQueue.pending().forEach((operation) => removeSyncJournalEntry(operation.id));
+  workspaceSyncQueue.pending().forEach((operation) => {
+    if (operation.payload.type === 'capture_voice') deleteRecordingFile(operation.payload.uri);
+    removeSyncJournalEntry(operation.id);
+  });
   workspaceSyncQueue.clear();
   notifyWorkspaceSyncStatus();
 }
 
 export function clearWorkspaceSyncDeadLetters(): void {
-  workspaceSyncQueue.deadLetters().forEach((operation) => removeSyncJournalEntry(operation.id));
+  workspaceSyncQueue.deadLetters().forEach((operation) => {
+    if (operation.payload.type === 'capture_voice') deleteRecordingFile(operation.payload.uri);
+    removeSyncJournalEntry(operation.id);
+  });
   workspaceSyncQueue.clearDeadLetters();
   notifyWorkspaceSyncStatus();
 }

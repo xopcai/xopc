@@ -41,6 +41,20 @@ function quickCaptureId(idempotencyKey: string): string {
   return `capture_${digest.slice(0, 32)}`;
 }
 
+function noteCaptureId(idempotencyKey: string): string {
+  const digest = createHash('sha256')
+    .update(`xopc:note-capture:${idempotencyKey}`)
+    .digest('hex');
+  return `note_capture_${digest.slice(0, 32)}`;
+}
+
+function noteAttachmentId(noteId: string, idempotencyKey: string): string {
+  const digest = createHash('sha256')
+    .update(`xopc:note-attachment:${noteId}:${idempotencyKey}`)
+    .digest('hex');
+  return `attachment_${digest.slice(0, 32)}`;
+}
+
 function inferKind(markdown?: string, hasAttachments?: boolean, attachments?: NoteAttachment[]): NoteKind {
   if (hasAttachments && attachments?.length && attachments.every((item) => item.type === 'audio')) return 'voice';
   if (hasAttachments) return 'media';
@@ -171,6 +185,8 @@ async function buildAiCatalysisReport(note: Note, config?: Config): Promise<Note
 export class NotesService {
   private lastSnapshotAt = new Map<string, number>();
   private quickCapturesInFlight = new Map<string, Promise<Note>>();
+  private noteCapturesInFlight = new Map<string, Promise<Note>>();
+  private noteAttachmentsInFlight = new Map<string, Promise<NoteAttachment | null>>();
 
   constructor(private readonly store = new NotesStore()) {}
 
@@ -226,8 +242,22 @@ export class NotesService {
     return note;
   }
 
-  async createNote(params: CreateNoteParams): Promise<Note> {
-    const id = randomUUID();
+  async createNote(params: CreateNoteParams, idempotencyKey?: string): Promise<Note> {
+    const id = idempotencyKey ? noteCaptureId(idempotencyKey) : randomUUID();
+    if (idempotencyKey) {
+      const existing = await this.store.getNote(id);
+      if (existing) return existing;
+      const inFlight = this.noteCapturesInFlight.get(id);
+      if (inFlight) return inFlight;
+      const capture = this.createNoteWithId(id, params)
+        .finally(() => this.noteCapturesInFlight.delete(id));
+      this.noteCapturesInFlight.set(id, capture);
+      return capture;
+    }
+    return this.createNoteWithId(id, params);
+  }
+
+  private async createNoteWithId(id: string, params: CreateNoteParams): Promise<Note> {
     const now = Date.now();
     const markdown = params.markdown ?? '';
     const note: Note = {
@@ -452,12 +482,33 @@ export class NotesService {
     mimeType: string;
     duration?: number;
     retainWithoutReference?: boolean;
-  }): Promise<NoteAttachment | null> {
+  }, idempotencyKey?: string): Promise<NoteAttachment | null> {
+    if (!idempotencyKey) return this.addAttachmentWithId(noteId, file, randomUUID());
+    const attachmentId = noteAttachmentId(noteId, idempotencyKey);
+    const note = await this.store.getNote(noteId);
+    const existing = note?.attachments?.find((attachment) => attachment.id === attachmentId);
+    if (existing) return existing;
+    const inFlightKey = `${noteId}:${attachmentId}`;
+    const inFlight = this.noteAttachmentsInFlight.get(inFlightKey);
+    if (inFlight) return inFlight;
+    const capture = this.addAttachmentWithId(noteId, file, attachmentId)
+      .finally(() => this.noteAttachmentsInFlight.delete(inFlightKey));
+    this.noteAttachmentsInFlight.set(inFlightKey, capture);
+    return capture;
+  }
+
+  private async addAttachmentWithId(noteId: string, file: {
+    name: string;
+    buffer: Buffer;
+    mimeType: string;
+    duration?: number;
+    retainWithoutReference?: boolean;
+  }, attachmentId: string): Promise<NoteAttachment | null> {
     const note = await this.store.getNote(noteId);
     if (!note) return null;
     const { relativePath, size } = await this.store.saveAttachment(noteId, file.name, file.buffer);
     const attachment: NoteAttachment = {
-      id: randomUUID(),
+      id: attachmentId,
       type: file.mimeType.startsWith('image/') ? 'image' : file.mimeType.startsWith('audio/') ? 'audio' : file.mimeType.startsWith('video/') ? 'video' : 'file',
       mimeType: file.mimeType,
       fileName: file.name,

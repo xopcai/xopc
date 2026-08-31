@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GatewayConnectivityError } from '../../api/gateway-error';
+
 const memory = new Map<string, string>();
 
 vi.mock('../../storage/mmkv', () => ({
@@ -18,10 +20,19 @@ vi.mock('../../query/notes', () => ({
   updateNote: vi.fn(),
 }));
 
+vi.mock('../../features/notes/capture-note-media', () => ({
+  captureNoteWithVoice: vi.fn(),
+}));
+
+vi.mock('../../features/chat/voiceRecording', () => ({
+  deleteRecordingFile: vi.fn(),
+}));
+
 import {
   clearWorkspaceSyncDeadLetters,
   clearWorkspaceSyncQueue,
   captureWorkspaceText,
+  captureWorkspaceVoice,
   flushPendingWorkspaceOperations,
   getWorkspaceSyncStatus,
   queueWorkspaceCapture,
@@ -31,6 +42,7 @@ import { listSyncJournalEntries } from '../sync-journal';
 
 describe('workspace sync status', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     memory.clear();
     clearWorkspaceSyncQueue();
     clearWorkspaceSyncDeadLetters();
@@ -99,5 +111,40 @@ describe('workspace sync status', () => {
       retryCount: 1,
       error: 'gateway offline',
     })]);
+  });
+
+  it('does not exhaust the retry budget while the gateway is unreachable', async () => {
+    const { quickCaptureNote } = await import('../../query/notes');
+    vi.mocked(quickCaptureNote).mockRejectedValue(
+      new GatewayConnectivityError('no-route', 'Could not reach gateway'),
+    );
+
+    await expect(captureWorkspaceText({ text: 'Wait for the gateway', channel: 'app' }))
+      .resolves.toMatchObject({ synced: false });
+
+    expect(getWorkspaceSyncStatus()).toEqual({ pendingCount: 1, failedCount: 0 });
+    expect(listSyncJournalEntries()).toEqual([expect.objectContaining({
+      state: 'pending',
+      retryCount: 0,
+      error: 'Could not reach gateway',
+    })]);
+  });
+
+  it('keeps voice captures durable and reuses the queue id as the media idempotency key', async () => {
+    const { captureNoteWithVoice } = await import('../../features/notes/capture-note-media');
+    const { deleteRecordingFile } = await import('../../features/chat/voiceRecording');
+    vi.mocked(captureNoteWithVoice).mockResolvedValue({ note: { id: 'voice-note-1' } });
+
+    const result = await captureWorkspaceVoice({
+      uri: 'file:///documents/voice.m4a',
+      durationMillis: 2_400,
+      mimeType: 'audio/mp4',
+    });
+
+    expect(result).toMatchObject({ synced: true, noteId: 'voice-note-1' });
+    const [, options] = vi.mocked(captureNoteWithVoice).mock.calls[0];
+    expect(options?.idempotencyKey).toBe(result.operationId);
+    expect(deleteRecordingFile).toHaveBeenCalledWith('file:///documents/voice.m4a');
+    expect(getWorkspaceSyncStatus()).toEqual({ pendingCount: 0, failedCount: 0 });
   });
 });

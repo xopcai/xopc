@@ -83,4 +83,22 @@ describe('createOfflineQueue dead letters', () => {
     queue.clearDeadLetters();
     expect(queue.deadLetterCount()).toBe(0);
   });
+
+  it('keeps retry-neutral connectivity failures pending without exhausting the budget', async () => {
+    const processor = vi.fn().mockRejectedValue(new Error('offline'));
+    const queue = createOfflineQueue<{ text: string }>({
+      namespace: 'test:retry-neutral',
+      processor,
+      maxRetries: 2,
+      shouldCountRetry: () => false,
+    });
+    queue.enqueue({ text: 'keep this' });
+
+    await queue.flush();
+    await queue.flush();
+    await queue.flush();
+
+    expect(queue.pending()).toEqual([expect.objectContaining({ retryCount: 0 })]);
+    expect(queue.deadLetters()).toEqual([]);
+  });
 });
