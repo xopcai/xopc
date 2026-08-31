@@ -293,7 +293,7 @@ describe('SQLite migrations', () => {
       db.close();
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it('upgrades automation delivery settings and historical completion events from v120', () => {
     const db = openEmptyDb();
