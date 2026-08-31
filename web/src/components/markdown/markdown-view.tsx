@@ -1,13 +1,12 @@
 import DOMPurify from 'dompurify';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  parseProductReferenceDeepLink,
-  productReferenceOpenRoute,
-} from '@xopcai/gateway-contract';
 
+import {
+  decorateAppLinks,
+  rewriteSupportedAppLinksInMarkdown,
+} from '@/lib/app-link';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { withDetailReturnTo } from '@/lib/navigation-return';
+import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -15,9 +14,8 @@ import { parseMarkdown } from './parse-markdown';
 import { recordStreamingParse } from './streaming-render-metrics';
 import {
   linkWorkspaceFileMentions,
-  openHttpLinksInNewTab,
   parseWorkspaceFileLinkTarget,
-  rewriteXopcSettingsLinksInMarkdown,
+  rewriteWorkspaceFileLinksInMarkdown,
   type WorkspaceFileLinkTarget,
 } from './internal-links';
 import { estimateMermaidPlaceholderHeight } from './mermaid-layout';
@@ -324,8 +322,6 @@ export interface MarkdownViewProps {
   codeCopy?: boolean;
   /** Called when a chat/workspace file link should open in the local preview pane. */
   onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void;
-  /** Opens HTTP(S) links in a separate browser tab or window. */
-  openHttpLinksInNewTab?: boolean;
   /** Render Mermaid diagrams. Disabled while chat Markdown is still streaming. */
   renderMermaid?: boolean;
   /** Add preview and image download actions to rendered Mermaid diagrams. */
@@ -341,13 +337,11 @@ function MarkdownViewImpl({
   className,
   codeCopy = true,
   onWorkspaceFileOpen,
-  openHttpLinksInNewTab: shouldOpenHttpLinksInNewTab = false,
   renderMermaid = true,
   mermaidActions = false,
   streamingMetricsKey,
 }: MarkdownViewProps) {
-  const routeLocation = useLocation();
-  const navigate = useNavigate();
+  const openAppLink = useAppLinkOpener();
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
     const m = messages(language).chat;
@@ -375,7 +369,8 @@ function MarkdownViewImpl({
   const safeHtml = useMemo(() => {
     if (!content.trim()) return '';
     const startedAt = streamingMetricsKey ? performance.now() : 0;
-    const raw = parseMarkdown(rewriteXopcSettingsLinksInMarkdown(content), breaks ? { breaks: true } : undefined);
+    const normalized = rewriteWorkspaceFileLinksInMarkdown(rewriteSupportedAppLinksInMarkdown(content));
+    const raw = parseMarkdown(normalized, breaks ? { breaks: true } : undefined);
     const sanitized = sanitizeMarkdownHtml(raw);
     if (streamingMetricsKey) {
       recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
@@ -408,11 +403,9 @@ function MarkdownViewImpl({
   }, [codeCopy, safeHtml, labels, onWorkspaceFileOpen]);
 
   useLayoutEffect(() => {
-    if (!shouldOpenHttpLinksInNewTab) return;
     const el = hostRef.current;
-    if (!el) return;
-    openHttpLinksInNewTab(el);
-  }, [safeHtml, shouldOpenHttpLinksInNewTab]);
+    if (el) decorateAppLinks(el);
+  }, [safeHtml]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -486,19 +479,6 @@ function MarkdownViewImpl({
       }
 
       const href = anchor.getAttribute('href') ?? '';
-      const productReference = parseProductReferenceDeepLink(href);
-      const productRoute = productReference
-        ? productReferenceOpenRoute({
-          ...productReference,
-          title: productReference.id,
-          capabilities: ['open'],
-        })
-        : href.startsWith('#/') ? href.slice(1) : null;
-      if (productRoute) {
-        event.preventDefault();
-        navigate(withDetailReturnTo(productRoute, `${routeLocation.pathname}${routeLocation.search}`));
-        return;
-      }
       const fileTarget = onWorkspaceFileOpen ? parseWorkspaceFileLinkTarget(href) : null;
       if (fileTarget && onWorkspaceFileOpen) {
         event.preventDefault();
@@ -506,15 +486,13 @@ function MarkdownViewImpl({
         return;
       }
 
-      if (href.startsWith('/settings/')) {
-        event.preventDefault();
-        window.location.hash = `#${href}`;
-      }
+      event.preventDefault();
+      void openAppLink(href);
     };
 
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
-  }, [routeLocation.pathname, routeLocation.search, navigate, onWorkspaceFileOpen]);
+  }, [onWorkspaceFileOpen, openAppLink]);
 
   return (
     <>

@@ -1574,7 +1574,7 @@ function RunDiagnosticsPanel({
             run.error ? (
               <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700 dark:text-red-300">{result}</p>
             ) : (
-              <MarkdownView content={result} compact className="text-sm" openHttpLinksInNewTab />
+              <MarkdownView content={result} compact className="text-sm" />
             )
           ) : (
             <p className="text-sm leading-relaxed text-fg-muted">
@@ -1781,7 +1781,7 @@ function AutomationDetails({
         <section>
           <h3 className="text-sm font-semibold text-fg">{labels.info.task}</h3>
           <div className="mt-2 rounded-xl border border-edge-subtle bg-surface-base p-4">
-            <MarkdownView content={automationTaskSummary(automation, labels)} compact openHttpLinksInNewTab />
+            <MarkdownView content={automationTaskSummary(automation, labels)} compact />
           </div>
         </section>
 

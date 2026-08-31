@@ -110,7 +110,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       {review.analysisMarkdown ? (
         <div className="mt-3 rounded-md border border-edge-subtle bg-surface px-2.5 py-2">
           <div className="mb-1 text-xs font-medium text-fg-secondary">Review assistant</div>
-          <MarkdownView content={review.analysisMarkdown} compact openHttpLinksInNewTab />
+          <MarkdownView content={review.analysisMarkdown} compact />
         </div>
       ) : null}
       {review.status === 'error' && review.errorMessage ? (
@@ -386,7 +386,6 @@ function ChatMarkdownView({
                 block.isTail && 'markdown-stream-tail',
               )}
               onWorkspaceFileOpen={openFile}
-              openHttpLinksInNewTab
               renderMermaid={!progressivelyRevealing}
               mermaidActions
               streamingMetricsKey={metricsKey}
@@ -398,7 +397,6 @@ function ChatMarkdownView({
           content={content}
           compact={compact}
           onWorkspaceFileOpen={openFile}
-          openHttpLinksInNewTab
           mermaidActions
         />
       )}

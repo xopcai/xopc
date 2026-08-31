@@ -330,7 +330,6 @@ export function WorkflowRunPanel({
                             className="workflow-status-markdown"
                             codeCopy={false}
                             renderMermaid={false}
-                            openHttpLinksInNewTab
                           />
                         </div>
                       ) : (
