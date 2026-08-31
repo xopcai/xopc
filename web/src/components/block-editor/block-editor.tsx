@@ -16,6 +16,7 @@ import {
 
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
+import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { noteAttachmentRef, uploadNoteMedia } from '@/features/notes/notes-api';
@@ -27,6 +28,8 @@ import { SlashCommands } from './extensions/slash-commands';
 import { BlockTrailingNode } from './extensions/trailing-node';
 import { BlockEditorToolbar } from './toolbar';
 import { ResizableImage } from './extensions/resizable-image';
+import { LinkBubbleMenu } from './link-bubble-menu';
+import { modifiedClickLinkHref } from './link-interaction';
 import type { SlashCommandRuntime } from './slash-items';
 
 import './block-editor.css';
@@ -67,6 +70,7 @@ export function BlockEditor({
 }: BlockEditorProps) {
   const language = useLocaleStore((s) => s.language);
   const notesLabels = messages(language).notes;
+  const openAppLink = useAppLinkOpener();
   const [imageUploading, setImageUploading] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
   const onChangeRef = useRef(onChange);
@@ -140,6 +144,13 @@ export function BlockEditor({
           }
         }
         return false;
+      },
+      handleClick: (_view, _pos, event) => {
+        const href = modifiedClickLinkHref(event);
+        if (!href) return false;
+        event.preventDefault();
+        void openAppLink(href);
+        return true;
       },
       handleDrop: (_view, event) => {
         const files = event.dataTransfer?.files;
@@ -243,6 +254,17 @@ export function BlockEditor({
       ) : null}
       <div className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <EditorContent editor={editor} />
+        <LinkBubbleMenu
+          editor={editor}
+          labels={{
+            open: notesLabels.linkOpen,
+            edit: notesLabels.linkEdit,
+            copy: notesLabels.linkCopy,
+            copied: notesLabels.linkCopied,
+            remove: notesLabels.linkRemove,
+            openFailed: notesLabels.linkOpenFailed,
+          }}
+        />
       </div>
       <input
         ref={imageInputRef}

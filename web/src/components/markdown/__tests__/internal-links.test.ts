@@ -4,58 +4,24 @@ import { describe, expect, it } from 'vitest';
 import {
   findWorkspaceRelativeFileMentions,
   linkWorkspaceFileMentions,
-  openHttpLinksInNewTab,
   parseWorkspaceFileLinkTarget,
-  rewriteXopcSettingsLinksInMarkdown,
-  xopcSettingsUrlToRoute,
+  rewriteWorkspaceFileLinksInMarkdown,
   xopcWorkspaceFileUrlToHref,
 } from '../internal-links';
 
 describe('markdown internal links', () => {
-  it('maps xopc settings deep links to hash-router paths', () => {
-    expect(xopcSettingsUrlToRoute('xopc://settings/agent-browser?tab=extension')).toBe(
-      '/settings/agent-browser?tab=extension',
-    );
-    expect(xopcSettingsUrlToRoute('xopc://gateway/mobile-connect?ps=secret')).toBeNull();
-
-    expect(
-      rewriteXopcSettingsLinksInMarkdown('Open [settings](xopc://settings/agent-browser?tab=extension).'),
-    ).toBe('Open [settings](/settings/agent-browser?tab=extension).');
-  });
-
   it('maps xopc workspace file deep links to internal hrefs', () => {
     expect(xopcWorkspaceFileUrlToHref('xopc://workspace/file?path=src%2Fapp.ts&line=3')).toBe(
       '/xopc/workspace/file?path=src%2Fapp.ts&line=3',
     );
     expect(
-      rewriteXopcSettingsLinksInMarkdown('Open [file](xopc://workspace/file?path=src%2Fapp.ts&line=3).'),
+      rewriteWorkspaceFileLinksInMarkdown('Open [file](xopc://workspace/file?path=src%2Fapp.ts&line=3).'),
     ).toBe('Open [file](/xopc/workspace/file?path=src%2Fapp.ts&line=3).');
     expect(parseWorkspaceFileLinkTarget('/xopc/workspace/file?path=src%2Fapp.ts&line=3')).toEqual({
       path: 'src/app.ts',
       line: 3,
       kind: 'workspace-relative',
     });
-  });
-
-  it('maps product deep links to internal product routes before sanitization', () => {
-    expect(
-      rewriteXopcSettingsLinksInMarkdown(
-        'Open [note](xopc://open?kind=note&id=note%2Fwith+spaces).',
-      ),
-    ).toBe('Open [note](#/notes/note%2Fwith%20spaces).');
-    expect(
-      rewriteXopcSettingsLinksInMarkdown(
-        'Open [app](xopc://open?kind=local_app&id=app%2Fwith+spaces).',
-      ),
-    ).toBe('Open [app](#/open?kind=local_app&id=app%2Fwith+spaces).');
-  });
-
-  it('does not merge a product deep link used as both the label and target', () => {
-    expect(
-      rewriteXopcSettingsLinksInMarkdown(
-        '快捷打开：[xopc://open?kind=note&id=b2d422b5](xopc://open?kind=note&id=b2d422b5)',
-      ),
-    ).toBe('快捷打开：[Open in xopc](#/notes/b2d422b5)');
   });
 
   it('parses workspace-relative file targets with optional line numbers', () => {
@@ -105,25 +71,4 @@ describe('markdown internal links', () => {
     expect(root.querySelector('a[href="docs/existing.md"]')?.textContent).toBe('docs/existing.md');
   });
 
-  it('opens HTTP(S) links separately without changing deep links', () => {
-    const root = document.createElement('div');
-    root.innerHTML = [
-      '<a href="http://127.0.0.1:18790/site/example/">Published site</a>',
-      '<a href="https://example.com/docs">Docs</a>',
-      '<a href="#/open?kind=local_app&amp;id=reading-list">Local app</a>',
-      '<a href="/settings/gateway">Settings route</a>',
-      '<a href="xopc://settings/gateway">Settings</a>',
-    ].join('');
-
-    openHttpLinksInNewTab(root);
-
-    const [site, docs, localApp, settingsRoute, settings] = [...root.querySelectorAll<HTMLAnchorElement>('a')];
-    expect(site?.target).toBe('_blank');
-    expect(site?.rel).toContain('noopener');
-    expect(site?.rel).toContain('noreferrer');
-    expect(docs?.target).toBe('_blank');
-    expect(localApp?.target).toBe('');
-    expect(settingsRoute?.target).toBe('');
-    expect(settings?.target).toBe('');
-  });
 });
