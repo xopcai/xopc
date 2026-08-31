@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildMinimalElectronPackageJson } from './electron-runtime-externals.mjs';
+import {
+  ELECTRON_PACKAGED_OVERRIDES,
+  buildMinimalElectronPackageJson,
+} from './electron-runtime-externals.mjs';
 import { prepareNodePtyPackage, resolveNodePtyPackage } from './prepare-node-pty.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -39,6 +42,14 @@ function copyRequired(repoRoot, from, to) {
 }
 
 function installRuntimeDeps(packDirPath, target) {
+  const workspaceConfig = [
+    'overrides:',
+    ...Object.entries(ELECTRON_PACKAGED_OVERRIDES).map(
+      ([name, version]) => `  ${JSON.stringify(name)}: ${JSON.stringify(version)}`,
+    ),
+    '',
+  ].join('\n');
+  writeFileSync(join(packDirPath, 'pnpm-workspace.yaml'), workspaceConfig);
   const r = spawnSync(
     'pnpm',
     [
@@ -57,6 +68,7 @@ function installRuntimeDeps(packDirPath, target) {
   if ((r.status ?? 1) !== 0) {
     throw new Error(`[prepare-electron-pack-dir] pnpm install failed in ${packDirPath}`);
   }
+  rmSync(join(packDirPath, 'pnpm-workspace.yaml'));
 }
 
 function stageNodePtyRuntime(repoRoot, packDirPath, target) {

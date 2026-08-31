@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ELECTRON_GATEWAY_EXTERNALS,
   ELECTRON_PACKAGED_DEPENDENCIES,
+  ELECTRON_PACKAGED_OVERRIDES,
   buildMinimalElectronPackageJson,
   resolveInstalledPackageVersion,
 } from '../../scripts/electron-runtime-externals.mjs';
@@ -54,9 +55,10 @@ describe('electron-runtime-externals', () => {
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
+    expect(ELECTRON_PACKAGED_OVERRIDES).toEqual({ 'tar@<=7.5.20': '7.5.22' });
   });
 
-  it('promotes optional runtime packages from devDependencies for Electron packaging', () => {
+  it('promotes optional runtime packages for Electron packaging', () => {
     const minimal = buildMinimalElectronPackageJson({
       name: '@xopcai/xopc',
       version: '0.0.0',
@@ -64,10 +66,12 @@ describe('electron-runtime-externals', () => {
         ws: '^8.21.0',
         'silk-wasm': '^3.7.1',
       },
-      devDependencies: {
+      optionalDependencies: {
         '@huggingface/transformers': '3.8.1',
-        'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
+      },
+      devDependencies: {
+        'onnxruntime-common': '1.21.0',
         'node-pty': '1.1.0',
       },
     });
