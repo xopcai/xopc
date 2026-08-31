@@ -52,6 +52,7 @@ import {
 } from './VoiceRecordingOverlay';
 import {
   beginRecording,
+  classifyVoiceTranscriptionFailure,
   discardRecording,
   finishRecording,
   inferRecordingMimeType,
@@ -452,7 +453,14 @@ export const ChatComposer = memo(function ChatComposer({
         }
       } catch (error) {
         reportVoiceFailure('transcribe', error);
-        setSnack(cm.voiceTranscribeFailed);
+        const failure = classifyVoiceTranscriptionFailure(error);
+        setSnack(
+          failure === 'decoder_unavailable'
+            ? cm.voiceDecoderUnavailable
+            : failure === 'runtime_unavailable'
+              ? cm.voiceRuntimeUnavailable
+              : cm.voiceTranscribeFailed,
+        );
       } finally {
         setTranscribing(false);
       }

@@ -39,4 +39,24 @@ describe('mergeVoiceTranscriptsIntoUserText', () => {
       }),
     );
   });
+
+  it('preserves an actionable marker when the gateway decoder is missing', async () => {
+    sttMocks.transcribe.mockRejectedValueOnce(
+      new Error('Audio decoder is unavailable; install ffmpeg'),
+    );
+
+    const result = await mergeVoiceTranscriptsIntoUserText(
+      [{
+        type: 'voice',
+        mimeType: 'audio/mp4',
+        name: 'voice.m4a',
+        size: 3,
+        data: Buffer.from('abc').toString('base64'),
+      }],
+      '',
+      { enabled: true, provider: 'xopc-local' },
+    );
+
+    expect(result.voiceTranscripts).toEqual(['[STT failed: audio decoder unavailable]']);
+  });
 });

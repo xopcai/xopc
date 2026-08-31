@@ -10,6 +10,7 @@ import {
   decodeAudioToMonoFloat32,
   detectAudioFormat,
   forEachNormalizedAudioSegment,
+  getAudioDecoderStatus,
 } from '../normalize.js';
 
 function pcmWav(seconds: number, sampleRate = 16_000): Buffer {
@@ -48,6 +49,23 @@ describe('audio normalization', () => {
     const decoded = await decodeAudioToMonoFloat32({ buffer: pcmWav(0.25) });
     expect(decoded.sampleRate).toBe(16_000);
     expect(decoded.durationSeconds).toBeCloseTo(0.25, 3);
+  });
+
+  it('reports a missing configured decoder before compressed audio is submitted', async () => {
+    const previous = process.env.XOPC_FFMPEG_PATH;
+    process.env.XOPC_FFMPEG_PATH = '/definitely/missing/xopc-ffmpeg';
+    try {
+      expect(getAudioDecoderStatus()).toMatchObject({
+        available: false,
+        command: '/definitely/missing/xopc-ffmpeg',
+      });
+      await expect(decodeAudioToMonoFloat32({
+        buffer: Buffer.from('0000ftyp0000'),
+      })).rejects.toThrow('install ffmpeg or set XOPC_FFMPEG_PATH');
+    } finally {
+      if (previous == null) delete process.env.XOPC_FFMPEG_PATH;
+      else process.env.XOPC_FFMPEG_PATH = previous;
+    }
   });
 
   const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;

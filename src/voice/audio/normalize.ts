@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,6 +25,36 @@ export class AudioNormalizationError extends Error {
   }
 }
 
+export interface AudioDecoderStatus {
+  available: boolean;
+  command: string;
+  error?: string;
+}
+
+function ffmpegCommand(): string {
+  return process.env.XOPC_FFMPEG_PATH?.trim() || 'ffmpeg';
+}
+
+/** Reports whether compressed browser/mobile recordings can be decoded on this host. */
+export function getAudioDecoderStatus(): AudioDecoderStatus {
+  const command = ffmpegCommand();
+  const result = spawnSync(command, ['-version'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'ignore', 'pipe'],
+    timeout: 5_000,
+  });
+  if (!result.error && result.status === 0) return { available: true, command };
+
+  const cause = result.error instanceof Error
+    ? result.error.message
+    : result.stderr?.trim() || `decoder exited with status ${String(result.status)}`;
+  return {
+    available: false,
+    command,
+    error: `Audio decoder is unavailable (${command}): ${cause}. Install ffmpeg or set XOPC_FFMPEG_PATH.`,
+  };
+}
+
 export function detectAudioFormat(buffer: Buffer): AudioFormat {
   if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WAVE') return 'wav';
   if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'webm';
@@ -41,7 +71,8 @@ function runFfmpeg(
 ): Promise<Buffer> {
   options.signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const child = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...args], {
+    const command = ffmpegCommand();
+    const child = spawn(command, ['-hide_banner', '-loglevel', 'error', ...args], {
       stdio: [options.input ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
     const stdout: Buffer[] = [];
@@ -78,7 +109,7 @@ function runFfmpeg(
     });
     child.once('error', (error: NodeJS.ErrnoException) => {
       const message = error.code === 'ENOENT'
-        ? 'Audio decoder is unavailable; install ffmpeg to transcribe this format'
+        ? `Audio decoder is unavailable (${command}); install ffmpeg or set XOPC_FFMPEG_PATH to transcribe this format`
         : `Audio decoder failed to start: ${error.message}`;
       finish(new AudioNormalizationError(message, { cause: error }));
     });

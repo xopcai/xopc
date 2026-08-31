@@ -57,12 +57,24 @@ import {
 
 import {
   beginRecording,
+  classifyVoiceTranscriptionFailure,
   finishRecording,
   nativeRecordingOptionsForPlatform,
   readRecordingDurationMillis,
   requestMicPermission,
   VoiceRecordingError,
 } from '../voiceRecording';
+
+describe('classifyVoiceTranscriptionFailure', () => {
+  it('separates a missing gateway decoder from generic recognition failures', () => {
+    expect(classifyVoiceTranscriptionFailure(
+      new Error('HTTP 415: Audio decoder is unavailable; install ffmpeg'),
+    )).toBe('decoder_unavailable');
+    expect(classifyVoiceTranscriptionFailure(new Error('sherpa-onnx-node is not installed')))
+      .toBe('runtime_unavailable');
+    expect(classifyVoiceTranscriptionFailure(new Error('request timed out'))).toBe('unknown');
+  });
+});
 
 describe('nativeRecordingOptionsForPlatform', () => {
   it('flattens iOS recording preset fields for native AudioRecorder', () => {

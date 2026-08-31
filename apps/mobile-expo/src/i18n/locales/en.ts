@@ -595,6 +595,8 @@ export const en = {
     voiceTranscribing: 'Recognizing…',
     voiceNoSpeechDetected: 'No speech detected.',
     voiceTranscribeFailed: 'Voice recognition failed. Try again.',
+    voiceDecoderUnavailable: 'The gateway cannot decode mobile recordings. Install ffmpeg on the gateway host.',
+    voiceRuntimeUnavailable: 'The gateway local voice runtime is unavailable. Check the voice model and Sherpa engine.',
     voiceSendUnavailable: 'Voice message sending is unavailable.',
     voiceSendFailed: 'Could not send the voice message. Check your connection and try again.',
     audioPlay: 'Play voice message',
