@@ -4,10 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { STTTranscriptionError } from '../../../../voice/stt/index.js';
 
-const { transcribe, syncVoiceLanguage } = vi.hoisted(() => ({
+const { completeWithResolvedCredentials, transcribe, syncVoiceLanguage } = vi.hoisted(() => ({
+  completeWithResolvedCredentials: vi.fn(),
   transcribe: vi.fn(),
   syncVoiceLanguage: vi.fn(),
 }));
+
+vi.mock('../../../../providers/model-call.js', () => ({ completeWithResolvedCredentials }));
 
 vi.mock('../../../../voice/stt/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../voice/stt/index.js')>();
@@ -16,7 +19,7 @@ vi.mock('../../../../voice/stt/index.js', async (importOriginal) => {
 
 import { registerVoiceRoutes } from '../voice.js';
 
-function createApp() {
+function createApp(options: { refinement?: boolean } = {}) {
   const app = new Hono();
   const config = ConfigSchema.parse({});
   config.tools.media = {
@@ -27,6 +30,9 @@ function createApp() {
       providers: { openai: { apiKey: 'test' } },
     },
   };
+  if (options.refinement) {
+    config.voice = { input: { refinement: { mode: 'punctuation' } } };
+  }
   registerVoiceRoutes(app, {
     service: { currentConfig: config, syncVoiceLanguage },
     strictRateLimitMiddleware: async (_c, next) => next(),
@@ -37,6 +43,7 @@ function createApp() {
 describe('voice transcription routes', () => {
   beforeEach(() => {
     transcribe.mockReset();
+    completeWithResolvedCredentials.mockReset();
     syncVoiceLanguage.mockReset();
     syncVoiceLanguage.mockResolvedValue({ applied: true, language: 'zh', mode: 'auto' });
     transcribe.mockResolvedValue({
@@ -44,6 +51,23 @@ describe('voice transcription routes', () => {
       provider: 'openai',
       attempts: [{ provider: 'openai', task: 'success', reasonCode: 'success', latencyMs: 12 }],
       attemptedProviders: ['openai'],
+    });
+  });
+
+  it('returns provider text without waiting for configured refinement', async () => {
+    const form = new FormData();
+    form.append('audio', new File(['audio'], 'sample.wav', { type: 'audio/wav' }));
+
+    const res = await createApp({ refinement: true }).request('/api/voice/transcriptions', {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(res.status).toBe(200);
+    expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      payload: { text: 'hello', refinementAvailable: true },
     });
   });
 
@@ -64,8 +88,23 @@ describe('voice transcription routes', () => {
     );
     await expect(res.json()).resolves.toMatchObject({
       ok: true,
-      payload: { raw: 'hello', provider: 'openai' },
+      payload: { text: 'hello', refinementAvailable: false, provider: 'openai' },
     });
+  });
+
+  it('keeps transcript refinement on a separate request', async () => {
+    completeWithResolvedCredentials.mockResolvedValue({
+      content: [{ type: 'text', text: 'Hello.' }],
+    });
+    const res = await createApp({ refinement: true }).request('/api/voice/transcriptions/refine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hello' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
+    await expect(res.json()).resolves.toEqual({ ok: true, payload: { text: 'Hello.' } });
   });
 
   it('returns a stable client error for unsupported audio', async () => {

@@ -93,6 +93,7 @@ export interface AddProviderDialogMessages {
   discoveringModels: string;
   discoverModelsHint: string;
   noResults: string;
+  recommended: string;
   step1Title: string;
   step2BuiltinTitle: string;
   step2CustomTitle: string;
@@ -113,6 +114,8 @@ type DialogStep =
   | { type: 'pick' }
   | { type: 'builtin'; providerId: string }
   | { type: 'custom'; presetKey?: string };
+
+const RECOMMENDED_PROVIDER_ID = 'xopc-cloud';
 
 interface AddProviderDialogProps {
   open: boolean;
@@ -252,7 +255,11 @@ function PickProviderStep({
     });
   }, [builtinRows, query]);
 
-  const groups = useMemo(() => groupByCategory(filteredRows), [filteredRows]);
+  const recommendedRow = filteredRows.find((row) => row.id === RECOMMENDED_PROVIDER_ID);
+  const groups = useMemo(
+    () => groupByCategory(filteredRows.filter((row) => row.id !== RECOMMENDED_PROVIDER_ID)),
+    [filteredRows],
+  );
 
   return (
     <>
@@ -283,6 +290,15 @@ function PickProviderStep({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-3">
+        {recommendedRow ? (
+          <div className="mb-2">
+            <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
+              {labels.recommended}
+            </p>
+            <ProviderPickButton row={recommendedRow} onPick={onPickBuiltin} />
+          </div>
+        ) : null}
+
         {/* Custom provider entry */}
         {!query ? (
           <button
@@ -317,23 +333,7 @@ function PickProviderStep({
                     {labels.categories[cat] ?? cat}
                   </p>
                   <div className="flex flex-col gap-0.5">
-                    {list.map((row) => (
-                      <button
-                        key={row.id}
-                        type="button"
-                        onClick={() => onPickBuiltin(row.id)}
-                        className={cn(
-                          'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors',
-                          'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                          interaction.press,
-                        )}
-                      >
-                        <span className="truncate text-sm text-fg">{row.name}</span>
-                        {row.configured ? (
-                          <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                        ) : null}
-                      </button>
-                    ))}
+                    {list.map((row) => <ProviderPickButton key={row.id} row={row} onPick={onPickBuiltin} />)}
                   </div>
                 </div>
               );
@@ -342,6 +342,31 @@ function PickProviderStep({
         )}
       </div>
     </>
+  );
+}
+
+function ProviderPickButton({
+  row,
+  onPick,
+}: {
+  row: ProviderRowModel;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(row.id)}
+      className={cn(
+        'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors',
+        'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        interaction.press,
+      )}
+    >
+      <span className="truncate text-sm text-fg">{row.name}</span>
+      {row.configured ? (
+        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+      ) : null}
+    </button>
   );
 }
 

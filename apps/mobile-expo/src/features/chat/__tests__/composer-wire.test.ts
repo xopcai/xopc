@@ -63,6 +63,26 @@ describe('composerAttachmentsToWire', () => {
       },
     ]);
   });
+
+  it('never sends audio as base64', () => {
+    const wire = composerAttachmentsToWire([{
+      id: 'voice-1',
+      type: 'audio',
+      name: 'voice.m4a',
+      mimeType: 'audio/mp4',
+      size: 12,
+      content: 'YXVkaW8=',
+      localUri: 'file:///documents/voice.m4a',
+    }]);
+
+    expect(wire).toEqual([{
+      type: 'voice',
+      mimeType: 'audio/mp4',
+      name: 'voice.m4a',
+      size: 12,
+      localUri: 'file:///documents/voice.m4a',
+    }]);
+  });
 });
 
 describe('capAttachments', () => {

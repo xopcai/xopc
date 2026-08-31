@@ -4,7 +4,7 @@ import { PanResponder } from 'react-native';
 
 import { AppToast } from '../../components/AppToast';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_LONG } from '../../constants/toast';
-import { transcribeVoice } from '../../api/agent-client';
+import { refineVoiceTranscript, transcribeVoice } from '../../api/agent-client';
 import { useMessages } from '../../i18n/messages';
 import { useTheme } from '../../theme';
 import {
@@ -184,13 +184,25 @@ export function useVoiceCaptureInteraction({
       setTranscribing(true);
       try {
         const result = await transcribeVoice(uri, mimeType);
-        const text = (result.refined || result.raw).trim();
+        const text = result.text.trim();
         if (text) {
           const current = valueRef.current.trim();
           const nextText = current ? `${current} ${text}` : text;
+          valueRef.current = nextText;
           onChangeText(nextText);
           onTextReady?.(nextText);
           onSettled?.();
+          if (result.refinementAvailable) {
+            void refineVoiceTranscript(text).then((refined) => {
+              const trimmed = refined.trim();
+              if (!mountedRef.current || !trimmed || trimmed === text) return;
+              if (valueRef.current !== nextText) return;
+              const refinedText = current ? `${current} ${trimmed}` : trimmed;
+              valueRef.current = refinedText;
+              onChangeText(refinedText);
+              onTextReady?.(refinedText);
+            }).catch(() => undefined);
+          }
         } else {
           setSnack(cm.voiceNoSpeechDetected);
         }

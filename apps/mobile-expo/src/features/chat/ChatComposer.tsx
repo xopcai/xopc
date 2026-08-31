@@ -19,7 +19,7 @@ import { Icon } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
 import { motion } from '../../motion';
-import { transcribeVoice } from '../../api/agent-client';
+import { refineVoiceTranscript, transcribeVoice } from '../../api/agent-client';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
 import { ChatPendingFollowUpStack } from './ChatPendingFollowUpStack';
@@ -345,6 +345,7 @@ export const ChatComposer = memo(function ChatComposer({
   /** Typing updates draft only; cursor comes from TextInput selection events. */
   const onDraftInputChange = useCallback(
     (nextDraft: string) => {
+      draftRef.current = nextDraft;
       setDraft(nextDraft);
       setInputHeight(estimateComposerInputHeight(nextDraft, inputWidth || undefined));
     },
@@ -354,6 +355,7 @@ export const ChatComposer = memo(function ChatComposer({
   /** Programmatic draft updates (palette, suggestions, restore) set cursor explicitly. */
   const updateDraft = useCallback(
     (nextDraft: string, nextCursor = nextDraft.length) => {
+      draftRef.current = nextDraft;
       setDraft(nextDraft);
       setCursorPos(nextCursor);
       setInputHeight(estimateComposerInputHeight(nextDraft, inputWidth || undefined));
@@ -457,7 +459,7 @@ export const ChatComposer = memo(function ChatComposer({
       setTranscribing(true);
       try {
         const result = await transcribeVoice(uri, mimeType);
-        const text = result.refined || result.raw;
+        const text = result.text;
         if (text.trim()) {
           const currentDraft = draftRef.current;
           const nextDraft = currentDraft.trim()
@@ -466,6 +468,14 @@ export const ChatComposer = memo(function ChatComposer({
           updateDraft(nextDraft);
           setMode('text');
           requestAnimationFrame(() => inputRef.current?.focus());
+          if (result.refinementAvailable) {
+            void refineVoiceTranscript(text).then((refined) => {
+              const trimmed = refined.trim();
+              if (!mountedRef.current || !trimmed || trimmed === text.trim()) return;
+              if (draftRef.current !== nextDraft) return;
+              updateDraft(currentDraft.trim() ? `${currentDraft.trim()} ${trimmed}` : trimmed);
+            }).catch(() => undefined);
+          }
         } else {
           setSnack(cm.voiceNoSpeechDetected);
         }
