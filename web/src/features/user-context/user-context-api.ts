@@ -153,6 +153,7 @@ export type UserFocus = {
   id: string;
   versionId: string;
   principalId: string;
+  canonicalKey?: string;
   title: string;
   summary: string;
   horizon: 'current' | 'ongoing' | 'long_term';
@@ -321,5 +322,18 @@ export function updateUserFocus(
   return fetchJson(apiUrl(`/api/understanding/focuses/${encodeURIComponent(focusId)}`), {
     method: 'PATCH',
     body: JSON.stringify(patch),
+  });
+}
+
+export type ContextReviewDecision = {
+  objectType: 'focus' | 'understanding';
+  objectId: string;
+  action: 'accept' | 'reject' | 'pause';
+};
+
+export function batchReviewContextObjects(decisions: ContextReviewDecision[]): Promise<{ objects: unknown[] }> {
+  return fetchJson(apiUrl('/api/you/context-objects/batch-review'), {
+    method: 'POST',
+    body: JSON.stringify({ decisions }),
   });
 }

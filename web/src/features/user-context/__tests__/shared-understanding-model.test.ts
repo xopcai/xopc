@@ -30,14 +30,15 @@ describe('shared understanding model', () => {
       understanding(),
       understanding({ id: 'understanding-review', status: 'needs_review', updatedAt: 40 }),
       understanding({ id: 'understanding-history', status: 'rejected', updatedAt: 4 }),
+      understanding({ id: 'rejected-inferred-candidate', status: 'rejected', explicitness: 'inferred', updatedAt: 3 }),
     ]);
 
     expect(model.currentFocuses.map((item) => item.id)).toEqual(['focus-1']);
     expect(model.activeUnderstandings.map((item) => item.id)).toEqual(['understanding-1']);
     expect(model.reviewQueue.map((item) => item.id)).toEqual(['understanding-review', 'focus-review']);
-    expect(model.history.map((item) => item.id)).toEqual(['focus-history', 'understanding-history']);
+    expect(model.history.map((item) => item.id)).toEqual(['focus-history', 'understanding-history', 'rejected-inferred-candidate']);
     expect(model.timeline.map((item) => item.id)).toEqual([
-      'understanding-review', 'focus-review', 'focus-1', 'understanding-1', 'focus-history', 'understanding-history',
+      'focus-1', 'understanding-1', 'focus-history', 'understanding-history',
     ]);
   });
 
