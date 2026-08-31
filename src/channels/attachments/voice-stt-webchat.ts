@@ -4,6 +4,7 @@
 
 import type { STTConfig } from '../../voice/stt/types.js';
 import { isSTTAvailable, transcribe } from '../../voice/stt/index.js';
+import { createLogger } from '../../utils/logger.js';
 import {
   decodeInboundAttachmentBase64,
   readInboundAttachmentBuffer,
@@ -12,6 +13,7 @@ import {
 } from './inbound-persist.js';
 
 const STT_MAX_BYTES = 25 * 1024 * 1024;
+const log = createLogger('VoiceAttachmentSTT');
 
 export function isVoiceLikeAttachment(att: InboundAttachmentInput | MediaRef): boolean {
   if (att.type === 'voice') return true;
@@ -78,8 +80,20 @@ export async function mergeVoiceTranscriptsIntoUserText(
         fileName: att.name,
       });
       transcripts.push(r.text.trim() || '[Voice: no speech detected]');
-    } catch {
-      transcripts.push('[STT failed]');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.error(
+        {
+          ...(error instanceof Error ? { err: error } : { errorMessage }),
+          fileName: att.name,
+          mimeType: att.mimeType,
+          size: buf.length,
+          phase: 'inbound_transcribe',
+        },
+        `Inbound voice transcription failed: ${errorMessage}`,
+      );
+      const decoderUnavailable = /ffmpeg|audio decoder|unsupported_audio_codec/i.test(errorMessage);
+      transcripts.push(decoderUnavailable ? '[STT failed: audio decoder unavailable]' : '[STT failed]');
     }
   }
 

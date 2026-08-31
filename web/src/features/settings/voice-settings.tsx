@@ -754,6 +754,16 @@ function LocalVoiceModelsPanel({ v }: { v: VoiceSettingsMessages }) {
       <div className="text-sm font-medium text-fg">{v.stt.localModels}</div>
       <p className="mt-1 text-xs text-fg-muted">{v.stt.localModelsDesc}</p>
       {error ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{String(error)}</p> : null}
+      {data?.runtime.ready === false ? (
+        <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+          {data.runtime.error ?? 'Local voice runtime is unavailable'}
+        </p>
+      ) : null}
+      {data?.decoder?.available === false ? (
+        <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+          {data.decoder.error ?? 'Compressed audio decoding is unavailable'}
+        </p>
+      ) : null}
       {actionError ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{actionError}</p> : null}
       <div className="mt-3 grid gap-2">
         {(data?.models ?? []).map((model) => {

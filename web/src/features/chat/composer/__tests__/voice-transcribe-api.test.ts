@@ -72,4 +72,28 @@ describe('voice-transcribe-api', () => {
       progress: 0.42,
     });
   });
+
+  it('checks local decoder readiness even when the model is already marked available', async () => {
+    fetchJson
+      .mockResolvedValueOnce({
+        voice: {
+          sttAvailable: true,
+          sttEnabled: true,
+          sttProvider: 'xopc-local',
+          localModelId: 'sensevoice-small',
+        },
+      })
+      .mockResolvedValueOnce({
+        payload: {
+          runtime: { ready: false, error: 'Audio decoder is unavailable; install ffmpeg' },
+          models: [{ id: 'sensevoice-small', state: 'ready' }],
+        },
+      });
+
+    await expect(fetchVoiceReadiness()).resolves.toMatchObject({
+      state: 'error',
+      provider: 'xopc-local',
+      error: 'Audio decoder is unavailable; install ffmpeg',
+    });
+  });
 });

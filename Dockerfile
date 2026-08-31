@@ -83,7 +83,7 @@ RUN --mount=type=cache,id=xopc-bookworm-apt-cache,target=/var/cache/apt,sharing=
     fi && \
     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ca-certificates curl git hostname lsof openssl procps python3 tini && \
+      ca-certificates curl ffmpeg git hostname lsof openssl procps python3 tini && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 

@@ -38,6 +38,17 @@ export class VoiceRecordingError extends Error {
   }
 }
 
+export type VoiceTranscriptionFailureKind = 'decoder_unavailable' | 'runtime_unavailable' | 'unknown';
+
+export function classifyVoiceTranscriptionFailure(error: unknown): VoiceTranscriptionFailureKind {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/ffmpeg|audio decoder|unsupported_audio_codec/i.test(message)) return 'decoder_unavailable';
+  if (/local voice runtime|sherpa|voice model|model.+not installed/i.test(message)) {
+    return 'runtime_unavailable';
+  }
+  return 'unknown';
+}
+
 /** expo-audio only emits recordingStatusUpdate on finish/error — poll for live metering. */
 const METERING_POLL_MS = 100;
 const meteringPolls = new WeakMap<ExpoRecording, ReturnType<typeof setInterval>>();
