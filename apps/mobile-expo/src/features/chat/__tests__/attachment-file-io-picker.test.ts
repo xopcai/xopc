@@ -21,6 +21,10 @@ vi.mock('expo-document-picker', () => ({
   getDocumentAsync,
 }));
 
+vi.mock('expo-file-system', () => ({
+  File: class File {},
+}));
+
 describe('pickAttachmentFromSource permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
