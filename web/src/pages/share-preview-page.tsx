@@ -13,11 +13,12 @@ import {
   type PreviewFileDescriptor,
 } from '@/features/preview-runtime';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 interface ShareMeta {
-  kind: 'file' | 'directory';
+  kind: 'file' | 'directory' | 'note';
   fileName: string;
   fileSize: number;
   mimeType: string;
@@ -25,6 +26,18 @@ interface ShareMeta {
   expiresAt: string;
   remainingViews: number | null;
   valid: boolean;
+}
+
+interface SharedNoteView {
+  kind: 'note';
+  title: string;
+  markdown: string;
+  snapshotAt: string;
+  expiresAt: string;
+  description: string | null;
+  sourceVersion: number;
+  snapshotRevision: number;
+  attachments: Array<{ id: string; type: string; mimeType: string; fileName: string; size: number; duration?: number }>;
 }
 
 type SharePreviewLoad = {
@@ -47,6 +60,7 @@ export function SharePreviewPage() {
   const [load, setLoad] = useState<SharePreviewLoad>(emptyLoad);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [noteView, setNoteView] = useState<SharedNoteView | null>(null);
 
   const descriptor = useMemo((): PreviewFileDescriptor | null => {
     if (!meta || !token || meta.kind !== 'file') return null;
@@ -84,6 +98,16 @@ export function SharePreviewPage() {
         setMeta(m);
         if (!m.valid) {
           setError(t.expired);
+          return;
+        }
+        if (m.kind === 'note') {
+          const viewRes = await fetch(apiUrl(`/s/${encodeURIComponent(token)}/view`), { method: 'POST' });
+          if (!viewRes.ok) {
+            setError(viewRes.status === 404 ? t.notFound : t.expired);
+            return;
+          }
+          const view = await viewRes.json() as { payload?: SharedNoteView };
+          if (!cancelled && view.payload) setNoteView(view.payload);
           return;
         }
         if (m.kind !== 'file') return;
@@ -149,7 +173,7 @@ export function SharePreviewPage() {
   const openInlineUrl = token ? apiUrl(`/s/${encodeURIComponent(token)}?inline=1`) : '#';
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-base">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-base">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-edge px-4">
         <span className="text-lg" aria-hidden>
           #
@@ -171,7 +195,7 @@ export function SharePreviewPage() {
             </div>
           ) : null}
         </div>
-        {meta ? (
+        {meta && meta.kind !== 'note' ? (
           <>
             <a
               href={openInlineUrl}
@@ -194,7 +218,7 @@ export function SharePreviewPage() {
         ) : null}
       </header>
 
-      <main className="flex min-h-0 w-full flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6">
+      <main className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-6 sm:px-5 xl:px-6">
         {loading ? (
           <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel p-4 shadow-surface" aria-busy="true">
             <Skeleton className="h-5 w-56 max-w-full" />
@@ -215,6 +239,19 @@ export function SharePreviewPage() {
           <div className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg-muted">
             {t.directoryHint}
           </div>
+        ) : meta?.kind === 'note' && noteView ? (
+          <article className="mx-auto w-full max-w-3xl rounded-xl border border-edge-subtle bg-surface-panel px-6 py-8 shadow-surface sm:px-10 sm:py-10">
+            <h1 className="text-3xl font-bold tracking-tight text-fg">{noteView.title}</h1>
+            <div className="mt-2 text-xs text-fg-muted">
+              {t.sharedAt}{' '}{new Date(noteView.snapshotAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+              {' · '}{t.expiresAt}{' '}{new Date(noteView.expiresAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+            </div>
+            {noteView.description ? (
+              <p className="mt-5 rounded-lg bg-surface-subtle px-4 py-3 text-sm leading-6 text-fg-muted">{noteView.description}</p>
+            ) : null}
+            <MarkdownView content={blockRemoteImages(noteView.markdown, t.remoteImageBlocked)} className="mt-8" />
+            <footer className="mt-10 border-t border-edge-subtle pt-4 text-center text-xs text-fg-subtle">{t.sharedVia}</footer>
+          </article>
         ) : descriptor ? (
           <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             <PreviewRuntimeView
@@ -240,6 +277,13 @@ export function SharePreviewPage() {
   );
 }
 
+function blockRemoteImages(markdown: string, label: string): string {
+  return markdown.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/gi, (_match, alt: string, url: string) => {
+    const text = alt.trim() || label;
+    return `[${text}](${url})`;
+  });
+}
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
@@ -257,6 +301,9 @@ const PREVIEW_LABELS_ZH = {
   openInline: '在新窗口打开',
   directoryHint: '目录分享请使用主页面浏览。',
   tooLarge: '文件过大，无法在线预览，请下载查看。',
+  sharedAt: '分享于',
+  sharedVia: '通过 xopc 分享',
+  remoteImageBlocked: '远程图片（点击打开）',
 } as const;
 
 const PREVIEW_LABELS_EN = {
@@ -269,4 +316,7 @@ const PREVIEW_LABELS_EN = {
   openInline: 'Open raw',
   directoryHint: 'Directory shares are browsed from the main page.',
   tooLarge: 'This file is too large to preview here. Please download it instead.',
+  sharedAt: 'Shared',
+  sharedVia: 'Shared via xopc',
+  remoteImageBlocked: 'Remote image (open manually)',
 } as const;

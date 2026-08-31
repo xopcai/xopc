@@ -548,7 +548,7 @@ export const TunnelConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
     brokerUrl: z.string().url().default('https://frp.xopc.ai/api'),
-    /** Broker register API secret (env `XOPC_TUNNEL_REGISTRATION_SECRET` overrides when set). */
+    /** Broker register API secret. */
     registrationSecret: z.string().min(1).optional(),
     autoStart: z.boolean().default(false),
     subdomain: z.string().optional(),
@@ -690,6 +690,24 @@ export const GatewayConfigSchema = z.object({
       maxDepth: 20,
       listingCacheMs: 60_000,
       zipConcurrency: 1,
+    }),
+    /** Note snapshot-sharing controls. */
+    note: z.object({
+      enabled: z.boolean().default(true),
+      maxMarkdownBytes: z.number().int().min(1_024).max(10_485_760).default(2_097_152),
+      maxAttachmentCount: z.number().int().min(0).max(500).default(50),
+      maxAttachmentSize: z.number().int().min(1_024).max(1_073_741_824).default(104_857_600),
+      maxTotalSize: z.number().int().min(1_024).max(2_147_483_648).default(262_144_000),
+      assetTicketTtlMs: z.number().int().min(60_000).max(3_600_000).default(600_000),
+      revokeOnSourceDelete: z.boolean().default(true),
+    }).default({
+      enabled: true,
+      maxMarkdownBytes: 2_097_152,
+      maxAttachmentCount: 50,
+      maxAttachmentSize: 104_857_600,
+      maxTotalSize: 262_144_000,
+      assetTicketTtlMs: 600_000,
+      revokeOnSourceDelete: true,
     }),
   }).optional(),
   /** Site-share configuration (static directory or reverse-proxy a local dev server). */

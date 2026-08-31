@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative as relPathPosix, resolve as resolvePath } from 'node:path';
-import { stat, lstat, realpath, readdir } from 'node:fs/promises';
+import { stat, lstat, realpath, readdir, rm } from 'node:fs/promises';
 
 import { resolveStateDir } from '../config/paths.js';
 import { isPathUnderWorkspace } from '../gateway/workspace-editor-path.js';
@@ -12,7 +12,11 @@ import type {
   ShareStoreData,
   ShareConfig,
   CreateShareParams,
-  ShareKind,
+  WorkspaceShareKind,
+  WorkspaceShareRecord,
+  NoteShareRecord,
+  DirectoryShareRecord,
+  ShareDirectoryMeta,
 } from './share-types.js';
 import { SHARE_CONFIG_DEFAULTS } from './share-types.js';
 
@@ -88,7 +92,7 @@ export class ShareStore {
       workspaceRoot: string;
       gatewayTokenHash: string;
     },
-  ): Promise<ShareRecord> {
+  ): Promise<WorkspaceShareRecord> {
     if (!this.config.enabled) {
       throw new Error('File sharing is disabled');
     }
@@ -113,7 +117,7 @@ export class ShareStore {
     const absolutePath = await this.resolveAndValidatePath(relPath, workspaceRoot);
     const fileStat = await stat(absolutePath);
 
-    const detectedKind: ShareKind = fileStat.isDirectory() ? 'directory' : 'file';
+    const detectedKind: WorkspaceShareKind = fileStat.isDirectory() ? 'directory' : 'file';
     const requestedKind = params.kind ?? detectedKind;
     if (requestedKind !== detectedKind) {
       throw new Error(
@@ -152,7 +156,7 @@ export class ShareStore {
     workspaceRoot: string;
     ttlMs: number;
     gatewayTokenHash: string;
-  }): Promise<ShareRecord> {
+  }): Promise<WorkspaceShareRecord> {
     const { params, absolutePath, fileStat, relPath, workspaceRoot, ttlMs, gatewayTokenHash } = args;
 
     if (!fileStat.isFile()) {
@@ -205,7 +209,7 @@ export class ShareStore {
     workspaceRoot: string;
     ttlMs: number;
     gatewayTokenHash: string;
-  }): Promise<ShareRecord> {
+  }): Promise<WorkspaceShareRecord> {
     const { params, absolutePath, fileStat, relPath, workspaceRoot, ttlMs, gatewayTokenHash } = args;
     const dirCfg = this.config.directory;
     if (!dirCfg.enabled) {
@@ -262,7 +266,7 @@ export class ShareStore {
   }
 
   private buildRecord(input: {
-    kind: ShareKind;
+    kind: WorkspaceShareKind;
     absolutePath: string;
     workspaceRoot: string;
     workspaceRelativePath: string;
@@ -274,19 +278,18 @@ export class ShareStore {
     maxViews?: number | null;
     description?: string;
     gatewayTokenHash: string;
-    directory?: ShareRecord['directory'];
-  }): ShareRecord {
+    directory?: ShareDirectoryMeta;
+  }): WorkspaceShareRecord {
     const id = randomUUID();
     const token = randomBytes(32).toString('base64url');
     const now = new Date();
-    const record: ShareRecord = {
+    const common = {
       id,
       token,
       absolutePath: input.absolutePath,
       workspaceRelativePath: input.workspaceRelativePath,
       workspaceRoot: input.workspaceRoot,
       inode: input.inode,
-      kind: input.kind,
       fileName: input.fileName,
       fileSize: input.fileSize,
       mimeType: input.mimeType,
@@ -297,12 +300,103 @@ export class ShareStore {
       revoked: false,
       createdByTokenHash: input.gatewayTokenHash,
       description: input.description,
-      directory: input.directory,
     };
+    const record: WorkspaceShareRecord = input.kind === 'directory'
+      ? { ...common, kind: 'directory', directory: input.directory! }
+      : { ...common, kind: 'file' };
 
     this.shares.set(id, record);
     this.tokenIndex.set(token, id);
     return record;
+  }
+
+  createNoteShare(input: {
+    id: string;
+    sourceNoteId: string;
+    sourceVersion: number;
+    artifactRelativePath: string;
+    artifactSize: number;
+    attachmentCount: number;
+    snapshotRevision?: number;
+    fileName: string;
+    ttlMs?: number;
+    maxViews?: number | null;
+    description?: string;
+    gatewayTokenHash: string;
+  }): NoteShareRecord {
+    if (!this.config.enabled || !this.config.note.enabled) {
+      throw new Error('Note sharing is disabled');
+    }
+    if (this.getActiveShares().length >= this.config.maxActiveShares) {
+      throw new Error(`Maximum active shares reached (${this.config.maxActiveShares})`);
+    }
+    const ttlMs = input.ttlMs ?? this.config.defaultTtlMs;
+    if (ttlMs < 60_000 || ttlMs > this.config.maxTtlMs) {
+      throw new Error(`TTL must be between 60s and ${this.config.maxTtlMs / 1000}s`);
+    }
+    if (input.maxViews !== undefined && input.maxViews !== null && (input.maxViews < 1 || input.maxViews > 1000)) {
+      throw new Error('maxViews must be between 1 and 1000');
+    }
+    const now = new Date();
+    const record: NoteShareRecord = {
+      id: input.id,
+      token: randomBytes(32).toString('base64url'),
+      kind: 'note',
+      fileName: input.fileName,
+      fileSize: input.artifactSize,
+      mimeType: 'application/x-xopc-note',
+      workspaceRelativePath: '',
+      sourceNoteId: input.sourceNoteId,
+      sourceVersion: input.sourceVersion,
+      artifactRelativePath: input.artifactRelativePath,
+      attachmentCount: input.attachmentCount,
+      snapshotRevision: input.snapshotRevision ?? 1,
+      assetTicketSecret: randomBytes(32).toString('base64url'),
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
+      maxViews: input.maxViews ?? null,
+      downloadCount: 0,
+      revoked: false,
+      createdByTokenHash: input.gatewayTokenHash,
+      description: input.description,
+    };
+    this.shares.set(record.id, record);
+    this.tokenIndex.set(record.token, record.id);
+    this.persistAndAudit(record, 'share.create', `Note share created: ${record.fileName}`, {
+      noteId: record.sourceNoteId,
+      sourceVersion: record.sourceVersion,
+      attachmentCount: record.attachmentCount,
+      ttlMs,
+    });
+    return record;
+  }
+
+  updateNoteSnapshot(id: string, patch: {
+    sourceVersion: number;
+    artifactSize: number;
+    attachmentCount: number;
+    fileName: string;
+  }): NoteShareRecord | null {
+    const record = this.shares.get(id);
+    if (!record || record.kind !== 'note') return null;
+    record.sourceVersion = patch.sourceVersion;
+    record.fileSize = patch.artifactSize;
+    record.attachmentCount = patch.attachmentCount;
+    record.fileName = patch.fileName;
+    record.snapshotRevision += 1;
+    this.persistSync();
+    logShareAudit(
+      'share.update',
+      { shareId: id, noteId: record.sourceNoteId, snapshotRevision: record.snapshotRevision },
+      `Note share snapshot updated: ${record.fileName}`,
+    );
+    return record;
+  }
+
+  getNoteShares(noteId: string): NoteShareRecord[] {
+    return this.getAllShares().filter(
+      (record): record is NoteShareRecord => record.kind === 'note' && record.sourceNoteId === noteId,
+    );
   }
 
   private persistAndAudit(
@@ -343,8 +437,19 @@ export class ShareStore {
     this.scheduleDebouncedPersist();
   }
 
+  /** Atomically validate and consume one access in the single-threaded store. */
+  consumeAccess(id: string): { valid: true } | { valid: false; reason: string } {
+    const record = this.shares.get(id);
+    if (!record) return { valid: false, reason: 'not_found' };
+    const validation = this.validateAccess(record);
+    if (!validation.valid) return { valid: false, reason: validation.reason ?? 'access_denied' };
+    record.downloadCount++;
+    this.scheduleDebouncedPersist();
+    return { valid: true };
+  }
+
   /** Check if the file still exists and inode matches. */
-  async validateFileIntegrity(record: ShareRecord): Promise<{ valid: boolean; reason?: string }> {
+  async validateFileIntegrity(record: WorkspaceShareRecord): Promise<{ valid: boolean; reason?: string }> {
     try {
       const realPath = await realpath(record.absolutePath);
       if (!isPathUnderWorkspace(record.workspaceRoot, realPath)) {
@@ -375,7 +480,7 @@ export class ShareStore {
    * if it stays within both the share root and the workspace.
    */
   async resolveDirectoryChild(
-    record: ShareRecord,
+    record: DirectoryShareRecord,
     relativePath: string,
   ): Promise<{ ok: true; absolutePath: string } | { ok: false; reason: string }> {
     if (record.kind !== 'directory') {
@@ -406,8 +511,7 @@ export class ShareStore {
   }
 
   /** List a single directory level (cached, share-root-relative). */
-  async listDirectory(record: ShareRecord, relativePath: string): Promise<DirectoryListing> {
-    if (record.kind !== 'directory') throw new Error('Not a directory share');
+  async listDirectory(record: DirectoryShareRecord, relativePath: string): Promise<DirectoryListing> {
     const trimmed = (relativePath ?? '').replace(/^\/+/, '');
     const cacheKey = `${record.id}::${trimmed}`;
     const cacheTtl = this.config.directory.listingCacheMs;
@@ -491,6 +595,7 @@ export class ShareStore {
     const record = this.shares.get(id);
     if (!record) return false;
     record.revoked = true;
+    this.cleanupNoteArtifact(record);
     this.invalidateListingCache(id);
     this.persistSync();
     logShareAudit(
@@ -507,6 +612,7 @@ export class ShareStore {
       const record = this.shares.get(id);
       if (record && !record.revoked) {
         record.revoked = true;
+        this.cleanupNoteArtifact(record);
         this.invalidateListingCache(id);
         count++;
         logShareAudit(
@@ -526,6 +632,7 @@ export class ShareStore {
     for (const record of this.shares.values()) {
       if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
         record.revoked = true;
+        this.cleanupNoteArtifact(record);
         this.invalidateListingCache(record.id);
         count++;
       }
@@ -576,7 +683,7 @@ export class ShareStore {
     try {
       const raw = readFileSync(path, 'utf8');
       const data = JSON.parse(raw) as ShareStoreData;
-      if (data.version !== 1 || !Array.isArray(data.shares)) return;
+      if ((data.version !== 1 && data.version !== 2) || !Array.isArray(data.shares)) return;
 
       const now = Date.now();
       let cleaned = 0;
@@ -616,7 +723,7 @@ export class ShareStore {
       }
     }
 
-    const data: ShareStoreData = { version: 1, shares: records };
+    const data: ShareStoreData = { version: 2, shares: records };
     writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
   }
 
@@ -647,6 +754,7 @@ export class ShareStore {
     let removed = 0;
     for (const [id, record] of this.shares) {
       const expiredMs = now - new Date(record.expiresAt).getTime();
+      if (expiredMs >= 0) this.cleanupNoteArtifact(record);
       if (expiredMs > EXPIRED_RETENTION_MS) {
         this.shares.delete(id);
         this.tokenIndex.delete(record.token);
@@ -698,6 +806,18 @@ export class ShareStore {
       throw new Error('Path is outside workspace');
     }
     return abs;
+  }
+
+  private cleanupNoteArtifact(record: ShareRecord): void {
+    if (record.kind !== 'note') return;
+    const expected = join('share-artifacts', record.id);
+    if (record.artifactRelativePath !== expected) {
+      log.warn({ shareId: record.id, artifactRelativePath: record.artifactRelativePath }, 'Skipped unsafe Note share artifact cleanup path');
+      return;
+    }
+    void rm(join(resolveStateDir(), expected), { recursive: true, force: true }).catch((err) => {
+      log.warn({ err, shareId: record.id }, 'Failed to clean Note share artifact');
+    });
   }
 }
 

@@ -6,6 +6,7 @@ import {
   type ShareConfig,
   type ShareDirectoryConfig,
   type ShareThumbnailConfig,
+  type ShareNoteConfig,
 } from './share-types.js';
 
 const ShareDirectoryPatchSchema = z.object({
@@ -28,6 +29,16 @@ const ShareThumbnailPatchSchema = z.object({
   internalGatewayUrl: z.string().min(1).optional(),
 });
 
+const ShareNotePatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  maxMarkdownBytes: z.number().int().min(1_024).max(10_485_760).optional(),
+  maxAttachmentCount: z.number().int().min(0).max(500).optional(),
+  maxAttachmentSize: z.number().int().min(1_024).max(1_073_741_824).optional(),
+  maxTotalSize: z.number().int().min(1_024).max(2_147_483_648).optional(),
+  assetTicketTtlMs: z.number().int().min(60_000).max(3_600_000).optional(),
+  revokeOnSourceDelete: z.boolean().optional(),
+});
+
 const ShareConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   defaultTtlMs: z.number().int().min(60_000).max(604_800_000).optional(),
@@ -37,6 +48,7 @@ const ShareConfigPatchSchema = z.object({
   inlinePreviewMimes: z.array(z.string().min(1)).optional(),
   directory: ShareDirectoryPatchSchema.optional(),
   thumbnail: ShareThumbnailPatchSchema.optional(),
+  note: ShareNotePatchSchema.optional(),
 });
 
 function resolveDirectoryConfig(raw: unknown): ShareDirectoryConfig {
@@ -69,10 +81,25 @@ function resolveThumbnailConfig(raw: unknown): ShareThumbnailConfig {
   };
 }
 
+function resolveNoteConfig(raw: unknown): ShareNoteConfig {
+  const base = SHARE_CONFIG_DEFAULTS.note;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...base };
+  const patch = raw as Partial<ShareNoteConfig>;
+  return {
+    enabled: patch.enabled ?? base.enabled,
+    maxMarkdownBytes: patch.maxMarkdownBytes ?? base.maxMarkdownBytes,
+    maxAttachmentCount: patch.maxAttachmentCount ?? base.maxAttachmentCount,
+    maxAttachmentSize: patch.maxAttachmentSize ?? base.maxAttachmentSize,
+    maxTotalSize: patch.maxTotalSize ?? base.maxTotalSize,
+    assetTicketTtlMs: patch.assetTicketTtlMs ?? base.assetTicketTtlMs,
+    revokeOnSourceDelete: patch.revokeOnSourceDelete ?? base.revokeOnSourceDelete,
+  };
+}
+
 export function resolveShareConfig(raw: unknown): ShareConfig {
   const patch =
     raw && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Partial<ShareConfig> & { directory?: unknown; thumbnail?: unknown })
+      ? (raw as Partial<ShareConfig> & { directory?: unknown; thumbnail?: unknown; note?: unknown })
       : {};
   return {
     enabled: patch.enabled ?? SHARE_CONFIG_DEFAULTS.enabled,
@@ -85,6 +112,7 @@ export function resolveShareConfig(raw: unknown): ShareConfig {
       : [...SHARE_CONFIG_DEFAULTS.inlinePreviewMimes],
     directory: resolveDirectoryConfig(patch.directory),
     thumbnail: resolveThumbnailConfig(patch.thumbnail),
+    note: resolveNoteConfig(patch.note),
   };
 }
 
@@ -120,6 +148,9 @@ export function mergeShareConfigPatch(
     thumbnail: parsed.data.thumbnail
       ? { ...current.thumbnail, ...parsed.data.thumbnail }
       : current.thumbnail,
+    note: parsed.data.note
+      ? { ...current.note, ...parsed.data.note }
+      : current.note,
   };
 
   if (next.defaultTtlMs > next.maxTtlMs) {

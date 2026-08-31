@@ -191,16 +191,18 @@ export interface CaptureNoteInput {
   kind?: NoteKind;
   channel?: 'app' | 'clipboard' | 'share';
   attachments?: CaptureNoteAttachment[];
+  /** Makes note + first attachment creation safe to replay after route recovery. */
+  idempotencyKey?: string;
 }
 
 export type CaptureNoteResult = { note: { id: string } & Partial<Note> };
 
 async function appendCaptureAttachment(form: FormData, attachment: CaptureNoteAttachment): Promise<void> {
-  if (attachment.localUri) {
-    form.append('file', { uri: attachment.localUri, name: attachment.fileName, type: attachment.mimeType } as unknown as Blob);
-  } else if (attachment.data) {
+  if (attachment.data) {
     const blob = await fetch(`data:${attachment.mimeType};base64,${attachment.data.replace(/\s/g, '')}`).then((res) => res.blob());
     form.append('file', blob, attachment.fileName);
+  } else if (attachment.localUri) {
+    form.append('file', { uri: attachment.localUri, name: attachment.fileName, type: attachment.mimeType } as unknown as Blob);
   } else {
     throw new Error('Create note media: missing file content');
   }
@@ -250,7 +252,13 @@ export async function captureNote(input: CaptureNoteInput): Promise<CaptureNoteR
   form.append('platform', platform);
   await appendCaptureAttachment(form, firstAttachment);
 
-  const res = await apiFetch('/api/notes', { method: 'POST', body: form, timeoutMs: 30_000 });
+  const res = await apiFetch('/api/notes', {
+    method: 'POST',
+    body: form,
+    headers: input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : undefined,
+    timeoutMs: 30_000,
+    recoverRouteOnNetworkError: Boolean(input.idempotencyKey),
+  });
   if (!res.ok) throw await readError(res);
   const { note } = await readCreatedNote(res);
 

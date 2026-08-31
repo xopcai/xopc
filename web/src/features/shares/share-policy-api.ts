@@ -11,6 +11,9 @@ export type SharePolicyState = {
   directoryMaxFolderSizeMb: number;
   directoryMaxFileCount: number;
   inlinePreviewMimes: string[];
+  noteEnabled: boolean;
+  noteMaxTotalSizeMb: number;
+  noteMaxAttachmentCount: number;
   siteEnabled: boolean;
   siteDefaultTtlHours: number;
   siteMaxTtlDays: number;
@@ -39,6 +42,9 @@ const DEFAULT_SHARE_POLICY: SharePolicyState = {
     'text/plain',
     'application/json',
   ],
+  noteEnabled: true,
+  noteMaxTotalSizeMb: 250,
+  noteMaxAttachmentCount: 50,
   siteEnabled: true,
   siteDefaultTtlHours: 24,
   siteMaxTtlDays: 30,
@@ -72,6 +78,7 @@ export function normalizeSharePolicyFromConfig(config: unknown): SharePolicyStat
   const gw = isRecord(c.gateway) ? c.gateway : {};
   const share = isRecord(gw.share) ? gw.share : {};
   const directory = isRecord(share.directory) ? share.directory : {};
+  const note = isRecord(share.note) ? share.note : {};
   const siteShare = isRecord(gw.siteShare) ? gw.siteShare : {};
   const siteStatic = isRecord(siteShare.static) ? siteShare.static : {};
 
@@ -103,6 +110,10 @@ export function normalizeSharePolicyFromConfig(config: unknown): SharePolicyStat
     typeof siteStatic.maxRootDirSize === 'number' && Number.isFinite(siteStatic.maxRootDirSize)
       ? Math.floor(siteStatic.maxRootDirSize)
       : DEFAULT_SHARE_POLICY.siteMaxRootDirSizeMb * BYTES_PER_MB;
+  const noteMaxTotalSize =
+    typeof note.maxTotalSize === 'number' && Number.isFinite(note.maxTotalSize)
+      ? Math.floor(note.maxTotalSize)
+      : DEFAULT_SHARE_POLICY.noteMaxTotalSizeMb * BYTES_PER_MB;
 
   return {
     enabled: share.enabled !== false,
@@ -121,6 +132,12 @@ export function normalizeSharePolicyFromConfig(config: unknown): SharePolicyStat
     inlinePreviewMimes: normalizeStringList(share.inlinePreviewMimes, 32).length
       ? normalizeStringList(share.inlinePreviewMimes, 32)
       : [...DEFAULT_SHARE_POLICY.inlinePreviewMimes],
+    noteEnabled: note.enabled !== false,
+    noteMaxTotalSizeMb: Math.max(1, Math.round(noteMaxTotalSize / BYTES_PER_MB)),
+    noteMaxAttachmentCount:
+      typeof note.maxAttachmentCount === 'number' && Number.isFinite(note.maxAttachmentCount)
+        ? Math.max(0, Math.min(500, Math.floor(note.maxAttachmentCount)))
+        : DEFAULT_SHARE_POLICY.noteMaxAttachmentCount,
     siteEnabled: siteShare.enabled !== false,
     siteDefaultTtlHours: Math.max(1, Math.round(siteDefaultTtlMs / MS_PER_HOUR)),
     siteMaxTtlDays: Math.max(1, Math.round(siteMaxTtlMs / MS_PER_DAY)),
@@ -166,6 +183,12 @@ export function validateSharePolicy(state: SharePolicyState): string | null {
   if (state.directoryMaxFileCount < 1 || state.directoryMaxFileCount > 100_000) {
     return 'Maximum directory file count must be between 1 and 100,000.';
   }
+  if (state.noteMaxTotalSizeMb < 1 || state.noteMaxTotalSizeMb > 2_048) {
+    return 'Maximum Note snapshot size must be between 1 MB and 2 GB.';
+  }
+  if (state.noteMaxAttachmentCount < 0 || state.noteMaxAttachmentCount > 500) {
+    return 'Maximum Note attachment count must be between 0 and 500.';
+  }
   if (siteDefaultTtlMs < 60_000 || siteDefaultTtlMs > 604_800_000) {
     return 'Default site share TTL must be between 1 minute and 7 days.';
   }
@@ -204,6 +227,11 @@ export async function patchSharePolicy(state: SharePolicyState): Promise<void> {
           directory: {
             maxFolderSize: state.directoryMaxFolderSizeMb * BYTES_PER_MB,
             maxFileCount: state.directoryMaxFileCount,
+          },
+          note: {
+            enabled: state.noteEnabled,
+            maxTotalSize: state.noteMaxTotalSizeMb * BYTES_PER_MB,
+            maxAttachmentCount: state.noteMaxAttachmentCount,
           },
         },
         siteShare: {

@@ -53,9 +53,11 @@ import {
 import {
   beginRecording,
   classifyVoiceTranscriptionFailure,
+  deleteRecordingFile,
   discardRecording,
   finishRecording,
   inferRecordingMimeType,
+  MAX_VOICE_RECORDING_MS,
   meteringToLevel,
   requestMicPermission,
   type ExpoRecording,
@@ -206,6 +208,7 @@ export const ChatComposer = memo(function ChatComposer({
   const [hudOpen, setHudOpen] = useState(false);
   const [voiceZone, setVoiceZone] = useState<VoiceRecordingZone>('center');
   const [meterSamples, setMeterSamples] = useState<number[]>([]);
+  const [voiceDurationMillis, setVoiceDurationMillis] = useState(0);
   const [snack, setSnack] = useState('');
   const [transcribing, setTranscribing] = useState(false);
 
@@ -215,6 +218,9 @@ export const ChatComposer = memo(function ChatComposer({
   const cancelZoneRef = useRef(false);
   const releaseZoneRef = useRef<VoiceRecordingZone>('center');
   const grantInFlightRef = useRef(false);
+  const maxDurationReachedRef = useRef(false);
+  const finalizeRef = useRef<() => void>(() => {});
+  const mountedRef = useRef(true);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
@@ -222,17 +228,27 @@ export const ChatComposer = memo(function ChatComposer({
   const restoredDraftSessionKeyRef = useRef<string | null>(null);
   const skipDraftPersistSessionKeyRef = useRef<string | null>(null);
 
+  useEffect(() => () => {
+    mountedRef.current = false;
+    abortStartRef.current = true;
+    const recording = recordingRef.current;
+    recordingRef.current = null;
+    if (recording) void discardRecording(recording);
+  }, []);
+
   const runBusy = streaming || disabled;
 
   const ensureMicAccess = useCallback(async (): Promise<boolean> => {
     try {
       const permission = await requestMicPermission();
       if (permission.granted) return true;
-      setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
+      if (mountedRef.current) {
+        setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
+      }
       return false;
     } catch (error) {
       reportVoiceFailure('permission', error);
-      setSnack(cm.voicePermissionCheckFailed);
+      if (mountedRef.current) setSnack(cm.voicePermissionCheckFailed);
       return false;
     }
   }, [cm]);
@@ -407,6 +423,7 @@ export const ChatComposer = memo(function ChatComposer({
     setHudOpen(false);
     setVoiceZone('center');
     setMeterSamples([]);
+    setVoiceDurationMillis(0);
 
     if (!rec) return;
 
@@ -425,6 +442,7 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
     if (durationMillis < MIN_VOICE_MS) {
+      deleteRecordingFile(uri);
       setSnack(cm.voiceTooShort);
       return;
     }
@@ -457,12 +475,15 @@ export const ChatComposer = memo(function ChatComposer({
         setSnack(
           failure === 'decoder_unavailable'
             ? cm.voiceDecoderUnavailable
+            : failure === 'not_configured'
+              ? cm.voiceSttNotConfigured
             : failure === 'runtime_unavailable'
               ? cm.voiceRuntimeUnavailable
               : cm.voiceTranscribeFailed,
         );
       } finally {
-        setTranscribing(false);
+        deleteRecordingFile(uri);
+        if (mountedRef.current) setTranscribing(false);
       }
       return;
     }
@@ -470,6 +491,7 @@ export const ChatComposer = memo(function ChatComposer({
     if (onSendVoice) {
       try {
         await onSendVoice({ uri, durationMillis, mimeType });
+        deleteRecordingFile(uri);
         setMode('text');
       } catch (error) {
         reportVoiceFailure('send', error);
@@ -479,6 +501,7 @@ export const ChatComposer = memo(function ChatComposer({
       setSnack(cm.voiceSendUnavailable);
     }
   }, [cm, onSendVoice, updateDraft]);
+  finalizeRef.current = () => void finalizeRecordingInteraction();
 
   const startGrantFlow = useCallback(() => {
     if (disabled || streaming || transcribing || grantInFlightRef.current) return;
@@ -489,6 +512,8 @@ export const ChatComposer = memo(function ChatComposer({
     releaseZoneRef.current = 'center';
     setVoiceZone('center');
     setMeterSamples([]);
+    setVoiceDurationMillis(0);
+    maxDurationReachedRef.current = false;
     grantInFlightRef.current = true;
 
     void (async () => {
@@ -498,11 +523,23 @@ export const ChatComposer = memo(function ChatComposer({
         return;
       }
       try {
-        const rec = await beginRecording((metering) => {
+        const rec = await beginRecording((metering, durationMillis) => {
+          if (!mountedRef.current) return;
           setMeterSamples((prev) => [...prev.slice(-47), meteringToLevel(metering)]);
+          setVoiceDurationMillis(durationMillis);
+          if (
+            durationMillis >= MAX_VOICE_RECORDING_MS
+            && !maxDurationReachedRef.current
+            && recordingRef.current
+          ) {
+            maxDurationReachedRef.current = true;
+            setSnack(cm.voiceMaxDurationReached);
+            finalizeRef.current();
+          }
         });
-        if (abortStartRef.current) {
+        if (!mountedRef.current || abortStartRef.current) {
           await discardRecording(rec);
+          if (!mountedRef.current) return;
           grantInFlightRef.current = false;
           return;
         }
@@ -511,6 +548,7 @@ export const ChatComposer = memo(function ChatComposer({
         grantInFlightRef.current = false;
         setHudOpen(true);
       } catch (error) {
+        if (!mountedRef.current) return;
         reportVoiceFailure('start', error);
         grantInFlightRef.current = false;
         setSnack(cm.voiceRecordingStartFailed);
@@ -863,6 +901,7 @@ export const ChatComposer = memo(function ChatComposer({
         zone={voiceZone}
         transcribing={transcribing}
         meterSamples={meterSamples}
+        durationMillis={voiceDurationMillis}
         centerHint={cm.voiceReleaseCenterHint}
         textHint={cm.voiceReleaseTextHint}
         textGlyph={cm.voiceTextGlyph}

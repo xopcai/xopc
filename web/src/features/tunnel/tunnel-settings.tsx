@@ -11,6 +11,16 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { isMaskedKey } from '@/features/settings/providers-api';
 import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import {
+  cleanupOAuthSession,
+  fetchOAuthSessionStatus,
+  startAsyncOAuthLogin,
+} from '@/features/settings/oauth-api';
+import {
+  closeOAuthAuthorizationWindow,
+  openOAuthAuthorizationUrl,
+  reserveOAuthAuthorizationWindow,
+} from '@/features/settings/oauth-authorization-window';
 import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import { TunnelConsentDialog } from '@/features/tunnel/tunnel-consent-dialog';
 import { TunnelControlCard } from '@/features/tunnel/tunnel-control-card';
@@ -19,6 +29,7 @@ import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-doc
 import {
   fetchTunnelStatus,
   patchTunnelConfig,
+  provisionTunnelRegistrationKey,
   recordTunnelConsent,
   startTunnel,
   stopTunnel,
@@ -40,6 +51,8 @@ type TunnelUi = {
   releasing: boolean;
   brokerSecretDraft: string;
   savingBrokerSecret: boolean;
+  authorizingBrokerSecret: boolean;
+  brokerSecretAuthorizationUrl: string | null;
   brokerSecretNotice: string | null;
 };
 
@@ -54,6 +67,8 @@ const initialTunnelUi: TunnelUi = {
   releasing: false,
   brokerSecretDraft: '',
   savingBrokerSecret: false,
+  authorizingBrokerSecret: false,
+  brokerSecretAuthorizationUrl: null,
   brokerSecretNotice: null,
 };
 
@@ -75,6 +90,8 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     releasing,
     brokerSecretDraft,
     savingBrokerSecret,
+    authorizingBrokerSecret,
+    brokerSecretAuthorizationUrl,
     brokerSecretNotice,
   } = ui;
   const brokerSecretSectionRef = useRef<HTMLDivElement>(null);
@@ -122,7 +139,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   }, [cfgData]);
 
   const brokerSecretConfiguredInConfig = isMaskedKey(brokerSecretFromConfig);
-  const brokerSecretFromEnv = status?.registrationSecret?.source === 'env';
   const brokerSecretMissing = status?.registrationSecret?.source === 'missing';
   const brokerReady = status?.registrationSecret?.configured === true;
 
@@ -285,6 +301,56 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     }
   }, [mutStatus, t.brokerSecretCleared]);
 
+  const authorizeBrokerSecret = useCallback(async () => {
+    const popup = reserveOAuthAuthorizationWindow();
+    let sessionId: string | null = null;
+    let openedUrl: string | null = null;
+    dispatchUi({
+      type: 'patch',
+      patch: {
+        authorizingBrokerSecret: true,
+        brokerSecretAuthorizationUrl: null,
+        brokerSecretNotice: null,
+        actionError: null,
+      },
+    });
+    try {
+      sessionId = (await startAsyncOAuthLogin('xopc-tunnel')).sessionId;
+      for (;;) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        const current = await fetchOAuthSessionStatus(sessionId);
+        if (current.authUrl && current.authUrl !== openedUrl) {
+          openedUrl = current.authUrl;
+          dispatchUi({ type: 'patch', patch: { brokerSecretAuthorizationUrl: current.authUrl } });
+          await openOAuthAuthorizationUrl(current.authUrl, popup);
+        }
+        if (current.status === 'failed' || current.status === 'cancelled') {
+          throw new Error(current.error ?? current.message ?? 'OAuth authorization failed');
+        }
+        if (current.status !== 'completed') continue;
+        await provisionTunnelRegistrationKey();
+        await Promise.all([mutStatus(), revalidateGatewayConfig()]);
+        dispatchUi({
+          type: 'patch',
+          patch: { brokerSecretNotice: t.brokerSecretSaved, brokerSecretDraft: '' },
+        });
+        return;
+      }
+    } catch (error) {
+      dispatchUi({
+        type: 'patch',
+        patch: { actionError: error instanceof Error ? error.message : String(error) },
+      });
+    } finally {
+      closeOAuthAuthorizationWindow(popup);
+      if (sessionId) void cleanupOAuthSession(sessionId).catch(() => undefined);
+      dispatchUi({
+        type: 'patch',
+        patch: { authorizingBrokerSecret: false, brokerSecretAuthorizationUrl: null },
+      });
+    }
+  }, [mutStatus, t.brokerSecretSaved]);
+
   const handleRelease = useCallback(async () => {
     dispatchUi({ type: 'patch', patch: { releaseConfirmOpen: false, actionError: null, releasing: true } });
     try {
@@ -337,16 +403,18 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   const brokerSecretBlock = (
     <BrokerSecretSetupSection
       t={t}
-      brokerSecretFromEnv={brokerSecretFromEnv}
       brokerSecretMissing={brokerSecretMissing}
       brokerSecretConfiguredInConfig={brokerSecretConfiguredInConfig}
       brokerSecretMaskedValue={brokerSecretConfiguredInConfig ? brokerSecretFromConfig : ''}
       brokerSecretDraft={brokerSecretDraft}
       savingBrokerSecret={savingBrokerSecret}
+      authorizingBrokerSecret={authorizingBrokerSecret}
+      brokerSecretAuthorizationUrl={brokerSecretAuthorizationUrl}
       brokerSecretNotice={brokerSecretNotice}
       copyFailedLabel={messages(language).clipboard.copyFailed}
       onDraftChange={(value) => dispatchUi({ type: 'patch', patch: { brokerSecretDraft: value } })}
       onSave={() => void saveBrokerSecret()}
+      onAuthorize={() => void authorizeBrokerSecret()}
       onClear={() => void clearBrokerSecret()}
       sectionRef={brokerSecretSectionRef}
     />

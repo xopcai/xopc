@@ -17,9 +17,11 @@ import {
   renderShareLandingPage,
   renderShareExpiredPage,
   renderFolderLandingPage,
+  renderNoteShareLandingPage,
 } from '../../../share/share-landing.js';
 import type { ShareExpiredReason } from '../../../share/share-landing.js';
-import type { ShareConfig, ShareRecord } from '../../../share/share-types.js';
+import type { DirectoryShareRecord, ShareConfig, ShareRecord, WorkspaceShareRecord } from '../../../share/share-types.js';
+import { NoteShareService } from '../../../share/note-share-service.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
 import { createZipStream, planDirectoryFiles } from '../../../share/share-zip.js';
@@ -137,6 +139,7 @@ function rfc5987ContentDisposition(disposition: 'inline' | 'attachment', fileNam
 
 export function registerSharePublicRoutes(app: Hono, service: GatewayService): void {
   const store = getShareStore(resolveShareConfig(service));
+  const noteShares = new NoteShareService(store, service.notesServiceInstance);
 
   /** Landing page — does NOT consume downloadCount. */
   app.get('/s/:token', async (c) => {
@@ -163,6 +166,14 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 
     if (record.kind === 'directory') {
       return renderDirectoryLanding(c, store, service, record, token);
+    }
+
+    if (record.kind === 'note') {
+      const previewUrl = `/#/share/${encodeURIComponent(token)}`;
+      c.header('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+      c.header('X-Frame-Options', 'DENY');
+      c.header('Referrer-Policy', 'no-referrer');
+      return c.html(renderNoteShareLandingPage(record, previewUrl, { og: buildLandingOg(service, record) }));
     }
 
     // File: support direct download / inline preview shortcuts
@@ -213,10 +224,90 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       return c.html(renderShareExpiredPage(validation.reason as ShareExpiredReason), 410);
     }
 
-    if (record.kind === 'directory') {
+    if (record.kind !== 'file') {
       return c.html(renderShareExpiredPage('not_found'), 404);
     }
     return handleFileDownload(c, store, record, clientIp);
+  });
+
+  /** Claim one Note view. POST prevents social unfurlers from consuming maxViews. */
+  app.post('/s/:token/view', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.json({ ok: false, error: { message: 'rate_limited' } }, 429);
+    }
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record || record.kind !== 'note') return c.json({ ok: false, error: { message: 'not_found' } }, 404);
+    const validation = store.validateAccess(record);
+    if (!validation.valid) return c.json({ ok: false, error: { message: validation.reason } }, 410);
+    try {
+      const manifest = await noteShares.readManifest(record);
+      const consumed = store.consumeAccess(record.id);
+      if (consumed.valid === false) return c.json({ ok: false, error: { message: consumed.reason } }, 410);
+      const ticket = noteShares.issueAssetTicket(record);
+      logShareAudit(
+        'share.access',
+        { shareId: record.id, noteId: record.sourceNoteId, tokenPrefix: token.slice(0, 8), clientIp, snapshotRevision: record.snapshotRevision },
+        `Note share viewed: ${record.fileName}`,
+      );
+      return c.json({
+        ok: true,
+        payload: {
+          kind: 'note',
+          title: manifest.title,
+          markdown: noteShares.publicMarkdown(record, manifest, ticket),
+          snapshotAt: manifest.snapshotAt,
+          expiresAt: record.expiresAt,
+          description: record.description ?? null,
+          sourceVersion: record.sourceVersion,
+          snapshotRevision: record.snapshotRevision,
+          attachments: manifest.attachments.map(({ artifactFileName: _artifactFileName, checksum: _checksum, ...attachment }) => attachment),
+        },
+      });
+    } catch (err) {
+      logShareAudit(
+        'share.access_denied',
+        { shareId: record.id, noteId: record.sourceNoteId, tokenPrefix: token.slice(0, 8), clientIp, reason: 'artifact_missing' },
+        'Note share artifact could not be read',
+      );
+      return c.json({ ok: false, error: { message: err instanceof Error ? err.message : 'artifact_missing' } }, 410);
+    }
+  });
+
+  /** Serve one snapshotted Note attachment through a short-lived view ticket. */
+  app.get('/s/:token/assets/:attachmentId', async (c) => {
+    const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
+    const rateResult = consumeSharePublicLimit(clientIp);
+    if (!rateResult.allowed) {
+      c.header('Retry-After', String(Math.ceil(rateResult.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+    const record = store.getByToken(c.req.param('token'));
+    if (!record || record.kind !== 'note') return c.text('Not found', 404);
+    if (record.revoked || Date.now() >= new Date(record.expiresAt).getTime()) return c.text('Gone', 410);
+    const ticket = c.req.query('ticket') ?? '';
+    if (!noteShares.verifyAssetTicket(record, ticket)) return c.text('Forbidden', 403);
+    const resolved = await noteShares.resolveAsset(record, c.req.param('attachmentId')).catch(() => null);
+    if (!resolved) return c.text('Not found', 404);
+    const fileStat = await stat(resolved.path).catch(() => null);
+    if (!fileStat?.isFile()) return c.text('Not found', 404);
+    const inline = resolved.attachment.type !== 'file';
+    const stream = createReadStream(resolved.path);
+    return new Response(Readable.toWeb(stream) as ReadableStream, {
+      status: 200,
+      headers: {
+        'Content-Type': shareResponseContentType(resolved.attachment.mimeType),
+        'Content-Disposition': rfc5987ContentDisposition(inline ? 'inline' : 'attachment', resolved.attachment.fileName),
+        'Content-Length': String(fileStat.size),
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Referrer-Policy': 'no-referrer',
+      },
+    });
   });
 
   /** Directory child file (GET — preview counts as download per product). */
@@ -324,6 +415,11 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       remainingViews,
       valid: validation.valid,
       directory: record.directory ?? null,
+      ...(record.kind === 'note' ? {
+        sourceVersion: record.sourceVersion,
+        snapshotRevision: record.snapshotRevision,
+        attachmentCount: record.attachmentCount,
+      } : {}),
     });
   });
 
@@ -357,6 +453,17 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
         headers: {
           'Content-Type': thumbnailContentType(cached),
           'Cache-Control': 'public, max-age=300',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    }
+    if (record.kind === 'note') {
+      const placeholder = placeholderSvg(record.fileName, 'text');
+      return new Response(placeholder, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/svg+xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=60',
           'X-Content-Type-Options': 'nosniff',
         },
       });
@@ -439,6 +546,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const store = getShareStore(resolveShareConfig(service));
+  const noteShares = new NoteShareService(store, service.notesServiceInstance);
   const siteStoreEager = getSiteShareStore(resolveSiteShareConfig(service));
   // Register once: when a site share is revoked / expires, drop its staging dir (if any).
   siteStoreEager.setCleanupHook((rec) => {
@@ -691,6 +799,12 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         fileSize: r.fileSize,
         mimeType: r.mimeType,
         directory: r.directory ?? null,
+        ...(r.kind === 'note' ? {
+          sourceNoteId: r.sourceNoteId,
+          sourceVersion: r.sourceVersion,
+          snapshotRevision: r.snapshotRevision,
+          attachmentCount: r.attachmentCount,
+        } : {}),
       };
     });
 
@@ -705,12 +819,13 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const urlCtx = getShareUrlContext(service);
     const resolved = resolveShareUrl(record.token, urlCtx);
     const expired = Date.now() >= new Date(record.expiresAt).getTime();
+    const { token: _token, createdByTokenHash: _createdByTokenHash, ...safeRecord } = record;
+    if ('assetTicketSecret' in safeRecord) delete (safeRecord as Partial<typeof safeRecord>).assetTicketSecret;
 
     return c.json({
       ok: true,
       payload: {
-        ...record,
-        token: undefined,
+        ...safeRecord,
         shareUrl: resolved.shareUrl,
         lanUrl: resolved.lanUrl,
         reachability: resolved.reachability,
@@ -721,8 +836,10 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.delete('/api/shares/:id', async (c) => {
     const id = c.req.param('id');
+    const record = store.getById(id);
     const success = store.revoke(id);
     if (!success) return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    if (record?.kind === 'note') await noteShares.removeArtifact(record.id);
     return c.json({ ok: true });
   });
 
@@ -735,7 +852,11 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     if (body.expired === true) {
+      const expiredNoteShares = store.getAllShares().filter(
+        (record) => record.kind === 'note' && !record.revoked && Date.now() >= new Date(record.expiresAt).getTime(),
+      );
       const count = store.revokeExpired();
+      await Promise.all(expiredNoteShares.map((record) => noteShares.removeArtifact(record.id)));
       return c.json({ ok: true, payload: { revokedCount: count } });
     }
 
@@ -743,7 +864,11 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (ids.length === 0) {
       return c.json({ ok: false, error: { message: 'Provide ids array or expired: true' } }, 400);
     }
+    const noteRecords = ids.map((id) => store.getById(id)).filter(
+      (record): record is import('../../../share/share-types.js').NoteShareRecord => record?.kind === 'note',
+    );
     const count = store.revokeMany(ids);
+    await Promise.all(noteRecords.map((record) => noteShares.removeArtifact(record.id)));
     return c.json({ ok: true, payload: { revokedCount: count } });
   });
 
@@ -784,7 +909,7 @@ async function renderDirectoryLanding(
   c: Context,
   store: ReturnType<typeof getShareStore>,
   service: GatewayService,
-  record: ShareRecord,
+  record: DirectoryShareRecord,
   token: string,
   subPath = '',
 ): Promise<Response> {
@@ -829,7 +954,7 @@ async function handleDirectoryFile(
   c: Context,
   store: ReturnType<typeof getShareStore>,
   service: GatewayService,
-  record: ShareRecord,
+  record: DirectoryShareRecord,
   relPath: string,
   clientIp: string,
   inline: boolean,
@@ -904,7 +1029,7 @@ async function handleDirectoryZip(
   c: Context,
   store: ReturnType<typeof getShareStore>,
   service: GatewayService,
-  record: ShareRecord,
+  record: DirectoryShareRecord,
   subPath: string,
   clientIp: string,
 ): Promise<Response> {
@@ -1075,7 +1200,7 @@ async function resolveWorkspaceRootForShare(
 async function handleFileDownload(
   c: Context,
   store: ReturnType<typeof getShareStore>,
-  record: ShareRecord,
+  record: WorkspaceShareRecord,
   clientIp: string,
   inline = false,
 ): Promise<Response> {
