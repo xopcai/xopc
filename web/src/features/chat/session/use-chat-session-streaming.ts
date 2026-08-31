@@ -105,6 +105,7 @@ export function useChatSessionStreaming(deps: {
         finalizeStreamingThinking(msg.content);
         finalizeRunningTools(msg.content);
         finalizeRunningReviews(msg.content);
+        msg.completedAt = Date.now();
         finalMsg = cloneMessageForRender(msg);
       }
       if (finalMsg && hasRenderableAssistantContent(finalMsg) && cacheKey) {

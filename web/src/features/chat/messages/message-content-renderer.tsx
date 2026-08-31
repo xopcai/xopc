@@ -505,16 +505,12 @@ function renderTextOrImageBlock(
 function activitySegmentPresentation(
   blocks: Array<ThinkingContent | ToolUseContent>,
   parent: AssistantTurnActivityPresentation,
+  isTailSegment: boolean,
 ): AssistantTurnActivityPresentation {
   const tools = blocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',
   );
-  const active = parent.active && blocks.some(
-    (block) =>
-      (block.type === 'thinking' && Boolean(block.streaming))
-      || (block.type === 'tool_use'
-        && (block.status === 'running' || block.activity?.status === 'running')),
-  );
+  const active = parent.active && isTailSegment;
   const failedCount = tools.filter(
     (tool) => tool.status === 'error' || tool.activity?.status === 'failed',
   ).length;
@@ -525,7 +521,7 @@ function activitySegmentPresentation(
     failedCount,
     hasTool: tools.length > 0,
     expandedByDefault: parent.expandedByDefault && active,
-    ...getActivityTiming(blocks),
+    ...getActivityTiming(blocks, isTailSegment ? parent.completedAt : undefined),
   };
 }
 
@@ -603,6 +599,7 @@ export function ChunkedContent({
   );
   const showThinkingActivity = activityBlocks.some((block) => block.type === 'thinking');
   let activityOrdinal = 0;
+  let remainingActivityBlocks = activityBlocks.length;
   let i = 0;
   let imageOrdinal = 0;
   while (i < renderContent.length) {
@@ -624,10 +621,15 @@ export function ChunkedContent({
         i++;
       }
       if (!isUser && assistantActivity && segment.length > 0) {
+        remainingActivityBlocks -= segment.length;
         nodes.push(
           <AssistantStepsBlock
             key={`turn-activity-${activityOrdinal}`}
-            activity={activitySegmentPresentation(segment, assistantActivity)}
+            activity={activitySegmentPresentation(
+              segment,
+              assistantActivity,
+              remainingActivityBlocks === 0,
+            )}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
             clusterLabels={clusterLabels}

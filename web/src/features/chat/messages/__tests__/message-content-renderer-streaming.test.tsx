@@ -254,6 +254,29 @@ describe('streaming assistant Markdown rendering', () => {
     expect(text.indexOf('runCommand_one')).toBeLessThan(text.indexOf('修改完成。'));
   });
 
+  it('keeps the latest completed tool segment active while the run is still streaming', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(31_000);
+    const completedTool = {
+      type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done',
+      startedAt: 1_000, completedAt: 2_000,
+    } as const;
+
+    render([completedTool], true, false, {
+      blocks: [completedTool],
+      active: true,
+      failedCount: 0,
+      hasTool: true,
+      expandedByDefault: false,
+      startedAt: 1_000,
+      completedAt: 2_000,
+      durationMs: 1_000,
+    });
+
+    expect(container.querySelector('.animate-spin')).not.toBeNull();
+    expect(container.textContent).toContain('30');
+  });
+
   it('keeps expanded assistant activity in a bounded scroll region', () => {
     const thinking = { type: 'thinking', text: 'Long reasoning', streaming: false } as const;
 

@@ -16,7 +16,12 @@ type TopicListener = {
   onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
 };
 
-const listeners = new Map<string, Set<TopicListener>>();
+type TopicListenerRegistration = {
+  listener: TopicListener;
+  cursor?: number;
+};
+
+const listeners = new Map<string, Set<TopicListenerRegistration>>();
 const topicCursors = new Map<string, number | undefined>();
 let activeClient: RealtimeClient | undefined;
 let endpointBinding: RealtimeEndpointBinding | undefined;
@@ -68,18 +73,44 @@ export function startGatewayRealtime(token?: string): () => void {
       if (event.topic === 'gateway' || event.topic === 'sessions') {
         dispatchGatewayRealtimeEvent(event.event, event.data);
       }
-      for (const listener of listeners.get(event.topic) ?? []) listener.onEvent(event);
+      const previousTopicCursor = topicCursors.get(event.topic);
+      if (previousTopicCursor === undefined || event.seq > previousTopicCursor) {
+        topicCursors.set(event.topic, event.seq);
+      }
+      for (const registration of listeners.get(event.topic) ?? []) {
+        if (registration.cursor !== undefined && event.seq <= registration.cursor) continue;
+        try {
+          registration.listener.onEvent(event);
+        } catch (error) {
+          console.error('[realtime] topic listener failed:', error);
+        } finally {
+          registration.cursor = Math.max(registration.cursor ?? 0, event.seq);
+        }
+      }
     },
     onGap: async (gap) => {
       window.dispatchEvent(new CustomEvent('realtime-gap', { detail: gap }));
-      await Promise.all([...listeners.get(gap.topic) ?? []].map((listener) => listener.onGap?.(gap)));
+      const affected = [...listeners.get(gap.topic) ?? []].filter(
+        (registration) =>
+          !gap.recoverable
+          || registration.cursor === undefined
+          || registration.cursor < gap.earliestSeq - 1,
+      );
+      const results = await Promise.allSettled(
+        affected.map((registration) => registration.listener.onGap?.(gap)),
+      );
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          console.error('[realtime] topic gap handler failed:', result.reason);
+        }
+      }
     },
   });
   activeClient?.disconnect();
   activeClient = client;
   if (endpointBinding) client.setEndpoint(endpointBinding);
-  client.subscribe('gateway');
-  client.subscribe('sessions');
+  client.subscribe('gateway', topicCursors.get('gateway'));
+  client.subscribe('sessions', topicCursors.get('sessions'));
   for (const topic of listeners.keys()) client.subscribe(topic, topicCursors.get(topic));
   setRealtimeConnectionState({ connectionState: 'connecting', error: null });
   client.connect();
@@ -115,17 +146,30 @@ export function reconnectGatewayRealtime(): void {
 }
 
 export function subscribeRealtimeTopic(topic: string, listener: TopicListener, afterSeq?: number): () => void {
-  const topicListeners = listeners.get(topic) ?? new Set<TopicListener>();
+  const topicListeners = listeners.get(topic) ?? new Set<TopicListenerRegistration>();
   const wasEmpty = topicListeners.size === 0;
-  topicListeners.add(listener);
+  const currentTopicCursor = topicCursors.get(topic);
+  const registration: TopicListenerRegistration = {
+    listener,
+    cursor: afterSeq ?? currentTopicCursor,
+  };
+  topicListeners.add(registration);
   listeners.set(topic, topicListeners);
   if (wasEmpty) {
-    topicCursors.set(topic, afterSeq);
+    const requestedCursor = afterSeq ?? currentTopicCursor;
+    topicCursors.set(topic, requestedCursor);
+    activeClient?.subscribe(topic, requestedCursor);
+  } else if (
+    afterSeq !== undefined
+    && (currentTopicCursor === undefined || afterSeq < currentTopicCursor)
+  ) {
+    // A second consumer may join after another listener already replayed the topic.
+    // Rewind the shared transport; per-listener cursors suppress duplicates for incumbents.
     activeClient?.subscribe(topic, afterSeq);
   }
   return () => {
     const current = listeners.get(topic);
-    current?.delete(listener);
+    current?.delete(registration);
     if (!current || current.size === 0) {
       listeners.delete(topic);
       topicCursors.delete(topic);
