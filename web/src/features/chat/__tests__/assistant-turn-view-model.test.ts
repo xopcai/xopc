@@ -123,6 +123,47 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.activity.active).toBe(false);
   });
 
+  it('keeps the activity round live between completed tools while the run is streaming', () => {
+    const view = buildAssistantTurnViewModel({
+      message: assistantMessage([{
+        type: 'tool_use',
+        id: 'tool-1',
+        name: 'read_file',
+        status: 'done',
+        startedAt: 2_000,
+        completedAt: 2_500,
+      }]),
+      isStreaming: true,
+      reasoningLevel: 'stream',
+    });
+
+    expect(view.lifecycle.state).toBe('starting');
+    expect(view.activity.active).toBe(true);
+    expect(view.activity.startedAt).toBe(2_000);
+  });
+
+  it('freezes completed activity at the observed end of the run', () => {
+    const message = assistantMessage([{
+      type: 'tool_use',
+      id: 'tool-1',
+      name: 'read_file',
+      status: 'done',
+      startedAt: 2_000,
+      completedAt: 2_500,
+    }]);
+    message.completedAt = 5_000;
+
+    const view = buildAssistantTurnViewModel({
+      message,
+      isStreaming: false,
+      reasoningLevel: 'stream',
+    });
+
+    expect(view.activity.active).toBe(false);
+    expect(view.activity.completedAt).toBe(5_000);
+    expect(view.activity.durationMs).toBe(3_000);
+  });
+
   it('separates search evidence from deliverables and reports partial completion', () => {
     const view = buildAssistantTurnViewModel({
       message: assistantMessage([

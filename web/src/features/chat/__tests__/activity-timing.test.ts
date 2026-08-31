@@ -45,4 +45,14 @@ describe('getActivityTiming', () => {
       durationMs: undefined,
     });
   });
+
+  it('extends the activity window to the observed run end', () => {
+    expect(getActivityTiming([
+      tool('a', 1_000, 2_000),
+    ], 5_000)).toEqual({
+      startedAt: 1_000,
+      completedAt: 5_000,
+      durationMs: 4_000,
+    });
+  });
 });
