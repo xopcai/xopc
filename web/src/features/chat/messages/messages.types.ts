@@ -138,6 +138,8 @@ export interface Message {
     cost?: number;
   };
   timestamp?: number;
+  /** Client-observed end of a live assistant run, used to freeze elapsed activity time. */
+  completedAt?: number;
 }
 
 export interface ProgressState {

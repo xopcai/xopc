@@ -15,6 +15,7 @@ export type ActivityTiming = {
  */
 export function getActivityTiming(
   blocks: ReadonlyArray<ThinkingContent | ToolUseContent>,
+  activityEndedAt?: number,
 ): ActivityTiming {
   const tools = blocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',
@@ -27,7 +28,13 @@ export function getActivityTiming(
     .filter((value): value is number => Number.isFinite(value));
 
   const startedAt = starts.length > 0 ? Math.min(...starts) : undefined;
-  const completedAt = completions.length > 0 ? Math.max(...completions) : undefined;
+  const completedAtCandidates = [
+    ...completions,
+    ...(Number.isFinite(activityEndedAt) ? [activityEndedAt as number] : []),
+  ];
+  const completedAt = completedAtCandidates.length > 0
+    ? Math.max(...completedAtCandidates)
+    : undefined;
   const durationMs =
     startedAt != null && completedAt != null
       ? Math.max(0, completedAt - startedAt)
