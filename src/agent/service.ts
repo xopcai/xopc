@@ -765,6 +765,7 @@ export class AgentService {
         workspaceDir,
         transcriptRuntime: params.transcriptRuntime,
         timeoutMs: resolveAgentTurnTimeoutMs(this.effectiveAppConfig(), params.parentSessionKey),
+        turnPolicy: this.agentManager.createAgentTurnPolicy(params.parentSessionKey),
         abortSignal: params.abortSignal,
         onEvent: params.onEvent,
       }),

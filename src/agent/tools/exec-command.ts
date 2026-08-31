@@ -44,6 +44,8 @@ export interface ExecCommandDetails {
   truncated: boolean;
   truncatedBy?: 'lines' | 'bytes' | null;
   outputBytes: number;
+  totalOutputBytes: number;
+  captureTruncated: boolean;
   stdout: string;
   stderr: string;
   aggregatedOutput: string;
@@ -88,6 +90,45 @@ function commandStatus(exitCode: number | null, timedOut: boolean): ExecCommandD
   return 'failed';
 }
 
+function appendBoundedTail(current: string, chunk: string, maxChars: number): {
+  value: string;
+  truncated: boolean;
+} {
+  const combined = current + chunk;
+  if (combined.length <= maxChars) return { value: combined, truncated: false };
+  return { value: combined.slice(-maxChars), truncated: true };
+}
+
+function terminateProcessTree(proc: ReturnType<typeof spawn>): void {
+  if (!proc.pid) return;
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill', ['/pid', String(proc.pid), '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    killer.once('error', () => {
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // Process already exited.
+      }
+    });
+    killer.unref();
+    return;
+  }
+  try {
+    process.kill(-proc.pid, 'SIGKILL');
+    return;
+  } catch {
+    // The process may have exited before its group was signalled.
+  }
+  try {
+    proc.kill('SIGKILL');
+  } catch {
+    // Process already exited.
+  }
+}
+
 function commandFailureHint(details: Pick<ExecCommandDetails, 'status' | 'exitCode' | 'timedOut' | 'stderr' | 'stdout'>): string | undefined {
   if (details.status === 'success') return undefined;
   if (details.status === 'timed_out') {
@@ -112,6 +153,9 @@ function formatOutputForModel(
   }
   if (details.exitCode !== 0 && details.exitCode != null) {
     prefix += `Command exited with code ${details.exitCode}\n`;
+  }
+  if (details.captureTruncated) {
+    prefix += `Earlier command output was discarded after ${formatSize(details.totalOutputBytes)}; showing the latest captured output.\n`;
   }
 
   const truncation = truncateTail(details.aggregatedOutput, {
@@ -170,6 +214,8 @@ export function createExecCommandTool(
             timedOut: false,
             truncated: false,
             outputBytes: 0,
+            totalOutputBytes: 0,
+            captureTruncated: false,
             stdout: '',
             stderr: 'cmd is required',
             aggregatedOutput: 'cmd is required',
@@ -200,6 +246,8 @@ export function createExecCommandTool(
             timedOut: false,
             truncated: false,
             outputBytes: Buffer.byteLength(text),
+            totalOutputBytes: Buffer.byteLength(text),
+            captureTruncated: false,
             stdout: '',
             stderr: text,
             aggregatedOutput: text,
@@ -217,12 +265,15 @@ export function createExecCommandTool(
       let stdout = '';
       let stderr = '';
       let aggregatedOutput = '';
+      let totalOutputBytes = 0;
+      let captureTruncated = false;
       let timedOut = false;
       let settled = false;
 
       return new Promise((resolveTool) => {
         const proc = spawn(command, [], {
           shell: true,
+          detached: process.platform !== 'win32',
           cwd: policy.effectiveCwd,
           env: {
             ...runtimeEnv,
@@ -233,9 +284,19 @@ export function createExecCommandTool(
         const publishDelta = (stream: 'stdout' | 'stderr', raw: Buffer | string) => {
           const text = raw.toString();
           if (!text) return;
-          if (stream === 'stdout') stdout += text;
-          else stderr += text;
-          aggregatedOutput += text;
+          totalOutputBytes += Buffer.byteLength(text);
+          if (stream === 'stdout') {
+            const next = appendBoundedTail(stdout, text, maxOutputChars);
+            stdout = next.value;
+            captureTruncated ||= next.truncated;
+          } else {
+            const next = appendBoundedTail(stderr, text, maxOutputChars);
+            stderr = next.value;
+            captureTruncated ||= next.truncated;
+          }
+          const nextAggregate = appendBoundedTail(aggregatedOutput, text, maxOutputChars);
+          aggregatedOutput = nextAggregate.value;
+          captureTruncated ||= nextAggregate.truncated;
 
           const delta = text.length > STREAM_DELTA_MAX_CHARS
             ? `${text.slice(0, STREAM_DELTA_MAX_CHARS)}\n[stream delta truncated]`
@@ -261,8 +322,12 @@ export function createExecCommandTool(
           clearTimeout(timeout);
           signal?.removeEventListener('abort', abort);
           if (errorText) {
-            stderr += errorText;
-            aggregatedOutput += errorText;
+            totalOutputBytes += Buffer.byteLength(errorText);
+            const nextStderr = appendBoundedTail(stderr, errorText, maxOutputChars);
+            stderr = nextStderr.value;
+            const nextAggregate = appendBoundedTail(aggregatedOutput, errorText, maxOutputChars);
+            aggregatedOutput = nextAggregate.value;
+            captureTruncated ||= nextStderr.truncated || nextAggregate.truncated;
           }
 
           const durationMs = Date.now() - startTime;
@@ -275,6 +340,8 @@ export function createExecCommandTool(
             timedOut,
             truncated: false,
             outputBytes: Buffer.byteLength(aggregatedOutput),
+            totalOutputBytes,
+            captureTruncated,
             stdout,
             stderr,
             aggregatedOutput,
@@ -298,12 +365,12 @@ export function createExecCommandTool(
 
         const abort = () => {
           timedOut = true;
-          proc.kill('SIGKILL');
+          terminateProcessTree(proc);
         };
 
         const timeout = setTimeout(() => {
           timedOut = true;
-          proc.kill('SIGKILL');
+          terminateProcessTree(proc);
         }, timeoutMs);
 
         if (signal?.aborted) {

@@ -20,6 +20,7 @@
  */
 
 import type { Agent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { AgentTurnPolicy } from './orchestration/agent-turn-policy.js';
 
 export interface AgentInstanceGateway {
   // ── Per-session resolved state ─────────────────────────────────────────
@@ -44,6 +45,9 @@ export interface AgentInstanceGateway {
   getAgent(sessionKey: string): Agent | undefined;
   /** Returns true when an agent instance existed for `sessionKey` and was removed. */
   removeAgent(sessionKey: string): boolean;
+
+  /** Create isolated policy state for one user-visible agent run. */
+  createAgentTurnPolicy(sessionKey: string): AgentTurnPolicy;
 
   // ── Read-through accessors ─────────────────────────────────────────────
   /** Last assistant text from the in-memory agent (empty when no agent / no assistant yet). */
