@@ -57,6 +57,12 @@ function createMockSessionStore(opts: {
 }
 
 function createMockAgentManager() {
+  const turnPolicy = {
+    reset: vi.fn(),
+    beforeToolCall: vi.fn(),
+    afterToolCall: vi.fn(),
+    shouldStopAfterTurn: vi.fn(),
+  };
   return {
     getOrCreateAgent: vi.fn().mockReturnValue({
       state: {
@@ -69,6 +75,7 @@ function createMockAgentManager() {
     getResolvedWorkspaceForSession: vi.fn().mockReturnValue('/tmp/workspace'),
     setModelForSession: vi.fn().mockReturnValue(true),
     removeAgent: vi.fn().mockReturnValue(true),
+    createAgentTurnPolicy: vi.fn().mockReturnValue(turnPolicy),
   };
 }
 
@@ -296,6 +303,158 @@ describe('pre-turn auto-compaction', () => {
       resumeLastUserMessage: true,
     }));
     expect(sessionStore.prepareModelFallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a non-retryable harness failure with a fallback model', async () => {
+    mockRunXopcEmbeddedTurn.mockResolvedValueOnce({
+      ok: false,
+      retryable: false,
+      errorMessage: 'another run already owns this session',
+    });
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    const modelManager = {
+      ...createMockModelManager(),
+      getModelForSession: vi.fn().mockReturnValue('primary/model-a'),
+      getResolvedModelForSession: vi.fn().mockReturnValue({
+        contextWindow: 128_000,
+        provider: 'primary',
+        id: 'model-a',
+      }),
+      getFallbackCandidatesForSession: vi.fn().mockReturnValue([
+        { provider: 'primary', model: 'model-a' },
+        { provider: 'fallback', model: 'model-b' },
+      ]),
+    };
+
+    const result = await runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: modelManager as any,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      retryable: false,
+      errorMessage: 'another run already owns this session',
+    });
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledOnce();
+    expect(sessionStore.prepareModelFallback).not.toHaveBeenCalled();
+  });
+
+  it('recomputes each model attempt timeout from the shared run deadline', async () => {
+    let now = 10_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    mockRunXopcEmbeddedTurn
+      .mockImplementationOnce(async () => {
+        now += 10_000;
+        return { ok: false, errorMessage: 'primary failed' };
+      })
+      .mockResolvedValueOnce({ ok: true, lastAssistantText: 'fallback ok' });
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    sessionStore.prepareModelFallback.mockResolvedValue('resume');
+    const modelManager = {
+      ...createMockModelManager(),
+      getModelForSession: vi.fn().mockReturnValue('primary/model-a'),
+      getResolvedModelForSession: vi.fn().mockReturnValue({
+        contextWindow: 128_000,
+        provider: 'primary',
+        id: 'model-a',
+      }),
+      getFallbackCandidatesForSession: vi.fn().mockReturnValue([
+        { provider: 'primary', model: 'model-a' },
+        { provider: 'fallback', model: 'model-b' },
+      ]),
+    };
+
+    try {
+      await runEmbeddedTurnForSession({
+        sessionKey: 'agent:main:test-session',
+        userMessage: { role: 'user', content: 'test' } as AgentMessage,
+        sessionStore: sessionStore as any,
+        agentManager: createMockAgentManager() as any,
+        modelManager: modelManager as any,
+        deadlineAtMs: 70_000,
+      });
+
+      expect(mockRunXopcEmbeddedTurn).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        timeoutMs: 60_000,
+      }));
+      expect(mockRunXopcEmbeddedTurn).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        timeoutMs: 50_000,
+      }));
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('does not start a fallback when the remaining deadline cannot support it', async () => {
+    let now = 10_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    mockRunXopcEmbeddedTurn.mockImplementationOnce(async () => {
+      now += 8_000;
+      return { ok: false, errorMessage: 'primary failed' };
+    });
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    sessionStore.prepareModelFallback.mockResolvedValue('resume');
+    const modelManager = {
+      ...createMockModelManager(),
+      getModelForSession: vi.fn().mockReturnValue('primary/model-a'),
+      getResolvedModelForSession: vi.fn().mockReturnValue({ provider: 'primary', id: 'model-a' }),
+      getFallbackCandidatesForSession: vi.fn().mockReturnValue([
+        { provider: 'primary', model: 'model-a' },
+        { provider: 'fallback', model: 'model-b' },
+      ]),
+    };
+
+    try {
+      const result = await runEmbeddedTurnForSession({
+        sessionKey: 'agent:main:test-session',
+        userMessage: { role: 'user', content: 'test' } as AgentMessage,
+        sessionStore: sessionStore as any,
+        agentManager: createMockAgentManager() as any,
+        modelManager: modelManager as any,
+        deadlineAtMs: 20_000,
+      });
+
+      expect(result).toMatchObject({ ok: false });
+      expect(result.errorMessage).toContain('too little time');
+      expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledTimes(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('does not start a fallback after the root run is cancelled', async () => {
+    const controller = new AbortController();
+    mockRunXopcEmbeddedTurn.mockImplementationOnce(async () => {
+      controller.abort();
+      return { ok: false, errorMessage: 'aborted' };
+    });
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    const modelManager = {
+      ...createMockModelManager(),
+      getModelForSession: vi.fn().mockReturnValue('primary/model-a'),
+      getResolvedModelForSession: vi.fn().mockReturnValue({ provider: 'primary', id: 'model-a' }),
+      getFallbackCandidatesForSession: vi.fn().mockReturnValue([
+        { provider: 'primary', model: 'model-a' },
+        { provider: 'fallback', model: 'model-b' },
+      ]),
+    };
+
+    const result = await runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: modelManager as any,
+      abortSignal: controller.signal,
+    });
+
+    expect(result).toEqual({ ok: false, errorMessage: 'aborted' });
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledTimes(1);
+    expect(sessionStore.prepareModelFallback).not.toHaveBeenCalled();
   });
 
   it('respects memory.retention.compaction.enabled=false config', async () => {

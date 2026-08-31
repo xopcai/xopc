@@ -16,6 +16,18 @@ export const MAX_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 /** Default per-turn timeout (30 minutes). */
 export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
+export const DEFAULT_AGENT_ABORT_GRACE_MS = 5_000;
+
+export class AgentTurnUnsettledError extends Error {
+  constructor(readonly timeoutMs: number, readonly abortGraceMs: number) {
+    super(`Agent turn timed out after ${timeoutMs / 1000}s and did not settle within ${abortGraceMs / 1000}s`);
+    this.name = 'AgentTurnUnsettledError';
+  }
+}
+
+export function isAgentTurnUnsettledError(err: unknown): err is AgentTurnUnsettledError {
+  return err instanceof AgentTurnUnsettledError;
+}
 
 export function resolveAgentTurnTimeoutMs(config?: Config, sessionKey?: string): number {
   if (!config) return DEFAULT_AGENT_TURN_TIMEOUT_MS;
@@ -32,6 +44,7 @@ export async function runAgentTurnWithTimeout(
   agent: Agent,
   runTurn: () => Promise<void>,
   timeoutMs: number,
+  options: { abortGraceMs?: number } = {},
 ): Promise<void> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -40,10 +53,11 @@ export async function runAgentTurnWithTimeout(
       timeoutMs,
     );
   });
+  const runTurnPromise = Promise.resolve().then(runTurn);
 
   try {
     await Promise.race([
-      runTurn().finally(() => {
+      runTurnPromise.finally(() => {
         if (timeoutId !== undefined) {
           clearTimeout(timeoutId);
         }
@@ -53,7 +67,24 @@ export async function runAgentTurnWithTimeout(
   } catch (err) {
     if (isAgentTurnTimeoutError(err)) {
       agent.abort();
-      await agent.waitForIdle();
+      const abortGraceMs = options.abortGraceMs ?? DEFAULT_AGENT_ABORT_GRACE_MS;
+      let graceTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          Promise.allSettled([
+            runTurnPromise,
+            agent.waitForIdle(),
+          ]),
+          new Promise<never>((_, reject) => {
+            graceTimer = setTimeout(
+              () => reject(new AgentTurnUnsettledError(timeoutMs, abortGraceMs)),
+              abortGraceMs,
+            );
+          }),
+        ]);
+      } finally {
+        if (graceTimer !== undefined) clearTimeout(graceTimer);
+      }
     }
     throw err;
   }

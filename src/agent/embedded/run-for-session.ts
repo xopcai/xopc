@@ -15,6 +15,7 @@ import { evaluateContextBudget } from '../memory/context-budget.js';
 import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
+import { AgentRunSupervisor } from '../orchestration/agent-run-supervisor.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -44,81 +45,85 @@ export async function runEmbeddedTurnForSession(
 ): Promise<RunXopcEmbeddedTurnResult> {
   const { sessionKey, agentManager, modelManager, sessionStore, userMessage } = params;
   const runId = params.runId ?? crypto.randomUUID();
-
-  await params.beforeTurn?.();
-
-  const agent = (agentManager as any).getOrCreateAgent(sessionKey) as {
-    state: {
-      tools: RunXopcEmbeddedTurnParams['tools'];
-      systemPrompt?: string;
-      thinkingLevel?: ThinkingLevel;
-    };
-  };
-  const mm = modelManager as any;
-  const configuredModelRef = String(mm.getModelForSession(sessionKey));
-  const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
-    ? mm.getFallbackCandidatesForSession(sessionKey)
-    : [];
-  const candidateModelRefs = candidates.length > 0
-    ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
-    : [configuredModelRef];
-  const resolvedCandidates: Array<{
-    ref: string;
-    model: RunXopcEmbeddedTurnParams['model'];
-  }> = [];
-  for (const [index, ref] of candidateModelRefs.entries()) {
-    try {
-      const resolved = index === 0 && typeof mm.getResolvedModelForSession === 'function'
-        ? mm.getResolvedModelForSession(sessionKey)
-        : resolveModel(ref);
-      resolvedCandidates.push({
-        ref,
-        model: resolved as RunXopcEmbeddedTurnParams['model'],
-      });
-    } catch (err) {
-      log.warn({ err, sessionKey, runId, modelRef: ref }, 'Skipping unavailable model candidate');
-    }
-  }
-  const primary = resolvedCandidates[0];
-  if (!primary) throw new Error(`No available model candidates for '${configuredModelRef}'`);
-
-  const modelRef = primary.ref;
-  const model = primary.model;
-  if (typeof mm.applyResolvedModel === 'function') {
-    mm.applyResolvedModel(agent, model, modelRef);
-  } else {
-    await mm.applyModelForSession(agent, sessionKey);
-  }
-  agentManager.setModelForSession(sessionKey, modelRef);
-  const tools = agent.state.tools;
-  const systemPrompt = agent.state.systemPrompt ?? '';
-  const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
-  const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
   const config = params.getConfig?.();
-  const promptCachePolicy = resolvePromptCachePolicy(
-    config
-      ? resolveEffectiveAgentProfileForSession(config, sessionKey).manifest.runtime?.promptCache
-      : undefined,
-  );
-  const configuredTurnTimeoutMs = resolveAgentTurnTimeoutMs(config, sessionKey);
-  const turnTimeoutMs = params.deadlineAtMs === undefined
-    ? configuredTurnTimeoutMs
-    : Math.max(1, Math.min(configuredTurnTimeoutMs, params.deadlineAtMs - Date.now()));
+  const supervisor = new AgentRunSupervisor({
+    timeoutMs: resolveAgentTurnTimeoutMs(config, sessionKey),
+    deadlineAtMs: params.deadlineAtMs,
+    parentSignal: params.abortSignal,
+  });
 
-  let userMessageForTurn = userMessage;
-  if (params.applyStartupContext !== false) {
-    userMessageForTurn = await applyStartupContextToUserMessage({
-      userMessage,
-      sessionKey,
-      workspaceDir,
-      cfg: config,
-      sessionStore,
-      startupAction: params.startupAction,
-      force: params.forceStartupContext,
-    });
-  }
+  try {
+    await params.beforeTurn?.();
+    if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
 
-  const result = await (async () => {
+    const agent = (agentManager as any).getOrCreateAgent(sessionKey) as {
+      state: {
+        tools: RunXopcEmbeddedTurnParams['tools'];
+        systemPrompt?: string;
+        thinkingLevel?: ThinkingLevel;
+      };
+    };
+    const mm = modelManager as any;
+    const configuredModelRef = String(mm.getModelForSession(sessionKey));
+    const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
+      ? mm.getFallbackCandidatesForSession(sessionKey)
+      : [];
+    const candidateModelRefs = candidates.length > 0
+      ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
+      : [configuredModelRef];
+    const resolvedCandidates: Array<{
+      ref: string;
+      model: RunXopcEmbeddedTurnParams['model'];
+    }> = [];
+    for (const [index, ref] of candidateModelRefs.entries()) {
+      try {
+        const resolved = index === 0 && typeof mm.getResolvedModelForSession === 'function'
+          ? mm.getResolvedModelForSession(sessionKey)
+          : resolveModel(ref);
+        resolvedCandidates.push({
+          ref,
+          model: resolved as RunXopcEmbeddedTurnParams['model'],
+        });
+      } catch (err) {
+        log.warn({ err, sessionKey, runId, modelRef: ref }, 'Skipping unavailable model candidate');
+      }
+    }
+    const primary = resolvedCandidates[0];
+    if (!primary) throw new Error(`No available model candidates for '${configuredModelRef}'`);
+
+    const modelRef = primary.ref;
+    const model = primary.model;
+    if (typeof mm.applyResolvedModel === 'function') {
+      mm.applyResolvedModel(agent, model, modelRef);
+    } else {
+      await mm.applyModelForSession(agent, sessionKey);
+    }
+    agentManager.setModelForSession(sessionKey, modelRef);
+    const tools = agent.state.tools;
+    const turnPolicy = agentManager.createAgentTurnPolicy(sessionKey);
+    const systemPrompt = agent.state.systemPrompt ?? '';
+    const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
+    const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
+    const promptCachePolicy = resolvePromptCachePolicy(
+      config
+        ? resolveEffectiveAgentProfileForSession(config, sessionKey).manifest.runtime?.promptCache
+        : undefined,
+    );
+    let userMessageForTurn = userMessage;
+    if (params.applyStartupContext !== false) {
+      userMessageForTurn = await applyStartupContextToUserMessage({
+        userMessage,
+        sessionKey,
+        workspaceDir,
+        cfg: config,
+        sessionStore,
+        startupAction: params.startupAction,
+        force: params.forceStartupContext,
+      });
+      if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+    }
+
+    try {
       await maybeAutoCompactBeforeTurn({
         sessionKey,
         sessionStore,
@@ -130,140 +135,152 @@ export async function runEmbeddedTurnForSession(
         tools,
         imageCount: params.llmImages?.length ?? 0,
         fallbackModels: resolvedCandidates.slice(1).map((candidate) => candidate.model),
-        abortSignal: params.abortSignal,
+        abortSignal: supervisor.signal,
         onEvent: params.onEvent,
       });
+    } catch (err) {
+      if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+      throw err;
+    }
+    if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
 
-      log.info(
-        {
-          sessionKey,
-          runId,
-          configuredModelRef,
-          primaryModelRef: modelRef,
-          candidateModelRefs: resolvedCandidates.map((candidate) => candidate.ref),
-        },
-        'Agent model fallback candidates resolved',
-      );
+    log.info(
+      {
+        sessionKey,
+        runId,
+        configuredModelRef,
+        primaryModelRef: modelRef,
+        candidateModelRefs: resolvedCandidates.map((candidate) => candidate.ref),
+      },
+      'Agent model fallback candidates resolved',
+    );
 
-      let lastResult: RunXopcEmbeddedTurnResult | undefined;
-      let lastError: unknown;
-      let resumeLastUserMessage = false;
-      const primaryModelRef = modelRef;
+    let lastResult: RunXopcEmbeddedTurnResult | undefined;
+    let lastError: unknown;
+    let resumeLastUserMessage = false;
+    const primaryModelRef = modelRef;
 
-      for (let i = 0; i < resolvedCandidates.length; i++) {
-        const candidate = resolvedCandidates[i]!;
-        const candidateModelRef = candidate.ref;
-        const isFallbackAttempt = i > 0;
-        const candidateModel = candidate.model;
-        const hasNextCandidate = i + 1 < resolvedCandidates.length;
-        const rowsBeforeAttempt = hasNextCandidate
-          ? await sessionStore.loadTranscriptRows(sessionKey)
-          : undefined;
+    for (let i = 0; i < resolvedCandidates.length; i++) {
+      const candidate = resolvedCandidates[i]!;
+      const candidateModelRef = candidate.ref;
+      const isFallbackAttempt = i > 0;
+      const candidateModel = candidate.model;
+      const hasNextCandidate = i + 1 < resolvedCandidates.length;
+      const attemptPlan = supervisor.planModelAttempt(isFallbackAttempt);
+      if (attemptPlan.ok === false) {
+        lastResult = { ok: false, errorMessage: attemptPlan.reason };
+        break;
+      }
+      const rowsBeforeAttempt = hasNextCandidate
+        ? await sessionStore.loadTranscriptRows(sessionKey)
+        : undefined;
 
-        if (typeof mm.applyResolvedModel === 'function') {
-          mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
-        }
-        agentManager.setModelForSession(sessionKey, candidateModelRef);
+      if (typeof mm.applyResolvedModel === 'function') {
+        mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
+      }
+      agentManager.setModelForSession(sessionKey, candidateModelRef);
 
-        if (isFallbackAttempt) {
-          log.info(
-            {
-              sessionKey,
-              runId,
-              primaryModelRef,
-              fallbackModelRef: candidateModelRef,
-              attempt: i + 1,
-              total: resolvedCandidates.length,
-            },
-            'Agent model fallback started',
-          );
-        }
-
-        try {
-          const turnResult = await runXopcEmbeddedTurn({
+      if (isFallbackAttempt) {
+        log.info(
+          {
             sessionKey,
             runId,
-            userMessage: userMessageForTurn,
-            images: params.llmImages,
-            model: candidateModel,
-            modelRef: candidateModelRef,
-            tools,
-            systemPrompt,
-            thinkingLevel,
-            promptCachePolicy,
-            workspaceDir,
-            sessionStore,
-            timeoutMs: turnTimeoutMs,
-            abortSignal: params.abortSignal,
-            onEvent: params.onEvent,
-            resumeLastUserMessage,
-          });
-
-          if (turnResult.ok) {
-            if (isFallbackAttempt) {
-              log.info(
-                {
-                  sessionKey,
-                  runId,
-                  primaryModelRef,
-                  fallbackModelRef: candidateModelRef,
-                  attempt: i + 1,
-                  total: resolvedCandidates.length,
-                },
-                'Agent model fallback succeeded',
-              );
-            }
-            return turnResult;
-          }
-
-          lastResult = turnResult;
-          log.warn(
-            {
-              sessionKey,
-              runId,
-              modelRef: candidateModelRef,
-              attempt: i + 1,
-              total: resolvedCandidates.length,
-              hasNextCandidate,
-              errorMessage: turnResult.errorMessage,
-            },
-            hasNextCandidate
-              ? 'Agent model turn failed, trying fallback'
-              : 'Agent model turn failed, no fallback remains',
-          );
-        } catch (err) {
-          lastError = err;
-          if (err instanceof DOMException && err.name === 'AbortError') {
-            throw err;
-          }
-          log.warn(
-            { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: resolvedCandidates.length, hasNextCandidate },
-            hasNextCandidate
-              ? 'Agent model call threw, trying fallback'
-              : 'Agent model call threw, no fallback remains',
-          );
-        }
-
-        if (hasNextCandidate && rowsBeforeAttempt) {
-          const preparation = await sessionStore.prepareModelFallback(sessionKey, rowsBeforeAttempt);
-          if (preparation === 'unsafe') {
-            log.warn(
-              { sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1 },
-              'Agent model fallback skipped because the failed attempt changed the transcript',
-            );
-            break;
-          }
-          resumeLastUserMessage = preparation === 'resume';
-        }
+            primaryModelRef,
+            fallbackModelRef: candidateModelRef,
+            attempt: i + 1,
+            total: resolvedCandidates.length,
+          },
+          'Agent model fallback started',
+        );
       }
 
-      if (lastResult) return lastResult;
-      if (lastError instanceof Error) throw lastError;
-      if (lastError != null) throw new Error(String(lastError));
-      return { ok: false, errorMessage: 'No model candidates available' };
-  })();
+      try {
+        const turnResult = await runXopcEmbeddedTurn({
+          sessionKey,
+          runId,
+          userMessage: userMessageForTurn,
+          images: params.llmImages,
+          model: candidateModel,
+          modelRef: candidateModelRef,
+          tools,
+          systemPrompt,
+          thinkingLevel,
+          promptCachePolicy,
+          workspaceDir,
+          sessionStore,
+          timeoutMs: attemptPlan.timeoutMs,
+          turnPolicy,
+          abortSignal: supervisor.signal,
+          onEvent: params.onEvent,
+          resumeLastUserMessage,
+        });
 
-  return result;
+        if (turnResult.ok) {
+          if (isFallbackAttempt) {
+            log.info(
+              {
+                sessionKey,
+                runId,
+                primaryModelRef,
+                fallbackModelRef: candidateModelRef,
+                attempt: i + 1,
+                total: resolvedCandidates.length,
+              },
+              'Agent model fallback succeeded',
+            );
+          }
+          return turnResult;
+        }
+
+        lastResult = turnResult;
+        if (supervisor.signal.aborted || turnResult.retryable === false) break;
+        log.warn(
+          {
+            sessionKey,
+            runId,
+            modelRef: candidateModelRef,
+            attempt: i + 1,
+            total: resolvedCandidates.length,
+            hasNextCandidate,
+            errorMessage: turnResult.errorMessage,
+          },
+          hasNextCandidate
+            ? 'Agent model turn failed, trying fallback'
+            : 'Agent model turn failed, no fallback remains',
+        );
+      } catch (err) {
+        lastError = err;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          throw err;
+        }
+        log.warn(
+          { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: resolvedCandidates.length, hasNextCandidate },
+          hasNextCandidate
+            ? 'Agent model call threw, trying fallback'
+            : 'Agent model call threw, no fallback remains',
+        );
+      }
+
+      if (hasNextCandidate && rowsBeforeAttempt) {
+        const preparation = await sessionStore.prepareModelFallback(sessionKey, rowsBeforeAttempt);
+        if (preparation === 'unsafe') {
+          log.warn(
+            { sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1 },
+            'Agent model fallback skipped because the failed attempt changed the transcript',
+          );
+          break;
+        }
+        resumeLastUserMessage = preparation === 'resume';
+      }
+    }
+
+    if (lastResult) return lastResult;
+    if (lastError instanceof Error) throw lastError;
+    if (lastError != null) throw new Error(String(lastError));
+    return { ok: false, errorMessage: 'No model candidates available' };
+  } finally {
+    supervisor.dispose();
+  }
 }
 
 // ---------------------------------------------------------------------------

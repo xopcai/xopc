@@ -33,7 +33,7 @@ import {
 } from '../source-context/types.js';
 import type { ReviewOutput } from '../../review/review-types.js';
 
-import { AsyncQueue } from './async-queue.js';
+import { AsyncQueue, AsyncQueueOverflowError } from './async-queue.js';
 import {
   hydratePerTurnState,
   runDirectAgentTurn,
@@ -114,6 +114,14 @@ export interface ProcessDirectStreamingInput {
 }
 
 export type ProcessDirectStreamEvent = { type: string; [key: string]: unknown };
+
+const MAX_BUFFERED_STREAM_EVENTS = 512;
+const LOSSY_STREAM_EVENT_TYPES = new Set([
+  'message_update',
+  'tool_execution_update',
+  'progress',
+  'review_delta',
+]);
 
 function isReviewOutput(value: unknown): value is ReviewOutput {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -254,7 +262,10 @@ export async function* runProcessDirectStreaming(
   const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId, input.origin);
 
-  const queue = new AsyncQueue<ProcessDirectStreamEvent>();
+  const queue = new AsyncQueue<ProcessDirectStreamEvent>({
+    maxBuffered: MAX_BUFFERED_STREAM_EVENTS,
+    isDroppable: (event) => LOSSY_STREAM_EVENT_TYPES.has(event.type),
+  });
   let reasoningLevel: ReasoningLevel = channel === 'webchat'
     ? resolveConfiguredActivityDetailDefault(deps.getConfig())
     : 'stream';
@@ -293,6 +304,7 @@ export async function* runProcessDirectStreaming(
   let ranSlashCommand = false;
   let mergedUserText = input.content;
   let webchatSlashReceipt: string | undefined;
+  let streamOverflowed = false;
   let slashCommandMetadata: Record<string, unknown> | undefined;
   const slashTraceRows: ReviewTraceContextEntry[] = [];
 
@@ -504,12 +516,25 @@ export async function* runProcessDirectStreaming(
         clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
       }
     } catch (err) {
-      if (!abortHandled) {
+      if (err instanceof AsyncQueueOverflowError) {
+        streamOverflowed = true;
+        await abortEmbeddedRun(sessionKey).catch(() => false);
+        deps.log.warn(
+          { err, sessionKey, maxBuffered: err.maxBuffered },
+          'Aborted agent stream because the consumer could not keep up with critical events',
+        );
+      } else if (!abortHandled) {
         const em = err instanceof Error ? err.message : String(err);
         pushVisible({ type: 'error', content: formatStreamError(em) });
       }
     } finally {
-      if (!userAborted && channel === 'webchat') {
+      if (queue.droppedCount > 0) {
+        deps.log.warn(
+          { sessionKey, droppedEvents: queue.droppedCount },
+          'Coalesced stream progress events because the consumer fell behind',
+        );
+      }
+      if (!userAborted && !streamOverflowed && channel === 'webchat') {
         try {
           const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
           if (ttsAudioEvent) {

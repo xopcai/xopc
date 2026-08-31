@@ -32,5 +32,5 @@ export {
 } from './tool-result-truncation.js';
 export { runXopcEmbeddedTurn, abortEmbeddedRun, queueEmbeddedSteer } from './run-turn.js';
 export { runEmbeddedTurnForSession } from './run-for-session.js';
-export { registerEmbeddedRun, getEmbeddedRunBySessionKey } from './runs.js';
+export { getEmbeddedRunBySessionKey } from './runs.js';
 export type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult, EmbeddedStreamEvent } from './types.js';

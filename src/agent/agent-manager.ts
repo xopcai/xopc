@@ -90,6 +90,10 @@ import { parseExternalToolRef } from './external-tools/refs.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
+import {
+  createAgentTurnPolicy as buildAgentTurnPolicy,
+  type AgentTurnPolicy,
+} from './orchestration/agent-turn-policy.js';
 
 const log = createLogger('AgentManager');
 
@@ -1123,6 +1127,12 @@ export class AgentManager implements AgentInstanceGateway {
     return agent;
   }
 
+  createAgentTurnPolicy(sessionKey: string): AgentTurnPolicy {
+    const profile = this.agents.get(sessionKey)?.effectiveProfile
+      ?? resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
+    return this.buildAgentTurnPolicy(sessionKey, profile);
+  }
+
   /**
    * Get existing agent for a session (if any)
    */
@@ -1332,7 +1342,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     const thinkingLevel =
       (profile.thinkingDefault as ThinkingLevel | undefined) ?? this.config.thinkingLevel ?? 'medium';
-    const toolCalls = new Map<string, number>();
+    const turnPolicy = this.buildAgentTurnPolicy(sessionKey, profile);
 
     agent = new Agent({
       initialState: {
@@ -1360,27 +1370,31 @@ export class AgentManager implements AgentInstanceGateway {
       toolExecution: 'parallel',
       streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
-      shouldStopAfterTurn: ({ newMessages, toolResults }) => {
-        const maxTurns = profile.manifest.runtime?.maxTurns;
-        const maxFailures = profile.manifest.runtime?.maxToolFailuresPerTurn;
-        const shouldStop = Boolean(
-          (maxTurns && newMessages.filter((message) => message.role === 'assistant').length >= maxTurns)
-          || (maxFailures && toolResults.filter((result) => result.isError).length >= maxFailures),
-        );
-        toolCalls.clear();
-        return shouldStop;
+      shouldStopAfterTurn: turnPolicy.shouldStopAfterTurn,
+      beforeToolCall: turnPolicy.beforeToolCall,
+      afterToolCall: turnPolicy.afterToolCall,
+    });
+    agent.subscribe((event) => {
+      if (event.type === 'agent_start') turnPolicy.reset();
+    });
+    return { agent, registeredToolNames };
+  }
+
+  private buildAgentTurnPolicy(
+    sessionKey: string,
+    profile: EffectiveAgentProfile,
+  ): AgentTurnPolicy {
+    return buildAgentTurnPolicy({
+      maxTurns: profile.manifest.runtime?.maxTurns,
+      maxToolFailures: profile.manifest.runtime?.maxToolFailuresPerTurn,
+      resolveToolLimit: (toolName, args) => {
+        const policy = this.resolveToolPolicy(profile, toolName, args);
+        const maxCalls = policy?.limits?.maxCallsPerTurn;
+        return policy && maxCalls ? { id: policy.id, maxCalls } : undefined;
       },
-      beforeToolCall: async ({ toolCall, args }) => {
+      authorizeToolCall: async ({ toolCall, args }) => {
         const toolName = toolCall.name;
         const policy = this.resolveToolPolicy(profile, toolName, args);
-        if (policy?.limits?.maxCallsPerTurn) {
-          const count = (toolCalls.get(policy.id) ?? 0) + 1;
-          toolCalls.set(policy.id, count);
-          if (count > policy.limits.maxCallsPerTurn) {
-            return { block: true, terminate: true, reason: `${policy.id} exceeded its per-turn call limit.` };
-          }
-        }
-
         const detail = JSON.stringify(args ?? {});
         const boundary = checkBoundary({ manifest: profile.manifest, action: policy?.id ?? toolName, detail });
         if (boundary.decision === 'deny') {
@@ -1447,10 +1461,6 @@ export class AgentManager implements AgentInstanceGateway {
         return undefined;
       },
     });
-    agent.subscribe((event) => {
-      if (event.type === 'agent_start') toolCalls.clear();
-    });
-    return { agent, registeredToolNames };
   }
 
   private resolveToolPolicy(

@@ -2,7 +2,7 @@ import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
-import { registerEmbeddedRun, unregisterEmbeddedRun } from './runs.js';
+import { acquireEmbeddedRunLease, EmbeddedRunConflictError } from './runs.js';
 import { subscribeEmbeddedSessionEvents, lastAssistantPlainText } from './subscribe-session.js';
 import type { RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import {
@@ -12,10 +12,14 @@ import {
   maybeRetryTurnAfterTransientLlmFailure,
   stripTrailingErrorAssistantMessages,
 } from '../orchestration/llm-turn-retry.js';
-import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
+import {
+  isAgentTurnUnsettledError,
+  runAgentTurnWithTimeout,
+  resolveAgentTurnTimeoutMs,
+} from '../orchestration/run-agent-turn-with-timeout.js';
 import { detectToolLoops, type RecentToolCall } from '../orchestration/loop-guard.js';
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
-import { acquireEmbeddedSessionRunner } from './session-runner.js';
+import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './session-runner.js';
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
@@ -120,6 +124,7 @@ async function maybeRecoverContextOverflow(params: {
   model: Model<Api>;
   sessionKey: string;
   transcriptRuntime: NonNullable<RunXopcEmbeddedTurnParams['transcriptRuntime']>;
+  abortSignal?: AbortSignal;
   onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
 }): Promise<boolean> {
   const errorMessage = getAssistantTurnErrorMessage(params.agent);
@@ -137,12 +142,14 @@ async function maybeRecoverContextOverflow(params: {
     params.model,
     'Preserve the current pending user request verbatim and retain every fact needed to answer it.',
     true,
+    { signal: params.abortSignal },
   );
   if (!result.compacted) {
     throw new Error(`Context overflow recovery could not find a safe compaction range: ${errorMessage}`);
   }
 
   params.agent.state.messages = await params.transcriptRuntime.loadMessages();
+  params.abortSignal?.throwIfAborted();
   params.onEvent?.({
     type: 'compaction',
     status: 'completed',
@@ -183,8 +190,15 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
   let runner: Awaited<ReturnType<typeof acquireEmbeddedSessionRunner>> | undefined;
   let unsubscribe: (() => void) | undefined;
+  let quarantineRunner = false;
+  let runLease: ReturnType<typeof acquireEmbeddedRunLease> | undefined;
 
   try {
+    runLease = acquireEmbeddedRunLease({
+      sessionKey,
+      sessionId: transcriptRuntime.sessionId,
+      runId,
+    });
     runner = await acquireEmbeddedSessionRunner({
       runtimeId: transcriptRuntime.runtimeId,
       sessionId: transcriptRuntime.sessionId,
@@ -198,6 +212,14 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     });
 
     const { session, reused } = runner;
+    await runLease.attach(session, async () => session.abort());
+    const runAbortSignal = params.abortSignal
+      ? AbortSignal.any([runLease.signal, params.abortSignal])
+      : runLease.signal;
+    if (runAbortSignal.aborted) {
+      await session.abort();
+      return { ok: false, errorMessage: 'aborted' };
+    }
     runner.piSm.setActiveTurnId?.(runId);
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(
@@ -291,6 +313,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       });
     };
     session.agent.streamFunction = loggingStreamFn;
+    params.turnPolicy?.reset();
+    session.agent.beforeToolCall = params.turnPolicy?.beforeToolCall;
+    session.agent.afterToolCall = params.turnPolicy?.afterToolCall;
+    session.agent.shouldStopAfterTurn = params.turnPolicy?.shouldStopAfterTurn;
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
       if (event.type === 'message_end' && event.message.role === 'assistant') {
@@ -299,27 +325,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       onEvent?.({ ...event, runId });
     });
 
-    const handle = {
-      sessionKey,
-      sessionId: transcriptRuntime.sessionId,
-      runId,
-      session,
-      abort: async () => {
-        await session.abort();
-      },
-    };
-    registerEmbeddedRun(handle);
-
     const abortListener = () => {
       void session.abort();
     };
-    if (params.abortSignal) {
-      if (params.abortSignal.aborted) {
-        await session.abort();
-        return { ok: false, errorMessage: 'aborted' };
-      }
-      params.abortSignal.addEventListener('abort', abortListener, { once: true });
-    }
+    runAbortSignal.addEventListener('abort', abortListener, { once: true });
 
     try {
       await runAgentTurnWithTimeout(
@@ -333,18 +342,26 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             await session.prompt(text, images.length > 0 ? { images } : undefined);
           }
           await session.agent.waitForIdle();
-          await maybeRetryTurnAfterTransientLlmFailure(session.agent, { sessionKey, log });
+          await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
+            sessionKey,
+            log,
+            signal: runAbortSignal,
+          });
           await maybeRecoverContextOverflow({
             agent: session.agent,
             model: resolvedModel,
             sessionKey,
             transcriptRuntime,
+            abortSignal: runAbortSignal,
             onEvent,
           });
         },
         timeoutMs,
       );
 
+      if (runAbortSignal.aborted) {
+        return { ok: false, errorMessage: 'aborted' };
+      }
       if (isAssistantTurnAborted(session.agent)) {
         return { ok: true, lastAssistantText: lastAssistantPlainText(session) };
       }
@@ -358,15 +375,22 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
       return { ok: true, lastAssistantText: lastAssistantPlainText(session) };
     } finally {
-      params.abortSignal?.removeEventListener('abort', abortListener);
-      unregisterEmbeddedRun(handle);
+      runAbortSignal.removeEventListener('abort', abortListener);
     }
   } catch (err) {
+    if (err instanceof EmbeddedRunConflictError) {
+      const em = err.message;
+      log.warn({ sessionKey, runId, activeRunId: err.activeRunId }, `Embedded run rejected: ${em}`);
+      onEvent?.({ type: 'error', content: em, runId });
+      return { ok: false, retryable: false, errorMessage: em };
+    }
+    quarantineRunner = isAgentTurnUnsettledError(err);
     const em = err instanceof Error ? err.message : String(err);
     log.error({ err, sessionKey, runId }, `Embedded run failed: ${em}`);
     onEvent?.({ type: 'error', content: em, runId });
     return { ok: false, errorMessage: em };
   } finally {
+    runLease?.release();
     unsubscribe?.();
     try {
       runner?.piSm.flushPendingToolResults?.();
@@ -374,6 +398,9 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       /* ignore */
     }
     runner?.piSm.setActiveTurnId?.(null);
+    if (quarantineRunner) {
+      evictEmbeddedSessionRunner(transcriptRuntime.runtimeId, 'unsettled_after_timeout');
+    }
     runner?.release();
   }
 }
