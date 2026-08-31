@@ -81,6 +81,9 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'skills/tools/find-skills/SKILL.md'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@huggingface/transformers'))).toBe(true);
+    expect(JSON.parse(readFileSync(join(packDir, 'node_modules/tar/package.json'), 'utf8')).version).toBe(
+      '7.5.22',
+    );
     expect(existsSync(join(packDir, 'node_modules/onnxruntime-common'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/onnxruntime-web'))).toBe(false);
     expect(

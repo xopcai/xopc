@@ -4,6 +4,7 @@
 name: npm Publish
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -46,6 +47,17 @@ jobs:
       - name: Validate publish manifest
         run: pnpm run release:check-package
 
+      - name: Resolve package version
+        id: package
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "${{ github.event_name }}" == "push" && "v${VERSION}" != "${{ github.ref_name }}" ]]; then
+            echo "Package version ${VERSION} does not match release tag ${{ github.ref_name }}" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Determine npm tag
         id: npm-tag
         run: |
@@ -58,12 +70,30 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check whether version is already published
+        id: npm-version
+        shell: bash
+        run: |
+          VERSION="${{ steps.package.outputs.version }}"
+          if npm view "@xopcai/xopc@${VERSION}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "@xopcai/xopc@${VERSION} is already published; publish will be skipped."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
+        if: steps.npm-version.outputs.exists != 'true'
         run: pnpm publish --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
+
+      - name: Confirm existing npm version
+        if: steps.npm-version.outputs.exists == 'true'
+        run: npm view "@xopcai/xopc@${{ steps.package.outputs.version }}" version dist.tarball
 
   docker:
     name: Publish Docker image
     needs: publish
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
