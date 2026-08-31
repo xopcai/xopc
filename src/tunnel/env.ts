@@ -9,6 +9,18 @@ export type TunnelRegistrationSecretMeta = {
   source: TunnelRegistrationSecretSource;
 };
 
+export const TUNNEL_REGISTRATION_SECRET_REQUIRED_CODE =
+  'TUNNEL_REGISTRATION_SECRET_REQUIRED';
+
+export class TunnelRegistrationSecretError extends Error {
+  readonly code = TUNNEL_REGISTRATION_SECRET_REQUIRED_CODE;
+
+  constructor(brokerUrl?: string) {
+    super(tunnelRegistrationSecretRequiredMessage(brokerUrl));
+    this.name = 'TunnelRegistrationSecretError';
+  }
+}
+
 function brokerHostname(brokerUrl: string): string | null {
   try {
     const normalized = brokerUrl.includes('://') ? brokerUrl : `https://${brokerUrl}`;
@@ -18,13 +30,12 @@ function brokerHostname(brokerUrl: string): string | null {
   }
 }
 
-/** True when the broker is the public frp.xopc.ai service (not local dev). */
-export function isProductionTunnelBroker(brokerUrl: string): boolean {
+/** True only for brokers that are safe to use with the built-in development secret. */
+export function isLocalDevelopmentTunnelBroker(brokerUrl: string): boolean {
   const host = brokerHostname(brokerUrl);
-  if (!host) return true;
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
-  if (host.endsWith('.local')) return false;
-  return host === 'frp.xopc.ai';
+  if (!host) return false;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+  return host.endsWith('.local');
 }
 
 export function maskTunnelSecretForWeb(secret: string): string {
@@ -65,11 +76,36 @@ export function getTunnelRegistrationSecretMeta(
   }
 
   const effectiveUrl = effectiveBrokerUrl(brokerUrl ?? config?.tunnel?.brokerUrl, env);
-  if (isProductionTunnelBroker(effectiveUrl)) {
-    return { configured: false, source: 'missing' };
+  if (isLocalDevelopmentTunnelBroker(effectiveUrl)) {
+    return { configured: true, source: 'dev_default' };
   }
 
-  return { configured: true, source: 'dev_default' };
+  return { configured: false, source: 'missing' };
+}
+
+export function resolveOptionalTunnelRegistrationSecret(
+  brokerUrl?: string,
+  configSecret?: string,
+): string | undefined {
+  const fromConfig = configSecret?.trim();
+  if (fromConfig) return fromConfig;
+
+  const effectiveUrl = effectiveBrokerUrl(brokerUrl, process.env);
+  return isLocalDevelopmentTunnelBroker(effectiveUrl) ? DEV_REGISTRATION_SECRET : undefined;
+}
+
+export function tunnelRegistrationSecretRequiredMessage(brokerUrl?: string): string {
+  const effectiveUrl = effectiveBrokerUrl(brokerUrl, process.env);
+  const host = brokerHostname(effectiveUrl);
+  const brokerLabel =
+    host === 'frp.xopc.ai'
+      ? 'the XOPC public broker (frp.xopc.ai)'
+      : `broker ${host ?? effectiveUrl}`;
+  return (
+    `Tunnel registration secret is required for ${brokerLabel}. ` +
+    'Authorize XOPC from Remote access → Public internet, or create a Tunnel Registration Key at ' +
+    'https://console.xopc.ai/access/client and save it there manually.'
+  );
 }
 
 /**
@@ -80,20 +116,9 @@ export function resolveTunnelRegistrationSecret(
   brokerUrl?: string,
   configSecret?: string,
 ): string {
-  const fromConfig = configSecret?.trim();
-  if (fromConfig) return fromConfig;
-
-  const effectiveUrl = effectiveBrokerUrl(brokerUrl, process.env);
-
-  if (isProductionTunnelBroker(effectiveUrl)) {
-    throw new Error(
-      'Tunnel registration secret is required for the production broker (frp.xopc.ai). ' +
-        'Authorize XOPC from Remote access → Public internet, or create a Tunnel Registration Key at ' +
-        'https://console.xopc.ai/access/client and save it there manually.',
-    );
-  }
-
-  return DEV_REGISTRATION_SECRET;
+  const secret = resolveOptionalTunnelRegistrationSecret(brokerUrl, configSecret);
+  if (secret) return secret;
+  throw new TunnelRegistrationSecretError(brokerUrl);
 }
 
 export function resolveTunnelBrokerUrl(

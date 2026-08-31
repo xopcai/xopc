@@ -2,7 +2,7 @@ import type { Config } from '../config/schema.js';
 import { resolveGatewayEffectiveHost } from '../config/gateway-bind.js';
 import { createLogger } from '../utils/logger.js';
 import { hasValidTunnelConsent } from './consent.js';
-import { resolveTunnelBrokerUrl, resolveTunnelRegistrationSecret } from './env.js';
+import { resolveOptionalTunnelRegistrationSecret, resolveTunnelBrokerUrl } from './env.js';
 import { getTunnelService } from './tunnel-service.js';
 import { resolveFrpSubdomainHost } from './frp-subdomain-host.js';
 import { fetchTunnelWellKnown } from './well-known.js';
@@ -36,21 +36,12 @@ export type ConfigureTunnelFromGatewayConfigOptions = {
 };
 
 function applyTunnelServiceFromGatewayConfig(config: Config, brokerUrl: string): void {
-  let registrationSecret: string;
-  try {
-    registrationSecret = resolveTunnelRegistrationSecret(
-      brokerUrl,
-      config.tunnel?.registrationSecret,
-    );
-  } catch (err) {
-    const em = err instanceof Error ? err.message : String(err);
-    log.warn({ phase: 'tunnel_configure', errorMessage: em }, em);
-    throw err;
-  }
-
   getTunnelService().configure({
     brokerUrl,
-    registrationSecret,
+    registrationSecret: resolveOptionalTunnelRegistrationSecret(
+      brokerUrl,
+      config.tunnel?.registrationSecret,
+    ),
     autoStart: config.tunnel?.autoStart ?? false,
     gatewayHost: resolveGatewayEffectiveHost(config),
     frpSubdomainHost: resolveFrpSubdomainHost(brokerUrl),

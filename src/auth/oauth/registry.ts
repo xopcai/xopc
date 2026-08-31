@@ -12,14 +12,20 @@ import type { OAuthProviderInterface } from './types.js';
 export interface OAuthProviderDefinition {
   displayName: string;
   oauthOnly?: boolean;
+  purpose: 'models' | 'tunnel';
   provider: OAuthProviderInterface;
   profileId: string;
   urlPrompt: string;
 }
 
-function definition(provider: OAuthProviderInterface, displayName = provider.name): OAuthProviderDefinition {
+function definition(
+  provider: OAuthProviderInterface,
+  purpose: OAuthProviderDefinition['purpose'],
+  displayName = provider.name,
+): OAuthProviderDefinition {
   return {
     displayName,
+    purpose,
     provider,
     profileId: `${provider.id}:default`,
     urlPrompt: '🌐 Please open this URL in your browser:\n',
@@ -27,16 +33,19 @@ function definition(provider: OAuthProviderInterface, displayName = provider.nam
 }
 
 export const OAUTH_PROVIDER_DEFINITIONS: Readonly<Record<string, OAuthProviderDefinition>> = {
-  'xopc-cloud': { ...definition(xopcCloudOAuthProvider), oauthOnly: true },
-  'xopc-tunnel': { ...definition(xopcTunnelOAuthProvider), oauthOnly: true },
-  anthropic: definition(anthropicOAuthProvider, 'Anthropic (Claude)'),
-  minimax: definition(minimaxOAuthProvider, 'MiniMax (幂维智能)'),
-  'minimax-cn': { ...definition(minimaxCnOAuthProvider, 'MiniMax CN'), urlPrompt: '🌐 请在浏览器中打开以下 URL:\n' },
-  'kimi-coding': definition(kimiCodingOAuthProvider, 'Kimi For Coding (月之暗面)'),
-  'github-copilot': definition(githubCopilotOAuthProvider),
-  'google-gemini-cli': definition(googleGeminiCliOAuthProvider),
-  'google-antigravity': definition(googleAntigravityOAuthProvider),
-  'openai-codex': definition(openaiCodexOAuthProvider),
+  'xopc-cloud': { ...definition(xopcCloudOAuthProvider, 'models'), oauthOnly: true },
+  'xopc-tunnel': { ...definition(xopcTunnelOAuthProvider, 'tunnel'), oauthOnly: true },
+  anthropic: definition(anthropicOAuthProvider, 'models', 'Anthropic (Claude)'),
+  minimax: definition(minimaxOAuthProvider, 'models', 'MiniMax (幂维智能)'),
+  'minimax-cn': {
+    ...definition(minimaxCnOAuthProvider, 'models', 'MiniMax CN'),
+    urlPrompt: '🌐 请在浏览器中打开以下 URL:\n',
+  },
+  'kimi-coding': definition(kimiCodingOAuthProvider, 'models', 'Kimi For Coding (月之暗面)'),
+  'github-copilot': definition(githubCopilotOAuthProvider, 'models'),
+  'google-gemini-cli': definition(googleGeminiCliOAuthProvider, 'models'),
+  'google-antigravity': definition(googleAntigravityOAuthProvider, 'models'),
+  'openai-codex': definition(openaiCodexOAuthProvider, 'models'),
 };
 
 export function getOAuthProviderDefinition(provider: string): OAuthProviderDefinition | undefined {
@@ -49,6 +58,12 @@ export function getOAuthProviderInterfaces(): Record<string, OAuthProviderInterf
 
 export function getOAuthProviderIds(): string[] {
   return Object.keys(OAUTH_PROVIDER_DEFINITIONS);
+}
+
+export function getModelOAuthProviderIds(): string[] {
+  return Object.entries(OAUTH_PROVIDER_DEFINITIONS)
+    .filter(([, definition]) => definition.purpose === 'models')
+    .map(([id]) => id);
 }
 
 export function isOAuthOnlyProvider(provider: string): boolean {
