@@ -37,6 +37,11 @@ interface LocalVoiceModelStatus {
   error?: string;
 }
 
+interface LocalVoiceRuntimeStatus {
+  ready: boolean;
+  error?: string;
+}
+
 function extensionForMime(mimeType: string): string {
   if (mimeType.includes('ogg')) return 'ogg';
   if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
@@ -78,13 +83,26 @@ export async function fetchVoiceReadiness(): Promise<VoiceReadiness> {
     const voice = status.voice;
     if (voice?.sttEnabled === false) return { state: 'disabled' };
     const provider = voice?.sttProvider ?? undefined;
-    if (voice?.sttAvailable === true) return { state: 'ready', provider };
-    if (provider !== 'xopc-local') return { state: 'unavailable', provider };
+    if (provider !== 'xopc-local') {
+      return voice?.sttAvailable === true
+        ? { state: 'ready', provider }
+        : { state: 'unavailable', provider };
+    }
 
-    const local = await fetchJson<{ payload?: { models?: LocalVoiceModelStatus[] } }>(
+    const local = await fetchJson<{
+      payload?: { runtime?: LocalVoiceRuntimeStatus; models?: LocalVoiceModelStatus[] };
+    }>(
       apiUrl('/api/voice/local/status'),
     );
     const modelId = voice?.localModelId ?? 'sensevoice-small';
+    if (local.payload?.runtime?.ready === false) {
+      return {
+        state: 'error',
+        provider,
+        modelId,
+        error: local.payload.runtime.error || 'Local voice runtime is unavailable',
+      };
+    }
     const model = local.payload?.models?.find((entry) => entry.id === modelId);
     if (!model) return { state: 'error', provider, modelId, error: 'Local voice model status is unavailable' };
     if (model.state === 'ready') return { state: 'ready', provider, modelId };

@@ -50,6 +50,7 @@ export interface LocalVoiceModelStatus {
 
 export interface LocalVoiceStatusPayload {
   runtime: { ready: boolean; engine?: string; protocolVersion?: number; error?: string };
+  decoder?: { available: boolean; command: string; error?: string };
   models: LocalVoiceModelStatus[];
 }
 

@@ -33,6 +33,7 @@ import {
   startLocalVoiceModelInstall,
 } from '../../../voice/local/model-manager.js';
 import { getLocalVoiceRuntimeClient } from '../../../voice/local/runtime-client.js';
+import { getAudioDecoderStatus } from '../../../voice/audio/normalize.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -256,19 +257,37 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
 
   authenticated.get('/api/voice/local/status', async (c) => {
+    const config = service.currentConfig as Config;
+    const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
+    const modelId = typeof sttConfig.providers?.['xopc-local']?.model === 'string'
+      ? sttConfig.providers['xopc-local'].model
+      : 'sensevoice-small';
     const models = await listLocalVoiceModelStatuses();
+    const decoder = getAudioDecoderStatus();
     try {
       const runtime = await getLocalVoiceRuntimeClient().request<{
         ok: boolean;
         protocolVersion: number;
         engine: string;
-      }>('health', {}, { timeoutMs: 10_000, stopOnTimeout: false });
-      return c.json({ ok: true, payload: { runtime: { ...runtime, ready: true }, models } });
+        modelId?: string;
+        selectedEngine?: string;
+      }>('health', { modelId }, { timeoutMs: 10_000, stopOnTimeout: false });
+      return c.json({
+        ok: true,
+        payload: {
+          runtime: {
+            ...runtime,
+            ready: true,
+          },
+          decoder,
+          models,
+        },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return c.json({
         ok: true,
-        payload: { runtime: { ready: false, error: message }, models },
+        payload: { runtime: { ready: false, error: message }, decoder, models },
       });
     }
   });

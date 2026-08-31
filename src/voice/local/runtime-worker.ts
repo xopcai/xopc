@@ -37,6 +37,30 @@ type SherpaModule = {
 
 const sherpaRecognizers = new Map<string, Promise<SherpaOfflineRecognizer>>();
 
+async function assertLocalVoiceEngineAvailable(modelId: string): Promise<string> {
+  const model = getLocalVoiceModel(modelId);
+  if (model.engine === 'sherpa-onnx') {
+    const imported = await import('sherpa-onnx-node').catch((cause: unknown) => {
+      throw new Error(
+        'The sherpa-onnx local voice engine is not installed. Install sherpa-onnx-node@1.13.4 alongside @xopcai/xopc.',
+        { cause },
+      );
+    });
+    const sherpa = ((imported as { default?: SherpaModule }).default ?? imported) as SherpaModule;
+    if (typeof sherpa.OfflineRecognizer !== 'function') {
+      throw new Error('The sherpa-onnx local voice engine did not expose OfflineRecognizer');
+    }
+  } else {
+    await import('@huggingface/transformers').catch((cause: unknown) => {
+      throw new Error(
+        'The Transformers.js local voice engine is not installed. Install @huggingface/transformers@3.8.1 alongside @xopcai/xopc.',
+        { cause },
+      );
+    });
+  }
+  return model.engine;
+}
+
 const networkAgent = new RetryAgent(new EnvHttpProxyAgent(), {
   maxRetries: 4,
   minTimeout: 500,
@@ -234,11 +258,18 @@ async function transcribeWithSherpa(
 async function handle(request: RuntimeRequest): Promise<unknown> {
   const params = request.params ?? {};
   if (request.method === 'health') {
+    const modelId = typeof params.modelId === 'string' && params.modelId
+      ? params.modelId
+      : undefined;
+    const selectedEngine = modelId
+      ? await assertLocalVoiceEngineAvailable(modelId)
+      : undefined;
     return {
       ok: true,
       protocolVersion: 2,
       engine: 'transformers.js+sherpa-onnx',
       engines: ['transformers.js', 'sherpa-onnx'],
+      ...(modelId ? { modelId, selectedEngine } : {}),
     };
   }
   if (request.method === 'model.install') {
