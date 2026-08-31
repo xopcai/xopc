@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/cn';
 
 import { focusAfterBlockInsert } from './extensions/block-insert-focus';
+import { editSelectedLink } from './link-interaction';
 
 interface ToolbarButtonProps {
   onClick: () => void;
@@ -78,20 +79,6 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
     },
     [imageUploading, onImageUpload],
   );
-
-  const handleLinkInsert = useCallback(() => {
-    const previousUrl = editor.getAttributes('link').href ?? '';
-    const url = window.prompt('URL', previousUrl);
-
-    if (url === null) return;
-
-    if (url === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-  }, [editor]);
 
   const iconSize = 16;
 
@@ -169,7 +156,7 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
       >
         <Code size={iconSize} />
       </ToolbarButton>
-      <ToolbarButton onClick={handleLinkInsert} isActive={editor.isActive('link')} title="Link">
+      <ToolbarButton onClick={() => editSelectedLink(editor)} isActive={editor.isActive('link')} title="Link">
         <LinkIcon size={iconSize} />
       </ToolbarButton>
 
