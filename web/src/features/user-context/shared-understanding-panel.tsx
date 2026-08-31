@@ -1,15 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Check, ChevronRight, Eye, History, Network, Pencil, Plus, Sparkles, Target, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, Eye, History, Layers3, Network, Pencil, Plus, RefreshCw, Sparkles, Target, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 import {
+  batchReviewContextObjects,
   createUnderstanding,
   fetchUnderstandingEvidence,
   updateUnderstanding,
   updateUserFocus,
+  type ContextReviewDecision,
   type ContextEvidence,
   type UnderstandingKind,
   type UserFocus,
@@ -43,8 +45,11 @@ const COPY = {
     evidence: 'View evidence', evidenceTitle: 'Why xopc holds this', evidenceLoading: 'Loading evidence…', evidenceEmpty: 'No displayable evidence is linked.', evidenceError: 'Evidence could not be loaded.',
     changesIntro: 'A timeline of when the portrait formed, changed, or stopped applying. It shows state changes without inventing a diff.',
     timelineEmpty: 'There are no changes yet.', formed: 'Formed', changed: 'Updated', proposed: 'Proposed', needsReview: 'Needs review',
+    timelineShowing: 'Showing the most recent', timelineUnit: 'changes', showMore: 'Show more', showLess: 'Collapse',
     paused: 'Paused', completed: 'Completed', rejected: 'Marked incorrect', archived: 'Archived',
-    reviewTitle: 'One decision at a time', reviewHint: 'Suggestions do not affect xopc until you confirm them.',
+    reviewTitle: 'A small batch, not an endless queue', reviewHint: 'Suggestions stay inactive until confirmed. You only need to review a useful batch, not clear the backlog.',
+    batchSummary: (count: number) => `${count} groups in this batch`, backlogSummary: (count: number) => `${count} other suggestions remain inactive`, nextBatch: 'Next batch', duplicateSummary: (count: number) => `${count} matching suggestions combined`,
+    dismissBatch: 'None of this batch', confirmDismiss: 'Mark every suggestion in this batch as not true?',
     later: 'Later', yes: 'Yes', change: 'Needs changes', wrong: 'Not true', saveConfirm: 'Save and confirm', confidence: 'confidence',
     focusCandidate: 'Suggested focus', understandingCandidate: 'Suggested understanding', high: 'high', medium: 'medium', low: 'low', noReview: 'Nothing needs your review.',
     statement: 'What should xopc understand?', type: 'Type', create: 'Add',
@@ -65,8 +70,11 @@ const COPY = {
     evidence: '查看依据', evidenceTitle: 'xopc 为什么这样理解', evidenceLoading: '正在读取依据…', evidenceEmpty: '暂时没有可展示的依据。', evidenceError: '暂时无法读取依据。',
     changesIntro: '按时间呈现画像何时形成、更新或不再适用；只表达状态变化，不虚构具体差异。',
     timelineEmpty: '还没有画像变化。', formed: '形成', changed: '更新', proposed: '提出建议', needsReview: '需要复核',
+    timelineShowing: '当前展示最近', timelineUnit: '条变化', showMore: '继续展开', showLess: '收起',
     paused: '已暂停', completed: '已完成', rejected: '标记为不正确', archived: '已归档',
-    reviewTitle: '一次只确认一条', reviewHint: '建议内容在你确认前不会影响 xopc 的行动。',
+    reviewTitle: '一次处理一小批，不追求清空', reviewHint: '未确认的建议不会生效。你只需要处理值得看的这一批，不必清空全部积压。',
+    batchSummary: (count: number) => `本批 ${count} 组`, backlogSummary: (count: number) => `其余 ${count} 条建议保持不生效`, nextBatch: '换一批', duplicateSummary: (count: number) => `已合并 ${count} 条相同建议`,
+    dismissBatch: '这批都不是', confirmDismiss: '确认将本批所有建议标记为“不是这样”？',
     later: '稍后', yes: '是的', change: '需要修改', wrong: '不是这样', saveConfirm: '保存并确认', confidence: '把握',
     focusCandidate: '候选关注', understandingCandidate: '候选理解', high: '高', medium: '中', low: '低', noReview: '目前没有需要你确认的内容。',
     statement: '希望 xopc 了解什么？', type: '类型', create: '添加',
@@ -98,10 +106,10 @@ export function SharedUnderstandingPanel({ focuses, understandings, language, on
     </header>
 
     <div className="flex gap-1 overflow-x-auto border-b border-edge" role="tablist" aria-label={language === 'zh' ? '共同理解视图' : 'Shared understanding views'}>
-      <ViewTab selected={view === 'portrait'} onClick={() => setView('portrait')} icon={<Target className="size-3.5" />} label={t.portrait} count={model.currentFocuses.length} />
+      <ViewTab selected={view === 'portrait'} onClick={() => setView('portrait')} icon={<Target className="size-3.5" />} label={t.portrait} />
       <ViewTab selected={view === 'map'} onClick={() => setView('map')} icon={<Network className="size-3.5" />} label={t.map} />
       <ViewTab selected={view === 'changes'} onClick={() => setView('changes')} icon={<History className="size-3.5" />} label={t.changes} />
-      <ViewTab selected={view === 'review'} onClick={() => setView('review')} icon={<Sparkles className="size-3.5" />} label={t.review} count={model.reviewQueue.length} emphasize={model.reviewQueue.length > 0} />
+      <ViewTab selected={view === 'review'} onClick={() => setView('review')} icon={<Sparkles className="size-3.5" />} label={t.review} emphasize={model.reviewQueue.length > 0} />
     </div>
 
     {view === 'portrait' ? <PortraitView focuses={model.currentFocuses} understandings={model.activeUnderstandings} language={language} t={t} onRefresh={onRefresh} /> : null}
@@ -118,12 +126,12 @@ function ViewTab({ selected, onClick, icon, label, count, emphasize = false }: {
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
-  count?: number;
+  count?: React.ReactNode;
   emphasize?: boolean;
 }) {
   return <button type="button" role="tab" aria-selected={selected} onClick={onClick}
     className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm transition-colors ${selected ? 'border-accent text-fg' : 'border-transparent text-fg-muted hover:text-fg'}`}>
-    {icon}<span>{label}</span>{count !== undefined ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${emphasize ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>{count}</span> : null}
+    {icon}<span>{label}</span>{count !== undefined ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${emphasize ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>{count}</span> : emphasize ? <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" /> : null}
   </button>;
 }
 
@@ -340,29 +348,69 @@ function ChangesTimeline({ items, language, t }: {
   language: 'en' | 'zh';
   t: Copy;
 }) {
+  const pageSize = 12;
+  const [visibleCount, setVisibleCount] = useState(pageSize);
   if (!items.length) return <EmptyState>{t.timelineEmpty}</EmptyState>;
+  const visibleItems = items.slice(0, visibleCount);
+  const groups = groupTimelineByDay(visibleItems, language);
   return <section className="overflow-hidden rounded-2xl border border-edge bg-surface-panel">
-    <header className="border-b border-edge px-5 py-4"><p className="max-w-2xl text-xs leading-5 text-fg-muted">{t.changesIntro}</p></header>
+    <header className="flex flex-col gap-2 border-b border-edge px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+      <p className="max-w-2xl text-xs leading-5 text-fg-muted">{t.changesIntro}</p>
+      <p className="shrink-0 text-[11px] text-fg-subtle">{t.timelineShowing} {Math.min(visibleCount, items.length)} {t.timelineUnit}</p>
+    </header>
     <div className="px-4 py-2 sm:px-6">
-      {items.map((item, index) => {
-        const status = item.type === 'focus' ? item.focus.status : item.understanding.status;
-        const object = item.type === 'focus' ? item.focus : item.understanding;
-        const text = item.type === 'focus' ? item.focus.title : item.understanding.statement;
-        const label = timelineLabel(status, object.createdAt === object.updatedAt, t);
-        const kind = item.type === 'focus' ? t.importantNow : UNDERSTANDING_KIND_LABELS[item.understanding.kind][language];
-        const inactive = ['paused', 'completed', 'rejected', 'archived'].includes(status);
-        return <article key={`${item.type}:${item.id}`} className="relative grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 py-4 sm:grid-cols-[6.5rem_1.25rem_minmax(0,1fr)] sm:gap-4">
-          <time className="hidden pt-0.5 text-right text-[11px] tabular-nums text-fg-subtle sm:block">{formatDate(item.updatedAt, language)}</time>
-          {index < items.length - 1 ? <span className="absolute bottom-0 left-[0.6rem] top-7 w-px bg-edge sm:left-[7.9rem]" aria-hidden="true" /> : null}
-          <span className={`relative z-10 mt-1 size-2.5 rounded-full border-2 border-surface-panel ${inactive ? 'bg-fg-subtle' : status === 'active' ? 'bg-success' : 'bg-warning'}`} aria-hidden="true" />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-[11px] font-medium text-accent">{label}</span><span className="text-[11px] text-fg-subtle">{kind}</span><time className="text-[11px] text-fg-subtle sm:hidden">{formatDate(item.updatedAt, language)}</time></div>
-            <p className={`mt-1 text-sm leading-6 ${inactive ? 'text-fg-muted' : 'text-fg'}`}>{text}</p>
-          </div>
-        </article>;
-      })}
+      {groups.map((group) => <section key={group.key} className="grid border-b border-edge last:border-b-0 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:gap-4">
+        <h3 className="py-4 text-[11px] font-medium text-fg-subtle sm:text-right">{group.label}</h3>
+        <div>{group.items.map((item, index) => <TimelineItem key={`${item.type}:${item.id}`} item={item} language={language} t={t} continued={index < group.items.length - 1} />)}</div>
+      </section>)}
     </div>
+    {items.length > pageSize ? <footer className="flex justify-center border-t border-edge px-5 py-3">
+      {visibleCount < items.length
+        ? <Button variant="ghost" onClick={() => setVisibleCount((count) => Math.min(items.length, count + pageSize))}><ChevronDown className="size-4" />{t.showMore}</Button>
+        : <Button variant="ghost" onClick={() => setVisibleCount(pageSize)}><ChevronUp className="size-4" />{t.showLess}</Button>}
+    </footer> : null}
   </section>;
+}
+
+function TimelineItem({ item, language, t, continued }: {
+  item: SharedUnderstandingTimelineItem;
+  language: 'en' | 'zh';
+  t: Copy;
+  continued: boolean;
+}) {
+  const status = item.type === 'focus' ? item.focus.status : item.understanding.status;
+  const object = item.type === 'focus' ? item.focus : item.understanding;
+  const text = item.type === 'focus' ? item.focus.title : item.understanding.statement;
+  const label = timelineLabel(status, object.createdAt === object.updatedAt, t);
+  const kind = item.type === 'focus' ? t.importantNow : UNDERSTANDING_KIND_LABELS[item.understanding.kind][language];
+  const inactive = ['paused', 'completed', 'rejected', 'archived'].includes(status);
+  return <article className="relative grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 py-4">
+    {continued ? <span className="absolute bottom-0 left-[0.3rem] top-7 w-px bg-edge" aria-hidden="true" /> : null}
+    <span className={`relative z-10 mt-1 size-2.5 rounded-full border-2 border-surface-panel ${inactive ? 'bg-fg-subtle' : status === 'active' ? 'bg-success' : 'bg-warning'}`} aria-hidden="true" />
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-[11px] font-medium text-accent">{label}</span><span className="text-[11px] text-fg-subtle">{kind}</span></div>
+      <p className={`mt-1 text-sm leading-6 ${inactive ? 'text-fg-muted' : 'text-fg'}`}>{text}</p>
+    </div>
+  </article>;
+}
+
+function groupTimelineByDay(items: SharedUnderstandingTimelineItem[], language: 'en' | 'zh'): Array<{
+  key: string;
+  label: string;
+  items: SharedUnderstandingTimelineItem[];
+}> {
+  const groups = new Map<string, { label: string; items: SharedUnderstandingTimelineItem[] }>();
+  for (const item of items) {
+    const date = new Date(item.updatedAt);
+    const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const existing = groups.get(key);
+    if (existing) existing.items.push(item);
+    else groups.set(key, {
+      label: new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { year: 'numeric', month: 'short', day: 'numeric' }).format(date),
+      items: [item],
+    });
+  }
+  return [...groups.entries()].map(([key, value]) => ({ key, ...value }));
 }
 
 function timelineLabel(status: UserFocus['status'] | UserUnderstanding['status'], newlyCreated: boolean, t: Copy): string {
@@ -398,38 +446,145 @@ function ReviewQueue({ items, language, t, onRefresh }: {
   t: Copy;
   onRefresh: () => Promise<unknown>;
 }) {
-  const [index, setIndex] = useState(0);
-  const [editing, setEditing] = useState(false);
+  const batchSize = 8;
+  const groups = useMemo(() => groupReviewItems(items), [items]);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const currentIndex = items.length ? index % items.length : 0;
-  const item = items[currentIndex];
-  useEffect(() => { setIndex(0); setEditing(false); }, [items.length]);
-  if (!item) return <EmptyState>{t.noReview}</EmptyState>;
+  const [confirmingDismiss, setConfirmingDismiss] = useState(false);
+  const batchCount = Math.max(1, Math.ceil(groups.length / batchSize));
+  const safeBatchIndex = batchIndex % batchCount;
+  const batchGroups = groups.slice(safeBatchIndex * batchSize, (safeBatchIndex + 1) * batchSize);
+  const batchItemCount = batchGroups.reduce((count, group) => count + group.items.length, 0);
+  const backlogCount = Math.max(0, items.length - batchItemCount);
+  const duplicateCount = groups.reduce((count, group) => count + Math.max(0, group.items.length - 1), 0);
+  useEffect(() => {
+    if (batchIndex < batchCount) return;
+    setBatchIndex(0);
+  }, [batchCount, batchIndex]);
+  useEffect(() => { setEditingKey(null); setConfirmingDismiss(false); }, [items.length]);
+  if (!items.length) return <EmptyState>{t.noReview}</EmptyState>;
 
-  const decide = async (accepted: boolean) => {
+  const apply = async (decisions: ContextReviewDecision[]) => {
     setPending(true);
     try {
-      if (item.type === 'focus') await updateUserFocus(item.id, { status: accepted ? 'active' : 'rejected' });
-      else await updateUnderstanding(item.id, { status: accepted ? 'active' : 'rejected' });
+      await applyReviewDecisions(decisions);
       await onRefresh();
     } finally { setPending(false); }
   };
+  const decideGroup = (group: ReviewGroup, accepted: boolean) => {
+    const decisions = group.items.map((item, index): ContextReviewDecision => ({
+      objectType: item.type,
+      objectId: item.id,
+      action: accepted && index === 0 ? 'accept' : 'reject',
+    }));
+    return apply(decisions);
+  };
+  const dismissBatch = () => apply(batchGroups.flatMap((group) => group.items.map((item): ContextReviewDecision => ({
+    objectType: item.type,
+    objectId: item.id,
+    action: 'reject',
+  }))));
 
-  return <section className="mx-auto max-w-2xl">
-    <div className="flex items-center justify-between text-xs text-fg-muted"><span>{t.reviewTitle}</span><span className="tabular-nums">{currentIndex + 1} / {items.length}</span></div>
-    <article className="mt-3 rounded-2xl border border-edge bg-surface-panel p-5 sm:p-6">
-      <ReviewItemContent item={item} language={language} t={t} editing={editing} pending={pending} onCancelEdit={() => setEditing(false)} onSaved={onRefresh} />
-      {!editing ? <>
-        <p className="mt-5 rounded-xl bg-surface-muted px-3 py-2.5 text-xs leading-5 text-fg-muted">{t.reviewHint}</p>
-        <div className="mt-5 grid gap-2 sm:grid-cols-3">
-          <Button variant="primary" disabled={pending} onClick={() => void decide(true)}><Check className="size-4" />{t.yes}</Button>
-          <Button disabled={pending} onClick={() => setEditing(true)}>{t.change}</Button>
-          <Button variant="ghost" className="text-danger" disabled={pending} onClick={() => void decide(false)}>{t.wrong}</Button>
+  return <section className="mx-auto max-w-4xl space-y-3">
+    <header className="rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2"><Layers3 className="size-4 text-accent" /><h2 className="text-sm font-semibold text-fg">{t.reviewTitle}</h2></div>
+          <p className="mt-2 text-xs leading-5 text-fg-muted">{t.reviewHint}</p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-fg-subtle">
+            <span>{t.batchSummary(batchGroups.length)}</span>
+            <span>{t.backlogSummary(backlogCount)}</span>
+            {duplicateCount ? <span>{t.duplicateSummary(duplicateCount)}</span> : null}
+          </div>
         </div>
-        {items.length > 1 ? <button type="button" className="mx-auto mt-3 block rounded-md px-2 py-1 text-xs text-fg-muted hover:text-fg" onClick={() => setIndex((current) => (current + 1) % items.length)}>{t.later}</button> : null}
-      </> : null}
-    </article>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {groups.length > batchSize ? <Button disabled={pending} onClick={() => { setBatchIndex((index) => (index + 1) % batchCount); setEditingKey(null); }}><RefreshCw className="size-3.5" />{t.nextBatch}</Button> : null}
+          <Button variant="ghost" className="text-danger" disabled={pending} onClick={() => setConfirmingDismiss(true)}>{t.dismissBatch}</Button>
+        </div>
+      </div>
+      {confirmingDismiss ? <div className="mt-4 flex flex-col gap-3 rounded-xl bg-danger-soft px-3 py-3 text-xs text-danger sm:flex-row sm:items-center sm:justify-between"><span>{t.confirmDismiss}</span><span className="flex gap-2"><Button disabled={pending} onClick={() => setConfirmingDismiss(false)}>{t.cancel}</Button><Button variant="ghost" className="text-danger" disabled={pending} onClick={() => void dismissBatch()}>{t.wrong}</Button></span></div> : null}
+    </header>
+
+    <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge bg-surface-panel">
+      {batchGroups.map((group) => {
+        const item = group.items[0];
+        const confidence = item.type === 'focus' ? item.focus.confidence : item.understanding.confidence;
+        const confidenceLabel = confidence >= 0.85 ? t.high : confidence >= 0.65 ? t.medium : t.low;
+        const title = item.type === 'focus' ? item.focus.title : item.understanding.statement;
+        const summary = item.type === 'focus' ? item.focus.summary : null;
+        const editing = editingKey === group.key;
+        return <article key={group.key} className="px-4 py-4 sm:px-5">
+          {editing ? <ReviewItemContent
+            item={item}
+            language={language}
+            t={t}
+            editing
+            pending={pending}
+            onCancelEdit={() => setEditingKey(null)}
+            onSaved={async () => {
+              const duplicates = group.items.slice(1).map((duplicate): ContextReviewDecision => ({ objectType: duplicate.type, objectId: duplicate.id, action: 'reject' }));
+              if (duplicates.length) await applyReviewDecisions(duplicates);
+              setEditingKey(null);
+              await onRefresh();
+            }}
+          /> : <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
+                <span className="font-medium text-accent">{item.type === 'focus' ? t.focusCandidate : t.understandingCandidate}</span>
+                <span>·</span><span>{t.confidence} {confidenceLabel}</span>
+                {item.type === 'understanding' ? <><span>·</span><span>{UNDERSTANDING_KIND_LABELS[item.understanding.kind][language]}</span></> : null}
+                {group.items.length > 1 ? <span className="rounded-full bg-surface-muted px-1.5 py-0.5">×{group.items.length}</span> : null}
+              </div>
+              <h3 className="mt-2 text-sm font-medium leading-6 text-fg">{title}</h3>
+              {summary ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{summary}</p> : null}
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button variant="primary" disabled={pending} onClick={() => void decideGroup(group, true)}><Check className="size-3.5" />{t.yes}</Button>
+              <Button disabled={pending} onClick={() => setEditingKey(group.key)}>{t.change}</Button>
+              <Button variant="ghost" className="text-danger" disabled={pending} onClick={() => void decideGroup(group, false)}>{t.wrong}</Button>
+            </div>
+          </div>}
+        </article>;
+      })}
+    </div>
   </section>;
+}
+
+type ReviewGroup = {
+  key: string;
+  items: SharedUnderstandingReviewItem[];
+  priority: number;
+  updatedAt: number;
+};
+
+function groupReviewItems(items: SharedUnderstandingReviewItem[]): ReviewGroup[] {
+  const groups = new Map<string, ReviewGroup>();
+  for (const item of items) {
+    const object = item.type === 'focus' ? item.focus : item.understanding;
+    const scope = `${object.scope.type}:${object.scope.id ?? ''}`;
+    const content = item.type === 'focus'
+      ? `${item.focus.title}\n${item.focus.summary}`
+      : `${item.understanding.kind}\n${item.understanding.statement}`;
+    const normalized = content.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, ' ').trim();
+    const key = `${item.type}:${scope}:${normalized}`;
+    const confidence = item.type === 'focus' ? item.focus.confidence : item.understanding.confidence;
+    const status = item.type === 'focus' ? item.focus.status : item.understanding.status;
+    const priority = (status === 'needs_review' ? 3 : status === 'stale' ? 2 : 0) + confidence;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.items.push(item);
+      existing.priority = Math.max(existing.priority, priority);
+      existing.updatedAt = Math.max(existing.updatedAt, item.updatedAt);
+    } else groups.set(key, { key, items: [item], priority, updatedAt: item.updatedAt });
+  }
+  return [...groups.values()].sort((left, right) => right.priority - left.priority || right.updatedAt - left.updatedAt);
+}
+
+async function applyReviewDecisions(decisions: ContextReviewDecision[]): Promise<void> {
+  for (let index = 0; index < decisions.length; index += 50) {
+    await batchReviewContextObjects(decisions.slice(index, index + 50));
+  }
 }
 
 function ReviewItemContent({ item, language, t, editing, pending, onCancelEdit, onSaved }: {

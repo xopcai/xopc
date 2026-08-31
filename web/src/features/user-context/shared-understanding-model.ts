@@ -76,13 +76,19 @@ export function buildSharedUnderstandingModel(
       })),
   ].sort(newestFirst);
   const timeline: SharedUnderstandingTimelineItem[] = [
-    ...focuses.map((focus) => ({ type: 'focus' as const, id: focus.id, updatedAt: focus.updatedAt, focus })),
-    ...understandings.map((understanding) => ({
+    ...focuses
+      .filter((focus) => focus.status !== 'candidate'
+        && !(focus.status === 'rejected' && focus.explicitness === 'inferred'))
+      .map((focus) => ({ type: 'focus' as const, id: focus.id, updatedAt: focus.updatedAt, focus })),
+    ...understandings
+      .filter((understanding) => !REVIEW_STATUSES.has(understanding.status)
+        && !(understanding.status === 'rejected' && understanding.explicitness === 'inferred'))
+      .map((understanding) => ({
       type: 'understanding' as const,
       id: understanding.id,
       updatedAt: understanding.updatedAt,
       understanding,
-    })),
+      })),
   ].sort(newestFirst);
   return { currentFocuses, activeUnderstandings, reviewQueue, history, timeline };
 }

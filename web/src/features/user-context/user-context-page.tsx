@@ -46,7 +46,7 @@ const copy = {
     maintainedTogether: 'Shaped together', youDecide: 'You decide what stays', editProfile: 'Edit basics', talkAboutMe: 'Add through conversation',
     roleMissing: 'Add what you do', direction: 'What matters now', directionEmpty: 'Add a direction so xopc can help keep important work moving.',
     portraitUnderstanding: 'What xopc understands', portraitUnderstandingHint: 'Confirmed context xopc can use across conversations.', portraitRules: 'How we work together', portraitRulesHint: 'The agreements xopc should follow when helping you.',
-    reviewWaiting: 'waiting for your review', seeAll: 'See all', addFirstUnderstanding: 'Nothing confirmed yet. Tell xopc what matters to you, or review a suggestion when one appears.', addFirstRule: 'No working agreements yet. Add one to make collaboration feel more like yours.',
+    reviewWaiting: 'New understanding is ready for review', seeAll: 'See all', addFirstUnderstanding: 'Nothing confirmed yet. Tell xopc what matters to you, or review a suggestion when one appears.', addFirstRule: 'No working agreements yet. Add one to make collaboration feel more like yours.',
     portraitControl: 'How this portrait evolves', portraitControlHint: 'Manage where understanding comes from, how it is reviewed, and what is never retained.', portraitLearn: 'Learn how this portrait is formed', advanced: 'Portrait controls', backToPortrait: 'Back to your portrait',
     controlSourcesHint: 'See which conversations, connections, and explicit details shape xopc’s understanding.', controlReviewHint: 'Choose how xopc proposes updates and which changes require your confirmation.', controlPrivacyHint: 'Set the boundaries for sensitive content and long-term retention.', controlTrust: 'Inferred understanding is never activated automatically. You can review, correct, or remove it at any time.',
     profileHint: 'Facts you provide directly. These are available across conversations.',
@@ -72,7 +72,7 @@ const copy = {
     maintainedTogether: '由你与 xopc 共同维护', youDecide: '你决定什么被保留', editProfile: '编辑基本信息', talkAboutMe: '在对话中补充',
     roleMissing: '补充你的角色', direction: '此刻重要的事', directionEmpty: '写下你此刻的方向，让 xopc 帮你持续推动真正重要的事。',
     portraitUnderstanding: 'xopc 对你的理解', portraitUnderstandingHint: '已经确认、可以在不同对话中帮助你的上下文。', portraitRules: '我们如何一起工作', portraitRulesHint: 'xopc 在帮助你时应该遵循的约定。',
-    reviewWaiting: '条等待你确认', seeAll: '查看全部', addFirstUnderstanding: '还没有已确认的理解。你可以直接告诉 xopc 什么对你重要，或在它形成建议后确认。', addFirstRule: '还没有协作约定。添加后，xopc 会更像你熟悉的搭档。',
+    reviewWaiting: '有新的理解待确认', seeAll: '查看全部', addFirstUnderstanding: '还没有已确认的理解。你可以直接告诉 xopc 什么对你重要，或在它形成建议后确认。', addFirstRule: '还没有协作约定。添加后，xopc 会更像你熟悉的搭档。',
     portraitControl: '这份画像如何更新', portraitControlHint: '管理理解从哪里来、如何复核，以及哪些内容永远不会被保留。', portraitLearn: '了解这份画像如何形成', advanced: '画像管理', backToPortrait: '返回你的画像',
     controlSourcesHint: '查看哪些对话、连接与明确告知的内容塑造了 xopc 的理解。', controlReviewHint: '决定 xopc 如何提出更新，以及哪些变化需要你确认。', controlPrivacyHint: '设定敏感内容与长期保留的边界。', controlTrust: '推断出的理解不会自动生效。你可以随时复核、修正或删除。',
     profileHint: '由你直接提供的事实，会在不同对话中使用。',
@@ -189,6 +189,8 @@ export function UserContextPage() {
   if (error || !data) return <div className="p-6"><Empty>{t.error} <button className="text-accent hover:underline" onClick={() => void mutate()}>{t.retry}</button></Empty></div>;
 
   const advancedTab = tab === 'sources' || tab === 'dreaming' || tab === 'privacy';
+  const reviewCount = data.understandings.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status)).length
+    + data.focuses.filter((focus) => focus.status === 'candidate').length;
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6 lg:py-8">
       {advancedTab ? <div className="flex items-center gap-3 border-b border-edge pb-4">
@@ -201,10 +203,11 @@ export function UserContextPage() {
         onChange={(next) => setParams({ tab: next })}
         items={[
           { id: 'profile', label: t.profile, icon: CircleUserRound },
-          { id: 'understanding', label: t.understanding, icon: Brain, count: (
-            data.understandings.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status)).length
-            + data.focuses.filter((focus) => focus.status === 'candidate').length
-          ) || undefined },
+          {
+            id: 'understanding', label: t.understanding, icon: Brain,
+            title: reviewCount ? language === 'zh' ? `${reviewCount} 条建议待确认` : `${reviewCount} suggestions to review` : undefined,
+            suffix: reviewCount ? <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" /> : undefined,
+          },
           { id: 'collaboration', label: t.collaboration, icon: Handshake },
         ]}
       />}
@@ -276,7 +279,7 @@ function PortraitOverview({ data, language, t, onNavigate, onProfileChanged }: {
         description={t.portraitUnderstandingHint}
         action={<button className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline" onClick={() => onNavigate('understanding')}>{t.seeAll}<ChevronRight className="size-3.5" /></button>}
       >
-        {pendingCount ? <button className="mb-4 flex w-full items-center justify-between rounded-xl border border-accent/20 bg-accent-soft px-3 py-2.5 text-left text-xs text-accent transition-colors hover:border-accent/40" onClick={() => onNavigate('understanding')}><span><Sparkles className="mr-1.5 inline size-3.5" />{pendingCount} {t.reviewWaiting}</span><ArrowUpRight className="size-3.5" /></button> : null}
+        {pendingCount ? <button className="mb-4 flex w-full items-center justify-between rounded-xl border border-accent/20 bg-accent-soft px-3 py-2.5 text-left text-xs text-accent transition-colors hover:border-accent/40" onClick={() => onNavigate('understanding')}><span><Sparkles className="mr-1.5 inline size-3.5" />{t.reviewWaiting}</span><ArrowUpRight className="size-3.5" /></button> : null}
         {activeUnderstanding.length ? <div className="space-y-1">{activeUnderstanding.slice(0, 4).map((item) => <div key={item.id} className="group flex gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-hover"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-accent/70" /><div className="min-w-0"><p className="text-sm leading-6 text-fg">{item.statement}</p><p className="mt-0.5 text-[11px] text-fg-subtle">{UNDERSTANDING_KIND_LABELS[item.kind][language]}</p></div></div>)}</div> : <p className="py-5 text-sm leading-6 text-fg-muted">{t.addFirstUnderstanding}</p>}
       </PortraitSection>
 
