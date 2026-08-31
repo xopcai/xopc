@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { TaskPriority, ProjectMonitoringPolicy, ProjectMonitoringUpdate, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
 import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Circle, CircleCheck, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
-import { type FormEvent, type Ref, useEffect, useImperativeHandle, useState } from 'react';
+import { type FormEvent, type PointerEvent, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,18 @@ export type CreateProjectTaskInput = {
 export type ProjectTaskBoardHandle = {
   openCreate: () => void;
 };
+
+type BoardPanState = {
+  pointerId: number;
+  startX: number;
+  scrollLeft: number;
+  active: boolean;
+};
+
+function shouldIgnoreBoardPan(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  return Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],[draggable="true"],[data-board-pan-skip="true"]'));
+}
 
 const LANE_ICONS = {
   backlog: CircleDot,
@@ -270,7 +282,10 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
   actionBusyId?: string | null;
   ref?: Ref<ProjectTaskBoardHandle>;
 }) {
+  const boardScrollerRef = useRef<HTMLDivElement | null>(null);
+  const boardPanRef = useRef<BoardPanState | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [isPanningBoard, setIsPanningBoard] = useState(false);
   const [undoMove, setUndoMove] = useState<{ taskId: string; phase: TaskPhase; beforeTaskId: string | null } | null>(null);
   const [viewMode, setViewMode] = useState<'board' | 'graph'>('board');
   const [createOpen, setCreateOpen] = useState(false);
@@ -350,6 +365,43 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
     return () => window.clearTimeout(timer);
   }, [undoMove]);
 
+  const endBoardPan = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const pan = boardPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    boardPanRef.current = null;
+    setIsPanningBoard(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const handleBoardPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || shouldIgnoreBoardPan(event.target)) return;
+    const scroller = boardScrollerRef.current;
+    if (!scroller) return;
+    boardPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: scroller.scrollLeft,
+      active: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
+  const handleBoardPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const pan = boardPanRef.current;
+    const scroller = boardScrollerRef.current;
+    if (!pan || !scroller || pan.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pan.startX;
+    if (!pan.active && Math.abs(deltaX) < 5) return;
+    if (!pan.active) {
+      pan.active = true;
+      setIsPanningBoard(true);
+    }
+    event.preventDefault();
+    scroller.scrollLeft = pan.scrollLeft - deltaX;
+  }, []);
+
   return (
     <section id="project-panel-board" role="tabpanel" aria-labelledby="project-primary-tab-board" className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
@@ -371,7 +423,23 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
           </div>
         </div>
       </div>
-      {viewMode === 'board' ? <div className="min-h-0 w-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [scrollbar-width:thin]">
+      {viewMode === 'board' ? <div
+        ref={boardScrollerRef}
+        className={cn(
+          'min-h-0 w-full min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [scrollbar-width:thin]',
+          isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
+        )}
+        onPointerDown={handleBoardPointerDown}
+        onPointerMove={handleBoardPointerMove}
+        onPointerUp={endBoardPan}
+        onPointerCancel={endBoardPan}
+        onLostPointerCapture={(event) => {
+          if (boardPanRef.current?.pointerId === event.pointerId) {
+            boardPanRef.current = null;
+            setIsPanningBoard(false);
+          }
+        }}
+      >
         <div className="grid h-full min-h-0 min-w-[103rem] grid-cols-5 gap-3">
           {PROJECT_TASK_PHASES.map((phase) => {
             const Icon = LANE_ICONS[phase];
