@@ -3,7 +3,7 @@
  * Lists directories the gateway process can read — intended for trusted operators only.
  */
 import type { Hono } from 'hono';
-import { readdir, realpath, stat } from 'node:fs/promises';
+import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -187,6 +187,59 @@ export function registerHostFsRoutes(authenticated: Hono, _deps: AuthenticatedRo
         return jsonError(403, 'Permission denied');
       }
       return jsonError(500, msg || 'Failed to read directory');
+    }
+  });
+
+  /** Create one directory below an existing absolute directory on the gateway host. */
+  authenticated.post('/api/host/fs/directory', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parentPath = body && typeof body === 'object' && typeof body.parentPath === 'string'
+      ? body.parentPath.trim()
+      : '';
+    const name = body && typeof body === 'object' && typeof body.name === 'string'
+      ? body.name.trim()
+      : '';
+
+    if (!parentPath || !path.isAbsolute(parentPath)) {
+      return jsonError(400, 'An absolute parent path is required');
+    }
+    if (
+      !name
+      || name === '.'
+      || name === '..'
+      || name.includes('/')
+      || name.includes('\\')
+      || name.includes('\0')
+      || name.length > 255
+    ) {
+      return jsonError(400, 'Invalid folder name');
+    }
+
+    let resolvedParent: string;
+    try {
+      resolvedParent = await realpath(path.normalize(parentPath));
+      const parentStat = await stat(resolvedParent);
+      if (!parentStat.isDirectory()) return jsonError(400, 'Parent path is not a directory');
+    } catch (err) {
+      log.warn({ err, path: parentPath }, 'Host fs create parent lookup failed');
+      return jsonError(404, 'Parent path not found');
+    }
+
+    const directoryPath = path.join(resolvedParent, name);
+    try {
+      await mkdir(directoryPath);
+      const createdPath = await realpath(directoryPath);
+      log.info({ path: createdPath }, 'Host fs directory created');
+      return c.json({ ok: true, payload: { absolutePath: createdPath } }, 201);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code === 'EEXIST') return jsonError(409, 'A file or folder with this name already exists');
+      log.warn({ err, path: directoryPath }, 'Host fs directory create failed');
+      if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS') {
+        return jsonError(403, 'Permission denied');
+      }
+      if (code === 'ENOENT') return jsonError(404, 'Parent path not found');
+      return jsonError(500, 'Failed to create folder');
     }
   });
 }
