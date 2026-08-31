@@ -372,8 +372,11 @@ jobs:
             sleep 12
           done
 
-          # Older releases mistakenly uploaded win-unpacked/xopc.exe as release asset "xopc.exe".
-          if gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' | grep -qx 'xopc.exe'; then
-            echo "Removing misleading release asset xopc.exe (win-unpacked binary, not the NSIS installer)"
-            gh release delete-asset "$TAG" xopc.exe --repo "$REPO" -y || true
-          fi
+          # Older workflows uploaded helper/unpacked executables as standalone assets. Only
+          # electron-builder's versioned xopc-*.exe files are installable Windows packages.
+          while IFS= read -r asset_name; do
+            if [[ "$asset_name" == *.exe && "$asset_name" != xopc-*.exe ]]; then
+              echo "Removing non-installer release asset ${asset_name}"
+              gh release delete-asset "$TAG" "$asset_name" --repo "$REPO" -y || true
+            fi
+          done < <(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')
