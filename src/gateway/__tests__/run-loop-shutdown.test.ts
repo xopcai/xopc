@@ -79,4 +79,41 @@ describe('gateway run-loop shutdown', () => {
     expect(mocks.releaseLock).toHaveBeenCalledOnce();
     expect(process.listeners('SIGINT')).not.toContain(onSigint);
   });
+
+  it('force exits when shutdown still hangs after connections were force closed', async () => {
+    mocks.releaseLock.mockResolvedValue(undefined);
+    mocks.acquireGatewayLock.mockResolvedValue({ release: mocks.releaseLock });
+
+    let finishClose: (() => void) | undefined;
+    const close = vi.fn(
+      () => new Promise<void>((resolve) => {
+        finishClose = resolve;
+      }),
+    );
+    const forceCloseConnections = vi.fn();
+    const start = vi.fn(async () => ({ close, forceCloseConnections }) as unknown as GatewayServer);
+    const existingSigintListeners = new Set(process.listeners('SIGINT'));
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const running = runGatewayLoop({ configPath: '/tmp/xopc-test.json', port: 18790, start });
+    await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+
+    const onSigint = process
+      .listeners('SIGINT')
+      .find((listener) => !existingSigintListeners.has(listener));
+    expect(onSigint).toBeDefined();
+
+    onSigint!();
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+    onSigint!();
+    expect(forceCloseConnections).toHaveBeenCalledOnce();
+
+    onSigint!();
+    expect(exit).toHaveBeenCalledWith(0);
+
+    finishClose!();
+    await running;
+  });
 });
