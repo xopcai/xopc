@@ -31,6 +31,7 @@ export class ChatStreamMapper {
   private currentAssistantMessageId: string | undefined;
   private lastAssistantMessageId: string | undefined;
   private currentAssistantText = '';
+  private lastAssistantText = '';
   private currentAssistantReviewEmitted = false;
   private toolCallToMessageId = new Map<string, string>();
   private turnDiffs: string[] = [];
@@ -197,6 +198,10 @@ export class ChatStreamMapper {
     return [this.make('error', { code, message, petFeedback: createPetFeedback('error', { recoverable: false }) })];
   }
 
+  getLastAssistantText(): string {
+    return this.currentAssistantText || this.lastAssistantText;
+  }
+
   private mapMessageStart(raw: unknown): ChatStreamEvent[] {
     const message = raw as AgentMessage | undefined;
     if (message?.role !== 'assistant') return [];
@@ -287,6 +292,7 @@ export class ChatStreamMapper {
       presentation: hasToolCall(message) ? 'narration' : 'answer',
       usage: extractUsage(message),
     }));
+    if (this.currentAssistantText) this.lastAssistantText = this.currentAssistantText;
     this.lastAssistantMessageId = messageId;
     this.currentAssistantMessageId = undefined;
     this.currentAssistantText = '';

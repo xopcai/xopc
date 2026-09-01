@@ -168,6 +168,7 @@ describe('ChatStreamMapper', () => {
       type: 'assistant_message_end',
       payload: { presentation: 'answer' },
     });
+    expect(m.getLastAssistantText()).toBe('hi');
   });
 
   it('marks text accompanying a tool call as narration', () => {
