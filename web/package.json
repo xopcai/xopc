@@ -11,9 +11,9 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "type-check": "tsc -b --noEmit",
-    "react-doctor": "npx --yes react-doctor@0.2.6 --yes --offline --fail-on=error",
-    "react-doctor:ci": "npx --yes react-doctor@0.2.6 --yes --offline --fail-on=error --annotations",
-    "react-doctor:pr": "npx --yes react-doctor@0.2.6 --yes --offline --fail-on=error --annotations --diff"
+    "react-doctor": "react-doctor --yes --offline --fail-on=error",
+    "react-doctor:ci": "react-doctor --yes --offline --fail-on=error --annotations",
+    "react-doctor:pr": "react-doctor --yes --offline --fail-on=error --annotations --diff"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
@@ -92,6 +92,7 @@
     "@vitejs/plugin-react": "^6",
     "babel-plugin-react-compiler": "1",
     "eslint": "^10.2.1",
+    "react-doctor": "0.2.6",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.2",
