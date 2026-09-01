@@ -15,7 +15,7 @@ XOPC 支持两类 MCP 能力：
 - [配置说明](#配置说明)
 - [网关控制台（Web UI）](#网关控制台web-ui)
 - [关闭 MCP 工具](#关闭-mcp-工具)
-- [扩展自带的 MCP](#扩展自带的-mcp)
+- [Extension 的 Connector 依赖](#extension-的-connector-依赖)
 - [生命周期](#生命周期)
 - [安全说明](#安全说明)
 - [相关文档](#相关文档)
@@ -37,7 +37,7 @@ XOPC 支持两类 MCP 能力：
 | **SSE** | `url` + `transport: "sse"` | 基于 SSE 的远程 MCP |
 | **Streamable HTTP** | `url` + `transport: "streamable-http"` | 流式 HTTP 远程 MCP（国内很多 SaaS 开放平台采用类似方式） |
 
-扩展包可在根目录提供 `.mcp.json`，会与用户配置 **合并**（同名服务器以用户配置为准）。
+Extension 不持有 MCP 配置，只能声明 `connectorDependencies`；用户独立安装并授权对应 Connector。
 
 ---
 
@@ -165,14 +165,15 @@ XOPC 支持两类 MCP 能力：
 
 ---
 
-## 扩展自带的 MCP
+## Extension 的 Connector 依赖
 
-扩展可在包根目录放置 `.mcp.json`。运行时与用户 `mcp.servers` 合并：
+Extension 在 `xopc.extension.json` 中声明所需 Connector：
 
-- **同名**服务器 → 以用户配置为准；
-- **不同名** → 一并加载，工具分别带各自服务器 id 前缀。
+```json
+{ "connectorDependencies": ["notion"] }
+```
 
-修改扩展或 MCP 配置后，需重启网关或触发热加载。
+Extension 负责 Skills、工作流、运行时代码或 UI，Connector 仍由用户独立安装和授权。依赖缺失或被禁用时会产生诊断；运行时不再读取原始 `.mcp.json`。
 
 ---
 
@@ -203,5 +204,5 @@ MCP 运行时按 **会话 key**（对话 / 智能体上下文）隔离：
 - [MCP CLI 与 API](./cli/mcp.md) — `xopc mcp`、`xopc mcp serve`、REST 接口
 - [内置工具](./tools.md) — 工具总览
 - [配置参考](./configuration.md) — 完整配置说明
-- [扩展系统](./extensions.md) — 扩展与 `.mcp.json`
+- [扩展系统](./extensions.md) — Extension 与 Connector 依赖
 - [网关服务](./gateway.md) — 启动网关与鉴权

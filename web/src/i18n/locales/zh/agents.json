@@ -525,7 +525,7 @@
       "image": "分析或描述图片（视觉），可来自工作区或当前对话。",
       "image_generate": "使用已配置的图像 / 文生图模型生成图片。",
       "extensions": "启用扩展注册的工具；关闭则屏蔽所有扩展工具。",
-      "bundle-mcp": "从已配置的 MCP 服务器加载工具（全局 mcp.servers 与扩展 .mcp.json）。"
+      "bundle-mcp": "从已配置的 MCP 服务器加载工具，包括已安装的 Connector。"
     },
     "skillsTitle": "可用技能",
     "skillsHint": "这些技能会出现在该智能体的 Chat / 菜单和 <available_skills> 中。其他技能不会被该智能体看到。「使用共享配置」采用共享设置；「选择技能」写入本智能体的技能设置。",

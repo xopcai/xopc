@@ -2,7 +2,7 @@ import { CredentialResolver } from '../auth/credentials.js';
 import type { Config } from '../config/schema.js';
 import { getConnectorDefinition } from './catalog.js';
 import { assertPreferredConnectorStrategy } from './integration-strategy.js';
-import { getConnectorInstance } from './instances.js';
+import { getConnectorInstance, getInstalledConnectorDefinition } from './instances.js';
 import { getConnectorRuntimeAdapter } from './runtime-adapter-registry.js';
 import type { ConnectorDefinition, ConnectorInstallInput, ConnectorInstance } from './types.js';
 
@@ -34,7 +34,7 @@ export function updateConnectorConfig(
 ): ConnectorInstance {
   const instance = getConnectorInstance(config, instanceId);
   if (!instance) throw new Error(`Connector instance not found: ${instanceId}`);
-  const definition = getConnectorDefinition(instance.connectorId);
+  const definition = getInstalledConnectorDefinition(config, instanceId);
   if (!definition) throw new Error(`Unknown connector: ${instance.connectorId}`);
   const adapter = getConnectorRuntimeAdapter(definition.runtime.type);
   if (!adapter.update) throw new Error(`Connector type "${definition.runtime.type}" does not support config updates.`);
@@ -49,7 +49,7 @@ export function uninstallConnector(config: Config, instanceId: string): Connecto
     }
     throw new Error(`Connector instance not found: ${instanceId}`);
   }
-  const definition = getConnectorDefinition(instance.connectorId);
+  const definition = getInstalledConnectorDefinition(config, instanceId);
   if (!definition) throw new Error(`Unknown connector: ${instance.connectorId}`);
   getConnectorRuntimeAdapter(definition.runtime.type).uninstall({ config, definition, instance });
   return instance;

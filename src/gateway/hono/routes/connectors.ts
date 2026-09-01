@@ -1,6 +1,8 @@
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
+import { getMcpOAuthManager } from '../../../agent/mcp/oauth/mcp-oauth-manager.js';
+import { ConfigPersistenceError, persistConfigMutation } from '../../../config/config-mutation.js';
 import type { Config } from '../../../config/schema.js';
 import { buildConnectedPeopleGraph } from '../../../knowledge/index.js';
 import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
@@ -28,7 +30,7 @@ import { inspectManagedComposioStatus } from '../../../connectors/composio-manag
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
 import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
 import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
-import { getConnectorInstance, listConnectorInstances } from '../../../connectors/instances.js';
+import { getConnectorInstance, getInstalledConnectorDefinition, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
 import { projectComposioConnectionStatus } from '../../../connectors/runtime-status.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../../../connectors/setup-secrets.js';
@@ -79,9 +81,31 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     });
   });
 
-  authenticated.get('/api/connectors/installed', (c) => {
+  authenticated.get('/api/connectors/installed', async (c) => {
     const config = service.currentConfig as Config;
-    const instances = listConnectorInstances(config);
+    const instances = await Promise.all(listConnectorInstances(config).map(async (instance) => {
+      if (!instance.enabled || instance.materialized.type !== 'mcp') return instance;
+      const server = config.mcp?.servers?.[instance.materialized.serverId];
+      if (!server) return instance;
+      const oauth = await getMcpOAuthManager().status(instance.materialized.serverId, server);
+      if (!oauth.configured) return instance;
+      if (oauth.status === 'connected') {
+        return { ...instance, authStatus: 'connected' as const, connectionStatus: 'connected' as const };
+      }
+      if (oauth.status === 'authorizing') {
+        return { ...instance, status: 'connecting' as const, authStatus: 'unknown' as const, connectionStatus: 'connecting' as const };
+      }
+      if (oauth.status === 'error') {
+        return {
+          ...instance,
+          status: 'failed' as const,
+          authStatus: 'unauthorized' as const,
+          connectionStatus: 'error' as const,
+          lastError: oauth.session?.error ?? instance.lastError,
+        };
+      }
+      return { ...instance, status: 'unauthorized' as const, authStatus: 'missing' as const, connectionStatus: 'disconnected' as const };
+    }));
     const connections = listConnectorConnections({ principalId: 'local-owner' });
     return c.json({
       ok: true,
@@ -334,12 +358,14 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     const config = service.currentConfig as Config;
     try {
-      setComposioToolkitScope(config, toolkit, scope as ComposioScope);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) return c.json({ ok: false, error: saved.error }, 500);
+      await persistConfigMutation({
+        config,
+        mutate: () => setComposioToolkitScope(config, toolkit, scope as ComposioScope),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { toolkit, scope } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 
@@ -491,13 +517,17 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   });
 
   authenticated.post('/api/connectors/:id/auth/start', strictRateLimitMiddleware, async (c) => {
-    const connectorId = c.req.param('id');
-    const connector = getConnectorDefinition(connectorId);
+    const connectorOrInstanceId = c.req.param('id');
+    const config = service.currentConfig as Config;
+    const instance = getConnectorInstance(config, connectorOrInstanceId);
+    const connector = instance
+      ? getInstalledConnectorDefinition(config, instance.instanceId)
+      : getConnectorDefinition(connectorOrInstanceId);
     if (!connector) {
-      return c.json({ ok: false, error: `Unknown connector: ${connectorId}` }, 404);
+      return c.json({ ok: false, error: `Unknown connector: ${connectorOrInstanceId}` }, 404);
     }
     try {
-      const authorization = await startConnectorAuthorization(connector, service.currentConfig as Config);
+      const authorization = await startConnectorAuthorization(connector, config, instance?.instanceId);
       return c.json({ ok: true, payload: { authorization } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
@@ -534,16 +564,16 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       : undefined;
     const config = service.currentConfig as Config;
     try {
-      const instance = registryDefinition?.id === connectorId
-        ? await installConnectorDefinition(config, registryDefinition, input)
-        : await installConnector(config, connectorId, input);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error }, 500);
-      }
+      const instance = await persistConfigMutation({
+        config,
+        mutate: () => registryDefinition?.id === connectorId
+          ? installConnectorDefinition(config, registryDefinition, input)
+          : installConnector(config, connectorId, input),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { instance } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 
@@ -559,11 +589,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     try {
       const result = await testConnectorInstance(config, instance.materialized.serverId);
-      recordConnectorHealthUsage(config, instance.instanceId, result);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error }, 500);
-      }
+      await persistConfigMutation({
+        config,
+        mutate: () => recordConnectorHealthUsage(config, instance.instanceId, result),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: result });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 500);
@@ -590,14 +620,14 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const input: ConnectorInstallInput = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
     const config = service.currentConfig as Config;
     try {
-      const instance = updateConnectorConfig(config, instanceId, input);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error }, 500);
-      }
+      const instance = await persistConfigMutation({
+        config,
+        mutate: () => updateConnectorConfig(config, instanceId, input),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { instance } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 
@@ -605,14 +635,14 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const instanceId = c.req.param('id');
     const config = service.currentConfig as Config;
     try {
-      const instance = setConnectorEnabled(config, instanceId, true);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error }, 500);
-      }
+      const instance = await persistConfigMutation({
+        config,
+        mutate: () => setConnectorEnabled(config, instanceId, true),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { instance } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 
@@ -620,14 +650,14 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const instanceId = c.req.param('id');
     const config = service.currentConfig as Config;
     try {
-      const instance = setConnectorEnabled(config, instanceId, false);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error }, 500);
-      }
+      const instance = await persistConfigMutation({
+        config,
+        mutate: () => setConnectorEnabled(config, instanceId, false),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { instance } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 
@@ -635,14 +665,21 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const instanceId = c.req.param('id');
     const config = service.currentConfig as Config;
     try {
-      const instance = uninstallConnector(config, instanceId);
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error }, 500);
+      const definition = getInstalledConnectorDefinition(config, instanceId);
+      const installed = getConnectorInstance(config, instanceId);
+      const serverId = installed?.materialized.type === 'mcp' ? installed.materialized.serverId : undefined;
+      const rawServer = serverId ? config.mcp?.servers?.[serverId] : undefined;
+      if (definition?.auth.mode === 'oauth' && definition.runtime.type === 'mcp' && rawServer) {
+        await getMcpOAuthManager().disconnect(serverId!, rawServer);
       }
+      const instance = await persistConfigMutation({
+        config,
+        mutate: () => uninstallConnector(config, instanceId),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { instance } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 }

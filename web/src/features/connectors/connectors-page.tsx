@@ -83,23 +83,41 @@ type CustomDialogState =
   | { mode: 'edit'; row: McpServerRow }
   | null;
 
-function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefinition {
-  const category = ['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(item.category ?? '')
-    ? item.category as ConnectorDefinition['category']
+function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefinition | null {
+  const manifest = item.connectorManifest;
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return null;
+  const record = manifest as Record<string, unknown>;
+  if (record.contractVersion !== 1 || record.id !== item.name) return null;
+  const runtime = record.runtime;
+  const auth = record.auth;
+  if (!runtime || typeof runtime !== 'object' || Array.isArray(runtime)) return null;
+  if (!auth || typeof auth !== 'object' || Array.isArray(auth)) return null;
+  const runtimeRecord = runtime as Record<string, unknown>;
+  const authRecord = auth as Record<string, unknown>;
+  if (runtimeRecord.type !== 'mcp' || typeof runtimeRecord.serverId !== 'string') return null;
+  const category = ['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(String(record.category ?? ''))
+    ? record.category as ConnectorDefinition['category']
     : 'custom';
+  const authDefinition: ConnectorDefinition['auth'] = authRecord.mode === 'oauth'
+    ? { mode: 'oauth', ...(typeof authRecord.clientId === 'string' ? { clientId: authRecord.clientId } : {}) }
+    : authRecord.mode === 'apiKey' ? { mode: 'apiKey' } : { mode: 'none' };
   return {
     id: item.name,
     version: item.latestVersion ?? 'store',
-    displayName: item.name,
-    description: item.description,
+    displayName: typeof record.displayName === 'string' ? record.displayName : item.name,
+    description: typeof record.description === 'string' ? record.description : item.description,
     category,
     kind: 'mcp',
     source: 'store',
-    capabilities: ['tools', 'runtime.mcp.streamableHttp'],
-    tags: ['store'],
-    auth: { mode: 'none' },
-    setup: {},
-    runtime: { type: 'mcp', serverId: `store-${item.name}`.slice(0, 64) },
+    capabilities: Array.isArray(record.capabilities)
+      ? record.capabilities.filter((value): value is ConnectorDefinition['capabilities'][number] => typeof value === 'string')
+      : [],
+    tags: Array.isArray(record.tags) ? record.tags.filter((value): value is string => typeof value === 'string') : ['store'],
+    auth: authDefinition,
+    setup: record.setup && typeof record.setup === 'object' && !Array.isArray(record.setup)
+      ? record.setup
+      : {},
+    runtime: { type: 'mcp', serverId: runtimeRecord.serverId },
   };
 }
 
@@ -291,7 +309,10 @@ export function ConnectorsPage() {
           sort: connectorSort === 'source' ? 'newest' : 'downloads',
         });
         return {
-          connectors: catalog.items.map(connectorFromStoreItem),
+          connectors: catalog.items.flatMap((item) => {
+            const connector = connectorFromStoreItem(item);
+            return connector ? [connector] : [];
+          }),
           totalPages: catalog.meta.totalPages,
         };
       }));
