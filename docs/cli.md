@@ -27,6 +27,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `resume` | Resume a previous TUI Session |
 | `tunnel` | Manage public tunnel access |
 | `gateway` | Run and manage the Gateway |
+| `history` | Export Session history for external tools such as ctx |
 | `session` | List and manage Sessions |
 | `project` | Manage long-running Projects |
 | `doctor` | Diagnose installation, data, and security issues |
@@ -71,6 +72,8 @@ xopc config validate
 xopc doctor
 xopc logs tail
 ```
+
+To make XOPC Sessions searchable in ctx, see [Export history to ctx](./ctx-history.md).
 
 ## Profiles and paths
 
