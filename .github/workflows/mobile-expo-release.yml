@@ -115,6 +115,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Restore Firebase Android config
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [[ -z "$GOOGLE_SERVICES_JSON_BASE64" ]]; then
+            echo "Missing GitHub Actions secret: GOOGLE_SERVICES_JSON_BASE64" >&2
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > "$RUNNER_TEMP/google-services.json"
+          GOOGLE_SERVICES_JSON="$RUNNER_TEMP/google-services.json" pnpm -C apps/mobile-expo run verify:android-push
+
       - name: Restore Android signing keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ matrix.profile == 'production' && secrets.ANDROID_PRODUCTION_KEYSTORE_BASE64 || secrets.ANDROID_PREVIEW_KEYSTORE_BASE64 }}

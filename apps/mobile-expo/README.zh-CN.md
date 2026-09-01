@@ -130,7 +130,7 @@ Gateway 会在本地 SQLite 中保存设备注册信息，并为“Task 需要�
 发布构建前，请在各平台账号中完成以下配置（不要提交凭据或凭据文件）：
 
 1. 在 Expo/EAS 中确认项目 ID 与 `app.json` 相同，并使用 development 或 production client 测试；Android 的 Expo Go 不能作为推送通知测试目标。
-2. Android：在 Firebase 创建包名为 `ai.xopc.xopc` 的 Android App，并在 Expo 项目凭据中配置 FCM v1。将下载的客户端配置保存为 `apps/mobile-expo/google-services.json`（已忽略 Git），或在 EAS 中配置名为 `GOOGLE_SERVICES_JSON` 的 file 环境变量。可运行 `pnpm -C apps/mobile-expo run verify:android-push` 校验包名和必需字段。
+2. Android：在 Firebase 创建包名为 `ai.xopc.xopc` 的 Android App，并在 Expo 项目凭据中配置 FCM v1。将下载的客户端配置保存为 `apps/mobile-expo/google-services.json`（已忽略 Git），或在 EAS 中配置名为 `GOOGLE_SERVICES_JSON` 的 file 环境变量。GitHub Android 发布还需将该文件的 Base64 内容保存为仓库 Secret `GOOGLE_SERVICES_JSON_BASE64`。可运行 `pnpm -C apps/mobile-expo run verify:android-push` 校验包名和必需字段。
 3. iOS：在 Apple Developer 中为 `ai.xopc.xopc` 开启 Push Notifications，并在 EAS 凭据中配置 APNs key 或 profile；请在真机 iPhone/iPad 上测试。
 4. 确认 gateway 主机可通过 HTTPS 访问 `https://exp.host`；手机仍通过已配对的 LAN 或远程 URL 访问 gateway。
 
