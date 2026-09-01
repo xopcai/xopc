@@ -85,7 +85,7 @@ describe('connected source understanding input', () => {
     expect(values[0]?.ownerAttribution).toBe('user');
   });
 
-  it('persists reviewable understandings and focuses with connector provenance', async () => {
+  it('keeps connected responsibilities in current work instead of the durable portrait', async () => {
     const sourceInstanceId = 'composio:gmail:account-1';
     const grant = upsertUnderstandingSourceGrant({
       sourceKey: 'connector-account:account-1',
@@ -129,7 +129,8 @@ describe('connected source understanding input', () => {
       analyze: vi.fn(async ({ items }) => ({
         modelRef: 'test/model',
         profileCandidates: [{
-          id: 'candidate-1', category: 'responsibility', statement: 'Owns the Atlas launch review.',
+          id: 'candidate-1', category: 'responsibility', factKey: 'responsibility:atlas-launch',
+          statement: 'Owns the Atlas launch review.',
           confidence: 'high', evidence: ['The source directly assigns the launch review to the user.'],
           evidenceRefs: [items[0]!.evidenceRef], status: 'pending',
         }],
@@ -141,15 +142,79 @@ describe('connected source understanding input', () => {
       })),
     });
 
-    expect(result).toEqual({ created: 1, focusCount: 1, status: 'completed' });
-    expect(applyUnderstandingCandidates).toHaveBeenCalledWith(
-      [expect.objectContaining({ kind: 'project_context', content: 'Owns the Atlas launch review.' })],
-      expect.objectContaining({ source: { provider: 'connected-sources', sourceInstanceId } }),
-    );
+    expect(result).toEqual({ created: 0, focusCount: 1, status: 'completed' });
+    expect(applyUnderstandingCandidates).not.toHaveBeenCalled();
     expect(listUserFocuses()).toEqual([expect.objectContaining({
       canonicalKey: 'connected-focus:atlas-launch',
       sourceRunId: sourceRun.id,
     })]);
+  });
+
+  it('writes only strongly repeated user-owned preferences and binds each candidate to its own evidence', async () => {
+    const sourceInstanceId = 'composio:slack:account-1';
+    const grant = upsertUnderstandingSourceGrant({
+      sourceKey: 'connector-account:account-1', adapterId: 'connector:composio-slack', category: 'files',
+      platform: 'all', displayName: 'Slack', accessMode: 'continuous', retentionPolicy: 'bounded_raw',
+      processingPolicy: 'remote_allowed', config: { sourceInstanceId },
+    });
+    const sourceRun = createUnderstandingSourceRun({ grantId: grant.id, kind: 'bootstrap' });
+    const stored = upsertKnowledgeSourceItems([1, 2, 3].map((index) => ({
+      sourceInstanceId,
+      collectionScope: 'messages',
+      externalId: `message-${index}`,
+      itemType: 'connected_content' as const,
+      occurredAt: `2026-08-${20 + index}T09:00:00.000Z`,
+      contentHash: `hash-${index}`,
+      normalizedText: JSON.stringify({ title: `Planning ${index}`, content: `Planning evidence ${index}` }),
+      metadata: { toolkit: 'slack', agentId: 'main', actorAttributed: true },
+      sensitivity: 'personal' as const,
+      retentionClass: 'bounded' as const,
+      synthesisPipeline: 'connected_knowledge' as const,
+      synthesisStatus: 'pending' as const,
+    }))).items;
+    const applyUnderstandingCandidates = vi.fn(async (candidates: Array<{ canonicalKey?: string }>) => ({
+      proposed: 1, created: 1, deduplicated: 0, rejected: 0, createdRecords: [],
+      writeOutputs: [{ candidateKey: candidates[0]!.canonicalKey!, outcome: 'created' as const }],
+    }));
+
+    const result = await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceRunId: sourceRun.id,
+      processingPolicy: grant.processingPolicy,
+      memoryManager: { applyUnderstandingCandidates } as unknown as MemoryManager,
+      analyze: vi.fn(async ({ items }) => ({
+        modelRef: 'test/model',
+        profileCandidates: [
+          {
+            id: 'preference', category: 'preference', factKey: 'communication:async-updates',
+            statement: 'Prefers asynchronous progress updates.', confidence: 'high', evidence: ['Repeated twice.'],
+            evidenceRefs: items.slice(0, 2).map((value) => value.evidenceRef), status: 'pending',
+          },
+          {
+            id: 'routine', category: 'routine', factKey: 'routine:weekly-planning',
+            statement: 'Plans work weekly.', confidence: 'high', evidence: ['Repeated three times.'],
+            evidenceRefs: items.map((value) => value.evidenceRef), status: 'pending',
+          },
+          {
+            id: 'weak', category: 'preference', factKey: 'communication:brief',
+            statement: 'May prefer brief updates.', confidence: 'medium', evidence: ['Weak signal.'],
+            evidenceRefs: items.slice(0, 2).map((value) => value.evidenceRef), status: 'pending',
+          },
+        ],
+        workThreadCandidates: [], sourceStatuses: [{ sourceId: 'connected-work', status: 'completed' }],
+      })),
+    });
+
+    expect(result).toEqual({ created: 2, focusCount: 0, status: 'completed' });
+    expect(applyUnderstandingCandidates).toHaveBeenCalledTimes(2);
+    expect(applyUnderstandingCandidates.mock.calls[0]?.[0][0]).toMatchObject({
+      canonicalKey: 'understanding:preference:communication:async-updates',
+    });
+    const preferenceEvidence = applyUnderstandingCandidates.mock.calls[0]?.[1].sourceItemIds;
+    const routineEvidence = applyUnderstandingCandidates.mock.calls[1]?.[1].sourceItemIds;
+    expect(preferenceEvidence).toHaveLength(2);
+    expect(routineEvidence).toHaveLength(3);
+    expect(routineEvidence).toEqual(expect.arrayContaining(preferenceEvidence));
+    expect(routineEvidence).toEqual(expect.arrayContaining(stored.map((value) => value.id)));
   });
 
   it('does not send local-only source content to semantic analysis', async () => {

@@ -1,20 +1,38 @@
 import { USER_FACING_UNDERSTANDING_WRITING_GUIDANCE } from '../../user-context/understanding-writing.js';
 
-export const MEMORY_REVIEW_USER_PROMPT = `Review the conversation above and identify durable user-understanding candidates.
+export const UNDERSTANDING_INTERPRETER_SYSTEM_PROMPT = `You are xopc's user-understanding interpreter. You do not chat with the user and cannot write storage. Distinguish memory commands, memory questions, corrections, forgetting, durable user assertions, and ordinary task requests. Return strict JSON only. Never treat assistant text as evidence of a fact about the user.`;
 
-Focus on:
-1. Has the user revealed things about themselves — persona, desires, preferences, or personal details worth remembering?
-2. Has the user expressed expectations about how you should behave, their work style, emotional-support preferences, boundaries, or how they want you to communicate?
-3. Has the user explicitly corrected a prior assumption? Prefer the correction and do not preserve the contradicted interpretation.
+export function buildUnderstandingInterpreterPrompt(options: {
+  mode: 'turn' | 'transcript';
+  availableTargets?: Array<{ id: string; statement: string }>;
+}): string {
+  const targets = options.availableTargets?.length
+    ? `\nOnly these understanding IDs may be targeted for confirm, correction, or forgetting:\n${options.availableTargets.map((item) => `- ${item.id}: ${item.statement}`).join('\n')}`
+    : '\nNo existing understanding IDs are available to target.';
+  return `Interpret the evidence-tagged conversation above for ${options.mode === 'turn' ? 'the latest user turn' : 'durable transcript synthesis'}.
 
-Return JSON only, with this shape:
-{"candidates":[{"kind":"preference","content":"...","confidence":0.8,"importance":0.7,"durability":"durable","sensitivity":"normal","disclosurePolicy":"referenceable","evidenceRefs":["entry-id"]}]}
+Return exactly this JSON shape:
+{"intent":"none","candidates":[],"targetUnderstandingIds":[],"abstentionReason":"..."}
+
+Allowed intents: memory_create, memory_query, memory_confirm, memory_correct, memory_forget, user_assertion, task_request, none.
+
+Candidate shape:
+{"factKey":"communication:concise","statement":"...","kind":"preference","explicitness":"observed","durability":"durable","scopeHint":"global","confidence":0.8,"importance":0.7,"sensitivity":"normal","disclosurePolicy":"referenceable","evidence":[{"ref":"entry-id","quote":"exact quote from that user message"}],"selfContained":true,"unresolvedReferences":[]}
 
 Allowed kinds: preference, boundary, relationship, routine, current_state, long_term_goal, project_context, task_lesson, derived_insight.
-Every reviewed message is prefixed with an evidence_ref. Every candidate must list the exact one or more evidence_ref values that support it. Omit a candidate when no exact message supports it. Only include facts supported by the conversation and likely to matter in a future session. A temporary mood or one-off reaction is current context, not durable identity; omit it unless the user describes a recurring pattern that will matter later. Never include passwords, tokens, credentials, or speculative diagnoses. Use {"candidates":[]} when nothing qualifies.
+
+Rules:
+- A question such as “Do you remember this goal?” is memory_query and creates no candidate.
+- A request to create, summarize, update, investigate, or track a goal is task_request, not a user goal.
+- Every candidate needs an exact quote from one or more user messages. Assistant messages may resolve context but never count as evidence.
+- Extract zero to eight independent candidates; do not collapse multiple facts into one.
+- factKey must be a stable language-neutral lowercase identifier using letters, digits, colons, or hyphens. Equivalent facts in different languages must use the same factKey.
+- Set selfContained=false and list unresolvedReferences for unresolved words such as this, that, it, 这个, 那个, or 它.
+- Omit temporary reactions and one-off task instructions.
+- Never include passwords, credentials, regulated identifiers, or speculative diagnoses.
+- For transcript mode, use explicitness=inferred unless the latest user message is itself an explicit memory command or correction.
+- If evidence is insufficient, return candidates=[] and explain abstentionReason.
 
 ${USER_FACING_UNDERSTANDING_WRITING_GUIDANCE}
-
-Do not turn a request about the current task into user understanding. Exclude requested outputs, follow-up instructions, project-note edits, investigations, and other one-off work. Every candidate must be a complete standalone profile statement or enduring pattern; never return a clause fragment beginning with a connector such as "and", "also", "并且", "以及", or "的事项". Use long_term_goal only when the person states an enduring personal goal, not when they ask the assistant to create, update, investigate, summarize, or track something.`;
-
-export const UNDERSTANDING_REVIEW_SYSTEM_PROMPT = `You are the user-understanding synthesis stage for the same session. You do not chat with the user and cannot write storage directly. Extract only evidence-backed, durable candidates and return strict JSON matching the requested schema.`;
+${targets}`;
+}

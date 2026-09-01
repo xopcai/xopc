@@ -1,44 +1,53 @@
 import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
-import type { Config } from '../../config/schema.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
-import { getApiKeySync } from '../../providers/index.js';
-import { isDurableUnderstandingCandidate } from '../../user-context/understandingQuality.js';
-import { UNDERSTANDING_KINDS } from '../../user-context/domain.js';
-import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
-import { createLogger } from '../../utils/logger.js';
+import { extractProfileAgentId } from '../../config/agent-profile.js';
+import { resolveTypedModelRef } from '../../config/agent-typed-models.js';
+import type { Config } from '../../config/schema.js';
+import { getApiKeySync, resolveModel } from '../../providers/index.js';
 import {
-  createContextEvidence,
   finishContextExtractionRun,
-  getSessionMetadata,
+  getTurnPersonalization,
   loadCompactionSourceSnapshot,
 } from '../../storage/sqlite/index.js';
-import { claimRegisteredExtraction, extractionInputHash } from '../../user-context/extraction/registry.js';
+import { claimRegisteredExtraction, type ExtractorId } from '../../user-context/extraction/registry.js';
+import { emptyUnderstandingReview, executeUnderstandingInterpretation } from '../../user-context/extraction/executor.js';
+import {
+  parseSemanticUnderstanding,
+  type SemanticEvidence,
+  type SemanticUnderstandingInterpretation,
+} from '../../user-context/extraction/semantic.js';
+import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
+import { createLogger } from '../../utils/logger.js';
 
 import { extractTextContent } from '../context/workspace.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import type { MemoryManager } from '../memory/manager.js';
-import type { UnderstandingCandidate } from '../memory/understanding/types.js';
-import {
-  runAgentTurnWithTimeout,
-  resolveAgentTurnTimeoutMs,
-} from '../orchestration/run-agent-turn-with-timeout.js';
-import {
-  isAssistantTurnAborted,
-  isAssistantTurnFailed,
-} from '../orchestration/llm-turn-retry.js';
+import type { UnderstandingReviewResult } from '../memory/understanding/types.js';
+import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
+import { isAssistantTurnAborted, isAssistantTurnFailed } from '../orchestration/llm-turn-retry.js';
 
 import type { BackgroundReviewSettings } from './settings.js';
-import {
-  MEMORY_REVIEW_USER_PROMPT,
-  UNDERSTANDING_REVIEW_SYSTEM_PROMPT,
-} from './prompts.js';
+import { buildUnderstandingInterpreterPrompt, UNDERSTANDING_INTERPRETER_SYSTEM_PROMPT } from './prompts.js';
 
-const log = createLogger('BackgroundReview');
+const log = createLogger('UnderstandingInterpreter');
 
-type EvidenceMessage = { entryId: string; createdAt: number; message: AgentMessage };
-type BackgroundCandidate = UnderstandingCandidate & { evidenceRefs: string[] };
+type EvidenceMessage = SemanticEvidence & { createdAt: number; message: AgentMessage };
+
+export interface RunBackgroundReviewParams {
+  sessionKey: string;
+  mainAgent: Agent;
+  settings: BackgroundReviewSettings;
+  memoryManager: MemoryManager;
+  getConfig: () => Config | undefined;
+}
+
+export interface RunTurnUnderstandingParams extends Omit<RunBackgroundReviewParams, 'settings'> {
+  turnId: string;
+  userText: string;
+  maxHistoryMessages?: number;
+}
 
 function isReviewMessage(value: unknown): value is AgentMessage {
   if (!value || typeof value !== 'object') return false;
@@ -46,17 +55,23 @@ function isReviewMessage(value: unknown): value is AgentMessage {
   return role === 'user' || role === 'assistant';
 }
 
-function tagMessage(message: AgentMessage, entryId: string): AgentMessage {
-  const copy = JSON.parse(JSON.stringify(message)) as AgentMessage;
-  const tag = `[evidence_ref:${entryId}]\n`;
-  const messageContent = readAgentMessageContent(copy);
-  if (typeof messageContent === 'string') return { ...copy, content: `${tag}${messageContent}` } as AgentMessage;
-  if (Array.isArray(messageContent)) {
-    const content = [...messageContent] as Array<{ type: string; text?: string }>;
-    const first = content[0];
-    if (first?.type === 'text') content[0] = { ...first, text: `${tag}${first.text ?? ''}` };
-    else content.unshift({ type: 'text', text: tag });
-    return { ...copy, content } as AgentMessage;
+function messageText(message: AgentMessage): string {
+  const content = readAgentMessageContent(message);
+  if (typeof content === 'string') return content;
+  return Array.isArray(content) ? extractTextContent(content as Array<{ type: string; text?: string }>) : '';
+}
+
+function tagMessage(entry: EvidenceMessage): AgentMessage {
+  const copy = JSON.parse(JSON.stringify(entry.message)) as AgentMessage;
+  const tag = `[evidence_ref:${entry.ref}] [role:${entry.role}]\n`;
+  const content = readAgentMessageContent(copy);
+  if (typeof content === 'string') return { ...copy, content: `${tag}${content}` } as AgentMessage;
+  if (Array.isArray(content)) {
+    const parts = [...content] as Array<{ type: string; text?: string }>;
+    const first = parts[0];
+    if (first?.type === 'text') parts[0] = { ...first, text: `${tag}${first.text ?? ''}` };
+    else parts.unshift({ type: 'text', text: tag });
+    return { ...copy, content: parts } as AgentMessage;
   }
   return copy;
 }
@@ -67,105 +82,83 @@ function loadEvidenceMessages(sessionKey: string, max: number): EvidenceMessage[
   return snapshot.entries
     .filter((entry) => isReviewMessage(entry.row))
     .slice(-max)
-    .map((entry) => ({ entryId: entry.entryId, createdAt: entry.createdAt, message: entry.row as AgentMessage }));
+    .map((entry) => {
+      const message = entry.row as AgentMessage;
+      return {
+        ref: entry.entryId,
+        role: message.role as 'user' | 'assistant',
+        text: messageText(message),
+        createdAt: entry.createdAt,
+        message,
+      };
+    });
 }
-
-export interface RunBackgroundReviewParams {
-  sessionKey: string;
-  mainAgent: Agent;
-  settings: BackgroundReviewSettings;
-  memoryManager: MemoryManager;
-  getConfig: () => Config | undefined;
-}
-
-const ALLOWED_UNDERSTANDING_KINDS = new Set<UnderstandingCandidate['kind']>(UNDERSTANDING_KINDS);
-const ALLOWED_SENSITIVITIES = new Set<UnderstandingCandidate['sensitivity']>([
-  'normal', 'personal', 'secret', 'regulated',
-]);
 
 function lastAssistantText(agent: Agent): string {
-  for (let i = agent.state.messages.length - 1; i >= 0; i--) {
+  for (let i = agent.state.messages.length - 1; i >= 0; i -= 1) {
     const message = agent.state.messages[i];
-    if (message.role !== 'assistant') continue;
-    return Array.isArray(message.content)
-      ? extractTextContent(message.content as Array<{ type: string; text?: string }>)
-      : String(message.content);
+    if (message.role === 'assistant') return messageText(message);
   }
   return '';
 }
 
-function parseBackgroundCandidates(raw: string): BackgroundCandidate[] {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw)?.[1];
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  const candidateJson = fenced ?? (start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
+function isLocalModel(model: Model<Api>): boolean {
+  if (['ollama', 'lmstudio'].includes(model.provider)) return true;
   try {
-    const parsed = JSON.parse(candidateJson) as { candidates?: unknown };
-    if (!Array.isArray(parsed.candidates)) return [];
-    const output: BackgroundCandidate[] = [];
-    for (const value of parsed.candidates.slice(0, 8)) {
-      if (!value || typeof value !== 'object') continue;
-      const item = value as Record<string, unknown>;
-      if (!ALLOWED_UNDERSTANDING_KINDS.has(item.kind as UnderstandingCandidate['kind'])) continue;
-      if (typeof item.content !== 'string' || item.content.trim().length < 4) continue;
-      const kind = item.kind as UnderstandingCandidate['kind'];
-      if (!isDurableUnderstandingCandidate(kind, item.content)) continue;
-      const confidence = typeof item.confidence === 'number' ? item.confidence : 0.65;
-      const importance = typeof item.importance === 'number' ? item.importance : 0.5;
-      const durability = item.durability === 'ephemeral' || item.durability === 'recurring'
-        ? item.durability
-        : 'durable';
-      const sensitivity = ALLOWED_SENSITIVITIES.has(item.sensitivity as UnderstandingCandidate['sensitivity'])
-        ? item.sensitivity as UnderstandingCandidate['sensitivity']
-        : 'personal';
-      const disclosurePolicy = item.disclosurePolicy === 'silent' || item.disclosurePolicy === 'ask_before_reference'
-        ? item.disclosurePolicy
-        : 'referenceable';
-      const evidenceRefs = Array.isArray(item.evidenceRefs)
-        ? [...new Set(item.evidenceRefs.filter((value): value is string => typeof value === 'string' && value.trim().length > 0))]
-        : [];
-      output.push({
-        kind,
-        content: item.content.trim(),
-        confidence: Math.max(0, Math.min(1, confidence)),
-        importance: Math.max(0, Math.min(1, importance)),
-        explicitness: 'inferred',
-        durability,
-        sensitivity,
-        disclosurePolicy,
-        evidenceRefs,
-      } as BackgroundCandidate);
-    }
-    return output;
+    const hostname = new URL(model.baseUrl).hostname;
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
   } catch {
-    return [];
+    return false;
   }
 }
 
-export function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
-  return parseBackgroundCandidates(raw).map(({ evidenceRefs: _evidenceRefs, ...candidate }) => candidate);
+function resolveInterpreterRuntime(params: Pick<RunBackgroundReviewParams, 'sessionKey' | 'mainAgent' | 'getConfig'>): {
+  model: Model<Api>;
+  processingPolicy: 'local_only' | 'remote_allowed';
+  destination: 'local_model' | 'remote_model';
+} | null {
+  const config = params.getConfig();
+  const processingPolicy = config?.userContext.understanding.processingPolicy ?? 'remote_allowed';
+  let model: Model<Api> | undefined;
+  if (config) {
+    const agentId = extractProfileAgentId(params.sessionKey, config);
+    for (const role of ['understanding', 'small']) {
+      const ref = resolveTypedModelRef(config, agentId, role);
+      if (!ref) continue;
+      try {
+        model = resolveModel(ref);
+        break;
+      } catch (err) {
+        log.debug({ err, agentId, role, modelRef: ref }, 'Configured understanding model could not be resolved');
+      }
+    }
+  }
+  model ??= params.mainAgent.state.model as Model<Api>;
+  if (processingPolicy === 'local_only' && !isLocalModel(model)) {
+    log.debug({ sessionKey: params.sessionKey, provider: model.provider, modelId: model.id }, 'Understanding interpretation skipped because no local model is configured');
+    return null;
+  }
+  return {
+    model,
+    processingPolicy,
+    destination: isLocalModel(model) ? 'local_model' : 'remote_model',
+  };
 }
 
-async function runUnderstandingReview(params: RunBackgroundReviewParams): Promise<void> {
-  const { sessionKey, mainAgent, settings, memoryManager, getConfig } = params;
-  const evidenceMessages = loadEvidenceMessages(sessionKey, settings.maxHistoryMessages);
-  if (!evidenceMessages.length) {
-    log.debug({ sessionKey }, 'User-understanding review skipped because no persisted evidence was available');
-    return;
-  }
-  const lastEvidence = evidenceMessages[evidenceMessages.length - 1]!;
-  const extraction = claimRegisteredExtraction({
-    extractorId: 'transcript-synthesis',
-    sourceRef: `session:${sessionKey}:window:${evidenceMessages[0]!.entryId}:${lastEvidence.entryId}`,
-    contentForHash: evidenceMessages.map((entry) => entry.entryId).join('\n'),
-    processingPolicy: 'remote_allowed',
-    destination: 'remote_model',
-  });
-  if (!extraction.shouldExecute) return;
+async function interpret(params: {
+  sessionKey: string;
+  mainAgent: Agent;
+  getConfig: () => Config | undefined;
+  evidence: EvidenceMessage[];
+  mode: 'turn' | 'transcript';
+  availableTargets: Array<{ id: string; statement: string }>;
+  timeoutMs: number;
+  model: Model<Api>;
+}): Promise<SemanticUnderstandingInterpretation | null> {
   const reviewAgent = new Agent({
     initialState: {
-      systemPrompt: UNDERSTANDING_REVIEW_SYSTEM_PROMPT,
-      model: mainAgent.state.model as Model<Api>,
+      systemPrompt: UNDERSTANDING_INTERPRETER_SYSTEM_PROMPT,
+      model: params.model,
       thinkingLevel: 'off' as ThinkingLevel,
       tools: [],
       messages: [],
@@ -173,79 +166,129 @@ async function runUnderstandingReview(params: RunBackgroundReviewParams): Promis
     streamFn: createExtensionAwareStreamFn(),
     getApiKey: (provider: string) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
   });
-  reviewAgent.state.messages = evidenceMessages.map((entry) => tagMessage(entry.message, entry.entryId));
-  const timeoutMs = Math.min(settings.maxDurationMs, resolveAgentTurnTimeoutMs(getConfig()));
+  reviewAgent.state.messages = params.evidence.map(tagMessage);
   try {
     await runAgentTurnWithTimeout(reviewAgent, async () => {
-      await reviewAgent.prompt({ role: 'user', content: MEMORY_REVIEW_USER_PROMPT, timestamp: Date.now() });
+      await reviewAgent.prompt({
+        role: 'user',
+        content: buildUnderstandingInterpreterPrompt({ mode: params.mode, availableTargets: params.availableTargets }),
+        timestamp: Date.now(),
+      });
       await reviewAgent.waitForIdle();
-    }, timeoutMs);
+    }, Math.min(params.timeoutMs, resolveAgentTurnTimeoutMs(params.getConfig())));
   } catch (err) {
-    log.warn({ err, sessionKey }, 'User-understanding review failed or timed out');
+    log.warn({ err, sessionKey: params.sessionKey }, 'User-understanding interpretation failed or timed out');
     reviewAgent.abort();
     await reviewAgent.waitForIdle().catch(() => {});
-    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_failed' });
-    return;
+    return null;
   }
-  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) {
-    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_failed' });
-    return;
+  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return null;
+  return parseSemanticUnderstanding(
+    lastAssistantText(reviewAgent),
+    params.evidence,
+    params.availableTargets.map((item) => item.id),
+  );
+}
+
+async function executeReview(params: {
+  sessionKey: string;
+  mainAgent: Agent;
+  memoryManager: MemoryManager;
+  getConfig: () => Config | undefined;
+  evidence: EvidenceMessage[];
+  mode: 'turn' | 'transcript';
+  extractorId: ExtractorId;
+  sourceRef: string;
+  contentForHash: string;
+  availableTargets: Array<{ id: string; statement: string }>;
+  timeoutMs: number;
+  turnId?: string;
+}): Promise<UnderstandingReviewResult> {
+  const runtime = resolveInterpreterRuntime(params);
+  if (!runtime) return emptyUnderstandingReview();
+  const extraction = claimRegisteredExtraction({
+    extractorId: params.extractorId,
+    sourceRef: params.sourceRef,
+    contentForHash: params.contentForHash,
+    processingPolicy: runtime.processingPolicy,
+    destination: runtime.destination,
+  });
+  if (!extraction.shouldExecute) return emptyUnderstandingReview();
+  const interpretation = await interpret({ ...params, model: runtime.model });
+  if (!interpretation) {
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_or_schema_failed' });
+    return emptyUnderstandingReview();
   }
-  const candidates = parseBackgroundCandidates(lastAssistantText(reviewAgent));
-  let applied = 0;
   try {
-    const evidenceByRef = new Map(evidenceMessages.map((entry) => [entry.entryId, entry]));
-    const projectId = getSessionMetadata(sessionKey)?.projectId;
-    const outputs: Array<{
-      candidateKey: string; objectType?: 'understanding'; objectId?: string; versionId?: string;
-      outcome: 'created' | 'deduplicated' | 'rejected';
-    }> = [];
-    for (const { evidenceRefs, ...candidate } of candidates) {
-      const referenced = evidenceRefs.flatMap((ref) => {
-        const entry = evidenceByRef.get(ref);
-        return entry ? [entry] : [];
-      });
-      if (!referenced.length) {
-        outputs.push({ candidateKey: `${candidate.kind}:${candidate.content}`, outcome: 'rejected' });
-        continue;
-      }
-      const evidenceIds = referenced.map((entry) => createContextEvidence({
-        sourceType: 'conversation',
-        sourceRef: `session:${sessionKey}:entry:${entry.entryId}`,
-        sourceRunId: extraction.run.id,
-        sessionId: sessionKey,
-        messageId: entry.entryId,
-        contentHash: extractionInputHash(JSON.stringify(entry.message)),
-        retentionPolicy: 'derived_only',
-        processingPolicy: 'remote_allowed',
-        extractorId: 'transcript-synthesis',
-        extractorVersion: '1',
-        trustLevel: 'owner',
-        observedAt: entry.createdAt,
-      }).id);
-      const result = await memoryManager.applyUnderstandingCandidates([candidate], {
-        sessionKey,
-        ...(projectId ? { projectId } : {}),
-        evidenceIds,
-        reviewSource: 'background',
-        extractionRunId: extraction.run.id,
-      });
-      outputs.push(...(result.writeOutputs ?? []).map((output) => ({
+    const result = await executeUnderstandingInterpretation({
+      interpretation,
+      evidence: params.evidence,
+      extractionRunId: extraction.run.id,
+      extractorId: params.extractorId,
+      sessionKey: params.sessionKey,
+      ...(params.turnId ? { turnId: params.turnId } : {}),
+      memoryManager: params.memoryManager,
+      getConfig: params.getConfig,
+      reviewSource: params.mode === 'turn' ? 'turn' : 'background',
+      processingPolicy: runtime.processingPolicy,
+    });
+    finishContextExtractionRun({
+      runId: extraction.run.id,
+      status: 'completed',
+      outputs: result.writeOutputs?.map((output) => ({
         candidateKey: output.candidateKey,
         ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
         ...(output.versionId ? { versionId: output.versionId } : {}),
         outcome: output.outcome,
-      })));
-      applied += 1;
-    }
-    finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs });
-  } catch (error) {
+      })),
+    });
+    return result;
+  } catch (err) {
     finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'write_failed' });
-    throw error;
+    throw err;
   }
-  log.debug({ sessionKey, candidateCount: candidates.length, applied }, 'User-understanding review completed');
+}
+
+export async function runTurnUnderstandingReview(params: RunTurnUnderstandingParams): Promise<UnderstandingReviewResult> {
+  const evidence = loadEvidenceMessages(params.sessionKey, params.maxHistoryMessages ?? 12);
+  if (!evidence.length) return emptyUnderstandingReview();
+  const personalization = getTurnPersonalization(params.turnId);
+  const availableTargets = personalization?.items.flatMap((item) => {
+    if (item.objectType !== 'understanding' || item.decision !== 'selected') return [];
+    return [{ id: item.objectId, statement: item.content }];
+  }) ?? [];
+  return executeReview({
+    sessionKey: params.sessionKey,
+    mainAgent: params.mainAgent,
+    memoryManager: params.memoryManager,
+    getConfig: params.getConfig,
+    evidence,
+    mode: 'turn',
+    extractorId: 'turn-semantics',
+    sourceRef: `session:${params.sessionKey}:turn:${params.turnId}`,
+    contentForHash: params.userText,
+    availableTargets,
+    timeoutMs: 30_000,
+    turnId: params.turnId,
+  });
 }
 
 export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams): Promise<void> {
-  await runUnderstandingReview(params);
+  const evidence = loadEvidenceMessages(params.sessionKey, params.settings.maxHistoryMessages);
+  if (!evidence.length) return;
+  const first = evidence[0]!;
+  const last = evidence[evidence.length - 1]!;
+  await executeReview({
+    sessionKey: params.sessionKey,
+    mainAgent: params.mainAgent,
+    memoryManager: params.memoryManager,
+    getConfig: params.getConfig,
+    evidence,
+    mode: 'transcript',
+    extractorId: 'transcript-synthesis',
+    sourceRef: `session:${params.sessionKey}:window:${first.ref}:${last.ref}`,
+    contentForHash: evidence.map((entry) => entry.ref).join('\n'),
+    availableTargets: [],
+    timeoutMs: params.settings.maxDurationMs,
+  });
 }

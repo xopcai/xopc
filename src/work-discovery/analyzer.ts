@@ -135,7 +135,9 @@ function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): Wo
     || item.category === 'routine'
     ? item.category
     : undefined;
-  if (!category || typeof item.statement !== 'string') return null;
+  if (!category || typeof item.statement !== 'string' || typeof item.factKey !== 'string') return null;
+  const factKey = item.factKey.trim().toLocaleLowerCase();
+  if (!/^[a-z0-9][a-z0-9:-]{2,119}$/.test(factKey)) return null;
   const statement = item.statement.trim().slice(0, 500);
   if (statement.length < 4) return null;
   const confidence = item.confidence === 'high' || item.confidence === 'low' ? item.confidence : 'medium';
@@ -146,6 +148,7 @@ function validateProfileCandidate(value: unknown, allowedRefs?: Set<string>): Wo
   return {
     id: randomUUID(),
     category,
+    factKey,
     statement,
     confidence,
     evidence: strings(item.evidence, 4).map((entry) => entry.slice(0, 300)),
@@ -253,7 +256,8 @@ export async function analyzeWorkContext(input: {
     'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, conversationStarter, lowConfidence, and contextQuestion.',
     'profileCandidates contains only user-specific role, responsibility, preference, or routine facts that are directly supported and would remain useful outside this repository snapshot.',
     'Do not put the project stack, packages, architecture, deployment setup, repository conventions, or current task in profileCandidates. Put project facts in projectSummary/currentState and current work in workThreads.',
-    'Each profile candidate has category (role, responsibility, preference, or routine), statement, confidence, and evidence.',
+    'Each profile candidate has category (role, responsibility, preference, or routine), factKey, statement, confidence, and evidence.',
+    'factKey is a stable language-neutral lowercase identifier such as workflow:code-review:github; equivalent facts in different languages must use the same factKey.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,
     'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
     'workThreads contains every distinct evidence-backed work stream with topicKey, title, summary, horizon, status, confidence, and evidenceRefs. Do not merge unrelated streams to force a fixed count.',
@@ -419,7 +423,8 @@ async function analyzeUnderstandingBatch(input: {
     'Return only one JSON object with profileCandidates and workThreads.',
     'Return at most 8 profileCandidates and at most 8 workThreads. Prefer the strongest distinct findings.',
     'profileCandidates contains only user-specific role, responsibility, preference, or routine facts with direct support. Current tasks belong in workThreads; project technologies, packages, architecture, and repository conventions are not user facts.',
-    'Each profile candidate has category (role, responsibility, preference, or routine), statement, confidence, evidence, and evidenceRefs.',
+    'Each profile candidate has category (role, responsibility, preference, or routine), factKey, statement, confidence, evidence, and evidenceRefs.',
+    'factKey is a stable language-neutral lowercase identifier such as workflow:code-review:github; equivalent facts in different languages must use the same factKey.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,
     'Each work thread has topicKey, title, summary, status, horizon, confidence, and evidenceRefs.',
     'Every evidenceRefs value must be one of the supplied refs. Omit anything without direct support.',
@@ -483,7 +488,7 @@ function mergeProfileCandidates(candidates: WorkDiscoveryProfileCandidate[]): Wo
   const merged = new Map<string, WorkDiscoveryProfileCandidate>();
   const confidenceRank = { low: 1, medium: 2, high: 3 } as const;
   for (const candidate of candidates) {
-    const key = `${candidate.category}:${candidate.statement.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()}`;
+    const key = `${candidate.category}:${candidate.factKey}`;
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, candidate);

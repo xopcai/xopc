@@ -1277,6 +1277,7 @@ export const ConfigSchema = z.object({
     },
     understanding: {
       enabled: true,
+      processingPolicy: 'remote_allowed',
       adaptiveCadence: true,
       reviewIntervalTurns: 10,
       maxHistoryMessages: 80,

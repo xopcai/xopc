@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import type { MemoryManager } from '../agent/memory/manager.js';
 import type { UnderstandingCandidate } from '../agent/memory/understanding/types.js';
 import type { Config } from '../config/schema.js';
@@ -80,18 +78,17 @@ export function connectedItemsForUnderstanding(items: KnowledgeSourceItem[]): Un
     });
 }
 
-function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingCandidate['kind'] {
-  if (category === 'preference') return 'preference';
-  if (category === 'routine') return 'routine';
-  return 'project_context';
+type ConnectedPortraitCandidate = WorkDiscoveryProfileCandidate & { category: 'preference' | 'routine' };
+
+function isConnectedPortraitCandidate(candidate: WorkDiscoveryProfileCandidate): candidate is ConnectedPortraitCandidate {
+  return candidate.category === 'preference' || candidate.category === 'routine';
 }
 
-function understandingCandidate(candidate: WorkDiscoveryProfileCandidate): UnderstandingCandidate {
-  const normalized = candidate.statement.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+function understandingCandidate(candidate: ConnectedPortraitCandidate): UnderstandingCandidate {
   return {
-    kind: understandingKind(candidate.category),
+    kind: candidate.category,
     content: candidate.statement,
-    canonicalKey: `connected-semantic:${candidate.category}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`,
+    canonicalKey: `understanding:${candidate.category}:${candidate.factKey}`,
     confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
     importance: 0.68,
     explicitness: 'inferred',
@@ -105,6 +102,24 @@ function hasLongVerbatimOverlap(value: string, sourceTexts: string[], minimumLen
   const normalized = value.replace(/\s+/g, ' ').trim();
   if (normalized.length < minimumLength) return false;
   return sourceTexts.some((source) => source.replace(/\s+/g, ' ').includes(normalized));
+}
+
+function evidenceDate(item: UnderstandingSourceItem): string | undefined {
+  const timestamp = item.occurredAt ?? item.modifiedAt;
+  return timestamp == null ? undefined : new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function durableConnectedEvidence(
+  candidate: ConnectedPortraitCandidate,
+  itemsByRef: Map<string, UnderstandingSourceItem>,
+): UnderstandingSourceItem[] {
+  if (candidate.confidence !== 'high') return [];
+  const items = [...new Set(candidate.evidenceRefs ?? [])]
+    .flatMap((ref) => itemsByRef.get(ref) ?? []);
+  if (items.some((item) => item.ownerAttribution !== 'user')) return [];
+  const required = candidate.category === 'routine' ? 3 : 2;
+  const dates = new Set(items.map(evidenceDate).filter((value): value is string => Boolean(value)));
+  return items.length >= required && dates.size >= required ? items : [];
 }
 
 export async function deriveConnectedSourceUnderstanding(input: {
@@ -139,28 +154,31 @@ export async function deriveConnectedSourceUnderstanding(input: {
   }
   try {
     const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
-  const rawTexts = items.flatMap((item) => item.text ? [item.text] : []);
-  const profileCandidates = analysis.profileCandidates
-    .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawTexts));
-  const sourceItemIds = [...new Set([
-    ...profileCandidates.flatMap((candidate) => candidate.evidenceRefs ?? []),
-    ...analysis.workThreadCandidates.flatMap((candidate) => candidate.evidenceRefs),
-  ].map((ref) => ref.startsWith('knowledge-source://') ? ref.slice('knowledge-source://'.length) : ''))]
-    .filter(Boolean)
-    .slice(0, 20);
-    const reviewed = profileCandidates.length
-      ? await input.memoryManager.applyUnderstandingCandidates(
-        profileCandidates.map(understandingCandidate),
+    const rawTexts = items.flatMap((item) => item.text ? [item.text] : []);
+    const itemsByRef = new Map(items.map((item) => [item.evidenceRef, item]));
+    const profileCandidates = analysis.profileCandidates
+      .filter(isConnectedPortraitCandidate)
+      .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawTexts)
+        && durableConnectedEvidence(candidate, itemsByRef).length > 0);
+    const reviewed = { created: 0, writeOutputs: [] as Array<{
+      candidateKey: string; objectId?: string; versionId?: string; outcome: 'created' | 'deduplicated' | 'rejected';
+    }> };
+    for (const candidate of profileCandidates) {
+      const evidenceItems = durableConnectedEvidence(candidate, itemsByRef);
+      const applied = await input.memoryManager.applyUnderstandingCandidates(
+        [understandingCandidate(candidate)],
         {
           agentId: input.agentId,
-          sourceItemIds,
+          sourceItemIds: evidenceItems.map((item) => item.id).slice(0, 20),
           sourceText: 'Bounded semantic synthesis from explicitly connected work sources.',
           source: { provider: 'connected-sources', sourceInstanceId: input.sourceInstanceId },
           reviewSource: 'background',
           extractionRunId: extraction.run.id,
         },
-      )
-      : { created: 0, writeOutputs: [] };
+      );
+      reviewed.created += applied.created;
+      reviewed.writeOutputs.push(...(applied.writeOutputs ?? []));
+    }
     const focuses = analysis.workThreadCandidates
     .filter((candidate) => !hasLongVerbatimOverlap(candidate.title, rawTexts)
       && !hasLongVerbatimOverlap(candidate.summary, rawTexts))

@@ -188,7 +188,7 @@ export class AgentOrchestrator {
         }
       })();
 
-      const understandingReview = await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
+      const understandingReview = await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory, turnId);
       if (understandingReview?.createdRecords.length) {
         const captured = understandingReview.createdRecords.filter((record) => record.status === 'active');
         const candidates = understandingReview.createdRecords.filter((record) => record.status === 'candidate');

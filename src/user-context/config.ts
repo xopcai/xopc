@@ -74,6 +74,7 @@ export const UserMemoryConfigSchema = z
 export const UserUnderstandingConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
+    processingPolicy: z.enum(['local_only', 'remote_allowed']).default('remote_allowed'),
     adaptiveCadence: z.boolean().default(true),
     reviewIntervalTurns: z.number().int().min(1).max(1_000).default(10),
     maxHistoryMessages: z.number().int().min(1).max(200).default(80),
@@ -82,6 +83,7 @@ export const UserUnderstandingConfigSchema = z
   .strict()
   .default({
     enabled: true,
+    processingPolicy: 'remote_allowed',
     adaptiveCadence: true,
     reviewIntervalTurns: 10,
     maxHistoryMessages: 80,
@@ -158,6 +160,7 @@ export const UserContextConfigSchema = z
     memory: { mode: 'confirmWrite', sources: ['session', 'understanding'], writePolicy: { understanding: 'confirm' } },
     understanding: {
       enabled: true,
+      processingPolicy: 'remote_allowed',
       adaptiveCadence: true,
       reviewIntervalTurns: 10,
       maxHistoryMessages: 80,

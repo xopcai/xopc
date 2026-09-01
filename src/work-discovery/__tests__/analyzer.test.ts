@@ -123,6 +123,7 @@ describe('work discovery analyzer', () => {
         contextQuestion: 'Which milestone matters now?',
         profileCandidates: [{
           category: 'role',
+          factKey: 'role:typescript-maintainer',
           statement: 'Maintains this TypeScript product.',
           confidence: 'high',
           evidence: ['Recent work repeatedly attributes maintenance decisions to the user.'],
@@ -154,6 +155,7 @@ describe('work discovery analyzer', () => {
     const parsed = JSON.parse(validAnalysisJson()) as Record<string, unknown>;
     parsed.profileCandidates = [{
       category: 'routine',
+      factKey: 'routine:project-notes',
       statement: 'Maintains current project notes in the repository.',
       confidence: 'medium',
       evidence: ['README.md contains current project notes.'],
@@ -175,6 +177,7 @@ describe('work discovery analyzer', () => {
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: [{
           category: 'routine',
+          factKey: 'routine:project-note-review',
           statement: 'Reviews recent project notes regularly.',
           confidence: 'high',
           evidence: ['A recent project note was found.'],
@@ -211,11 +214,11 @@ describe('work discovery analyzer', () => {
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: [
           {
-            category: 'technology', statement: 'Uses TypeScript.', confidence: 'high',
+            category: 'technology', factKey: 'technology:typescript', statement: 'Uses TypeScript.', confidence: 'high',
             evidence: ['package.json'], evidenceRefs: [evidenceRef],
           },
           {
-            category: 'focus', statement: 'Is fixing the current build.', confidence: 'high',
+            category: 'focus', factKey: 'focus:current-build', statement: 'Is fixing the current build.', confidence: 'high',
             evidence: ['Recent changes'], evidenceRefs: [evidenceRef],
           },
         ],
@@ -239,6 +242,7 @@ describe('work discovery analyzer', () => {
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: Array.from({ length: 7 }, (_, index) => ({
           category: 'responsibility',
+          factKey: `responsibility:${index + 1}`,
           statement: `Supported user responsibility ${index + 1}`,
           confidence: 'high',
           evidence: [`Evidence ${index + 1}`],
@@ -279,6 +283,7 @@ describe('work discovery analyzer', () => {
         content: [{ type: 'text', text: JSON.stringify({
           profileCandidates: [{
             category: 'routine',
+            factKey: 'routine:calendar-planning',
             statement: 'Plans work from calendar commitments.',
             confidence: 'medium',
             evidence: ['A current calendar commitment was found.'],
@@ -312,7 +317,8 @@ describe('work discovery analyzer', () => {
     const resultFor = (ref: string, statement: string) => ({
       content: [{ type: 'text', text: JSON.stringify({
         profileCandidates: [{
-          category: 'responsibility', statement, confidence: 'medium', evidence: ['Supported item.'], evidenceRefs: [ref],
+          category: 'responsibility', factKey: `responsibility:${ref.endsWith('1') ? 'first' : 'second'}`,
+          statement, confidence: 'medium', evidence: ['Supported item.'], evidenceRefs: [ref],
         }],
         workThreads: [],
       }) }],

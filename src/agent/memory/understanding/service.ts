@@ -4,21 +4,15 @@ import {
   createTemporalAssertion,
   createContextEvidence,
   createUnderstanding,
-  finishContextExtractionRun,
   getUnderstanding,
   getContextExtractionRun,
   isUnderstandingSuppressed,
   linkUnderstandingEvidence,
   linkContextObjects,
-  listContextExtractionOutputs,
   listUnderstandings,
   setUnderstandingStatus,
 } from '../../../storage/sqlite/index.js';
-import {
-  claimRegisteredExtraction,
-  extractionInputHash,
-  getRegisteredExtractorDefinition,
-} from '../../../user-context/extraction/registry.js';
+import { getRegisteredExtractorDefinition } from '../../../user-context/extraction/registry.js';
 import type { UnderstandingKind, UserContextScope } from '../../../user-context/domain.js';
 import {
   canonicalUnderstandingKey,
@@ -26,24 +20,9 @@ import {
   findDuplicateUnderstanding,
 } from '../../../user-context/understanding.js';
 import { inferMemorySensitivity, redactSensitiveMemoryText } from '../sensitivity.js';
-import { extractExplicitUnderstandingCorrectionContent } from './correction.js';
 import type { UnderstandingCandidate, UnderstandingReviewResult } from './types.js';
 
 const MAX_CANDIDATE_CHARS = 600;
-const EXPLICIT_PATTERNS = [
-  /\b(?:please\s+)?remember(?:\s+that)?\s+(.+)/i,
-  /\bkeep\s+in\s+mind(?:\s+that)?\s+(.+)/i,
-  /(?:请)?记住[：:\s]*(.+)/,
-];
-const HIGH_SIGNAL_PATTERNS = [
-  /(?:从现在起|今后|以后)(?:都)?(?:请)?[：:\s]*(.+)/,
-  /下次(?:请)?[：:\s]*(.+)/,
-  /(?:默认|每次|每回)(?:都)?(?:请)?[：:\s]*(.+)/,
-  /((?:我|本人)(?:一直|通常|一般|更)?(?:喜欢|偏好|习惯|希望|不希望|不喜欢).+)/,
-  /\b(?:from now on|going forward|next time|by default|whenever)\b[,:\s]*(.+)/i,
-  /(\bi\s+(?:always|usually|generally)\s+(?:prefer|like|want|need|avoid)\b.+)/i,
-  /(\bi\s+(?:prefer|like|want|need)\s+.+\s+(?:every time|by default|going forward)\b.*)/i,
-];
 const SENSITIVITY_RANK = { normal: 0, personal: 1, secret: 2, regulated: 3 } as const;
 
 function effectiveSensitivity(
@@ -64,59 +43,6 @@ function candidateTime(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function inferKind(content: string): UnderstandingKind {
-  if (/\b(don't|do not|never|avoid)\b/i.test(content) || /不要|不用|无需|别再|禁止|底线/.test(content)) return 'boundary';
-  if (/\b(prefer|preference|like)\b/i.test(content) || /喜欢|偏好|习惯/.test(content)) return 'preference';
-  if (/\b(project|repo|codebase|workspace)\b/i.test(content) || /项目|仓库|代码库/.test(content)) return 'project_context';
-  if (/\b(goal|plan|deadline)\b/i.test(content) || /目标|计划|截止/.test(content)) return 'long_term_goal';
-  if (/\b(next time|lesson|failed|error)\b/i.test(content) || /教训|失败|错误/.test(content)) return 'task_lesson';
-  if (/习惯|每周|每天|usually|routine/i.test(content)) return 'routine';
-  return 'current_state';
-}
-
-export function extractExplicitUnderstandingCandidates(userContent: string): UnderstandingCandidate[] {
-  const correction = extractExplicitUnderstandingCorrectionContent(userContent);
-  const matched = correction ?? userContent.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    .flatMap((line) => EXPLICIT_PATTERNS.map((pattern) => pattern.exec(line)?.[1] ?? ''))
-    .map(normalizeContent)
-    .find((content) => content.length >= 8);
-  if (!matched) return [];
-  const content = normalizeContent(matched);
-  const kind = inferKind(content);
-  return [{
-    kind,
-    content,
-    canonicalKey: canonicalUnderstandingKey(kind, content),
-    confidence: correction ? 0.98 : 0.95,
-    importance: kind === 'boundary' ? 0.9 : 0.8,
-    explicitness: 'explicit',
-    durability: 'durable',
-    sensitivity: inferMemorySensitivity(content),
-    disclosurePolicy: kind === 'boundary' ? 'silent' : 'referenceable',
-  }];
-}
-
-export function extractHighSignalUnderstandingCandidates(userContent: string): UnderstandingCandidate[] {
-  if (extractExplicitUnderstandingCorrectionContent(userContent)) return [];
-  const matched = userContent.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    .flatMap((line) => HIGH_SIGNAL_PATTERNS.map((pattern) => pattern.exec(line)?.[1] ?? ''))
-    .map(normalizeContent)
-    .find((content) => content.length >= 6);
-  if (!matched) return [];
-  const kind = inferKind(matched);
-  return [{
-    kind,
-    content: matched,
-    canonicalKey: canonicalUnderstandingKey(kind, matched),
-    confidence: 0.85,
-    importance: kind === 'boundary' ? 0.9 : 0.75,
-    explicitness: 'observed',
-    durability: 'durable',
-    sensitivity: inferMemorySensitivity(matched),
-    disclosurePolicy: kind === 'boundary' ? 'silent' : 'referenceable',
-  }];
-}
-
 function scopeForCandidate(candidate: UnderstandingCandidate, context: {
   sessionKey?: string;
   workspaceId?: string;
@@ -131,106 +57,6 @@ function scopeForCandidate(candidate: UnderstandingCandidate, context: {
 }
 
 export class UserUnderstandingService {
-  async reviewTurn(params: {
-    userContent: string;
-    assistantContent: string;
-    sessionKey?: string;
-    turnId?: string;
-    workspaceId?: string;
-    projectId?: string;
-    correctionTargetRecordIds?: string[];
-  }): Promise<UnderstandingReviewResult> {
-    void params.assistantContent;
-    const explicitCandidates = extractExplicitUnderstandingCandidates(params.userContent);
-    const candidates = explicitCandidates.length > 0
-      ? explicitCandidates
-      : extractHighSignalUnderstandingCandidates(params.userContent);
-    const turnRef = params.turnId ?? `untracked-${extractionInputHash(params.userContent).slice(0, 16)}`;
-    const extraction = claimRegisteredExtraction({
-      extractorId: explicitCandidates.length > 0 ? 'explicit-command' : 'deterministic-signal',
-      sourceRef: params.sessionKey
-        ? `session:${params.sessionKey}:turn:${turnRef}`
-        : `turn:${turnRef}`,
-      contentForHash: params.userContent,
-      processingPolicy: 'local_only',
-      destination: 'deterministic',
-    });
-    if (!extraction.shouldExecute) {
-      const previous = listContextExtractionOutputs(extraction.run.id);
-      return {
-        proposed: candidates.length, created: 0,
-        deduplicated: previous.filter((output) => output.outcome !== 'rejected').length,
-        rejected: previous.filter((output) => output.outcome === 'rejected').length,
-        createdRecords: [],
-      };
-    }
-    if (candidates.length === 0) {
-      finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs: [] });
-      return { proposed: 0, created: 0, deduplicated: 0, rejected: 0, createdRecords: [] };
-    }
-    const safeCandidates = candidates.filter((candidate) => {
-      const content = normalizeContent(candidate.content);
-      const sensitivity = effectiveSensitivity(candidate.sensitivity, content);
-      return sensitivity !== 'secret' && sensitivity !== 'regulated';
-    });
-    if (!safeCandidates.length) {
-      finishContextExtractionRun({
-        runId: extraction.run.id, status: 'completed',
-        outputs: candidates.map((candidate) => ({
-          candidateKey: candidate.canonicalKey ?? canonicalUnderstandingKey(candidate.kind, candidate.content),
-          outcome: 'rejected',
-        })),
-      });
-      return { proposed: candidates.length, created: 0, deduplicated: 0, rejected: candidates.length, createdRecords: [] };
-    }
-    const evidence = createContextEvidence({
-      sourceType: 'conversation',
-      sourceRef: params.sessionKey
-        ? `session:${params.sessionKey}:turn:${turnRef}`
-        : `turn:${turnRef}`,
-      sourceRunId: extraction.run.id,
-      ...(params.sessionKey ? { sessionId: params.sessionKey } : {}),
-      turnId: turnRef,
-      contentHash: extractionInputHash(params.userContent),
-      retentionPolicy: 'derived_only',
-      processingPolicy: 'local_only',
-      extractorId: extraction.run.extractorId,
-      extractorVersion: extraction.run.extractorVersion,
-      redactedExcerpt: redactSensitiveMemoryText(safeCandidates.map((candidate) => candidate.content).join('\n'))
-        .slice(0, MAX_CANDIDATE_CHARS),
-      trustLevel: 'owner',
-      observedAt: Date.now(),
-    });
-    let result: Awaited<ReturnType<UserUnderstandingService['applyCandidates']>>;
-    try {
-      result = await this.applyCandidates(safeCandidates, {
-        sessionKey: params.sessionKey,
-        workspaceId: params.workspaceId,
-        projectId: params.projectId,
-        evidenceIds: [evidence.id],
-        reviewSource: 'turn',
-        supersedesRecordIds: params.correctionTargetRecordIds,
-        extractionRunId: extraction.run.id,
-      });
-    } catch (error) {
-      finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'write_failed' });
-      throw error;
-    }
-    finishContextExtractionRun({
-      runId: extraction.run.id, status: 'completed',
-      outputs: result.writeOutputs?.map((output) => ({
-        candidateKey: output.candidateKey, objectType: output.objectId ? 'understanding' : undefined,
-        objectId: output.objectId, versionId: output.versionId, outcome: output.outcome,
-      })) ?? [],
-    });
-    return {
-      ...result,
-      proposed: candidates.length,
-      rejected: result.rejected + candidates.length - safeCandidates.length,
-      sourceItemId: evidence.id,
-    };
-  }
-
   async applyCandidates(candidates: UnderstandingCandidate[], context: {
     sessionKey?: string;
     workspaceId?: string;
@@ -356,7 +182,9 @@ export class UserUnderstandingService {
         const closedAt = record.validFrom ?? Date.now();
         closeUnderstandingValidity(supersededId, closedAt);
         closeTemporalAssertions({ objectType: 'understanding', objectId: supersededId, validTo: closedAt });
-        setUnderstandingStatus(supersededId, 'archived');
+        setUnderstandingStatus(supersededId, 'archived', {
+          actorType: 'user', source: 'semantic-memory-superseded',
+        });
       }
       const assertionType = record.kind === 'current_state' ? 'current_state'
         : record.kind === 'routine' ? 'routine'

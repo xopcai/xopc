@@ -124,6 +124,7 @@ describe('work discovery repository', () => {
           id: 'candidate-1',
           understandingId: record.id,
           category: 'role',
+          factKey: 'role:typescript-builder',
           statement: record.statement,
           confidence: 'high',
           evidence: ['package.json'],

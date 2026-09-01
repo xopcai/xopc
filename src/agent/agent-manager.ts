@@ -83,6 +83,8 @@ import { UserContextCoordinator } from './memory/user-context-coordinator.js';
 import type { UserContextPlan } from './memory/context/types.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
+import { runTurnUnderstandingReview } from './background-review/run-background-review.js';
+import { parseSessionKey } from '../routing/session-key.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { checkBoundary } from '../agent-runtime/boundary-guard.js';
 import { mcpToolPolicyId, resolveMcpToolPolicy } from './mcp/bundle-mcp-policy.js';
@@ -315,7 +317,6 @@ export class AgentManager implements AgentInstanceGateway {
     this.userContext = new UserContextCoordinator({
       getConfig: () => this.config.config,
       isEnabledForSession: (sessionKey) => this.isUserContextEnabledForSession(sessionKey),
-      getAgentIdForSession: (sk) => this.agents.get(sk)?.effectiveProfile.agentId ?? 'main',
       getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
       getProjectIdForSession: (sk) => getSessionMetadata(sk)?.projectId,
       getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
@@ -525,8 +526,21 @@ export class AgentManager implements AgentInstanceGateway {
    * After a completed turn: sync external providers and queue next-turn prefetch.
    * Delegates to {@link UserContextCoordinator}.
    */
-  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<import('./memory/understanding/types.js').UnderstandingReviewResult | undefined> {
-    return this.userContext.afterTurn(sessionKey, userPlainText);
+  async afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('./memory/understanding/types.js').UnderstandingReviewResult | undefined> {
+    await this.userContext.afterTurn(sessionKey, userPlainText);
+    if (!this.isUserContextEnabledForSession(sessionKey)) return undefined;
+    const parsed = parseSessionKey(sessionKey);
+    if (parsed && parsed.peerKind !== 'direct') return undefined;
+    const instance = this.agents.get(sessionKey);
+    if (!instance) return undefined;
+    return runTurnUnderstandingReview({
+      sessionKey,
+      turnId,
+      userText: userPlainText,
+      mainAgent: instance.agent,
+      memoryManager: this.getMemoryManagerForSession(sessionKey),
+      getConfig: () => this.mergedConfig(),
+    });
   }
 
   /**
