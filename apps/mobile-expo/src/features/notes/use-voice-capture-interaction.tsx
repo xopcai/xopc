@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { PanResponder } from 'react-native';
+import { useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { AppToast } from '../../components/AppToast';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_LONG } from '../../constants/toast';
 import { refineVoiceTranscript, transcribeVoice } from '../../api/agent-client';
 import { useMessages } from '../../i18n/messages';
-import { useTheme } from '../../theme';
 import {
-  VoiceRecordingOverlay,
+  hapticVoiceCancel,
+  hapticVoiceSend,
+  hapticVoiceStart,
+  hapticVoiceZoneChange,
+} from '../../motion/haptics';
+import {
+  VoiceRecordingCard,
   type VoiceRecordingZone,
-} from '../chat/VoiceRecordingOverlay';
+} from '../chat/VoiceRecordingCard';
 import {
   beginRecording,
   classifyVoiceTranscriptionFailure,
@@ -74,9 +80,8 @@ export function useVoiceCaptureInteraction({
   active: boolean;
   transcribing: boolean;
 } {
-  const { isDark } = useTheme();
   const { chat: cm } = useMessages();
-  const [hudOpen, setHudOpen] = useState(false);
+  const [recordingActive, setRecordingActive] = useState(false);
   const [voiceZone, setVoiceZone] = useState<VoiceRecordingZone>('center');
   const [meterSamples, setMeterSamples] = useState<number[]>([]);
   const [durationMillis, setDurationMillis] = useState(0);
@@ -97,6 +102,7 @@ export function useVoiceCaptureInteraction({
   const finalizeRef = useRef<() => void>(() => {});
   const valueRef = useRef(value);
   const mountedRef = useRef(true);
+  const voiceDragX = useSharedValue(0);
   valueRef.current = value;
 
   useEffect(() => () => {
@@ -119,11 +125,12 @@ export function useVoiceCaptureInteraction({
     interactionStartedRef.current = false;
     maxDurationReachedRef.current = false;
     setStarting(false);
-    setHudOpen(false);
+    setRecordingActive(false);
     setVoiceZone('center');
     setMeterSamples([]);
     setDurationMillis(0);
-  }, []);
+    voiceDragX.value = withTiming(0, { duration: 140 });
+  }, [voiceDragX]);
 
   const ensureMicAccess = useCallback(async (): Promise<boolean> => {
     try {
@@ -152,6 +159,7 @@ export function useVoiceCaptureInteraction({
 
     if (shouldDiscard) {
       await discardRecording(rec);
+      hapticVoiceCancel();
       onSettled?.();
       return;
     }
@@ -226,6 +234,7 @@ export function useVoiceCaptureInteraction({
     }
 
     onVoiceCapture({ uri, durationMillis, mimeType });
+    hapticVoiceSend();
     onSettled?.();
   }, [cm, onChangeText, onSettled, onTextReady, onVoiceCapture, resetInteractionState]);
   finalizeRef.current = () => void finalizeRecordingInteraction();
@@ -281,7 +290,8 @@ export function useVoiceCaptureInteraction({
         readyRef.current = true;
         grantInFlightRef.current = false;
         setStarting(false);
-        setHudOpen(true);
+        setRecordingActive(true);
+        hapticVoiceStart();
       } catch (error) {
         if (!mountedRef.current) return;
         reportVoiceFailure('start', error);
@@ -340,12 +350,16 @@ export function useVoiceCaptureInteraction({
         },
         onPanResponderMove: (_, g) => {
           if (!interactionStartedRef.current) return;
+          voiceDragX.value = g.dx;
           const zone = voiceZoneFromGesture(g.dx);
+          if (releaseZoneRef.current === zone) return;
+          hapticVoiceZoneChange();
           cancelZoneRef.current = zone === 'cancel';
           releaseZoneRef.current = zone;
           setVoiceZone(zone);
         },
         onPanResponderRelease: () => {
+          voiceDragX.value = withTiming(0, { duration: 140 });
           if (longPressTimerRef.current) {
             clearTimeout(longPressTimerRef.current);
             longPressTimerRef.current = null;
@@ -360,6 +374,7 @@ export function useVoiceCaptureInteraction({
           void finalizeRecordingInteraction();
         },
         onPanResponderTerminate: () => {
+          voiceDragX.value = withTiming(0, { duration: 140 });
           if (longPressTimerRef.current) {
             clearTimeout(longPressTimerRef.current);
             longPressTimerRef.current = null;
@@ -377,24 +392,34 @@ export function useVoiceCaptureInteraction({
         },
         onPanResponderTerminationRequest: () => false,
       }),
-    [canCaptureVoice, finalizeRecordingInteraction, longPressDelayMs, onTap, startGrantFlow],
+    [canCaptureVoice, finalizeRecordingInteraction, longPressDelayMs, onTap, startGrantFlow, voiceDragX],
   );
 
   return {
     feedback: (
       <>
-        <VoiceRecordingOverlay
-          visible={hudOpen || transcribing}
+        <VoiceRecordingCard
+          visible={starting || recordingActive || transcribing}
+          stage={transcribing ? 'transcribing' : starting ? 'starting' : 'recording'}
           zone={voiceZone}
-          transcribing={transcribing}
           meterSamples={meterSamples}
           durationMillis={durationMillis}
-          centerHint={cm.voiceReleaseCenterHint}
+          centerHint={cm.voiceReleaseCenterSimpleHint}
           textHint={cm.voiceReleaseTextHint}
-          textGlyph={cm.voiceTextGlyph}
           cancelHint={cm.voiceReleaseCancelHint}
+          lockHint={cm.voiceReleaseLockHint}
+          startingLabel={cm.voiceStarting}
+          lockedLabel={cm.voiceLocked}
+          reviewLabel={cm.voiceReview}
           transcribingLabel={cm.voiceTranscribing}
-          isDark={isDark}
+          sendingLabel={cm.voiceSending}
+          deleteLabel={cm.voiceDelete}
+          stopLabel={cm.voiceStop}
+          convertTextLabel={cm.voiceConvertToText}
+          sendLabel={cm.send}
+          playLabel={cm.audioPlay}
+          pauseLabel={cm.audioPause}
+          dragX={voiceDragX}
         />
         <AppToast
           visible={Boolean(snack)}
@@ -409,7 +434,7 @@ export function useVoiceCaptureInteraction({
     panHandlers: panResponder.panHandlers,
     onPress: handlePress,
     prepare,
-    active: starting || hudOpen || transcribing,
+    active: starting || recordingActive || transcribing,
     transcribing,
   };
 }

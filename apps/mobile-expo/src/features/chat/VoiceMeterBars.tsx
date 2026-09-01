@@ -4,7 +4,7 @@
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-const BAR_COUNT = 36;
+const BAR_COUNT = 28;
 
 export const VoiceMeterBars = memo(function VoiceMeterBars({
   samples,

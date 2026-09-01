@@ -104,6 +104,7 @@ describe('canSendComposerDraft', () => {
 
 describe('estimateComposerInputHeight', () => {
   it('keeps short drafts at the compact height', () => {
+    expect(MIN_COMPOSER_INPUT_HEIGHT).toBe(40);
     expect(estimateComposerInputHeight('hi', 320)).toBe(MIN_COMPOSER_INPUT_HEIGHT);
   });
 
