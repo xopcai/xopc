@@ -1,8 +1,8 @@
 import type { Config } from '../config/schema.js';
 import { getConnectorDefinition } from './catalog.js';
-import { isManagedConnectorServer } from './materialize.js';
+import { connectorDefinitionFromManagedMarker, isManagedConnectorServer } from './materialize.js';
 import { getConnectorAuditFromMarker, getConnectorUsageFromMarker } from './usage.js';
-import type { ConnectorInstance } from './types.js';
+import type { ConnectorDefinition, ConnectorInstance } from './types.js';
 
 function readMarkerConfig(marker: unknown): Record<string, unknown> | undefined {
   if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return undefined;
@@ -14,7 +14,8 @@ function readMarkerConfig(marker: unknown): Record<string, unknown> | undefined 
 
 function secretStatusForServer(server: Record<string, unknown>): Record<string, boolean> {
   const marker = server.xopcConnector as { connectorId?: string } | undefined;
-  const definition = marker?.connectorId ? getConnectorDefinition(marker.connectorId) : undefined;
+  const definition = connectorDefinitionFromManagedMarker(marker)
+    ?? (marker?.connectorId ? getConnectorDefinition(marker.connectorId) : undefined);
   const env = server.env && typeof server.env === 'object' && !Array.isArray(server.env)
     ? (server.env as Record<string, unknown>)
     : {};
@@ -37,7 +38,7 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
   const markerRecord = marker as Record<string, unknown>;
   if (markerRecord.managed !== true || typeof markerRecord.connectorId !== 'string') return [];
   const connectorId = markerRecord.connectorId;
-  const definition = getConnectorDefinition(connectorId);
+  const definition = connectorDefinitionFromManagedMarker(markerRecord) ?? getConnectorDefinition(connectorId);
   const runtime = record.runtime && typeof record.runtime === 'object' && !Array.isArray(record.runtime)
     ? record.runtime as Record<string, unknown>
     : {};
@@ -90,7 +91,7 @@ export function listConnectorInstances(config: Config): ConnectorInstance[] {
         return [];
       }
       const connectorId = server.xopcConnector.connectorId;
-      const definition = getConnectorDefinition(connectorId);
+      const definition = connectorDefinitionFromManagedMarker(server.xopcConnector) ?? getConnectorDefinition(connectorId);
       const enabled = server.xopcConnector.enabled !== false;
       const usage = getConnectorUsageFromMarker(server.xopcConnector);
       const lastHealthStatus = usage.lastHealthStatus;
@@ -145,4 +146,22 @@ export function listConnectorInstances(config: Config): ConnectorInstance[] {
 
 export function getConnectorInstance(config: Config, instanceId: string): ConnectorInstance | undefined {
   return listConnectorInstances(config).find((instance) => instance.instanceId === instanceId);
+}
+
+export function getInstalledConnectorDefinition(config: Config, instanceId: string): ConnectorDefinition | undefined {
+  const server = config.mcp?.servers?.[instanceId];
+  if (server && isManagedConnectorServer(server)) {
+    return connectorDefinitionFromManagedMarker(server.xopcConnector)
+      ?? getConnectorDefinition(server.xopcConnector.connectorId);
+  }
+  const record = config.connectors?.instances?.[instanceId];
+  if (record && typeof record === 'object' && !Array.isArray(record)) {
+    const marker = (record as Record<string, unknown>).xopcConnector;
+    const connectorId = marker && typeof marker === 'object' && !Array.isArray(marker)
+      ? (marker as Record<string, unknown>).connectorId
+      : undefined;
+    return connectorDefinitionFromManagedMarker(marker)
+      ?? (typeof connectorId === 'string' ? getConnectorDefinition(connectorId) : undefined);
+  }
+  return undefined;
 }

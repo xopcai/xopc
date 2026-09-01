@@ -29,6 +29,8 @@ Use the extension's settings page when available. Otherwise follow the fields sh
 
 Keep secrets in the supported credential or environment mechanism. Do not copy a publisher's example values without checking which permissions and external services they enable.
 
+An Extension that builds workflows or UI on top of external services declares `connectorDependencies` in `xopc.extension.json`. Install and authorize those Connectors separately from the Connector Store. Extensions cannot embed raw MCP configuration or own OAuth tokens.
+
 ## Update or disable
 
 ```bash

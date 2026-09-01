@@ -180,6 +180,12 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
     main: typeof raw.main === 'string' ? raw.main : undefined,
     configSchema: isRecord(raw.configSchema) ? (raw.configSchema as Record<string, unknown>) : undefined,
     dependencies: isRecord(raw.dependencies) ? (raw.dependencies as Record<string, string>) : undefined,
+    connectorDependencies: Array.isArray(raw.connectorDependencies)
+      ? [...new Set(raw.connectorDependencies
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean))]
+      : undefined,
 
     enabledByDefault: typeof raw.enabledByDefault === 'boolean' ? raw.enabledByDefault : undefined,
 

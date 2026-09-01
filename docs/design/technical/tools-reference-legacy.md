@@ -27,7 +27,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 
 Extensions may add tools to the external catalog, but not to the model-visible tool list.
 
-**MCP tools:** Cataloged on demand from `mcp.servers` (and extension `.mcp.json` manifests). Agent policy can still deny a server or a stable tool policy id. See [MCP](mcp.md).
+**MCP tools:** Cataloged on demand from `mcp.servers`. Installed Connectors materialize their managed server there; Extensions may declare `connectorDependencies` but cannot inject MCP configuration. Agent policy can still deny a server or a stable tool policy id. See [MCP](mcp.md).
 
 **Conditionally enabled:** Some capabilities need explicit settings or agent policy: e.g. `session_search` needs session persistence; `web_extract` can use `XOPC_WEB_EXTRACT_MODEL`; skills write policy is `skills.agentWritePolicy`; skill discovery can be gated with `skills.toolGating` and metadata. For skills CLI (`xopc skills hub …`), see [Skills](skills.md).
 

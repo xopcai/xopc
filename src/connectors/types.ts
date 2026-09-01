@@ -23,7 +23,7 @@ export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth';
 export type ConnectorAuthDefinition =
   | { mode: 'none' }
   | { mode: 'apiKey' }
-  | { mode: 'oauth'; provider: string };
+  | { mode: 'oauth'; provider?: string; clientId?: string };
 
 export type ConnectorScope = 'read' | 'write' | 'admin';
 
@@ -342,4 +342,6 @@ export type ManagedConnectorMarker = {
   config?: Record<string, unknown>;
   source?: ConnectorDefinition['source'];
   artifactSha256?: string;
+  /** Immutable install-time snapshot used for update, health, and uninstall after restart. */
+  definition?: ConnectorDefinition;
 };

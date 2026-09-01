@@ -12,7 +12,7 @@ XOPC supports **outbound bundle-MCP**: the agent connects to external MCP server
 - [Gateway console (Web UI)](#gateway-console-web-ui)
 - [Gateway REST API](#gateway-rest-api)
 - [Inbound channel bridge](#inbound-channel-bridge)
-- [Extension MCP manifests](#extension-mcp-manifests)
+- [Extension Connector dependencies](#extension-connector-dependencies)
 - [Lifecycle](#lifecycle)
 - [Security notes](#security-notes)
 - [Related docs](#related-docs)
@@ -34,7 +34,7 @@ XOPC supports **outbound bundle-MCP**: the agent connects to external MCP server
 | **SSE** | `url` + `transport: "sse"` | Remote MCP over Server-Sent Events |
 | **Streamable HTTP** | `url` + `transport: "streamable-http"` | Remote MCP over streamable HTTP (common for hosted services) |
 
-Extension packages may ship `.mcp.json` manifests; those servers **merge** with user config (same server id → user entry wins).
+Extension packages do not own MCP configuration. They may declare `connectorDependencies`; users install and authorize those Connectors independently.
 
 ---
 
@@ -214,14 +214,15 @@ xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
 
 ---
 
-## Extension MCP manifests
+## Extension Connector dependencies
 
-Extensions can ship `.mcp.json` at the package root. At runtime, XOPC merges extension servers with `mcp.servers` from config:
+Extensions declare required Connector ids in `xopc.extension.json`:
 
-- Same server **name** → user config wins.
-- Different names → both appear; tools are prefixed by each server id.
+```json
+{ "connectorDependencies": ["notion"] }
+```
 
-Restart or hot-reload config after changing extensions or user MCP entries.
+The Extension contributes Skills, workflows, runtime code, or UI. The Connector remains an independently installed and authorized capability. A missing or disabled dependency produces a runtime diagnostic; raw `.mcp.json` files are not loaded.
 
 ---
 

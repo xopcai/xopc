@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
+import { ConfigPersistenceError, persistConfigMutation } from '../../../config/config-mutation.js';
 import type { ConnectorInstallInput } from '../../../connectors/types.js';
 import {
   getStoreConnectorInstallPlan,
@@ -58,21 +59,16 @@ export function registerCapabilityRoutes(authenticated: Hono, deps: Authenticate
     const input: ConnectorInstallInput = body && typeof body === 'object' && !Array.isArray(body)
       ? body as ConnectorInstallInput
       : {};
+    const config = service.currentConfig as Config;
     try {
-      const config = service.currentConfig as Config;
-      const { instance, plan } = await installStoreConnector(
+      const { instance, plan } = await persistConfigMutation({
         config,
-        c.req.param('name'),
-        input,
-        optionalVersion(body),
-      );
-      const saved = await service.saveConfig(config);
-      if (!saved.saved) {
-        return c.json({ ok: false, error: saved.error ?? 'Failed to save connector configuration.' }, 500);
-      }
+        mutate: () => installStoreConnector(config, c.req.param('name'), input, optionalVersion(body)),
+        save: () => service.saveConfig(config),
+      });
       return c.json({ ok: true, payload: { instance, plan } });
     } catch (error) {
-      return c.json({ ok: false, error: errorMessage(error) }, 400);
+      return c.json({ ok: false, error: errorMessage(error) }, error instanceof ConfigPersistenceError ? 500 : 400);
     }
   });
 }
