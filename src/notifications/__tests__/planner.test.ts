@@ -13,6 +13,7 @@ describe('notificationPlanFromGatewayEvent', () => {
       source: 'webchat',
       target: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:one' },
       sessionTitle: 'Research notifications',
+      responsePreview: 'The notification flow is implemented and all tests pass.',
     });
     expect(plan).toMatchObject({
       dedupeKey: 'chat.completed:run-chat',
@@ -20,6 +21,30 @@ describe('notificationPlanFromGatewayEvent', () => {
         type: 'chat.completed',
         target: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:one' },
         title: { en: 'Response ready', zh: '回答已就绪' },
+        body: {
+          en: 'The notification flow is implemented and all tests pass.',
+          zh: 'The notification flow is implemented and all tests pass.',
+        },
+      },
+    });
+  });
+
+  it('keeps failed chat notifications free of response content', () => {
+    const plan = notificationPlanFromGatewayEvent('agent.run.ended', {
+      schemaVersion: 1,
+      runId: 'run-failed',
+      sessionKey: 'agent:main:webchat:default:direct:one',
+      status: 'error',
+      completedAtMs: 1,
+      source: 'webchat',
+      target: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:one' },
+      sessionTitle: 'Research notifications',
+      responsePreview: 'This content must not be shown.',
+    });
+
+    expect(plan).toMatchObject({
+      notification: {
+        type: 'chat.failed',
         body: { en: 'Research notifications', zh: 'Research notifications' },
       },
     });
