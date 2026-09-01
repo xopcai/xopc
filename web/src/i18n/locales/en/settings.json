@@ -1176,6 +1176,26 @@
     "envLabel": "Environment (JSON object)",
     "envHint": "Values may reference ${ENV_VAR}. Dangerous host env keys are filtered at startup.",
     "urlLabel": "Server URL",
+    "authLabel": "Authentication",
+    "authHint": "OAuth uses Authorization Code with PKCE and stores one local account for this endpoint.",
+    "authLabels": {
+      "none": "None / headers",
+      "oauth": "OAuth"
+    },
+    "oauthClientIdLabel": "OAuth client ID",
+    "oauthClientIdHint": "Optional. Leave empty when the server supports dynamic client registration.",
+    "oauthClientIdPlaceholder": "public-client-id",
+    "oauthConnect": "Connect",
+    "oauthDisconnect": "Disconnect",
+    "oauthOpenAuthorization": "Open authorization",
+    "oauthOpenFailed": "Could not open the authorization page. Allow pop-ups or check system browser access, then connect again.",
+    "oauthSaveBeforeTest": "Save this server, connect OAuth, then test it from the server card.",
+    "oauthStatus": {
+      "disconnected": "Not connected",
+      "authorizing": "Authorizing",
+      "connected": "Connected",
+      "error": "Authorization failed"
+    },
     "headersLabel": "Headers",
     "optionalSuffix": "(optional)",
     "headersHint": "Bearer tokens and custom headers for remote MCP servers.",

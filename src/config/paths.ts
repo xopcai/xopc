@@ -93,6 +93,11 @@ export function resolveOAuthPath(provider: string): string {
   return join(resolveCredentialsDir(), 'oauth', `${provider}.json`);
 }
 
+/** Resolve the credential record for one canonical remote MCP endpoint. */
+export function resolveMcpOAuthPath(serverKey: string): string {
+  return join(resolveCredentialsDir(), 'mcp', `${serverKey}.json`);
+}
+
 /**
  * Internal agent state dir: `stateDir/agents/<id>/agent/`
  * (credentials, inbox IPC, pid, agent.json — not the Markdown workspace).

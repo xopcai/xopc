@@ -1144,6 +1144,14 @@ const ConnectorSecretReferenceSchema = z.object({
 
 const McpConfigScalarSchema = z.union([z.string(), z.number(), z.boolean(), ConnectorSecretReferenceSchema]);
 
+export const McpOAuthConfigSchema = z
+  .object({
+    type: z.literal('oauth'),
+    /** Optional public client id for authorization servers without dynamic registration. */
+    clientId: z.string().min(1).optional(),
+  })
+  .strict();
+
 export const McpServerSchema = z
   .object({
     command: z.string().optional(),
@@ -1154,6 +1162,7 @@ export const McpServerSchema = z
     url: McpHttpUrlSchema.optional(),
     transport: z.enum(['sse', 'streamable-http']).optional(),
     headers: z.record(z.string(), McpConfigScalarSchema).optional(),
+    auth: McpOAuthConfigSchema.optional(),
     connectionTimeoutMs: z.number().finite().positive().optional(),
     requestTimeoutMs: z.number().finite().positive().optional(),
   })
@@ -1167,6 +1176,32 @@ export const McpServerSchema = z
         message: 'MCP server cannot define both command and url',
       });
     }
+    if (value.auth && !hasUrl) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['auth'],
+        message: 'MCP OAuth requires an HTTP server URL',
+      });
+    }
+    if (value.auth && value.transport === 'sse') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['auth'],
+        message: 'MCP OAuth currently supports streamable HTTP only',
+      });
+    }
+    if (value.auth && value.headers) {
+      const authorizationHeader = Object.keys(value.headers).find(
+        (key) => key.toLowerCase() === 'authorization',
+      );
+      if (authorizationHeader) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['headers', authorizationHeader],
+          message: 'MCP OAuth cannot be combined with a static Authorization header',
+        });
+      }
+    }
   });
 
 export const McpConfigSchema = z
@@ -1178,6 +1213,7 @@ export const McpConfigSchema = z
   .optional();
 
 export type McpServerConfig = z.infer<typeof McpServerSchema>;
+export type McpOAuthConfig = z.infer<typeof McpOAuthConfigSchema>;
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 
 export const ConnectorsConfigSchema = z
