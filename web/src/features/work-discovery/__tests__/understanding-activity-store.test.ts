@@ -65,6 +65,7 @@ describe('understanding activity store', () => {
         id: 'candidate-1',
         understandingId: 'understanding-1',
         category: 'preference',
+        factKey: 'preference:original-wording',
         statement: 'Original wording',
         confidence: 'high',
         evidence: ['Observed in project notes'],

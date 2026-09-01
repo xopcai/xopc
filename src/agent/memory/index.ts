@@ -11,7 +11,7 @@ export {
   shouldPlanUserContextThisTurn,
 } from './memory-config.js';
 export { MemoryManager } from './manager.js';
-export { UserUnderstandingService, extractExplicitUnderstandingCandidates } from './understanding/service.js';
+export { UserUnderstandingService } from './understanding/service.js';
 export type { UnderstandingCandidate, UnderstandingReviewResult } from './understanding/types.js';
 export { discoverMemoryPlugins } from './plugin-discovery.js';
 export type { MemoryPluginMetadata } from './plugin-discovery.js';

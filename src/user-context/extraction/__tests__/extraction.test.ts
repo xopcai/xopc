@@ -44,14 +44,14 @@ describe('context extraction and reconciliation', () => {
 
   it('claims each source and extractor version once and records policy abstention', () => {
     const first = claimRegisteredExtraction({
-      extractorId: 'deterministic-signal', sourceRef: 'turn:1', contentForHash: 'same input',
-      processingPolicy: 'local_only', destination: 'deterministic',
+      extractorId: 'turn-semantics', sourceRef: 'turn:1', contentForHash: 'same input',
+      processingPolicy: 'remote_allowed', destination: 'remote_model',
     });
     expect(first.shouldExecute).toBe(true);
     finishContextExtractionRun({ runId: first.run.id, status: 'completed' });
     expect(claimRegisteredExtraction({
-      extractorId: 'deterministic-signal', sourceRef: 'turn:1', contentForHash: 'same input',
-      processingPolicy: 'local_only', destination: 'deterministic',
+      extractorId: 'turn-semantics', sourceRef: 'turn:1', contentForHash: 'same input',
+      processingPolicy: 'remote_allowed', destination: 'remote_model',
     }).shouldExecute).toBe(false);
 
     const skipped = claimRegisteredExtraction({
@@ -66,12 +66,25 @@ describe('context extraction and reconciliation', () => {
 
   it('does not repeat writes when the same turn is delivered twice', async () => {
     const service = new UserUnderstandingService();
-    const input = {
-      userContent: 'Please remember that I prefer concise release updates.',
-      assistantContent: 'Understood.', sessionKey: 'session:repeat', turnId: 'turn-repeat',
-    };
-    expect(await service.reviewTurn(input)).toMatchObject({ created: 1 });
-    expect(await service.reviewTurn(input)).toMatchObject({ created: 0, deduplicated: 1 });
+    const claim = claimRegisteredExtraction({
+      extractorId: 'turn-semantics',
+      sourceRef: 'session:session:repeat:turn:turn-repeat',
+      contentForHash: 'Please remember that I prefer concise release updates.',
+      processingPolicy: 'remote_allowed',
+      destination: 'remote_model',
+    });
+    const first = await service.applyCandidates([{
+      ...EXPLICIT, kind: 'preference', content: 'Prefers concise release updates.',
+    }], { extractionRunId: claim.run.id });
+    expect(first).toMatchObject({ created: 1 });
+    finishContextExtractionRun({ runId: claim.run.id, status: 'completed', outputs: first.writeOutputs });
+    expect(claimRegisteredExtraction({
+      extractorId: 'turn-semantics',
+      sourceRef: 'session:session:repeat:turn:turn-repeat',
+      contentForHash: 'Please remember that I prefer concise release updates.',
+      processingPolicy: 'remote_allowed',
+      destination: 'remote_model',
+    }).shouldExecute).toBe(false);
     expect(listUnderstandings()).toHaveLength(1);
     expect(listContextExtractionRuns({ sourceRef: 'session:session:repeat:turn:turn-repeat' })).toHaveLength(1);
   });
@@ -140,7 +153,7 @@ describe('context extraction and reconciliation', () => {
       confidence: 1, statement: 'Prefer concise updates.', createdBy: 'user', changeReason: 'test',
     });
     const extraction = claimRegisteredExtraction({
-      extractorId: 'connector-structural', sourceRef: 'source-run:repair', contentForHash: 'signals',
+      extractorId: 'connector-semantic', sourceRef: 'source-run:repair', contentForHash: 'signals',
       processingPolicy: 'local_only', destination: 'deterministic',
     });
     finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs: [

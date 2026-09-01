@@ -20,10 +20,12 @@ import {
   listCollaborationRules,
   listUnderstandings,
   listUnderstandingEvidence,
+  listUnderstandingStatusEvents,
   recordContextRun,
   rejectUnderstanding,
   reviseCollaborationRule,
   reviseUnderstanding,
+  setUnderstandingStatus,
   updateUserProfile,
 } from '../user-context-repository.js';
 import { summarizeUserUnderstandingQuality } from '../user-context-quality-repository.js';
@@ -94,6 +96,27 @@ describe('structured user context repository', () => {
     expect(isUnderstandingSuppressed(created.canonicalKey, created.scope)).toBe(false);
     expect(rejectUnderstanding(created.id, 'Never infer this again').status).toBe('rejected');
     expect(isUnderstandingSuppressed(created.canonicalKey, created.scope)).toBe(true);
+  });
+
+  it('audits creation, confirmation, and rejection with their actors and sources', () => {
+    const created = createUnderstanding({
+      kind: 'preference', canonicalKey: 'understanding:preference:communication:concise', status: 'candidate',
+      scope: { type: 'global' }, explicitness: 'inferred', durability: 'durable', sensitivity: 'normal',
+      disclosurePolicy: 'referenceable', confidence: 0.8, statement: 'Prefers concise updates.',
+      createdBy: 'runtime', changeReason: 'semantic synthesis',
+    });
+    setUnderstandingStatus(created.id, 'active', {
+      explicitness: 'explicit', confidence: 1, actorType: 'user', source: 'context-review',
+    });
+    rejectUnderstanding(created.id, 'Marked incorrect by user', 'user');
+
+    expect(listUnderstandingStatusEvents(created.id).map((event) => ({
+      from: event.fromStatus, to: event.toStatus, actor: event.actorType, source: event.source,
+    }))).toEqual([
+      { from: 'active', to: 'rejected', actor: 'user', source: 'Marked incorrect by user' },
+      { from: 'candidate', to: 'active', actor: 'user', source: 'context-review' },
+      { from: undefined, to: 'candidate', actor: 'runtime', source: 'create:semantic synthesis' },
+    ]);
   });
 
   it('stores only user-authored collaboration rules and revisions', () => {

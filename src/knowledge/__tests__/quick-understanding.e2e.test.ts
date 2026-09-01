@@ -4,19 +4,14 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { BuiltinMemoryProvider } from '../../agent/memory/builtin-provider.js';
-import { MemoryManager } from '../../agent/memory/manager.js';
 import {
   closeXopcDatabase,
-  listUnderstandingEvidence,
   listUnderstandings,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
 } from '../../storage/sqlite/index.js';
-import { claimRegisteredExtraction } from '../../user-context/extraction/registry.js';
 import { ConnectedKnowledgePipeline } from '../connected-knowledge-pipeline.js';
-import { ConnectedUnderstandingPipeline } from '../connected-understanding-pipeline.js';
 
 describe('quick understanding end to end', () => {
   let stateDir: string;
@@ -33,7 +28,7 @@ describe('quick understanding end to end', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('turns cross-source metadata into reviewable understanding and keyword recall without embeddings', async () => {
+  it('keeps connected activity searchable without promoting it into the user portrait', async () => {
     const base = {
       collectionScope: 'activity',
       authorRole: 'third_party' as const,
@@ -78,24 +73,7 @@ describe('quick understanding end to end', () => {
     const knowledge = new ConnectedKnowledgePipeline({ agentId: 'main', workspaceId: stateDir });
     expect((await knowledge.processPending()).completed).toBe(3);
 
-    const memory = new MemoryManager();
-    memory.addProvider(new BuiltinMemoryProvider());
-    const extraction = claimRegisteredExtraction({
-      extractorId: 'connector-structural', sourceRef: 'test:quick-understanding', contentForHash: 'fixture',
-      processingPolicy: 'local_only', destination: 'deterministic',
-    });
-    const understanding = await new ConnectedUnderstandingPipeline(memory).process('main', extraction.run.id);
-    expect(understanding.created).toBe(1);
-    const project = listUnderstandings().find((item) => item.kind === 'project_context');
-    expect(project).toMatchObject({ status: 'candidate', explicitness: 'inferred' });
-    expect(listUnderstandingEvidence(project!.id).map((item) => item.sourceRef)).toEqual(expect.arrayContaining(
-      stored.map((item) => item.id),
-    ));
-
-    const recalled = await memory.search({ query: 'Atlas launch review', scope: { workspaceId: stateDir } });
-    const itemRecalls = recalled.filter((item) => item.record.id.startsWith('knowledge:'));
-    expect(itemRecalls).toHaveLength(3);
-    expect(new Set(recalled.map((item) => item.record.providerId))).toEqual(new Set(['connected-knowledge']));
-    expect(itemRecalls.every((item) => item.citation.recordId.startsWith('knowledge:'))).toBe(true);
+    expect(stored).toHaveLength(3);
+    expect(listUnderstandings()).toEqual([]);
   });
 });
