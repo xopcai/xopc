@@ -44,6 +44,7 @@ export interface SessionMetadata {
   };
   sessionType?: string;
   customData?: Record<string, unknown>;
+  parentSessionKey?: string;
   sessionId?: string;
   sessionStartedAt?: string;
   lastInteractionAt?: string;
@@ -136,6 +137,18 @@ export interface SessionCreateRequest {
   projectId?: string;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
+}
+
+export interface SessionForkAtTurnRequest {
+  lastTurnId: string;
+}
+
+export interface SessionForkAtTurnResponse {
+  ok: true;
+  sessionKey: string;
+  rowCount: number;
+  lastTurnId: string;
+  session: SessionDetail;
 }
 
 export interface SessionMetadataPatchRequest {
@@ -320,6 +333,16 @@ export const sessionCreateResponseSchema = z
   })
   .passthrough();
 
+export const sessionForkAtTurnResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    sessionKey: z.string().min(1),
+    rowCount: z.number().int().nonnegative(),
+    lastTurnId: z.string().min(1),
+    session: sessionDetailSchema,
+  })
+  .passthrough();
+
 export const sessionActiveRunResponseSchema = z
   .object({
     ok: z.boolean().optional(),
@@ -424,6 +447,10 @@ export function parseSessionCreateResponse(raw: unknown): SessionCreateResponse 
   return sessionCreateResponseSchema.parse(raw) as SessionCreateResponse;
 }
 
+export function parseSessionForkAtTurnResponse(raw: unknown): SessionForkAtTurnResponse {
+  return sessionForkAtTurnResponseSchema.parse(raw) as unknown as SessionForkAtTurnResponse;
+}
+
 export function parseSessionActiveRunResponse(raw: unknown): SessionActiveRunResponse {
   return sessionActiveRunResponseSchema.parse(raw) as SessionActiveRunResponse;
 }
@@ -502,6 +529,10 @@ export function buildSessionDetailPath(
   if (options?.includeTranscriptRows) includeParts.push('transcriptRows');
   const qs = includeParts.length ? `?include=${includeParts.join(',')}` : '';
   return `/api/sessions/${encodeURIComponent(key)}${qs}`;
+}
+
+export function buildSessionForkAtTurnPath(key: string): string {
+  return `/api/sessions/${encodeURIComponent(key)}/fork-at-turn`;
 }
 
 export function buildSessionHistoryPath(

@@ -42,6 +42,32 @@ describe('parseWebchatSessionKeyForCreate', () => {
   });
 });
 
+describe('SessionManager.forkSessionAtTurn', () => {
+  beforeEach(() => mockedApiFetch.mockReset());
+
+  it('posts the stable turn id and returns the server-generated key', async () => {
+    const sourceKey = 'agent:main:webchat:default:direct:source';
+    const targetKey = 'agent:main:webchat:default:direct:generated';
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({
+      ok: true,
+      sessionKey: targetKey,
+      rowCount: 2,
+      lastTurnId: 'turn-1',
+      session: { key: targetKey, messages: [] },
+    }, 201));
+
+    const result = await new SessionManager().forkSessionAtTurn(sourceKey, 'turn-1');
+
+    expect(result.sessionKey).toBe(targetKey);
+    expect(mockedApiFetch).toHaveBeenCalledOnce();
+    expect(mockedApiFetch.mock.calls[0]?.[0]).toContain(
+      `/api/sessions/${encodeURIComponent(sourceKey)}/fork-at-turn`,
+    );
+    expect(JSON.parse(String(mockedApiFetch.mock.calls[0]?.[1]?.body)))
+      .toEqual({ lastTurnId: 'turn-1' });
+  });
+});
+
 describe('SessionManager.ensureSessionExists', () => {
   beforeEach(() => {
     mockedApiFetch.mockReset();

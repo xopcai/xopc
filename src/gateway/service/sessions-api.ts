@@ -11,6 +11,8 @@
  * lifecycle + wiring.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import type { AgentService } from '../../agent/service.js';
 import type { CompactionResult } from '../../agent/memory/compaction.js';
 import { retireSessionMcpRuntimeForSessionKey } from '../../agent/mcp/bundle-mcp-tools.js';
@@ -19,9 +21,11 @@ import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { buildSessionTimeline } from '../../session/transcript-outline.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
-import { collectMediaUrisFromMessages, deleteMediaUris } from '../../media/session-references.js';
+import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
+import { buildSessionKey } from '../../routing/session-key.js';
+import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
 
 function clampWindowSpan(value: number | undefined, fallback: number): number {
   const parsed = Math.trunc(value ?? fallback);
@@ -223,10 +227,12 @@ export class GatewaySessionsApi {
   // ── Lifecycle (delete / rename / tag / pin / archive) ─────────────────
 
   async delete(key: string): Promise<{ deleted: boolean }> {
-    const messages = await this.opts.sessionIndex.loadMessages(key).catch(() => []);
+    const transcriptRows = await this.opts.sessionIndex.getStore()
+      .loadTranscriptHistoryRows(key)
+      .catch(() => []);
     const result = await this.opts.sessionIndex.deleteSession(key);
     if (result) {
-      await deleteMediaUris(collectMediaUrisFromMessages(messages));
+      await deleteMediaUris(collectMediaUrisFromValues(transcriptRows));
       this.opts.getAgentService().evictSessionAgent(key);
       await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
     }
@@ -315,6 +321,56 @@ export class GatewaySessionsApi {
     options: { throughRow?: number } = {},
   ): Promise<{ sessionKey: string; rowCount: number }> {
     return this.opts.sessionIndex.forkSessionRows(key, targetKey, options);
+  }
+
+  async forkAtTurn(
+    sourceKey: string,
+    lastTurnId: string,
+  ): Promise<{
+    sessionKey: string;
+    rowCount: number;
+    lastTurnId: string;
+    session: NonNullable<Awaited<ReturnType<GatewaySessionsApi['getSession']>>>;
+  }> {
+    const source = await this.opts.sessionIndex.getSessionMetadata(sourceKey);
+    if (!source) throw new Error(`Session not found: ${sourceKey}`);
+    if (source.sessionType !== 'chat') {
+      throw new Error('Only chat sessions can be forked');
+    }
+    const normalizedTurnId = lastTurnId.trim();
+    if (!normalizedTurnId) throw new Error('lastTurnId is required');
+    if (this.opts.getActiveWebchatRunId(sourceKey)?.trim() === normalizedTurnId) {
+      throw new Error('Cannot fork a turn that is still running');
+    }
+
+    const agentId = source.routing?.agentId?.trim() || resolveAgentIdFromSessionKey(sourceKey);
+    const chatId = `chat_${randomUUID()}`;
+    const targetKey = buildSessionKey({
+      agentId,
+      source: 'webchat',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: chatId,
+    });
+    const result = await this.opts.sessionIndex.forkSessionAtTurn(sourceKey, {
+      targetKey,
+      lastTurnId: normalizedTurnId,
+      targetMetadata: {
+        sourceChannel: 'webchat',
+        sourceChatId: `default:direct:${chatId}`,
+        sessionType: 'chat',
+        routing: {
+          agentId,
+          source: 'webchat',
+          accountId: 'default',
+          peerKind: 'direct',
+          peerId: chatId,
+        },
+      },
+    });
+    const session = await this.getSession(result.sessionKey);
+    if (!session) throw new Error(`Forked session not found: ${result.sessionKey}`);
+    return { ...result, lastTurnId: normalizedTurnId, session };
   }
 
   btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {

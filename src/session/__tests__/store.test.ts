@@ -6,11 +6,14 @@ import { tmpdir } from 'os';
 import { ConfigSchema } from '../../config/schema.js';
 import {
   closeXopcDatabase,
+  getSessionConfig,
   openXopcDatabase,
   patchSessionMetadata,
   resetXopcDatabaseSingletonForTest,
+  setSessionConfig,
 } from '../../storage/sqlite/index.js';
 import { SessionStore } from '../store.js';
+import { isMediaUriReferencedByLiveSession } from '../../media/session-references.js';
 
 function compactionResult(messages: any[], summary: string, firstKeptIndex: number, tokensBefore: number, tokensAfter: number) {
   return {
@@ -700,6 +703,124 @@ describe('SessionStore', () => {
       const targetMeta = await store.getMetadata(target);
       expect(targetMeta?.customData?.forkedFromSessionKey).toBe(source);
       expect(targetMeta?.customData?.forkedFromRow).toBe(2);
+    });
+
+    it('forkSessionAtTurn atomically copies a completed turn and inherited provenance', async () => {
+      const source = 'agent:main:webchat:default:direct:fork-turn-source';
+      const target = 'agent:main:webchat:default:direct:fork-turn-target';
+      await store.saveMessages(source, [
+        { role: 'user', content: 'first', turnId: 'turn-1' },
+        { role: 'assistant', content: 'answer one', turnId: 'turn-1' },
+        { role: 'user', content: 'second', turnId: 'turn-2' },
+        { role: 'assistant', content: 'answer two', turnId: 'turn-2' },
+      ], { metadata: directMetadata('main', 'webchat', 'fork-turn-source') });
+      patchSessionMetadata(source, {
+        name: 'Source Session',
+        tags: ['demo'],
+        projectId: 'project-1',
+        customData: { retained: true },
+      });
+      setSessionConfig(source, {
+        thinkingLevel: 'high',
+        modelOverride: 'test/fork-model',
+        workingDirectoryOverride: join(tempDir, 'fork-workspace'),
+        responseLanguage: 'zh',
+      }, join(tempDir, 'main'));
+
+      const result = await store.forkSessionAtTurn(source, {
+        targetKey: target,
+        lastTurnId: 'turn-1',
+        targetMetadata: directMetadata('main', 'webchat', 'fork-turn-target'),
+      });
+
+      expect(result).toEqual({ sessionKey: target, rowCount: 2, lastTurnId: 'turn-1' });
+      expect((await store.loadTranscriptRows(target)).map((row) => (row as { turnId?: string }).turnId))
+        .toEqual(['turn-1', 'turn-1']);
+      const targetMeta = await store.getMetadata(target);
+      expect(targetMeta).toMatchObject({
+        parentSessionKey: source,
+        projectId: 'project-1',
+        hiddenFromSessionList: false,
+      });
+      expect(targetMeta?.routing?.peerId).toBe('fork-turn-target');
+      expect(targetMeta?.customData).toMatchObject({
+        retained: true,
+        genericNewChatShell: false,
+        forkedFromSessionKey: source,
+        forkedFromTurnId: 'turn-1',
+      });
+      expect(getSessionConfig(target)).toMatchObject({
+        thinkingLevel: 'high',
+        modelOverride: 'test/fork-model',
+        workingDirectoryOverride: join(tempDir, 'fork-workspace'),
+        responseLanguage: 'zh',
+      });
+    });
+
+    it('forkSessionAtTurn rolls back when the selected turn is not complete', async () => {
+      const source = 'agent:main:webchat:default:direct:fork-incomplete-source';
+      const target = 'agent:main:webchat:default:direct:fork-incomplete-target';
+      await store.saveMessages(source, [
+        { role: 'user', content: 'still running', turnId: 'turn-running' },
+      ]);
+
+      await expect(store.forkSessionAtTurn(source, {
+        targetKey: target,
+        lastTurnId: 'turn-running',
+        targetMetadata: directMetadata('main', 'webchat', 'fork-incomplete-target'),
+      })).rejects.toThrow('Completed turn not found');
+      expect(await store.getMetadata(target)).toBeNull();
+    });
+
+    it('forkSessionAtTurn can select a turn retained before an in-place reset', async () => {
+      const source = 'agent:main:webchat:default:direct:fork-reset-source';
+      const target = 'agent:main:webchat:default:direct:fork-reset-target';
+      await store.saveMessages(source, [
+        { role: 'user', content: 'before reset', turnId: 'turn-before-reset' },
+        { role: 'assistant', content: 'old answer', turnId: 'turn-before-reset' },
+      ]);
+      await store.reset(source);
+      await store.saveMessages(source, [
+        { role: 'user', content: 'after reset', turnId: 'turn-after-reset' },
+        { role: 'assistant', content: 'new answer', turnId: 'turn-after-reset' },
+      ]);
+
+      const result = await store.forkSessionAtTurn(source, {
+        targetKey: target,
+        lastTurnId: 'turn-before-reset',
+        targetMetadata: directMetadata('main', 'webchat', 'fork-reset-target'),
+      });
+
+      expect(result.rowCount).toBe(2);
+      expect(await store.loadMessages(target)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: 'assistant', content: 'old answer' }),
+      ]));
+    });
+
+    it('keeps shared media live until every fork is deleted', async () => {
+      const source = 'agent:main:webchat:default:direct:fork-media-source';
+      const target = 'agent:main:webchat:default:direct:fork-media-target';
+      const uri = 'media://outbound/shared-fork-image.png';
+      await store.saveMessages(source, [
+        { role: 'user', content: 'make an image', turnId: 'turn-media' },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'done' }],
+          attachments: [{ uri }],
+          turnId: 'turn-media',
+        },
+      ]);
+      await store.forkSessionAtTurn(source, {
+        targetKey: target,
+        lastTurnId: 'turn-media',
+        targetMetadata: directMetadata('main', 'webchat', 'fork-media-target'),
+      });
+
+      expect(isMediaUriReferencedByLiveSession(uri)).toBe(true);
+      await store.delete(source);
+      expect(isMediaUriReferencedByLiveSession(uri)).toBe(true);
+      await store.delete(target);
+      expect(isMediaUriReferencedByLiveSession(uri)).toBe(false);
     });
   });
 });

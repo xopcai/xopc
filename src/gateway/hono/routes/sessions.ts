@@ -719,6 +719,24 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
+  // POST /api/sessions/:key/fork-at-turn — server-generated chat session fork.
+  authenticated.post('/api/sessions/:key/fork-at-turn', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const lastTurnId = typeof body.lastTurnId === 'string' ? body.lastTurnId.trim() : '';
+    if (!lastTurnId) {
+      return c.json({ ok: false, error: 'lastTurnId is required' }, 400);
+    }
+    try {
+      const result = await service.sessions.forkAtTurn(key, lastTurnId);
+      return c.json({ ok: true, ...result }, 201);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const status = errorMessage.startsWith('Session not found:') ? 404 : 409;
+      return c.json({ ok: false, error: errorMessage }, status);
+    }
+  });
+
   authenticated.post('/api/sessions/:key/fork-row', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
