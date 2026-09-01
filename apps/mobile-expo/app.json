@@ -6,7 +6,7 @@
       "xopc-mobile",
       "xopc"
     ],
-    "version": "0.0.15",
+    "version": "0.0.16",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -43,7 +43,7 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.CAMERA"
       ],
-      "versionCode": 15,
+      "versionCode": 16,
       "package": "ai.xopc.xopc",
       "googleServicesFile": "./google-services.json"
     },
