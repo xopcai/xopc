@@ -98,6 +98,15 @@ export {
   type CreateUnderstandingInput,
 } from './user-context-repository.js';
 export {
+  getUserPerson,
+  getUserPeopleIndexState,
+  listUserPeople,
+  mergeUserPeople,
+  replaceUserPeopleIndex,
+  summarizeUserPeople,
+  updateUserPerson,
+} from './user-people-repository.js';
+export {
   cancelQueuedSessionInput,
   claimNextSessionInput,
   findSessionInput,

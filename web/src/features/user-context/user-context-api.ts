@@ -92,6 +92,58 @@ export type UserContextResponse = {
   consolidation: { lastRun: ContextConsolidationRun | null };
 };
 
+export type UserPersonKind = 'person' | 'bot' | 'service' | 'group' | 'unknown';
+
+export type UserPerson = {
+  id: string;
+  displayName: string;
+  kind: UserPersonKind;
+  hidden: boolean;
+  confidence: number;
+  primaryHandle?: string;
+  interactionCount: number;
+  firstObservedAt: number;
+  lastObservedAt: number;
+  handles: Array<{
+    id: string;
+    type: 'email' | 'provider_user' | 'username' | 'display_name';
+    value: string;
+    sourceInstanceId: string;
+    verification: 'observed' | 'inferred' | 'user_confirmed';
+    firstObservedAt: number;
+    lastObservedAt: number;
+  }>;
+  sources: Array<{
+    sourceInstanceId: string;
+    connectorId?: string;
+    toolkit?: string;
+    interactionCount: number;
+    firstObservedAt: number;
+    lastObservedAt: number;
+  }>;
+  relationshipUnderstanding?: {
+    id: string;
+    statement: string;
+    status: UnderstandingStatus;
+  };
+};
+
+export type UserRelationshipSummary = {
+  people: number;
+  automatedAccounts: number;
+  needsReview: number;
+  hidden: number;
+  sources: number;
+  lastUpdatedAt?: number;
+};
+
+export type UserRelationshipsResponse = {
+  items: UserPerson[];
+  summary: UserRelationshipSummary;
+  total: number;
+  nextCursor?: string;
+};
+
 export type ContextConsolidationRun = {
   runId: string;
   triggerKind: 'schedule' | 'manual';
@@ -178,6 +230,51 @@ export function detectBrowserTimezone(): string {
 
 export function fetchUserContext(): Promise<UserContextResponse> {
   return fetchJson(apiUrl('/api/you'));
+}
+
+export function fetchUserRelationships(options: {
+  query?: string;
+  kind?: UserPersonKind;
+  sourceInstanceId?: string;
+  includeHidden?: boolean;
+  hiddenOnly?: boolean;
+  cursor?: string;
+  limit?: number;
+} = {}): Promise<UserRelationshipsResponse> {
+  const params = new URLSearchParams();
+  if (options.query) params.set('q', options.query);
+  if (options.kind) params.set('kind', options.kind);
+  if (options.sourceInstanceId) params.set('source', options.sourceInstanceId);
+  if (options.includeHidden) params.set('includeHidden', 'true');
+  if (options.hiddenOnly) params.set('hidden', 'true');
+  if (options.cursor) params.set('cursor', options.cursor);
+  params.set('limit', String(options.limit ?? 30));
+  return fetchJson(apiUrl(`/api/you/relationships?${params.toString()}`));
+}
+
+export async function fetchUserRelationship(personId: string): Promise<UserPerson> {
+  const response = await fetchJson<{ person: UserPerson }>(apiUrl(`/api/you/relationships/${encodeURIComponent(personId)}`));
+  return response.person;
+}
+
+export async function updateUserRelationship(personId: string, patch: {
+  displayName?: string | null;
+  kind?: UserPersonKind | null;
+  hidden?: boolean;
+}): Promise<UserPerson> {
+  const response = await fetchJson<{ person: UserPerson }>(apiUrl(`/api/you/relationships/${encodeURIComponent(personId)}`), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return response.person;
+}
+
+export async function mergeUserRelationships(sourcePersonId: string, targetPersonId: string): Promise<UserPerson> {
+  const response = await fetchJson<{ person: UserPerson }>(apiUrl('/api/you/relationships/merge'), {
+    method: 'POST',
+    body: JSON.stringify({ sourcePersonId, targetPersonId }),
+  });
+  return response.person;
 }
 
 export async function fetchUserContextSettings(): Promise<UserContextSettings> {

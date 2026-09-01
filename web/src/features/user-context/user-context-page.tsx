@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowUpRight, Brain, Cable, ChevronLeft, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, MessageCircle, Moon, Plus, Settings2, ShieldCheck, Sparkles, Trash2, UserRoundPen, X } from 'lucide-react';
+import { ArrowUpRight, Brain, Cable, ChevronLeft, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, MessageCircle, Moon, Plus, Settings2, ShieldCheck, Sparkles, Trash2, UserRoundPen, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -33,16 +33,17 @@ import {
 } from './user-context-api';
 import { SharedUnderstandingPanel } from './shared-understanding-panel';
 import { focusNeedsReview } from './shared-understanding-model';
+import { RelationshipPortraitCard, RelationshipsPanel } from './relationships-panel';
 import { UNDERSTANDING_KIND_LABELS } from './understanding-kind-labels';
 
-type Tab = 'profile' | 'understanding' | 'collaboration' | 'sources' | 'dreaming' | 'privacy';
-const TABS = new Set<Tab>(['profile', 'understanding', 'collaboration', 'sources', 'dreaming', 'privacy']);
+type Tab = 'profile' | 'understanding' | 'relationships' | 'collaboration' | 'sources' | 'dreaming' | 'privacy';
+const TABS = new Set<Tab>(['profile', 'understanding', 'relationships', 'collaboration', 'sources', 'dreaming', 'privacy']);
 const inputClass = 'w-full rounded-xl border border-edge bg-surface-panel px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent/60 focus:ring-2 focus:ring-accent/20';
 
 const copy = {
   en: {
     title: 'You', subtitle: 'A living portrait, shaped together by you and xopc.',
-    profile: 'Your portrait', understanding: 'Shared understanding', collaboration: 'Working together', sources: 'Sources', dreaming: 'Background review', privacy: 'Privacy',
+    profile: 'Your portrait', understanding: 'Shared understanding', relationships: 'Your relationships', collaboration: 'Working together', sources: 'Sources', dreaming: 'Background review', privacy: 'Privacy',
     portraitEyebrow: 'YOU × XOPC', portraitIntro: 'This is how xopc currently understands you. It grows through your conversations and work — and you always have the final say.',
     maintainedTogether: 'Shaped together', youDecide: 'You decide what stays', editProfile: 'Edit basics', talkAboutMe: 'Add through conversation',
     roleMissing: 'Add what you do', direction: 'What matters now', directionEmpty: 'Add a direction so xopc can help keep important work moving.',
@@ -68,7 +69,7 @@ const copy = {
   },
   zh: {
     title: '你', subtitle: '一份由你和 xopc 共同塑造、持续生长的画像。',
-    profile: '你的画像', understanding: '共同理解', collaboration: '协作方式', sources: '数据来源', dreaming: '后台复核', privacy: '隐私',
+    profile: '你的画像', understanding: '共同理解', relationships: '我的关系', collaboration: '协作方式', sources: '数据来源', dreaming: '后台复核', privacy: '隐私',
     portraitEyebrow: 'YOU × XOPC', portraitIntro: '这是 xopc 此刻对你的理解。它会在对话与共事中逐渐丰富，而你始终拥有最终决定权。',
     maintainedTogether: '由你与 xopc 共同维护', youDecide: '你决定什么被保留', editProfile: '编辑基本信息', talkAboutMe: '在对话中补充',
     roleMissing: '补充你的角色', direction: '此刻重要的事', directionEmpty: '写下你此刻的方向，让 xopc 帮你持续推动真正重要的事。',
@@ -209,6 +210,7 @@ export function UserContextPage() {
             title: reviewCount ? language === 'zh' ? `${reviewCount} 条建议待确认` : `${reviewCount} suggestions to review` : undefined,
             suffix: reviewCount ? <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" /> : undefined,
           },
+          { id: 'relationships', label: t.relationships, icon: Users },
           { id: 'collaboration', label: t.collaboration, icon: Handshake },
         ]}
       />}
@@ -220,6 +222,7 @@ export function UserContextPage() {
         onProfileChanged={(profile) => mutate((current) => current ? { ...current, profile } : current, { revalidate: false })}
       /> : null}
       {tab === 'understanding' ? <SharedUnderstandingPanel focuses={data.focuses} understandings={data.understandings} language={language} onRefresh={() => mutate()} /> : null}
+      {tab === 'relationships' ? <RelationshipsPanel language={language} /> : null}
       {tab === 'collaboration' ? <RulesPanel rules={data.rules} language={language} t={t} onChanged={() => mutate()} /> : null}
       {tab === 'sources' ? <SourcesPanel t={t} /> : null}
       {tab === 'dreaming' ? <DreamingPanel lastRun={data.consolidation?.lastRun ?? null} t={t} /> : null}
@@ -294,6 +297,8 @@ function PortraitOverview({ data, language, t, onNavigate, onProfileChanged }: {
         {activeRules.length ? <div className="space-y-1">{activeRules.slice(0, 4).map((rule) => <div key={rule.id} className="flex gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-hover"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-fg-subtle" /><div className="min-w-0"><p className="text-sm leading-6 text-fg">{rule.statement}</p><p className="mt-0.5 text-[11px] text-fg-subtle">{ruleLabels[rule.category][language]}</p></div></div>)}</div> : <p className="py-5 text-sm leading-6 text-fg-muted">{t.addFirstRule}</p>}
       </PortraitSection>
     </div>
+
+    <RelationshipPortraitCard language={language} onOpen={() => onNavigate('relationships')} />
 
     <button className="group flex w-full items-center gap-4 rounded-2xl border border-edge bg-surface-panel px-5 py-4 text-left transition-colors hover:bg-surface-hover sm:px-6" onClick={() => setControlsOpen(true)}>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"><Settings2 className="size-4" /></span>
