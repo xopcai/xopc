@@ -21,6 +21,7 @@ import type {
   MemoryWriteResult,
   MemorySyncEvent,
 } from './types.js';
+import { resolveMemorySessionKind } from './turn-provenance.js';
 
 /**
  * Builtin local memory provider backed exclusively by the structured SQLite store.
@@ -70,6 +71,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         kinds: request.kinds,
         maxResults: request.maxResults,
         minScore: request.minScore,
+        trustedOnly: request.trustedOnly,
       };
     const [active, shadow] = [
       searchMemoryRecords(options),
@@ -121,10 +123,15 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   }
 
   async write(request: MemoryWriteRequest): Promise<MemoryWriteResult> {
+    const sourceAgentId = normalizeAgentId(request.sourceAgentId ?? 'main');
+    const sourceSessionId = request.provenance?.sourceSessionId ?? request.scope?.sessionKey;
+    const originClass = request.confirmed
+      ? 'owner'
+      : (request.provenance?.originClass ?? 'agent');
     const record = upsertMemoryRecord({
         providerId: this.id,
         kind: request.kind,
-        sourceAgentId: normalizeAgentId(request.sourceAgentId ?? 'main'),
+        sourceAgentId,
         workspaceId: request.scope?.workspaceId,
         sessionKey: request.scope?.sessionKey,
         projectId: request.scope?.projectId,
@@ -149,6 +156,16 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         expiresAt: request.expiresAt,
         supersedesRecordId: request.supersedesRecordId,
         conflictGroupId: request.conflictGroupId,
+        originClass,
+        sessionKind: request.provenance?.sessionKind
+          ?? (sourceSessionId ? resolveMemorySessionKind(sourceSessionId) : 'unknown'),
+        observedAt: request.provenance?.observedAt,
+        sourceSessionId,
+        sourceTurnId: request.provenance?.sourceTurnId,
+        supersedesKey: request.provenance?.supersedesKey,
+        derivedFromRecalledContext: request.confirmed
+          ? false
+          : request.provenance?.derivedFromRecalledContext,
       });
     return {
       success: true,
@@ -190,6 +207,13 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         expiresAt: existing.expiresAt,
         supersedesRecordId: existing.supersedesRecordId,
         conflictGroupId: existing.conflictGroupId,
+        originClass: existing.provenance.originClass,
+        sessionKind: existing.provenance.sessionKind,
+        observedAt: existing.provenance.observedAt,
+        sourceSessionId: existing.provenance.sourceSessionId,
+        sourceTurnId: existing.provenance.sourceTurnId,
+        supersedesKey: existing.provenance.supersedesKey,
+        derivedFromRecalledContext: existing.provenance.derivedFromRecalledContext,
       });
     return { success: true, message: 'Memory updated', record };
   }

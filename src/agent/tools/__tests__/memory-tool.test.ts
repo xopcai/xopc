@@ -22,6 +22,13 @@ describe('memory_search recall signals', () => {
           id: 'memory/note.md#L1-L1',
           kind: 'user_note',
           scope: { agentId: 'main' },
+          provenance: {
+            sourceAgentId: 'main',
+            originClass: 'agent',
+            sessionKind: 'interactive',
+            observedAt: new Date(0).toISOString(),
+            derivedFromRecalledContext: false,
+          },
           content: 'Keep responses concise.',
           source: { path: 'memory/note.md', lineStart: 1, lineEnd: 1 },
           explicitness: 'explicit',
@@ -48,12 +55,18 @@ describe('memory_search recall signals', () => {
       getMemoryManager: () => manager,
     });
 
-    await tool.execute('call-1', { query: 'response style' });
+    const output = await tool.execute('call-1', { query: 'response style' });
 
     expect(recordSignal).toHaveBeenCalledWith(expect.objectContaining({
       source: 'search_recall',
       recordId: 'memory/note.md#L1-L1',
       score: 0.9,
     }));
+    expect(output.details).toMatchObject({
+      results: [expect.objectContaining({
+        originClass: 'agent',
+        trustedForAutomaticRecall: true,
+      })],
+    });
   });
 });

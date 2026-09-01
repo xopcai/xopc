@@ -33,6 +33,7 @@ import {
   recordPromptCacheTouch,
 } from '../../providers/prompt-cache-lifecycle.js';
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
+import { markTurnToolResult } from '../memory/turn-provenance.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -321,6 +322,9 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         recordPromptCacheTouch(sessionKey, resolvedModel, event.message.usage);
+      }
+      if (event.type === 'tool_execution_end') {
+        markTurnToolResult(sessionKey, runId, event.toolName);
       }
       onEvent?.({ ...event, runId });
     });

@@ -31,6 +31,11 @@ export interface UserContextPlan {
   rejected: Array<{ recordId: string; reason: UserContextRejectionReason }>;
   consentRequests: Array<{ id: string; recordId: string; statement: string; purpose: string }>;
   estimatedTokens: number;
+  /** Exact rendered context characters prepended before the user's message. */
+  contextChars: number;
+  contextItemCount: number;
+  /** Generic durable memory records selected by the trusted automatic recall lane. */
+  memoryRecordIds?: string[];
   allocation?: {
     profile: 'standard' | 'deep' | 'critical';
     maxResults: number;

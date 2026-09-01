@@ -130,6 +130,49 @@ describe('MemoryManager', () => {
     }
   });
 
+  it('blocks recalled context from writing itself into active memory', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-memory-recall-loop-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    try {
+      const mgr = new MemoryManager();
+      mgr.addProvider(new BuiltinMemoryProvider());
+      const blocked = await mgr.write({
+        kind: 'derived_insight',
+        content: 'A recalled claim should not reinforce itself.',
+        scope: { sessionKey: 'agent:main:main' },
+        provenance: {
+          originClass: 'untrusted',
+          sessionKind: 'interactive',
+          sourceSessionId: 'agent:main:main',
+          sourceTurnId: 'turn-recalled',
+          derivedFromRecalledContext: true,
+        },
+      });
+      expect(blocked.success).toBe(false);
+
+      const staged = await mgr.write({
+        kind: 'derived_insight',
+        content: 'A recalled claim may remain a reviewable candidate.',
+        status: 'candidate',
+        scope: { sessionKey: 'agent:main:main' },
+        provenance: {
+          originClass: 'untrusted',
+          sessionKind: 'interactive',
+          sourceSessionId: 'agent:main:main',
+          sourceTurnId: 'turn-recalled',
+          derivedFromRecalledContext: true,
+        },
+      });
+      expect(staged.success).toBe(true);
+      expect(staged.record?.status).toBe('candidate');
+    } finally {
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it('auto-proposes explicit remember requests during turn sync', async () => {
     const stateDir = mkdtempSync(join(tmpdir(), 'xopc-memory-sync-'));
     resetXopcDatabaseSingletonForTest();
