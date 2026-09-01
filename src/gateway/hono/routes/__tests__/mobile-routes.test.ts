@@ -10,7 +10,6 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
-import { createMobileActivityEvent } from '../../../../mobile/notification-store.js';
 import { registerMobileRoutes } from '../mobile.js';
 
 describe('mobile routes', () => {
@@ -40,59 +39,51 @@ describe('mobile routes', () => {
         platform: 'android',
         pushToken: 'ExponentPushToken[token]',
         permissions: 'granted',
-        preferences: { completed: true },
+        locale: 'zh',
+        preferences: { chatCompleted: true },
       }),
     });
     expect(registration.status).toBe(201);
     expect(await registration.json()).toMatchObject({
       ok: true,
-      device: { id: 'device-1', preferences: { completed: true, needsInput: true } },
+      device: { id: 'device-1', locale: 'zh', preferences: { chatCompleted: true, taskNeedsInput: true } },
     });
 
     const update = await app.request('/api/mobile/devices/device-1/preferences', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ failed: false }),
+      body: JSON.stringify({ chatFailed: false }),
     });
     expect(update.status).toBe(200);
     expect(await update.json()).toMatchObject({
-      device: { preferences: { completed: true, failed: false } },
+      device: { preferences: { chatCompleted: true, chatFailed: false } },
     });
 
     const invalid = await app.request('/api/mobile/devices/device-1/preferences', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ failed: 'no' }),
+      body: JSON.stringify({ chatFailed: 'no' }),
     });
     expect(invalid.status).toBe(400);
   });
 
-  it('lists and acknowledges activity for a registered device', async () => {
-    await app.request('/api/mobile/devices/register', {
+  it('requires a supported locale and removes a registration explicitly', async () => {
+    const invalid = await app.request('/api/mobile/devices/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        id: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted',
+        id: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'fr',
       }),
     });
-    const event = createMobileActivityEvent({
-      type: 'automation.failed',
-      entity: { kind: 'automation', id: 'automation-1' },
-      priority: 'high',
-      title: 'Automation failed',
-      deepLink: '/automation',
-      payload: { route: '/automation' },
-    });
+    expect(invalid.status).toBe(400);
 
-    const list = await app.request('/api/mobile/activity?limit=1');
-    expect(list.status).toBe(200);
-    expect(await list.json()).toMatchObject({ items: [expect.objectContaining({ id: event.id })] });
-
-    const ack = await app.request(`/api/mobile/activity/${event.id}/ack`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ deviceId: 'device-1' }),
+    await app.request('/api/mobile/devices/register', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'en',
+      }),
     });
-    expect(ack.status).toBe(200);
+    const removed = await app.request('/api/mobile/devices/device-1', { method: 'DELETE' });
+    expect(await removed.json()).toEqual({ ok: true, removed: true });
   });
 });

@@ -7,6 +7,7 @@ import { apiFetch } from '../../api/client';
 import { recordUsageEvent } from '../../product/usage-metrics';
 import { KEYS, storage } from '../../storage/mmkv';
 import { useGatewayStore } from '../../stores/gateway-store';
+import { usePreferencesStore } from '../../stores/preferences-store';
 
 import { resolveNotificationRoute } from './notification-route';
 
@@ -20,6 +21,7 @@ type DeviceRegistration = {
   pushToken: string;
   platform: 'ios' | 'android';
   permissions: NotificationPermission;
+  locale: 'en' | 'zh';
   appVersion?: string;
 };
 
@@ -73,17 +75,27 @@ function navigateNotification(router: ImperativeRouter, data: unknown): void {
 }
 
 async function registerWithGateway(registration: DeviceRegistration): Promise<boolean> {
-  try {
-    const response = await apiFetch('/api/mobile/devices/register', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...registration,
-      }),
-    });
-    return response.ok;
-  } catch {
-    return false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await apiFetch('/api/mobile/devices/register', {
+        method: 'POST',
+        body: JSON.stringify(registration),
+        signal: controller.signal,
+      });
+      if (response.ok) return true;
+      if (response.status >= 400 && response.status < 500) return false;
+    } catch {
+      // Retry transient network failures below.
+    } finally {
+      clearTimeout(timer);
+    }
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 1_000 : 3_000));
+    }
   }
+  return false;
 }
 
 async function buildRegistration(requestPermission: boolean): Promise<DeviceRegistration | null> {
@@ -111,6 +123,7 @@ async function buildRegistration(requestPermission: boolean): Promise<DeviceRegi
     pushToken: token.data,
     platform: Platform.OS === 'android' ? 'android' : 'ios',
     permissions: permission,
+    locale: usePreferencesStore.getState().language,
     appVersion: Constants.expoConfig?.version,
   };
 }
@@ -124,7 +137,15 @@ export async function enableMobileNotifications(): Promise<boolean> {
 /** Refreshes a previously authorized token without showing a system permission prompt. */
 export async function syncMobileNotificationRegistration(): Promise<boolean> {
   const registration = await buildRegistration(false);
-  return registration ? registerWithGateway(registration) : false;
+  if (registration) return registerWithGateway(registration);
+  if (supportsRemoteNotifications() && Device.isDevice) {
+    const Notifications = await loadNotifications();
+    const permissions = await Notifications.getPermissionsAsync();
+    if (notificationPermission(permissions.status) === 'denied') {
+      await disableMobileNotifications();
+    }
+  }
+  return false;
 }
 
 export async function disableMobileNotifications(): Promise<void> {
@@ -177,15 +198,9 @@ export function subscribeToMobileNotifications(router: ImperativeRouter): () => 
     responseSubscription = Notifications.addNotificationResponseReceivedListener((nextResponse) => {
       navigateNotification(router, nextResponse.notification.request.content.data);
     });
-    tokenSubscription = Notifications.addPushTokenListener((token) => {
+    tokenSubscription = Notifications.addPushTokenListener(() => {
       if (!useGatewayStore.getState().activeGatewayId) return;
-      void registerWithGateway({
-        id: installationId(),
-        pushToken: token.data,
-        platform: Platform.OS === 'android' ? 'android' : 'ios',
-        permissions: 'granted',
-        appVersion: Constants.expoConfig?.version,
-      });
+      void syncMobileNotificationRegistration();
     });
   })();
 
