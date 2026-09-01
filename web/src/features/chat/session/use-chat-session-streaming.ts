@@ -93,8 +93,8 @@ export function useChatSessionStreaming(deps: {
   const clearShellError = () => store().setShellError(null);
 
   const finalizeMessage = useCallback(
-    () => {
-      const cacheKey = chatRunManager.activeStreamSessionKey ?? sessionKeyRef.current;
+    (targetSessionKey?: string) => {
+      const cacheKey = targetSessionKey ?? sessionKeyRef.current;
       if (cacheKey && !shouldApplyStreamUpdate(cacheKey)) {
         return;
       }
@@ -115,7 +115,7 @@ export function useChatSessionStreaming(deps: {
       }
       sendingRef.current = false;
       streamingRef.current = false;
-      chatRunManager.resetRunTracking();
+      if (cacheKey) chatRunManager.resetRunTracking(cacheKey);
       fq.dismissClarify();
       void pollSessionNameAfterTurn();
       const syncKey = sessionKeyRef.current;
@@ -142,12 +142,16 @@ export function useChatSessionStreaming(deps: {
   const tryResumeAgentRun = useCallback(
     async (chatId: string, loadedMessages?: Message[]) => {
       if (!shouldApplyStreamUpdate(chatId)) return;
-      if (chatRunManager.isStreamingFor(chatId)) return;
-      if (chatRunManager.isSending) return;
 
       const runId = await resolveResumeRunId(chatId);
-      if (!runId) return;
-      if (chatRunManager.activeResumeRunId === runId) return;
+      if (!runId) {
+        const staleRunId = chatRunManager.getResumeRunId(chatId);
+        if (staleRunId) chatRunManager.reconcileInactive(chatId, staleRunId);
+        store().clearStreamingState(chatId);
+        clearChatRunPresence(chatId);
+        return;
+      }
+      if (chatRunManager.isTrackingRun(chatId, runId)) return;
 
       let seedMessages = loadedMessages ?? getSessionMessages(chatId);
       let seedHasMore = getChatSessionSnapshot(chatId)?.hasMore ?? false;
@@ -160,9 +164,8 @@ export function useChatSessionStreaming(deps: {
         /* use cached seed */
       }
 
-      chatRunManager.userAborted = false;
-      chatRunManager.activeResumeRunId = runId;
-      chatRunManager.activeStreamSessionKey = chatId;
+      chatRunManager.setUserAborted(chatId, false);
+      chatRunManager.setResumeRunId(chatId, runId);
       sendingRef.current = true;
       streamingRef.current = true;
       store().seedSessionIfEmpty(chatId, seedMessages, true, true, seedHasMore);
@@ -186,16 +189,14 @@ export function useChatSessionStreaming(deps: {
 
       const clearFailedResumeState = () => {
         store().clearStreamingState(chatId);
-        if (chatRunManager.activeResumeRunId === runId) {
-          chatRunManager.activeResumeRunId = null;
+        if (chatRunManager.getResumeRunId(chatId) === runId) {
+          chatRunManager.setResumeRunId(chatId, null);
         }
         if (!shouldApplyStreamUpdate(chatId)) {
-          chatRunManager.clearActiveStreamSessionKey(chatId);
           return;
         }
         sendingRef.current = false;
         streamingRef.current = false;
-        chatRunManager.clearActiveStreamSessionKey(chatId);
       };
 
       try {
@@ -213,7 +214,7 @@ export function useChatSessionStreaming(deps: {
           fq,
         });
 
-        const resumed = await chatRunManager.sender.resume(runId, chatId, resumeStreamCallbacks);
+        const resumed = await chatRunManager.senderFor(chatId).resume(runId, chatId, resumeStreamCallbacks);
         if (!resumed) {
           clearChatRunPresence(chatId);
           clearFailedResumeState();
@@ -225,6 +226,8 @@ export function useChatSessionStreaming(deps: {
         }
         clearChatRunPresence(chatId);
         clearFailedResumeState();
+      } finally {
+        chatRunManager.releaseIdleSender(chatId);
       }
     },
     [
@@ -242,9 +245,9 @@ export function useChatSessionStreaming(deps: {
   const interruptAndSend = useCallback(
     async (content: string, attachments?: WireAttachment[], levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
       if (!content.trim() && !attachments?.length) return;
-      if (!sendingRef.current && !streamingRef.current && !chatRunManager.isSending) {
-        return;
-      }
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      if (!sendingRef.current && !streamingRef.current && !chatRunManager.isStreamingFor(key)) return;
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
         if (taskId) {
@@ -254,16 +257,13 @@ export function useChatSessionStreaming(deps: {
         await createNewSession({ forceNew: true });
         return;
       }
-      const key = sessionKeyRef.current;
-      if (!key) return;
       fq.dismissClarifyAndClearPending();
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-      chatRunManager.userAborted = true;
-      chatRunManager.resetRunTracking();
-      chatRunManager.abort();
+      chatRunManager.setUserAborted(key, true);
+      chatRunManager.abort(key);
       sendingRef.current = false;
       streamingRef.current = false;
-      finalizeMessage();
+      finalizeMessage(key);
       queueMicrotask(() => {
         void sendMessageRef.current(content, attachments, effectiveThinking, contextRefs);
       });
@@ -293,8 +293,7 @@ export function useChatSessionStreaming(deps: {
       if (!shouldApplyStreamUpdate(sessionKey)) return;
       if (
         (!content.trim() && !attachments?.length) ||
-        (chatRunManager.activeStreamSessionKey === sessionKey &&
-          (sendingRef.current || streamingRef.current))
+        (sendingRef.current || streamingRef.current || chatRunManager.isStreamingFor(sessionKey))
       ) {
         return;
       }
@@ -318,8 +317,7 @@ export function useChatSessionStreaming(deps: {
           )
         : -1;
       if (replaceTurnId && replaceIndex < 0) return;
-      chatRunManager.userAborted = false;
-      chatRunManager.activeStreamSessionKey = chatId;
+      chatRunManager.setUserAborted(chatId, false);
       sendingRef.current = true;
       streamingRef.current = false;
       clearShellError();
@@ -390,7 +388,7 @@ export function useChatSessionStreaming(deps: {
           fq,
         });
 
-        await chatRunManager.sender.send(
+        await chatRunManager.senderFor(chatId).send(
           content,
           chatId,
           attachments,
@@ -404,16 +402,20 @@ export function useChatSessionStreaming(deps: {
         if ((err as Error).name !== 'AbortError') {
           store().clearStreamingState(chatId);
           clearChatRunPresence(chatId);
-          setShellError(JSON.stringify(buildSendFailedErrorPayload()));
+          if (shouldApplyStreamUpdate(chatId)) {
+            setShellError(JSON.stringify(buildSendFailedErrorPayload()));
+          }
           if (replaceTurnId) void loadSessionById(chatId, 0);
         } else {
           clearChatRunPresence(chatId);
         }
       } finally {
-        sendingRef.current = false;
-        streamingRef.current = false;
+        if (shouldApplyStreamUpdate(chatId)) {
+          sendingRef.current = false;
+          streamingRef.current = false;
+        }
         store().setSessionFlags(chatId, { sending: false });
-        chatRunManager.clearActiveStreamSessionKey(chatId);
+        chatRunManager.releaseIdleSender(chatId);
       }
     },
     [
@@ -445,15 +447,15 @@ export function useChatSessionStreaming(deps: {
   );
 
   const abort = useCallback(() => {
-    chatRunManager.userAborted = true;
-    chatRunManager.resetRunTracking();
-    fq.dismissClarifyAndClearPending();
-    chatRunManager.abort();
     const key = sessionKeyRef.current;
+    if (!key) return;
+    chatRunManager.setUserAborted(key, true);
+    fq.dismissClarifyAndClearPending();
+    chatRunManager.abort(key);
     if (key) clearChatRunPresence(key);
     sendingRef.current = false;
     streamingRef.current = false;
-    finalizeMessage();
+    finalizeMessage(key);
     if (key) {
       window.setTimeout(() => {
         void loadSessionById(key, 0);

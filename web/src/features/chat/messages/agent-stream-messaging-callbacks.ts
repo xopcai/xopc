@@ -55,7 +55,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
-  finalizeMessage: (opts?: { skipSteeringQueueFlush?: boolean }) => void;
+  finalizeMessage: (sessionKey?: string) => void;
   fq: AgentStreamFqCallbacks;
 }): MessagingCallbacks {
   const {
@@ -108,9 +108,8 @@ export function createAgentStreamMessagingCallbacks(opts: {
 
   const onBackgroundTerminal = () => {
     store().clearStreamingState(chatId);
-    chatRunManager.clearActiveStreamSessionKey(chatId);
     if (clearResumeRunIdOnBackgroundTerminal) {
-      chatRunManager.activeResumeRunId = null;
+      chatRunManager.setResumeRunId(chatId, null);
     }
     store().setSessionFlags(chatId, { sending: false, streaming: false });
     store().setSessionProgress(chatId, null);
@@ -273,11 +272,20 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onResult: ({ status }) => {
       flushReviewDeltas();
       const visible = shouldApplyStreamUpdate(chatId);
-      if (chatRunManager.userAborted || status === 'cancelled') {
-        chatRunManager.userAborted = false;
+      if (chatRunManager.takeUserAborted(chatId) || status === 'cancelled') {
         clearChatRunPresence(chatId);
-        if (visible) finalizeMessage();
+        if (visible) finalizeMessage(chatId);
         else onBackgroundTerminal();
+        return;
+      }
+      if (status === 'error') {
+        markChatRunFailed(chatId, !visible);
+        if (!visible) {
+          onBackgroundTerminal();
+          return;
+        }
+        finalizeMessage(chatId);
+        reloadSessionSnapshot();
         return;
       }
       markChatRunCompleted(chatId, !visible);
@@ -285,7 +293,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
         onBackgroundTerminal();
         return;
       }
-      finalizeMessage();
+      finalizeMessage(chatId);
     },
     onError: (msg) => {
       flushReviewDeltas();
@@ -297,7 +305,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       }
       store().clearStreamingState(chatId);
       if (clearResumeRunIdOnVisibleError) {
-        chatRunManager.activeResumeRunId = null;
+        chatRunManager.setResumeRunId(chatId, null);
       }
       store().setSessionFlags(chatId, { sending: false, streaming: false });
       store().setSessionProgress(chatId, null);

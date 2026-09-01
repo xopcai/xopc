@@ -211,4 +211,53 @@ describe('runGatewayAgent', () => {
     ]);
   });
 
+  it('publishes a run-topic terminal when setup fails before active registration', async () => {
+    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
+    const completedTopics: string[] = [];
+    const deps = {
+      config: {},
+      agentService: {
+        resolveUserTimezoneForSession: () => 'UTC',
+        prepareInboundAttachments: async () => { throw new Error('attachment setup failed'); },
+        beginInboundTurn: () => {},
+        getLastAssistantPlainText: () => '',
+        takeTaskReviewStreamHint: () => undefined,
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+        endInboundTurn: () => {},
+      },
+      bus: { publishInbound: async () => {} },
+      runAbortControllers: new Map<string, AbortController>(),
+      activeWebchatRunBySession: new Map<string, string>(),
+      sessionIndex: { getSessionMetadata: async () => ({ sessionId: 's1' }) },
+      emit: () => {},
+      publishRealtime: (topic: string, event: string, data: unknown) => {
+        realtimeEvents.push({ topic, event, data });
+      },
+      completeRealtimeTopic: (topic: string) => completedTopics.push(topic),
+    } as unknown as RunGatewayAgentDeps;
+
+    const events = [];
+    for await (const event of runGatewayAgent(
+      deps,
+      'hello',
+      'webchat',
+      sessionKey,
+      { type: 'system', source: 'internal' },
+      undefined,
+      undefined,
+      { runId: 'run-setup-failure' },
+    )) events.push(event);
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'run_end',
+      payload: { status: 'error' },
+    });
+    expect(realtimeEvents.at(-1)).toMatchObject({
+      topic: 'run:run-setup-failure',
+      event: 'run_end',
+    });
+    expect(completedTopics).toEqual(['run:run-setup-failure']);
+  });
+
 });

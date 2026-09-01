@@ -23,7 +23,6 @@ export function useChatSessionLoad(deps: {
   routeSessionKeyRef: RefObject<string | null>;
   sendingRef: RefObject<boolean>;
   streamingRef: RefObject<boolean>;
-  activeStreamSessionKeyRef: RefObject<string | null>;
   loadingSessionRef: RefObject<boolean>;
   messagesLenRef: RefObject<number>;
   thinkingSupportGenRef: RefObject<number>;
@@ -44,7 +43,6 @@ export function useChatSessionLoad(deps: {
     routeSessionKeyRef,
     sendingRef,
     streamingRef,
-    activeStreamSessionKeyRef,
     loadingSessionRef,
     messagesLenRef,
     thinkingSupportGenRef,
@@ -284,7 +282,6 @@ export function useChatSessionLoad(deps: {
       isStillViewingSession,
       sendingRef,
       streamingRef,
-      activeStreamSessionKeyRef,
       loadingSessionRef,
       dismissClarifyOnSessionLoad,
       navigateToSession,

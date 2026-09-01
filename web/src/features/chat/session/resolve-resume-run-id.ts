@@ -5,8 +5,8 @@ import {
 } from '@xopcai/gateway-contract';
 
 import {
-  hasPendingAgentRunForChat,
-  pendingAgentRunStorageKey,
+  clearPendingAgentRunIfMatches,
+  readPendingAgentRunId,
   setPendingAgentRun,
 } from '@/features/chat/messages/message-sender';
 import { apiFetch } from '@/lib/fetch';
@@ -17,12 +17,8 @@ export async function fetchSessionActiveRun(sessionKey: string): Promise<Session
   const key = String(sessionKey ?? '').trim();
   if (!key) return { active: false };
   const res = await apiFetch(apiUrl(buildSessionRunPath(key)));
-  if (!res.ok) return { active: false };
-  try {
-    return normalizeSessionActiveRunResponse(await res.json());
-  } catch {
-    return { active: false };
-  }
+  if (!res.ok) throw new Error(`Active run lookup failed (${res.status})`);
+  return normalizeSessionActiveRunResponse(await res.json());
 }
 
 /**
@@ -32,6 +28,7 @@ export async function fetchSessionActiveRun(sessionKey: string): Promise<Session
 export async function resolveResumeRunId(sessionKey: string): Promise<string | null> {
   const key = String(sessionKey ?? '').trim();
   if (!key) return null;
+  const fallbackAtStart = readPendingAgentRunId(key);
 
   try {
     const remote = await fetchSessionActiveRun(key);
@@ -39,18 +36,11 @@ export async function resolveResumeRunId(sessionKey: string): Promise<string | n
       setPendingAgentRun(key, remote.runId);
       return remote.runId;
     }
+    if (fallbackAtStart) clearPendingAgentRunIfMatches(key, fallbackAtStart);
+    return null;
   } catch {
     /* gateway may be starting */
   }
 
-  if (!hasPendingAgentRunForChat(key)) return null;
-  try {
-    const raw = sessionStorage.getItem(pendingAgentRunStorageKey(key));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { runId?: unknown };
-    const runId = typeof parsed.runId === 'string' ? parsed.runId.trim() : '';
-    return runId || null;
-  } catch {
-    return null;
-  }
+  return readPendingAgentRunId(key);
 }

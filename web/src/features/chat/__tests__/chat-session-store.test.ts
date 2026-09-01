@@ -347,11 +347,12 @@ describe('isSessionAgentRunActive', () => {
 });
 
 describe('chatRunManager', () => {
-  it('exposes singleton sender', async () => {
+  it('exposes singleton per-session senders', async () => {
     const { chatRunManager } = await import('@/features/chat/session/chat-run-manager');
     const a = chatRunManager;
     const { chatRunManager: b } = await import('@/features/chat/session/chat-run-manager');
     expect(a).toBe(b);
-    expect(a.sender).toBeDefined();
+    expect(a.senderFor(sessionKey)).toBe(a.senderFor(sessionKey));
+    expect(a.senderFor(`${sessionKey}:other`)).not.toBe(a.senderFor(sessionKey));
   });
 });
