@@ -137,6 +137,7 @@ export function CustomMcpServerDialog({
     !reservedId &&
     !duplicateId &&
     (row.transport === 'stdio' ? row.command.trim().length > 0 : row.url.trim().length > 0);
+  const canTest = !(row.transport === 'streamable-http' && row.auth === 'oauth');
   const summary = mcpServerEndpointSummary(row);
 
   const runTest = useCallback(async () => {
@@ -325,7 +326,12 @@ export function CustomMcpServerDialog({
             </div>
 
             <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge-subtle px-6 py-4">
-              <Button variant="secondary" disabled={!row.id.trim() || testing} onClick={() => void runTest()}>
+              <Button
+                variant="secondary"
+                disabled={!row.id.trim() || testing || !canTest}
+                title={!canTest ? t.oauthSaveBeforeTest : undefined}
+                onClick={() => void runTest()}
+              >
                 {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
                 {t.testConnection}
               </Button>

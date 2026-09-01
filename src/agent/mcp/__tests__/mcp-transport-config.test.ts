@@ -27,4 +27,29 @@ describe('mcp-transport-config', () => {
       url: 'https://example.com/sse',
     });
   });
+
+  it('resolves OAuth only for streamable HTTP', () => {
+    expect(resolveMcpTransportConfig('private', {
+      url: 'https://example.com/mcp',
+      auth: { type: 'oauth', clientId: 'public-client' },
+    })).toMatchObject({
+      kind: 'http',
+      transportType: 'streamable-http',
+      auth: { type: 'oauth', clientId: 'public-client' },
+    });
+
+    expect(resolveMcpTransportConfig('events-with-oauth', {
+      url: 'https://example.com/sse',
+      transport: 'sse',
+      auth: { type: 'oauth' },
+    })).toBeNull();
+  });
+
+  it('rejects ambiguous OAuth and static bearer configuration', () => {
+    expect(resolveMcpTransportConfig('ambiguous', {
+      url: 'https://example.com/mcp',
+      headers: { Authorization: 'Bearer static' },
+      auth: { type: 'oauth' },
+    })).toBeNull();
+  });
 });
