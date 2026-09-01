@@ -13,7 +13,7 @@ export interface CommandEntry {
   examples: string[];
 }
 
-export type SkillAvailabilityStatus = 'available' | 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled';
+export type SkillAvailabilityStatus = 'available' | 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled' | 'tool-gated';
 
 export interface PaletteItem {
   kind: PaletteItemKind;

@@ -34,9 +34,8 @@ export interface UseComposerEditorReturn {
   editorRef: MutableRefObject<HTMLDivElement | null>;
   valueRef: MutableRefObject<string>;
 
-  setValue: (v: string) => void;
-  setCursor: (c: number) => void;
   adjustHeight: () => void;
+  focusForExternalPaste: () => void;
   resetEditor: (opts?: ResetEditorOptions) => void;
   onWireInput: (wire: string, caret: number) => void;
 }
@@ -50,6 +49,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
   const editorRef = useRef<HTMLDivElement | null>(null);
   const valueRef = useRef(value);
   const cursorRef = useRef(cursor);
+  const selectionRangeRef = useRef<Range | null>(null);
   const lastWelcomeDraftIdRef = useRef(0);
 
   const pendingFocusAfterEnableRef = useRef(true);
@@ -65,6 +65,28 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`;
   }, []);
 
+  const focusForExternalPaste = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+
+    el.focus({ preventScroll: true });
+    const selection = window.getSelection();
+    const range = selectionRangeRef.current;
+    if (
+      selection &&
+      range?.startContainer.isConnected &&
+      range.endContainer.isConnected &&
+      el.contains(range.startContainer) &&
+      el.contains(range.endContainer)
+    ) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+
+    applyWireToEditor(el, valueRef.current, cursorRef.current);
+  }, []);
+
   const resetEditor = useCallback(
     (opts?: ResetEditorOptions) => {
       const nextText = opts?.nextText ?? '';
@@ -73,6 +95,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
       setValue(nextText);
       valueRef.current = nextText;
       setCursor(caretOffset);
+      cursorRef.current = caretOffset;
+      selectionRangeRef.current = null;
 
       requestAnimationFrame(() => {
         const el = editorRef.current;
@@ -132,12 +156,23 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     let queued = false;
     let lastOffset = -1;
 
+    const rememberSelection = () => {
+      const selection = window.getSelection();
+      if (!selection?.rangeCount || !el.contains(selection.anchorNode) || !el.contains(selection.focusNode)) {
+        return null;
+      }
+      const next = getWireCaretOffset(el);
+      cursorRef.current = next;
+      selectionRangeRef.current = selection.getRangeAt(0).cloneRange();
+      return next;
+    };
+
     const flush = () => {
       rafId = null;
       queued = false;
       if (document.activeElement !== el) return;
-      const next = getWireCaretOffset(el);
-      cursorRef.current = next;
+      const next = rememberSelection();
+      if (next === null) return;
       if (next === lastOffset) return;
       lastOffset = next;
       if (!shouldSyncSelectionRef.current) return;
@@ -168,7 +203,10 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     };
 
     const onFocus = () => attach();
-    const onBlur = () => detach();
+    const onBlur = () => {
+      rememberSelection();
+      detach();
+    };
 
     el.addEventListener('focus', onFocus);
     el.addEventListener('blur', onBlur);
@@ -195,6 +233,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
 
   const onWireInput = useCallback((wire: string, caret: number) => {
     valueRef.current = wire;
+    cursorRef.current = caret;
     setValue(wire);
     setCursor(caret);
   }, []);
@@ -206,9 +245,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     setIsComposing,
     editorRef,
     valueRef,
-    setValue,
-    setCursor,
     adjustHeight,
+    focusForExternalPaste,
     resetEditor,
     onWireInput,
   };

@@ -126,7 +126,12 @@ export interface SkillCatalogSnapshot extends SkillCatalogRuntimeMeta {
   catalog: SkillCatalogEntry[];
 }
 
-export type AgentSkillUnavailableReason = 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled';
+export type AgentSkillUnavailableReason =
+  | 'agent-denied'
+  | 'disabled'
+  | 'requirements-unmet'
+  | 'model-invocation-disabled'
+  | 'tool-gated';
 
 export interface AgentSkillAvailabilityEntry extends SkillCatalogEntry {
   availableForCurrentAgent: boolean;
@@ -810,6 +815,7 @@ export class AgentManager implements AgentInstanceGateway {
   private buildAgentSkillAvailability(
     profile: EffectiveAgentProfile,
     workspaceDir: string,
+    registeredToolNames?: string[],
   ): AgentSkillAvailabilityPayload {
     const cfg = this.config.config!;
     const entry = Array.isArray(cfg.agents?.list)
@@ -820,6 +826,18 @@ export class AgentManager implements AgentInstanceGateway {
     const lock = loadSkillsLock();
     const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
     const allow = profile.skillsAllowlist === undefined ? undefined : new Set(profile.skillsAllowlist.map((s) => s.toLowerCase()));
+    const tools = registeredToolNames ?? this.toolsFactory.createAllTools({
+      workspace: workspaceDir,
+      profileMarkdownRoot: resolveAgentProfileDir(cfg, profile.agentId),
+      agentId: profile.agentId,
+      disabledTools: profile.tools.denied,
+      getMemoryManager: () => rt.memoryManager,
+      getSkillManager: () => rt.skillManager,
+    }).map((tool) => tool.name);
+    const visibleSkillNames = new Set(rt.skillManager.selectSkillsForAgentIndexing({
+      skillAllowlist: profile.skillsAllowlist,
+      registeredToolNames: tools,
+    }).map((skill) => skill.name));
 
     const skills = rt.skillManager.getSkills().map((s) => {
       let unavailableReason: AgentSkillUnavailableReason | null = null;
@@ -832,6 +850,8 @@ export class AgentManager implements AgentInstanceGateway {
         unavailableReason = 'requirements-unmet';
       } else if (allow !== undefined && !allow.has(s.name.toLowerCase())) {
         unavailableReason = 'agent-denied';
+      } else if (!visibleSkillNames.has(s.name)) {
+        unavailableReason = 'tool-gated';
       }
 
       return {
@@ -867,11 +887,18 @@ export class AgentManager implements AgentInstanceGateway {
 
   getSessionSkillAvailability(sessionKey: string): AgentSkillAvailabilityPayload {
     const profile = resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
-    return this.buildAgentSkillAvailability(profile, this.getResolvedWorkspaceForSession(sessionKey));
+    return this.buildAgentSkillAvailability(
+      profile,
+      this.getResolvedWorkspaceForSession(sessionKey),
+      this.agents.get(sessionKey)?.registeredToolNames,
+    );
   }
 
   getSessionWorkspaceTrust(sessionKey: string): WorkspaceTrustState {
-    const workspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+    return this.getWorkspaceTrust(this.getResolvedWorkspaceForSession(sessionKey));
+  }
+
+  getWorkspaceTrust(workspacePath: string): WorkspaceTrustState {
     const required = hasTrustRequiringProjectResources(workspacePath);
     const decision = required ? this.projectTrustStore.get(workspacePath) : null;
     return {
@@ -883,13 +910,16 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   setSessionWorkspaceTrust(sessionKey: string, trusted: boolean): WorkspaceTrustState {
-    const workspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+    return this.setWorkspaceTrust(this.getResolvedWorkspaceForSession(sessionKey), trusted);
+  }
+
+  setWorkspaceTrust(workspacePath: string, trusted: boolean): WorkspaceTrustState {
     if (!hasTrustRequiringProjectResources(workspacePath)) {
       return { workspacePath, required: false, decision: null, trusted: false };
     }
     this.projectTrustStore.set(workspacePath, trusted);
     this.refreshSkillsAfterTrustChange();
-    return this.getSessionWorkspaceTrust(sessionKey);
+    return this.getWorkspaceTrust(workspacePath);
   }
 
   /**

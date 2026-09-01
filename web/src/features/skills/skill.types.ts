@@ -128,7 +128,7 @@ export interface SkillInstallAvailability {
   enabled?: boolean;
   defaultAgentId: string;
   availableForDefaultAgent?: boolean;
-  unavailableReason?: 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled' | null;
+  unavailableReason?: 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled' | 'tool-gated' | null;
   diagnostics: SkillDiagnostic[];
 }
 

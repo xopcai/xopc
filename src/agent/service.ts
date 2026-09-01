@@ -649,6 +649,14 @@ export class AgentService {
     return this.agentManager.setSessionWorkspaceTrust(sessionKey, trusted);
   }
 
+  getWorkspaceTrust(workspacePath: string): WorkspaceTrustState {
+    return this.agentManager.getWorkspaceTrust(workspacePath);
+  }
+
+  setWorkspaceTrust(workspacePath: string, trusted: boolean): WorkspaceTrustState {
+    return this.agentManager.setWorkspaceTrust(workspacePath, trusted);
+  }
+
   getCapabilityCatalog(sessionKey?: string): AgentCapabilityCatalogEntry[] {
     return this.agentManager.getCapabilityCatalogForSession(sessionKey);
   }
