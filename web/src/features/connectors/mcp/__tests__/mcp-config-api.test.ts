@@ -24,7 +24,7 @@ describe('MCP OAuth config', () => {
       auth: 'oauth',
       oauthClientId: 'public-client',
     });
-    expect(buildMcpServerConfigFromRow(state.servers[0]!)).toMatchObject({
+    expect(buildMcpServerConfigFromRow(state.servers[0])).toMatchObject({
       url: 'https://mcp.example.com/api',
       transport: 'streamable-http',
       headers: { 'X-Tenant': 'tenant-a' },
@@ -43,7 +43,7 @@ describe('MCP OAuth config', () => {
         },
       },
     });
-    const row = { ...state.servers[0]!, auth: 'oauth' as const };
+    const row = { ...state.servers[0], auth: 'oauth' as const };
 
     expect(buildMcpServerConfigFromRow(row)).not.toHaveProperty('auth');
   });
