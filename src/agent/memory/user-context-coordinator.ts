@@ -17,6 +17,9 @@ import {
 import { isExplicitUnderstandingCorrection } from './understanding/correction.js';
 import { extractAgentUserPlainText } from './user-message-text.js';
 import { assembleTaskContext } from '../../tasks/task-context-assembler.js';
+import { consumeTurnMemoryProvenance, markTurnRecalledContext } from './turn-provenance.js';
+import { planTrustedRecall } from './trusted-recall.js';
+import { prependAgentContext } from '../../user-context/planner.js';
 
 const log = createLogger('UserContextCoordinator');
 
@@ -63,6 +66,8 @@ export class UserContextCoordinator {
       rejected: [],
       consentRequests: [],
       estimatedTokens: 0,
+      contextChars: 0,
+      contextItemCount: 0,
     });
     if (!this.options.isEnabledForSession(sessionKey)) return empty();
     const config = this.options.getConfig();
@@ -113,7 +118,50 @@ export class UserContextCoordinator {
       excludedRecordIds,
       allocation: taskContext.allocation,
     });
-    return plan;
+    const totalChars = taskContext.allocation.maxChars;
+    const remainingChars = Math.max(0, totalChars - plan.contextChars);
+    const remainingResults = Math.max(0, taskContext.allocation.maxResults - plan.contextItemCount);
+    const memoryBudget = Math.min(1_600, Math.floor(totalChars * 0.2), remainingChars);
+    const memoryManager = this.options.getMemoryManagerForSession(sessionKey);
+    const recallResults = memoryBudget >= 256
+      ? await memoryManager.search({
+        query,
+        scope: {
+          workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey),
+          projectId: this.options.getProjectIdForSession?.(sessionKey),
+          sessionKey,
+        },
+        maxResults: 8,
+        minScore: 0.25,
+        trustedOnly: true,
+      })
+      : [];
+    const recall = planTrustedRecall(recallResults, memoryBudget, remainingResults);
+    if (plan.contextChars > 0 || recall.selected.length > 0) {
+      markTurnRecalledContext(sessionKey, turnId);
+    }
+    for (const result of recall.selected) {
+      memoryManager.recordSignal({
+        source: 'context_injection',
+        recordId: result.record.id,
+        score: result.score,
+        metadata: {
+          sessionKey,
+          turnId,
+          workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey),
+          budgetChars: memoryBudget,
+          injectedChars: recall.usedChars,
+        },
+      });
+    }
+    return {
+      ...plan,
+      modelMessage: prependAgentContext(plan.modelMessage, recall.block),
+      memoryRecordIds: recall.selected.map((result) => result.record.id),
+      contextChars: plan.contextChars + recall.usedChars,
+      contextItemCount: plan.contextItemCount + recall.selected.length,
+      estimatedTokens: Math.ceil((plan.contextChars + recall.usedChars) / 4),
+    };
   }
 
   async afterTurn(sessionKey: string, userPlainText: string): Promise<import('./understanding/types.js').UnderstandingReviewResult | undefined> {
@@ -122,6 +170,10 @@ export class UserContextCoordinator {
     const assistantContent = this.options.getLastAssistantContent(sessionKey) ?? '';
     if (!isPrivateSession(sessionKey)) return undefined;
     const correctionTargetRecordIds = this.correctionTargets.get(sessionKey);
+    const turnId = this.lastTurnId.get(sessionKey);
+    const provenance = turnId
+      ? consumeTurnMemoryProvenance(sessionKey, turnId)
+      : undefined;
     this.correctionTargets.delete(sessionKey);
     try {
       const review = await memoryManager.captureTurnUnderstanding(
@@ -130,19 +182,27 @@ export class UserContextCoordinator {
         {
           agentId: this.options.getAgentIdForSession(sessionKey),
           sessionId: sessionKey,
-          turnId: this.lastTurnId.get(sessionKey),
+          turnId,
           workspaceId: this.options.getWorkspaceIdForSession?.(sessionKey),
           projectId: this.options.getProjectIdForSession?.(sessionKey),
           correctionTargetRecordIds,
         },
       );
-      void memoryManager.syncProvidersForTurn(userPlainText, assistantContent, { sessionId: sessionKey });
+      void memoryManager.syncProvidersForTurn(userPlainText, assistantContent, {
+        sessionId: sessionKey,
+        turnId,
+        provenance,
+      });
       memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
       return review;
     } catch (err) {
       log.warn({ err, sessionKey }, 'Turn understanding capture failed');
     }
-    void memoryManager.syncProvidersForTurn(userPlainText, assistantContent, { sessionId: sessionKey });
+    void memoryManager.syncProvidersForTurn(userPlainText, assistantContent, {
+      sessionId: sessionKey,
+      turnId,
+      provenance,
+    });
     memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
     return undefined;
   }
