@@ -5,13 +5,20 @@ import {
   listBundleMcpServerToolsForGateway,
 } from '../../../agent/mcp/bundle-mcp-gateway.js';
 import { loadMergedBundleMcpConfig } from '../../../agent/mcp/bundle-mcp-config.js';
+import { getMcpOAuthManager } from '../../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { canonicalizeConfiguredMcpServer, normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { isManagedConnectorServer } from '../../../connectors/materialize.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  authenticated.get('/api/mcp/servers', (c) => {
+  const resolveServer = (id: string) => {
+    const cfg = deps.service.currentConfig;
+    const workspaceDir = getWorkspacePath(cfg) || './workspace';
+    return loadMergedBundleMcpConfig({ workspaceDir, cfg }).config.mcpServers[id];
+  };
+
+  authenticated.get('/api/mcp/servers', async (c) => {
     const cfg = deps.service.currentConfig;
     const workspaceDir = getWorkspacePath(cfg) || './workspace';
     const merged = loadMergedBundleMcpConfig({
@@ -19,11 +26,13 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       cfg,
     });
     const configured = normalizeConfiguredMcpServers(cfg.mcp?.servers);
-    const servers = Object.entries(configured).map(([id, server]) => ({
+    const oauthManager = getMcpOAuthManager();
+    const servers = await Promise.all(Object.entries(configured).map(async ([id, server]) => ({
       id,
       managed: isManagedConnectorServer(server),
       connectorId: isManagedConnectorServer(server) ? server.xopcConnector.connectorId : undefined,
-    }));
+      oauth: await oauthManager.status(id, server),
+    })));
     return c.json({
       ok: true,
       payload: {
@@ -33,6 +42,55 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       },
     });
   });
+
+  authenticated.get('/api/mcp/servers/:id/oauth', async (c) => {
+    const id = c.req.param('id');
+    const server = resolveServer(id);
+    if (!server) return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
+    return c.json({ ok: true, payload: await getMcpOAuthManager().status(id, server) });
+  });
+
+  authenticated.post(
+    '/api/mcp/servers/:id/oauth/start',
+    deps.strictRateLimitMiddleware,
+    async (c) => {
+      const id = c.req.param('id');
+      const server = resolveServer(id);
+      if (!server) return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
+      try {
+        const payload = await getMcpOAuthManager().start({
+          serverId: id,
+          rawServer: server,
+          cfg: deps.service.currentConfig,
+        });
+        return c.json({ ok: true, payload });
+      } catch (err) {
+        return c.json(
+          { ok: false, error: err instanceof Error ? err.message : String(err) },
+          400,
+        );
+      }
+    },
+  );
+
+  authenticated.delete(
+    '/api/mcp/servers/:id/oauth',
+    deps.strictRateLimitMiddleware,
+    async (c) => {
+      const id = c.req.param('id');
+      const server = resolveServer(id);
+      if (!server) return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
+      try {
+        const payload = await getMcpOAuthManager().disconnect(id, server);
+        return c.json({ ok: true, payload });
+      } catch (err) {
+        return c.json(
+          { ok: false, error: err instanceof Error ? err.message : String(err) },
+          400,
+        );
+      }
+    },
+  );
 
   authenticated.get('/api/mcp/servers/:id/tools', async (c) => {
     const id = c.req.param('id');
@@ -91,6 +149,13 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       return c.json({ ok: false, error: `Unknown MCP server: ${id}` }, 404);
     }
     try {
+      const oauth = await getMcpOAuthManager().status(id, knownServer);
+      if (oauth.configured && oauth.status !== 'connected') {
+        return c.json(
+          { ok: false, error: oauth.session?.error ?? 'MCP server authorization is required' },
+          409,
+        );
+      }
       const testCfg: typeof cfg = inlineServer
         ? {
             ...cfg,

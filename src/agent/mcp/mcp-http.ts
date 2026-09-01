@@ -10,6 +10,10 @@ export type HttpMcpServerLaunchConfig = {
   transportType: HttpMcpTransportType;
   url: string;
   headers?: Record<string, string>;
+  auth?: {
+    type: "oauth";
+    clientId?: string;
+  };
 };
 
 export type HttpMcpServerLaunchResult =
@@ -58,12 +62,34 @@ export function resolveHttpMcpServerLaunchConfig(
     }
   }
 
+  let auth: HttpMcpServerLaunchConfig["auth"];
+  if (raw.auth !== undefined) {
+    if (!isMcpConfigRecord(raw.auth) || raw.auth.type !== "oauth") {
+      return { ok: false, reason: 'its auth must be { "type": "oauth" }' };
+    }
+    if (raw.auth.clientId !== undefined && (typeof raw.auth.clientId !== "string" || !raw.auth.clientId.trim())) {
+      return { ok: false, reason: "its OAuth clientId must be a non-empty string" };
+    }
+    const transportType = options?.transportType ?? "streamable-http";
+    if (transportType !== "streamable-http") {
+      return { ok: false, reason: "OAuth supports streamable HTTP only" };
+    }
+    if (headers && Object.keys(headers).some((key) => key.toLowerCase() === "authorization")) {
+      return { ok: false, reason: "OAuth cannot be combined with a static Authorization header" };
+    }
+    auth = {
+      type: "oauth",
+      ...(typeof raw.auth.clientId === "string" ? { clientId: raw.auth.clientId.trim() } : {}),
+    };
+  }
+
   return {
     ok: true,
     config: {
       transportType: options?.transportType ?? "streamable-http",
       url,
       headers,
+      auth,
     },
   };
 }
