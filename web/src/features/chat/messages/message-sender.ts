@@ -1,10 +1,12 @@
 import {
   SESSION_INPUT_REQUEST_TIMEOUT_MS,
   SESSION_INPUT_RETRY_DELAYS_MS,
+  parseTurnOutcome,
   sessionInputFingerprint,
   shouldRetrySessionInputStatus,
   type AgentStreamRunEndPayload,
   type ToolActivity,
+  type TurnOutcome,
 } from '@xopcai/gateway-contract';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
@@ -263,6 +265,8 @@ export type MessagingCallbacks = {
   onCompaction?: (state: CompactionState) => void;
   /** Current agent turn plan, emitted by the `update_plan` tool. */
   onTurnPlanUpdated?: (state: TurnPlanState) => void;
+  /** Structured completion result for the current run. */
+  onTurnOutcome?: (outcome: TurnOutcome) => void;
   /** Canonical task plan snapshot emitted by `update_plan` or `todo`. */
   onTaskPlanUpdated?: (state: TaskPlanState) => void;
   /** Isolated `/review` context lifecycle. */
@@ -703,6 +707,11 @@ export class MessageSender {
             items,
           });
         }
+        break;
+      }
+      case 'turn_outcome': {
+        const outcome = parseTurnOutcome(payload);
+        if (outcome) cb?.onTurnOutcome?.(outcome);
         break;
       }
       case 'tts_audio':

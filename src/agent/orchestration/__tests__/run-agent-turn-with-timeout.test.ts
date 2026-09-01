@@ -21,6 +21,8 @@ describe('resolveAgentTurnTimeoutMs', () => {
       },
     });
 
+    expect(DEFAULT_AGENT_TURN_TIMEOUT_MS).toBe(4 * 60 * 60 * 1000);
+    expect(MAX_AGENT_TURN_TIMEOUT_MS).toBe(24 * 60 * 60 * 1000);
     expect(resolveAgentTurnTimeoutMs()).toBe(DEFAULT_AGENT_TURN_TIMEOUT_MS);
     expect(resolveAgentTurnTimeoutMs(withTimeout(90_000))).toBe(90_000);
     expect(resolveAgentTurnTimeoutMs(withTimeout(1_000))).toBe(MIN_AGENT_TURN_TIMEOUT_MS);

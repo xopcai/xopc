@@ -30,6 +30,7 @@ import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js
 
 import { ChatStreamMapper } from '../chat-stream/mapper.js';
 import { coalesceThinkingDeltas } from '../chat-stream/thinking-delta-coalescer.js';
+import { TurnOutcomeCollector } from '../chat-stream/turn-outcome-collector.js';
 import type { ChatStreamEvent } from '../chat-stream/protocol.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
@@ -95,6 +96,7 @@ export async function *runGatewayAgent(
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
   let webchatMetadata: SessionMetadata | undefined;
+  let outcomeEnvironment: 'workspace' | 'worktree' | 'remote_runtime' = 'workspace';
   if (channel === 'webchat') {
     const resolved = resolveWebchatSessionKey({ sessionKey: chatId });
     if (resolved.ok === false) {
@@ -126,6 +128,11 @@ export async function *runGatewayAgent(
       channel,
       metadata: webchatMetadata,
     });
+    if (/remote/i.test(executionContext.strategy ?? '')) {
+      outcomeEnvironment = 'remote_runtime';
+    } else if (/worktree/i.test(executionContext.strategy ?? '')) {
+      outcomeEnvironment = 'worktree';
+    }
     taskRun = TaskRunCoordinator.start({
       runId,
       context: executionContext,
@@ -133,8 +140,11 @@ export async function *runGatewayAgent(
     });
   }
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
+  const outcomeCollector = new TurnOutcomeCollector(runId, outcomeEnvironment);
+  let outcomeFinalized = false;
   let registeredActiveWebchatRun = false;
   const captureTaskEvent = (event: ChatStreamEvent): void => {
+    outcomeCollector.capture(event);
     if (event.type === 'task_plan_updated') {
       taskRun?.capturePlan(event.payload.items);
       return;
@@ -163,6 +173,34 @@ export async function *runGatewayAgent(
       }
       yield event;
     }
+  };
+  const finalizeOutcome = async (
+    status: AgentStreamRunStatus,
+    summary?: string,
+  ): Promise<ChatStreamEvent[]> => {
+    if (outcomeFinalized) return [];
+    outcomeFinalized = true;
+    const outcome = outcomeCollector.finalize(status, summary);
+    if (webchatSessionKey) {
+      try {
+        await sessionIndex.appendTranscriptCustomEntry(webchatSessionKey, {
+          customType: 'turn_outcome',
+          data: outcome,
+        });
+      } catch (err) {
+        log.warn(
+          { err, runId, sessionKey: webchatSessionKey },
+          `Turn outcome persistence failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    return [{
+      type: 'turn_outcome',
+      runId,
+      sessionKey: streamSessionKey,
+      timestamp: Date.now(),
+      payload: outcome,
+    }];
   };
 
   try {
@@ -220,6 +258,7 @@ export async function *runGatewayAgent(
         taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
         terminalStatus = endStatus;
         taskRunSummary = endSummary;
+        yield* emitAndYield(await finalizeOutcome(endStatus, endSummary));
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         completeRealtimeTopic(`run:${runId}`);
         runTopicCompleted = true;
@@ -246,6 +285,7 @@ export async function *runGatewayAgent(
         taskRunSummary = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         yield* emitAndYield(mapper.error(errorContent));
+        yield* emitAndYield(await finalizeOutcome('error', streamError));
         yield* emitAndYield(mapper.end('error', streamError));
         completeRealtimeTopic(`run:${runId}`);
         runTopicCompleted = true;
@@ -323,6 +363,7 @@ export async function *runGatewayAgent(
         payload: { messageId, presentation: 'answer' },
       },
     ]);
+    yield* emitAndYield(await finalizeOutcome('success', 'Message processed'));
     yield* emitAndYield(mapper.end('success', 'Message processed'));
     taskRunStatus = 'succeeded';
     taskRunSummary = 'Message processed';
@@ -345,6 +386,7 @@ export async function *runGatewayAgent(
     );
     if (channel === 'webchat' && !runTopicCompleted) {
       yield* emitAndYield(mapper.error(formatAgentRunErrorForClient(em)));
+      yield* emitAndYield(await finalizeOutcome('error', em));
       yield* emitAndYield(mapper.end('error', em));
       completeRealtimeTopic(`run:${runId}`);
       runTopicCompleted = true;

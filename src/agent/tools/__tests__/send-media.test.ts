@@ -67,6 +67,12 @@ describe('send_media', () => {
         mimeType: 'image/webp',
         uri: 'media://outbound/photo---id.webp',
       }],
+      artifacts: [{
+        artifactId: 'photo---id.webp',
+        kind: 'image',
+        location: 'artifact_store',
+        uri: 'media://outbound/photo---id.webp',
+      }],
     });
     expect(result.content[0]?.text).toContain('Media attached');
   });
@@ -89,7 +95,10 @@ describe('send_media', () => {
       mediaType: 'document',
       mediaUrl: expect.stringMatching(/^data:image\/svg\+xml;base64,/),
     }));
-    expect(result.details).toMatchObject({ media: [{ uri: 'media://outbound/photo---id.webp' }] });
+    expect(result.details).toMatchObject({
+      media: [{ uri: 'media://outbound/photo---id.webp' }],
+      artifacts: [{ kind: 'file', uri: 'media://outbound/photo---id.webp' }],
+    });
   });
 
   it('returns an error when no conversation context is active', async () => {

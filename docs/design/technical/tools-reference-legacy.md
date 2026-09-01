@@ -163,10 +163,10 @@ Runs a shell command under workspace constraints. Stdout/stderr are truncated (e
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `command` | string | yes | Command line |
-| `timeout` | number | no | Seconds (default: 300) |
+| `timeout` | number | no | Seconds (default: 1800) |
 | `cwd` | string | no | Working directory |
 
-Default timeout 5 minutes; execution is restricted to the workspace.
+Default timeout 30 minutes; execution is restricted to the workspace.
 
 ```json
 {
@@ -383,7 +383,7 @@ Only registered when the runtime provides the automation service (normal for gat
 | Operation | Limit |
 |-----------|-------|
 | File paths | Workspace-scoped |
-| Shell | 5 min timeout; output truncated (~50KB) |
+| Shell | 30 min default timeout; output truncated (~50KB) |
 | File read | Lines/bytes capped (e.g. 500 lines / 50KB) |
 | File size | Large reads rejected (e.g. max ~10MB) |
 

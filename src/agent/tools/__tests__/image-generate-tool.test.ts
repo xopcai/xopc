@@ -157,6 +157,13 @@ describe('image_generate tool — Step 2 input wiring', () => {
         uri: 'media://outbound/generated---id.png',
       }),
     ]);
+    expect(res.details?.artifacts).toEqual([
+      expect.objectContaining({
+        kind: 'image',
+        location: 'artifact_store',
+        uri: 'media://outbound/generated---id.png',
+      }),
+    ]);
   });
 
   it('drops invalid enum values silently (lets provider apply defaults)', async () => {

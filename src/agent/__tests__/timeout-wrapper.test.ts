@@ -52,7 +52,7 @@ describe('TimeoutWrapper Module', () => {
 
       await executeWithTimeout(operation, { toolName: 'shell_exec' });
 
-      // Should use exec_command timeout (5 minutes = 300000ms)
+      // Uses the shared 30-minute tool timeout.
       // We can't easily test this without exposing internals,
       // but we can verify it doesn't timeout immediately
       vi.advanceTimersByTime(1000);
@@ -64,7 +64,7 @@ describe('TimeoutWrapper Module', () => {
 
       await executeWithTimeout(operation, { toolName: 'read_file' });
 
-      // Should use read timeout (30 seconds)
+      // Uses the shared 30-minute tool timeout.
       vi.advanceTimersByTime(1000);
       expect(operation).toHaveBeenCalled();
     });
@@ -272,11 +272,11 @@ describe('TimeoutWrapper Module', () => {
 
   describe('DEFAULT_TIMEOUT_CONFIG', () => {
     it('should have sensible defaults', () => {
-      expect(DEFAULT_TIMEOUT_CONFIG.defaultTimeoutMs).toBe(300000); // 5 minutes
-      expect(DEFAULT_TIMEOUT_CONFIG.shellTimeoutMs).toBe(300000); // 5 minutes
-      expect(DEFAULT_TIMEOUT_CONFIG.readTimeoutMs).toBe(30000); // 30 seconds
-      expect(DEFAULT_TIMEOUT_CONFIG.writeTimeoutMs).toBe(60000); // 1 minute
-      expect(DEFAULT_TIMEOUT_CONFIG.networkTimeoutMs).toBe(60000); // 1 minute
+      expect(DEFAULT_TIMEOUT_CONFIG.defaultTimeoutMs).toBe(1_800_000);
+      expect(DEFAULT_TIMEOUT_CONFIG.shellTimeoutMs).toBe(1_800_000);
+      expect(DEFAULT_TIMEOUT_CONFIG.readTimeoutMs).toBe(1_800_000);
+      expect(DEFAULT_TIMEOUT_CONFIG.writeTimeoutMs).toBe(1_800_000);
+      expect(DEFAULT_TIMEOUT_CONFIG.networkTimeoutMs).toBe(1_800_000);
       expect(DEFAULT_TIMEOUT_CONFIG.gracefulShutdownMs).toBe(5000); // 5 seconds
     });
   });

@@ -1,9 +1,6 @@
 import {
-  collectAssistantWorkspaceOutputPaths,
-  collectAssistantToolMedia,
-  filterAssistantAttachmentsDedupedAgainstWorkspacePaths,
   imageContentBlocksToAttachments,
-} from '@/features/chat/messages/assistant-message-artifacts';
+} from '@/features/chat/messages/assistant-message-images';
 import { getActivityTiming } from '@/features/chat/messages/activity-timing';
 import { filterVisibleSteps } from '@/features/chat/messages/assistant-steps-summary';
 import type {
@@ -44,11 +41,8 @@ export interface AssistantTurnViewModel {
     state: AssistantTurnLifecycleState;
     activeTool?: ToolUseContent;
   };
-  deliverables: {
-    workspacePaths: ReturnType<typeof collectAssistantWorkspaceOutputPaths>;
-    mediaAttachments: MessageAttachment[];
-    attachments?: MessageAttachment[];
-  };
+  outcome: Message['outcome'];
+  attachments?: MessageAttachment[];
   sources: SearchSource[];
 }
 
@@ -102,7 +96,17 @@ export function buildAssistantTurnViewModel({
     (block): block is ImageContent =>
       block.type === 'image' && Boolean(block.source?.data),
   );
-  const workspacePaths = collectAssistantWorkspaceOutputPaths(message.content);
+  const outcomeArtifactIds = new Set(message.outcome?.deliverables.map((item) => item.artifactId));
+  const outcomeArtifactUris = new Set(
+    message.outcome?.deliverables.flatMap((item) => item.uri ? [item.uri] : []),
+  );
+  const standaloneAttachments = [
+    ...imageContentBlocksToAttachments(imageBlocks),
+    ...(message.attachments ?? []),
+  ].filter((attachment) => !(
+    (attachment.id && outcomeArtifactIds.has(attachment.id))
+    || (attachment.uri && outcomeArtifactUris.has(attachment.uri))
+  ));
 
   let state: AssistantTurnLifecycleState;
   if (!isStreaming) {
@@ -143,17 +147,8 @@ export function buildAssistantTurnViewModel({
       state,
       activeTool: state === 'using_tool' ? runningTool : undefined,
     },
-    deliverables: {
-      workspacePaths,
-      mediaAttachments: [
-        ...imageContentBlocksToAttachments(imageBlocks),
-        ...collectAssistantToolMedia(message.content),
-      ],
-      attachments: filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
-        message.attachments,
-        workspacePaths,
-      ),
-    },
+    outcome: message.outcome,
+    attachments: standaloneAttachments,
     sources: extractSearchSources(toolBlocks),
   };
 }

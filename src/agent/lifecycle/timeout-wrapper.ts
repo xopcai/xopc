@@ -12,21 +12,23 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('TimeoutWrapper');
 
 export interface TimeoutConfig {
-  defaultTimeoutMs: number;      // Default timeout in ms (default: 300000 = 5 min)
-  shellTimeoutMs: number;        // Shell command timeout (default: 300000 = 5 min)
-  readTimeoutMs: number;         // File read timeout (default: 30000 = 30 sec)
-  writeTimeoutMs: number;        // File write timeout (default: 60000 = 1 min)
-  networkTimeoutMs: number;      // Network request timeout (default: 60000 = 1 min)
+  defaultTimeoutMs: number;
+  shellTimeoutMs: number;
+  readTimeoutMs: number;
+  writeTimeoutMs: number;
+  networkTimeoutMs: number;
   gracefulShutdownMs: number;    // Time to wait for graceful shutdown (default: 5000)
 }
 
+export const DEFAULT_TOOL_EXECUTION_TIMEOUT_MS = 30 * 60 * 1000;
+
 const DEFAULT_CONFIG: TimeoutConfig = {
-  defaultTimeoutMs: 5 * 60 * 1000,      // 5 minutes
-  shellTimeoutMs: 5 * 60 * 1000,        // 5 minutes
-  readTimeoutMs: 30 * 1000,             // 30 seconds
-  writeTimeoutMs: 60 * 1000,            // 1 minute
-  networkTimeoutMs: 60 * 1000,          // 1 minute
-  gracefulShutdownMs: 5000,             // 5 seconds
+  defaultTimeoutMs: DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
+  shellTimeoutMs: DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
+  readTimeoutMs: DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
+  writeTimeoutMs: DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
+  networkTimeoutMs: DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
+  gracefulShutdownMs: 5000,
 };
 
 export interface TimeoutResult<T> {

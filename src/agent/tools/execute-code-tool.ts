@@ -28,7 +28,7 @@ const ExecuteCodeSchema = Type.Object({
   }),
   timeout: Type.Optional(
     Type.Number({
-      description: 'Execution timeout in seconds (default: 3600 = 60m, max: 14400 = 4h)',
+      description: 'Execution timeout in seconds (default: 1800 = 30m, max: 14400 = 4h)',
       default: DEFAULT_TIMEOUT_SEC,
     }),
   ),
