@@ -29,6 +29,7 @@ export type McpPromptInfo = {
 };
 
 export type McpTransportKind = 'stdio' | 'sse' | 'streamable-http';
+export type McpAuthKind = 'none' | 'oauth';
 
 export type McpServerRow = {
   /** Stable React list key; not persisted to config. */
@@ -41,6 +42,8 @@ export type McpServerRow = {
   cwd: string;
   url: string;
   headers: McpHeaderEntry[];
+  auth: McpAuthKind;
+  oauthClientId: string;
   connectionTimeoutMs: number | undefined;
   requestTimeoutMs: number | undefined;
 };
@@ -121,6 +124,12 @@ function rowToServerConfig(row: McpServerRow): Record<string, unknown> {
   };
   const headers = headersToRecord(row.headers);
   if (headers) config.headers = headers;
+  if (row.transport === 'streamable-http' && row.auth === 'oauth') {
+    config.auth = {
+      type: 'oauth',
+      ...(row.oauthClientId.trim() ? { clientId: row.oauthClientId.trim() } : {}),
+    };
+  }
   if (row.connectionTimeoutMs != null && Number.isFinite(row.connectionTimeoutMs)) {
     config.connectionTimeoutMs = row.connectionTimeoutMs;
   }
@@ -143,6 +152,11 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
     raw.headers && typeof raw.headers === 'object' && !Array.isArray(raw.headers)
       ? (raw.headers as Record<string, unknown>)
       : undefined;
+  const authRaw =
+    raw.auth && typeof raw.auth === 'object' && !Array.isArray(raw.auth)
+      ? (raw.auth as Record<string, unknown>)
+      : undefined;
+  const auth: McpAuthKind = authRaw?.type === 'oauth' ? 'oauth' : 'none';
 
   return {
     clientKey: id,
@@ -154,6 +168,8 @@ function serverConfigToRow(id: string, raw: Record<string, unknown>): McpServerR
     cwd: typeof raw.cwd === 'string' ? raw.cwd : typeof raw.workingDirectory === 'string' ? raw.workingDirectory : '',
     url: typeof raw.url === 'string' ? raw.url : '',
     headers: recordToHeaders(headersRaw),
+    auth,
+    oauthClientId: typeof authRaw?.clientId === 'string' ? authRaw.clientId : '',
     connectionTimeoutMs:
       typeof raw.connectionTimeoutMs === 'number' && Number.isFinite(raw.connectionTimeoutMs)
         ? raw.connectionTimeoutMs
@@ -176,6 +192,8 @@ export function emptyMcpServerRow(id = ''): McpServerRow {
     cwd: '',
     url: '',
     headers: [{ key: 'Authorization', value: '' }],
+    auth: 'none',
+    oauthClientId: '',
     connectionTimeoutMs: undefined,
     requestTimeoutMs: undefined,
   };
@@ -247,16 +265,45 @@ export type McpServerTestResult = {
   prompts: McpPromptInfo[];
 };
 
-/** Accept legacy `string[]` or `{ name, description? }[]` from the gateway. */
+export type McpOAuthStatus = {
+  configured: boolean;
+  status: 'not_configured' | 'disconnected' | 'authorizing' | 'connected' | 'error';
+  session?: {
+    status: string;
+    authorizationUrl?: string;
+    error?: string;
+  };
+};
+
+async function requestMcpOAuth(
+  serverId: string,
+  method: 'GET' | 'POST' | 'DELETE',
+  suffix = '',
+): Promise<McpOAuthStatus> {
+  const response = await fetchJson<{ ok?: boolean; payload?: McpOAuthStatus; error?: string }>(
+    apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/oauth${suffix}`),
+    { method },
+  );
+  if (!response.payload) throw new Error(response.error ?? 'MCP OAuth request failed');
+  return response.payload;
+}
+
+export function getMcpOAuthStatus(serverId: string): Promise<McpOAuthStatus> {
+  return requestMcpOAuth(serverId, 'GET');
+}
+
+export function startMcpOAuth(serverId: string): Promise<McpOAuthStatus> {
+  return requestMcpOAuth(serverId, 'POST', '/start');
+}
+
+export function disconnectMcpOAuth(serverId: string): Promise<McpOAuthStatus> {
+  return requestMcpOAuth(serverId, 'DELETE');
+}
+
 function normalizeMcpTools(tools: unknown): McpToolInfo[] {
   if (!Array.isArray(tools)) return [];
   const out: McpToolInfo[] = [];
   for (const item of tools) {
-    if (typeof item === 'string') {
-      const name = item.trim();
-      if (name) out.push({ name });
-      continue;
-    }
     if (!item || typeof item !== 'object') continue;
     const raw = item as { name?: unknown; shortName?: unknown; description?: unknown };
     if (typeof raw.name !== 'string') continue;

@@ -1176,6 +1176,26 @@
     "envLabel": "环境变量（JSON 对象）",
     "envHint": "值可使用 ${ENV_VAR}。危险的主机环境变量会在启动时被过滤。",
     "urlLabel": "服务器地址",
+    "authLabel": "鉴权方式",
+    "authHint": "OAuth 使用 Authorization Code + PKCE，并按端点在本地保存一个账号。",
+    "authLabels": {
+      "none": "无 / 使用 Headers",
+      "oauth": "OAuth"
+    },
+    "oauthClientIdLabel": "OAuth client ID",
+    "oauthClientIdHint": "可选。服务端支持动态客户端注册时请留空。",
+    "oauthClientIdPlaceholder": "public-client-id",
+    "oauthConnect": "连接",
+    "oauthDisconnect": "断开",
+    "oauthOpenAuthorization": "打开授权页",
+    "oauthOpenFailed": "无法打开授权页。请允许弹窗或检查系统浏览器权限后重新连接。",
+    "oauthSaveBeforeTest": "请先保存服务器并完成 OAuth 连接，再从服务器卡片测试。",
+    "oauthStatus": {
+      "disconnected": "未连接",
+      "authorizing": "授权中",
+      "connected": "已连接",
+      "error": "授权失败"
+    },
     "headersLabel": "Headers",
     "optionalSuffix": "（可选）",
     "headersHint": "远程 MCP 服务的 Bearer token 与自定义头。",

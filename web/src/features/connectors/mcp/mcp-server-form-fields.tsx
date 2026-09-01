@@ -7,6 +7,7 @@ import {
   parseRequestTimeoutSeconds,
   requestTimeoutSeconds,
   type McpServerRow,
+  type McpAuthKind,
   type McpTransportKind,
 } from '@/features/connectors/mcp/mcp-config-api';
 import type { McpSettingsMessages } from '@/i18n/messages';
@@ -15,6 +16,7 @@ import { cn } from '@/lib/cn';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const TRANSPORTS: McpTransportKind[] = ['stdio', 'sse', 'streamable-http'];
+const AUTH_KINDS: McpAuthKind[] = ['none', 'oauth'];
 
 function Field({
   label,
@@ -144,6 +146,39 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               </Field>
             </div>
           ) : null}
+          {showBasic && row.transport === 'streamable-http' ? (
+            <>
+              <Field label={t.authLabel} description={t.authHint}>
+                <Select
+                  className={inputClassName()}
+                  value={row.auth}
+                  onChange={(event) => {
+                    const auth = event.target.value as McpAuthKind;
+                    onUpdate({
+                      auth,
+                      headers: auth === 'oauth'
+                        ? row.headers.filter((header) => header.key.trim().toLowerCase() !== 'authorization')
+                        : row.headers,
+                    });
+                  }}
+                >
+                  {AUTH_KINDS.map((auth) => (
+                    <SelectOption key={auth} value={auth}>{t.authLabels[auth]}</SelectOption>
+                  ))}
+                </Select>
+              </Field>
+              {row.auth === 'oauth' ? (
+                <Field label={t.oauthClientIdLabel} description={t.oauthClientIdHint}>
+                  <input
+                    className={cn(inputClassName(), 'font-mono text-xs')}
+                    value={row.oauthClientId}
+                    placeholder={t.oauthClientIdPlaceholder}
+                    onChange={(event) => onUpdate({ oauthClientId: event.target.value })}
+                  />
+                </Field>
+              ) : null}
+            </>
+          ) : null}
           {showAdvanced ? (
             <McpHeadersEditor
               label={t.headersLabel}
@@ -155,7 +190,11 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage, varia
               keyPlaceholder={t.headerKeyPlaceholder}
               valuePlaceholder={t.headerValuePlaceholder}
               headers={row.headers}
-              onChange={(headers) => onUpdate({ headers })}
+              onChange={(headers) => onUpdate({
+                headers: row.auth === 'oauth'
+                  ? headers.filter((header) => header.key.trim().toLowerCase() !== 'authorization')
+                  : headers,
+              })}
             />
           ) : null}
         </>

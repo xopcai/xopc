@@ -3,6 +3,7 @@ import {
   type SSEClientTransportOptions,
 } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { FetchLike, Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { fetch as undiciFetch } from "undici";
@@ -14,6 +15,8 @@ const log = createLogger("Mcp:Transport");
 import { normalizeOptionalString } from "../../utils/string-coerce.js";
 import { XopcStdioClientTransport } from "./mcp-stdio-transport.js";
 import { resolveMcpTransportConfig } from "./mcp-transport-config.js";
+import { XopcMcpOAuthClientProvider } from "./oauth/mcp-oauth-provider.js";
+import { McpOAuthStore } from "./oauth/mcp-oauth-store.js";
 
 export type ResolvedMcpTransport = {
   transport: Transport;
@@ -78,10 +81,32 @@ function buildSseEventSourceFetch(headers: Record<string, string>): SseEventSour
   };
 }
 
+function buildScopedHttpFetch(serverUrl: URL, headers: Record<string, string>): FetchLike {
+  return async (url, init) => {
+    const mergedHeaders = new Headers();
+    if (new URL(url).origin === serverUrl.origin) {
+      for (const [key, value] of Object.entries(headers)) mergedHeaders.set(key, value);
+    }
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => mergedHeaders.set(key, value));
+    }
+    return fetchWithUndici(url, {
+      ...init,
+      headers: mergedHeaders,
+    });
+  };
+}
+
+export type ResolveMcpTransportOptions = {
+  oauthProvider?: OAuthClientProvider;
+  oauthStore?: McpOAuthStore;
+};
+
 export async function resolveMcpTransport(
   serverName: string,
   rawServer: unknown,
   config?: Config,
+  options: ResolveMcpTransportOptions = {},
 ): Promise<ResolvedMcpTransport | null> {
   const resolved = resolveMcpTransportConfig(serverName, rawServer);
   if (!resolved) {
@@ -122,10 +147,27 @@ export async function resolveMcpTransport(
     };
   }
   if (resolved.transportType === "streamable-http") {
+    const serverUrl = new URL(resolved.url);
+    const oauthEnabled = Boolean(resolved.auth);
+    let oauthProvider = options.oauthProvider;
+    if (resolved.auth && !oauthProvider) {
+      const store = options.oauthStore ?? new McpOAuthStore();
+      const record = await store.load(serverUrl);
+      if (record?.tokens) {
+        oauthProvider = new XopcMcpOAuthClientProvider({
+          serverUrl,
+          clientId: resolved.auth.clientId,
+          store,
+        });
+      }
+    }
     return {
-      transport: new StreamableHTTPClientTransport(new URL(resolved.url), {
-        requestInit: resolved.headers ? { headers: resolved.headers } : undefined,
-        fetch: fetchWithUndici,
+      transport: new StreamableHTTPClientTransport(serverUrl, {
+        authProvider: oauthProvider,
+        requestInit: !oauthEnabled && resolved.headers ? { headers: resolved.headers } : undefined,
+        fetch: oauthEnabled
+          ? buildScopedHttpFetch(serverUrl, resolved.headers ?? {})
+          : fetchWithUndici,
       }),
       description: resolved.description,
       transportType: "streamable-http",

@@ -1,10 +1,22 @@
-import { Loader2, PlugZap, Trash2 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { Link2, Loader2, PlugZap, Trash2, Unlink } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+  closeOAuthAuthorizationWindow,
+  openOAuthAuthorizationUrl,
+  reserveOAuthAuthorizationWindow,
+} from '@/features/settings/oauth-authorization-window';
 import { messages } from '@/i18n/messages';
 
-import { testMcpServer, type McpServerRow } from '../mcp/mcp-config-api';
+import {
+  disconnectMcpOAuth,
+  getMcpOAuthStatus,
+  startMcpOAuth,
+  testMcpServer,
+  type McpOAuthStatus,
+  type McpServerRow,
+} from '../mcp/mcp-config-api';
 import { mcpServerEndpointSummary } from '../mcp/mcp-server-endpoint-summary';
 import { formatConnectorMessage } from '../utils/connector-i18n';
 
@@ -29,7 +41,74 @@ export function CustomMcpServerRow({
     promptCount: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [oauthStatus, setOauthStatus] = useState<McpOAuthStatus | null>(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
   const summary = mcpServerEndpointSummary(row);
+  const usesOAuth = row.transport === 'streamable-http' && row.auth === 'oauth';
+
+  useEffect(() => {
+    if (!usesOAuth) {
+      setOauthStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await getMcpOAuthStatus(row.id.trim());
+        if (!cancelled) {
+          setOauthStatus(next);
+          if (next.status === 'error' && next.session?.error) setError(next.session.error);
+          if (next.status === 'connected') setError(null);
+        }
+      } catch (statusError) {
+        if (!cancelled) setError(statusError instanceof Error ? statusError.message : String(statusError));
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => {
+      if (oauthStatus?.status === 'authorizing') void refresh();
+    }, 1_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [oauthStatus?.status, row.id, usesOAuth]);
+
+  const connectOAuth = useCallback(async () => {
+    setOauthBusy(true);
+    setError(null);
+    const popup = reserveOAuthAuthorizationWindow();
+    try {
+      const next = await startMcpOAuth(row.id.trim());
+      setOauthStatus(next);
+      if (next.status === 'error' && next.session?.error) setError(next.session.error);
+      if (next.status === 'connected') setError(null);
+      const authorizationUrl = next.session?.authorizationUrl;
+      if (authorizationUrl) {
+        const opened = await openOAuthAuthorizationUrl(authorizationUrl, popup);
+        if (!opened) setError(t.oauthOpenFailed);
+      } else {
+        closeOAuthAuthorizationWindow(popup);
+      }
+    } catch (connectError) {
+      closeOAuthAuthorizationWindow(popup);
+      setError(connectError instanceof Error ? connectError.message : String(connectError));
+    } finally {
+      setOauthBusy(false);
+    }
+  }, [row.id, t.oauthOpenFailed]);
+
+  const disconnectOAuth = useCallback(async () => {
+    setOauthBusy(true);
+    setError(null);
+    try {
+      setOauthStatus(await disconnectMcpOAuth(row.id.trim()));
+    } catch (disconnectError) {
+      setError(disconnectError instanceof Error ? disconnectError.message : String(disconnectError));
+    } finally {
+      setOauthBusy(false);
+    }
+  }, [row.id]);
 
   const runTest = useCallback(async () => {
     setTesting(true);
@@ -73,6 +152,11 @@ export function CustomMcpServerRow({
           <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
             {t.transportLabels[row.transport]}
           </span>
+          {usesOAuth && oauthStatus ? (
+            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+              {t.oauthStatus[oauthStatus.status === 'not_configured' ? 'disconnected' : oauthStatus.status]}
+            </span>
+          ) : null}
         </div>
         {summary ? (
           <p className="mt-3 line-clamp-2 break-all font-mono text-xs leading-5 text-fg-subtle" title={summary}>
@@ -93,10 +177,23 @@ export function CustomMcpServerRow({
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-edge pt-3" onClick={(event) => event.stopPropagation()}>
         <span className="text-xs text-fg-subtle">{cs.connectorDetails}</span>
         <div className="flex gap-2">
-          <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
-            {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-            {t.testConnection}
-          </Button>
+          {usesOAuth && oauthStatus?.status !== 'connected' ? (
+            <Button variant="secondary" disabled={oauthBusy} onClick={() => void connectOAuth()}>
+              {oauthBusy ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+              {oauthStatus?.status === 'authorizing' ? t.oauthOpenAuthorization : t.oauthConnect}
+            </Button>
+          ) : (
+            <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
+              {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+              {t.testConnection}
+            </Button>
+          )}
+          {usesOAuth && oauthStatus?.status === 'connected' ? (
+            <Button variant="ghost" disabled={oauthBusy} onClick={() => void disconnectOAuth()}>
+              {oauthBusy ? <Loader2 className="size-4 animate-spin" /> : <Unlink className="size-4" />}
+              {t.oauthDisconnect}
+            </Button>
+          ) : null}
           <Button variant="ghost" disabled={removing} onClick={() => void remove()}>
             {removing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
             {t.removeServer}
