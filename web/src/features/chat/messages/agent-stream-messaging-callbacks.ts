@@ -198,6 +198,12 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onTaskPlanUpdated: (taskPlan) => {
       store().setSessionTaskPlan(chatId, taskPlan);
     },
+    onTurnOutcome: (outcome) => {
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (message) => {
+        message.outcome = outcome;
+      });
+    },
     onReview: ({ review }) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {

@@ -18,7 +18,11 @@ import type {
   AgentToolUpdateCallback,
 } from '@earendil-works/pi-agent-core';
 import { createLogger } from '../../utils/logger.js';
-import { executeWithTimeout, TimeoutError } from '../lifecycle/timeout-wrapper.js';
+import {
+  DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
+  executeWithTimeout,
+  TimeoutError,
+} from '../lifecycle/timeout-wrapper.js';
 import { withRetry } from '../../infra/retry.js';
 import type { XopcToolMetadata } from './metadata.js';
 import { ToolConcurrencyController, resolveToolLockMode } from './concurrency.js';
@@ -44,7 +48,7 @@ export interface ToolExecutorConfig {
 }
 
 const DEFAULT_CONFIG: ToolExecutorConfig = {
-  defaultTimeoutMs: 5 * 60 * 1000, // 5 minutes
+  defaultTimeoutMs: DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
   maxRetries: 2,
   retryDelayMs: 1000,
   enableTimeout: true,
