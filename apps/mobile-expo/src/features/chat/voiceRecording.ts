@@ -51,6 +51,10 @@ export type VoiceTranscriptionFailureKind =
  */
 export const MAX_VOICE_RECORDING_MS = 8 * 60 * 1000;
 
+export function isVoiceInputAvailable(permission: MicrophonePermissionResult): boolean {
+  return permission.granted || permission.canAskAgain;
+}
+
 export function classifyVoiceTranscriptionFailure(error: unknown): VoiceTranscriptionFailureKind {
   const message = error instanceof Error ? error.message : String(error);
   if (/ffmpeg|audio decoder|unsupported[_ ]audio[_ ]codec/i.test(message)) return 'decoder_unavailable';
@@ -129,16 +133,23 @@ export function nativeRecordingOptionsForPlatform(
   } as Partial<RecordingOptions>;
 }
 
-export async function requestMicPermission(): Promise<MicrophonePermissionResult> {
+export async function getMicPermissionStatus(): Promise<MicrophonePermissionResult> {
   try {
     const current = await getRecordingPermissionsAsync();
-    if (current.granted || !current.canAskAgain) {
-      return {
-        granted: current.granted,
-        canAskAgain: current.canAskAgain,
-        requested: false,
-      };
-    }
+    return {
+      granted: current.granted,
+      canAskAgain: current.canAskAgain,
+      requested: false,
+    };
+  } catch (error) {
+    throw new VoiceRecordingError('permission', error);
+  }
+}
+
+export async function requestMicPermission(): Promise<MicrophonePermissionResult> {
+  try {
+    const current = await getMicPermissionStatus();
+    if (current.granted || !current.canAskAgain) return current;
 
     const requested = await requestRecordingPermissionsAsync();
     return {
