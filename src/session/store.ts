@@ -6,6 +6,8 @@ import { resolveStateDir } from '../config/paths-state.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
 import { resolveCompactionPolicy } from '../agent/memory/compaction-policy.js';
+import { promoteCompactionLedger } from '../agent/memory/compaction-promotion.js';
+import { resolveAgentIdFromSessionKey } from '../routing/agent-session-key.js';
 import { createLogger } from '../utils/logger.js';
 import {
   SessionCompactor,
@@ -753,6 +755,30 @@ export class SessionStore {
       });
       if (!appended) {
         throw new Error(`Session changed while compaction was running: ${key}`);
+      }
+      try {
+        const metadata = getSessionMetadata(key);
+        const promoted = promoteCompactionLedger({
+          sessionKey: key,
+          sessionId: expectedSnapshot.sessionId,
+          sourceAgentId: resolveAgentIdFromSessionKey(key),
+          workspaceId: this.resolveWorkspaceCwd(key),
+          projectId: metadata?.projectId,
+          handover: result.handover,
+          audit: result.audit,
+          sourceEntries: expectedSnapshot.entries,
+        });
+        log.info(
+          {
+            sessionKey: key,
+            episodicCount: promoted.episodicRecordIds.length,
+            durableCount: promoted.durableRecordIds.length,
+            rejectedCount: promoted.rejectedRecordIds.length,
+          },
+          'Compaction ledger memory promotion completed',
+        );
+      } catch (err) {
+        log.warn({ err, sessionKey: key }, 'Compaction ledger memory promotion failed');
       }
       log.info(
         { key, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter, keptMessages: compacted.length },

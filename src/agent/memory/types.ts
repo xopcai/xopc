@@ -35,6 +35,28 @@ export type MemoryDurability = 'ephemeral' | 'durable' | 'recurring';
 
 export type MemoryDisclosurePolicy = 'silent' | 'referenceable' | 'ask_before_reference';
 
+export type MemoryOriginClass = 'owner' | 'agent' | 'untrusted' | 'system';
+
+export type MemorySessionKind =
+  | 'interactive'
+  | 'group'
+  | 'automation'
+  | 'workflow'
+  | 'subagent'
+  | 'background'
+  | 'unknown';
+
+export interface MemoryProvenance {
+  sourceAgentId: string;
+  originClass: MemoryOriginClass;
+  sessionKind: MemorySessionKind;
+  observedAt: string;
+  sourceSessionId?: string;
+  sourceTurnId?: string;
+  supersedesKey?: string;
+  derivedFromRecalledContext: boolean;
+}
+
 export type MemoryEvidenceRelation = 'supports' | 'contradicts' | 'supersedes' | 'derived_from';
 
 export interface MemoryEvidence {
@@ -75,9 +97,7 @@ export interface MemoryRecord {
   status?: MemoryStatus;
   canonicalKey?: string;
   scope: MemoryScope;
-  provenance: {
-    sourceAgentId: string;
-  };
+  provenance: MemoryProvenance;
   content: string;
   source: {
     sourceInstanceId?: string;
@@ -111,6 +131,8 @@ export interface MemorySearchRequest {
   kinds?: MemoryKind[];
   maxResults?: number;
   minScore?: number;
+  /** Only return owner/agent records that were not derived from recalled context. */
+  trustedOnly?: boolean;
 }
 
 export interface MemorySearchResult {
@@ -143,6 +165,7 @@ export interface MemoryWriteRequest {
   scope?: Partial<MemoryScope>;
   /** Agent that produced this record. This is request data, never provider state. */
   sourceAgentId?: string;
+  provenance?: Partial<Omit<MemoryProvenance, 'sourceAgentId'>>;
   writeTarget?: 'agentProfile' | 'understanding' | 'workspace';
   confirmed?: boolean;
   tags?: string[];
@@ -210,6 +233,8 @@ export type MemorySyncEvent =
       userContent: string;
       assistantContent: string;
       sessionId?: string;
+      turnId?: string;
+      provenance: Omit<MemoryProvenance, 'sourceAgentId' | 'observedAt'>;
     }
   | {
       type: 'signal';

@@ -107,6 +107,54 @@ describe('sqlite notes and memory repositories', () => {
     });
   });
 
+  it('persists structural provenance and fail-closes trusted recall', () => {
+    upsertMemoryRecord({
+      id: 'trusted-owner-memory',
+      providerId: 'local',
+      kind: 'preference',
+      sourceAgentId: 'main',
+      content: 'Prefer structural provenance checks.',
+      originClass: 'owner',
+      sessionKind: 'interactive',
+      observedAt: '2026-08-31T12:00:00.000Z',
+      sourceSessionId: 'agent:main:main',
+      sourceTurnId: 'turn-1',
+    });
+    upsertMemoryRecord({
+      id: 'recalled-loop-memory',
+      providerId: 'local',
+      kind: 'preference',
+      sourceAgentId: 'main',
+      content: 'Prefer structural provenance checks from recalled context.',
+      originClass: 'agent',
+      sessionKind: 'interactive',
+      derivedFromRecalledContext: true,
+    });
+    upsertMemoryRecord({
+      id: 'unknown-origin-memory',
+      providerId: 'local',
+      kind: 'preference',
+      sourceAgentId: 'main',
+      content: 'Prefer structural provenance checks from an unknown source.',
+    });
+
+    expect(getMemoryRecord('trusted-owner-memory')?.provenance).toMatchObject({
+      originClass: 'owner',
+      sessionKind: 'interactive',
+      observedAt: '2026-08-31T12:00:00.000Z',
+      sourceSessionId: 'agent:main:main',
+      sourceTurnId: 'turn-1',
+      derivedFromRecalledContext: false,
+    });
+    const trusted = searchMemoryRecords({
+      query: 'structural provenance checks',
+      trustedOnly: true,
+      maxResults: 10,
+    });
+    expect(trusted.map((hit) => hit.record.id)).toEqual(['trusted-owner-memory']);
+    expect(getMemoryRecord('unknown-origin-memory')?.provenance.originClass).toBe('untrusted');
+  });
+
   it('falls back to bounded lexical similarity for Chinese reformulations', () => {
     upsertMemoryRecord({
       id: 'memory-zh-preference',
