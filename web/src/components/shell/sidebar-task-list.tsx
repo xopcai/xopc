@@ -14,7 +14,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState, type UIEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type FormEvent, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
@@ -26,8 +26,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
+import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
+import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import {
   archiveProject,
+  createProject,
   createProjectSession,
   deleteProject,
   pinProject,
@@ -813,6 +816,8 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const m = messages(language);
   const sb = m.sidebar;
   const sess = m.sessions;
+  const projectsText = m.projectsPage;
+  const wd = m.chat.workingDirectory;
   const token = useGatewayStore((s) => s.token);
   const openTokenDialog = useGatewayStore((s) => s.openTokenDialog);
 
@@ -842,6 +847,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameProjectId, setRenameProjectId] = useState<string | null>(null);
   const [renameProjectDraft, setRenameProjectDraft] = useState('');
   const [removeProjectId, setRemoveProjectId] = useState<string | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createProjectName, setCreateProjectName] = useState('');
+  const [createProjectWorkspace, setCreateProjectWorkspace] = useState('');
+  const [createProjectError, setCreateProjectError] = useState<string | null>(null);
+  const [creatingProject, setCreatingProject] = useState(false);
   const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
   const [projectsCollapsed, setProjectsCollapsed] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
@@ -852,6 +862,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [inboxExtraItems, setInboxExtraItems] = useState<SessionMetadata[]>([]);
   const [inboxHasMoreOverride, setInboxHasMoreOverride] = useState<boolean | null>(null);
   const [loadingInboxMore, setLoadingInboxMore] = useState(false);
+  const workspacePicker = useDirectoryPicker({
+    initialPath: createProjectWorkspace,
+    onPicked: setCreateProjectWorkspace,
+  });
 
   const { data, size, setSize, isValidating, mutate } = useSWRInfinite<Awaited<ReturnType<typeof fetchSidebarChatList>>>(
     (pageIndex, previousPageData) => {
@@ -1223,6 +1237,28 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
   }, [defaultAgentId, navigate, onNavigate, refreshSidebar]);
 
+  const submitCreateProject = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = createProjectName.trim();
+    const workspaceRoot = createProjectWorkspace.trim();
+    if (!name || !workspaceRoot || creatingProject) return;
+
+    setCreatingProject(true);
+    setCreateProjectError(null);
+    try {
+      const project = await createProject({ name, workspaceRoot });
+      setCreateProjectName('');
+      setCreateProjectWorkspace('');
+      setCreateProjectOpen(false);
+      refreshSidebar();
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+    } catch (cause) {
+      setCreateProjectError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCreatingProject(false);
+    }
+  }, [createProjectName, createProjectWorkspace, creatingProject, refreshSidebar]);
+
   const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
   const renameProjectTarget = renameProjectId
     ? projectGroups.find((group) => group.project.id === renameProjectId)?.project
@@ -1281,7 +1317,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
             />
             {projectGroups.length > 0 ? (
               <div className="pb-1">
-                <div className="px-2 pb-1">
+                <div className="group flex items-center justify-between px-2 pb-1">
                   <button
                     type="button"
                     className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
@@ -1297,6 +1333,19 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                       strokeWidth={1.75}
                       aria-hidden
                     />
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex size-6 items-center justify-center rounded-md text-fg-subtle opacity-0 transition-[color,background-color,opacity] hover:bg-surface-hover hover:text-fg focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                      'group-hover:opacity-100 group-focus-within:opacity-100',
+                      createProjectOpen && 'opacity-100',
+                    )}
+                    onClick={() => setCreateProjectOpen(true)}
+                    aria-label={projectsText.createTitle}
+                    title={projectsText.createTitle}
+                  >
+                    <Plus className="size-3.5" strokeWidth={2} aria-hidden />
                   </button>
                 </div>
                 {!projectsCollapsed
@@ -1366,6 +1415,96 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ) : null}
       </div>
+
+      <Dialog.Root
+        open={createProjectOpen}
+        onOpenChange={(open) => {
+          if (creatingProject) return;
+          setCreateProjectOpen(open);
+          if (!open) setCreateProjectError(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(30rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="shrink-0 border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">{projectsText.createTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">
+                {projectsText.createDescription}
+              </Dialog.Description>
+            </div>
+            <form onSubmit={submitCreateProject} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <label className="grid gap-1.5 text-sm font-medium text-fg">
+                  {projectsText.projectName}
+                  <input
+                    autoFocus
+                    className="h-10 rounded-lg border border-edge bg-surface-base px-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                    value={createProjectName}
+                    onChange={(event) => setCreateProjectName(event.target.value)}
+                    maxLength={160}
+                  />
+                </label>
+                <div className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg">{projectsText.workspaceRoot}</span>
+                  <button
+                    type="button"
+                    className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-edge bg-surface-base px-3 py-2 text-left outline-none transition-colors hover:bg-surface-hover focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={workspacePicker.pick}
+                    disabled={creatingProject || workspacePicker.picking}
+                  >
+                    {workspacePicker.picking
+                      ? <Loader2 className="size-5 shrink-0 animate-spin text-accent" aria-hidden />
+                      : <FolderOpen className="size-5 shrink-0 text-accent" aria-hidden />}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-fg">
+                        {createProjectWorkspace ? wd.chooseFolder : wd.selectWorkingDirectory}
+                      </span>
+                      <span
+                        className={cn(
+                          'mt-0.5 block truncate font-mono text-xs font-normal',
+                          createProjectWorkspace ? 'text-fg-muted' : 'text-fg-subtle',
+                        )}
+                        title={createProjectWorkspace || undefined}
+                      >
+                        {createProjectWorkspace || projectsText.workspaceSelectionPlaceholder}
+                      </span>
+                    </span>
+                  </button>
+                  <p className="text-xs font-normal text-fg-subtle">{projectsText.workspaceSelectionHint}</p>
+                </div>
+                {createProjectError ? (
+                  <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
+                    {createProjectError}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+                <Dialog.Close asChild>
+                  <Button type="button" variant="ghost" disabled={creatingProject}>{projectsText.cancel}</Button>
+                </Dialog.Close>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={creatingProject || !createProjectName.trim() || !createProjectWorkspace.trim()}
+                >
+                  {creatingProject ? projectsText.home.creating : projectsText.create}
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {!workspacePicker.hasNativePicker ? (
+        <WorkingDirectoryPickerModal
+          open={workspacePicker.modalOpen}
+          onOpenChange={workspacePicker.setModalOpen}
+          initialAbsolutePath={createProjectWorkspace || undefined}
+          onConfirm={workspacePicker.confirmPick}
+          wd={wd}
+        />
+      ) : null}
 
       <Dialog.Root open={renameKey !== null} onOpenChange={(o) => !o && setRenameKey(null)}>
         <Dialog.Portal>
