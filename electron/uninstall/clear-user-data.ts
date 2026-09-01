@@ -1,5 +1,7 @@
 import { app } from 'electron';
 
+import { bypassNextAppQuitConfirmation } from '../quit-confirmation.js';
+
 import { UninstallError } from './errors.js';
 import { prepareShutdown } from './prepare-shutdown.js';
 import { removeUserDataDirs } from './remove-user-data-dirs.js';
@@ -13,6 +15,7 @@ export async function clearUserData(): Promise<ClearUserDataResult> {
     prepareShutdown();
     await removeUserDataDirs();
     app.relaunch();
+    bypassNextAppQuitConfirmation();
     app.quit();
     return { ok: true };
   } catch (err) {

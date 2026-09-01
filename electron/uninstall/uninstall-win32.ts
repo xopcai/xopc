@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 
 import { app } from 'electron';
 
+import { bypassNextAppQuitConfirmation } from '../quit-confirmation.js';
+
 import { UninstallError } from './errors.js';
 import { clearUserDataWithoutRelaunch } from './clear-user-data.js';
 import { queryWindowsUninstallerFromRegistry } from './dir-size.js';
@@ -41,6 +43,7 @@ export async function uninstallAppWin32(options: {
     }
 
     spawn(uninstallerPath, [], { detached: true, stdio: 'ignore' }).unref();
+    bypassNextAppQuitConfirmation();
     app.quit();
     return { ok: true, mode: 'native-uninstaller' };
   } catch (err) {

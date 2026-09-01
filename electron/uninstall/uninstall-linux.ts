@@ -1,5 +1,7 @@
 import { app, shell } from 'electron';
 
+import { bypassNextAppQuitConfirmation } from '../quit-confirmation.js';
+
 import { UninstallError } from './errors.js';
 import { clearUserDataWithoutRelaunch } from './clear-user-data.js';
 import {
@@ -41,6 +43,7 @@ export async function uninstallAppLinux(options: {
     const kind = detectLinuxPackageKind(process.execPath);
     await openLinuxInstallLocation(process.execPath, kind);
 
+    bypassNextAppQuitConfirmation();
     app.quit();
 
     const debPackageName = await resolveLinuxDebPackageName(process.execPath);
