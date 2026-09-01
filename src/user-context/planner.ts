@@ -191,7 +191,7 @@ export class UserContextPlanner {
   }): UserContextPlan {
     const traceId = randomUUID();
     const query = params.query.trim();
-    if (!query) return { traceId, modelMessage: params.userMessage, items: [], rejected: [], consentRequests: [], estimatedTokens: 0, allocation: params.allocation };
+    if (!query) return { traceId, modelMessage: params.userMessage, items: [], rejected: [], consentRequests: [], estimatedTokens: 0, contextChars: 0, contextItemCount: 0, allocation: params.allocation };
 
     const started = Date.now();
     const now = Date.now();
@@ -205,7 +205,8 @@ export class UserContextPlanner {
     const queryProfile = buildRetrievalQueryProfile(query, scopeInput);
     const selfReview = queryProfile.selfReview;
     const maxResults = requestedMaxResults ?? (selfReview ? SELF_REVIEW_MAX_RESULTS : DEFAULT_MAX_RESULTS);
-    const maxChars = requestedMaxChars ?? (selfReview ? SELF_REVIEW_MAX_CONTEXT_CHARS : DEFAULT_MAX_CONTEXT_CHARS);
+    const budgetChars = requestedMaxChars ?? (selfReview ? SELF_REVIEW_MAX_CONTEXT_CHARS : DEFAULT_MAX_CONTEXT_CHARS);
+    const maxChars = Math.max(0, budgetChars - 2);
     const projects = new ProjectStore();
     const excluded = new Set(params.excludedRecordIds ?? []);
     const rejected: UserContextPlan['rejected'] = [];
@@ -373,9 +374,12 @@ export class UserContextPlanner {
     }
 
     const block = render();
-    recordContextRun({ turnId: params.turnId, sessionKey: params.sessionKey, query, budget: maxChars,
+    recordContextRun({ turnId: params.turnId, sessionKey: params.sessionKey, query, budget: budgetChars,
       durationMs: Date.now() - started, items: traceItems });
     return { traceId, modelMessage: prependAgentContext(params.userMessage, block), items, rejected, consentRequests,
-      estimatedTokens: Math.ceil(block.length / 4), allocation: params.allocation };
+      estimatedTokens: Math.ceil((block.length + (block ? 2 : 0)) / 4),
+      contextChars: block.length + (block ? 2 : 0),
+      contextItemCount: traceItems.filter((item) => item.decision === 'selected').length,
+      allocation: params.allocation };
   }
 }

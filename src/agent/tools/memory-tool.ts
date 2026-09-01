@@ -57,7 +57,14 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
         }
         const withCitations = results.map((entry) => ({
           id: entry.record.id,
-          ownerAgentId: entry.record.provenance.sourceAgentId,
+          ownerAgentId: entry.record.provenance?.sourceAgentId,
+          originClass: entry.record.provenance?.originClass ?? 'untrusted',
+          sessionKind: entry.record.provenance?.sessionKind ?? 'unknown',
+          derivedFromRecalledContext: entry.record.provenance?.derivedFromRecalledContext ?? true,
+          trustedForAutomaticRecall:
+            (entry.record.provenance?.originClass === 'owner'
+              || entry.record.provenance?.originClass === 'agent')
+            && entry.record.provenance?.derivedFromRecalledContext === false,
           kind: entry.record.kind,
           content: entry.snippet,
           score: entry.score,

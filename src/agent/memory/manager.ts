@@ -22,6 +22,7 @@ import type {
   MemorySignal,
   MemoryKind,
 } from './types.js';
+import type { TurnMemoryProvenance } from './turn-provenance.js';
 
 const log = createLogger('MemoryManager');
 
@@ -157,13 +158,26 @@ export class MemoryManager {
   async syncProvidersForTurn(
     userContent: string,
     assistantContent: string,
-    options?: { sessionId?: string },
+    options?: {
+      sessionId?: string;
+      turnId?: string;
+      provenance?: TurnMemoryProvenance;
+    },
   ): Promise<void> {
+    const provenance = options?.provenance;
     const event: MemorySyncEvent = {
       type: 'turn',
       userContent,
       assistantContent,
       sessionId: options?.sessionId,
+      turnId: options?.turnId,
+      provenance: {
+        originClass: provenance?.originClass ?? 'untrusted',
+        sessionKind: provenance?.sessionKind ?? 'unknown',
+        sourceSessionId: provenance?.sourceSessionId ?? options?.sessionId,
+        sourceTurnId: provenance?.sourceTurnId ?? options?.turnId,
+        derivedFromRecalledContext: provenance?.derivedFromRecalledContext ?? false,
+      },
     };
     for (const p of this.providers) {
       const started = Date.now();
@@ -280,6 +294,12 @@ export class MemoryManager {
     return results
       .sort((a, b) => b.score - a.score)
       .filter((result) => this.canReadRecord(result.record, request.scope))
+      .filter((result) =>
+        !request.trustedOnly
+        || ((result.record.provenance?.originClass === 'owner'
+          || result.record.provenance?.originClass === 'agent')
+          && result.record.provenance?.derivedFromRecalledContext === false),
+      )
       .filter((result) => {
         const key = `${result.citation.providerId}:${result.citation.recordId}`;
         if (seen.has(key)) return false;
@@ -534,6 +554,13 @@ export class MemoryManager {
     }
     if (operation === 'write') {
       const writeRequest = request as MemoryWriteRequest;
+      if (
+        writeRequest.provenance?.derivedFromRecalledContext
+        && writeRequest.status !== 'candidate'
+        && !writeRequest.confirmed
+      ) {
+        return false;
+      }
       if (provider.capabilities.local && this.memoryRuntime) {
         const check = this.memoryRuntime.checkWrite({
           target: writeRequest.writeTarget ?? writeTargetForRecord(writeRequest),

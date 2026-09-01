@@ -136,7 +136,22 @@ class DemoMemoryProvider implements MemoryProvider {
       providerId: this.id,
       kind: request.kind,
       scope: { ...this.scope, ...request.scope },
-      provenance: { sourceAgentId: this.sourceAgentId },
+      provenance: {
+        sourceAgentId: this.sourceAgentId,
+        originClass: request.provenance?.originClass ?? 'untrusted',
+        sessionKind: request.provenance?.sessionKind ?? 'unknown',
+        observedAt: request.provenance?.observedAt ?? now,
+        ...(request.provenance?.sourceSessionId
+          ? { sourceSessionId: request.provenance.sourceSessionId }
+          : {}),
+        ...(request.provenance?.sourceTurnId
+          ? { sourceTurnId: request.provenance.sourceTurnId }
+          : {}),
+        ...(request.provenance?.supersedesKey
+          ? { supersedesKey: request.provenance.supersedesKey }
+          : {}),
+        derivedFromRecalledContext: request.provenance?.derivedFromRecalledContext ?? false,
+      },
       content: request.content,
       source: request.source ?? { provider: this.id },
       explicitness: request.explicitness ?? 'inferred',

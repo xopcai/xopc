@@ -130,6 +130,13 @@ export class ConnectedKnowledgePipeline {
               canonicalKey: existing.canonicalKey,
               supersedesRecordId: existing.supersedesRecordId,
               conflictGroupId: existing.conflictGroupId,
+              originClass: existing.provenance.originClass,
+              sessionKind: existing.provenance.sessionKind,
+              observedAt: existing.provenance.observedAt,
+              sourceSessionId: existing.provenance.sourceSessionId,
+              sourceTurnId: existing.provenance.sourceTurnId,
+              supersedesKey: existing.provenance.supersedesKey,
+              derivedFromRecalledContext: existing.provenance.derivedFromRecalledContext,
             });
           }
           completeKnowledgeSourceItemSynthesis({
@@ -177,6 +184,10 @@ export class ConnectedKnowledgePipeline {
             observedAt: item.occurredAt ?? item.sourceUpdatedAt,
           }],
           validFrom: item.occurredAt ?? item.sourceUpdatedAt,
+          originClass: 'untrusted',
+          sessionKind: 'background',
+          observedAt: item.occurredAt ?? item.sourceUpdatedAt ?? item.updatedAt,
+          derivedFromRecalledContext: false,
         });
         attachMemoryEvidence({
           recordId: record.id,
@@ -275,6 +286,13 @@ export class ConnectedKnowledgePipeline {
           reviewAfter: existing.reviewAfter,
           expiresAt: existing.expiresAt,
           canonicalKey: existing.canonicalKey,
+          originClass: existing.provenance.originClass,
+          sessionKind: existing.provenance.sessionKind,
+          observedAt: existing.provenance.observedAt,
+          sourceSessionId: existing.provenance.sourceSessionId,
+          sourceTurnId: existing.provenance.sourceTurnId,
+          supersedesKey: existing.provenance.supersedesKey,
+          derivedFromRecalledContext: existing.provenance.derivedFromRecalledContext,
         });
       }
       return false;
@@ -313,6 +331,13 @@ export class ConnectedKnowledgePipeline {
         observedAt: item.occurredAt ?? item.sourceUpdatedAt,
       })),
       validFrom: `${day}T00:00:00.000Z`,
+      originClass: 'untrusted',
+      sessionKind: 'background',
+      observedAt: items
+        .map((item) => item.occurredAt ?? item.sourceUpdatedAt ?? item.updatedAt)
+        .sort()
+        .at(-1),
+      derivedFromRecalledContext: false,
     });
     deleteMemoryEvidenceForRecord(summary.id, 'derived_from');
     for (const item of items) {

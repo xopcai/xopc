@@ -5,7 +5,9 @@ import type {
   MemoryDurability,
   MemoryExplicitness,
   MemoryKind,
+  MemoryOriginClass,
   MemoryRecord,
+  MemorySessionKind,
   MemorySensitivity,
   MemorySearchResult,
   MemorySignal,
@@ -49,6 +51,13 @@ type MemoryRecordRow = {
   expires_at: number | null;
   supersedes_record_id: string | null;
   conflict_group_id: string | null;
+  origin_class: string;
+  session_kind: string;
+  observed_at: number;
+  source_session_id: string | null;
+  source_turn_id: string | null;
+  supersedes_key: string | null;
+  derived_from_recalled_context: number;
   created_at: number;
   updated_at: number;
 };
@@ -84,6 +93,13 @@ export interface UpsertMemoryRecordInput {
   expiresAt?: string;
   supersedesRecordId?: string;
   conflictGroupId?: string;
+  originClass?: MemoryOriginClass;
+  sessionKind?: MemorySessionKind;
+  observedAt?: string;
+  sourceSessionId?: string;
+  sourceTurnId?: string;
+  supersedesKey?: string;
+  derivedFromRecalledContext?: boolean;
   nowMs?: number;
 }
 
@@ -133,6 +149,7 @@ export interface SearchMemoryRecordsOptions {
   statuses?: MemoryStatus[];
   maxResults?: number;
   minScore?: number;
+  trustedOnly?: boolean;
 }
 
 export interface AppendMemorySignalInput {
@@ -381,7 +398,16 @@ function rowToRecord(row: MemoryRecordRow, evidence: MemoryRecord['evidence'] = 
       ...(row.session_key ? { sessionKey: row.session_key } : {}),
       ...(row.project_id ? { projectId: row.project_id } : {}),
     },
-    provenance: { sourceAgentId: row.source_agent_id },
+    provenance: {
+      sourceAgentId: row.source_agent_id,
+      originClass: row.origin_class as MemoryOriginClass,
+      sessionKind: row.session_kind as MemorySessionKind,
+      observedAt: new Date(row.observed_at).toISOString(),
+      ...(row.source_session_id ? { sourceSessionId: row.source_session_id } : {}),
+      ...(row.source_turn_id ? { sourceTurnId: row.source_turn_id } : {}),
+      ...(row.supersedes_key ? { supersedesKey: row.supersedes_key } : {}),
+      derivedFromRecalledContext: row.derived_from_recalled_context === 1,
+    },
     content: row.content,
     source: parseSource(row.source_json),
     ...(row.confidence != null ? { confidence: row.confidence } : {}),
@@ -434,6 +460,9 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
   const validTo = parseOptionalTimestamp(input.validTo);
   const reviewAfter = parseOptionalTimestamp(input.reviewAfter);
   const expiresAt = parseOptionalTimestamp(input.expiresAt);
+  const observedAt = parseOptionalTimestamp(input.observedAt) ?? now;
+  const originClass = input.originClass ?? 'untrusted';
+  const sessionKind = input.sessionKind ?? 'unknown';
   const source = {
     ...(input.source ?? {}),
     provider: input.source?.provider ?? input.providerId,
@@ -446,8 +475,10 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
         content, source_json, confidence, tags_json, status, sensitivity,
         canonical_key, explicitness, durability, importance,
         disclosure_policy, valid_from, valid_to, review_after, expires_at,
-        supersedes_record_id, conflict_group_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        supersedes_record_id, conflict_group_id,
+        origin_class, session_kind, observed_at, source_session_id, source_turn_id,
+        supersedes_key, derived_from_recalled_context, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         provider_id = excluded.provider_id,
         kind = excluded.kind,
@@ -473,6 +504,13 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
         expires_at = excluded.expires_at,
         supersedes_record_id = excluded.supersedes_record_id,
         conflict_group_id = excluded.conflict_group_id,
+        origin_class = excluded.origin_class,
+        session_kind = excluded.session_kind,
+        observed_at = excluded.observed_at,
+        source_session_id = excluded.source_session_id,
+        source_turn_id = excluded.source_turn_id,
+        supersedes_key = excluded.supersedes_key,
+        derived_from_recalled_context = excluded.derived_from_recalled_context,
         updated_at = excluded.updated_at`,
     ).run(
       id,
@@ -500,6 +538,13 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       expiresAt,
       input.supersedesRecordId ?? null,
       input.conflictGroupId ?? null,
+      originClass,
+      sessionKind,
+      observedAt,
+      input.sourceSessionId ?? null,
+      input.sourceTurnId ?? null,
+      input.supersedesKey ?? null,
+      input.derivedFromRecalledContext ? 1 : 0,
       now,
       now,
     );
@@ -555,7 +600,16 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       ...(input.sessionKey ? { sessionKey: input.sessionKey } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),
     },
-    provenance: { sourceAgentId: input.sourceAgentId },
+    provenance: {
+      sourceAgentId: input.sourceAgentId,
+      originClass,
+      sessionKind,
+      observedAt: new Date(observedAt).toISOString(),
+      ...(input.sourceSessionId ? { sourceSessionId: input.sourceSessionId } : {}),
+      ...(input.sourceTurnId ? { sourceTurnId: input.sourceTurnId } : {}),
+      ...(input.supersedesKey ? { supersedesKey: input.supersedesKey } : {}),
+      derivedFromRecalledContext: input.derivedFromRecalledContext ?? false,
+    },
     content: input.content,
     source,
     ...(input.confidence != null ? { confidence: input.confidence } : {}),
@@ -718,6 +772,10 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
     filters.push(`f.kind IN (${options.kinds.map(() => '?').join(', ')})`);
     params.push(...options.kinds);
   }
+  if (options.trustedOnly) {
+    filters.push(`r.origin_class IN ('owner', 'agent')`);
+    filters.push('r.derived_from_recalled_context = 0');
+  }
   const statuses = options.statuses && options.statuses.length > 0 ? options.statuses : ['active'];
   filters.push(`r.status IN (${statuses.map(() => '?').join(', ')})`);
   params.push(...statuses);
@@ -754,6 +812,10 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
     }).filter((record) =>
       statuses.includes(record.status ?? 'active')
       && (!options.kinds?.length || options.kinds.includes(record.kind)),
+    ).filter((record) =>
+      !options.trustedOnly
+      || ((record.provenance.originClass === 'owner' || record.provenance.originClass === 'agent')
+        && !record.provenance.derivedFromRecalledContext),
     );
   const candidateById = new Map(candidateRecords.map((record) => [record.id, record]));
   const missingRows = rows.filter((row) => !candidateById.has(row.record_id));
