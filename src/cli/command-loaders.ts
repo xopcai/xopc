@@ -25,6 +25,7 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   tui: () => import('./commands/tui.js'),
   resume: () => import('./commands/resume.js'),
   gateway: () => import('./commands/gateway.js'),
+  history: () => import('./commands/history.js'),
   session: () => import('./commands/session.js'),
   project: () => import('./commands/project.js'),
   config: () => import('./commands/config.js'),
