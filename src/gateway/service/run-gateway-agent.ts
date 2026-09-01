@@ -90,6 +90,7 @@ export async function *runGatewayAgent(
   let taskRunStatus: TaskRunReceipt['status'] = 'failed';
   let taskRunSummary = 'Agent run ended unexpectedly';
   let terminalStatus: AgentStreamRunStatus = 'error';
+  let runTopicCompleted = false;
 
   let webchatSessionKey: string | undefined;
   let webchatSessionId: string | undefined;
@@ -221,6 +222,7 @@ export async function *runGatewayAgent(
         taskRunSummary = endSummary;
         yield* emitAndYield(mapper.end(endStatus, endSummary));
         completeRealtimeTopic(`run:${runId}`);
+        runTopicCompleted = true;
         return {
           status: mergedSignal.aborted ? 'aborted' : 'ok',
           summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
@@ -246,6 +248,7 @@ export async function *runGatewayAgent(
         yield* emitAndYield(mapper.error(errorContent));
         yield* emitAndYield(mapper.end('error', streamError));
         completeRealtimeTopic(`run:${runId}`);
+        runTopicCompleted = true;
         return { status: 'error', summary: streamError };
       } finally {
         if (registeredActiveWebchatRun && activeWebchatRunBySession.get(sessionKey) === runId) {
@@ -327,6 +330,7 @@ export async function *runGatewayAgent(
   } catch (error) {
     const em = error instanceof Error ? error.message : String(error);
     taskRunStatus = 'failed';
+    terminalStatus = 'error';
     taskRunSummary = em;
     log.error(
       {
@@ -339,6 +343,13 @@ export async function *runGatewayAgent(
       },
       `Agent run failed: ${em}`,
     );
+    if (channel === 'webchat' && !runTopicCompleted) {
+      yield* emitAndYield(mapper.error(formatAgentRunErrorForClient(em)));
+      yield* emitAndYield(mapper.end('error', em));
+      completeRealtimeTopic(`run:${runId}`);
+      runTopicCompleted = true;
+      return { status: 'error', summary: em };
+    }
     throw error;
   } finally {
     if (taskRun) {
