@@ -22,18 +22,19 @@ describe('static-ui cache', () => {
     return import('../static-ui.js');
   }
 
-  it('caches file content and serves ETag + Cache-Control', async () => {
-    writeFileSync(join(tempRoot, 'index.html'), '<html>hello</html>', 'utf8');
+  it('caches immutable file content and serves ETag + Cache-Control', async () => {
+    mkdirSync(join(tempRoot, 'assets'), { recursive: true });
+    writeFileSync(join(tempRoot, 'assets', 'app.js'), 'console.log(1)', 'utf8');
     const staticUi = await loadStaticUi();
     staticUi.clearStaticUiCacheForTests();
 
-    const first = staticUi.serveStaticFile('index.html');
-    const second = staticUi.serveStaticFile('index.html');
+    const first = staticUi.serveStaticFile('assets/app.js');
+    const second = staticUi.serveStaticFile('assets/app.js');
 
     expect(first?.status).toBe(200);
-    expect(first?.headers.get('Cache-Control')).toBe('no-cache');
+    expect(first?.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
     expect(first?.headers.get('ETag')).toBeTruthy();
-    expect(await first?.text()).toBe('<html>hello</html>');
+    expect(await first?.text()).toBe('console.log(1)');
 
     const stats = staticUi.getStaticUiCacheStats();
     expect(stats.entries).toBe(1);
@@ -41,7 +42,7 @@ describe('static-ui cache', () => {
     expect(stats.misses).toBe(1);
 
     const etag = first?.headers.get('ETag') ?? '';
-    const notModified = staticUi.serveStaticFile('index.html', new Request('http://localhost/', {
+    const notModified = staticUi.serveStaticFile('assets/app.js', new Request('http://localhost/assets/app.js', {
       headers: { 'if-none-match': etag },
     }));
     expect(notModified?.status).toBe(304);
@@ -50,15 +51,32 @@ describe('static-ui cache', () => {
     expect(second?.headers.get('ETag')).toBe(etag);
   });
 
+  it('always serves the current index entrypoint from disk', async () => {
+    writeFileSync(join(tempRoot, 'index.html'), '<html>first</html>', 'utf8');
+    const staticUi = await loadStaticUi();
+    staticUi.clearStaticUiCacheForTests();
+
+    const first = staticUi.serveStaticFile('index.html');
+    const firstEtag = first?.headers.get('ETag');
+    expect(await first?.text()).toBe('<html>first</html>');
+
+    writeFileSync(join(tempRoot, 'index.html'), '<html>second</html>', 'utf8');
+    const second = staticUi.serveStaticFile('index.html');
+
+    expect(await second?.text()).toBe('<html>second</html>');
+    expect(second?.headers.get('ETag')).not.toBe(firstEtag);
+    expect(staticUi.getStaticUiCacheStats().entries).toBe(0);
+  });
+
   it('prewarms default UI entrypoints', async () => {
-    writeFileSync(join(tempRoot, 'index.html'), '<html>warm</html>', 'utf8');
     writeFileSync(join(tempRoot, 'favicon.ico'), 'ico', 'utf8');
+    writeFileSync(join(tempRoot, 'logo.svg'), '<svg/>', 'utf8');
     const staticUi = await loadStaticUi();
     staticUi.clearStaticUiCacheForTests();
 
     const result = staticUi.prewarmStaticUiCache();
-    expect(result.loaded).toBeGreaterThanOrEqual(2);
-    expect(staticUi.getStaticUiCacheStats().entries).toBeGreaterThanOrEqual(2);
+    expect(result.loaded).toBe(2);
+    expect(staticUi.getStaticUiCacheStats().entries).toBe(2);
   });
 
   it('uses immutable cache headers for hashed assets', async () => {
