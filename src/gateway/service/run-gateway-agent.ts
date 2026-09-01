@@ -374,7 +374,7 @@ export async function *runGatewayAgent(
         sessionKey: webchatSessionKey,
         status: terminalStatus,
         completedAtMs: Date.now(),
-        route: `/chat/${encodeURIComponent(webchatSessionKey)}`,
+        target: { kind: 'chat', sessionKey: webchatSessionKey },
         source: 'webchat',
         ...(metaAfter?.name?.trim() ? { sessionTitle: metaAfter.name.trim().slice(0, 100) } : {}),
       };

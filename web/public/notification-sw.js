@@ -1,7 +1,7 @@
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const route = event.notification.data?.route;
-  if (typeof route !== 'string' || !route.startsWith('/chat/')) return;
+  if (typeof route !== 'string' || !route.startsWith('/') || route.startsWith('//')) return;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const client = windows[0];

@@ -20,10 +20,11 @@ export class TaskOutboxDispatcher {
     let published = 0;
     for (const row of rows) {
       try {
+        const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
         this.publish({
           type: row.event_type,
           source: 'tasks',
-          payload: JSON.parse(row.payload_json) as Record<string, unknown>,
+          payload: { ...payload, sourceEventId: row.event_id },
           occurredAtMs: row.created_at,
         });
         runSqliteWriteTransaction((db) => {
