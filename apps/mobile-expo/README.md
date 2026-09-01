@@ -130,7 +130,7 @@ The gateway stores device registrations in its local SQLite database and sends a
 Before distributing a build, complete these account-side steps (do not commit credentials or credential files):
 
 1. In Expo/EAS, ensure this project's ID matches `app.json` and build a development or production client; Expo Go is not a valid push-notification test target on Android.
-2. For Android, create the Firebase Android app with package ID `ai.xopc.xopc`, then configure FCM v1 credentials in the Expo project credentials. Save the downloaded client configuration as `apps/mobile-expo/google-services.json` (Git-ignored), or configure an EAS file environment variable named `GOOGLE_SERVICES_JSON`. Run `pnpm -C apps/mobile-expo run verify:android-push` to validate its package and required fields.
+2. For Android, create the Firebase Android app with package ID `ai.xopc.xopc`, then configure FCM v1 credentials in the Expo project credentials. Save the downloaded client configuration as `apps/mobile-expo/google-services.json` (Git-ignored), or configure an EAS file environment variable named `GOOGLE_SERVICES_JSON`. GitHub Android releases also require the Base64-encoded file in the repository secret `GOOGLE_SERVICES_JSON_BASE64`. Run `pnpm -C apps/mobile-expo run verify:android-push` to validate its package and required fields.
 3. For iOS, enable Push Notifications for `ai.xopc.xopc` in the Apple Developer portal and configure an APNs key or profile in EAS credentials. Test on a physical iPhone or iPad.
 4. Make sure the gateway host can make outbound HTTPS requests to `https://exp.host`; device-to-gateway traffic continues to use the paired LAN or remote URL.
 
