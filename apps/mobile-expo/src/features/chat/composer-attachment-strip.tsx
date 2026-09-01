@@ -1,12 +1,14 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
+import { isEditableImageAttachment } from './attachment-file-io-core';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import type { ComposerAttachment } from './composer.types';
 import { FilePreviewModal, type PreviewableFile } from './FilePreviewModal';
+import { ImageEditorModal } from './ImageEditorModal';
 import type { AudioContent } from './messages.types';
 
 function isAudioAttachment(att: ComposerAttachment): boolean {
@@ -58,24 +60,29 @@ function needsAuthHeaders(uri: string): boolean {
 export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   attachments,
   onRemove,
+  onReplace,
   removeLabel,
+  editLabel,
   readOnly = false,
 }: {
   attachments: ComposerAttachment[];
   onRemove: (index: number) => void;
+  onReplace?: (index: number, attachment: ComposerAttachment) => void;
   removeLabel: string;
+  editLabel?: string;
   readOnly?: boolean;
 }) {
   const { colors } = useTheme();
   const token = useGatewayStore((s) => s.token);
   const [preview, setPreview] = useState<PreviewableFile | null>(null);
   const [audioPreview, setAudioPreview] = useState<AudioContent | null>(null);
+  const [editing, setEditing] = useState<{ index: number; attachment: ComposerAttachment } | null>(null);
   const border = colors.border.default;
   const chipBg = colors.surface.input;
   const muted = colors.text.secondary;
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  const items = useMemo(() => attachments.filter(Boolean), [attachments]);
+  const items = attachments;
   if (!items.length) return null;
 
   return (
@@ -122,6 +129,19 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
                   </View>
                 )}
               </Pressable>
+              {!readOnly && onReplace && editLabel && isEditableImageAttachment(att) ? (
+                <Pressable
+                  style={styles.editHit}
+                  onPress={() => setEditing({ index, attachment: att })}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={editLabel}
+                >
+                  <View style={[styles.editBadge, { backgroundColor: colors.surface.panel }]}>
+                    <Icon source="pencil-outline" size={16} color={colors.text.primary} />
+                  </View>
+                </Pressable>
+              ) : null}
               {!readOnly ? (
                 <Pressable
                   style={styles.removeHit}
@@ -139,6 +159,15 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
           );
         })}
       </ScrollView>
+      <ImageEditorModal
+        visible={Boolean(editing)}
+        attachment={editing?.attachment ?? null}
+        onClose={() => setEditing(null)}
+        onSave={(next) => {
+          if (editing) onReplace?.(editing.index, next);
+          setEditing(null);
+        }}
+      />
       <FilePreviewModal visible={Boolean(preview)} file={preview} onClose={() => setPreview(null)} />
       <Modal
         visible={Boolean(audioPreview)}
@@ -204,6 +233,19 @@ const styles = StyleSheet.create({
     top: -6,
     right: -6,
     zIndex: 2,
+  },
+  editHit: {
+    position: 'absolute',
+    left: -4,
+    bottom: -4,
+    zIndex: 2,
+  },
+  editBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeBadge: {
     width: 22,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  stripMediaClaimCheck,
   stripRuntimeUserMessageEnvelope,
   stripSourceContextsEnvelope,
 } from './user-message-display.js';
@@ -47,5 +48,30 @@ describe('stripSourceContextsEnvelope', () => {
   it('unwraps a source-backed message even when no timestamp is present', () => {
     const text = '<source_contexts>\nNote\n</source_contexts>\n\n<user_message>\nSummarize\n</user_message>';
     expect(stripSourceContextsEnvelope(text)).toBe('Summarize');
+  });
+});
+
+describe('stripMediaClaimCheck', () => {
+  it('removes the canonical media block while preserving user text', () => {
+    const text = [
+      '讲一个故事',
+      '[media attached: recording.m4a (audio/mp4, 44355 bytes)]',
+      'xopc-media-uri:media://inbound/recording.m4a',
+      'xopc-media-path:/home/admin/.xopc/media/inbound/recording.m4a',
+      'Use the read_media tool with the xopc-media-uri value when you need to inspect this attachment.',
+    ].join('\n');
+
+    expect(stripMediaClaimCheck(text)).toBe('讲一个故事');
+  });
+
+  it('removes a media-only block completely', () => {
+    const text = [
+      '[media attached: recording.m4a (audio/mp4, 44355 bytes)]',
+      'xopc-media-uri:media://inbound/recording.m4a',
+      'xopc-media-path:/home/admin/.xopc/media/inbound/recording.m4a',
+      'Use the read_media tool with the xopc-media-uri value when you need to inspect this attachment.',
+    ].join('\n');
+
+    expect(stripMediaClaimCheck(text)).toBe('');
   });
 });

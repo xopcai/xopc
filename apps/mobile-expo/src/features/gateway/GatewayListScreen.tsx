@@ -18,7 +18,7 @@ import { syncGatewayUrlsFromTunnelQr } from './apply-tunnel-qr-from-api';
 import { ConnectionLogCard } from './ConnectionLogCard';
 import { GatewayConnectionCard } from './GatewayConnectionCard';
 import { formatGatewayHost } from './gateway-connection-view';
-import { syncAfterGatewaySettingsSave } from './gateway-connection-sync';
+import { switchGatewayProfile } from './gateway-switch-service';
 import { GatewayTunnelStatusCard } from './GatewayTunnelStatusCard';
 import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import {
@@ -49,7 +49,6 @@ export function GatewayListScreen() {
 
   const profiles = useGatewayStore((st) => st.profiles);
   const activeGatewayId = useGatewayStore((st) => st.activeGatewayId);
-  const switchGateway = useGatewayStore((st) => st.switchGateway);
   const configured = useGatewayConfigured();
   const connectionView = useGatewayConnectionView();
 
@@ -67,17 +66,24 @@ export function GatewayListScreen() {
 
   const handleSwitch = useCallback(
     async (id: string) => {
-      if (id === activeGatewayId || switchingId) return;
+      if (id === useGatewayStore.getState().activeGatewayId) return;
       setSwitchingId(id);
+      setSyncNotice(null);
       try {
-        switchGateway(id);
-        await syncAfterGatewaySettingsSave();
+        const result = await switchGatewayProfile(id);
+        if (result.status === 'superseded') return;
+        if (result.status === 'failed') {
+          setSyncNotice(g.routesUnreachableBanner);
+          return;
+        }
         await navigateHomeAfterGatewayConnect(router.replace);
+      } catch {
+        setSyncNotice(g.routesUnreachableBanner);
       } finally {
-        setSwitchingId(null);
+        setSwitchingId((current) => current === id ? null : current);
       }
     },
-    [activeGatewayId, router, switchGateway, switchingId],
+    [g.routesUnreachableBanner, router],
   );
 
   return (

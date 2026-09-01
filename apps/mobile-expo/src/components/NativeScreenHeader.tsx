@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../i18n/messages';
 import { spacing, useTheme } from '../theme';
@@ -21,6 +21,33 @@ interface NativeScreenHeaderProps {
   rightActions?: HeaderAction[];
   searchPlaceholder?: string;
   onSearchPress?: () => void;
+  onTitlePress?: () => void;
+  titleAccessibilityLabel?: string;
+}
+
+function HeaderTitleButton({
+  title,
+  onPress,
+  accessibilityLabel,
+}: {
+  title: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      style={styles.titleButton}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Text style={[styles.titleText, { color: colors.text.primary }]} numberOfLines={1}>
+        {title}
+      </Text>
+      <Icon source="chevron-down" size={17} color={colors.text.tertiary} />
+    </Pressable>
+  );
 }
 
 function HeaderIconButton({ action }: { action: HeaderAction }) {
@@ -48,6 +75,8 @@ export function NativeScreenHeader({
   rightActions,
   searchPlaceholder,
   onSearchPress,
+  onTitlePress,
+  titleAccessibilityLabel,
 }: NativeScreenHeaderProps) {
   const m = useMessages();
   const actions = [
@@ -64,6 +93,15 @@ export function NativeScreenHeader({
       options={{
         headerShown: true,
         title: title ?? '',
+        headerTitle: onTitlePress && title
+          ? () => (
+              <HeaderTitleButton
+                title={title}
+                onPress={onTitlePress}
+                accessibilityLabel={titleAccessibilityLabel}
+              />
+            )
+          : undefined,
         headerLargeTitle: false,
         headerShadowVisible: false,
         headerBackVisible: !onBack,
@@ -92,4 +130,14 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   button: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   logo: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  titleButton: {
+    maxWidth: 220,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  titleText: { maxWidth: 185, fontSize: 16, fontWeight: '600' },
 });

@@ -8,6 +8,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 
+import { isGatewayConnectivityError } from '@/api/gateway-error';
 import { AppToast } from '@/components/AppToast';
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { type GatewayProfileForm, gatewayProfileSchema } from '@/config/schema';
@@ -19,13 +20,15 @@ import { DEFAULT_GATEWAY_BASE_URL, useGatewayStore } from '@/stores/gateway-stor
 import { gatewayProfileNameFromUrl } from '@/stores/gateway-types';
 
 import { syncGatewayUrlsFromTunnelQr } from './apply-tunnel-qr-from-api';
-import { syncAfterGatewaySettingsSave } from './gateway-connection-sync';
+import { gatewayConnectivityErrorMessage } from './gateway-connectivity-error-copy';
 import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
+import { preflightGatewayCredentials } from './preflight-credentials';
+import { saveGatewayProfile } from './save-gateway-profile';
 import {
   gatewayUrlValidationMessage,
   zodGatewayBaseUrlErrorMessage,
 } from './gateway-url-messages';
-import { validateGatewayUrlForManualConnect } from './validate-gateway-url';
+import { assertNotLoopbackGatewayUrl } from './validate-gateway-url';
 import {
   GatewayQrScannerModal,
   requestGatewayQrCameraAccess,
@@ -51,10 +54,7 @@ export function GatewayEditScreen() {
 
   const profiles = useGatewayStore((st) => st.profiles);
   const activeGatewayId = useGatewayStore((st) => st.activeGatewayId);
-  const addProfile = useGatewayStore((st) => st.addProfile);
-  const updateProfile = useGatewayStore((st) => st.updateProfile);
   const removeProfile = useGatewayStore((st) => st.removeProfile);
-  const switchGateway = useGatewayStore((st) => st.switchGateway);
   const configured = useGatewayConfigured();
 
   const existingProfile = useMemo(
@@ -155,27 +155,16 @@ export function GatewayEditScreen() {
     setTesting(true);
     setTestMessage(null);
     setTestOk(null);
-    const st = useGatewayStore.getState();
-    const prev = {
-      baseUrl: st.baseUrl,
-      lanUrl: st.lanUrl,
-      token: st.token,
-      activeBaseUrl: st.activeBaseUrl,
-    };
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    let shouldRestoreStore = false;
     try {
       const formBaseUrl = normalizeBaseUrl(watchedBaseUrl ?? '');
       const formToken = watchedToken ?? '';
       if (!formBaseUrl) return;
 
-      const urlCheck = await validateGatewayUrlForManualConnect(formBaseUrl, {
-        requireReachable: true,
-      });
-      if (!urlCheck.ok) {
+      const blocked = assertNotLoopbackGatewayUrl(formBaseUrl);
+      if (blocked) {
         setTestOk(false);
         setTestMessage(
-          gatewayUrlValidationMessage(urlCheck.code, {
+          gatewayUrlValidationMessage(blocked.code, {
             invalidUrl: s.baseUrlInvalid,
             loopbackUrl: g.loopbackUrl,
             unreachableUrl: g.unreachableUrl,
@@ -184,55 +173,36 @@ export function GatewayEditScreen() {
         return;
       }
 
-      useGatewayStore.setState({
-        baseUrl: urlCheck.url,
+      const result = await preflightGatewayCredentials({
+        baseUrl: formBaseUrl,
         lanUrl: pendingLanUrl,
         token: formToken,
-        activeBaseUrl: urlCheck.url,
       });
-      shouldRestoreStore = true;
-      const active = await st.refreshActiveBaseUrl();
-      if (!active) {
+      if (!result.ok) {
         setTestOk(false);
-        setTestMessage(g.unreachableUrl);
+        setTestMessage(gatewayConnectivityErrorMessage(result.error, l));
         return;
       }
-
-      const controller = new AbortController();
-      timeout = setTimeout(() => controller.abort(), 5000);
-      const headers: Record<string, string> = {};
-      if (formToken) headers.Authorization = `Bearer ${formToken}`;
-      const res = await fetch(`${active}/health`, { signal: controller.signal, headers });
-
-      if (res.ok) {
-        setTestOk(true);
-        setTestMessage(g.testOk);
-      } else {
-        setTestOk(false);
-        setTestMessage(`${g.testFailed} (${res.status})`);
-      }
+      setTestOk(true);
+      setTestMessage(g.testOk);
     } catch {
       setTestOk(false);
       setTestMessage(g.testFailed);
     } finally {
-      if (timeout) clearTimeout(timeout);
-      if (shouldRestoreStore) useGatewayStore.setState(prev);
       setTesting(false);
     }
-  }, [g.loopbackUrl, g.testFailed, g.testOk, g.unreachableUrl, pendingLanUrl, s.baseUrlInvalid, watchedBaseUrl, watchedToken]);
+  }, [g.loopbackUrl, g.testFailed, g.testOk, g.unreachableUrl, l, pendingLanUrl, s.baseUrlInvalid, watchedBaseUrl, watchedToken]);
 
   const onSubmit = async (data: GatewayProfileForm) => {
     const nextBaseUrl = normalizeBaseUrl(data.baseUrl);
     const prevBaseUrl = existingProfile ? normalizeBaseUrl(existingProfile.baseUrl) : '';
     const baseUrlChanged = !isNew && prevBaseUrl !== nextBaseUrl;
 
-    const urlCheck = await validateGatewayUrlForManualConnect(data.baseUrl, {
-      requireReachable: !data.token.trim(),
-    });
-    if (!urlCheck.ok) {
+    const blocked = assertNotLoopbackGatewayUrl(data.baseUrl);
+    if (blocked) {
       Alert.alert(
         s.editGateway,
-        gatewayUrlValidationMessage(urlCheck.code, {
+        gatewayUrlValidationMessage(blocked.code, {
           invalidUrl: s.baseUrlInvalid,
           loopbackUrl: g.loopbackUrl,
           unreachableUrl: g.unreachableUrl,
@@ -243,47 +213,28 @@ export function GatewayEditScreen() {
 
     setSaving(true);
     try {
-      const saveBaseUrl = urlCheck.url;
-      if (isNew) {
-        const duplicate = useGatewayStore.getState().findProfileByBaseUrl(nextBaseUrl);
-        if (duplicate) {
-          updateProfile(duplicate.id, {
-            name: data.name,
-            baseUrl: saveBaseUrl,
-            lanUrl: pendingLanUrl,
-            token: data.token,
-          });
-          switchGateway(duplicate.id);
-        } else {
-          addProfile(
-            {
-              name: data.name,
-              baseUrl: saveBaseUrl,
-              lanUrl: pendingLanUrl,
-              token: data.token,
-            },
-            { setActive: true },
-          );
-        }
-      } else if (existingProfile) {
-        updateProfile(existingProfile.id, {
-          name: data.name,
-          baseUrl: saveBaseUrl,
-          lanUrl: pendingLanUrl,
-          token: data.token,
-        });
-        if (existingProfile.id !== activeGatewayId) {
-          switchGateway(existingProfile.id);
-        }
-      }
-
-      await syncAfterGatewaySettingsSave();
+      await saveGatewayProfile({
+        profileId: existingProfile?.id,
+        name: data.name,
+        baseUrl: nextBaseUrl,
+        lanUrl: pendingLanUrl,
+        token: data.token,
+      });
 
       if (isNew || baseUrlChanged) {
         await navigateHomeAfterGatewayConnect(router.replace);
       } else {
         router.back();
       }
+    } catch (error) {
+      Alert.alert(
+        s.editGateway,
+        isGatewayConnectivityError(error)
+          ? gatewayConnectivityErrorMessage(error, l)
+          : error instanceof Error
+            ? error.message
+            : g.testFailed,
+      );
     } finally {
       setSaving(false);
     }

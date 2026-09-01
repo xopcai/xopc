@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { invalidateQueries, reconnect } = vi.hoisted(() => ({
+const { invalidateQueries, reconnect, resetQueries } = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   reconnect: vi.fn(),
+  resetQueries: vi.fn(),
 }));
 
 vi.mock('../../../query/query-client', () => ({
-  queryClient: { invalidateQueries },
+  queryClient: { invalidateQueries, resetQueries },
 }));
 
 vi.mock('../../../query/keys', () => ({
@@ -19,6 +20,10 @@ vi.mock('../../../query/keys', () => ({
 
 vi.mock('../use-gateway-realtime', () => ({
   getSharedGatewayRealtimeClient: () => ({ reconnect }),
+}));
+
+vi.mock('../probe-coordinator', () => ({
+  getLastProbeTask: () => ({ online: true }),
 }));
 
 vi.mock('../../../stores/gateway-store', () => ({
@@ -36,6 +41,7 @@ describe('syncGatewayAfterConnectivityChange', () => {
     resetGatewaySyncStateForTests();
     invalidateQueries.mockClear();
     reconnect.mockClear();
+    resetQueries.mockClear();
   });
 
   afterEach(() => {
@@ -56,6 +62,13 @@ describe('syncGatewayAfterConnectivityChange', () => {
   it('runs immediately when requested', () => {
     syncGatewayAfterConnectivityChange({ immediate: true });
     expect(invalidateQueries).toHaveBeenCalledTimes(6);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets gateway-backed query state for a committed profile switch', () => {
+    syncGatewayAfterConnectivityChange({ immediate: true, resetQueries: true });
+    expect(resetQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
     expect(reconnect).toHaveBeenCalledTimes(1);
   });
 

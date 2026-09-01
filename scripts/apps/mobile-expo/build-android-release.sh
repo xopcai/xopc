@@ -55,6 +55,8 @@ if [[ ! -f "$ANDROID_KEYSTORE_PATH" ]]; then
   exit 1
 fi
 
+node "${APP_DIR}/scripts/verify-google-services.mjs"
+
 echo "Generating the Android native project..."
 pnpm -C "$APP_DIR" exec expo prebuild --platform android --clean --no-install
 

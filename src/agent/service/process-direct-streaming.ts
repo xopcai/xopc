@@ -44,6 +44,7 @@ import {
   setPendingTranscriptUserMessage,
   type TranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
+import { isSuccessfulWebchatTtsToolEvent } from './webchat-tts.js';
 
 export type DirectStreamInboundAttachment = InboundAttachmentInput;
 
@@ -301,6 +302,7 @@ export async function* runProcessDirectStreaming(
   let userAborted = false;
   let abortHandled = false;
   let inboundVoice = false;
+  let explicitTtsEmitted = false;
   let ranSlashCommand = false;
   let mergedUserText = input.content;
   let webchatSlashReceipt: string | undefined;
@@ -497,6 +499,9 @@ export async function* runProcessDirectStreaming(
                 runId: input.runId,
                 onEvent: (embeddedEvent) => {
                   const event = { ...embeddedEvent };
+                  if (isSuccessfulWebchatTtsToolEvent(event)) {
+                    explicitTtsEmitted = true;
+                  }
                   if (event.type === 'error' && typeof event.content === 'string') {
                     event.content = formatStreamError(event.content);
                   }
@@ -534,7 +539,7 @@ export async function* runProcessDirectStreaming(
           'Coalesced stream progress events because the consumer fell behind',
         );
       }
-      if (!userAborted && !streamOverflowed && channel === 'webchat') {
+      if (!userAborted && !streamOverflowed && channel === 'webchat' && !explicitTtsEmitted) {
         try {
           const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
           if (ttsAudioEvent) {

@@ -3,7 +3,7 @@ import type { ImperativeRouter } from 'expo-router';
 import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import { hasPairableGatewayQr, parseGatewayQrPayload } from './parse-gateway-qr';
 import { resolveGatewayCredentialsFromQr } from './pair-gateway';
-import { upsertGatewayFromPairResult } from './upsert-gateway-from-credentials';
+import { saveGatewayProfile } from './save-gateway-profile';
 
 /**
  * Expo / dev-client URLs sometimes embed the real link after `/--/` or in `?url=`.
@@ -83,10 +83,16 @@ export async function tryConsumeGatewayDeeplink(
     }
     if (!resolved?.baseUrl) return false;
 
-    await upsertGatewayFromPairResult(resolved);
-
-    await navigateHomeAfterGatewayConnect(router.replace);
-    return true;
+    try {
+      await saveGatewayProfile(resolved);
+      const navigation = await navigateHomeAfterGatewayConnect(router.replace);
+      return navigation.ok;
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('[gateway-deeplink] gateway verification failed', err);
+      }
+      return false;
+    }
   })();
 
   inflightDeeplinks.set(inflightKey, work);

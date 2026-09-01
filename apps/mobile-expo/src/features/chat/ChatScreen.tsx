@@ -21,6 +21,7 @@ import { RouteOverrideToastView } from '../gateway/RouteOverrideToastView';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { t } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 
 import { AgentPickerSheet } from './AgentPickerSheet';
@@ -29,11 +30,11 @@ import { ChatContextBanner } from './ChatContextBanner';
 import { ChatHeader } from './ChatHeader';
 import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ClarifyPrompt } from './ClarifyPrompt';
-import { GatewayPickerSheet } from './GatewayPickerSheet';
 import { MessageList } from './MessageList';
 import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
 import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
+import { useAutoReadAloud } from './use-auto-read-aloud';
 import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
 
 const AnimatedView = Animated.createAnimatedComponent(View);
@@ -76,15 +77,10 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     setComposerPrefillAttachments,
     bootstrap,
     chat,
-    gatewayProfiles,
     activeGatewayId,
-    gatewayOnline,
     routeOverrideToast,
     agentSheetVisible,
     setAgentSheetVisible,
-    gatewaySheetVisible,
-    setGatewaySheetVisible,
-    switchingGatewayId,
     handleBack,
     openAgentsPicker,
     openReconnectLanding,
@@ -100,10 +96,20 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleAssistantCopy,
     handleAssistantSaveToNote,
     handleAssistantRegenerate,
-    handleGatewaySelect,
     handleGatewayManageSettings,
-    handleGatewayAdd,
   } = page;
+  const language = usePreferencesStore((state) => state.language);
+  const autoReadAloudEnabled = usePreferencesStore((state) => state.autoReadAloudEnabled);
+  const setAutoReadAloudEnabled = usePreferencesStore((state) => state.setAutoReadAloudEnabled);
+
+  useAutoReadAloud({
+    enabled: autoReadAloudEnabled,
+    language,
+    messages: displayMessages,
+    sessionKey,
+    streaming: chat.streaming,
+    title: m.chat.messageReadAloudTitle,
+  });
 
   const headerPaddingTop = insets.top + (overlay ? 0 : 8);
   const canvasBg = colors.surface.base;
@@ -136,11 +142,11 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
           models={modelsQuery.data?.items ?? []}
           currentModelId={effectiveModelId}
           paddingTop={headerPaddingTop}
-          headerBg={colors.surface.base}
           pillText={colors.text.primary}
-          pillMuted={colors.text.tertiary}
+          autoReadAloudEnabled={autoReadAloudEnabled}
           onBackPress={overlay ? onRequestHome : isShellEmbedded ? undefined : handleBack}
           onAgentPress={openAgentsPicker}
+          onAutoReadAloudToggle={() => setAutoReadAloudEnabled(!autoReadAloudEnabled)}
           onModelSelect={handleModelSelect}
           onFilesPress={sessionKey ? () => router.push(`/files?sessionKey=${encodeURIComponent(sessionKey)}`) : undefined}
           onNewChat={handleNewChat}
@@ -301,17 +307,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         currentAgentId={currentSessionAgentId}
         onSelect={handleAgentSelect}
         onDismiss={() => setAgentSheetVisible(false)}
-      />
-      <GatewayPickerSheet
-        visible={gatewaySheetVisible}
-        profiles={gatewayProfiles}
-        activeGatewayId={activeGatewayId}
-        gatewayOnline={gatewayOnline}
-        switchingId={switchingGatewayId}
-        onSelect={(id) => void handleGatewaySelect(id)}
-        onManageSettings={handleGatewayManageSettings}
-        onAddGateway={handleGatewayAdd}
-        onDismiss={() => setGatewaySheetVisible(false)}
       />
     </View>
   );

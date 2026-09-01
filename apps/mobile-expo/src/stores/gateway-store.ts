@@ -44,11 +44,10 @@ export type GatewayState = {
   apiUrl: (path: string) => string;
   findProfileByBaseUrl: (url: string) => GatewayProfile | null;
   getActiveProfile: () => GatewayProfile | null;
-  applyActiveProfile: (id: string | null) => void;
-  addProfile: (input: GatewayProfileInput, options?: { setActive?: boolean }) => string;
+  addProfile: (input: GatewayProfileInput) => string;
   updateProfile: (id: string, patch: Partial<GatewayProfileInput>) => void;
   removeProfile: (id: string) => void;
-  switchGateway: (id: string) => void;
+  activateProfile: (id: string) => void;
   /** Manual route override for the active profile. */
   routeOverride: RouteOverride;
   setRouteOverride: (override: RouteOverride) => Promise<void>;
@@ -240,11 +239,19 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   },
 
   refreshActiveBaseUrl: async () => {
-    const { baseUrl, lanUrl } = get();
+    const { activeGatewayId, baseUrl, lanUrl } = get();
     const tunnel = normalizeBaseUrl(baseUrl);
     const lan = lanUrl ? normalizeBaseUrl(lanUrl) : '';
+    const isStillActive = () => {
+      const current = get();
+      return (
+        current.activeGatewayId === activeGatewayId &&
+        normalizeBaseUrl(current.baseUrl) === tunnel &&
+        (current.lanUrl ? normalizeBaseUrl(current.lanUrl) : '') === lan
+      );
+    };
     if (!tunnel && !lan) {
-      set({ activeBaseUrl: '' });
+      if (isStillActive()) set({ activeBaseUrl: '' });
       return '';
     }
     const { runProbeRound } = await import('../features/gateway/probe-coordinator');
@@ -255,10 +262,11 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
       (task.result.winner === 'lan' || task.result.winner === 'tunnel')
     ) {
       const resolved = normalizeBaseUrl(winnerUrl);
-      set({ activeBaseUrl: resolved });
+      if (isStillActive()) set({ activeBaseUrl: resolved });
       return resolved;
     }
     // Both unreachable — keep the previous best guess; don't poison the URL.
+    if (!isStillActive()) return normalizeBaseUrl(get().activeBaseUrl);
     const fallback = normalizeBaseUrl(get().activeBaseUrl) || lan || tunnel;
     set({ activeBaseUrl: fallback });
     return fallback;
@@ -319,28 +327,10 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
     return profiles.find((p) => p.id === activeGatewayId) ?? null;
   },
 
-  applyActiveProfile: (id) => {
-    const { profiles } = get();
-    const profile = id ? (profiles.find((p) => p.id === id) ?? null) : null;
-    set({
-      activeGatewayId: profile?.id ?? null,
-      ...flatFieldsFromProfile(profile),
-    });
-  },
-
-  addProfile: (input, options) => {
+  addProfile: (input) => {
     const profile = buildGatewayProfile(input);
-    const setActive = options?.setActive !== false;
     const profiles = [...get().profiles, profile];
-    if (setActive) {
-      set({
-        profiles,
-        activeGatewayId: profile.id,
-        ...flatFieldsFromProfile(profile),
-      });
-    } else {
-      set({ profiles });
-    }
+    set({ profiles });
     get().persist();
     return profile.id;
   },
@@ -402,7 +392,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
     get().persist();
   },
 
-  switchGateway: (id) => {
+  activateProfile: (id) => {
     const profile = get().profiles.find((p) => p.id === id);
     if (!profile) return;
     set({

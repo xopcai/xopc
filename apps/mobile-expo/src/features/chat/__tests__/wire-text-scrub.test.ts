@@ -150,6 +150,39 @@ describe('parseSessionMessages startup context', () => {
     ]);
   });
 
+  it('keeps voice media without exposing its model-only claim check', () => {
+    const ui = parseSessionMessages([
+      {
+        role: 'user',
+        content: [
+          '[media attached: recording.m4a (audio/mp4, 44355 bytes)]',
+          'xopc-media-uri:media://inbound/recording.m4a',
+          'xopc-media-path:/home/admin/.xopc/media/inbound/recording.m4a',
+          'Use the read_media tool with the xopc-media-uri value when you need to inspect this attachment.',
+        ].join('\n'),
+        media: [
+          {
+            id: 'voice-1',
+            type: 'voice',
+            uri: 'media://inbound/recording.m4a',
+            mimeType: 'audio/mp4',
+            name: 'recording.m4a',
+            size: 44355,
+          },
+        ],
+        timestamp: 1,
+      },
+    ]);
+
+    expect(ui[0]?.content).toEqual([]);
+    expect(ui[0]?.attachments).toEqual([
+      expect.objectContaining({
+        uri: 'media://inbound/recording.m4a',
+        mimeType: 'audio/mp4',
+      }),
+    ]);
+  });
+
   it('strips startup prelude from persisted user rows', () => {
     const expanded = `${samplePrelude}\n\n使用 workflow 帮我探索下 /path`;
     const ui = parseSessionMessages([
