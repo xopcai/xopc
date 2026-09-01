@@ -10,6 +10,7 @@ import {
 
 import {
   apiFetch,
+  apiUploadFile,
   formatApiHttpError,
 } from './client';
 import { readUriAsBase64 } from '../features/chat/attachment-file-io';
@@ -39,6 +40,7 @@ import {
   readPendingSessionInput,
   type PendingSessionInput,
 } from '../features/gateway/session-input-outbox';
+import { usePreferencesStore } from '../stores/preferences-store';
 
 async function postSessionInput(path: string, body: string, headers?: Record<string, string>): Promise<Response> {
   let lastError: unknown;
@@ -74,7 +76,6 @@ async function materializeAttachments(attachments: WireAttachment[]): Promise<Wi
       if (!localUri) throw new Error('Audio attachment is missing a native file URI');
       const uploaded = await uploadMediaFile({
         uri: localUri,
-        name: audioAttachment.name ?? 'voice.m4a',
         mimeType: audioAttachment.mimeType ?? 'audio/mp4',
       });
       return { ...audioAttachment, ...uploaded };
@@ -87,18 +88,12 @@ async function materializeAttachments(attachments: WireAttachment[]): Promise<Wi
 
 async function uploadMediaFile(input: {
   uri: string;
-  name: string;
   mimeType: string;
 }): Promise<{ uri: string; name: string; mimeType: string; size: number }> {
-  const form = new FormData();
-  form.append('file', {
+  const res = await apiUploadFile('/api/media', {
     uri: input.uri,
-    name: input.name,
-    type: input.mimeType,
-  } as unknown as Blob);
-  const res = await apiFetch('/api/media', {
-    method: 'POST',
-    body: form,
+    fieldName: 'file',
+    mimeType: input.mimeType,
     timeoutMs: 60_000,
   });
   if (!res.ok) {
@@ -141,17 +136,13 @@ export async function transcribeVoice(
   mimeType: string,
   options?: { language?: string },
 ): Promise<VoiceTranscribeResult> {
-  const extension = mimeType.includes('wav') ? 'wav'
-    : mimeType.includes('ogg') ? 'ogg'
-      : mimeType.includes('mpeg') ? 'mp3'
-        : 'm4a';
-  const name = `voice.${extension}`;
-  const form = new FormData();
-  form.append('audio', { uri, name, type: mimeType } as unknown as Blob);
-  if (options?.language) form.append('language', options.language);
-  const res = await apiFetch('/api/voice/transcriptions', {
-    method: 'POST',
-    body: form,
+  const preferredLanguage = usePreferencesStore.getState().language === 'zh' ? 'zh-CN' : 'en-US';
+  const language = options?.language?.trim() || preferredLanguage;
+  const res = await apiUploadFile('/api/voice/transcriptions', {
+    uri,
+    fieldName: 'audio',
+    mimeType,
+    parameters: { language },
     timeoutMs: 60_000,
     recoverRouteOnNetworkError: true,
   });
