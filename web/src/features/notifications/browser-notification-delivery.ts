@@ -1,4 +1,4 @@
-import type { AgentRunNotification } from '@/features/notifications/agent-run-notification';
+import type { ProductNotificationPresentation } from '@/features/notifications/product-notification';
 import { getBrowserNotificationPreferences } from '@/features/notifications/browser-notification-preferences';
 import {
   markNotificationDelivered,
@@ -20,7 +20,7 @@ async function notificationRegistration(): Promise<ServiceWorkerRegistration> {
   return registration;
 }
 
-export async function deliverBrowserNotification(notification: AgentRunNotification): Promise<boolean> {
+export async function deliverBrowserNotification(notification: ProductNotificationPresentation): Promise<boolean> {
   if (!browserNotificationsSupported()) return false;
   const decision = decideNotification({
     notification,

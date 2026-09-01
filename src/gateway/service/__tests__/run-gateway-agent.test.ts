@@ -194,7 +194,7 @@ describe('runGatewayAgent', () => {
         sessionKey,
         status: 'success',
         sessionTitle: 'Finish notifications',
-        route: `/chat/${encodeURIComponent(sessionKey)}`,
+        target: { kind: 'chat', sessionKey },
       }),
     }]);
     expect(realtimeEvents.filter((event) => event.topic === 'sessions')).toEqual([

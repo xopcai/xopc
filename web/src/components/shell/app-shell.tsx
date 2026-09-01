@@ -20,7 +20,7 @@ import { GlobalCommandPaletteHost } from '@/features/search/global-command-palet
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
-import { AgentRunNotificationCoordinator } from '@/features/notifications/agent-run-notification-coordinator';
+import { ProductNotificationCoordinator } from '@/features/notifications/product-notification-coordinator';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
@@ -156,7 +156,7 @@ export function AppShell() {
         <EndpointToolBridge />
         <GatewayRealtimeBridge />
         <UnderstandingActivityCoordinator />
-        <AgentRunNotificationCoordinator />
+        <ProductNotificationCoordinator />
         <ElectronMenuListener />
         <WindowsTitlebar />
         {isElectronDarwin() ? (
@@ -183,7 +183,7 @@ export function AppShell() {
       </a>
       <GatewayRealtimeBridge />
       <UnderstandingActivityCoordinator />
-      <AgentRunNotificationCoordinator />
+      <ProductNotificationCoordinator />
       <ElectronMenuListener />
       <NavigateToChatListener />
       <ExtensionNavigateListener />

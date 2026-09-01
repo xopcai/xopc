@@ -1,4 +1,4 @@
-import type { AgentRunNotification } from '@/features/notifications/agent-run-notification';
+import type { ProductNotificationPresentation } from '@/features/notifications/product-notification';
 
 export type NotificationPreferences = {
   enabled: boolean;
@@ -7,7 +7,7 @@ export type NotificationPreferences = {
 };
 
 export type NotificationPolicyInput = {
-  notification: AgentRunNotification;
+  notification: ProductNotificationPresentation;
   preferences: NotificationPreferences;
   permissionGranted: boolean;
   appFocused: boolean;

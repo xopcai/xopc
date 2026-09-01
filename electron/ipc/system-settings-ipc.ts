@@ -10,6 +10,11 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 
 import { type IpcMain, type IpcMainInvokeEvent, app, desktopCapturer, Notification, powerSaveBlocker, shell, systemPreferences } from 'electron';
+import {
+  NotificationTargetSchema,
+  notificationTargetRoute,
+  type NotificationTarget,
+} from '@xopcai/gateway-contract';
 
 import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState, PermissionRequestResult } from './system-settings-types.js';
 import { rawMediaAccessStatus, tccToTriState } from './shell-permission-gates.js';
@@ -34,7 +39,7 @@ type ElectronShellPreferences = {
 };
 
 type EndpointNotificationInput = { title: string; body: string };
-type AgentRunNotificationInput = EndpointNotificationInput & { id: string; route: string };
+type ProductNotificationInput = EndpointNotificationInput & { id: string; target: NotificationTarget };
 
 const defaultPrefs: ElectronShellPreferences = {
   keepAwakePreferred: false,
@@ -46,7 +51,7 @@ let prefs: ElectronShellPreferences = { ...defaultPrefs };
 let prefsPath: string | null = null;
 let powerBlockerId: number | null = null;
 let loaded = false;
-const activeAgentRunNotifications = new Set<Notification>();
+const activeProductNotifications = new Set<Notification>();
 
 function resolvePrefsPath(): string {
   if (prefsPath) {
@@ -158,22 +163,21 @@ function parseEndpointNotificationInput(input: unknown): EndpointNotificationInp
   return { title, body };
 }
 
-function parseAgentRunNotificationInput(input: unknown): AgentRunNotificationInput | undefined {
+function parseProductNotificationInput(input: unknown): ProductNotificationInput | undefined {
   if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length !== 4) {
     return undefined;
   }
-  const { id, title, body, route } = input as Record<string, unknown>;
+  const { id, title, body, target } = input as Record<string, unknown>;
   const text = parseEndpointNotificationInput({ title, body });
+  const parsedTarget = NotificationTargetSchema.safeParse(target);
   if (
     !text
+    || !parsedTarget.success
     || typeof id !== 'string'
     || !id.trim()
     || id.length > 160
-    || typeof route !== 'string'
-    || !route.startsWith('/chat/')
-    || route.length > 1_000
   ) return undefined;
-  return { id, route, ...text };
+  return { id, target: parsedTarget.data, ...text };
 }
 
 function mapMediaStatusWhenAvailable(type: 'microphone' | 'screen' | 'camera'): TccTriState {
@@ -477,31 +481,40 @@ async function probeNotificationAccess(): Promise<TccTriState> {
     return 'unknown';
   }
 
-  const status = await new Promise<TccTriState>((resolve) => {
-    const notification = new Notification({
-      title: 'xopc',
-      body: ' ',
-      silent: true,
-    });
-    let settled = false;
-    const finish = (next: TccTriState) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
+  let status: TccTriState;
+  try {
+    status = await new Promise<TccTriState>((resolve) => {
+      const notification = new Notification({
+        title: 'xopc',
+        body: ' ',
+        silent: true,
+      });
+      let settled = false;
+      const finish = (next: TccTriState) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        try {
+          notification.close();
+        } catch {
+          /* ignore */
+        }
+        resolve(next);
+      };
+      const timer = setTimeout(() => finish(notificationAccessState()), NOTIFICATION_PROBE_TIMEOUT_MS);
+      notification.once('show', () => finish('granted'));
+      notification.once('failed', () => finish('denied'));
       try {
-        notification.close();
+        notification.show();
       } catch {
-        /* ignore */
+        finish('unknown');
       }
-      resolve(next);
-    };
-    const timer = setTimeout(() => finish(notificationAccessState()), NOTIFICATION_PROBE_TIMEOUT_MS);
-    notification.once('show', () => finish('granted'));
-    notification.once('failed', () => finish('denied'));
-    notification.show();
-  });
+    });
+  } catch {
+    status = 'unknown';
+  }
 
   await persistNotificationAuthStatus(status);
   return status;
@@ -717,31 +730,67 @@ export function registerSystemSettingsIpc(
   );
 
   ipcMain.handle(
-    'system-settings:show-agent-run-notification',
-    (event, input: unknown): { ok: true; outcome: 'shown' | 'suppressed-focused' } | { ok: false; error: string } => {
+    'system-settings:show-product-notification',
+    async (event, input: unknown): Promise<
+      { ok: true; outcome: 'shown' | 'suppressed-focused' }
+      | { ok: false; error: string }
+    > => {
       assertTrustedRenderer(event);
-      const notificationInput = parseAgentRunNotificationInput(input);
+      const notificationInput = parseProductNotificationInput(input);
       if (!notificationInput) return { ok: false, error: 'INVALID_ARGUMENTS' };
       if (!prefs.notifyEnabled) return { ok: false, error: 'NOTIFICATIONS_DISABLED' };
       if (options?.isMainWindowFocused?.()) return { ok: true, outcome: 'suppressed-focused' };
       if (!Notification.isSupported()) return { ok: false, error: 'NOTIFICATIONS_UNSUPPORTED' };
-      if (!isShellNotificationGranted()) return { ok: false, error: 'PERMISSION_DENIED' };
+      if (!isShellNotificationGranted() && await probeNotificationAccess() !== 'granted') {
+        return { ok: false, error: 'PERMISSION_DENIED' };
+      }
       try {
         const notification = new Notification({
           title: notificationInput.title,
           body: notificationInput.body,
           silent: !prefs.notifySoundEnabled,
         });
-        activeAgentRunNotifications.add(notification);
-        const release = () => activeAgentRunNotifications.delete(notification);
+        activeProductNotifications.add(notification);
+        const release = () => activeProductNotifications.delete(notification);
         notification.once('close', release);
-        notification.once('failed', release);
         notification.once('click', () => {
           release();
-          options?.navigateMainWindow?.(notificationInput.route);
+          options?.navigateMainWindow?.(notificationTargetRoute(notificationInput.target, 'web'));
         });
-        notification.show();
-        return { ok: true, outcome: 'shown' };
+        const outcome = await new Promise<'shown' | 'failed' | 'timeout'>((resolve) => {
+          let settled = false;
+          const timer = setTimeout(() => finish('timeout'), 5_000);
+          const finish = (value: 'shown' | 'failed' | 'timeout') => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+          };
+          notification.once('show', () => finish('shown'));
+          notification.once('failed', () => {
+            release();
+            finish('failed');
+          });
+          try {
+            notification.show();
+          } catch {
+            release();
+            finish('failed');
+          }
+        });
+        if (outcome !== 'shown') {
+          release();
+          if (outcome === 'timeout') {
+            try {
+              notification.close();
+            } catch {
+              /* ignore */
+            }
+          }
+          await persistNotificationAuthStatus('unknown');
+          return { ok: false, error: outcome === 'timeout' ? 'NOTIFICATION_TIMEOUT' : 'NOTIFICATION_FAILED' };
+        }
+        return { ok: true, outcome };
       } catch {
         return { ok: false, error: 'NOTIFICATION_FAILED' };
       }

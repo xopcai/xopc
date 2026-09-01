@@ -13,6 +13,8 @@ import type {
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
+import { enqueueTaskAttentionRequiredEvent } from './task-change-events.js';
+
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
 
 type TaskRunRow = {
@@ -496,6 +498,22 @@ export class TaskRunRepository {
           reason: input.reason.trim(),
           resumeAt: input.resumeAt,
         }, input.actor ?? { kind: 'system' }, now);
+      }
+      if (input.kind === 'user_input' || input.kind === 'approval') {
+        const task = db.prepare(
+          'SELECT title, project_id FROM tasks WHERE task_id = ?',
+        ).get(input.taskId) as { title: string; project_id: string | null } | undefined;
+        if (task) {
+          enqueueTaskAttentionRequiredEvent(db, {
+            taskId: input.taskId,
+            taskTitle: task.title,
+            ...(task.project_id ? { projectId: task.project_id } : {}),
+            reason: input.kind,
+            detail: input.reason.trim(),
+            correlationId: id,
+            occurredAt: now,
+          });
+        }
       }
     });
     return this.requireWait(id);

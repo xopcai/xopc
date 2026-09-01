@@ -12,7 +12,7 @@ import type {
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import { TaskContextRepository } from './task-context-repository.js';
-import { enqueueTaskChangedEvent } from './task-change-events.js';
+import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
 import { TaskRepository } from './task-repository.js';
@@ -152,6 +152,17 @@ export class TaskApplicationService {
           changedFields: ['phase', 'runs', 'attention'],
           actor,
         });
+      } else if (started.ok === false && started.reason === 'blocked') {
+        const waits = this.#runs.listActiveWaits(current.id);
+        if (!waits.some((wait) => wait.kind === 'approval' || wait.kind === 'user_input')) {
+          enqueueTaskAttentionRequiredEvent(db, {
+            taskId: current.id,
+            taskTitle: current.title,
+            ...(current.projectId ? { projectId: current.projectId } : {}),
+            reason: 'blocked',
+            correlationId: input.idempotencyKey,
+          });
+        }
       }
       return started;
     });
@@ -263,11 +274,16 @@ export class TaskApplicationService {
       }
       if (result.ok === false) {
         if (result.reason === 'blocked') {
-          this.enqueueEvent(db, 'task.attention_required.v2', task.id, input.idempotencyKey, {
-            taskId: task.id,
-            reason: 'blocked',
-            projectId: task.projectId,
-          });
+          const waits = this.#runs.listActiveWaits(task.id);
+          if (!waits.some((wait) => wait.kind === 'approval' || wait.kind === 'user_input')) {
+            enqueueTaskAttentionRequiredEvent(db, {
+              taskId: task.id,
+              taskTitle: task.title,
+              ...(task.projectId ? { projectId: task.projectId } : {}),
+              reason: 'blocked',
+              correlationId: input.idempotencyKey,
+            });
+          }
         }
         return result;
       }
@@ -288,6 +304,7 @@ export class TaskApplicationService {
       });
       if (result.model.task.phase !== task.phase) {
         this.enqueueEvent(db, 'task.phase_changed.v2', task.id, input.idempotencyKey, {
+          task: { id: result.model.task.id, title: result.model.task.title },
           taskId: task.id,
           from: task.phase,
           to: result.model.task.phase,
@@ -334,6 +351,14 @@ export class TaskApplicationService {
       const task = this.#tasks.require(run.taskId);
       if (input.receipt.status !== 'succeeded') {
         const model = this.#projector.project(task);
+        enqueueTaskAttentionRequiredEvent(db, {
+          taskId: task.id,
+          taskTitle: task.title,
+          ...(task.projectId ? { projectId: task.projectId } : {}),
+          reason: 'failed',
+          detail: input.terminalMessage ?? input.receipt.summary,
+          correlationId: run.id,
+        });
         enqueueTaskChangedEvent(db, {
           taskId: task.id,
           projectId: task.projectId,
@@ -355,6 +380,14 @@ export class TaskApplicationService {
         ...(phase === 'closed' ? { resolution: 'done' as const } : {}),
       });
       if (!updated) throw new Error('Task changed while its run was being finalized');
+      this.enqueueEvent(db, 'task.phase_changed.v2', updated.id, run.id, {
+        task: { id: updated.id, title: updated.title },
+        taskId: updated.id,
+        from: task.phase,
+        to: updated.phase,
+        resolution: updated.resolution,
+        projectId: updated.projectId,
+      });
       enqueueTaskChangedEvent(db, {
         taskId: updated.id,
         projectId: updated.projectId,

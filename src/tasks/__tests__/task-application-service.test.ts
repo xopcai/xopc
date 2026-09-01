@@ -190,6 +190,17 @@ describe('TaskApplicationService', () => {
     if (blocked.ok || !blocked.model) return;
     expect(blocked.model.operationalState).toBe('blocked');
     expect(blocked.model.attention[0]).toMatchObject({ kind: 'dependency_blocked' });
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    new TaskOutboxDispatcher((event) => events.push(event)).drain();
+    expect(events.filter((event) => event.type === 'task.attention_required.v2')).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          sourceEventId: expect.any(String),
+          task: { id: blocked.model.task.id, title: 'Blocked' },
+          reason: 'blocked',
+        }),
+      }),
+    ]);
   });
 
   it('uses the run receipt as the only execution completion boundary', () => {
@@ -235,6 +246,61 @@ describe('TaskApplicationService', () => {
       model: { task: { phase: 'closed', resolution: 'done' }, operationalState: 'idle' },
     });
     expect(runs.getReceipt(run.id)?.summary).toBe('Implemented and verified');
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    new TaskOutboxDispatcher((event) => events.push(event)).drain();
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'task.phase_changed.v2',
+      payload: expect.objectContaining({
+        sourceEventId: expect.any(String),
+        task: { id: created.ok ? created.model.task.id : '', title: 'Complete once' },
+        to: 'closed',
+        resolution: 'done',
+      }),
+    }));
+  });
+
+  it('publishes attention when a TaskRun fails', () => {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: 'failed-run', title: 'Deploy release', priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    });
+    if (!created.ok || !created.runId) throw new Error('Expected TaskRun');
+    const runs = new TaskRunRepository();
+    let run = runs.require(created.runId);
+    const snapshot = new TaskContextRepository().captureSnapshot({
+      ownerKind: 'task_run', ownerId: run.id, query: contract.objective,
+    });
+    run = runs.start({
+      runId: run.id, expectedVersion: run.version, contextSnapshotId: snapshot.id, policySnapshot: {},
+    })!;
+    service.completeRun({
+      runId: run.id,
+      expectedRunVersion: run.version,
+      terminalMessage: 'Deployment command failed',
+      receipt: {
+        status: 'failed',
+        summary: 'Deployment failed',
+        changes: [],
+        evidence: [],
+        verification: { status: 'unverified', checks: [] },
+        remainingWork: ['Retry deployment'],
+        needsUser: false,
+        completionVerdict: 'not_achieved',
+        failure: { code: 'deploy_failed', phase: 'execution', recoveryAction: 'Retry the task run' },
+      },
+    });
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    new TaskOutboxDispatcher((event) => events.push(event)).drain();
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'task.attention_required.v2',
+      payload: expect.objectContaining({
+        task: { id: created.model.task.id, title: 'Deploy release' },
+        reason: 'failed',
+        detail: 'Deployment command failed',
+      }),
+    }));
   });
 
   it('rejects reuse of a create idempotency key with different intent', () => {
@@ -319,6 +385,47 @@ describe('TaskApplicationService', () => {
     expect(runs.listEvents(run.id).at(-1)?.type).toBe('task_run.wait_resolved');
     expect(runs.claimNext({ owner: 'test-worker', leaseMs: 1_000, executorKind: 'agent' }))
       .toMatchObject({ id: run.id, status: 'waiting' });
+  });
+
+  it('publishes one attention event when a run waits for user input', () => {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: 'attention-task', title: 'Approve production rollout', priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    });
+    if (!created.ok || !created.runId) throw new Error('Expected TaskRun');
+    const runs = new TaskRunRepository();
+    let run = runs.require(created.runId);
+    const snapshot = new TaskContextRepository().captureSnapshot({
+      ownerKind: 'task_run', ownerId: run.id, query: contract.objective,
+    });
+    run = runs.start({
+      runId: run.id, expectedVersion: run.version, contextSnapshotId: snapshot.id, policySnapshot: {},
+    })!;
+    const initialEvents: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    new TaskOutboxDispatcher((event) => initialEvents.push(event)).drain();
+
+    const result = service.execute({
+      taskId: created.model.task.id,
+      expectedVersion: created.model.task.version,
+      idempotencyKey: 'ask-user',
+      command: {
+        type: 'add_wait',
+        wait: { kind: 'user_input', reason: 'Choose a rollout window', condition: {} },
+      },
+    });
+    expect(result.ok).toBe(true);
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    new TaskOutboxDispatcher((event) => events.push(event)).drain();
+    const attention = events.filter((event) => event.type === 'task.attention_required.v2');
+    expect(attention).toHaveLength(1);
+    expect(attention[0]?.payload).toMatchObject({
+      sourceEventId: expect.any(String),
+      task: { id: created.model.task.id, title: 'Approve production rollout' },
+      reason: 'user_input',
+      detail: 'Choose a rollout window',
+    });
   });
 
   it('publishes each transactional task outbox event once', () => {

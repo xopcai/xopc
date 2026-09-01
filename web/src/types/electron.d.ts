@@ -522,11 +522,11 @@ export interface ElectronSystemSettingsAPI {
     title: string;
     body: string;
   }): Promise<{ ok: true } | { ok: false; error: string }>;
-  showAgentRunNotification(input: {
+  showProductNotification(input: {
     id: string;
     title: string;
     body: string;
-    route: string;
+    target: import('@xopcai/gateway-contract').NotificationTarget;
   }): Promise<
     { ok: true; outcome: 'shown' | 'suppressed-focused' }
     | { ok: false; error: string }

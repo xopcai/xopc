@@ -61,7 +61,7 @@ import {
 import type { ClarifyStreamEvent } from './clarify-bridge.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
-import { MobileNotificationService } from '../mobile/notification-service.js';
+import { NotificationService } from '../notifications/service.js';
 import { ProjectService, resolveProjectAgentId } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import {
@@ -202,7 +202,7 @@ export class GatewayService {
   private taskRunDispatcher: TaskRunDispatcher | null = null;
   private taskRunDispatchTimer: ReturnType<typeof setInterval> | null = null;
   private managedComposioEventPoller?: ManagedComposioEventPoller;
-  private mobileNotifications: MobileNotificationService | null = null;
+  private notificationService: NotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
   private connectedSourceChangePublisher: ConnectedSourceChangePublisher | null = null;
@@ -264,7 +264,6 @@ export class GatewayService {
     this.proactiveInboxWorker = new ProactiveInboxWorker({
       deliver: async ({ inboxItem }) => {
         this.emit('proactive.inbox.created', inboxItem);
-        await this.createMobileNotificationService().deliverGatewayEvent('proactive.inbox.created', inboxItem);
       },
     });
     let bootstrapConfigChanged = initializeVoiceDefaults(
@@ -649,11 +648,13 @@ export class GatewayService {
     return this.taskRunDispatcher;
   }
 
-  private createMobileNotificationService(): MobileNotificationService {
-    if (!this.mobileNotifications) {
-      this.mobileNotifications = new MobileNotificationService();
+  private createNotificationService(): NotificationService {
+    if (!this.notificationService) {
+      this.notificationService = new NotificationService({
+        publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
+      });
     }
-    return this.mobileNotifications;
+    return this.notificationService;
   }
 
   dispatchTaskRuns(): void {
@@ -933,6 +934,7 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
+    this.createNotificationService().start();
     this.startTime = Date.now();
     this.running = true;
     this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
@@ -1335,6 +1337,7 @@ export class GatewayService {
     await this.discussionLiveWorker.stop();
     this.proactiveTemporalWorker.stop();
     await this.proactiveInboxWorker.stop();
+    this.notificationService?.stop();
     if (this.taskRunDispatchTimer) {
       clearInterval(this.taskRunDispatchTimer);
       this.taskRunDispatchTimer = null;
@@ -1889,7 +1892,7 @@ export class GatewayService {
 
   emit(type: string, payload: unknown): void {
     this.realtime.broker.publish('gateway', type, payload);
-    this.createMobileNotificationService().handleGatewayEvent(type, payload);
+    this.createNotificationService().handleGatewayEvent(type, payload);
   }
 
   private handleAutomationRunCompleted(run: AutomationRun): void {

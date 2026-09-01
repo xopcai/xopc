@@ -10,6 +10,7 @@ import { registerProjectsRoutes } from './projects.js';
 import { registerProjectSkillRoutes } from './project-skills.js';
 import { registerSearchRoutes } from './search.js';
 import { registerMobileRoutes } from './mobile.js';
+import { registerNotificationRoutes } from './notifications.js';
 import { registerInteractionStateRoutes } from './interaction-state.js';
 import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerEndpointToolRoutes } from './endpoint-tools.js';
@@ -44,6 +45,7 @@ export function registerCoreAuthenticatedRoutes(
   registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerMobileRoutes(authenticated, deps);
+  registerNotificationRoutes(authenticated, deps);
   registerInteractionStateRoutes(authenticated, deps);
   registerComposerHistoryRoutes(authenticated, deps);
   registerEndpointToolRoutes(authenticated, deps);
