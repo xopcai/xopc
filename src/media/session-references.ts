@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { getSqliteDatabase } from '../storage/sqlite/index.js';
 import { deleteMediaBuffer } from './store.js';
 import { tryParseMediaUri } from './uri.js';
 
@@ -25,21 +26,50 @@ function collectFromValue(value: unknown, out: Set<string>, seen: WeakSet<object
   }
 }
 
-export function collectMediaUrisFromMessages(messages: readonly AgentMessage[]): Set<string> {
+export function collectMediaUrisFromValues(values: readonly unknown[]): Set<string> {
   const out = new Set<string>();
   const seen = new WeakSet<object>();
-  for (const message of messages) collectFromValue(message, out, seen);
+  for (const value of values) collectFromValue(value, out, seen);
   return out;
+}
+
+export function collectMediaUrisFromMessages(messages: readonly AgentMessage[]): Set<string> {
+  return collectMediaUrisFromValues(messages);
 }
 
 export function messagesReferenceMediaUri(messages: readonly AgentMessage[], uri: string): boolean {
   return collectMediaUrisFromMessages(messages).has(uri.trim());
 }
 
+/**
+ * A media object remains live while any non-deleted session references it,
+ * including archived transcripts retained by a reset of that session key.
+ */
+export function isMediaUriReferencedByLiveSession(uri: string): boolean {
+  const normalized = uri.trim();
+  if (!normalized) return false;
+  const escaped = JSON.stringify(normalized)
+    .replaceAll('\\', '\\\\')
+    .replaceAll('%', '\\%')
+    .replaceAll('_', '\\_');
+  const row = getSqliteDatabase()
+    .prepare(
+      `SELECT 1 AS referenced
+       FROM transcript_entries e
+       JOIN transcripts t ON t.session_id = e.session_id
+       JOIN sessions s ON s.session_key = t.session_key
+       WHERE e.payload_json LIKE ? ESCAPE '\\'
+       LIMIT 1`,
+    )
+    .get(`%${escaped}%`) as { referenced?: number } | undefined;
+  return row?.referenced === 1;
+}
+
 export async function deleteMediaUris(uris: Iterable<string>): Promise<void> {
   for (const uri of new Set(uris)) {
     const parsed = tryParseMediaUri(uri);
     if (!parsed) continue;
+    if (isMediaUriReferencedByLiveSession(uri)) continue;
     await deleteMediaBuffer(parsed.id, parsed.bucket).catch(() => {});
   }
 }

@@ -23,6 +23,7 @@ import {
   deleteSessionRecord,
   ensureSessionRecord,
   estimateTokensFromMessages,
+  getSessionConfig,
   getGlobalSessionStats,
   getSessionMetadata,
   findSessionKeyBySessionId,
@@ -38,7 +39,9 @@ import {
   replaceTranscriptRows,
   resetSessionRecord,
   restoreBeforeCompactionBoundary,
+  runSqliteWriteTransaction,
   searchSessionTranscript,
+  setSessionConfig,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
@@ -102,6 +105,18 @@ type SessionCompactionHookEvent = {
 };
 
 export type ModelFallbackPreparation = 'prompt' | 'resume' | 'unsafe';
+
+export interface ForkSessionAtTurnOptions {
+  targetKey: string;
+  lastTurnId: string;
+  targetMetadata: SessionMetadataSeed;
+}
+
+export interface ForkSessionResult {
+  sessionKey: string;
+  rowCount: number;
+  lastTurnId?: string;
+}
 
 function isTranscriptMessageRole(row: TranscriptStoredRow | undefined, role: string): boolean {
   return !!row && typeof row === 'object' && 'role' in row && row.role === role;
@@ -1008,6 +1023,73 @@ export class SessionStore {
         },
       });
       return { sessionKey: targetKey, rowCount: selectedRows.length };
+    });
+  }
+
+  /**
+   * Atomically copy a completed turn prefix into a new session, including the
+   * source session's per-session agent configuration.
+   */
+  async forkSessionAtTurn(
+    sourceKey: string,
+    options: ForkSessionAtTurnOptions,
+  ): Promise<ForkSessionResult> {
+    requireXopcDatabase();
+    const targetKey = options.targetKey.trim();
+    const lastTurnId = options.lastTurnId.trim();
+    if (!targetKey) throw new Error('Target session key is required');
+    if (!lastTurnId) throw new Error('lastTurnId is required');
+
+    return runSqliteWriteTransaction(() => {
+      const sourceMetadata = getSessionMetadata(sourceKey);
+      if (!sourceMetadata) throw new Error(`Session not found: ${sourceKey}`);
+      if (getSessionMetadata(targetKey)) {
+        throw new Error(`Target session already exists: ${targetKey}`);
+      }
+
+      // Use visible history rather than only the active transcript so a turn
+      // retained across an in-place reset can still be selected in the UI.
+      const rows = loadTranscriptHistoryRowsForSession(sourceKey);
+      let lastTurnRow = -1;
+      let hasAssistantOutput = false;
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index] as TranscriptStoredRow & { turnId?: unknown; role?: unknown };
+        if (row.turnId !== lastTurnId) continue;
+        lastTurnRow = index;
+        if (row.role === 'assistant') hasAssistantOutput = true;
+      }
+      if (lastTurnRow < 0 || !hasAssistantOutput) {
+        throw new Error(`Completed turn not found: ${lastTurnId}`);
+      }
+
+      const selectedRows = rows.slice(0, lastTurnRow + 1);
+      const sourceLabel = sourceMetadata.name?.trim() || sourceKey;
+      const forkedAt = new Date().toISOString();
+      const cwd = sourceMetadata.cwd?.trim() || this.resolveWorkspaceCwd(targetKey);
+      ensureSessionRecord(targetKey, cwd, {
+        ...options.targetMetadata,
+        name: `Fork of ${sourceLabel}`,
+        tags: [...new Set([...(sourceMetadata.tags ?? []), 'fork'])],
+        projectId: sourceMetadata.projectId,
+        parentSessionKey: sourceKey,
+        hiddenFromSessionList: false,
+        customData: {
+          ...(sourceMetadata.customData ?? {}),
+          ...(options.targetMetadata.customData ?? {}),
+          genericNewChatShell: false,
+          forkedFromSessionKey: sourceKey,
+          forkedFromSessionId: sourceMetadata.sessionId,
+          forkedFromSessionName: sourceMetadata.name,
+          forkedFromTurnId: lastTurnId,
+          forkedAt,
+        },
+      });
+      replaceTranscriptRows(targetKey, selectedRows);
+
+      const sourceConfig = getSessionConfig(sourceKey);
+      if (sourceConfig) setSessionConfig(targetKey, sourceConfig, cwd);
+
+      return { sessionKey: targetKey, rowCount: selectedRows.length, lastTurnId };
     });
   }
 

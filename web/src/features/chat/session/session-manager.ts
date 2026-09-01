@@ -1,7 +1,10 @@
 import {
+  buildSessionForkAtTurnPath,
   buildSessionHistoryPath,
+  parseSessionForkAtTurnResponse,
   parseSessionMessagePage,
   type SessionCreateRequest,
+  type SessionForkAtTurnResponse,
   type SessionInitialAgentConfig,
 } from '@xopcai/gateway-contract';
 
@@ -146,6 +149,19 @@ async function readErrorMessage(res: Response): Promise<string> {
 
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
+  async forkSessionAtTurn(
+    sourceSessionKey: string,
+    lastTurnId: string,
+  ): Promise<SessionForkAtTurnResponse> {
+    const res = await apiFetch(apiUrl(buildSessionForkAtTurnPath(sourceSessionKey)), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lastTurnId }),
+    });
+    if (!res.ok) throw new Error(await readErrorMessage(res));
+    return parseSessionForkAtTurnResponse(await res.json());
+  }
+
   /** All webchat sessions, paginated by source channel. */
   async loadSessions(): Promise<SessionInfo[]> {
     const pageSize = 100;

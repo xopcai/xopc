@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { registerSessionsRoutes } from '../hono/routes/sessions.js';
 import type { GatewayService } from '../service.js';
@@ -56,6 +56,49 @@ describe('GET /api/session-runs', () => {
     const res = await app.request('/api/session-runs');
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true, payload: { runs } });
+  });
+});
+
+describe('POST /api/sessions/:key/fork-at-turn', () => {
+  it('delegates using only the turn id and returns the server-generated session', async () => {
+    const sourceKey = 'agent:main:webchat:default:direct:source';
+    const forkedKey = 'agent:main:webchat:default:direct:server-generated';
+    const forkAtTurn = vi.fn(async () => ({
+      sessionKey: forkedKey,
+      rowCount: 4,
+      lastTurnId: 'turn-1',
+      session: { key: forkedKey, messages: [] },
+    }));
+    const service = { sessions: { forkAtTurn } } as unknown as GatewayService;
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    const res = await app.request(`/api/sessions/${encodeURIComponent(sourceKey)}/fork-at-turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lastTurnId: 'turn-1', targetKey: 'client-must-not-control-this' }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(forkAtTurn).toHaveBeenCalledWith(sourceKey, 'turn-1');
+    await expect(res.json()).resolves.toMatchObject({ ok: true, sessionKey: forkedKey });
+  });
+
+  it('rejects a missing turn id before touching the service', async () => {
+    const forkAtTurn = vi.fn();
+    const app = new Hono();
+    registerSessionsRoutes(app, {
+      service: { sessions: { forkAtTurn } } as unknown as GatewayService,
+    });
+
+    const res = await app.request('/api/sessions/source/fork-at-turn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(res.status).toBe(400);
+    expect(forkAtTurn).not.toHaveBeenCalled();
   });
 });
 
