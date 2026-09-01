@@ -28,6 +28,18 @@ describe('project skill routes', () => {
   let previousStateDir: string | undefined;
   let projects: ProjectService;
   const refreshSkillsAfterDiskChange = vi.fn();
+  const getWorkspaceTrust = vi.fn((workspacePath: string) => ({
+    workspacePath,
+    required: false,
+    decision: null,
+    trusted: false,
+  }));
+  const setWorkspaceTrust = vi.fn((workspacePath: string, trusted: boolean) => ({
+    workspacePath,
+    required: true,
+    decision: trusted,
+    trusted,
+  }));
 
   beforeEach(() => {
     previousStateDir = process.env.XOPC_STATE_DIR;
@@ -38,6 +50,8 @@ describe('project skill routes', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     projects = new ProjectService();
     refreshSkillsAfterDiskChange.mockReset();
+    getWorkspaceTrust.mockClear();
+    setWorkspaceTrust.mockClear();
   });
 
   afterEach(() => {
@@ -54,7 +68,7 @@ describe('project skill routes', () => {
     const service = {
       projects,
       currentConfig: ConfigSchema.parse({}),
-      agentService: { refreshSkillsAfterDiskChange },
+      agentService: { refreshSkillsAfterDiskChange, getWorkspaceTrust, setWorkspaceTrust },
     } as unknown as GatewayService;
     registerProjectSkillRoutes(app, { service } as Parameters<typeof registerProjectSkillRoutes>[1]);
     return app;
@@ -73,9 +87,25 @@ describe('project skill routes', () => {
     expect(await list.json()).toEqual(expect.objectContaining({
       ok: true,
       workspaceRoot: realpathSync(workspaceRoot),
-      items: [expect.objectContaining({ id: 'sales', name: 'sales' })],
+      items: [expect.objectContaining({ directoryId: 'sales', name: 'sales', origin: 'xopc-workspace' })],
     }));
     expect(refreshSkillsAfterDiskChange).toHaveBeenCalledOnce();
+  });
+
+  it('reads and updates project workspace trust without requiring a session', async () => {
+    const project = projects.create({ name: 'Trust', workspaceRoot });
+
+    const read = await app().request(`/api/projects/${project.id}/workspace-trust`);
+    const update = await app().request(`/api/projects/${project.id}/workspace-trust`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trusted: true }),
+    });
+
+    expect(read.status).toBe(200);
+    expect(update.status).toBe(200);
+    expect(getWorkspaceTrust).toHaveBeenCalledWith(realpathSync(workspaceRoot));
+    expect(setWorkspaceTrust).toHaveBeenCalledWith(realpathSync(workspaceRoot), true);
   });
 
   it('returns an explicit error instead of falling back to a global workspace', async () => {

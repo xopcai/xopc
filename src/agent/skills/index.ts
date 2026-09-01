@@ -8,9 +8,10 @@ import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import { parseRequiredEnvVarNames } from './required-env-vars.js';
 import { parseSkillMetadata } from './parse-skill-metadata.js';
 import { parseSkillToolConditions } from './skill-tool-gating.js';
+import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 import {
   resolveSkillSources,
-  resolveWorkspaceSkillSource,
+  resolveWorkspaceAgentsSkillsDir,
   type ResolveSkillSourcesOptions,
 } from './skill-sources.js';
 import type {
@@ -165,6 +166,73 @@ function discoverSkills(
   return { skills, diagnostics };
 }
 
+export type WorkspaceSkillSourceState = 'active' | 'missing' | 'disabled' | 'untrusted' | 'invalid';
+
+export interface WorkspaceSkillSourceStatus {
+  origin: 'xopc-workspace' | 'agents-workspace';
+  rootDir: string;
+  managed: boolean;
+  writable: boolean;
+  state: WorkspaceSkillSourceState;
+}
+
+export interface WorkspaceSkillInventoryEntry {
+  skill: Skill;
+  effective: boolean;
+  shadowedBy?: Skill['origin']['id'];
+}
+
+export interface WorkspaceSkillInventoryResult {
+  entries: WorkspaceSkillInventoryEntry[];
+  sources: WorkspaceSkillSourceStatus[];
+  diagnostics: SkillDiagnostic[];
+}
+
+function discoverAndMergeSkills(
+  sources: SkillSourceDescriptor[],
+  maxSkillFileBytes: number,
+  initialDiagnostics: SkillDiagnostic[] = [],
+): { skills: Skill[]; entries: WorkspaceSkillInventoryEntry[]; diagnostics: SkillDiagnostic[] } {
+  const skillMap = new Map<string, Skill>();
+  const discoveredSkills: Skill[] = [];
+  const diagnostics = [...initialDiagnostics];
+
+  for (const source of sources) {
+    const discovered = discoverSkills(source, maxSkillFileBytes);
+    diagnostics.push(...discovered.diagnostics);
+    for (const skill of discovered.skills) {
+      discoveredSkills.push(skill);
+      const previous = skillMap.get(skill.name);
+      if (previous) {
+        const winner = skill.origin.priority > previous.origin.priority ? skill : previous;
+        const shadowed = winner === skill ? previous : skill;
+        diagnostics.push({
+          type: 'collision',
+          skillName: skill.name,
+          path: winner.filePath,
+          message:
+            `Skill "${skill.name}" from ${winner.origin.id} (${winner.filePath}) ` +
+            `shadows ${shadowed.origin.id} (${shadowed.filePath})`,
+        });
+      }
+      if (!previous || skill.origin.priority > previous.origin.priority) {
+        skillMap.set(skill.name, skill);
+      }
+    }
+  }
+
+  return {
+    skills: [...skillMap.values()],
+    entries: discoveredSkills.map((skill) => {
+      const winner = skillMap.get(skill.name)!;
+      return winner === skill
+        ? { skill, effective: true }
+        : { skill, effective: false, shadowedBy: winner.origin.id };
+    }),
+    diagnostics,
+  };
+}
+
 function deriveDescriptionFromMarkdown(content: string): string | undefined {
   let fallbackHeading = '';
 
@@ -278,48 +346,64 @@ export function loadSkills(options: ResolveSkillSourcesOptions & {
   const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
   const resolvedSources = resolveSkillSources(options, skillsConfig);
   const maxSkillFileBytes = resolveMaxSkillFileBytes(skillsConfig);
-  const skillMap = new Map<string, Skill>();
-  const diagnostics: SkillDiagnostic[] = [...resolvedSources.diagnostics];
-
-  for (const source of resolvedSources.sources) {
-    const discovered = discoverSkills(source, maxSkillFileBytes);
-    diagnostics.push(...discovered.diagnostics);
-    for (const skill of discovered.skills) {
-      const previous = skillMap.get(skill.name);
-      if (previous) {
-        const winner = skill.origin.priority > previous.origin.priority ? skill : previous;
-        const shadowed = winner === skill ? previous : skill;
-        diagnostics.push({
-          type: 'collision',
-          skillName: skill.name,
-          path: winner.filePath,
-          message:
-            `Skill "${skill.name}" from ${winner.origin.id} (${winner.filePath}) ` +
-            `shadows ${shadowed.origin.id} (${shadowed.filePath})`,
-        });
-      }
-      if (!previous || skill.origin.priority > previous.origin.priority) {
-        skillMap.set(skill.name, skill);
-      }
-    }
-  }
-  const merged = Array.from(skillMap.values());
+  const merged = discoverAndMergeSkills(
+    resolvedSources.sources,
+    maxSkillFileBytes,
+    resolvedSources.diagnostics,
+  );
 
   return {
-    skills: merged,
-    prompt: formatSkillsForPrompt(merged, skillsConfig),
-    diagnostics,
+    skills: merged.skills,
+    prompt: formatSkillsForPrompt(merged.skills, skillsConfig),
+    diagnostics: merged.diagnostics,
   };
 }
 
-/** Discover only skills owned by a workspace, without global or bundled skills. */
-export function loadWorkspaceSkills(workspaceDir: string): LoadSkillsResult {
+/** Discover project-owned XOPC and Agents skills with runtime-equivalent trust and precedence. */
+export function loadWorkspaceSkillInventory(
+  workspaceDir: string,
+  options: { workspaceTrust: 'trusted' | 'untrusted' },
+): WorkspaceSkillInventoryResult {
   const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+  const resolved = resolveSkillSources({ workspaceDir, workspaceTrust: options.workspaceTrust }, skillsConfig);
   const maxSkillFileBytes = resolveMaxSkillFileBytes(skillsConfig);
-  const discovered = discoverSkills(resolveWorkspaceSkillSource(workspaceDir), maxSkillFileBytes);
+  const workspaceSources = resolved.sources.filter(
+    (source) => source.id === 'xopc-workspace' || source.id === 'agents-workspace',
+  );
+  const discovered = discoverAndMergeSkills(workspaceSources, maxSkillFileBytes, resolved.diagnostics);
+  const agentsRoot = resolveWorkspaceAgentsSkillsDir(workspaceDir);
+  const agentsDiagnostic = resolved.diagnostics.find(
+    (diagnostic) => diagnostic.type === 'warning' && diagnostic.message.includes('agents-workspace'),
+  );
+  const agentsEnabled = skillsConfig.load?.sources?.agentsWorkspace?.enabled !== false;
+  const agentsSource = workspaceSources.find((source) => source.id === 'agents-workspace');
+
   return {
-    skills: discovered.skills,
-    prompt: formatSkillsForPrompt(discovered.skills),
+    entries: discovered.entries,
+    sources: [
+      {
+        origin: 'xopc-workspace',
+        rootDir: resolveWorkspaceSkillsDir(workspaceDir),
+        managed: true,
+        writable: true,
+        state: 'active',
+      },
+      {
+        origin: 'agents-workspace',
+        rootDir: agentsRoot,
+        managed: false,
+        writable: false,
+        state: !agentsEnabled
+          ? 'disabled'
+          : !existsSync(agentsRoot)
+            ? 'missing'
+            : agentsSource
+              ? 'active'
+              : agentsDiagnostic?.type === 'warning'
+                ? 'invalid'
+                : 'untrusted',
+      },
+    ],
     diagnostics: discovered.diagnostics,
   };
 }
