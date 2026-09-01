@@ -8,6 +8,11 @@ import {
   listKnowledgeSourceItems,
 } from '../storage/sqlite/index.js';
 import type { KnowledgeSourceItem } from './types.js';
+import {
+  personIdForIdentity,
+  personIdentityKey,
+  rebuildUserPeopleIndex,
+} from '../user-context/relationships/indexer.js';
 
 export type ClaimObservation = {
   class: 'relationship' | 'project' | 'routine';
@@ -102,6 +107,7 @@ function person(value: unknown): { name?: string; email?: string; username?: str
 function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservation[] {
   const grouped = new Map<string, {
     label: string;
+    personId: string;
     events: Map<string, KnowledgeSourceItem>;
   }>();
   for (const item of recent(items, 90)) {
@@ -117,9 +123,10 @@ function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservatio
       const strongIdentity = (signal.email ?? signal.username)?.toLowerCase();
       if (strongIdentity && owners.has(strongIdentity)) continue;
       const label = signal.name ?? signal.email ?? signal.username!;
-      const identityKey = signal.email?.toLowerCase()
-        ?? `${String(item.metadata.toolkit ?? item.sourceInstanceId)}:${signal.username?.toLowerCase() ?? signal.name?.toLowerCase()}`;
-      const entry = grouped.get(identityKey) ?? { label, events: new Map() };
+      const identityKey = personIdentityKey(signal, item.sourceInstanceId);
+      const personId = personIdForIdentity(signal, item.sourceInstanceId);
+      if (!identityKey || !personId) continue;
+      const entry = grouped.get(identityKey) ?? { label, personId, events: new Map() };
       const eventKey = logicalEventKey(item)!;
       if (!entry.events.has(eventKey)) entry.events.set(eventKey, item);
       grouped.set(identityKey, entry);
@@ -130,8 +137,8 @@ function relationshipObservations(items: KnowledgeSourceItem[]): ClaimObservatio
     .slice(0, 8)
     .map((entry) => ({
       class: 'relationship',
-      key: `person:${entry.label.toLocaleLowerCase()}`,
-      value: { label: entry.label },
+      key: `person:${entry.personId}`,
+      value: { label: entry.label, personId: entry.personId },
       items: [...entry.events.values()],
       windowDays: 90,
     }));
@@ -214,6 +221,7 @@ export function renderConnectedObservation(observation: ClaimObservation): Under
   if (observation.class === 'relationship') {
     return {
       kind: 'relationship', content: `Frequently collaborates with ${label}.`, canonicalKey: `connected:${observation.key}`,
+      payload: typeof observation.value.personId === 'string' ? { personId: observation.value.personId } : undefined,
       confidence, importance: 0.65, explicitness: 'inferred', durability: 'recurring',
       sensitivity: 'personal', disclosurePolicy: 'ask_before_reference',
     };
@@ -239,6 +247,7 @@ export class ConnectedUnderstandingPipeline {
   constructor(private readonly memoryManager: MemoryManager) {}
 
   async process(agentId: string, extractionRunId: string): Promise<UnderstandingReviewResult> {
+    rebuildUserPeopleIndex();
     const items = listKnowledgeSourceItems({ agentId, includeDeleted: false, limit: 500 });
     const observations = deriveConnectedClaimObservations(items);
     const totals: UnderstandingReviewResult = {

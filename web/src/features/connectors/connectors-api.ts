@@ -181,31 +181,6 @@ export type ConnectorInstance = {
   audit: ConnectorAuditRecord[];
 };
 
-export type ConnectedPersonNode = {
-  id: string;
-  label: string;
-  names: string[];
-  emails: string[];
-  usernames: string[];
-  roles: string[];
-  mentionCount: number;
-  lastObservedAt: string;
-};
-
-export type ConnectedPeopleGraph = {
-  people: ConnectedPersonNode[];
-  sourceEdges: Array<{
-    personId: string;
-    sourceInstanceId: string;
-    connectorId?: string;
-    toolkit?: string;
-    mentionCount: number;
-    lastObservedAt: string;
-  }>;
-  scannedItems: number;
-  truncated: boolean;
-};
-
 export type ConnectorToolInfo = {
   name: string;
   shortName?: string;
@@ -731,14 +706,6 @@ export async function syncConnectorSource(connectorId: string): Promise<{ record
     { method: 'POST' },
   );
   return requirePayload(response, 'Could not sync connector source.');
-}
-
-export async function fetchConnectedPeopleGraph(query = '', limit = 100): Promise<ConnectedPeopleGraph> {
-  const params = new URLSearchParams({ q: query, limit: String(limit) });
-  const response = await fetchJson<ApiEnvelope<ConnectedPeopleGraph>>(
-    apiUrl(`/api/connectors/people?${params.toString()}`),
-  );
-  return requirePayload(response, 'Could not load the connected people graph.');
 }
 
 export async function listConnectorApprovals(status: ConnectorApproval['status'] = 'pending'): Promise<ConnectorApproval[]> {
