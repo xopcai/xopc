@@ -7,8 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase, openXopcDatabase, recordContextRun, resetXopcDatabaseSingletonForTest,
+  upsertKnowledgeSourceItems,
 } from '../../../../storage/sqlite/index.js';
-import { upsertUserFocus } from '../../../../user-context/sources/repository.js';
+import {
+  upsertUnderstandingSourceGrant,
+  upsertUserFocus,
+} from '../../../../user-context/sources/repository.js';
 import { registerYouRoutes } from '../you.js';
 
 describe('structured user context routes', () => {
@@ -70,6 +74,33 @@ describe('structured user context routes', () => {
     const body = await response.json() as { profile: { callName: string }; suggestedCallName: string };
     expect(body.profile.callName).toBe('');
     expect(typeof body.suggestedCallName).toBe('string');
+  });
+
+  it('serves relationships from You and accepts user corrections', async () => {
+    upsertUnderstandingSourceGrant({
+      sourceKey: 'connector-account:work', adapterId: 'connector:composio-gmail', category: 'mail',
+      platform: 'all', displayName: 'Gmail', accessMode: 'continuous', retentionPolicy: 'bounded_raw',
+      processingPolicy: 'local_only', config: { connectorId: 'composio-gmail', accountId: 'work' },
+    });
+    upsertKnowledgeSourceItems([{
+      sourceInstanceId: 'composio:composio-gmail:work', collectionScope: 'messages', externalId: 'mail-1',
+      itemType: 'email', occurredAt: '2026-08-01T09:00:00.000Z', contentHash: 'mail-1',
+      metadata: { personEntities: [{ name: 'Alex Chen', email: 'alex@example.com' }] },
+      sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge',
+      synthesisStatus: 'completed',
+    }]);
+
+    const response = await app.request('/api/you/relationships?kind=person&limit=10');
+    expect(response.status).toBe(200);
+    const body = await response.json() as { items: Array<{ id: string; displayName: string }>; summary: { people: number } };
+    expect(body).toMatchObject({ items: [{ displayName: 'Alex Chen' }], summary: { people: 1 } });
+
+    const corrected = await app.request(`/api/you/relationships/${body.items[0]!.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: 'Alex', kind: 'group' }),
+    });
+    expect(corrected.status).toBe(200);
+    await expect(corrected.json()).resolves.toMatchObject({ person: { displayName: 'Alex', kind: 'group' } });
   });
 
   it('rejects invalid domain values and exposes no Markdown profile endpoint', async () => {

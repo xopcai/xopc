@@ -16,6 +16,13 @@ import { UNDERSTANDING_KINDS, type CollaborationRule, type UnderstandingKind,
   type UnderstandingStatus, type UserContextScope } from '../../../user-context/domain.js';
 import { listContextObjects, type ContextObjectView } from '../../../user-context/context-objects.js';
 import { repairExtractedContext } from '../../../user-context/extraction/repair.js';
+import {
+  getUserRelationship,
+  listUserRelationships,
+  mergeUserRelationships,
+  patchUserRelationship,
+} from '../../../user-context/relationships/service.js';
+import { USER_PERSON_KINDS, type UserPersonKind } from '../../../user-context/relationships/types.js';
 import { listUserFocuses, updateUserFocus } from '../../../user-context/sources/repository.js';
 import { canonicalUnderstandingKey, findDuplicateUnderstanding } from '../../../user-context/understanding.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -30,6 +37,7 @@ const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
 const RULE_STATUSES = new Set<CollaborationRule['status']>(['active', 'disabled', 'archived']);
 const FEEDBACK_RATINGS = new Set(['helpful', 'irrelevant', 'wrong', 'stale', 'sensitive']);
 const CONTEXT_OBJECT_VIEWS = new Set<ContextObjectView>(['current', 'review', 'history']);
+const USER_PERSON_KIND_SET = new Set<UserPersonKind>(USER_PERSON_KINDS);
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -91,6 +99,71 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     rules: listCollaborationRules(),
     consolidation: { lastRun: listContextConsolidationRuns(1)[0] ?? null },
   }));
+
+  authenticated.get('/api/you/relationships', (c) => {
+    const kind = c.req.query('kind');
+    if (kind && !USER_PERSON_KIND_SET.has(kind as UserPersonKind)) {
+      return c.json({ error: 'Invalid relationship kind' }, 400);
+    }
+    const requestedLimit = Number(c.req.query('limit') ?? '30');
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+      return c.json({ error: 'limit must be an integer from 1 to 100' }, 400);
+    }
+    const cursor = c.req.query('cursor');
+    if (cursor && !/^\d+$/.test(cursor)) return c.json({ error: 'Invalid cursor' }, 400);
+    return c.json(listUserRelationships({
+      query: c.req.query('q') ?? '',
+      ...(kind ? { kind: kind as UserPersonKind } : {}),
+      ...(c.req.query('source') ? { sourceInstanceId: c.req.query('source') } : {}),
+      includeHidden: c.req.query('includeHidden') === 'true',
+      hiddenOnly: c.req.query('hidden') === 'true',
+      ...(cursor ? { cursor } : {}),
+      limit: requestedLimit,
+    }));
+  });
+
+  authenticated.get('/api/you/relationships/:id', (c) => {
+    const person = getUserRelationship(c.req.param('id'));
+    return person ? c.json({ person }) : c.json({ error: 'Relationship not found' }, 404);
+  });
+
+  authenticated.patch('/api/you/relationships/:id', write, async (c) => {
+    const body = await readBody(c);
+    if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+    const patch: { displayName?: string | null; kind?: UserPersonKind | null; hidden?: boolean } = {};
+    if (body.displayName !== undefined) {
+      if (body.displayName !== null && (typeof body.displayName !== 'string' || body.displayName.trim().length > 160)) {
+        return c.json({ error: 'displayName must be null or a string of at most 160 characters' }, 400);
+      }
+      patch.displayName = typeof body.displayName === 'string' && body.displayName.trim()
+        ? body.displayName.trim()
+        : null;
+    }
+    if (body.kind !== undefined) {
+      if (body.kind !== null && !USER_PERSON_KIND_SET.has(body.kind as UserPersonKind)) {
+        return c.json({ error: 'Invalid relationship kind' }, 400);
+      }
+      patch.kind = body.kind as UserPersonKind | null;
+    }
+    if (body.hidden !== undefined) {
+      if (typeof body.hidden !== 'boolean') return c.json({ error: 'hidden must be a boolean' }, 400);
+      patch.hidden = body.hidden;
+    }
+    if (!Object.keys(patch).length) return c.json({ error: 'No relationship fields provided' }, 400);
+    const person = patchUserRelationship(c.req.param('id'), patch);
+    return person ? c.json({ person }) : c.json({ error: 'Relationship not found' }, 404);
+  });
+
+  authenticated.post('/api/you/relationships/merge', write, async (c) => {
+    const body = await readBody(c);
+    const sourcePersonId = nonEmptyString(body?.sourcePersonId, 200);
+    const targetPersonId = nonEmptyString(body?.targetPersonId, 200);
+    if (!sourcePersonId || !targetPersonId || sourcePersonId === targetPersonId) {
+      return c.json({ error: 'Distinct sourcePersonId and targetPersonId are required' }, 400);
+    }
+    const person = mergeUserRelationships(sourcePersonId, targetPersonId);
+    return person ? c.json({ person }) : c.json({ error: 'Relationship not found' }, 404);
+  });
 
   authenticated.get('/api/you/context-objects', (c) => {
     const view = c.req.query('view') ?? 'current';

@@ -4,7 +4,6 @@ import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { getMcpOAuthManager } from '../../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { ConfigPersistenceError, persistConfigMutation } from '../../../config/config-mutation.js';
 import type { Config } from '../../../config/schema.js';
-import { buildConnectedPeopleGraph } from '../../../knowledge/index.js';
 import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } from '../../../connectors/catalog.js';
 import { listComposioConnectorCatalog } from '../../../connectors/composio-catalog.js';
@@ -53,6 +52,7 @@ import {
   upsertConnectorSyncPolicy,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { applySourceRevocationChoices, sourceRevocationImpact } from './understanding-sources.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -213,7 +213,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     if (connectionId && !policy.scanEnabled) {
       service.setConnectorLearningPaused(connectionId, true);
       const grant = listUnderstandingSourceGrants().find((item) => item.sourceKey === `connector-account:${account.id}`);
-      if (grant) revokeUnderstandingSourceGrant(grant.id);
+      if (grant) {
+        const impact = sourceRevocationImpact(grant.id);
+        revokeUnderstandingSourceGrant(grant.id);
+        if (impact) applySourceRevocationChoices(impact, { derived: 'retain', raw: 'retain' });
+      }
     } else if (connectionId && previous?.scanEnabled === false) {
       const resumed = service.setConnectorLearningPaused(connectionId, false);
       if (resumed === 0) {
@@ -284,7 +288,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       await revokeComposioConnection(connectionId);
       if (connection?.accountId) {
         const grant = listUnderstandingSourceGrants().find((item) => item.sourceKey === `connector-account:${connection.accountId}`);
-        if (grant) revokeUnderstandingSourceGrant(grant.id);
+        if (grant) {
+          const impact = sourceRevocationImpact(grant.id);
+          revokeUnderstandingSourceGrant(grant.id);
+          if (impact) applySourceRevocationChoices(impact, { derived: 'retain', raw: 'retain' });
+        }
       }
       return c.json({ ok: true, payload: { revoked: true } });
     } catch (error) {
@@ -399,12 +407,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
-  });
-
-  authenticated.get('/api/connectors/people', (c) => {
-    const query = c.req.query('q') ?? '';
-    const limit = Number(c.req.query('limit') ?? '100');
-    return c.json({ ok: true, payload: buildConnectedPeopleGraph({ query, limit }) });
   });
 
   authenticated.get('/api/connectors/:id', (c) => {
