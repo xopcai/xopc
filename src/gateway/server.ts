@@ -28,6 +28,8 @@ export interface GatewayServerConfig {
 export class GatewayServer {
   private server?: ServerType;
   private extraServers: ServerType[] = [];
+  private readonly serverSockets = new Map<ServerType, Set<Socket>>();
+  private stopPromise: Promise<void> | null = null;
   private config: GatewayServerConfig;
   private service: GatewayService;
 
@@ -89,8 +91,15 @@ export class GatewayServer {
     const attachUpgrade = (server: ServerType): void => {
       // `@hono/node-server`'s `serve()` returns the underlying `http.Server`.
       const inner = server as unknown as {
+        on(event: 'connection', listener: (socket: Socket) => void): void;
         on(event: 'upgrade', listener: (req: IncomingMessage, socket: Socket, head: Buffer) => void): void;
       };
+      const sockets = new Set<Socket>();
+      this.serverSockets.set(server, sockets);
+      inner.on('connection', (socket) => {
+        sockets.add(socket);
+        socket.once('close', () => sockets.delete(socket));
+      });
       inner.on('upgrade', (req, socket, head) => {
         try {
           if (this.service.realtime.handleUpgrade(req, socket, head)) return;
@@ -141,14 +150,28 @@ export class GatewayServer {
   }
 
   async stop(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise;
+
+    this.stopPromise = this.stopInternal();
+    return this.stopPromise;
+  }
+
+  private async stopInternal(): Promise<void> {
     console.log('[GatewayServer] Stopping gateway server...');
+
+    const forceCloseServer = (server: ServerType) => {
+      (server as { closeAllConnections?: () => void }).closeAllConnections?.();
+      for (const socket of this.serverSockets.get(server) ?? []) {
+        socket.destroy();
+      }
+    };
 
     const closeServer = async (server: ServerType | undefined) => {
       if (!server) {
         return;
       }
       const forceClose = setTimeout(() => {
-        (server as { closeAllConnections?: () => void }).closeAllConnections?.();
+        forceCloseServer(server);
       }, 2000);
       await new Promise<void>((resolve) => {
         server.close(() => {
@@ -158,22 +181,33 @@ export class GatewayServer {
       });
     };
 
-    await closeServer(this.server);
-    this.server = undefined;
+    const primaryServer = this.server;
+    const extraServers = this.extraServers;
+    const closePromises = [closeServer(primaryServer), ...extraServers.map(closeServer)];
+    const activeServers = [primaryServer, ...extraServers].filter(
+      (server): server is ServerType => server !== undefined,
+    );
 
-    for (const extra of this.extraServers) {
-      await closeServer(extra);
-    }
-    this.extraServers = [];
-
+    // Begin refusing new HTTP connections first, then close realtime WebSockets and the
+    // remaining service resources while the HTTP close callbacks drain in parallel.
     await this.service.stop();
+    for (const server of activeServers) forceCloseServer(server);
+    await Promise.all(closePromises);
+    for (const server of activeServers) this.serverSockets.delete(server);
+
+    this.server = undefined;
+    this.extraServers = [];
 
     console.log('[GatewayServer] Gateway server stopped');
   }
 
   forceCloseConnections(): void {
     const close = (server: ServerType | undefined) => {
+      if (!server) return;
       (server as { closeAllConnections?: () => void } | undefined)?.closeAllConnections?.();
+      for (const socket of this.serverSockets.get(server) ?? []) {
+        socket.destroy();
+      }
     };
 
     close(this.server);

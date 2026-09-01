@@ -359,19 +359,33 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
   return { port: readyPort, token };
 }
 
-async function stopGatewayProcessAndWait(timeoutMs = 7000): Promise<void> {
+function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+
+  return new Promise<boolean>((resolve) => {
+    const finish = (exited: boolean) => {
+      clearTimeout(timeout);
+      child.removeListener('exit', onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once('exit', onExit);
+  });
+}
+
+export async function stopGatewayProcessAndWait(timeoutMs = 7000): Promise<void> {
   const child = gatewayChild;
   if (!child) return;
   stopGatewayProcess();
-  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (await waitForChildExit(child, timeoutMs)) return;
 
-  await new Promise<void>((resolve) => {
-    const timeout = setTimeout(resolve, timeoutMs);
-    child.once('exit', () => {
-      clearTimeout(timeout);
-      resolve();
-    });
-  });
+  try {
+    child.kill('SIGKILL');
+  } catch {
+    /* ignore */
+  }
+  await waitForChildExit(child, 2000);
 }
 
 export function stopGatewayProcess(): void {
@@ -403,7 +417,7 @@ export function stopGatewayProcess(): void {
       child.kill('SIGTERM');
 
       // Force kill after 5 seconds if still running.
-      setTimeout(() => {
+      const forceKillTimer = setTimeout(() => {
         try {
           if (child.exitCode === null && child.signalCode === null) {
             child.kill('SIGKILL');
@@ -412,6 +426,7 @@ export function stopGatewayProcess(): void {
           /* ignore */
         }
       }, 5000);
+      forceKillTimer.unref?.();
     }
   } catch {
     /* ignore */
