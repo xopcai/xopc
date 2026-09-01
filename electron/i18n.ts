@@ -4,6 +4,12 @@ export type ElectronMenuMessages = {
   app: {
     settings: string;
   };
+  quitConfirmation: {
+    title: string;
+    detail: string;
+    cancel: string;
+    quit: string;
+  };
   file: {
     label: string;
     newChat: string;
@@ -84,6 +90,12 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     app: {
       settings: 'Settings…',
     },
+    quitConfirmation: {
+      title: 'Quit xopc?',
+      detail: 'Active local tasks and chats on this machine will be interrupted.',
+      cancel: 'Cancel',
+      quit: 'Quit',
+    },
     file: {
       label: 'File',
       newChat: 'New Chat',
@@ -161,6 +173,12 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
   zh: {
     app: {
       settings: '设置…',
+    },
+    quitConfirmation: {
+      title: '退出 xopc？',
+      detail: '这台设备上正在运行的本地任务和对话将会中断。',
+      cancel: '取消',
+      quit: '退出',
     },
     file: {
       label: '文件',

@@ -7,6 +7,8 @@ const { autoUpdater } = electronUpdater;
 
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
+import { bypassNextAppQuitConfirmation } from './quit-confirmation.js';
+
 const log = createLogger('AutoUpdater');
 
 export type UpdateStatus =
@@ -238,6 +240,7 @@ export function quitAndInstall(): void {
       log.warn({ err: e }, 'Built-in autoUpdater.checkForUpdates before quitAndInstall failed');
     }
   }
+  bypassNextAppQuitConfirmation();
   autoUpdater.quitAndInstall(false, true);
 }
 
