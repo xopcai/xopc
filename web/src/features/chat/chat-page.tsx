@@ -164,6 +164,23 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     if (chatSessionKey) markChatRunViewed(chatSessionKey);
   }, [chatSessionKey, markChatRunViewed]);
   const { data: sessionMetadata } = useChatSessionMetadata(chatSessionKey);
+  const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
+    if (!chatSessionKey) return;
+    try {
+      const fork = await session.sessionManager.forkSessionAtTurn(chatSessionKey, lastTurnId);
+      window.dispatchEvent(new CustomEvent('session-created', {
+        detail: { key: fork.sessionKey, sessionKey: fork.sessionKey },
+      }));
+      showComposerNotification('success', m.chat.messageForkCreated);
+      navigate(`/chat/${encodeURIComponent(fork.sessionKey)}`);
+    } catch (err) {
+      showComposerNotification(
+        'error',
+        err instanceof Error ? err.message : m.chat.messageForkFailed,
+      );
+      throw err;
+    }
+  }, [chatSessionKey, m.chat.messageForkCreated, m.chat.messageForkFailed, navigate, session.sessionManager]);
   const workflowRunId = sessionMetadata?.workflowRunId ?? null;
   const workflowOwnerAgentId = sessionMetadata?.ownerAgentId ?? undefined;
   const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
@@ -965,6 +982,20 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           />
         ) : null}
         {!embedded && taskId ? <TaskSessionScopeBar taskId={taskId} /> : null}
+        {!embedded && sessionMetadata?.parentSessionKey ? (
+          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted sm:px-5 xl:px-6">
+            <Link
+              to={`/chat/${encodeURIComponent(sessionMetadata.parentSessionKey)}`}
+              className="font-medium text-accent transition-colors hover:text-accent-fg"
+            >
+              {m.chat.forkedFromConversation.replace(
+                '{{name}}',
+                sessionMetadata.forkedFromSessionName || m.chat.forkedFromConversationFallback,
+              )}
+            </Link>
+            <span className="ms-2">{m.chat.forkSharedWorkspaceNotice}</span>
+          </div>
+        ) : null}
         {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
         agents.displayAgentId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
@@ -1120,6 +1151,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                     onSaveAssistantAsNote={handleSaveAssistantAsNote}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
+                    onForkAssistantTurn={
+                      !taskId && sessionMetadata?.sessionType === 'chat'
+                        ? handleForkAssistantTurn
+                        : undefined
+                    }
                   />
                 </>
               )}
