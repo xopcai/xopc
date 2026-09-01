@@ -123,14 +123,14 @@ Run `pnpm -C apps/mobile-expo exec expo prebuild --clean` after changing `app.js
 
 ## Push Notifications
 
-The app uses Expo Push Service for task alerts. Once a paired gateway is configured, enable **Task notifications** in the app settings. The app requests permission only from that explicit action, registers its Expo token with the gateway, and opens the related chat or automation when an alert is tapped.
+The app uses Expo Push Service for task alerts. **Task notifications** default to disabled. After the user explicitly enables them in settings, the app requests system permission, stores the user's intent in MMKV, and registers its Expo token with the gateway; the user still controls the system permission. Tapping an alert opens the related chat or automation.
 
 The gateway stores device registrations in its local SQLite database and sends alerts for Tasks that need input or are blocked, plus failed automations. Task-completion alerts are disabled by default and can be enabled through the device preferences API.
 
 Before distributing a build, complete these account-side steps (do not commit credentials or credential files):
 
 1. In Expo/EAS, ensure this project's ID matches `app.json` and build a development or production client; Expo Go is not a valid push-notification test target on Android.
-2. For Android, create the Firebase Android app with package ID `ai.xopc.xopc`, then configure FCM v1 credentials in the Expo project credentials. Keep `google-services.json` out of Git.
+2. For Android, create the Firebase Android app with package ID `ai.xopc.xopc`, then configure FCM v1 credentials in the Expo project credentials. Save the downloaded client configuration as `apps/mobile-expo/google-services.json` (Git-ignored), or configure an EAS file environment variable named `GOOGLE_SERVICES_JSON`. Run `pnpm -C apps/mobile-expo run verify:android-push` to validate its package and required fields.
 3. For iOS, enable Push Notifications for `ai.xopc.xopc` in the Apple Developer portal and configure an APNs key or profile in EAS credentials. Test on a physical iPhone or iPad.
 4. Make sure the gateway host can make outbound HTTPS requests to `https://exp.host`; device-to-gateway traffic continues to use the paired LAN or remote URL.
 

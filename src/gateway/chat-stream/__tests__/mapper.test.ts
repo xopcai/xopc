@@ -390,6 +390,45 @@ describe('ChatStreamMapper', () => {
     expect(done).toMatchObject({ type: 'run_end' });
   });
 
+  it('derives TTS audio from a completed text_to_speech tool result', () => {
+    const m = mapper();
+    m.map({
+      type: 'tool_execution_start',
+      toolCallId: 'tts-1',
+      toolName: 'text_to_speech',
+      args: { text: 'hello' },
+    });
+
+    const events = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tts-1',
+      toolName: 'text_to_speech',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: 'Attached voice message.' }],
+        details: {
+          media: [{
+            type: 'voice',
+            uri: 'media://tts/assist.mp3',
+            mimeType: 'audio/mpeg',
+            name: 'assist.mp3',
+          }],
+        },
+      },
+    });
+
+    expect(events.map((event) => event.type)).toEqual(['tool_end', 'tts_audio']);
+    expect(events[1]).toMatchObject({
+      payload: {
+        uri: 'media://tts/assist.mp3',
+        mimeType: 'audio/mpeg',
+        name: 'assist.mp3',
+        attachTo: 'last_assistant',
+        messageId: 'msg_run-1_1',
+      },
+    });
+  });
+
   it('maps quiet memory consent and capture events', () => {
     const m = mapper();
     const [consent] = m.map({

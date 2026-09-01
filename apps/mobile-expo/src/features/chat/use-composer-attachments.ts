@@ -38,6 +38,10 @@ export function useComposerAttachments(messages: ComposerAttachmentMessages) {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const replaceAttachment = useCallback((index: number, next: ComposerAttachment) => {
+    setAttachments((prev) => prev.map((attachment, i) => (i === index ? next : attachment)));
+  }, []);
+
   const toWirePayload = useCallback((): WireAttachment[] => {
     return composerAttachmentsToWire(attachmentsRef.current);
   }, []);
@@ -100,6 +104,7 @@ export function useComposerAttachments(messages: ComposerAttachmentMessages) {
     closeSheet,
     addFromSource,
     removeAttachment,
+    replaceAttachment,
     clearAttachments,
     restoreAttachments,
     setAttachments,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const memory = new Map<string, string>();
 const tokenMemory = new Map<string, string>();
+const { runProbeRound } = vi.hoisted(() => ({ runProbeRound: vi.fn() }));
 
 vi.mock('../../storage/mmkv', () => ({
   KEYS: {
@@ -50,6 +51,10 @@ vi.mock('../../api/connection-strategy', () => ({
   })),
 }));
 
+vi.mock('../../features/gateway/probe-coordinator', () => ({
+  runProbeRound,
+}));
+
 import { KEYS } from '../../storage/mmkv';
 import { useGatewayStore } from '../gateway-store';
 
@@ -70,23 +75,39 @@ function resetStore(): void {
 describe('useGatewayStore', () => {
   beforeEach(() => {
     resetStore();
+    runProbeRound.mockReset();
+  });
+
+  it('does not activate a profile before the connection service verifies it', () => {
+    useGatewayStore.getState().addProfile({
+      name: 'Unverified',
+      baseUrl: 'https://unverified.example.com',
+      token: 'token',
+    });
+
+    expect(useGatewayStore.getState().profiles).toHaveLength(1);
+    expect(useGatewayStore.getState().activeGatewayId).toBeNull();
+    expect(useGatewayStore.getState().baseUrl).toBe('');
   });
 
   it('adds, updates, switches, and removes profiles', () => {
-    const firstId = useGatewayStore.getState().addProfile(
-      { name: 'Home', baseUrl: 'https://home.example.com', token: 'a' },
-      { setActive: true },
-    );
-    const secondId = useGatewayStore.getState().addProfile(
-      { name: 'Office', baseUrl: 'https://office.example.com', token: 'b' },
-      { setActive: false },
-    );
+    const firstId = useGatewayStore.getState().addProfile({
+      name: 'Home',
+      baseUrl: 'https://home.example.com',
+      token: 'a',
+    });
+    const secondId = useGatewayStore.getState().addProfile({
+      name: 'Office',
+      baseUrl: 'https://office.example.com',
+      token: 'b',
+    });
+    useGatewayStore.getState().activateProfile(firstId);
 
     expect(useGatewayStore.getState().profiles).toHaveLength(2);
     expect(useGatewayStore.getState().activeGatewayId).toBe(firstId);
     expect(useGatewayStore.getState().baseUrl).toBe('https://home.example.com');
 
-    useGatewayStore.getState().switchGateway(secondId);
+    useGatewayStore.getState().activateProfile(secondId);
     expect(useGatewayStore.getState().activeGatewayId).toBe(secondId);
     expect(useGatewayStore.getState().baseUrl).toBe('https://office.example.com');
     expect(useGatewayStore.getState().token).toBe('b');
@@ -165,5 +186,46 @@ describe('useGatewayStore', () => {
     expect(useGatewayStore.getState().apiUrl('/api/sessions/test/inputs')).toBe(
       'http://192.168.1.44:18790/api/sessions/test/inputs',
     );
+  });
+
+  it('does not let an earlier profile refresh overwrite the newly active gateway URL', async () => {
+    const firstId = useGatewayStore.getState().addProfile({
+      name: 'Unavailable',
+      baseUrl: 'https://unavailable.example.com',
+      token: 'old',
+    });
+    const secondId = useGatewayStore.getState().addProfile({
+      name: 'Healthy',
+      baseUrl: 'https://healthy.example.com',
+      token: 'new',
+    });
+    useGatewayStore.getState().activateProfile(firstId);
+
+    let resolveFirst!: (task: {
+      result: { winner: 'tunnel'; url: string };
+      online: true;
+    }) => void;
+    runProbeRound
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFirst = resolve;
+      }))
+      .mockResolvedValueOnce({
+        result: { winner: 'tunnel', url: 'https://healthy.example.com' },
+        online: true,
+      });
+
+    expect(useGatewayStore.getState().activeGatewayId).toBe(firstId);
+    const staleRefresh = useGatewayStore.getState().refreshActiveBaseUrl();
+    useGatewayStore.getState().activateProfile(secondId);
+    await useGatewayStore.getState().refreshActiveBaseUrl();
+
+    resolveFirst({
+      result: { winner: 'tunnel', url: 'https://unavailable.example.com' },
+      online: true,
+    });
+    await staleRefresh;
+
+    expect(useGatewayStore.getState().activeGatewayId).toBe(secondId);
+    expect(useGatewayStore.getState().activeBaseUrl).toBe('https://healthy.example.com');
   });
 });

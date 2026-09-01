@@ -1,6 +1,6 @@
 import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon, Text } from 'react-native-paper';
+import { Icon, Menu, Text } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
 import type { ChatModelOption } from '../../query/models';
@@ -13,11 +13,11 @@ export const ChatHeader = memo(function ChatHeader({
   models,
   currentModelId,
   paddingTop,
-  headerBg: _headerBg,
   pillText,
-  pillMuted,
+  autoReadAloudEnabled,
   onBackPress,
   onAgentPress,
+  onAutoReadAloudToggle,
   onModelSelect,
   onFilesPress,
   onNewChat,
@@ -27,20 +27,22 @@ export const ChatHeader = memo(function ChatHeader({
   models: ChatModelOption[];
   currentModelId: string;
   paddingTop: number;
-  headerBg: string;
   pillText: string;
-  pillMuted: string;
+  autoReadAloudEnabled: boolean;
   onBackPress?: () => void;
   onAgentPress: () => void;
+  onAutoReadAloudToggle: () => void;
   onModelSelect: (modelId: string) => void;
   onFilesPress?: () => void;
   onNewChat: () => void;
 }) {
   const m = useMessages();
+  const [actionsVisible, setActionsVisible] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const pickerTopOffset = paddingTop + 52;
 
   const openModelPicker = useCallback(() => {
+    setActionsVisible(false);
     setModelPickerVisible(true);
   }, []);
 
@@ -48,16 +50,26 @@ export const ChatHeader = memo(function ChatHeader({
     setModelPickerVisible(false);
   }, []);
 
+  const startNewChat = useCallback(() => {
+    setActionsVisible(false);
+    onNewChat();
+  }, [onNewChat]);
+
+  const openFiles = useCallback(() => {
+    setActionsVisible(false);
+    onFilesPress?.();
+  }, [onFilesPress]);
+
   return (
     <>
-      <View style={[styles.header, { paddingTop }]}> 
-        {onBackPress ? (
-          <Pressable style={styles.iconButton} onPress={onBackPress} hitSlop={6}>
-            <Icon source="chevron-left" size={26} color={pillText} />
-          </Pressable>
-        ) : (
-          <View style={styles.iconPlaceholder} />
-        )}
+      <View style={[styles.header, { paddingTop }]}>
+        <View style={styles.sideSlot}>
+          {onBackPress ? (
+            <Pressable style={styles.iconButton} onPress={onBackPress} hitSlop={6}>
+              <Icon source="chevron-left" size={26} color={pillText} />
+            </Pressable>
+          ) : null}
+        </View>
 
         <View style={styles.headerCenter}>
           <Pressable
@@ -70,33 +82,57 @@ export const ChatHeader = memo(function ChatHeader({
               {agentName}
             </Text>
           </Pressable>
-          <Pressable
-            style={styles.modelPressable}
-            onPress={openModelPicker}
-            accessibilityRole="button"
-            accessibilityLabel={m.chat.headerModelPicker}
-          >
-            <Text style={[styles.modelTitle, { color: pillMuted }]} numberOfLines={1}>
-              {modelName}
-            </Text>
-            <Icon source="chevron-down" size={16} color={pillMuted} />
-          </Pressable>
         </View>
 
         <View style={styles.rightActions}>
-          <Pressable style={styles.iconButton} onPress={onNewChat} hitSlop={6}>
-            <Icon source="square-edit-outline" size={21} color={pillText} />
+          <Pressable
+            style={styles.iconButton}
+            onPress={onAutoReadAloudToggle}
+            hitSlop={6}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: autoReadAloudEnabled }}
+            accessibilityLabel={autoReadAloudEnabled
+              ? m.chat.autoReadAloudDisable
+              : m.chat.autoReadAloudEnable}
+          >
+            <Icon
+              source={autoReadAloudEnabled ? 'volume-high' : 'volume-off'}
+              size={23}
+              color={pillText}
+            />
           </Pressable>
-          {onFilesPress ? (
-            <Pressable
-              style={styles.iconButton}
-              onPress={onFilesPress}
-              accessibilityRole="button"
-              accessibilityLabel={m.chat.openSessionFiles}
-            >
-              <Icon source="folder-outline" size={21} color={pillText} />
-            </Pressable>
-          ) : null}
+          <Menu
+            visible={actionsVisible}
+            onDismiss={() => setActionsVisible(false)}
+            anchor={(
+              <Pressable
+                style={styles.iconButton}
+                onPress={() => setActionsVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel={m.chat.headerActions}
+              >
+                <Icon source="view-grid-outline" size={23} color={pillText} />
+              </Pressable>
+            )}
+          >
+            <Menu.Item
+              leadingIcon="swap-horizontal"
+              title={`${m.chat.headerModelPicker} · ${modelName}`}
+              onPress={openModelPicker}
+            />
+            <Menu.Item
+              leadingIcon="square-edit-outline"
+              title={m.chat.headerNewChat}
+              onPress={startNewChat}
+            />
+            {onFilesPress ? (
+              <Menu.Item
+                leadingIcon="folder-outline"
+                title={m.chat.openSessionFiles}
+                onPress={openFiles}
+              />
+            ) : null}
+          </Menu>
         </View>
       </View>
 
@@ -126,14 +162,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconPlaceholder: {
-    width: 44,
-    height: 44,
+  sideSlot: {
+    width: 88,
+    alignItems: 'flex-start',
   },
   rightActions: {
+    width: 88,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'flex-end',
   },
   headerCenter: {
     flex: 1,
@@ -147,22 +184,9 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingHorizontal: 4,
   },
-  modelPressable: {
-    maxWidth: '100%',
-    paddingHorizontal: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
   agentTitle: {
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  modelTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-    flexShrink: 1,
   },
 });

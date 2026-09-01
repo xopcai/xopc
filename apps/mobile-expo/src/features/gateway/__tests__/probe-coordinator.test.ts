@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const memory = new Map<string, string>();
+const gatewayState = vi.hoisted(() => ({
+  baseUrl: 'https://gw.example.com',
+  lanUrl: 'http://192.168.1.10:18790' as string | null,
+  token: 'tok',
+  activeGatewayId: 'profile-1' as string | null,
+}));
 
 vi.mock('../../../storage/mmkv', () => ({
   KEYS: { routeWinnerPrefix: 'gateway.routeWinner:' },
@@ -25,19 +31,14 @@ vi.mock('../network-info', () => ({
 }));
 
 vi.mock('../../../stores/gateway-store', () => {
-  const state = {
-    baseUrl: 'https://gw.example.com',
-    lanUrl: 'http://192.168.1.10:18790',
-    token: 'tok',
-    activeGatewayId: 'profile-1',
-  };
   return {
-    useGatewayStore: { getState: () => state },
+    useGatewayStore: { getState: () => gatewayState },
   };
 });
 
 import { raceGatewayRoutes } from '../../../api/connection-strategy';
 import {
+  acceptVerifiedGatewayRoute,
   __resetProbeCoordinatorForTests,
   getLastProbeTask,
   runProbeRound,
@@ -50,6 +51,12 @@ beforeEach(() => {
   __resetProbeCoordinatorForTests();
   memory.clear();
   mockedRace.mockReset();
+  Object.assign(gatewayState, {
+    baseUrl: 'https://gw.example.com',
+    lanUrl: 'http://192.168.1.10:18790',
+    token: 'tok',
+    activeGatewayId: 'profile-1',
+  });
 });
 
 afterEach(() => {
@@ -57,6 +64,25 @@ afterEach(() => {
 });
 
 describe('runProbeRound', () => {
+  it('publishes a pre-verified route for the active profile without another race', () => {
+    const listener = vi.fn();
+    subscribeProbeTask(listener);
+
+    acceptVerifiedGatewayRoute({
+      profileId: 'profile-1',
+      baseUrl: 'https://gw.example.com',
+      lanUrl: 'http://192.168.1.10:18790',
+      token: 'tok',
+      winner: 'lan',
+      url: 'http://192.168.1.10:18790',
+      latencyMs: 31,
+    });
+
+    expect(getLastProbeTask()).toMatchObject({ online: true, result: { winner: 'lan' } });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(mockedRace).not.toHaveBeenCalled();
+  });
+
   it('runs the race once and broadcasts the task', async () => {
     mockedRace.mockResolvedValue({
       winner: 'lan',
@@ -117,5 +143,48 @@ describe('runProbeRound', () => {
     const task = await runProbeRound('initial');
     expect(task.online).toBe(false);
     expect(getLastProbeTask()?.online).toBe(false);
+  });
+
+  it('does not reuse or publish an in-flight probe from the previous gateway', async () => {
+    let resolveFirst!: (result: Awaited<ReturnType<typeof raceGatewayRoutes>>) => void;
+    const first = new Promise<Awaited<ReturnType<typeof raceGatewayRoutes>>>((resolve) => {
+      resolveFirst = resolve;
+    });
+    mockedRace
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce({
+        winner: 'tunnel',
+        url: 'https://healthy.example.com',
+        latencyMs: 40,
+        lan: null,
+        tunnel: { reachable: true, latencyMs: 40 },
+      });
+
+    const listener = vi.fn();
+    subscribeProbeTask(listener);
+    const staleProbe = runProbeRound('settings-saved', { force: true });
+
+    Object.assign(gatewayState, {
+      activeGatewayId: 'profile-2',
+      baseUrl: 'https://healthy.example.com',
+      lanUrl: null,
+      token: 'healthy-token',
+    });
+    const healthyProbe = runProbeRound('settings-saved', { force: true });
+
+    await expect(healthyProbe).resolves.toMatchObject({ online: true });
+    expect(mockedRace).toHaveBeenCalledTimes(2);
+    expect(getLastProbeTask()?.online).toBe(true);
+
+    resolveFirst({
+      winner: 'none',
+      url: '',
+      lan: { reachable: false, reason: 'timeout' },
+      tunnel: { reachable: false, reason: 'timeout' },
+    });
+    await staleProbe;
+
+    expect(getLastProbeTask()?.online).toBe(true);
+    expect(listener).not.toHaveBeenCalledWith(expect.objectContaining({ online: false }));
   });
 });

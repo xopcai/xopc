@@ -89,6 +89,59 @@ describe('assistant deliverables', () => {
     ]);
   });
 
+  it('does not duplicate TTS media that is already projected inline', () => {
+    const uri = 'media://tts/assist.mp3';
+    const tool = completedTool('text_to_speech', {
+      media: [{
+        id: 'voice-1',
+        name: 'assist.mp3',
+        type: 'voice',
+        mimeType: 'audio/mpeg',
+        uri,
+      }],
+    });
+    const message: Message = {
+      role: 'assistant',
+      content: [tool, {
+        type: 'audio',
+        uri,
+        mimeType: 'audio/mpeg',
+        name: 'assist.mp3',
+      }],
+    };
+
+    expect(collectAssistantDeliverables(message, false).attachments).toEqual([]);
+  });
+
+  it('restores TTS media from persisted tool details', () => {
+    const [message] = parseSessionMessages([{
+      role: 'assistant',
+      content: '',
+      toolCalls: [{
+        id: 'tts-1',
+        name: 'text_to_speech',
+        args: { text: 'hello' },
+        result: 'Attached voice message.',
+        details: {
+          media: [{
+            id: 'voice-1',
+            name: 'assist.mp3',
+            type: 'voice',
+            mimeType: 'audio/mpeg',
+            uri: 'media://tts/assist.mp3',
+          }],
+        },
+      }],
+    }]);
+
+    expect(collectAssistantDeliverables(message, false).attachments).toEqual([
+      expect.objectContaining({
+        type: 'audio',
+        uri: 'media://tts/assist.mp3',
+      }),
+    ]);
+  });
+
   it('collects non-file product deliveries separately', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,

@@ -17,6 +17,7 @@ export const KEYS = {
   mobileInstallationId: 'mobile.installationId',
   endpointId: 'endpointTools.endpointId',
   notificationsEnabled: 'prefs.notificationsEnabled',
+  autoReadAloudEnabled: 'prefs.autoReadAloudEnabled',
   noteTags: 'prefs.noteTags',
   usageEvents: 'product.usageEvents',
   homePinnedFocusId: 'home.pinnedFocusId',

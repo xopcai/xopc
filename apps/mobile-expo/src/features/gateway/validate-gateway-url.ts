@@ -33,7 +33,9 @@ function notGatewayMessage(): string {
 }
 
 /** Client-side loopback guard (fast path before network). */
-export function assertNotLoopbackGatewayUrl(rawUrl: string): GatewayUrlValidationResult | null {
+export function assertNotLoopbackGatewayUrl(
+  rawUrl: string,
+): Extract<GatewayUrlValidationResult, { ok: false }> | null {
   const url = normalizeGatewayBaseUrl(rawUrl);
   if (!url) {
     return { ok: false, code: 'INVALID_URL', message: invalidUrlMessage() };

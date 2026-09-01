@@ -16,6 +16,18 @@ type NotificationStatus = Awaited<ReturnType<NotificationsModule['getPermissions
 type NotificationSubscription = { remove: () => void };
 type NotificationPermission = 'granted' | 'denied' | 'unknown';
 
+export type MobileNotificationEnableResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | 'gateway-registration-failed'
+        | 'not-physical-device'
+        | 'permission-denied'
+        | 'token-unavailable'
+        | 'unsupported';
+    };
+
 type DeviceRegistration = {
   id: string;
   pushToken: string;
@@ -116,7 +128,7 @@ async function buildRegistration(requestPermission: boolean): Promise<DeviceRegi
   const permission = notificationPermission(permissions.status);
   if (permission !== 'granted') return null;
   const projectId = expoProjectId();
-  if (!projectId) return null;
+  if (!projectId) throw new Error('Expo project ID is unavailable');
   const token = await Notifications.getExpoPushTokenAsync({ projectId });
   return {
     id: installationId(),
@@ -128,22 +140,35 @@ async function buildRegistration(requestPermission: boolean): Promise<DeviceRegi
   };
 }
 
-/** Request system permission only from an explicit settings action, then register this device. */
-export async function enableMobileNotifications(): Promise<boolean> {
-  const registration = await buildRegistration(true);
-  return registration ? registerWithGateway(registration) : false;
+/** Request system permission, then register this device with an actionable result. */
+export async function enableMobileNotifications(): Promise<MobileNotificationEnableResult> {
+  if (!supportsRemoteNotifications()) return { ok: false, reason: 'unsupported' };
+  if (!Device.isDevice) return { ok: false, reason: 'not-physical-device' };
+  try {
+    const registration = await buildRegistration(true);
+    if (!registration) return { ok: false, reason: 'permission-denied' };
+    return await registerWithGateway(registration)
+      ? { ok: true }
+      : { ok: false, reason: 'gateway-registration-failed' };
+  } catch {
+    return { ok: false, reason: 'token-unavailable' };
+  }
 }
 
 /** Refreshes a previously authorized token without showing a system permission prompt. */
 export async function syncMobileNotificationRegistration(): Promise<boolean> {
-  const registration = await buildRegistration(false);
-  if (registration) return registerWithGateway(registration);
-  if (supportsRemoteNotifications() && Device.isDevice) {
+  if (!supportsRemoteNotifications() || !Device.isDevice) return false;
+  try {
+    const registration = await buildRegistration(false);
+    if (registration) return registerWithGateway(registration);
     const Notifications = await loadNotifications();
     const permissions = await Notifications.getPermissionsAsync();
     if (notificationPermission(permissions.status) === 'denied') {
+      usePreferencesStore.getState().setNotificationsEnabled(false);
       await disableMobileNotifications();
     }
+  } catch {
+    // Keep the local intent so a later foreground or daily sync can retry.
   }
   return false;
 }
