@@ -2,7 +2,13 @@ import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import type { Config } from '../config/schema.js';
-import { loadWorkspaceSkills } from '../agent/skills/index.js';
+import {
+  loadSkills,
+  loadWorkspaceSkillInventory,
+  type WorkspaceSkillInventoryEntry,
+  type WorkspaceSkillSourceStatus,
+} from '../agent/skills/index.js';
+import { resolveBundledSkillsDir } from '../config/paths.js';
 import { pullSkillFromSource } from '../agent/skills/hub-pull.js';
 import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import { deleteManagedSkill, installSkillFromZip, isValidSkillId } from '../agent/skills/managed-store.js';
@@ -27,26 +33,45 @@ export class ProjectSkillError extends Error {
 }
 
 export interface ProjectSkillSummary {
-  id: string;
+  key: string;
+  directoryId: string;
   name: string;
   description: string;
   category?: string;
+  origin: Skill['origin']['id'];
+  path: string;
+  managed: boolean;
+  writable: boolean;
+  removable: boolean;
+  effective: boolean;
+  shadowedBy?: Skill['origin']['id'];
   disableModelInvocation: boolean;
   metadata: SkillMetadata;
   toolConditions?: SkillToolConditions;
   requiredEnvVarNames?: string[];
 }
 
+export interface ProjectWorkspaceTrustState {
+  workspacePath: string;
+  required: boolean;
+  decision: boolean | null;
+  trusted: boolean;
+}
+
 export interface ProjectSkillListResult {
   workspaceRoot: string;
-  skillsRoot: string;
+  sources: WorkspaceSkillSourceStatus[];
+  trust: ProjectWorkspaceTrustState;
   items: ProjectSkillSummary[];
+  inheritedItems: ProjectSkillSummary[];
   diagnostics: SkillDiagnostic[];
 }
 
 interface ProjectSkillServiceOptions {
   projects: ProjectService;
   getConfig: () => Config;
+  getWorkspaceTrust: (workspaceRoot: string) => ProjectWorkspaceTrustState;
+  setWorkspaceTrust: (workspaceRoot: string, trusted: boolean) => ProjectWorkspaceTrustState;
   refreshSkills: () => void | Promise<void>;
 }
 
@@ -54,20 +79,34 @@ export class ProjectSkillService {
   constructor(private readonly options: ProjectSkillServiceOptions) {}
 
   list(projectId: string): ProjectSkillListResult {
-    const location = this.resolveLocation(projectId, false);
-    const loaded = loadWorkspaceSkills(location.workspaceRoot);
+    const { location, loaded, inherited, trust } = this.loadCatalog(projectId);
     return {
-      ...location,
-      items: loaded.skills
-        .filter((skill) => this.isDirectSkill(skill, location.skillsRoot))
-        .map((skill) => this.toSummary(skill)),
-      diagnostics: loaded.diagnostics,
+      workspaceRoot: location.workspaceRoot,
+      sources: loaded.sources,
+      trust,
+      items: loaded.entries.map((entry) => this.toSummary(entry)),
+      inheritedItems: inherited.skills.map((skill) => this.toSummary({ skill, effective: true })),
+      diagnostics: inherited.diagnostics,
     };
   }
 
-  getContent(projectId: string, skillId: string): ProjectSkillSummary & { bodyMarkdown: string } {
-    const { skill } = this.findSkill(projectId, skillId);
-    return { ...this.toSummary(skill), bodyMarkdown: skill.content };
+  getContent(projectId: string, skillKey: string): ProjectSkillSummary & { bodyMarkdown: string } {
+    const { loaded, inherited } = this.loadCatalog(projectId);
+    const entry = loaded.entries.find((candidate) => this.skillKey(candidate.skill) === skillKey);
+    if (entry) return { ...this.toSummary(entry), bodyMarkdown: entry.skill.content };
+    const inheritedSkill = inherited.skills.find((candidate) => this.skillKey(candidate) === skillKey);
+    if (!inheritedSkill) throw new ProjectSkillError('skill_not_found', 404, 'Project skill not found');
+    return { ...this.toSummary({ skill: inheritedSkill, effective: true }), bodyMarkdown: inheritedSkill.content };
+  }
+
+  getWorkspaceTrust(projectId: string): ProjectWorkspaceTrustState {
+    const location = this.resolveLocation(projectId, false);
+    return this.options.getWorkspaceTrust(location.workspaceRoot);
+  }
+
+  setWorkspaceTrust(projectId: string, trusted: boolean): ProjectWorkspaceTrustState {
+    const location = this.resolveLocation(projectId, false);
+    return this.options.setWorkspaceTrust(location.workspaceRoot, trusted);
   }
 
   async installZip(projectId: string, buffer: Buffer, input: { skillId?: string; overwrite?: boolean } = {}) {
@@ -79,7 +118,7 @@ export class ProjectSkillService {
     });
     removeSkillsLockEntry(installed.skillId, resolveWorkspaceSkillsLockPath(location.workspaceRoot));
     await this.options.refreshSkills();
-    return this.getContent(projectId, installed.skillId);
+    return this.getContent(projectId, this.encodeSkillKey('xopc-workspace', installed.skillId));
   }
 
   async installMarketplace(projectId: string, input: { name: string; version?: string; provider?: string; overwrite?: boolean }) {
@@ -101,7 +140,7 @@ export class ProjectSkillService {
       lockPath: resolveWorkspaceSkillsLockPath(location.workspaceRoot),
     });
     await this.options.refreshSkills();
-    return this.getContent(projectId, installed.skillId);
+    return this.getContent(projectId, this.encodeSkillKey('xopc-workspace', installed.skillId));
   }
 
   async remove(projectId: string, skillId: string): Promise<void> {
@@ -115,19 +154,6 @@ export class ProjectSkillService {
     deleteManagedSkill(skillId, location.skillsRoot);
     removeSkillsLockEntry(skillId, resolveWorkspaceSkillsLockPath(location.workspaceRoot));
     await this.options.refreshSkills();
-  }
-
-  private findSkill(projectId: string, skillId: string): { skill: Skill; skillsRoot: string } {
-    if (!isValidSkillId(skillId)) {
-      throw new ProjectSkillError('invalid_skill_id', 400, 'Invalid skill id');
-    }
-    const location = this.resolveLocation(projectId, false);
-    const skill = loadWorkspaceSkills(location.workspaceRoot).skills.find((item) => {
-      const rel = relative(location.skillsRoot, item.baseDir);
-      return !rel.includes(sep) && basename(item.baseDir) === skillId;
-    });
-    if (!skill) throw new ProjectSkillError('skill_not_found', 404, 'Project skill not found');
-    return { skill, skillsRoot: location.skillsRoot };
   }
 
   private resolveLocation(projectId: string, requireWritable: boolean): { workspaceRoot: string; skillsRoot: string } {
@@ -159,18 +185,53 @@ export class ProjectSkillService {
     return { workspaceRoot, skillsRoot };
   }
 
-  private isDirectSkill(skill: Skill, skillsRoot: string): boolean {
-    const rel = relative(skillsRoot, skill.baseDir);
-    return Boolean(rel) && !rel.includes(sep) && isValidSkillId(basename(skill.baseDir));
+  private loadCatalog(projectId: string) {
+    const location = this.resolveLocation(projectId, false);
+    const trust = this.options.getWorkspaceTrust(location.workspaceRoot);
+    const loaded = loadWorkspaceSkillInventory(location.workspaceRoot, {
+      workspaceTrust: trust.trusted ? 'trusted' : 'untrusted',
+    });
+    const all = loadSkills({
+      workspaceDir: location.workspaceRoot,
+      builtinDir: resolveBundledSkillsDir(),
+      workspaceTrust: trust.trusted ? 'trusted' : 'untrusted',
+    });
+    const inherited = {
+      skills: all.skills.filter((skill) => skill.origin.scope !== 'workspace'),
+      diagnostics: all.diagnostics,
+    };
+    return { location, loaded, inherited, trust };
   }
 
-  private toSummary(skill: Skill): ProjectSkillSummary {
+  private skillKey(skill: Skill): string {
+    const rel = relative(skill.origin.rootDir, skill.baseDir).split(sep).join('/');
+    return this.encodeSkillKey(skill.origin.id, rel);
+  }
+
+  private encodeSkillKey(origin: Skill['origin']['id'], relativeDir: string): string {
+    return Buffer.from(`${origin}\0${relativeDir}`, 'utf8').toString('base64url');
+  }
+
+  private toSummary(entry: WorkspaceSkillInventoryEntry): ProjectSkillSummary {
+    const { skill } = entry;
     const id = basename(skill.baseDir);
+    const relativeDir = relative(skill.origin.rootDir, skill.baseDir);
+    const removable = skill.origin.id === 'xopc-workspace'
+      && !relativeDir.includes(sep)
+      && isValidSkillId(id);
     return {
-      id,
+      key: this.skillKey(skill),
+      directoryId: id,
       name: skill.name,
       description: skill.description,
       category: skill.category,
+      origin: skill.origin.id,
+      path: skill.baseDir,
+      managed: skill.origin.managed,
+      writable: skill.origin.writable,
+      removable,
+      effective: entry.effective,
+      shadowedBy: entry.shadowedBy,
       disableModelInvocation: skill.disableModelInvocation,
       metadata: skill.metadata,
       toolConditions: skill.toolConditions,

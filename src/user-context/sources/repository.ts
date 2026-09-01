@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { USER_CONTEXT_PRINCIPAL_ID, type ContextEvidence, type UserContextScope } from '../domain.js';
+import { focusLifecycle } from '../focus-lifecycle.js';
 import type {
   UnderstandingSourceGrant,
   UnderstandingSourceRun,
@@ -358,22 +359,35 @@ export function listUserFocuses(statuses?: UserFocus['status'][]): UserFocus[] {
 
 export function updateUserFocus(
   id: string,
-  patch: Partial<Pick<UserFocus, 'title' | 'summary' | 'status'>>,
+  patch: Partial<Pick<UserFocus, 'title' | 'summary' | 'status' | 'validFrom' | 'validTo' | 'reviewAt'>>,
   nowMs = Date.now(),
 ): UserFocus | null {
   const currentRow = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE focus_id = ?')
     .get(id) as FocusRow | undefined;
   if (!currentRow) return null;
   const current = focusFromRow(currentRow);
+  const renewedLifecycle = patch.status === 'active'
+    && (current.status !== 'active'
+      || (current.reviewAt !== undefined && current.reviewAt <= nowMs)
+      || (current.validTo !== undefined && current.validTo <= nowMs))
+    ? focusLifecycle(current.horizon, nowMs)
+    : {};
+  const nextValidFrom = patch.validFrom ?? renewedLifecycle.validFrom ?? current.validFrom;
+  const nextValidTo = patch.validTo ?? renewedLifecycle.validTo ?? current.validTo;
+  const nextReviewAt = patch.reviewAt ?? renewedLifecycle.reviewAt ?? current.reviewAt;
   if ((patch.title ?? current.title) === current.title
     && (patch.summary ?? current.summary) === current.summary
-    && (patch.status ?? current.status) === current.status) return current;
+    && (patch.status ?? current.status) === current.status
+    && nextValidFrom === current.validFrom
+    && nextValidTo === current.validTo
+    && nextReviewAt === current.reviewAt) return current;
   const versionId = randomUUID();
   runSqliteWriteTransaction((db) => {
     db.prepare(`UPDATE user_focuses
-      SET title = ?, summary = ?, status = ?, updated_at = ? WHERE focus_id = ?`).run(
+      SET title = ?, summary = ?, status = ?, valid_from = ?, valid_to = ?, review_at = ?, updated_at = ?
+      WHERE focus_id = ?`).run(
       patch.title ?? current.title, patch.summary ?? current.summary,
-      patch.status ?? current.status, nowMs, id,
+      patch.status ?? current.status, nextValidFrom ?? null, nextValidTo ?? null, nextReviewAt ?? null, nowMs, id,
     );
     const nextRow = db.prepare('SELECT * FROM user_focuses WHERE focus_id = ?').get(id) as FocusRow;
     db.prepare(`INSERT INTO user_focus_versions (

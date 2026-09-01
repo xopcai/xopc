@@ -131,6 +131,32 @@ describe('SharedUnderstandingPanel', () => {
     expect(container.textContent).toContain('持续构成画像的理解');
   });
 
+  it('updates the portrait hero immediately when another focus is selected', async () => {
+    const secondFocus: UserFocus = {
+      ...activeFocus,
+      id: 'second',
+      versionId: 'second-v1',
+      title: '完善连接器稳定性',
+      summary: '处理连接器调用和检索故障',
+      updatedAt: 1,
+    };
+    await act(async () => root.render(<SharedUnderstandingPanel
+      focuses={[activeFocus, secondFocus]}
+      understandings={[preference]}
+      language="zh"
+      onRefresh={vi.fn().mockResolvedValue(undefined)}
+    />));
+
+    expect(container.querySelector('h2')?.textContent).toBe('发布 XOPC 1.0');
+    const focusButton = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes('完善连接器稳定性'));
+    await act(async () => focusButton?.click());
+
+    expect(container.querySelector('h2')?.textContent).toBe('完善连接器稳定性');
+    expect(container.querySelector('h2')?.nextElementSibling?.textContent).toBe('处理连接器调用和检索故障');
+    expect(focusButton?.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('reviews a bounded batch instead of presenting the whole backlog as progress', async () => {
     const candidates = Array.from({ length: 10 }, (_, index) => ({
       ...candidateFocus,
@@ -151,7 +177,7 @@ describe('SharedUnderstandingPanel', () => {
       .find((button) => button.textContent?.includes('待确认'));
     await act(async () => reviewTab?.click());
     expect(container.textContent).toContain('本批 8 组');
-    expect(container.textContent).toContain('其余 2 条建议保持不生效');
+    expect(container.textContent).toContain('其余 2 项稍后处理');
     expect(container.textContent).toContain('候选关注 10');
     expect(container.textContent).not.toContain('候选关注 1候选摘要 1');
 

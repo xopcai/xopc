@@ -28,6 +28,7 @@ describe('ProjectSkillService', () => {
   let workspaceRoot: string;
   let previousStateDir: string | undefined;
   let projects: ProjectService;
+  let workspaceTrusted: boolean;
   const refreshSkills = vi.fn();
 
   beforeEach(() => {
@@ -38,6 +39,7 @@ describe('ProjectSkillService', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     projects = new ProjectService();
+    workspaceTrusted = false;
     refreshSkills.mockReset();
   });
 
@@ -54,11 +56,21 @@ describe('ProjectSkillService', () => {
     return new ProjectSkillService({
       projects,
       getConfig: () => ConfigSchema.parse({}),
+      getWorkspaceTrust: (workspacePath) => ({
+        workspacePath,
+        required: true,
+        decision: workspaceTrusted,
+        trusted: workspaceTrusted,
+      }),
+      setWorkspaceTrust: (workspacePath, trusted) => {
+        workspaceTrusted = trusted;
+        return { workspacePath, required: true, decision: trusted, trusted };
+      },
       refreshSkills,
     });
   }
 
-  it('installs, lists, reads, and removes only workspace-local skills', async () => {
+  it('installs, lists, reads, and removes XOPC workspace skills', async () => {
     const project = projects.create({ name: 'Commerce', workspaceRoot });
     const globalSkillDir = join(stateDir, 'skills', 'global-only');
     mkdirSync(globalSkillDir, { recursive: true });
@@ -66,16 +78,81 @@ describe('ProjectSkillService', () => {
 
     const installed = await service().installZip(project.id, makeSkillZip('commerce-sales'));
 
-    expect(installed.id).toBe('commerce-sales');
+    expect(installed.directoryId).toBe('commerce-sales');
+    expect(installed.key).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(installed.bodyMarkdown).toContain('Use commerce-sales.');
     expect(existsSync(join(workspaceRoot, '.xopc', 'skills', 'commerce-sales', 'SKILL.md'))).toBe(true);
-    expect(service().list(project.id).items.map((item) => item.id)).toEqual(['commerce-sales']);
+    expect(service().list(project.id).items.map((item) => item.directoryId)).toEqual(['commerce-sales']);
+    expect(service().list(project.id).inheritedItems).toContainEqual(expect.objectContaining({
+      name: 'global-only',
+      origin: 'xopc-global',
+      removable: false,
+    }));
     expect(refreshSkills).toHaveBeenCalledTimes(1);
 
     await service().remove(project.id, 'commerce-sales');
 
     expect(service().list(project.id).items).toEqual([]);
     expect(refreshSkills).toHaveBeenCalledTimes(2);
+  });
+
+  it('lists trusted Agents workspace skills as read-only and keeps XOPC precedence', () => {
+    const project = projects.create({ name: 'Compatibility', workspaceRoot });
+    const agentsSkillDir = join(workspaceRoot, '.agents', 'skills', 'shared');
+    const xopcSkillDir = join(workspaceRoot, '.xopc', 'skills', 'shared');
+    mkdirSync(agentsSkillDir, { recursive: true });
+    mkdirSync(xopcSkillDir, { recursive: true });
+    writeFileSync(join(agentsSkillDir, 'SKILL.md'), '---\nname: shared\ndescription: Agents copy\n---\n\nAgents.\n');
+    writeFileSync(join(xopcSkillDir, 'SKILL.md'), '---\nname: shared\ndescription: XOPC copy\n---\n\nXOPC.\n');
+    workspaceTrusted = true;
+
+    const result = service().list(project.id);
+
+    expect(result.sources).toContainEqual(expect.objectContaining({
+      origin: 'agents-workspace',
+      state: 'active',
+      managed: false,
+      writable: false,
+    }));
+    expect(result.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        origin: 'agents-workspace',
+        effective: false,
+        shadowedBy: 'xopc-workspace',
+        removable: false,
+      }),
+      expect.objectContaining({
+        origin: 'xopc-workspace',
+        effective: true,
+        removable: true,
+      }),
+    ]));
+  });
+
+  it('does not read Agents workspace skills before the project is trusted', () => {
+    const project = projects.create({ name: 'Untrusted', workspaceRoot });
+    const skillDir = join(workspaceRoot, '.agents', 'skills', 'private');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: private\ndescription: Private\n---\n\nPrivate.\n');
+
+    const result = service().list(project.id);
+
+    expect(result.items).toEqual([]);
+    expect(result.sources).toContainEqual(expect.objectContaining({ origin: 'agents-workspace', state: 'untrusted' }));
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ type: 'skipped' }));
+  });
+
+  it('lists nested project skills without making them removable', () => {
+    const project = projects.create({ name: 'Nested', workspaceRoot });
+    const skillDir = join(workspaceRoot, '.xopc', 'skills', 'engineering', 'review');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), '---\nname: review\ndescription: Review code\n---\n\nReview.\n');
+
+    expect(service().list(project.id).items).toContainEqual(expect.objectContaining({
+      origin: 'xopc-workspace',
+      category: 'engineering',
+      removable: false,
+    }));
   });
 
   it('does not fall back when the project has no workspace', () => {

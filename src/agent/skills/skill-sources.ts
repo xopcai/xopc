@@ -200,14 +200,3 @@ export function resolveAgentsSkillsDir(env: NodeJS.ProcessEnv = process.env): st
 export function resolveWorkspaceAgentsSkillsDir(workspaceDir: string): string {
   return join(workspaceDir, '.agents', 'skills');
 }
-
-export function resolveWorkspaceSkillSource(workspaceDir: string): SkillSourceDescriptor {
-  return descriptor({
-    id: 'xopc-workspace',
-    rootDir: resolveWorkspaceSkillsDir(workspaceDir),
-    priority: PRIORITY.xopcWorkspace,
-    scope: 'workspace',
-    managed: true,
-    writable: true,
-  });
-}

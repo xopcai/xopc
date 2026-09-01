@@ -90,6 +90,21 @@ describe('understanding source repository', () => {
     ).get(focus.id)).toEqual({ count: 3 });
   });
 
+  it('renews lifecycle dates when an active focus is confirmed after review is due', () => {
+    const focus = upsertUserFocus({
+      canonicalKey: 'focus:renew', title: 'Renew focus', summary: 'Keep the work moving',
+      horizon: 'current', status: 'active', confidence: 1, evidenceRefs: [],
+      validFrom: 1, reviewAt: 10, validTo: 20, nowMs: 1,
+    });
+
+    expect(updateUserFocus(focus.id, { status: 'active' }, 100)).toMatchObject({
+      status: 'active', validFrom: 100,
+      reviewAt: 100 + 14 * 24 * 60 * 60 * 1_000,
+      validTo: 100 + 30 * 24 * 60 * 60 * 1_000,
+      updatedAt: 100,
+    });
+  });
+
   it('does not let inferred source output overwrite an explicit focus', () => {
     const explicit = upsertUserFocus({
       canonicalKey: 'focus:protected', title: 'User focus', summary: 'Ship safely',

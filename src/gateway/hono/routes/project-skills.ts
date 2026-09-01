@@ -7,6 +7,8 @@ function projectSkills(deps: AuthenticatedRouteDeps): ProjectSkillService {
   return new ProjectSkillService({
     projects: deps.service.projects,
     getConfig: () => deps.service.currentConfig,
+    getWorkspaceTrust: (workspaceRoot) => deps.service.agentService.getWorkspaceTrust(workspaceRoot),
+    setWorkspaceTrust: (workspaceRoot, trusted) => deps.service.agentService.setWorkspaceTrust(workspaceRoot, trusted),
     refreshSkills: () => deps.service.agentService.refreshSkillsAfterDiskChange(),
   });
 }
@@ -27,9 +29,30 @@ export function registerProjectSkillRoutes(authenticated: Hono, deps: Authentica
     }
   });
 
-  authenticated.get('/api/projects/:projectId/skills/:skillId', (c) => {
+  authenticated.get('/api/projects/:projectId/workspace-trust', (c) => {
     try {
-      return c.json({ ok: true, skill: projectSkills(deps).getContent(c.req.param('projectId'), c.req.param('skillId')) });
+      return c.json({ ok: true, trust: projectSkills(deps).getWorkspaceTrust(c.req.param('projectId')) });
+    } catch (error) {
+      return errorResponse(c, error);
+    }
+  });
+
+  authenticated.patch('/api/projects/:projectId/workspace-trust', async (c) => {
+    try {
+      const body = await c.req.json<Record<string, unknown>>();
+      if (typeof body.trusted !== 'boolean') {
+        return c.json({ ok: false, error: 'Expected { trusted: boolean }' }, 400);
+      }
+      const trust = projectSkills(deps).setWorkspaceTrust(c.req.param('projectId'), body.trusted);
+      return c.json({ ok: true, trust });
+    } catch (error) {
+      return errorResponse(c, error);
+    }
+  });
+
+  authenticated.get('/api/projects/:projectId/skills/:skillKey', (c) => {
+    try {
+      return c.json({ ok: true, skill: projectSkills(deps).getContent(c.req.param('projectId'), c.req.param('skillKey')) });
     } catch (error) {
       return errorResponse(c, error);
     }
