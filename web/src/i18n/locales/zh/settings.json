@@ -1155,7 +1155,7 @@
     "idleTtlHint": "未设置时默认 10 分钟。设为 0 表示禁用空闲回收。",
     "idleTtlPlaceholder": "10",
     "serversTitle": "服务器",
-    "serversHint": "每个 server id 会作为工具名前缀（server__tool）。扩展的 .mcp.json 会自动合并。",
+    "serversHint": "每个 server id 会作为工具名前缀（server__tool）。已安装的 Connector 会创建受管服务器；Extension 仅单独声明 Connector 依赖。",
     "customServersTitle": "自定义 MCP 服务器",
     "customServersHint": "添加 stdio 子进程或远程 HTTP/SSE 端点。上方目录安装的连接器单独管理。",
     "reservedServerId": "该名称已被已安装的连接器占用，请换一个 server id。",

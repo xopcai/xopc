@@ -222,6 +222,7 @@ interface ExtensionManifest {
   name?: string;
   version?: string;
   main?: string;
+  connectorDependencies?: string[];
   engines?: {
     xopc?: string;
     extensionApi?: string;
@@ -238,6 +239,35 @@ function isSafeZipPath(name: string): boolean {
     if (p === '..') return false;
   }
   return true;
+}
+
+function findEmbeddedMcpConfig(root: string): string | undefined {
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    const path = join(root, entry.name);
+    if (entry.isFile() && entry.name.toLowerCase() === '.mcp.json') return path;
+    if (entry.isDirectory()) {
+      const nested = findEmbeddedMcpConfig(path);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}
+
+function validateConnectorDependencies(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    return 'Extension connectorDependencies must be an array of unique Connector ids';
+  }
+  const dependencies = value as string[];
+  const validId = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+  if (
+    dependencies.some((id) => !validId.test(id))
+    || new Set(dependencies).size !== dependencies.length
+  ) {
+    return 'Extension connectorDependencies must be an array of unique Connector ids';
+  }
+  return undefined;
 }
 
 function isIgnorableZipEntry(name: string): boolean {
@@ -612,6 +642,16 @@ async function installFromDirectory(
   if (!manifest) {
     return { ok: false, error: 'Extension must include xopc.extension.json' };
   }
+
+  if (findEmbeddedMcpConfig(sourceDir)) {
+    return {
+      ok: false,
+      error: 'Extensions must declare connectorDependencies instead of embedding .mcp.json',
+    };
+  }
+
+  const connectorDependencyError = validateConnectorDependencies(manifest.connectorDependencies);
+  if (connectorDependencyError) return { ok: false, error: connectorDependencyError };
 
   if (!manifest.engines?.xopc) {
     return { ok: false, error: 'Extension manifest must declare engines.xopc' };

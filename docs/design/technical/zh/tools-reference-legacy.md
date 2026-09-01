@@ -27,7 +27,7 @@
 
 扩展可向外部工具目录追加能力，但不会直接追加到模型可见工具列表。
 
-**MCP 工具：** 按需从 `mcp.servers`（及扩展 `.mcp.json`）读取目录；Agent 策略仍可按服务器或稳定策略 id 禁用。详见 [MCP](mcp.md)。
+**MCP 工具：** 按需从 `mcp.servers` 读取目录；已安装 Connector 会在这里生成受管服务器，Extension 只能声明 `connectorDependencies`，不能注入 MCP 配置。Agent 策略仍可按服务器或稳定策略 id 禁用。详见 [MCP](mcp.md)。
 
 **条件注册举例：** `session_search` 依赖会话持久化；`web_extract` 可通过 `XOPC_WEB_EXTRACT_MODEL` 指定抽取模型；技能写入受 `skills.agentWritePolicy` 约束；技能发现可通过 `skills.toolGating` 与元数据门控。Skills Hub CLI：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
 

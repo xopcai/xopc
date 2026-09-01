@@ -53,6 +53,8 @@ export interface SkillsStorePackageListItem {
   stars?: number;
   /** Short provenance label for the row (e.g. ClawHub). */
   sourceLabel?: string;
+  /** Published Connector V1 manifest, present for Store connector listings. */
+  connectorManifest?: unknown;
 }
 
 /** Unified marketplace package list item (works for all adapters). */

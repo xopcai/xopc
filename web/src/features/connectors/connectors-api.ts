@@ -62,7 +62,7 @@ export type ConnectorDefinition = {
   auth:
     | { mode: 'none' }
     | { mode: 'apiKey' }
-    | { mode: 'oauth'; provider: string };
+    | { mode: 'oauth'; provider?: string; clientId?: string };
   setup: {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
@@ -104,6 +104,7 @@ export type StoreConnectorCatalogItem = {
   author: { username: string; avatarUrl: string | null };
   latestVersion?: string;
   updatedAt: number;
+  connectorManifest?: unknown;
 };
 
 export type StoreConnectorPermissions = {
@@ -472,6 +473,23 @@ export async function startConnectorAuthorization(connectorId: string): Promise<
     { method: 'POST' },
   );
   return requirePayload(response, 'Could not start connector authorization.').authorization;
+}
+
+export async function waitForConnectorAuthorization(
+  instanceId: string,
+  timeoutMs = 120_000,
+): Promise<ConnectorInstance> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const instance = (await fetchConnectorInstances()).find((candidate) => candidate.instanceId === instanceId);
+    if (!instance) throw new Error('Connector installation is unavailable.');
+    if (instance.authStatus === 'connected') return instance;
+    if (instance.status === 'failed' || instance.connectionStatus === 'error') {
+      throw new Error(instance.lastError ?? 'Connector authorization failed.');
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+  }
+  throw new Error('Connector authorization timed out.');
 }
 
 export type ComposioSetupStatus = {

@@ -88,6 +88,46 @@ describe('installExtensionFromStoreZip', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('rejects embedded MCP configuration', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-ext-test-'));
+    try {
+      const buf = zipBuffer({
+        'xopc.extension.json': JSON.stringify({
+          id: 'legacy-mcp-ext',
+          main: 'index.js',
+          engines: { xopc: '>=0.0.0' },
+        }),
+        'index.js': 'export default {};\n',
+        'nested/.mcp.json': '{}',
+      });
+      const res = await installExtensionFromStoreZip(buf, dir);
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/connectorDependencies/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects invalid Connector dependencies', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-ext-test-'));
+    try {
+      const buf = zipBuffer({
+        'xopc.extension.json': JSON.stringify({
+          id: 'invalid-dependencies',
+          main: 'index.js',
+          engines: { xopc: '>=0.0.0' },
+          connectorDependencies: ['notion', 'notion'],
+        }),
+        'index.js': 'export default {};\n',
+      });
+      const res = await installExtensionFromStoreZip(buf, dir);
+      expect(res.ok).toBe(false);
+      expect(res.error).toMatch(/unique Connector ids/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('transactional store extension install', () => {

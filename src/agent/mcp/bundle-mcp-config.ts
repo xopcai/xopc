@@ -1,11 +1,10 @@
 import { normalizeConfiguredMcpServers } from '../../config/mcp-config-normalize.js';
 import type { Config } from '../../config/schema.js';
-import {
-  loadEnabledBundleMcpConfig,
-  type BundleMcpConfig,
-  type BundleMcpDiagnostic,
-  type BundleMcpServerConfig,
-} from '../../extensions/bundle-mcp.js';
+import { inspectExtensionConnectorDependencies } from '../../extensions/connector-dependencies.js';
+
+export type BundleMcpServerConfig = Record<string, unknown>;
+export type BundleMcpDiagnostic = { extensionId: string; connectorId: string; message: string };
+export type BundleMcpConfig = { mcpServers: Record<string, BundleMcpServerConfig> };
 
 export type MergedBundleMcpConfig = {
   config: BundleMcpConfig;
@@ -24,6 +23,13 @@ function listConfiguredMcpServers(params: {
   const configuredMcp = normalizeConfiguredMcpServers(params.cfg?.mcp?.servers);
   return Object.fromEntries(
     Object.entries(configuredMcp)
+      .filter(([, server]) => {
+        const marker = server.xopcConnector;
+        return !marker
+          || typeof marker !== 'object'
+          || Array.isArray(marker)
+          || (marker as Record<string, unknown>).enabled !== false;
+      })
       .map(([name, server]) => [
         name,
         params.mapConfiguredServer(server as BundleMcpServerConfig, name),
@@ -37,10 +43,7 @@ export function loadMergedBundleMcpConfig(params: {
   mapConfiguredServer?: BundleMcpServerMapper;
 }): MergedBundleMcpConfig {
   const mapConfiguredServer = params.mapConfiguredServer ?? ((server) => server);
-  const bundled = loadEnabledBundleMcpConfig({
-    workspaceDir: params.workspaceDir,
-    cfg: params.cfg,
-  });
+  void params.workspaceDir;
   const configured = listConfiguredMcpServers({
     cfg: params.cfg,
     mapConfiguredServer,
@@ -49,10 +52,9 @@ export function loadMergedBundleMcpConfig(params: {
   return {
     config: {
       mcpServers: {
-        ...bundled.config.mcpServers,
         ...configured,
       },
     },
-    diagnostics: bundled.diagnostics,
+    diagnostics: inspectExtensionConnectorDependencies({ cfg: params.cfg }),
   };
 }
