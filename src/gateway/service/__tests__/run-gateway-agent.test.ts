@@ -157,8 +157,22 @@ describe('runGatewayAgent', () => {
         resolveUserTimezoneForSession: () => 'UTC',
         prepareInboundAttachments: async () => undefined,
         beginInboundTurn: () => {},
-        turnDispatcher: { processDirectStreaming: async function* () {} },
-        getLastAssistantPlainText: () => '',
+        turnDispatcher: {
+          processDirectStreaming: async function* () {
+            const message = { role: 'assistant', content: [] };
+            yield { type: 'message_start', message };
+            yield {
+              type: 'message_update',
+              message,
+              assistantMessageEvent: {
+                type: 'text_delta',
+                delta: 'Here is the completed response with details.\nSecond line.',
+              },
+            };
+            yield { type: 'message_end', message };
+          },
+        },
+        getLastAssistantPlainText: () => 'cached response must not supply the notification preview',
         takeTaskReviewStreamHint: () => undefined,
         outboundCoordinator: { emitSessionTurnComplete: async () => {} },
         endInboundTurn: () => {},
@@ -200,6 +214,7 @@ describe('runGatewayAgent', () => {
         sessionKey,
         status: 'success',
         sessionTitle: 'Finish notifications',
+        responsePreview: 'Here is the completed response with details. Second line.',
         target: { kind: 'chat', sessionKey },
       }),
     }]);

@@ -35,6 +35,9 @@ function chatPlan(payload: unknown): NotificationPlan | null {
     zh: '打开对话查看结果。',
   };
   const sessionTitle = typeof event.sessionTitle === 'string' ? event.sessionTitle.trim().slice(0, 120) : '';
+  const responsePreview = completed && typeof event.responsePreview === 'string'
+    ? Array.from(event.responsePreview.trim()).slice(0, 180).join('')
+    : '';
   return {
     dedupeKey: `${type}:${event.runId}`,
     notification: {
@@ -44,7 +47,9 @@ function chatPlan(payload: unknown): NotificationPlan | null {
       title: completed
         ? { en: 'Response ready', zh: '回答已就绪' }
         : { en: 'Response needs attention', zh: '回答需要处理' },
-      body: sessionTitle ? { en: sessionTitle, zh: sessionTitle } : fallback,
+      body: responsePreview
+        ? { en: responsePreview, zh: responsePreview }
+        : sessionTitle ? { en: sessionTitle, zh: sessionTitle } : fallback,
       payload: { runId: event.runId },
     },
   };
