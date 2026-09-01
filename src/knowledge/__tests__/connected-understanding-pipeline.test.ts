@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { KnowledgeSourceItem } from '../types.js';
-import { deriveConnectedClaimObservations } from '../connected-understanding-pipeline.js';
+import { deriveConnectedClaimObservations, renderConnectedObservation } from '../connected-understanding-pipeline.js';
 
 function item(id: string, patch: Partial<KnowledgeSourceItem> = {}): KnowledgeSourceItem {
   return {
@@ -35,9 +35,12 @@ describe('connected understanding derivation', () => {
     expect(observations).toHaveLength(2);
     expect(observations[0]).toMatchObject({
       class: 'relationship',
-      value: { label: 'Alice Zhang' },
+      value: { label: 'Alice Zhang', personId: expect.stringMatching(/^person_/) },
     });
     expect(observations[0]?.items.map((value) => value.id)).toEqual(['mail-1', 'mail-2', 'mail-3']);
+    expect(renderConnectedObservation(observations[0]!)).toMatchObject({
+      kind: 'relationship', payload: { personId: observations[0]?.value.personId },
+    });
   });
 
   it('derives a routine only after three matching calendar observations', () => {

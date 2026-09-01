@@ -1,4 +1,4 @@
-import { Loader2, Users } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -30,12 +30,10 @@ import {
   fetchConnectorCatalog,
   fetchComposioConnectorCatalog,
   fetchConnectorInstances,
-  fetchConnectedPeopleGraph,
   fetchStoreConnectorCatalog,
   fetchStoreConnectorInstallPlan,
   type ConnectorDefinition,
   type ConnectorInstance,
-  type ConnectedPeopleGraph,
   type StoreConnectorCatalogItem,
 } from './connectors-api';
 import { CustomMcpServerDialog } from './custom-mcp-server-dialog';
@@ -75,7 +73,6 @@ type LoadState = {
   instances: ConnectorInstance[];
   loading: boolean;
   error: string | null;
-  peopleGraph: ConnectedPeopleGraph | null;
 };
 
 type CustomDialogState =
@@ -153,15 +150,12 @@ export function ConnectorsPage() {
     instances: [],
     loading: true,
     error: null,
-    peopleGraph: null,
   });
   const [registryLoading, setRegistryLoading] = useState(false);
   const [storePlanLoading, setStorePlanLoading] = useState(false);
   const [registryPage, setRegistryPage] = useState(1);
   const [registryTotalPages, setRegistryTotalPages] = useState<number | undefined>(undefined);
   const [connectedSearchQuery, setConnectedSearchQuery] = useState('');
-  const [peopleSearchQuery, setPeopleSearchQuery] = useState('');
-  const [peopleSearching, setPeopleSearching] = useState(false);
   const [discoverSearchQuery, setDiscoverSearchQuery] = useState(
     understandingIntent ? searchParams.get('connector') ?? '' : '',
   );
@@ -195,15 +189,14 @@ export function ConnectorsPage() {
 
   const load = useCallback(async () => {
     if (!token) {
-      setState({ catalog: [], registryCatalog: [], instances: [], loading: false, error: null, peopleGraph: null });
+      setState({ catalog: [], registryCatalog: [], instances: [], loading: false, error: null });
       return;
     }
     setState((previous) => ({ ...previous, loading: true, error: null }));
     try {
-      const [catalog, instances, peopleGraph] = await Promise.all([
+      const [catalog, instances] = await Promise.all([
         fetchConnectorCatalog(),
         fetchConnectorInstances(),
-        fetchConnectedPeopleGraph('', 12).catch(() => null),
       ]);
       setState((previous) => ({
         catalog,
@@ -211,7 +204,6 @@ export function ConnectorsPage() {
         instances,
         loading: false,
         error: null,
-        peopleGraph,
       }));
     } catch (error) {
       setState({
@@ -220,7 +212,6 @@ export function ConnectorsPage() {
         instances: [],
         loading: false,
         error: error instanceof Error ? error.message : String(error),
-        peopleGraph: null,
       });
     }
   }, [token]);
@@ -228,26 +219,6 @@ export function ConnectorsPage() {
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => {
-    if (!hasToken || tab !== 'connected') return;
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setPeopleSearching(true);
-      void fetchConnectedPeopleGraph(peopleSearchQuery, 50)
-        .then((peopleGraph) => {
-          if (!cancelled) setState((previous) => ({ ...previous, peopleGraph }));
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setPeopleSearching(false);
-        });
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [hasToken, peopleSearchQuery, tab]);
 
   useEffect(() => {
     if (initialTabResolvedRef.current || state.loading || (hasToken && !mcpSettings)) return;
@@ -598,54 +569,13 @@ export function ConnectorsPage() {
                 />
               </div>
 
-              {state.peopleGraph && (state.peopleGraph.people.length > 0 || peopleSearchQuery) ? (
-                <section className="rounded-2xl border border-edge-subtle bg-surface-base p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-accent-soft p-2 text-accent-fg">
-                      <Users className="size-4" aria-hidden />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-semibold text-fg">{cs.peopleGraphTitle}</h2>
-                      <p className="mt-1 text-xs text-fg-muted">
-                        {cs.peopleGraphHint
-                          .replace('{{people}}', String(state.peopleGraph.people.length))
-                          .replace('{{sources}}', String(new Set(state.peopleGraph.sourceEdges.map((edge) => edge.sourceInstanceId)).size))}
-                      </p>
-                    </div>
-                    </div>
-                    <div className="relative w-full max-w-xs">
-                      <ConnectorSearchField
-                        value={peopleSearchQuery}
-                        onChange={setPeopleSearchQuery}
-                        placeholder={cs.peopleGraphSearchPlaceholder}
-                      />
-                      {peopleSearching ? <Loader2 className="absolute right-3 top-2.5 size-4 animate-spin text-fg-subtle" aria-hidden /> : null}
-                    </div>
-                  </div>
-                  {state.peopleGraph.people.length ? (
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                      {state.peopleGraph.people.slice(0, 10).map((person) => {
-                        const sourceLabels = [...new Set(state.peopleGraph!.sourceEdges
-                          .filter((edge) => edge.personId === person.id)
-                          .map((edge) => edge.toolkit ?? edge.connectorId ?? edge.sourceInstanceId))];
-                        return (
-                          <div key={person.id} className="rounded-xl border border-edge bg-surface-panel px-3 py-2.5">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="truncate text-sm font-medium text-fg">{person.label}</p>
-                              <span className="shrink-0 text-xs text-fg-subtle">{person.mentionCount}</span>
-                            </div>
-                            <p className="mt-1 truncate text-xs text-fg-muted">
-                              {person.emails[0] ?? person.usernames[0] ?? person.roles.join(' · ')}
-                            </p>
-                            <p className="mt-1 truncate text-[11px] text-fg-subtle">{sourceLabels.join(' · ')}</p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : <p className="mt-4 text-sm text-fg-muted">{cs.peopleGraphSearchEmpty}</p>}
-                </section>
-              ) : null}
+              <section className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface-base px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">{cs.relationshipsEntryTitle}</h2>
+                  <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.relationshipsEntryHint}</p>
+                </div>
+                <Button type="button" className="shrink-0" onClick={() => navigate('/you?tab=relationships')}>{cs.relationshipsEntryAction}</Button>
+              </section>
 
               {state.loading ? (
                 <div className="grid gap-3" aria-busy="true" aria-label={cs.loading}>

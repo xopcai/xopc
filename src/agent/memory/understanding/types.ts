@@ -3,6 +3,7 @@ import type { UnderstandingKind, UserUnderstanding } from '../../../user-context
 export interface UnderstandingCandidate {
   kind: UnderstandingKind;
   content: string;
+  payload?: Record<string, unknown>;
   canonicalKey?: string;
   confidence: number;
   importance: number;

@@ -335,6 +335,7 @@ export class UserUnderstandingService {
         disclosurePolicy: candidate.disclosurePolicy,
         confidence: candidate.confidence,
         statement: content,
+        payload: candidate.payload,
         createdBy: context.reviewSource === 'background' ? 'consolidation' : 'runtime',
         changeReason: context.reviewSource === 'background' ? 'background synthesis' : 'explicit user statement',
         ...(validFrom !== undefined ? { validFrom } : {}),
