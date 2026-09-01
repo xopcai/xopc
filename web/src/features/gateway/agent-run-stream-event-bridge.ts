@@ -146,10 +146,19 @@ export function startAgentRunStreamEventBridge(
     subscriptions.set(started.runId, stop);
   };
 
+  const onRunCompleted = (raw: Event) => {
+    const completed = parseRunStartedDetail((raw as CustomEvent<unknown>).detail);
+    if (completed) subscriptions.get(completed.runId)?.();
+  };
+
   window.addEventListener('run-started', onRunStarted);
+  window.addEventListener('run-completed', onRunCompleted);
+  window.addEventListener('agent-run-ended', onRunCompleted);
   return () => {
     disposed = true;
     window.removeEventListener('run-started', onRunStarted);
+    window.removeEventListener('run-completed', onRunCompleted);
+    window.removeEventListener('agent-run-ended', onRunCompleted);
     for (const stop of [...subscriptions.values()]) stop();
   };
 }

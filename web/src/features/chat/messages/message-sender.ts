@@ -93,6 +93,18 @@ export function hasPendingAgentRunForChat(chatId: string): boolean {
   }
 }
 
+export function readPendingAgentRunId(chatId: string): string | null {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(pendingAgentRunStorageKey(chatId));
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as PendingAgentRun;
+    const runId = typeof pending.runId === 'string' ? pending.runId.trim() : '';
+    return runId || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Persist a run id for sidebar recovery and `tryResumeAgentRun`. */
 export function setPendingAgentRun(chatId: string, runId: string): void {
   const id = runId.trim();
@@ -147,6 +159,46 @@ export function clearPendingAgentRunForChat(chatId: string): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Clear a pending run only when the terminal event belongs to that exact run. */
+export function clearPendingAgentRunIfMatches(chatId: string, runId: string): boolean {
+  const key = String(chatId ?? '').trim();
+  const expectedRunId = String(runId ?? '').trim();
+  if (!key || !expectedRunId) return false;
+  try {
+    const storageKey = pendingAgentRunStorageKey(key);
+    const raw = sessionStorage.getItem(storageKey);
+    if (!raw) return false;
+    const pending = JSON.parse(raw) as PendingAgentRun;
+    if (pending.runId !== expectedRunId) return false;
+    sessionStorage.removeItem(storageKey);
+    dispatchPendingAgentRunChanged(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Enumerate durable UI run cursors for reconnect reconciliation. */
+export function listPendingAgentRuns(): Array<{ sessionKey: string; runId: string }> {
+  const prefix = 'xopc:pendingRun:';
+  const result: Array<{ sessionKey: string; runId: string }> = [];
+  try {
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const storageKey = sessionStorage.key(index);
+      if (!storageKey?.startsWith(prefix)) continue;
+      const sessionKey = storageKey.slice(prefix.length).trim();
+      const raw = sessionStorage.getItem(storageKey);
+      if (!sessionKey || !raw) continue;
+      const pending = JSON.parse(raw) as PendingAgentRun;
+      const runId = typeof pending.runId === 'string' ? pending.runId.trim() : '';
+      if (runId) result.push({ sessionKey, runId });
+    }
+  } catch {
+    return result;
+  }
+  return result;
 }
 
 export type CompactionState = {
@@ -256,6 +308,8 @@ export class MessageSender {
   /** `runId` from the active resume body; do not clear a newer pending run. */
   private _trackedRunId?: string;
   private _streamCleanup?: () => void;
+  private _streamFinish?: (value: boolean) => void;
+  private _terminalCallbacks?: MessagingCallbacks;
 
   get isSending() {
     return !!this._abort;
@@ -268,6 +322,25 @@ export class MessageSender {
 
   isStreamingFor(chatId: string): boolean {
     return !!this._abort && this._chatId === chatId;
+  }
+
+  isTrackingRun(chatId: string, runId: string): boolean {
+    return this.isStreamingFor(chatId) && this._trackedRunId === runId;
+  }
+
+  /** Settle a run from the low-volume sessions topic when its run topic terminal was lost. */
+  reconcileTerminal(chatId: string, runId: string, status: AgentStreamRunEndPayload['status']): boolean {
+    if (!this.isTrackingRun(chatId, runId) || !this._streamFinish) return false;
+    this._terminalCallbacks?.onResult({ runId, sessionKey: chatId, status });
+    this._streamFinish(true);
+    return true;
+  }
+
+  /** Stop tracking a run proven inactive by the authoritative REST snapshot. */
+  reconcileInactive(chatId: string, runId: string): boolean {
+    if (!this.isTrackingRun(chatId, runId) || !this._streamFinish) return false;
+    this._streamFinish(false);
+    return true;
   }
 
   async send(
@@ -374,6 +447,7 @@ export class MessageSender {
     this._trackedRunId = runId;
     setPendingAgentRun(chatId, runId);
     const terminal = this._wrapTerminalCallbacks(callbacks);
+    this._terminalCallbacks = terminal.wrapped;
     const resumed = await new Promise<boolean>((resolve) => {
       let settled = false;
       const finish = (value: boolean) => {
@@ -383,6 +457,7 @@ export class MessageSender {
         this._streamCleanup = undefined;
         resolve(value);
       };
+      this._streamFinish = finish;
       const afterSeq = readPendingAgentRunCursor(chatId, runId);
       this._streamCleanup = subscribeRealtimeTopic(`run:${runId}`, {
         onEvent: (message) => {
@@ -401,6 +476,8 @@ export class MessageSender {
       this._abort?.signal.addEventListener('abort', () => finish(false), { once: true });
     });
     this._abort = undefined;
+    this._streamFinish = undefined;
+    this._terminalCallbacks = undefined;
     this._clearPendingRun();
     return resumed;
   }

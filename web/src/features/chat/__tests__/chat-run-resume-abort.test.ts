@@ -88,7 +88,7 @@ describe('resolveResumeRunId', () => {
     expect(sessionStorage.getItem(pendingAgentRunStorageKey(sessionKey))).toContain('run-gateway');
   });
 
-  it('falls back to sessionStorage when gateway reports inactive', async () => {
+  it('clears stale sessionStorage when gateway authoritatively reports inactive', async () => {
     vi.mocked(apiFetch).mockResolvedValue({
       ok: true,
       json: async () => ({ payload: { active: false } }),
@@ -96,7 +96,15 @@ describe('resolveResumeRunId', () => {
     setPendingAgentRun(sessionKey, 'run-local');
 
     const runId = await resolveResumeRunId(sessionKey);
-    expect(runId).toBe('run-local');
+    expect(runId).toBeNull();
+    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+  });
+
+  it('falls back to sessionStorage only when the gateway lookup is unavailable', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(new Error('gateway starting'));
+    setPendingAgentRun(sessionKey, 'run-local');
+
+    await expect(resolveResumeRunId(sessionKey)).resolves.toBe('run-local');
   });
 });
 
@@ -294,6 +302,25 @@ describe('MessageSender terminal state', () => {
     await expect(pending).resolves.toBe(false);
 
     expect(sender.isStreamingFor(sessionKey)).toBe(false);
+    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+  });
+
+  it('settles from the sessions-topic terminal when run_end is lost', async () => {
+    const sender = new MessageSender();
+    const onResult = vi.fn();
+    const callbacks = {
+      onStreamStart: vi.fn(), onToken: vi.fn(), onThinking: vi.fn(), onThinkingEnd: vi.fn(),
+      onToolStart: vi.fn(), onToolEnd: vi.fn(), onProgress: vi.fn(), onResult, onError: vi.fn(),
+    } satisfies MessagingCallbacks;
+
+    const pending = sender.resume('run-reconciled', sessionKey, callbacks);
+    await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
+    expect(sender.reconcileTerminal(sessionKey, 'run-reconciled', 'success')).toBe(true);
+    await expect(pending).resolves.toBe(true);
+
+    expect(onResult).toHaveBeenCalledWith({
+      runId: 'run-reconciled', sessionKey, status: 'success',
+    });
     expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
   });
 

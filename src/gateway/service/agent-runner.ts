@@ -33,6 +33,7 @@ import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
 import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
 import { createLogger } from '../../utils/logger.js';
+import { listActiveSessionInputRuns } from '../../storage/sqlite/index.js';
 import {
   SessionInputCoordinator,
   type ReplaceLatestTurnInput,
@@ -138,14 +139,18 @@ export class GatewayAgentRunner {
   }
 
   getActiveRunId(sessionKey: string): string | undefined {
-    return this.activeWebchatRunBySession.get(sessionKey);
+    return this.activeWebchatRunBySession.get(sessionKey)
+      ?? this.inputs.snapshot(sessionKey).activeRunId;
   }
 
   listActiveRuns(): Array<{ sessionKey: string; runId: string }> {
-    return [...this.activeWebchatRunBySession.entries()].map(([sessionKey, runId]) => ({
-      sessionKey,
-      runId,
-    }));
+    const runs = new Map(
+      listActiveSessionInputRuns().map(({ sessionKey, runId }) => [sessionKey, runId]),
+    );
+    for (const [sessionKey, runId] of this.activeWebchatRunBySession) {
+      runs.set(sessionKey, runId);
+    }
+    return [...runs].map(([sessionKey, runId]) => ({ sessionKey, runId }));
   }
 
   getClarifyBridge(): ClarifyBridge {

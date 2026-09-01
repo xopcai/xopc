@@ -10,7 +10,7 @@ import {
   shouldApplyStreamUpdateToView,
   shouldRestoreLiveCacheToView,
 } from '@/features/chat/session/chat-session-view';
-import { chatRunManager, chatRunSessionKeyRef } from '@/features/chat/session/chat-run-manager';
+import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import {
   getChatSessionSnapshot,
   getSessionMessages,
@@ -165,10 +165,10 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
 
   const detachForNewConversation = useCallback(() => {
     fq.clearVisibleClarify();
-    chatRunManager.activeResumeRunId = null;
-    chatRunManager.userAborted = false;
+    const key = focusedSessionKeyRef.current;
+    if (key) chatRunManager.resetRunTracking(key);
     detachChatViewOnly(resetVisibleChatShell);
-  }, [fq.clearVisibleClarify, resetVisibleChatShell]);
+  }, [fq.clearVisibleClarify, focusedSessionKeyRef, resetVisibleChatShell]);
 
   const {
     refreshModelThinkingSupport,
@@ -185,7 +185,6 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     routeSessionKeyRef,
     sendingRef,
     streamingRef,
-    activeStreamSessionKeyRef: chatRunSessionKeyRef,
     loadingSessionRef,
     messagesLenRef,
     thinkingSupportGenRef,
@@ -215,7 +214,6 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     if (!cacheLive && !hasPendingAgentRunForChat(key) && !chatRunManager.isStreamingFor(key)) {
       return false;
     }
-    chatRunManager.activeStreamSessionKey = key;
     sendingRef.current = snap.sending;
     streamingRef.current = snap.streaming;
     return true;
@@ -358,12 +356,13 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       const runId = detail?.runId;
       if (!streamSessionKey || !runId?.trim()) return;
       setPendingAgentRun(streamSessionKey, runId);
+      chatRunManager.setResumeRunId(streamSessionKey, runId);
       if (!shouldApplyStreamUpdate(streamSessionKey)) return;
-      if (chatRunManager.isStreamingFor(streamSessionKey)) return;
+      if (chatRunManager.isTrackingRun(streamSessionKey, runId)) return;
 
       queueMicrotask(() => {
         if (!shouldApplyStreamUpdate(streamSessionKey)) return;
-        if (chatRunManager.isStreamingFor(streamSessionKey)) return;
+        if (chatRunManager.isTrackingRun(streamSessionKey, runId)) return;
         void tryResumeAgentRun(streamSessionKey, getSessionMessages(streamSessionKey));
       });
     };

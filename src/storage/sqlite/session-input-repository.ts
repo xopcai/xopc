@@ -103,6 +103,16 @@ export function getSessionInputState(sessionKey: string): SessionInputState {
   };
 }
 
+/** Durable active webchat runs claimed by the session-input coordinator. */
+export function listActiveSessionInputRuns(): Array<{ sessionKey: string; runId: string }> {
+  const rows = getSqliteDatabase().prepare(`SELECT session_key, active_run_id
+    FROM session_input_runtime WHERE active_run_id IS NOT NULL`).all() as Array<{
+      session_key: string;
+      active_run_id: string;
+    }>;
+  return rows.map((row) => ({ sessionKey: row.session_key, runId: row.active_run_id }));
+}
+
 export function findSessionInput(sessionKey: string, clientMessageId: string): SessionInput | undefined {
   const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE session_key = ? AND client_message_id = ?`)
     .get(sessionKey, clientMessageId) as InputRow | undefined;

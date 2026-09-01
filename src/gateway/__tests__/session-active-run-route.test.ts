@@ -43,6 +43,22 @@ describe('GET /api/sessions/:key/run', () => {
   });
 });
 
+describe('GET /api/session-runs', () => {
+  it('returns the authoritative active-run snapshot', async () => {
+    const runs = [{ sessionKey: 'agent:main:webchat:default:direct:abc', runId: 'run-123' }];
+    const service = {
+      isGatewayReady: () => true,
+      sessions: { listActiveRuns: () => runs },
+    } as unknown as GatewayService;
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    const res = await app.request('/api/session-runs');
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, payload: { runs } });
+  });
+});
+
 describe('GET /api/sessions/:key/history', () => {
   it('rejects non-numeric history cursors', async () => {
     let called = false;

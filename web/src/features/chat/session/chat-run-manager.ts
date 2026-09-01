@@ -1,55 +1,81 @@
+import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
+
 import { MessageSender } from '@/features/chat/messages/message-sender';
 
-/**
- * Singleton owner of in-flight webchat run subscriptions.
- * Survives route changes; callbacks write to {@link useChatSessionStore}, not hook state.
- */
+/** App-wide owner of run subscriptions, scoped per session for safe route switching. */
 class ChatRunManager {
   private static instance: ChatRunManager | undefined;
-
-  readonly sender = new MessageSender();
-  activeStreamSessionKey: string | null = null;
-  activeResumeRunId: string | null = null;
-  userAborted = false;
+  private readonly senders = new Map<string, MessageSender>();
+  private readonly resumeRunIds = new Map<string, string>();
+  private readonly userAbortedSessions = new Set<string>();
 
   static get(): ChatRunManager {
-    if (!ChatRunManager.instance) {
-      ChatRunManager.instance = new ChatRunManager();
-    }
+    if (!ChatRunManager.instance) ChatRunManager.instance = new ChatRunManager();
     return ChatRunManager.instance;
   }
 
-  clearActiveStreamSessionKey(sessionKey?: string): void {
-    if (sessionKey && this.activeStreamSessionKey !== sessionKey) return;
-    this.activeStreamSessionKey = null;
+  senderFor(sessionKey: string): MessageSender {
+    let sender = this.senders.get(sessionKey);
+    if (!sender) {
+      sender = new MessageSender();
+      this.senders.set(sessionKey, sender);
+    }
+    return sender;
   }
 
-  resetRunTracking(): void {
-    this.activeStreamSessionKey = null;
-    this.activeResumeRunId = null;
+  isStreamingFor(sessionKey: string): boolean {
+    return this.senders.get(sessionKey)?.isStreamingFor(sessionKey) ?? false;
   }
 
-  abort(): void {
-    this.sender.abort();
+  isTrackingRun(sessionKey: string, runId: string): boolean {
+    return this.senders.get(sessionKey)?.isTrackingRun(sessionKey, runId) ?? false;
   }
 
-  isStreamingFor(chatId: string): boolean {
-    return this.sender.isStreamingFor(chatId);
+  getResumeRunId(sessionKey: string): string | null {
+    return this.resumeRunIds.get(sessionKey) ?? null;
   }
 
-  get isSending(): boolean {
-    return this.sender.isSending;
+  setResumeRunId(sessionKey: string, runId: string | null): void {
+    if (runId) this.resumeRunIds.set(sessionKey, runId);
+    else this.resumeRunIds.delete(sessionKey);
+  }
+
+  setUserAborted(sessionKey: string, aborted: boolean): void {
+    if (aborted) this.userAbortedSessions.add(sessionKey);
+    else this.userAbortedSessions.delete(sessionKey);
+  }
+
+  takeUserAborted(sessionKey: string): boolean {
+    return this.userAbortedSessions.delete(sessionKey);
+  }
+
+  resetRunTracking(sessionKey: string): void {
+    this.resumeRunIds.delete(sessionKey);
+    this.userAbortedSessions.delete(sessionKey);
+  }
+
+  abort(sessionKey: string): void {
+    this.senders.get(sessionKey)?.abort();
+    this.senders.delete(sessionKey);
+    this.resetRunTracking(sessionKey);
+  }
+
+  reconcileTerminal(sessionKey: string, runId: string, status: AgentStreamRunStatus): boolean {
+    const handled = this.senders.get(sessionKey)?.reconcileTerminal(sessionKey, runId, status) ?? false;
+    if (this.resumeRunIds.get(sessionKey) === runId) this.resumeRunIds.delete(sessionKey);
+    return handled;
+  }
+
+  reconcileInactive(sessionKey: string, runId: string): boolean {
+    const handled = this.senders.get(sessionKey)?.reconcileInactive(sessionKey, runId) ?? false;
+    if (this.resumeRunIds.get(sessionKey) === runId) this.resumeRunIds.delete(sessionKey);
+    return handled;
+  }
+
+  releaseIdleSender(sessionKey: string): void {
+    const sender = this.senders.get(sessionKey);
+    if (sender && !sender.isSending) this.senders.delete(sessionKey);
   }
 }
 
 export const chatRunManager = ChatRunManager.get();
-
-/** Ref-shaped accessor for hooks that still expect `RefObject<string | null>`. */
-export const chatRunSessionKeyRef = {
-  get current(): string | null {
-    return chatRunManager.activeStreamSessionKey;
-  },
-  set current(value: string | null) {
-    chatRunManager.activeStreamSessionKey = value;
-  },
-};
