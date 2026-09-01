@@ -386,7 +386,7 @@ function ChatMarkdownView({
                 block.isTail && 'markdown-stream-tail',
               )}
               onWorkspaceFileOpen={openFile}
-              renderMermaid={!progressivelyRevealing}
+              renderMermaid={!progressivelyRevealing || !block.isTail}
               mermaidActions
               streamingMetricsKey={metricsKey}
             />
