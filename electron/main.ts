@@ -27,6 +27,7 @@ import {
   resolveGatewayStartupMode,
   spawnGatewayProcess,
   stopGatewayProcess,
+  stopGatewayProcessAndWait,
   registerGatewayConnection,
   registerEmbeddedGatewayRuntime,
   getGatewayCredential,
@@ -342,6 +343,9 @@ if (gotTheLock) {
 
 /** True while `before-quit` has run so window `close` does not call `preventDefault` during a normal quit. */
 let appIsQuitting = false;
+let quitCleanupStarted = false;
+let quitCleanupComplete = false;
+let quitCleanupPromise: Promise<void> | null = null;
 
 /** Track if gateway exited unexpectedly so we can show an error dialog. */
 let gatewayExitedUnexpectedly = false;
@@ -1205,18 +1209,30 @@ app.whenReady().then(async () => {
   if (startupLink) handleDeepLink(startupLink);
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   appIsQuitting = true;
-  destroyDesktopPetWindow();
-  destroyTray();
-  stopVoiceInputHotkey();
-  globalShortcut.unregisterAll();
-  stopAllPowerSaveBlockers();
-  stopCronDisplayWakeBlocker();
-  stopAllTerminals();
-  stopTunnelStatusPolling();
-  stopGatewayProcess();
-  stopAutoUpdater();
+  if (!quitCleanupStarted) {
+    quitCleanupStarted = true;
+    destroyDesktopPetWindow();
+    destroyTray();
+    stopVoiceInputHotkey();
+    globalShortcut.unregisterAll();
+    stopAllPowerSaveBlockers();
+    stopCronDisplayWakeBlocker();
+    stopAllTerminals();
+    stopTunnelStatusPolling();
+    stopAutoUpdater();
+  }
+
+  if (quitCleanupComplete) return;
+
+  event.preventDefault();
+  if (!quitCleanupPromise) {
+    quitCleanupPromise = stopGatewayProcessAndWait().finally(() => {
+      quitCleanupComplete = true;
+      app.quit();
+    });
+  }
 });
 
 app.on('window-all-closed', () => {
