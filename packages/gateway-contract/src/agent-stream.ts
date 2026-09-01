@@ -118,4 +118,5 @@ export type AgentRunEndedEvent = {
   target: import('./notifications.js').NotificationTarget;
   source: 'webchat';
   sessionTitle?: string;
+  responsePreview?: string;
 };

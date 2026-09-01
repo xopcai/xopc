@@ -407,6 +407,13 @@ export async function *runGatewayAgent(
     }
     if (webchatSessionKey) {
       const metaAfter = await sessionIndex.getSessionMetadata(webchatSessionKey).catch(() => undefined);
+      const normalizedResponse = terminalStatus === 'success'
+        ? mapper.getLastAssistantText().replace(/\s+/g, ' ').trim()
+        : '';
+      const responseCharacters = Array.from(normalizedResponse);
+      const responsePreview = responseCharacters.length > 180
+        ? `${responseCharacters.slice(0, 179).join('')}…`
+        : normalizedResponse;
       if (metaAfter?.name) {
         emit('session.updated', { key: webchatSessionKey, name: metaAfter.name });
       }
@@ -419,6 +426,7 @@ export async function *runGatewayAgent(
         target: { kind: 'chat', sessionKey: webchatSessionKey },
         source: 'webchat',
         ...(metaAfter?.name?.trim() ? { sessionTitle: metaAfter.name.trim().slice(0, 100) } : {}),
+        ...(responsePreview ? { responsePreview } : {}),
       };
       emit('agent.run.ended', endedEvent);
     }
