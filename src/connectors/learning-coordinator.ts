@@ -4,7 +4,6 @@ import type { MemoryManager } from '../agent/memory/manager.js';
 import {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
-  finishContextExtractionRun,
   listConnectorConnections,
   listConnectorLearningJobs,
   getConnectorAccount,
