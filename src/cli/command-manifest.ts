@@ -30,6 +30,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'resume [options] [sessionKey]', description: 'Resume a previous TUI session' },
   { name: 'tunnel', description: 'Manage FRP remote access tunnel' },
   { name: 'gateway [options]', description: 'Start the xopc gateway server' },
+  { name: 'history', description: 'Export XOPC session history for external tools' },
   { name: 'session', description: 'Session management commands' },
   { name: 'project', description: 'Manage long-running projects' },
   { name: 'doctor [options]', description: 'Check xopc installation health and diagnose common issues' },

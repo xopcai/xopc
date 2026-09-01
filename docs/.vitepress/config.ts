@@ -125,6 +125,7 @@ export default defineConfig({
             text: 'Reference',
             items: [
               { text: 'CLI commands', link: '/cli' },
+              { text: 'Export history to ctx', link: '/ctx-history' },
               { text: 'Configuration reference', link: '/reference/configuration' },
               { text: 'Data and file locations', link: '/workspace' },
               { text: 'Tool runtimes', link: '/runtime-tools' },
@@ -223,6 +224,7 @@ export default defineConfig({
             text: '参考',
             items: [
               { text: 'CLI 命令', link: '/zh/cli' },
+              { text: '导出历史到 ctx', link: '/zh/ctx-history' },
               { text: '配置参考', link: '/zh/reference/configuration' },
               { text: '数据与文件位置', link: '/zh/workspace' },
               { text: '工具运行环境', link: '/zh/runtime-tools' },
