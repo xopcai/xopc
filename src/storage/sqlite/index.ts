@@ -84,6 +84,7 @@ export {
   isUnderstandingSuppressed,
   listCollaborationRules,
   listUnderstandingEvidence,
+  listUnderstandingStatusEvents,
   listUnderstandings,
   linkUnderstandingEvidence,
   recordContextFeedback,
@@ -96,6 +97,7 @@ export {
   setUnderstandingStatus,
   updateUserProfile,
   type CreateUnderstandingInput,
+  type UnderstandingStatusEvent,
 } from './user-context-repository.js';
 export {
   getUserPerson,

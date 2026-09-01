@@ -48,7 +48,7 @@ export function repairExtractedContext(filter: ContextRepairFilter): {
           retained.push({ objectType: 'understanding', objectId: output.objectId, reason: 'user_explicit' });
           continue;
         }
-        setUnderstandingStatus(output.objectId, 'archived');
+        setUnderstandingStatus(output.objectId, 'archived', { actorType: 'runtime', source: 'context-extraction-repair' });
       } else {
         const focus = listUserFocuses().find((item) => item.id === output.objectId);
         if (!focus) continue;

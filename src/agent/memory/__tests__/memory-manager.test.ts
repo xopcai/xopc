@@ -11,8 +11,6 @@ import {
   closeXopcDatabase,
   getUnderstanding,
   listMemoryTraceEvents,
-  listUnderstandingEvidence,
-  listUnderstandings,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertMemoryRecord,
@@ -166,39 +164,6 @@ describe('MemoryManager', () => {
       });
       expect(staged.success).toBe(true);
       expect(staged.record?.status).toBe('candidate');
-    } finally {
-      closeXopcDatabase();
-      resetXopcDatabaseSingletonForTest();
-      rmSync(stateDir, { recursive: true, force: true });
-    }
-  });
-
-  it('auto-proposes explicit remember requests during turn sync', async () => {
-    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-memory-sync-'));
-    resetXopcDatabaseSingletonForTest();
-    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
-    try {
-      const mgr = new MemoryManager();
-      mgr.addProvider(new BuiltinMemoryProvider());
-      await mgr.initializeAll('session-2', { workspace: stateDir, agentId: 'main' });
-
-      await mgr.syncAll(
-        '记住：这个项目默认使用 pnpm，不要生成 package-lock.json。',
-        '我会记住这个偏好。',
-        { sessionId: 'session-2' },
-      );
-
-      const understanding = listUnderstandings().find((record) => record.statement.includes('pnpm'));
-      expect(understanding?.status).toBe('active');
-      expect(understanding?.explicitness).toBe('explicit');
-      expect(understanding?.canonicalKey).toMatch(/^boundary:/);
-      expect(listUnderstandingEvidence(understanding!.id)[0]?.sourceRef).toContain('session:session-2:');
-
-      const recalled = await mgr.search({
-        query: 'package-lock',
-        scope: { agentId: 'main', workspaceId: stateDir },
-      });
-      expect(recalled).toHaveLength(0);
     } finally {
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();

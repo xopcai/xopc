@@ -132,29 +132,6 @@ export class MemoryManager {
     }
   }
 
-  async syncAll(userContent: string, assistantContent: string, options?: { sessionId?: string }): Promise<void> {
-    await this.captureTurnUnderstanding(userContent, assistantContent, options);
-    await this.syncProvidersForTurn(userContent, assistantContent, options);
-  }
-
-  async captureTurnUnderstanding(
-    userContent: string,
-    assistantContent: string,
-    options?: { agentId?: string; sessionId?: string; turnId?: string; workspaceId?: string; projectId?: string; correctionTargetRecordIds?: string[] },
-  ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
-    const sessionContext = options?.sessionId ? this.sessionContexts.get(options.sessionId) : undefined;
-    const review = await this.understanding.reviewTurn({
-      userContent,
-      assistantContent,
-      sessionKey: options?.sessionId,
-      turnId: options?.turnId,
-      workspaceId: options?.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
-      projectId: options?.projectId,
-      correctionTargetRecordIds: options?.correctionTargetRecordIds,
-    });
-    return review;
-  }
-
   async syncProvidersForTurn(
     userContent: string,
     assistantContent: string,
@@ -213,6 +190,7 @@ export class MemoryManager {
       source?: MemoryRecord['source'];
       reviewSource?: 'turn' | 'background';
       extractionRunId?: string;
+      supersedesRecordIds?: string[];
     } = {},
   ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
     const sessionContext = context.sessionKey ? this.sessionContexts.get(context.sessionKey) : undefined;

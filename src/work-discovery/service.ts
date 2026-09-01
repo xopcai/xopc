@@ -200,8 +200,7 @@ function understandingKind(category: WorkDiscoveryProfileCandidate['category']):
 }
 
 function understandingKey(candidate: WorkDiscoveryProfileCandidate): string {
-  const normalized = candidate.statement.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-  return `work-discovery:${candidate.category}:${createHash('sha256').update(normalized).digest('hex').slice(0, 20)}`;
+  return `understanding:${understandingKind(candidate.category)}:${candidate.factKey}`;
 }
 
 function sameScope(left: UserContextScope, right: UserContextScope): boolean {
@@ -241,7 +240,7 @@ function decideUnderstanding(input: {
   const owned = current && listUnderstandingEvidence(current.id)
     .some((evidence) => evidence.sourceRef.startsWith(expectedSourcePrefix));
   if (!current || !owned || current.status === 'archived') return undefined;
-  if (input.status === 'rejected') return rejectUnderstanding(current.id, 'Rejected from work discovery review');
+  if (input.status === 'rejected') return rejectUnderstanding(current.id, 'Rejected from work discovery review', 'user');
   const statement = input.status === 'edited' ? input.statement?.trim().slice(0, 500) : undefined;
   if (input.status === 'edited' && !statement) return undefined;
   const revised = statement
@@ -251,7 +250,9 @@ function decideUnderstanding(input: {
         changeReason: 'Edited during work discovery review',
       })
     : current;
-  return setUnderstandingStatus(revised.id, 'active', { explicitness: 'explicit', confidence: 1 });
+  return setUnderstandingStatus(revised.id, 'active', {
+    explicitness: 'explicit', confidence: 1, actorType: 'user', source: 'work-discovery-review',
+  });
 }
 
 export interface WorkDiscoveryServiceOptions {

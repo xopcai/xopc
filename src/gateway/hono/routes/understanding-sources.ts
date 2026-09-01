@@ -110,7 +110,7 @@ export function applySourceRevocationChoices(
     if (options.derived === 'delete') {
       if (deleteUnderstanding(id)) derivedDeleted += 1;
     } else {
-      setUnderstandingStatus(id, 'needs_review');
+      setUnderstandingStatus(id, 'needs_review', { actorType: 'runtime', source: 'understanding-source-revoked' });
     }
   }
   if (options.derived === 'delete' && impact.sourceInstanceId) {
