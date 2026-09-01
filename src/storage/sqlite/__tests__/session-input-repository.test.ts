@@ -13,6 +13,7 @@ import {
   finishSessionInputRun,
   getSessionInputState,
   insertSessionInput,
+  listActiveSessionInputRuns,
   loadTranscriptRowsForSession,
   mutateQueuedSessionInput,
   openXopcDatabase,
@@ -53,8 +54,10 @@ describe('session input repository', () => {
 
     expect(retry.id).toBe(first.id);
     expect(claimNextSessionInput(sessionKey, 'run-1')?.id).toBe('server-1');
+    expect(listActiveSessionInputRuns()).toEqual([{ sessionKey, runId: 'run-1' }]);
     expect(claimNextSessionInput(sessionKey, 'run-overlap')).toBeUndefined();
     expect(finishSessionInputRun(sessionKey, 'run-1', 'completed')).toBe(true);
+    expect(listActiveSessionInputRuns()).toEqual([]);
     expect(claimNextSessionInput(sessionKey, 'run-2')?.id).toBe('server-2');
   });
 

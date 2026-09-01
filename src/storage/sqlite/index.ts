@@ -114,6 +114,7 @@ export {
   getSessionInputState,
   getSessionInputById,
   insertSessionInput,
+  listActiveSessionInputRuns,
   mutateQueuedSessionInput,
   recoverSessionInputState,
   setSessionInputStatus,

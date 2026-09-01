@@ -81,6 +81,12 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   // ========== Session REST API (/api/sessions) ==========
 
+  authenticated.get('/api/session-runs', (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) return blocked;
+    return c.json({ ok: true, payload: { runs: service.sessions.listActiveRuns() } });
+  });
+
   authenticated.get('/api/sidebar/chat-list', async (c) => {
     const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
     if (blocked) {
