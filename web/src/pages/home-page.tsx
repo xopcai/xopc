@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
-import { CalendarClock, ChevronRight, CircleAlert, Paperclip, Plus, Sparkles, X } from 'lucide-react';
+import { CalendarClock, ChevronRight, CircleAlert, Plus, Sparkles, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -9,23 +9,24 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TabCompletionTextarea } from '@/components/ui/tab-completion-input';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
-import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import {
   ACCEPT,
   collectClipboardFiles,
   isComposerAcceptableFile,
 } from '@/features/chat/composer/composer-clipboard';
+import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { createComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
+import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
 import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
@@ -38,7 +39,13 @@ import {
   type HomeDecision,
   type HomeResponse,
 } from '@/features/tasks/home-api';
+import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
 import { taskCopy } from '@/features/tasks/task-copy';
+import {
+  type VoiceInputShortcutTarget,
+  VOICE_INPUT_CANCEL_EVENT,
+  VOICE_INPUT_TOGGLE_EVENT,
+} from '@/features/voice/voice-input-shortcut-events';
 import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -234,6 +241,23 @@ export function HomePage() {
   const [reviewDecision, setReviewDecision] = useState<HomeDecision | null>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachments = useComposerAttachments({ chat: msg.chat });
+  const intentInputRef = useRef<HTMLTextAreaElement>(null);
+  const voice = useComposerVoiceInput({
+    disabled: attachmentBusy,
+    chat: msg.chat,
+    onTranscript: (transcript) => {
+      setIntent((current) => appendTranscriptToDraft(current, transcript));
+      window.setTimeout(() => intentInputRef.current?.focus(), 0);
+    },
+  });
+  const {
+    phase: voicePhase,
+    voiceActive,
+    startVoiceInput,
+    cancelVoiceInput: cancelVoiceCapture,
+    confirmVoiceInput,
+    retryVoiceInput,
+  } = voice;
 
   const load = useCallback(async (showSkeleton = false) => {
     if (showSkeleton) setLoading(true);
@@ -330,12 +354,70 @@ export function HomePage() {
   }, [attachments.clearAttachments, attachments.wireAttachmentsPayload, intent, navigate]);
 
   const attachmentsFull = attachments.attachments.length >= MAX_CHAT_ATTACHMENTS;
-  const hasConversationDraft = Boolean(intent.trim()) || attachments.attachments.length > 0;
   const attachTitle = attachmentsFull
     ? interpolate(msg.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS })
     : `${msg.chat.attachFile} (${attachments.attachments.length}/${MAX_CHAT_ATTACHMENTS})`;
+  const quickComposerLabels = {
+    attachTitle,
+    dropFiles: msg.chat.dropFiles,
+    intentLabel: copy.intentLabel,
+    intentPlaceholder: copy.intentPlaceholder,
+    intentSuggestion: copy.intentSuggestion,
+    shortcut: t.home.submitShortcut,
+    submit: copy.newWork,
+  };
 
   const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
+  const composerVisible = isIdle || conversationOpen;
+
+  useEffect(() => {
+    if (!composerVisible && voiceActive) cancelVoiceCapture();
+  }, [cancelVoiceCapture, composerVisible, voiceActive]);
+
+  useEffect(() => {
+    const toggleVoiceInput = (event: Event) => {
+      const target = (event as CustomEvent<{ target?: VoiceInputShortcutTarget }>).detail?.target;
+      if ((target && target !== 'chat') || !composerVisible || attachmentBusy) return;
+      event.preventDefault();
+      if (voicePhase === 'recording') {
+        confirmVoiceInput();
+      } else if (voicePhase === 'idle') {
+        intentInputRef.current?.focus();
+        void startVoiceInput();
+      } else if (voicePhase === 'error') {
+        retryVoiceInput();
+      }
+    };
+    const handleCancelVoiceInput = (event: Event) => {
+      const target = (event as CustomEvent<{ target?: VoiceInputShortcutTarget }>).detail?.target;
+      if ((target && target !== 'chat') || !composerVisible || !voiceActive) return;
+      event.preventDefault();
+      cancelVoiceCapture();
+      intentInputRef.current?.focus();
+    };
+
+    window.addEventListener(VOICE_INPUT_TOGGLE_EVENT, toggleVoiceInput);
+    window.addEventListener(VOICE_INPUT_CANCEL_EVENT, handleCancelVoiceInput);
+    return () => {
+      window.removeEventListener(VOICE_INPUT_TOGGLE_EVENT, toggleVoiceInput);
+      window.removeEventListener(VOICE_INPUT_CANCEL_EVENT, handleCancelVoiceInput);
+    };
+  }, [
+    attachmentBusy,
+    cancelVoiceCapture,
+    composerVisible,
+    confirmVoiceInput,
+    retryVoiceInput,
+    startVoiceInput,
+    voiceActive,
+    voicePhase,
+  ]);
+
+  const handleConversationOpenChange = useCallback((open: boolean) => {
+    if (!open) cancelVoiceCapture();
+    setConversationOpen(open);
+  }, [cancelVoiceCapture]);
+
   const headerEnd = useMemo(() => isIdle ? null : (
     <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => setConversationOpen(true)}>
       <Plus className="size-4" aria-hidden />
@@ -427,7 +509,7 @@ export function HomePage() {
       />
       <Dialog.Root
         open={conversationOpen}
-        onOpenChange={setConversationOpen}
+        onOpenChange={handleConversationOpenChange}
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
@@ -443,68 +525,32 @@ export function HomePage() {
                 </Button>
               </Dialog.Close>
             </div>
-            <form
-              onSubmit={startConversation}
+            <HomeQuickComposer
+              variant="dialog"
+              inputId="new-conversation-intent"
+              inputRef={intentInputRef}
+              intent={intent}
+              labels={{ ...quickComposerLabels, submit: copy.submit }}
+              attachments={attachments.attachments}
+              isDragging={attachments.isDragging}
+              attachmentBusy={attachmentBusy}
+              attachmentsFull={attachmentsFull}
+              voice={voice}
+              chat={msg.chat}
+              cancelAction={(
+                <Dialog.Close asChild>
+                  <Button type="button" variant="ghost">{t.cancel}</Button>
+                </Dialog.Close>
+              )}
+              onIntentChange={setIntent}
+              onPickFiles={() => attachments.fileInputRef.current?.click()}
+              onRemoveAttachment={attachments.removeAttachment}
+              onPaste={(event) => void handleAttachmentPaste(event)}
               onDragOver={handleAttachmentDragOver}
               onDragLeave={handleAttachmentDragLeave}
               onDrop={(event) => void handleAttachmentDrop(event)}
-              className="relative flex min-h-0 flex-1 flex-col"
-            >
-              {attachments.isDragging ? (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-accent-soft/90 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
-                  {msg.chat.dropFiles}
-                </div>
-              ) : null}
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">
-                <label htmlFor="new-conversation-intent" className="mb-2 shrink-0 text-sm font-medium text-fg">{copy.intentLabel}</label>
-                <TabCompletionTextarea
-                  id="new-conversation-intent"
-                  className="min-h-32 w-full flex-1 resize-none rounded-xl border border-edge bg-surface-base p-3 text-sm font-normal leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                  value={intent}
-                  onChange={(event) => setIntent(event.target.value)}
-                  onPaste={(event) => void handleAttachmentPaste(event)}
-                  suggestion={copy.intentSuggestion}
-                  onAcceptSuggestion={setIntent}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                      event.preventDefault();
-                      event.currentTarget.form?.requestSubmit();
-                    }
-                  }}
-                  placeholder={copy.intentPlaceholder}
-                  maxLength={12_000}
-                  autoFocus
-                />
-                <ComposerAttachmentChips
-                  attachments={attachments.attachments}
-                  topPadded={false}
-                  onRemove={attachments.removeAttachment}
-                  className="mt-3 border-b-0 bg-transparent px-0 pb-0"
-                />
-                <div className="mt-2 flex shrink-0 items-center justify-between gap-3 text-[11px] text-fg-subtle">
-                  <span>{t.home.submitShortcut}</span>
-                  <span className="tabular-nums">{intent.length.toLocaleString()} / {(12_000).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2 border-t border-edge px-5 py-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="mr-auto size-9 rounded-lg p-0"
-                  disabled={attachmentBusy || attachmentsFull}
-                  title={attachTitle}
-                  aria-label={attachTitle}
-                  onClick={() => attachments.fileInputRef.current?.click()}
-                >
-                  <Paperclip className="size-4" aria-hidden />
-                </Button>
-                <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="submit" variant="primary" className="min-w-32" disabled={!hasConversationDraft || attachmentBusy}>
-                  <Sparkles className="size-4" aria-hidden />
-                  {copy.submit}
-                </Button>
-              </div>
-            </form>
+              onSubmit={startConversation}
+            />
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -551,61 +597,27 @@ export function HomePage() {
               {intro}
             </p>
             {isIdle ? (
-              <form
-                onSubmit={startConversation}
+              <HomeQuickComposer
+                variant="inline"
+                inputId="idle-conversation-intent"
+                inputRef={intentInputRef}
+                intent={intent}
+                labels={quickComposerLabels}
+                attachments={attachments.attachments}
+                isDragging={attachments.isDragging}
+                attachmentBusy={attachmentBusy}
+                attachmentsFull={attachmentsFull}
+                voice={voice}
+                chat={msg.chat}
+                onIntentChange={setIntent}
+                onPickFiles={() => attachments.fileInputRef.current?.click()}
+                onRemoveAttachment={attachments.removeAttachment}
+                onPaste={(event) => void handleAttachmentPaste(event)}
                 onDragOver={handleAttachmentDragOver}
                 onDragLeave={handleAttachmentDragLeave}
                 onDrop={(event) => void handleAttachmentDrop(event)}
-                className="relative mx-auto mt-8 w-full max-w-[640px] overflow-hidden rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15"
-              >
-                {attachments.isDragging ? (
-                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-accent-soft/90 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
-                    {msg.chat.dropFiles}
-                  </div>
-                ) : null}
-                <label htmlFor="idle-conversation-intent" className="sr-only">{copy.intentLabel}</label>
-                <TabCompletionTextarea
-                  id="idle-conversation-intent"
-                  className="min-h-24 w-full resize-none bg-transparent px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle"
-                  value={intent}
-                  onChange={(event) => setIntent(event.target.value)}
-                  onPaste={(event) => void handleAttachmentPaste(event)}
-                  suggestion={copy.intentSuggestion}
-                  onAcceptSuggestion={setIntent}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                      event.preventDefault();
-                      event.currentTarget.form?.requestSubmit();
-                    }
-                  }}
-                  placeholder={copy.intentPlaceholder}
-                  maxLength={12_000}
-                />
-                <ComposerAttachmentChips
-                  attachments={attachments.attachments}
-                  topPadded={false}
-                  onRemove={attachments.removeAttachment}
-                  className="border-b-0 bg-transparent px-3 pb-2 pt-0"
-                />
-                <div className="flex items-center gap-2 border-t border-edge-subtle px-1 pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="size-9 rounded-lg p-0"
-                    disabled={attachmentBusy || attachmentsFull}
-                    title={attachTitle}
-                    aria-label={attachTitle}
-                    onClick={() => attachments.fileInputRef.current?.click()}
-                  >
-                    <Paperclip className="size-4" aria-hidden />
-                  </Button>
-                  <span className="hidden text-[11px] text-fg-subtle sm:inline">{t.home.submitShortcut}</span>
-                  <Button type="submit" variant="primary" className="ml-auto h-9 rounded-lg px-3.5 text-xs" disabled={!hasConversationDraft || attachmentBusy}>
-                    <Sparkles className="size-3.5" aria-hidden />
-                    {copy.newWork}
-                  </Button>
-                </div>
-              </form>
+                onSubmit={startConversation}
+              />
             ) : null}
           </section>
 
