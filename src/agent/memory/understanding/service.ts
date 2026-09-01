@@ -13,7 +13,7 @@ import {
   setUnderstandingStatus,
 } from '../../../storage/sqlite/index.js';
 import { getRegisteredExtractorDefinition } from '../../../user-context/extraction/registry.js';
-import type { UnderstandingKind, UserContextScope } from '../../../user-context/domain.js';
+import type { UserContextScope } from '../../../user-context/domain.js';
 import {
   canonicalUnderstandingKey,
   findContradictoryUnderstanding,
