@@ -6,6 +6,8 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
+import { shouldRouteGlobalComposerPaste } from '@/features/chat/composer/composer-global-paste';
+import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/composer/composer-paste';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerContextChips } from '@/features/chat/composer/composer-context-chips';
@@ -352,6 +354,37 @@ export const ChatComposer = memo(function ChatComposer({
     cancelVoiceInput: cancelVoiceCapture,
     confirmVoiceInput,
   } = voice;
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const editorHidden = voiceActive && voicePhase !== 'error';
+      if (!shouldRouteGlobalComposerPaste(event, { disabled, editorHidden })) return;
+
+      const action = resolveComposerPaste(event.clipboardData);
+      if (!action) return;
+
+      event.preventDefault();
+      editor.focusForExternalPaste();
+      void applyComposerPaste(action, {
+        processFiles: att.processFiles,
+        processPastedText: att.processPastedText,
+        insertText: (text) => document.execCommand('insertText', false, text),
+        onUnsupportedFiles: () =>
+          showComposerNotification('warning', m.chat.clipboardFileTypeUnsupported),
+      });
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [
+    att.processFiles,
+    att.processPastedText,
+    disabled,
+    editor.focusForExternalPaste,
+    m.chat.clipboardFileTypeUnsupported,
+    voiceActive,
+    voicePhase,
+  ]);
 
   useEffect(() => {
     const toggleVoiceInput = (event?: Event) => {

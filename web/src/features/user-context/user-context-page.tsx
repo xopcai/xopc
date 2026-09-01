@@ -32,6 +32,7 @@ import {
   type UnderstandingSourceGrant, type UnderstandingSourceRun, type UserProfile,
 } from './user-context-api';
 import { SharedUnderstandingPanel } from './shared-understanding-panel';
+import { focusNeedsReview } from './shared-understanding-model';
 import { UNDERSTANDING_KIND_LABELS } from './understanding-kind-labels';
 
 type Tab = 'profile' | 'understanding' | 'collaboration' | 'sources' | 'dreaming' | 'privacy';
@@ -190,7 +191,7 @@ export function UserContextPage() {
 
   const advancedTab = tab === 'sources' || tab === 'dreaming' || tab === 'privacy';
   const reviewCount = data.understandings.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status)).length
-    + data.focuses.filter((focus) => focus.status === 'candidate').length;
+    + data.focuses.filter((focus) => focus.status === 'candidate' || focusNeedsReview(focus)).length;
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6 lg:py-8">
       {advancedTab ? <div className="flex items-center gap-3 border-b border-edge pb-4">
@@ -238,7 +239,8 @@ function PortraitOverview({ data, language, t, onNavigate, onProfileChanged }: {
   const [controlsOpen, setControlsOpen] = useState(false);
   const activeUnderstanding = data.understandings.filter((item) => item.status === 'active');
   const pendingUnderstanding = data.understandings.filter((item) => ['candidate', 'needs_review', 'stale'].includes(item.status));
-  const pendingCount = pendingUnderstanding.length + data.focuses.filter((focus) => focus.status === 'candidate').length;
+  const pendingCount = pendingUnderstanding.length
+    + data.focuses.filter((focus) => focus.status === 'candidate' || focusNeedsReview(focus)).length;
   const activeRules = data.rules.filter((rule) => rule.status === 'active');
   const displayName = data.profile.callName.trim() || (language === 'zh' ? '你' : 'You');
   const initial = [...displayName][0]?.toLocaleUpperCase() ?? 'Y';

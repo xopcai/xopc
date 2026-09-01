@@ -47,11 +47,11 @@ const COPY = {
     timelineEmpty: 'There are no changes yet.', formed: 'Formed', changed: 'Updated', proposed: 'Proposed', needsReview: 'Needs review',
     timelineShowing: 'Showing the most recent', timelineUnit: 'changes', showMore: 'Show more', showLess: 'Collapse',
     paused: 'Paused', completed: 'Completed', rejected: 'Marked incorrect', archived: 'Archived',
-    reviewTitle: 'A small batch, not an endless queue', reviewHint: 'Suggestions stay inactive until confirmed. You only need to review a useful batch, not clear the backlog.',
-    batchSummary: (count: number) => `${count} groups in this batch`, backlogSummary: (count: number) => `${count} other suggestions remain inactive`, nextBatch: 'Next batch', duplicateSummary: (count: number) => `${count} matching suggestions combined`,
+    reviewTitle: 'A small batch, not an endless queue', reviewHint: 'Suggestions stay inactive until confirmed; focuses that reached review time need to be renewed or ended. Only handle the useful batch in front of you.',
+    batchSummary: (count: number) => `${count} groups in this batch`, backlogSummary: (count: number) => `${count} other items remain for later`, nextBatch: 'Next batch', duplicateSummary: (count: number) => `${count} matching suggestions combined`,
     dismissBatch: 'None of this batch', confirmDismiss: 'Mark every suggestion in this batch as not true?',
     later: 'Later', yes: 'Yes', change: 'Needs changes', wrong: 'Not true', saveConfirm: 'Save and confirm', confidence: 'confidence',
-    focusCandidate: 'Suggested focus', understandingCandidate: 'Suggested understanding', high: 'high', medium: 'medium', low: 'low', noReview: 'Nothing needs your review.',
+    focusCandidate: 'Suggested focus', focusReviewDue: 'Focus due for review', focusExpired: 'Expired focus', understandingCandidate: 'Suggested understanding', keepActive: 'Keep active', high: 'high', medium: 'medium', low: 'low', noReview: 'Nothing needs your review.',
     statement: 'What should xopc understand?', type: 'Type', create: 'Add',
   },
   zh: {
@@ -72,11 +72,11 @@ const COPY = {
     timelineEmpty: '还没有画像变化。', formed: '形成', changed: '更新', proposed: '提出建议', needsReview: '需要复核',
     timelineShowing: '当前展示最近', timelineUnit: '条变化', showMore: '继续展开', showLess: '收起',
     paused: '已暂停', completed: '已完成', rejected: '标记为不正确', archived: '已归档',
-    reviewTitle: '一次处理一小批，不追求清空', reviewHint: '未确认的建议不会生效。你只需要处理值得看的这一批，不必清空全部积压。',
-    batchSummary: (count: number) => `本批 ${count} 组`, backlogSummary: (count: number) => `其余 ${count} 条建议保持不生效`, nextBatch: '换一批', duplicateSummary: (count: number) => `已合并 ${count} 条相同建议`,
+    reviewTitle: '一次处理一小批，不追求清空', reviewHint: '候选建议确认前不会生效；到期关注需要续期或结束。你只需要处理值得看的这一批。',
+    batchSummary: (count: number) => `本批 ${count} 组`, backlogSummary: (count: number) => `其余 ${count} 项稍后处理`, nextBatch: '换一批', duplicateSummary: (count: number) => `已合并 ${count} 条相同建议`,
     dismissBatch: '这批都不是', confirmDismiss: '确认将本批所有建议标记为“不是这样”？',
     later: '稍后', yes: '是的', change: '需要修改', wrong: '不是这样', saveConfirm: '保存并确认', confidence: '把握',
-    focusCandidate: '候选关注', understandingCandidate: '候选理解', high: '高', medium: '中', low: '低', noReview: '目前没有需要你确认的内容。',
+    focusCandidate: '候选关注', focusReviewDue: '关注需要复核', focusExpired: '关注已到期', understandingCandidate: '候选理解', keepActive: '继续保留', high: '高', medium: '中', low: '低', noReview: '目前没有需要你确认的内容。',
     statement: '希望 xopc 了解什么？', type: '类型', create: '添加',
   },
 } as const;
@@ -151,6 +151,7 @@ function PortraitView({ focuses, understandings, language, t, onRefresh }: {
   const compactedFocuses = compactFocuses(focuses);
   const visibleFocuses = compactedFocuses.slice(0, 5);
   const hiddenFocusCount = Math.max(0, compactedFocuses.length - visibleFocuses.length);
+  const displayedFocus = selection?.type === 'focus' ? selection.item : leadFocus;
 
   useEffect(() => {
     if (selection || !initialSelection) return;
@@ -162,37 +163,27 @@ function PortraitView({ focuses, understandings, language, t, onRefresh }: {
   return <div className="space-y-5">
     <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-panel">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/45 to-transparent" aria-hidden="true" />
-      <div className="grid gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12 lg:px-10 lg:py-11">
-        <div className="flex min-h-[18rem] min-w-0 flex-col">
+      <div className="grid items-start gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-10 lg:px-10 lg:py-10">
+        <div className="min-w-0" aria-live="polite">
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent"><Sparkles className="size-3.5" />{t.portraitHint}</div>
-          {leadFocus ? <>
-            <button type="button" className="mt-7 block max-w-3xl text-left" onClick={() => setSelectionKey(`focus:${leadFocus.id}`)}>
-              <h2 className="text-2xl font-semibold leading-tight tracking-tight text-fg sm:text-3xl">{leadFocus.title}</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-fg-muted sm:text-base">{leadFocus.summary}</p>
-            </button>
-            <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-8 text-xs text-fg-subtle">
-              <span className="inline-flex items-center gap-1.5 text-fg-muted"><span className="size-1.5 rounded-full bg-success" />{t.active}</span>
-              <span>{horizonLabel(leadFocus.horizon, t)}</span>
-              <span>{scopeLabel(leadFocus.scope, t)}</span>
-              <span>{t.updated} · {formatDate(leadFocus.updatedAt, language)}</span>
-            </div>
-          </> : <p className="mt-7 max-w-2xl text-base leading-7 text-fg-muted">{t.noFocus}</p>}
+          {displayedFocus ? <FocusHero key={displayedFocus.id} focus={displayedFocus} language={language} t={t} onRefresh={onRefresh} />
+            : <p className="mt-7 max-w-2xl text-base leading-7 text-fg-muted">{t.noFocus}</p>}
         </div>
-        <div className="self-start rounded-2xl border border-edge bg-surface-base/70 p-5">
+        <div className="self-start rounded-2xl border border-edge bg-surface-base/70 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-fg-subtle">{t.importantNow}</p>
-          {focuses.length ? <div className="mt-4 space-y-1">
-            {visibleFocuses.map((focus, index) => <button key={focus.id} type="button" onClick={() => setSelectionKey(`focus:${focus.id}`)} className={`group flex w-full items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors ${selection?.type === 'focus' && selection.item.id === focus.id ? 'bg-accent-soft' : 'hover:bg-surface-hover'}`}>
+          {focuses.length ? <div className="mt-3 space-y-0.5">
+            {visibleFocuses.map((focus, index) => <button key={focus.id} type="button" aria-pressed={selection?.type === 'focus' && selection.item.id === focus.id} onClick={() => setSelectionKey(`focus:${focus.id}`)} className={`group flex w-full items-start gap-3 rounded-xl px-2.5 py-2 text-left transition-colors ${selection?.type === 'focus' && selection.item.id === focus.id ? 'bg-accent-soft' : 'hover:bg-surface-hover'}`}>
               <span className={`mt-2 size-1.5 shrink-0 rounded-full ${index === 0 ? 'bg-accent' : 'bg-success'}`} />
               <span className="min-w-0 flex-1"><span className="line-clamp-2 text-sm leading-6 text-fg">{focus.title}</span><span className="mt-0.5 block text-[11px] text-fg-subtle">{formatDate(focus.updatedAt, language)}</span></span>
               <ChevronRight className="mt-1 size-3.5 shrink-0 text-fg-subtle opacity-0 transition-opacity group-hover:opacity-100" />
             </button>)}
-            {hiddenFocusCount ? <p className="border-t border-edge px-2.5 pt-3 text-[11px] text-fg-subtle">+{hiddenFocusCount} {t.moreFocuses}</p> : null}
+            {hiddenFocusCount ? <p className="mt-1 border-t border-edge px-2.5 pt-2.5 text-[11px] text-fg-subtle">+{hiddenFocusCount} {t.moreFocuses}</p> : null}
           </div> : <p className="mt-4 text-sm leading-6 text-fg-muted">{t.noFocus}</p>}
         </div>
       </div>
     </section>
 
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className={`grid gap-5 ${selection?.type === 'understanding' ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''}`}>
       <section className="rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5">
         <div><h3 className="text-sm font-semibold text-fg">{t.lastingPortrait}</h3><p className="mt-1 text-xs leading-5 text-fg-muted">{t.lastingHint}</p></div>
         {understandings.length ? <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -205,8 +196,60 @@ function PortraitView({ focuses, understandings, language, t, onRefresh }: {
           })}
         </div> : <p className="mt-5 rounded-xl border border-dashed border-edge px-4 py-8 text-center text-sm leading-6 text-fg-muted">{t.noUnderstanding}</p>}
       </section>
-      {selection ? <PortraitDetail selection={selection} language={language} t={t} onRefresh={onRefresh} /> : null}
+      {selection?.type === 'understanding' ? <PortraitDetail selection={selection} language={language} t={t} onRefresh={onRefresh} /> : null}
     </div>
+  </div>;
+}
+
+function FocusHero({ focus, language, t, onRefresh }: {
+  focus: UserFocus;
+  language: 'en' | 'zh';
+  t: Copy;
+  onRefresh: () => Promise<unknown>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(focus.title);
+  const [summary, setSummary] = useState(focus.summary);
+  const [pending, setPending] = useState(false);
+  useEffect(() => {
+    setEditing(false);
+    setTitle(focus.title);
+    setSummary(focus.summary);
+  }, [focus.id, focus.summary, focus.title]);
+
+  const mutate = async (action: () => Promise<unknown>) => {
+    setPending(true);
+    try { await action(); await onRefresh(); } finally { setPending(false); }
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim() || !summary.trim()) return;
+    await mutate(() => updateUserFocus(focus.id, { title: title.trim(), summary: summary.trim() }));
+    setEditing(false);
+  };
+  const source = focus.explicitness === 'explicit' ? t.explicit : focus.explicitness === 'observed' ? t.observed : t.inferred;
+
+  return <div className="mt-7 max-w-3xl">
+    {editing ? <form className="space-y-3" onSubmit={submit}>
+      <input autoFocus className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} />
+      <textarea className={inputClass} rows={4} value={summary} onChange={(event) => setSummary(event.target.value)} />
+      <div className="flex flex-wrap gap-2"><Button type="submit" variant="primary" disabled={pending || !title.trim() || !summary.trim()}>{t.save}</Button><Button type="button" disabled={pending} onClick={() => setEditing(false)}>{t.cancel}</Button></div>
+    </form> : <>
+      <h2 className="text-2xl font-semibold leading-tight tracking-tight text-fg sm:text-3xl">{focus.title}</h2>
+      <p className="mt-3 max-w-2xl text-sm leading-7 text-fg-muted sm:text-base">{focus.summary}</p>
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-subtle">
+        <span className="inline-flex items-center gap-1.5 text-fg-muted"><span className="size-1.5 rounded-full bg-success" />{t.active}</span>
+        <span>{horizonLabel(focus.horizon, t)}</span>
+        <span>{scopeLabel(focus.scope, t)}</span>
+        <span>{source}</span>
+        <span>{t.updated} · {formatDate(focus.updatedAt, language)}</span>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-2 border-t border-edge pt-4">
+        <Button disabled={pending} onClick={() => setEditing(true)}><Pencil className="size-3.5" />{t.edit}</Button>
+        <Button variant="ghost" disabled={pending} onClick={() => void mutate(() => updateUserFocus(focus.id, { status: 'paused' }))}>{t.pause}</Button>
+        <Button variant="ghost" disabled={pending} onClick={() => void mutate(() => updateUserFocus(focus.id, { status: 'completed' }))}><Check className="size-3.5" />{t.complete}</Button>
+      </div>
+    </>}
   </div>;
 }
 
@@ -476,14 +519,15 @@ function ReviewQueue({ items, language, t, onRefresh }: {
     const decisions = group.items.map((item, index): ContextReviewDecision => ({
       objectType: item.type,
       objectId: item.id,
-      action: accepted && index === 0 ? 'accept' : 'reject',
+      action: accepted && index === 0 ? 'accept'
+        : item.type === 'focus' && item.reviewReason !== 'candidate' ? 'pause' : 'reject',
     }));
     return apply(decisions);
   };
   const dismissBatch = () => apply(batchGroups.flatMap((group) => group.items.map((item): ContextReviewDecision => ({
     objectType: item.type,
     objectId: item.id,
-    action: 'reject',
+    action: item.type === 'focus' && item.reviewReason !== 'candidate' ? 'pause' : 'reject',
   }))));
 
   return <section className="mx-auto max-w-4xl space-y-3">
@@ -531,7 +575,7 @@ function ReviewQueue({ items, language, t, onRefresh }: {
           /> : <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
-                <span className="font-medium text-accent">{item.type === 'focus' ? t.focusCandidate : t.understandingCandidate}</span>
+                <span className="font-medium text-accent">{reviewItemLabel(item, t)}</span>
                 <span>·</span><span>{t.confidence} {confidenceLabel}</span>
                 {item.type === 'understanding' ? <><span>·</span><span>{UNDERSTANDING_KIND_LABELS[item.understanding.kind][language]}</span></> : null}
                 {group.items.length > 1 ? <span className="rounded-full bg-surface-muted px-1.5 py-0.5">×{group.items.length}</span> : null}
@@ -540,7 +584,7 @@ function ReviewQueue({ items, language, t, onRefresh }: {
               {summary ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{summary}</p> : null}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Button variant="primary" disabled={pending} onClick={() => void decideGroup(group, true)}><Check className="size-3.5" />{t.yes}</Button>
+              <Button variant="primary" disabled={pending} onClick={() => void decideGroup(group, true)}><Check className="size-3.5" />{item.type === 'focus' && item.reviewReason !== 'candidate' ? t.keepActive : t.yes}</Button>
               <Button disabled={pending} onClick={() => setEditingKey(group.key)}>{t.change}</Button>
               <Button variant="ghost" className="text-danger" disabled={pending} onClick={() => void decideGroup(group, false)}>{t.wrong}</Button>
             </div>
@@ -570,7 +614,9 @@ function groupReviewItems(items: SharedUnderstandingReviewItem[]): ReviewGroup[]
     const key = `${item.type}:${scope}:${normalized}`;
     const confidence = item.type === 'focus' ? item.focus.confidence : item.understanding.confidence;
     const status = item.type === 'focus' ? item.focus.status : item.understanding.status;
-    const priority = (status === 'needs_review' ? 3 : status === 'stale' ? 2 : 0) + confidence;
+    const lifecyclePriority = item.type === 'focus' && item.reviewReason === 'expired' ? 4
+      : item.type === 'focus' && item.reviewReason === 'due' ? 3 : 0;
+    const priority = lifecyclePriority + (status === 'needs_review' ? 3 : status === 'stale' ? 2 : 0) + confidence;
     const existing = groups.get(key);
     if (existing) {
       existing.items.push(item);
@@ -579,6 +625,13 @@ function groupReviewItems(items: SharedUnderstandingReviewItem[]): ReviewGroup[]
     } else groups.set(key, { key, items: [item], priority, updatedAt: item.updatedAt });
   }
   return [...groups.values()].sort((left, right) => right.priority - left.priority || right.updatedAt - left.updatedAt);
+}
+
+function reviewItemLabel(item: SharedUnderstandingReviewItem, t: Copy): string {
+  if (item.type === 'understanding') return t.understandingCandidate;
+  if (item.reviewReason === 'expired') return t.focusExpired;
+  if (item.reviewReason === 'due') return t.focusReviewDue;
+  return t.focusCandidate;
 }
 
 async function applyReviewDecisions(decisions: ContextReviewDecision[]): Promise<void> {
@@ -624,7 +677,7 @@ function ReviewItemContent({ item, language, t, editing, pending, onCancelEdit, 
   const source = understanding ? understanding.explicitness === 'explicit' ? t.explicit : understanding.explicitness === 'observed' ? t.observed : t.inferred : t.inferred;
   return <>
     <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-      <span className="font-medium text-accent">{item.type === 'focus' ? t.focusCandidate : t.understandingCandidate}</span><span>·</span><span>{t.confidence} {confidenceLabel}</span>
+      <span className="font-medium text-accent">{reviewItemLabel(item, t)}</span><span>·</span><span>{t.confidence} {confidenceLabel}</span>
       {understanding ? <><span>·</span><span>{UNDERSTANDING_KIND_LABELS[understanding.kind][language]}</span></> : null}
     </div>
     {item.type === 'focus' ? <><h2 className="mt-4 text-lg font-semibold leading-7 text-fg">{item.focus.title}</h2><p className="mt-2 text-sm leading-6 text-fg-muted">{item.focus.summary}</p></> : <p className="mt-4 text-lg font-semibold leading-8 text-fg">{item.understanding.statement}</p>}

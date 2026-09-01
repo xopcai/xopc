@@ -11,8 +11,8 @@ import {
   type PickerKeyAdapter,
 } from '@/features/chat/composer/picker-key-adapter';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
-import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/composer-clipboard';
-import { classifyPastedText, type PastedTextAttachment } from '@/features/chat/composer/pasted-text';
+import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/composer/composer-paste';
+import type { PastedTextAttachment } from '@/features/chat/composer/pasted-text';
 import { syncComposerPlaceholderClass } from '@/features/chat/composer/use-composer-editor';
 import { cn } from '@/lib/cn';
 
@@ -103,29 +103,17 @@ export const ChatComposerInput = memo(function ChatComposerInput({
         });
       }}
       onPaste={async (e) => {
-        const cd = e.clipboardData;
-        const collected = collectClipboardFiles(cd ?? null);
-        const accepted = collected.filter(isComposerAcceptableFile);
-        if (accepted.length > 0) {
-          e.preventDefault();
-          await processFiles(accepted);
-          return;
-        }
-        if (collected.length > 0) {
-          e.preventDefault();
-          showComposerNotification('warning', chatMessages.clipboardFileTypeUnsupported);
-          return;
-        }
-        const text = cd?.getData('text/plain');
-        if (text) {
-          e.preventDefault();
-          const pastedText = classifyPastedText(text);
-          if (pastedText) {
-            await processPastedText(pastedText);
-            return;
-          }
-          document.execCommand('insertText', false, text);
-        }
+        const action = resolveComposerPaste(e.clipboardData);
+        if (!action) return;
+
+        e.preventDefault();
+        await applyComposerPaste(action, {
+          processFiles,
+          processPastedText,
+          insertText: (text) => document.execCommand('insertText', false, text),
+          onUnsupportedFiles: () =>
+            showComposerNotification('warning', chatMessages.clipboardFileTypeUnsupported),
+        });
       }}
       onKeyDown={(e) => {
         const k = kbdRef.current;

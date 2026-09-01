@@ -10,7 +10,7 @@ const ENGLISH_STOP_WORDS = new Set([
 ]);
 
 export type SharedUnderstandingReviewItem =
-  | { type: 'focus'; id: string; updatedAt: number; focus: UserFocus }
+  | { type: 'focus'; id: string; updatedAt: number; focus: UserFocus; reviewReason: 'candidate' | 'due' | 'expired' }
   | { type: 'understanding'; id: string; updatedAt: number; understanding: UserUnderstanding };
 
 export type SharedUnderstandingHistoryItem =
@@ -44,15 +44,28 @@ function newestFirst<T extends { updatedAt: number }>(left: T, right: T): number
 export function buildSharedUnderstandingModel(
   focuses: UserFocus[],
   understandings: UserUnderstanding[],
+  now = Date.now(),
 ): SharedUnderstandingModel {
-  const currentFocuses = focuses.filter((focus) => focus.status === 'active').sort(newestFirst);
+  const currentFocuses = focuses
+    .filter((focus) => focus.status === 'active' && !focusNeedsReview(focus, now))
+    .sort(newestFirst);
   const activeUnderstandings = understandings
     .filter((understanding) => understanding.status === 'active')
     .sort(newestFirst);
   const reviewQueue: SharedUnderstandingReviewItem[] = [
     ...focuses
-      .filter((focus) => focus.status === 'candidate')
-      .map((focus) => ({ type: 'focus' as const, id: focus.id, updatedAt: focus.updatedAt, focus })),
+      .filter((focus) => focus.status === 'candidate' || focusNeedsReview(focus, now))
+      .map((focus) => ({
+        type: 'focus' as const,
+        id: focus.id,
+        updatedAt: focus.updatedAt,
+        focus,
+        reviewReason: focus.status === 'candidate'
+          ? 'candidate' as const
+          : focus.validTo !== undefined && focus.validTo <= now
+            ? 'expired' as const
+            : 'due' as const,
+      })),
     ...understandings
       .filter((understanding) => REVIEW_STATUSES.has(understanding.status))
       .map((understanding) => ({
@@ -91,6 +104,12 @@ export function buildSharedUnderstandingModel(
       })),
   ].sort(newestFirst);
   return { currentFocuses, activeUnderstandings, reviewQueue, history, timeline };
+}
+
+export function focusNeedsReview(focus: UserFocus, now = Date.now()): boolean {
+  if (focus.status !== 'active') return false;
+  return (focus.validTo !== undefined && focus.validTo <= now)
+    || (focus.reviewAt !== undefined && focus.reviewAt <= now);
 }
 
 function tokens(value: string): Set<string> {

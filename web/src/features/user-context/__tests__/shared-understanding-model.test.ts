@@ -42,6 +42,20 @@ describe('shared understanding model', () => {
     ]);
   });
 
+  it('moves due and expired active focuses out of the current portrait and into review', () => {
+    const now = 1_000;
+    const model = buildSharedUnderstandingModel([
+      focus({ id: 'current', reviewAt: 1_100, validTo: 1_200 }),
+      focus({ id: 'due', reviewAt: 900, validTo: 1_200, updatedAt: 30 }),
+      focus({ id: 'expired', reviewAt: 800, validTo: 950, updatedAt: 40 }),
+    ], [], now);
+
+    expect(model.currentFocuses.map((item) => item.id)).toEqual(['current']);
+    expect(model.reviewQueue.map((item) => item.id)).toEqual(['expired', 'due']);
+    expect(model.reviewQueue.map((item) => item.type === 'focus' ? item.reviewReason : null))
+      .toEqual(['expired', 'due']);
+  });
+
   it('ranks explainable project, topic, and global-context relations', () => {
     const relations = rankUnderstandingRelations(focus({ scope: { type: 'project', id: 'project-1' } }), [
       understanding({ id: 'global' }),
