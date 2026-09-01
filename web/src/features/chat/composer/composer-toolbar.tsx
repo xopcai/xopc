@@ -1,14 +1,13 @@
-import { Mic, Plus, Send, Square } from 'lucide-react';
+import { Plus, Send, Square } from 'lucide-react';
 import { memo } from 'react';
 
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
+import { ComposerVoiceInputButton } from '@/features/chat/composer/composer-voice-input-button';
 import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
 import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { MessageBundle } from '@/i18n/messages';
-import { shortcutDisplayKeys } from '@/stores/quick-capture-shortcut-store';
-import { useVoiceInputShortcutStore } from '@/stores/voice-input-shortcut-store';
 
 export interface ComposerToolbarProps {
   disabled: boolean;
@@ -69,17 +68,10 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   onModelChange,
   modelDisabled,
 }: ComposerToolbarProps) {
-  const voiceShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
   const attachmentsFull = attachmentCount >= maxAttachments;
   const attachTitle = attachmentsFull
     ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
     : `${m.attachFile} (${attachmentCount}/${maxAttachments})`;
-  const voiceActionTitle = voiceReadiness.state === 'preparing'
-    ? m.voicePreparing
-    : voiceReadiness.state === 'error' || voiceReadiness.state === 'needs_download'
-      ? m.voiceNeedsPreparation
-      : m.voiceInput;
-  const voiceTitle = `${voiceActionTitle} (${shortcutDisplayKeys(voiceShortcut).join('+')})`;
 
   return (
     <div
@@ -119,27 +111,12 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         ) : null}
         <div className="flex shrink-0 items-center gap-1">
           {!voiceActive ? (
-            <button
-              type="button"
-              className={cn(
-                'relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
-                interaction.transition,
-                interaction.press,
-                interaction.focusRingPanel,
-                'disabled:cursor-not-allowed disabled:opacity-50',
-              )}
+            <ComposerVoiceInputButton
               disabled={disabled}
-              title={voiceTitle}
-              aria-label={voiceTitle}
-              onClick={() => void onStartVoiceInput()}
-            >
-              <Mic className="size-4 stroke-[1.75]" />
-              {voiceReadiness.state === 'preparing' ? (
-                <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500 motion-safe:animate-pulse" aria-hidden />
-              ) : voiceReadiness.state === 'error' || voiceReadiness.state === 'needs_download' ? (
-                <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-red-500" aria-hidden />
-              ) : null}
-            </button>
+              readiness={voiceReadiness}
+              chat={m}
+              onStart={onStartVoiceInput}
+            />
           ) : null}
           {runBusy ? (
             <>
