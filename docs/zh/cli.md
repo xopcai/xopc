@@ -27,6 +27,7 @@ xopc --version
 | `resume` | 恢复之前的 TUI Session |
 | `tunnel` | 管理公网隧道访问 |
 | `gateway` | 运行和管理 Gateway |
+| `history` | 为 ctx 等外部工具导出 Session 历史 |
 | `session` | 列出和管理 Session |
 | `project` | 管理长期 Project |
 | `doctor` | 诊断安装、数据和安全问题 |
@@ -71,6 +72,8 @@ xopc config validate
 xopc doctor
 xopc logs tail
 ```
+
+如需在 ctx 中搜索 XOPC Session，请参阅[导出历史到 ctx](./ctx-history.md)。
 
 ## Profile 与路径
 
