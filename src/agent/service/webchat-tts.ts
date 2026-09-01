@@ -23,6 +23,30 @@ export type WebchatTtsDeps = {
   log: { warn: (obj: Record<string, unknown>, msg: string) => void };
 };
 
+/** True when the explicit TTS tool already produced durable Webchat audio. */
+export function isSuccessfulWebchatTtsToolEvent(event: unknown): boolean {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return false;
+  const row = event as Record<string, unknown>;
+  if (
+    row.type !== 'tool_execution_end'
+    || row.toolName !== 'text_to_speech'
+    || row.isError === true
+  ) {
+    return false;
+  }
+  const result = row.result && typeof row.result === 'object' && !Array.isArray(row.result)
+    ? row.result as Record<string, unknown>
+    : null;
+  const details = result?.details && typeof result.details === 'object' && !Array.isArray(result.details)
+    ? result.details as Record<string, unknown>
+    : null;
+  return Array.isArray(details?.media) && details.media.some((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const media = item as Record<string, unknown>;
+    return typeof media.uri === 'string' && media.uri.trim().length > 0;
+  });
+}
+
 /**
  * Generate TTS for webchat when config allows; persist under `{stateDir}/media/tts/`.
  */

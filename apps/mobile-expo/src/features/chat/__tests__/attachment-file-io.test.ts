@@ -4,7 +4,7 @@ import {
   arrayBufferToBase64,
   composerAttachmentFromBase64,
   formatAttachmentSize,
-  shouldOpenNativeImageEditor,
+  isEditableImageAttachment,
 } from '../attachment-file-io-core';
 
 describe('composerAttachmentFromBase64', () => {
@@ -58,10 +58,18 @@ describe('formatAttachmentSize', () => {
   });
 });
 
-describe('shouldOpenNativeImageEditor', () => {
-  it('opens the native editor for camera and photo library images only', () => {
-    expect(shouldOpenNativeImageEditor('camera')).toBe(true);
-    expect(shouldOpenNativeImageEditor('photos')).toBe(true);
-    expect(shouldOpenNativeImageEditor('document')).toBe(false);
+describe('isEditableImageAttachment', () => {
+  it('accepts picked local images only', () => {
+    const localImage = composerAttachmentFromBase64({
+      uri: 'file:///photo.jpg',
+      name: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      content: 'YWJj',
+      size: 3,
+    });
+    expect(isEditableImageAttachment(localImage)).toBe(true);
+    expect(isEditableImageAttachment({ ...localImage, localUri: 'content://photo.jpg' })).toBe(false);
+    expect(isEditableImageAttachment({ ...localImage, localUri: 'https://example.com/photo.jpg' })).toBe(false);
+    expect(isEditableImageAttachment({ ...localImage, type: 'document', mimeType: 'application/pdf' })).toBe(false);
   });
 });

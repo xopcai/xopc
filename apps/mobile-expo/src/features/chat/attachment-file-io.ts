@@ -14,13 +14,12 @@ import { mimeTypeFromFileName } from './tool-result-file-paths';
 export {
   composerAttachmentFromBase64,
   formatAttachmentSize,
-  shouldOpenNativeImageEditor,
   type AttachmentPickSource,
 } from './attachment-file-io-core';
 
-const EDITABLE_IMAGE_PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
+const IMAGE_PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ['images'],
-  allowsEditing: true,
+  allowsEditing: false,
   base64: true,
   quality: 0.92,
 };
@@ -124,14 +123,14 @@ async function ensureCameraPermission(): Promise<void> {
 export async function pickAttachmentFromSource(source: AttachmentPickSource): Promise<ComposerAttachment | null> {
   if (source === 'camera') {
     await ensureCameraPermission();
-    const result = await ImagePicker.launchCameraAsync(EDITABLE_IMAGE_PICKER_OPTIONS);
+    const result = await ImagePicker.launchCameraAsync(IMAGE_PICKER_OPTIONS);
     if (result.canceled || !result.assets[0]?.uri) return null;
     const asset = result.assets[0];
     return loadFromImagePickerAsset(asset, `photo-${Date.now()}.jpg`, 'image/jpeg');
   }
 
   if (source === 'photos') {
-    const result = await ImagePicker.launchImageLibraryAsync(EDITABLE_IMAGE_PICKER_OPTIONS);
+    const result = await ImagePicker.launchImageLibraryAsync(IMAGE_PICKER_OPTIONS);
     if (result.canceled || !result.assets[0]?.uri) return null;
     const asset = result.assets[0];
     return loadFromImagePickerAsset(asset, `image-${Date.now()}.jpg`, 'image/jpeg');

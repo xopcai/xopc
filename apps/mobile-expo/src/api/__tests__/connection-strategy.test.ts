@@ -18,14 +18,16 @@ afterEach(() => {
 });
 
 describe('probeGatewayRouteReachability', () => {
-  it('returns reachable with latency when server responds', async () => {
+  it('returns an HTTP error when the gateway rejects credentials', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: false, status: 401, body: { cancel: () => {} } })),
     );
 
     const result = await probeGatewayRouteReachability('192.168.1.44:18790');
-    expect(result.reachable).toBe(true);
+    expect(result.reachable).toBe(false);
+    expect(result.reason).toBe('http_error');
+    expect(result.httpStatus).toBe(401);
     expect(typeof result.latencyMs).toBe('number');
   });
 

@@ -238,7 +238,7 @@ describe('read aloud store', () => {
     expect(useReadAloudStore.getState().currentChunkIndex).toBe(1);
   });
 
-  it('starts a new Live Activity when replaying a completed response', async () => {
+  it('ends the media session and returns to idle when playback completes', async () => {
     mocks.memory.set('voice.readAloudConsent', 'accepted');
     useReadAloudStore.getState().requestStart(input);
 
@@ -252,14 +252,15 @@ describe('read aloud store', () => {
     }) => void) | undefined;
     listener?.({ currentTime: 10, didJustFinish: false, duration: 10, isLoaded: true, playing: true });
     listener?.({ currentTime: 10, didJustFinish: true, duration: 10, isLoaded: true, playing: false });
+
     expect(mocks.endLiveActivity).toHaveBeenCalled();
-
-    mocks.startLiveActivity.mockClear();
-    useReadAloudStore.getState().resume();
-
-    expect(mocks.startLiveActivity).toHaveBeenCalledWith(expect.objectContaining({
-      status: 'preparing',
-    }));
+    expect(mocks.players[0]?.remove).toHaveBeenCalledOnce();
+    expect(useReadAloudStore.getState()).toMatchObject({
+      source: null,
+      status: 'idle',
+      currentTime: 0,
+      duration: 0,
+    });
   });
 
   it('cancels preparation when the active message is tapped again', async () => {

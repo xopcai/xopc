@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../../config/schema.js';
-import { maybeEmitWebchatTts } from '../webchat-tts.js';
+import {
+  isSuccessfulWebchatTtsToolEvent,
+  maybeEmitWebchatTts,
+} from '../webchat-tts.js';
 import { speak } from '../../../voice/tts/index.js';
 
 vi.mock('../../../voice/tts/factory.js', () => ({
@@ -109,5 +112,29 @@ describe('maybeEmitWebchatTts', () => {
 
     expect(result).toBeNull();
     expect(speak).not.toHaveBeenCalled();
+  });
+});
+
+describe('isSuccessfulWebchatTtsToolEvent', () => {
+  it('recognizes durable media from a successful explicit TTS tool call', () => {
+    expect(isSuccessfulWebchatTtsToolEvent({
+      type: 'tool_execution_end',
+      toolName: 'text_to_speech',
+      isError: false,
+      result: {
+        details: {
+          media: [{ uri: 'media://tts/assist.mp3', type: 'voice' }],
+        },
+      },
+    })).toBe(true);
+  });
+
+  it('does not suppress automatic TTS when the explicit tool produced no media', () => {
+    expect(isSuccessfulWebchatTtsToolEvent({
+      type: 'tool_execution_end',
+      toolName: 'text_to_speech',
+      isError: false,
+      result: { details: { error: 'provider unavailable' } },
+    })).toBe(false);
   });
 });

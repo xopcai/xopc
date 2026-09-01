@@ -60,7 +60,7 @@ describe('pickAttachmentFromSource permissions', () => {
     expect(attachment?.name).toBe('image.jpg');
     expect(getMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
     expect(requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
-    expect(launchImageLibraryAsync).toHaveBeenCalledOnce();
+    expect(launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
   });
 
   it('still requires camera permission before taking a photo', async () => {
@@ -72,6 +72,6 @@ describe('pickAttachmentFromSource permissions', () => {
 
     expect(getCameraPermissionsAsync).toHaveBeenCalledOnce();
     expect(requestCameraPermissionsAsync).toHaveBeenCalledOnce();
-    expect(launchCameraAsync).toHaveBeenCalledOnce();
+    expect(launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({ allowsEditing: false }));
   });
 });

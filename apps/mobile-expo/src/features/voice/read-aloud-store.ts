@@ -28,6 +28,7 @@ export type ReadAloudInput = {
     id: string;
     sessionKey?: string;
     title: string;
+    preview?: string;
   };
   text: string;
   language: 'en-US' | 'zh-CN';
@@ -81,7 +82,6 @@ let cache: ReadAloudCache | null = null;
 let generation = 0;
 let finishingChunk = false;
 let playbackRequestedAt = 0;
-let playbackCompleted = false;
 
 function liveActivitySnapshot(status: ReadAloudLiveActivityStatus) {
   const input = activeInput;
@@ -173,11 +173,11 @@ function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
       if (nextIndex < chunks.length) {
         void playChunk(nextIndex, runGeneration);
       } else {
-        removePlayer();
-        endReadAloudLiveActivity();
-        playbackCompleted = true;
+        const rate = useReadAloudStore.getState().rate;
+        resetPlayback();
+        lastInput = null;
         recordUsageEvent('read_aloud_completed');
-        useReadAloudStore.setState({ status: 'paused', currentChunkIndex: 0, currentTime: 0 });
+        useReadAloudStore.setState({ ...initialPlaybackState, rate });
       }
     });
   } catch (error) {
@@ -229,7 +229,6 @@ function resetPlayback(): void {
   activeInput = null;
   finishingChunk = false;
   playbackRequestedAt = 0;
-  playbackCompleted = false;
   releaseAudioPlayback(PLAYBACK_OWNER);
   endReadAloudLiveActivity();
 }
@@ -305,7 +304,7 @@ async function playChunk(index: number, runGeneration: number): Promise<void> {
 
 function startPlayback(input: ReadAloudInput): void {
   const previousStatus = useReadAloudStore.getState().status;
-  if (activeInput && !playbackCompleted && previousStatus !== 'error') {
+  if (activeInput && previousStatus !== 'error') {
     recordUsageEvent('read_aloud_stopped');
   }
   resetPlayback();
@@ -394,13 +393,6 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
 
   resume: () => {
     if (!activeInput) return;
-    if (playbackCompleted) {
-      playbackCompleted = false;
-      playbackRequestedAt = Date.now();
-      recordUsageEvent('read_aloud_started');
-      const snapshot = liveActivitySnapshot('preparing');
-      if (snapshot) startReadAloudLiveActivity(snapshot);
-    }
     if (player && player.currentTime > 0) {
       claimAudioPlayback(PLAYBACK_OWNER, () => get().pause());
       player.setPlaybackRate(get().rate);
@@ -414,7 +406,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   },
 
   stop: () => {
-    if (activeInput && !playbackCompleted && get().status !== 'error') {
+    if (activeInput && get().status !== 'error') {
       recordUsageEvent('read_aloud_stopped');
     }
     resetPlayback();

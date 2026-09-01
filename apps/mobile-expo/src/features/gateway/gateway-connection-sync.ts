@@ -1,8 +1,6 @@
 import { queryKeys } from '../../query/keys';
 import { queryClient } from '../../query/query-client';
 import { invalidateSessionLists } from '../../query/workspace-sync';
-import { useGatewayStore } from '../../stores/gateway-store';
-
 import { getSharedGatewayRealtimeClient } from './use-gateway-realtime';
 
 const SYNC_DEBOUNCE_MS = 2_000;
@@ -18,13 +16,17 @@ export type GatewaySyncOptions = {
   reconnectRealtime?: boolean;
   /** Skip debounce (explicit user action such as saving gateway settings). */
   immediate?: boolean;
+  /** Reset all gateway-backed query state before loading another profile. */
+  resetQueries?: boolean;
 };
 
 function runGatewaySync(options: GatewaySyncOptions): void {
-  const { invalidateQueries = true, reconnectRealtime = true } = options;
+  const { invalidateQueries = true, reconnectRealtime = true, resetQueries = false } = options;
   lastSyncAt = Date.now();
 
-  if (invalidateQueries) {
+  if (resetQueries) {
+    void queryClient.resetQueries();
+  } else if (invalidateQueries) {
     invalidateSessionLists(queryClient);
     void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
     void queryClient.invalidateQueries({ queryKey: queryKeys.home });
@@ -38,7 +40,12 @@ function runGatewaySync(options: GatewaySyncOptions): void {
 
 /** Invalidate REST caches and reopen realtime after the active gateway URL changes or comes back online. */
 export function syncGatewayAfterConnectivityChange(options: GatewaySyncOptions = {}): void {
-  const { immediate = false, invalidateQueries = true, reconnectRealtime = true } = options;
+  const {
+    immediate = false,
+    invalidateQueries = true,
+    reconnectRealtime = true,
+    resetQueries = false,
+  } = options;
 
   const execute = () => {
     const now = Date.now();
@@ -48,7 +55,7 @@ export function syncGatewayAfterConnectivityChange(options: GatewaySyncOptions =
       }
       return;
     }
-    runGatewaySync({ invalidateQueries, reconnectRealtime });
+    runGatewaySync({ invalidateQueries, reconnectRealtime, resetQueries });
   };
 
   if (immediate) {
@@ -65,12 +72,6 @@ export function syncGatewayAfterConnectivityChange(options: GatewaySyncOptions =
     debounceTimer = null;
     execute();
   }, SYNC_DEBOUNCE_MS);
-}
-
-/** Persisted gateway settings changed — refresh active URL and reconnect immediately (no app restart). */
-export async function syncAfterGatewaySettingsSave(): Promise<void> {
-  await useGatewayStore.getState().refreshActiveBaseUrl();
-  syncGatewayAfterConnectivityChange({ immediate: true });
 }
 
 /** @internal test helper */

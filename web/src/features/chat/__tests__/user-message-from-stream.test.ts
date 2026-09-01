@@ -8,16 +8,7 @@ import {
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
   stripImageUnderstandingContext,
-  stripMediaAttachedClaimCheck,
 } from '@/features/chat/messages/wire-text-scrub';
-
-describe('stripMediaAttachedClaimCheck', () => {
-  it('removes media claim-check lines from persisted user text', () => {
-    const raw =
-      'hello\n[media attached: media://inbound/a.png (image/png)]\n[media attached: media://inbound/b.png (image/png, 42 bytes)]';
-    expect(stripMediaAttachedClaimCheck(raw)).toBe('hello');
-  });
-});
 
 describe('stripImageUnderstandingContext', () => {
   it('removes generated image descriptions from visible user text', () => {
