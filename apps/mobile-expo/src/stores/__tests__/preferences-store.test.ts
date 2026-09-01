@@ -27,6 +27,8 @@ vi.mock('../../storage/mmkv', () => ({
     clipboardIntakeEnabled: 'prefs.clipboardIntakeEnabled',
     defaultAgentId: 'prefs.defaultAgentId',
     newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
+    notificationsEnabled: 'prefs.notificationsEnabled',
+    autoReadAloudEnabled: 'prefs.autoReadAloudEnabled',
   },
   storage: {
     getString: (key: string) => memory.get(key),
@@ -53,6 +55,8 @@ function resetStore(): void {
     defaultAgentId: null,
     newSessionPreferencesByGateway: {},
     clipboardIntakeEnabled: true,
+    notificationsEnabled: false,
+    autoReadAloudEnabled: false,
   });
 }
 
@@ -80,6 +84,30 @@ describe('usePreferencesStore', () => {
 
     expect(usePreferencesStore.getState().hydrated).toBe(true);
     expect(usePreferencesStore.getState().clipboardIntakeEnabled).toBe(false);
+  });
+
+  it('keeps notifications opt-in and persists the local intent', () => {
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().notificationsEnabled).toBe(false);
+    expect(memory.has(KEYS.notificationsEnabled)).toBe(false);
+
+    usePreferencesStore.getState().setNotificationsEnabled(true);
+    expect(memory.get(KEYS.notificationsEnabled)).toBe('true');
+
+    usePreferencesStore.setState({ notificationsEnabled: false });
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().notificationsEnabled).toBe(true);
+  });
+
+  it('persists automatic read aloud as an opt-in preference', () => {
+    usePreferencesStore.getState().setAutoReadAloudEnabled(true);
+
+    expect(memory.get(KEYS.autoReadAloudEnabled)).toBe('true');
+
+    usePreferencesStore.setState({ autoReadAloudEnabled: false });
+    usePreferencesStore.getState().hydrate();
+
+    expect(usePreferencesStore.getState().autoReadAloudEnabled).toBe(true);
   });
 
   it('keeps new-session model and project preferences isolated by gateway and agent', () => {

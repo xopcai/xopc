@@ -1,7 +1,10 @@
 // Text scrubbing applied to persisted user-message content so the UI re-renders
 // the original wire form (rather than the server-expanded skill/file bodies).
 
-import { stripRuntimeUserMessageEnvelope } from '@xopcai/gateway-contract';
+import {
+  stripMediaClaimCheck,
+  stripRuntimeUserMessageEnvelope,
+} from '@xopcai/gateway-contract';
 
 const STARTUP_CONTEXT_MARKER = '[Startup context loaded by runtime]';
 const STARTUP_MEMORY_TRUNCATED = '...[additional startup memory truncated]...';
@@ -107,23 +110,19 @@ export function stripExpandedAtFileBlocks(text: string): string {
     .trim();
 }
 
-/** Remove persisted inbound machine lines from bubble text (attachments show separately). */
-export function stripInboundFileMachineText(text: string): string {
-  if (!text.includes('xopc-path:')) return text;
-  let out = text;
-  out = out.replace(
-    /\s*\[File:[^\]]+\]\s*\r?\nxopc-path:rel:[^\r\n]+\r?\n\s*xopc-path:abs:[^\r\n]+/g,
-    '',
-  );
-  out = out.replace(/\s*\[File:[^\]]+\]\s+xopc-path:rel:\S+\s+xopc-path:abs:\S+/g, '');
-  out = out.replace(/\s*\[File:[^\]]+\]\s*xopc-path:rel:\S+\s*xopc-path:abs:\S+/g, '');
-  return out.replace(/\n{3,}/g, '\n\n').trim();
-}
-
 const IMAGE_UNDERSTANDING_CONTEXT_RE =
   /(?:\n{2,})?\[(?:Image description:|\d+ image\(s\) attached(?:; no image-capable model is available to describe them\.| but could not be described:))[\s\S]*\]\s*$/;
 
 /** Remove model-only image understanding text from the visible user bubble. */
 export function stripImageUnderstandingContext(text: string): string {
   return text.replace(IMAGE_UNDERSTANDING_CONTEXT_RE, '').trimEnd();
+}
+
+/** Full user-bubble scrub for persisted transcript text. */
+export function stripUserMessageForDisplay(text: string): string {
+  let out = stripRuntimeContextForDisplay(text);
+  out = stripExpandedAtFileBlocks(out);
+  out = stripMediaClaimCheck(out);
+  out = stripImageUnderstandingContext(out);
+  return collapseExpandedSkillBlockForDisplay(out);
 }

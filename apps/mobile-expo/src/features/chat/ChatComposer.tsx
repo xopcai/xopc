@@ -933,7 +933,9 @@ export const ChatComposer = memo(function ChatComposer({
         <ComposerAttachmentStrip
           attachments={att.attachments}
           onRemove={att.removeAttachment}
+          onReplace={att.replaceAttachment}
           removeLabel={cm.removeAttachment}
+          editLabel={cm.editImage}
         />
       ) : null}
 

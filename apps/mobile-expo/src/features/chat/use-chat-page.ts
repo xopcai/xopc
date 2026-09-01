@@ -21,7 +21,6 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
-import { syncAfterGatewaySettingsSave } from '../gateway/gateway-connection-sync';
 import { useRouteOverrideToast } from '../gateway/use-route-override-toast';
 import { useKeyboardVisible } from '../../hooks/use-keyboard-visible';
 import { useMessages, t } from '../../i18n/messages';
@@ -76,9 +75,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const queryClient = useQueryClient();
   const { gatewayOnline } = useGatewayHealth();
   const routeOverrideToast = useRouteOverrideToast();
-  const gatewayProfiles = useGatewayStore((s) => s.profiles);
   const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
-  const switchGateway = useGatewayStore((s) => s.switchGateway);
   const isDark = usePreferencesStore((s) => s.resolvedTheme === 'dark');
   const keyboardVisible = useKeyboardVisible();
   const m = useMessages();
@@ -611,43 +608,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // ── Picker sheets state ──────────────────────────────────
   const [agentSheetVisible, setAgentSheetVisible] = useState(false);
-  const [gatewaySheetVisible, setGatewaySheetVisible] = useState(false);
-  const [switchingGatewayId, setSwitchingGatewayId] = useState<string | null>(null);
-
   const openAgentsPicker = useCallback(() => setAgentSheetVisible(true), []);
-
-  const handleGatewaySelect = useCallback(
-    async (profileId: string) => {
-      if (profileId === activeGatewayId) {
-        setGatewaySheetVisible(false);
-        return;
-      }
-      setSwitchingGatewayId(profileId);
-      try {
-        switchGateway(profileId);
-        await syncAfterGatewaySettingsSave();
-        const agentId = resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId);
-        const targetPreferences = usePreferencesStore.getState()
-          .newSessionPreferencesByGateway[profileId] ?? createDefaultNewSessionPreferences();
-        const preference = modelPreferenceForAgent(targetPreferences, agentId);
-        const key = await takeNewChatSessionKey(
-          { agentId, projectId: null },
-          preference ? { model: preference.modelRef } : undefined,
-        );
-        chatSession.activeSessionKeyRef.current = key;
-        bootstrap.setPendingBootstrapKey(key);
-        setGatewaySheetVisible(false);
-        if (!embedded) {
-          openChat(router, key, { replace: true });
-        }
-      } catch (e) {
-        chatSession.setSnackMsg(e instanceof Error ? e.message : String(e));
-      } finally {
-        setSwitchingGatewayId(null);
-      }
-    },
-    [activeGatewayId, agentsQuery.data, embedded, localDefaultAgentId, queryClient, router, switchGateway, chatSession, bootstrap],
-  );
 
   const { openGatewayConnectLanding } = useGatewayConnectLanding();
   const openReconnectLanding = useCallback(() => {
@@ -655,13 +616,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [openGatewayConnectLanding]);
 
   const handleGatewayManageSettings = useCallback(() => {
-    setGatewaySheetVisible(false);
     router.push('/settings/gateway');
-  }, [router]);
-
-  const handleGatewayAdd = useCallback(() => {
-    setGatewaySheetVisible(false);
-    router.push('/settings/gateway/new');
   }, [router]);
 
   return {
@@ -702,17 +657,12 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     chat: chatSession,
 
     // Gateway
-    gatewayProfiles,
     activeGatewayId,
-    gatewayOnline,
     routeOverrideToast,
 
     // Picker sheets
     agentSheetVisible,
     setAgentSheetVisible,
-    gatewaySheetVisible,
-    setGatewaySheetVisible,
-    switchingGatewayId,
 
     // Handlers
     handleBack,
@@ -731,8 +681,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleAssistantCopy,
     handleAssistantSaveToNote,
     handleAssistantRegenerate,
-    handleGatewaySelect,
     handleGatewayManageSettings,
-    handleGatewayAdd,
   };
 }

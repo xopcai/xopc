@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Button, Dialog, Icon, Portal, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Dialog, Icon, Portal, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { useReadAloudStore } from './read-aloud-store';
@@ -15,6 +17,7 @@ function formatTime(seconds: number): string {
 
 export function GlobalReadAloudPlayer() {
   const router = useRouter();
+  const [playerExpanded, setPlayerExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { chat: m } = useMessages();
@@ -22,8 +25,6 @@ export function GlobalReadAloudPlayer() {
   const status = useReadAloudStore((state) => state.status);
   const error = useReadAloudStore((state) => state.error);
   const consentRequired = useReadAloudStore((state) => state.consentRequired);
-  const currentChunkIndex = useReadAloudStore((state) => state.currentChunkIndex);
-  const chunkCount = useReadAloudStore((state) => state.chunkCount);
   const currentTime = useReadAloudStore((state) => state.currentTime);
   const duration = useReadAloudStore((state) => state.duration);
   const rate = useReadAloudStore((state) => state.rate);
@@ -41,95 +42,203 @@ export function GlobalReadAloudPlayer() {
     : error === 'generation'
       ? m.messageReadAloudFailed
       : null;
+  const statusTitle = status === 'preparing'
+    ? m.messageReadAloudPreparing
+    : status === 'playing'
+      ? m.messageReadAloudPlaying
+      : status === 'paused'
+        ? m.messageReadAloudPaused
+        : m.messageReadAloudFailed;
+  const statusDetail = errorMessage
+    ?? (status === 'preparing'
+      ? source?.title
+      : `${formatTime(currentTime)} / ${duration > 0 ? formatTime(duration) : '—'}`);
+  const handlePrimaryPress = status === 'playing'
+    ? pause
+    : status === 'preparing'
+      ? stop
+      : status === 'error'
+        ? retry
+        : resume;
+  const primaryAccessibilityLabel = status === 'playing'
+    ? m.messageReadAloudPause
+    : status === 'preparing'
+      ? m.messageReadAloudStop
+      : status === 'error'
+        ? m.messageReadAloudRetry
+        : m.messageReadAloudResume;
+  const primaryIcon = status === 'preparing'
+    ? 'stop'
+    : status === 'playing'
+      ? 'pause'
+      : status === 'error'
+        ? 'refresh'
+        : 'play';
+
+  useEffect(() => {
+    if (!visible) setPlayerExpanded(false);
+  }, [visible]);
+
+  const openSourceChat = () => {
+    if (!source?.sessionKey) return;
+    setPlayerExpanded(false);
+    router.push(`/chat/${encodeURIComponent(source.sessionKey)}`);
+  };
+
+  const endPlayback = () => {
+    setPlayerExpanded(false);
+    stop();
+  };
 
   return (
-    <Portal>
-      {visible ? (
-        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-          <View
-            style={[
-              styles.player,
-              {
-                bottom: insets.bottom + 82,
-                backgroundColor: colors.surface.panel,
-                borderColor: colors.border.default,
-              },
-            ]}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={status === 'playing'
-                ? m.messageReadAloudPause
-                : status === 'preparing'
-                  ? m.messageReadAloudStop
-                  : m.messageReadAloudResume}
-              onPress={status === 'playing'
-                ? pause
-                : status === 'preparing'
-                  ? stop
-                  : status === 'error'
-                    ? retry
-                    : resume}
-              style={[styles.playButton, { backgroundColor: colors.accent.primary }]}
+    <>
+      <Portal>
+        {visible ? (
+          <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+            <View
+              style={[
+                styles.player,
+                {
+                  bottom: insets.bottom + 82,
+                  backgroundColor: colors.surface.panel,
+                  borderColor: colors.border.default,
+                },
+              ]}
             >
-              <Icon
-                source={status === 'preparing' ? 'loading' : status === 'playing' ? 'pause' : 'play'}
-                size={20}
-                color={colors.accent.onPrimary}
-              />
-            </Pressable>
-            <View style={styles.body}>
+              <View style={[styles.voiceMark, { backgroundColor: colors.accent.selectionBg }]}>
+                {status === 'preparing' ? (
+                  <ActivityIndicator size={18} color={colors.accent.primary} />
+                ) : (
+                  <Icon
+                    source={status === 'error' ? 'alert-circle-outline' : 'waveform'}
+                    size={21}
+                    color={status === 'error' ? colors.semantic.error : colors.accent.primary}
+                  />
+                )}
+              </View>
               <Pressable
-                disabled={!source?.sessionKey}
-                onPress={source?.sessionKey
-                  ? () => router.push(`/chat/${encodeURIComponent(source.sessionKey!)}`)
-                  : undefined}
-                accessibilityRole={source?.sessionKey ? 'button' : undefined}
+                style={styles.body}
+                onPress={() => setPlayerExpanded(true)}
+                accessibilityRole="button"
+                accessibilityLabel={m.messageReadAloudOpenPlayer}
               >
                 <Text numberOfLines={1} style={[styles.title, { color: colors.text.primary }]}>
-                  {source?.title}
+                  {statusTitle}
                 </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.meta, { color: errorMessage ? colors.semantic.error : colors.text.tertiary }]}
+                >
+                  {statusDetail}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={primaryAccessibilityLabel}
+                onPress={handlePrimaryPress}
+                style={[styles.playButton, { backgroundColor: colors.accent.primary }]}
+              >
+                <Icon
+                  source={primaryIcon}
+                  size={20}
+                  color={colors.accent.onPrimary}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={m.messageReadAloudStop}
+                onPress={endPlayback}
+                style={styles.closeButton}
+              >
+                <Icon source="close" size={19} color={colors.text.secondary} />
               </Pressable>
               <View style={[styles.track, { backgroundColor: colors.border.default }]}>
                 <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: colors.accent.primary }]} />
               </View>
-              <View style={styles.metaRow}>
-                <Text numberOfLines={1} style={[styles.meta, { color: errorMessage ? colors.semantic.error : colors.text.tertiary }]}>
-                  {errorMessage ?? `${formatTime(currentTime)} / ${duration > 0 ? formatTime(duration) : '—'} · ${currentChunkIndex + 1}/${chunkCount}`}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={m.messageReadAloudRate}
-                  onPress={cycleRate}
-                  style={styles.rateButton}
-                >
-                  <Text style={[styles.rate, { color: colors.text.secondary }]}>{rate}×</Text>
-                </Pressable>
-              </View>
             </View>
+          </View>
+        ) : null}
+
+        <Dialog visible={consentRequired} onDismiss={declineConsent}>
+          <Dialog.Title>{m.messageReadAloudConsentTitle}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">{m.messageReadAloudConsentDescription}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={declineConsent}>{m.messageReadAloudConsentCancel}</Button>
+            <Button onPress={acceptConsent}>{m.messageReadAloudConsentConfirm}</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      <BottomSheetModal
+        visible={playerExpanded && visible}
+        onDismiss={() => setPlayerExpanded(false)}
+        title={m.messageReadAloudPlayerTitle}
+        subtitle={errorMessage ?? statusTitle}
+        maxHeight={480}
+        footer={(
+          <Button mode="contained-tonal" icon="close" onPress={endPlayback}>
+            {m.messageReadAloudEnd}
+          </Button>
+        )}
+      >
+        <View style={styles.sheetContent}>
+          <View style={[styles.previewCard, { backgroundColor: colors.surface.grouped }]}>
+            <Text numberOfLines={4} style={[styles.previewText, { color: colors.text.secondary }]}>
+              {source?.preview || source?.title}
+            </Text>
+          </View>
+
+          <View style={styles.progressBlock}>
+            <View style={[styles.sheetTrack, { backgroundColor: colors.border.default }]}>
+              <View style={[styles.sheetFill, { width: `${progress * 100}%`, backgroundColor: colors.accent.primary }]} />
+            </View>
+            <View style={styles.timeRow}>
+              <Text style={[styles.timeText, { color: colors.text.tertiary }]}>{formatTime(currentTime)}</Text>
+              <Text style={[styles.timeText, { color: colors.text.tertiary }]}>
+                {duration > 0 ? formatTime(duration) : '—'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.sheetControls}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={m.messageReadAloudStop}
-              onPress={stop}
-              style={styles.closeButton}
+              accessibilityLabel={m.messageReadAloudRate}
+              onPress={cycleRate}
+              style={styles.secondaryControl}
             >
-              <Icon source="close" size={19} color={colors.text.secondary} />
+              <Text style={[styles.rateText, { color: colors.text.secondary }]}>{rate}×</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={primaryAccessibilityLabel}
+              onPress={handlePrimaryPress}
+              style={[styles.sheetPrimaryControl, { backgroundColor: colors.accent.primary }]}
+            >
+              <Icon
+                source={primaryIcon}
+                size={26}
+                color={colors.accent.onPrimary}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={m.messageReadAloudBackToChat}
+              disabled={!source?.sessionKey}
+              onPress={openSourceChat}
+              style={[styles.secondaryControl, !source?.sessionKey && styles.controlDisabled]}
+            >
+              <Icon source="message-text-outline" size={21} color={colors.text.secondary} />
+              <Text style={[styles.controlLabel, { color: colors.text.secondary }]}>
+                {m.messageReadAloudBackToChat}
+              </Text>
             </Pressable>
           </View>
         </View>
-      ) : null}
-
-      <Dialog visible={consentRequired} onDismiss={declineConsent}>
-        <Dialog.Title>{m.messageReadAloudConsentTitle}</Dialog.Title>
-        <Dialog.Content>
-          <Text variant="bodyMedium">{m.messageReadAloudConsentDescription}</Text>
-        </Dialog.Content>
-        <Dialog.Actions>
-          <Button onPress={declineConsent}>{m.messageReadAloudConsentCancel}</Button>
-          <Button onPress={acceptConsent}>{m.messageReadAloudConsentConfirm}</Button>
-        </Dialog.Actions>
-      </Dialog>
-    </Portal>
+      </BottomSheetModal>
+    </>
   );
 }
 
@@ -138,10 +247,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.md,
     right: spacing.md,
-    minHeight: 68,
+    minHeight: 64,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xl,
-    padding: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -151,6 +261,13 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
+  voiceMark: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   playButton: {
     width: 44,
     height: 44,
@@ -158,13 +275,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: { flex: 1, minWidth: 0, gap: 5 },
+  body: { flex: 1, minWidth: 0, gap: spacing.xxs, justifyContent: 'center' },
   title: { ...typography.label, fontWeight: '600' },
-  track: { height: 4, borderRadius: 2, overflow: 'hidden' },
-  fill: { height: 4, borderRadius: 2 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  meta: { ...typography.caption, flex: 1 },
-  rateButton: { minWidth: 44, minHeight: 24, alignItems: 'flex-end', justifyContent: 'center' },
-  rate: { ...typography.caption, fontWeight: '600' },
+  track: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: 0,
+    height: 2,
+    borderRadius: 1,
+    overflow: 'hidden',
+  },
+  fill: { height: 2, borderRadius: 1 },
+  meta: { ...typography.micro },
   closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  sheetContent: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    gap: spacing.xl,
+  },
+  previewCard: {
+    minHeight: 88,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    justifyContent: 'center',
+  },
+  previewText: { ...typography.body },
+  progressBlock: { gap: spacing.xs },
+  sheetTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  sheetFill: { height: 4, borderRadius: 2 },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  timeText: { ...typography.micro },
+  sheetControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  secondaryControl: {
+    width: 72,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xxs,
+  },
+  rateText: { ...typography.ui, fontWeight: '600' },
+  controlLabel: { ...typography.micro, textAlign: 'center' },
+  controlDisabled: { opacity: 0.4 },
+  sheetPrimaryControl: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

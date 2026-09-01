@@ -7,6 +7,7 @@ import { speak } from '../../voice/tts/speak-core.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { getChannelOutputFormat } from '../../voice/tts/service.js';
 import { compressAudio } from '../../voice/tts/audio.js';
+import { persistOutboundTtsAudio } from '../../channels/attachments/outbound-tts-persist.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('Agent:TTSTool');
@@ -111,37 +112,47 @@ export function createTextToSpeechTool(deps: TextToSpeechToolDeps): AgentTool {
             : compressedFormat === 'mp3' || compressedFormat === 'mpeg'
               ? 'audio/mpeg'
               : `audio/${compressedFormat}`;
-        const dataUrl = `data:${mimeType};base64,${compressedAudio.toString('base64')}`;
+        const media = ctx.channel === 'webchat'
+          ? await persistOutboundTtsAudio(compressedAudio, compressedFormat)
+          : undefined;
 
-        const msg: OutboundMessage = {
-          channel: ctx.channel,
-          chat_id: ctx.chatId,
-          content: '',
-          mediaUrl: dataUrl,
-          mediaType: 'audio',
-          audioAsVoice: outFmt.voiceCompatible,
-        };
-
-        await deps.bus.publishOutbound(msg);
+        if (!media) {
+          const msg: OutboundMessage = {
+            channel: ctx.channel,
+            chat_id: ctx.chatId,
+            content: '',
+            mediaUrl: `data:${mimeType};base64,${compressedAudio.toString('base64')}`,
+            mediaType: 'audio',
+            audioAsVoice: outFmt.voiceCompatible,
+          };
+          await deps.bus.publishOutbound(msg);
+        }
 
         log.info(
           {
             provider: result.provider,
             format: compressedFormat,
+            channel: ctx.channel,
             textLength: params.text.length,
             audioSize: compressedAudio.length,
           },
-          'TTS tool sent audio',
+          ctx.channel === 'webchat' ? 'TTS tool attached audio' : 'TTS tool sent audio',
         );
 
         return {
           content: [
             {
               type: 'text',
-              text: `✅ Sent voice message (${result.provider}, ${compressedFormat}).`,
+              text: ctx.channel === 'webchat'
+                ? `✅ Attached voice message (${result.provider}, ${compressedFormat}).`
+                : `✅ Sent voice message (${result.provider}, ${compressedFormat}).`,
             },
           ],
-          details: { provider: result.provider, format: compressedFormat },
+          details: {
+            provider: result.provider,
+            format: compressedFormat,
+            ...(media ? { media: [media] } : {}),
+          },
         };
       } catch (error) {
         const em = error instanceof Error ? error.message : String(error);

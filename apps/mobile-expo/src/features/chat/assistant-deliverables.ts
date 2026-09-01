@@ -132,6 +132,13 @@ function attachmentOverlapsPath(attachment: MessageAttachment, path: ExtractedFi
   return Boolean(attachment.path && attachment.path === path.absolutePath);
 }
 
+function attachmentMediaKey(attachment: MessageAttachment): string {
+  return attachment.uri?.trim()
+    || attachment.workspaceRelativePath?.trim()
+    || attachment.name?.trim()
+    || '';
+}
+
 function deliveryKey(delivery: ProductDeliveryEnvelope): string {
   const reference = delivery.primary;
   return `${delivery.operation}:${reference?.kind ?? 'none'}:${reference?.id ?? 'none'}`;
@@ -161,12 +168,19 @@ export function collectAssistantDeliverables(
   const imageBlocks = message.content.filter(
     (block): block is ImageContent => block.type === 'image' && Boolean(block.source?.data),
   );
+  const inlineMediaKeys = new Set(
+    message.content
+      .filter((block) => block.type === 'audio')
+      .map((block) => block.uri?.trim() || block.workspaceRelativePath?.trim() || block.name?.trim() || '')
+      .filter(Boolean),
+  );
   const attachments = dedupeAttachments([
     ...imageContentBlocksToAttachments(imageBlocks),
     ...toolMedia,
     ...(message.attachments ?? []),
   ])?.filter((attachment) => (
     !workspacePaths.some((path) => attachmentOverlapsPath(attachment, path))
+    && !inlineMediaKeys.has(attachmentMediaKey(attachment))
   )) ?? [];
   const productDeliveries = Array.from(
     new Map(

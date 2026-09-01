@@ -3,8 +3,9 @@ import { mimeTypeFromFileName } from './tool-result-file-paths';
 
 export type AttachmentPickSource = 'camera' | 'photos' | 'document';
 
-export function shouldOpenNativeImageEditor(source: AttachmentPickSource): boolean {
-  return source === 'camera' || source === 'photos';
+export function isEditableImageAttachment(attachment: ComposerAttachment): boolean {
+  const image = attachment.type === 'image' || attachment.mimeType.startsWith('image/');
+  return image && /^file:\/\//i.test(attachment.localUri ?? '');
 }
 
 export function attachmentTypeFromMime(mimeType: string): 'image' | 'document' | 'audio' {

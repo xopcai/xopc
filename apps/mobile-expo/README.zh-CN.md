@@ -123,14 +123,14 @@ pnpm run android:mobile
 
 ## 推送通知
 
-App 通过 Expo Push Service 发送任务提醒。完成 gateway 配对后，在 App 设置中开启**任务通知**；仅在这次显式操作时请求系统权限，并把 Expo token 注册到 gateway。点击通知会打开对应聊天或自动化页面。
+App 通过 Expo Push Service 发送任务提醒。**任务通知**默认关闭；用户在设置中显式开启后，App 请求系统权限，将用户意图写入 MMKV，并把 Expo token 注册到 gateway。系统权限仍由用户决定。点击通知会打开对应聊天或自动化页面。
 
 Gateway 会在本地 SQLite 中保存设备注册信息，并为“Task 需要输入”“Task 阻塞”和自动化失败发送提醒。Task 完成提醒默认关闭，可通过设备偏好 API 开启。
 
 发布构建前，请在各平台账号中完成以下配置（不要提交凭据或凭据文件）：
 
 1. 在 Expo/EAS 中确认项目 ID 与 `app.json` 相同，并使用 development 或 production client 测试；Android 的 Expo Go 不能作为推送通知测试目标。
-2. Android：在 Firebase 创建包名为 `ai.xopc.xopc` 的 Android App，并在 Expo 项目凭据中配置 FCM v1。`google-services.json` 必须留在 Git 之外。
+2. Android：在 Firebase 创建包名为 `ai.xopc.xopc` 的 Android App，并在 Expo 项目凭据中配置 FCM v1。将下载的客户端配置保存为 `apps/mobile-expo/google-services.json`（已忽略 Git），或在 EAS 中配置名为 `GOOGLE_SERVICES_JSON` 的 file 环境变量。可运行 `pnpm -C apps/mobile-expo run verify:android-push` 校验包名和必需字段。
 3. iOS：在 Apple Developer 中为 `ai.xopc.xopc` 开启 Push Notifications，并在 EAS 凭据中配置 APNs key 或 profile；请在真机 iPhone/iPad 上测试。
 4. 确认 gateway 主机可通过 HTTPS 访问 `https://exp.host`；手机仍通过已配对的 LAN 或远程 URL 访问 gateway。
 

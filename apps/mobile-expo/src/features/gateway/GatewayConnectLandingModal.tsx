@@ -1,7 +1,6 @@
 /**
  * Full-screen connect flow when no gateway base URL is stored (mirrors web GatewayConnectLanding).
  */
-import { useQueryClient } from '@tanstack/react-query';
 import { useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -21,14 +20,14 @@ import { useTheme } from '../../theme';
 
 import { gatewaySettingsSchema } from '../../config/schema';
 import { useMessages } from '../../i18n/messages';
-import { queryKeys } from '../../query/keys';
-import { invalidateSessionLists } from '../../query/workspace-sync';
+import { isGatewayConnectivityError } from '../../api/gateway-error';
 import { DEFAULT_GATEWAY_BASE_URL, useGatewayStore } from '../../stores/gateway-store';
+import { gatewayConnectivityErrorMessage } from './gateway-connectivity-error-copy';
 import {
   gatewayUrlValidationMessage,
   zodGatewayBaseUrlErrorMessage,
 } from './gateway-url-messages';
-import { validateGatewayUrlForManualConnect } from './validate-gateway-url';
+import { assertNotLoopbackGatewayUrl } from './validate-gateway-url';
 import {
   GatewayQrScannerModal,
   requestGatewayQrCameraAccess,
@@ -36,35 +35,9 @@ import {
 import type { ParsedGatewayQr } from './parse-gateway-qr';
 import { resolveGatewayCredentialsFromQr } from './pair-gateway';
 import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
+import { switchGatewayProfile } from './gateway-switch-service';
 import { GatewayTokenInput } from './GatewayTokenInput';
-import { upsertGatewayFromCredentials } from './upsert-gateway-from-credentials';
-import { isGatewayConnectivityError } from '../../api/gateway-error';
-import type { GatewayConnectivityError } from '../../api/gateway-error';
-import type { MessageBundle } from '../../i18n/messages';
-
-function connectivityErrorMessage(
-  err: GatewayConnectivityError,
-  l: MessageBundle['gatewayConnect'],
-): string {
-  switch (err.kind) {
-    case 'token-invalid':
-      return l.sessionExpired;
-    case 'offline-network':
-      return l.offlineNetwork;
-    case 'offline-device':
-      return l.offlineDevice;
-    case 'no-route':
-      return l.unreachableUrl;
-    case 'reverse-proxy-unreachable':
-      return l.reverseProxyUnreachable ?? l.unreachableUrl;
-    case 'misconfigured':
-      return l.invalidUrl;
-    case 'server-error':
-      return err.message;
-    default:
-      return l.connectFailed;
-  }
-}
+import { saveGatewayProfile } from './save-gateway-profile';
 
 export type GatewayConnectLandingModalProps = {
   visible: boolean;
@@ -74,7 +47,6 @@ export type GatewayConnectLandingModalProps = {
 
 export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayConnectLandingModalProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
   const m = useMessages();
@@ -82,6 +54,9 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   const s = m.settings;
 
   const unauthorized = useGatewayStore((st) => st.unauthorized);
+  const profiles = useGatewayStore((st) => st.profiles);
+  const activeGatewayId = useGatewayStore((st) => st.activeGatewayId);
+  const alternateProfiles = profiles.filter((profile) => profile.id !== activeGatewayId);
 
   const [baseUrl, setBaseUrlField] = useState(DEFAULT_GATEWAY_BASE_URL);
   const [token, setTokenField] = useState('');
@@ -173,12 +148,10 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
       return;
     }
 
-    const urlCheck = await validateGatewayUrlForManualConnect(parsed.data.baseUrl, {
-      requireReachable: true,
-    });
-    if (!urlCheck.ok) {
+    const blocked = assertNotLoopbackGatewayUrl(parsed.data.baseUrl);
+    if (blocked) {
       setBaseUrlError(
-        gatewayUrlValidationMessage(urlCheck.code, {
+        gatewayUrlValidationMessage(blocked.code, {
           invalidUrl: l.invalidUrl,
           loopbackUrl: l.loopbackUrl,
           unreachableUrl: l.unreachableUrl,
@@ -187,29 +160,17 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
       return;
     }
 
-    const snapshot = useGatewayStore.getState();
-    const before = {
-      profiles: snapshot.profiles,
-      activeGatewayId: snapshot.activeGatewayId,
-      baseUrl: snapshot.baseUrl,
-      lanUrl: snapshot.lanUrl,
-      token: snapshot.token,
-      activeBaseUrl: snapshot.activeBaseUrl,
-    };
     setSaving(true);
     try {
       try {
-        await upsertGatewayFromCredentials(
-          {
-            baseUrl: urlCheck.url,
-            token: parsed.data.token,
-            lanUrl: pendingLanUrl,
-          },
-          { preflight: true },
-        );
+        await saveGatewayProfile({
+          baseUrl: parsed.data.baseUrl,
+          token: parsed.data.token,
+          lanUrl: pendingLanUrl,
+        });
       } catch (err) {
         if (isGatewayConnectivityError(err)) {
-          setSaveError(connectivityErrorMessage(err, l));
+          setSaveError(gatewayConnectivityErrorMessage(err, l));
           return;
         }
         throw err;
@@ -217,20 +178,9 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
 
       const nav = await navigateHomeAfterGatewayConnect(router.replace);
       if (!nav.ok) {
-        useGatewayStore.setState({
-          profiles: before.profiles,
-          activeGatewayId: before.activeGatewayId,
-          baseUrl: before.baseUrl,
-          lanUrl: before.lanUrl,
-          token: before.token,
-          activeBaseUrl: before.activeBaseUrl,
-        });
-        useGatewayStore.getState().persist();
         setSaveError(nav.message || l.connectFailed);
         return;
       }
-      invalidateSessionLists(queryClient);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
     } finally {
       setSaving(false);
     }
@@ -242,13 +192,28 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
     l.invalidUrl,
     l.loopbackUrl,
     l.unreachableUrl,
-    queryClient,
     router.replace,
   ]);
 
   const goFullSettings = useCallback(() => {
     router.push('/settings');
   }, [router]);
+
+  const handleExistingGatewaySwitch = useCallback((profileId: string) => {
+    setSaving(true);
+    setSaveError('');
+    void switchGatewayProfile(profileId)
+      .then((result) => {
+        if (result.status === 'failed') {
+          setSaveError(gatewayConnectivityErrorMessage(result.error, l));
+          return;
+        }
+        if (result.status === 'switched' || result.status === 'already-active') {
+          router.replace('/');
+        }
+      })
+      .finally(() => setSaving(false));
+  }, [l, router]);
 
   const requestClose = useCallback(() => {
     if (unauthorized) return;
@@ -293,6 +258,24 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
               <Text variant="bodySmall" style={{ color: colors.text }}>
                 {l.sessionExpired}
               </Text>
+              {alternateProfiles.length > 0 ? (
+                <View style={styles.alternateGateways}>
+                  <Text variant="labelMedium" style={{ color: colors.text }}>
+                    {m.gateway.switcher.title}
+                  </Text>
+                  {alternateProfiles.map((profile) => (
+                    <Button
+                      key={profile.id}
+                      mode="outlined"
+                      icon="swap-horizontal"
+                      onPress={() => handleExistingGatewaySwitch(profile.id)}
+                      disabled={saving}
+                    >
+                      {profile.name}
+                    </Button>
+                  ))}
+                </View>
+              ) : null}
             </View>
           ) : null}
 
@@ -422,6 +405,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  alternateGateways: {
+    marginTop: 12,
+    gap: 8,
   },
   steps: {
     marginTop: 12,

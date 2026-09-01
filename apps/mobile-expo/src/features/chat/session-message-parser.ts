@@ -12,8 +12,6 @@ import type { Message, MessageAttachment, MessageContent } from './messages.type
 import { dedupeAttachments, mergeWireAttachments } from './wire-attachments';
 import {
   applyStripToUserContent,
-  extractAttachmentsFromUserContent,
-  mergeUserAttachments,
 } from './inbound-message-text';
 import type { SessionMessagePage } from '../../query/sessions';
 
@@ -763,8 +761,7 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
 
     if (role === 'user' || role === 'user-with-attachments') {
       const roleTyped = role as Message['role'];
-      const fromContent = extractAttachmentsFromUserContent(m.content);
-      const attachments = mergeUserAttachments(mergeWireAttachments(m.attachments, m.media), fromContent);
+      const attachments = mergeWireAttachments(m.attachments, m.media);
       out.push({
         id: wireMessageId(m),
         role: roleTyped,

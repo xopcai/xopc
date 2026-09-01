@@ -94,16 +94,22 @@ export async function probeGatewayRouteReachability(
 
   const timeoutMs = options?.timeoutMs ?? PROBE_TIMING.TIMEOUT_TUNNEL_MS;
   const startedAt = nowMs();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(fetchUrl, {
       signal: controller.signal,
       headers: buildHealthHeaders(options?.token),
     });
-    clearTimeout(timeout);
     void res.body?.cancel?.();
-    return { reachable: true, latencyMs: nowMs() - startedAt };
+    const latencyMs = nowMs() - startedAt;
+    if (res.ok) return { reachable: true, latencyMs };
+    return {
+      reachable: false,
+      reason: 'http_error',
+      httpStatus: res.status,
+      latencyMs,
+    };
   } catch (error) {
     if (isAbortError(error)) {
       return { reachable: false, reason: 'timeout', latencyMs: nowMs() - startedAt };
@@ -115,6 +121,8 @@ export async function probeGatewayRouteReachability(
       latencyMs: nowMs() - startedAt,
       errorMessage: errorMessage || undefined,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

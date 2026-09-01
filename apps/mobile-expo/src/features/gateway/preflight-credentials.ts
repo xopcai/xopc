@@ -59,7 +59,8 @@ export async function preflightGatewayCredentials(input: PreflightInput): Promis
   }
 
   const tunnelStatus = race.tunnel?.httpStatus;
-  if (tunnelStatus === 401 || race.lan?.httpStatus === 401) {
+  const lanStatus = race.lan?.httpStatus;
+  if (tunnelStatus === 401 || lanStatus === 401) {
     return {
       ok: false,
       error: new GatewayConnectivityError('token-invalid', 'Token rejected by gateway', {
@@ -67,11 +68,14 @@ export async function preflightGatewayCredentials(input: PreflightInput): Promis
       }),
     };
   }
-  if (tunnelStatus && tunnelStatus >= 500) {
+  const serverErrorStatus = [tunnelStatus, lanStatus].find(
+    (status): status is number => status !== undefined && status >= 500,
+  );
+  if (serverErrorStatus) {
     return {
       ok: false,
-      error: new GatewayConnectivityError('server-error', `Gateway returned ${tunnelStatus}`, {
-        httpStatus: tunnelStatus,
+      error: new GatewayConnectivityError('server-error', `Gateway returned ${serverErrorStatus}`, {
+        httpStatus: serverErrorStatus,
       }),
     };
   }

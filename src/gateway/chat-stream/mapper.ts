@@ -380,6 +380,22 @@ export class ChatStreamMapper {
     // Derived semantic events still use the complete in-process result. Only the
     // realtime `tool_end` copy above is bounded.
     const details = asRecord(fullResult?.details);
+    if (toolName === 'text_to_speech' && !event.isError && details) {
+      const media = Array.isArray(details.media) ? details.media : [];
+      const audio = media
+        .map(asRecord)
+        .find((item) => item?.type === 'voice' || String(item?.mimeType ?? '').startsWith('audio/'));
+      const uri = typeof audio?.uri === 'string' ? audio.uri.trim() : '';
+      if (uri) {
+        events.push(this.make('tts_audio', {
+          uri,
+          mimeType: typeof audio?.mimeType === 'string' ? audio.mimeType : 'audio/mpeg',
+          name: typeof audio?.name === 'string' ? audio.name : 'voice.mp3',
+          attachTo: 'last_assistant',
+          messageId,
+        }));
+      }
+    }
     if (toolName === 'exec_command' && details) {
       events.push(
         this.make('command_completed', {

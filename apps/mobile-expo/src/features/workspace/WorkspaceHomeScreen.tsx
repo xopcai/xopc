@@ -47,6 +47,7 @@ import {
 import { AgentAvatar } from '../ai/AgentAvatar';
 import { readAgentUsage, sortHomeAgents, touchAgentUsage } from '../ai/agent-usage-cache';
 import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
+import { GatewaySwitcherSheet } from '../gateway/GatewaySwitcherSheet';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { resolveNoteListTitle } from '../notes/note-title';
 import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
@@ -129,7 +130,9 @@ export function WorkspaceHomeScreen() {
   const configured = useGatewayConfigured();
   const { gatewayOnline } = useGatewayHealth();
   const language = usePreferencesStore((state) => state.language);
+  const gatewayProfiles = useGatewayStore((state) => state.profiles);
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
+  const activeGateway = gatewayProfiles.find((profile) => profile.id === activeGatewayId) ?? null;
   const {
     openAskAi,
     prefetchAskAiSession,
@@ -139,6 +142,7 @@ export function WorkspaceHomeScreen() {
     retryAskAi,
   } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [gatewaySwitcherVisible, setGatewaySwitcherVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const homeReadyRecorded = useRef(false);
 
@@ -439,7 +443,11 @@ export function WorkspaceHomeScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         showLogo
-        title="xopc"
+        title={gatewayProfiles.length > 1 ? activeGateway?.name ?? 'xopc' : 'xopc'}
+        onTitlePress={gatewayProfiles.length > 1
+          ? () => setGatewaySwitcherVisible(true)
+          : undefined}
+        titleAccessibilityLabel={m.gateway.switcher.title}
         rightActions={[
           { icon: 'magnify', onPress: () => setSearchOpen(true), accessibilityLabel: m.common.search },
           { icon: 'cog-outline', onPress: () => router.push('/settings'), accessibilityLabel: m.settings.title },
@@ -452,8 +460,16 @@ export function WorkspaceHomeScreen() {
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
       >
-        <HomeGreeting language={language} gatewayOnline={gatewayOnline} starting={homeQuery.isLoading} />
-        {homeQuery.isError ? (
+        <HomeGreeting
+          language={language}
+          gatewayOnline={gatewayOnline}
+          starting={homeQuery.isLoading}
+          onGatewayPress={() => {
+            if (gatewayProfiles.length > 1) setGatewaySwitcherVisible(true);
+            else router.push('/settings/gateway');
+          }}
+        />
+        {homeQuery.isError && gatewayOnline ? (
           <HomeLoadError onRetry={() => void homeQuery.refetch()} retrying={homeQuery.isFetching} />
         ) : null}
         <RunningSection
@@ -503,6 +519,17 @@ export function WorkspaceHomeScreen() {
       >
         {askAiError ?? toastMessage}
       </AppToast>
+      <GatewaySwitcherSheet
+        visible={gatewaySwitcherVisible}
+        onDismiss={() => setGatewaySwitcherVisible(false)}
+        onSwitched={(profileId) => {
+          const profile = useGatewayStore.getState().profiles.find((item) => item.id === profileId);
+          if (profile) setToastMessage(t(m.gateway.switcher.switched, { name: profile.name }));
+        }}
+        onManage={() => router.push('/settings/gateway')}
+        onAdd={() => router.push('/settings/gateway/new')}
+        onEdit={(profileId) => router.push(`/settings/gateway/${profileId}`)}
+      />
     </View>
   );
 }
@@ -511,13 +538,16 @@ function HomeGreeting({
   language,
   gatewayOnline,
   starting,
+  onGatewayPress,
 }: {
   language: 'en' | 'zh';
   gatewayOnline: boolean;
   starting: boolean;
+  onGatewayPress: () => void;
 }) {
   const { colors } = useTheme();
-  const hm = useMessages().homePage;
+  const messages = useMessages();
+  const hm = messages.homePage;
   const now = new Date();
   const period = homeGreetingPeriod(now.getHours());
   const greeting = period === 'morning'
@@ -530,25 +560,35 @@ function HomeGreeting({
     month: 'long',
     day: 'numeric',
   }).format(now);
-  const status = !gatewayOnline
-    ? hm.gatewayOfflineStatus
-    : starting
-      ? hm.gatewayStartingStatus
-      : hm.gatewayReadyStatus;
-  const statusColor = !gatewayOnline
-    ? colors.semantic.warning
-    : starting
-      ? colors.accent.primary
-      : colors.semantic.success;
 
   return (
     <View style={styles.greeting}>
       <Text style={[styles.greetingDate, { color: colors.text.secondary }]}>{date}</Text>
       <Text style={[styles.greetingTitle, { color: colors.text.primary }]}>{greeting}</Text>
-      <View style={styles.connectionStatus}>
-        <View style={[styles.connectionDot, { backgroundColor: statusColor }]} />
-        <Text style={[styles.connectionText, { color: colors.text.tertiary }]}>{status}</Text>
-      </View>
+      {!gatewayOnline ? (
+        <Pressable
+          style={[styles.connectionStatus, { backgroundColor: colors.surface.input }]}
+          onPress={onGatewayPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${hm.gatewayOfflineStatus}, ${messages.settings.switchGateway}`}
+        >
+          <View style={[styles.connectionDot, { backgroundColor: colors.semantic.warning }]} />
+          <Text style={[styles.connectionText, { color: colors.text.secondary }]}>
+            {hm.gatewayOfflineStatus}
+          </Text>
+          <Text style={[styles.connectionAction, { color: colors.accent.primary }]}>
+            {messages.settings.switchGateway}
+          </Text>
+          <Icon source="chevron-right" size={16} color={colors.accent.primary} />
+        </Pressable>
+      ) : starting ? (
+        <View style={styles.connectionStarting}>
+          <View style={[styles.connectionDot, { backgroundColor: colors.accent.primary }]} />
+          <Text style={[styles.connectionText, { color: colors.text.tertiary }]}>
+            {hm.gatewayStartingStatus}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1050,9 +1090,11 @@ const styles = StyleSheet.create({
   greeting: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
   greetingDate: { ...typography.label, marginBottom: spacing.xs },
   greetingTitle: { ...typography.largeTitle, marginBottom: spacing.sm },
-  connectionStatus: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  connectionStatus: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radii.md, paddingHorizontal: spacing.md },
+  connectionStarting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   connectionDot: { width: 7, height: 7, borderRadius: radii.full },
   connectionText: { ...typography.caption },
+  connectionAction: { ...typography.caption, fontWeight: '600' },
   inlineError: { minHeight: 76, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
   inlineErrorCopy: { flex: 1, gap: spacing.xxs },
   inlineErrorTitle: { ...typography.ui, fontWeight: '600' },

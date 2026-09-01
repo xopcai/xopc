@@ -459,7 +459,12 @@ export const MessageBubble = memo(function MessageBubble({
               ? 'refresh'
               : 'volume-high',
         onPress: () => requestReadAloud({
-          source: { id: readAloudSourceId, sessionKey, title: m.chat.messageReadAloudTitle },
+          source: {
+            id: readAloudSourceId,
+            sessionKey,
+            title: m.chat.messageReadAloudTitle,
+            preview: speakableText,
+          },
           text: speakableText,
           language: detectSpeechLanguage(speakableText, language),
         }),

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Switch } from 'react-native-paper';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
@@ -66,19 +66,30 @@ export function SettingsScreen() {
   useDismissOnHardwareBack(router);
   const toggleNotifications = useCallback(async (next: boolean) => {
     if (notificationsUpdating) return;
+    setNotificationsEnabled(next);
     setNotificationsUpdating(true);
     try {
       if (next) {
-        const registered = await enableMobileNotifications();
-        if (registered) setNotificationsEnabled(true);
+        const result = await enableMobileNotifications();
+        if (!result.ok) {
+          const retryable = result.reason === 'gateway-registration-failed';
+          if (!retryable) setNotificationsEnabled(false);
+          Alert.alert(
+            s.notifications,
+            result.reason === 'permission-denied'
+              ? s.notificationsPermissionDenied
+              : retryable
+                ? s.notificationsRegistrationFailed
+                : s.notificationsUnavailable,
+          );
+        }
       } else {
-        setNotificationsEnabled(false);
         await disableMobileNotifications();
       }
     } finally {
       setNotificationsUpdating(false);
     }
-  }, [notificationsUpdating, setNotificationsEnabled]);
+  }, [notificationsUpdating, s, setNotificationsEnabled]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
