@@ -75,6 +75,9 @@ describe('create_share tool', () => {
     expect(res.details.shareUrl).toContain('/s/');
     expect(res.details.thumbnailUrl).toContain('/thumbnail');
     expect(res.details.reachability).toBe('local-only');
+    expect(res.details.artifacts).toEqual([
+      expect.objectContaining({ kind: 'file', location: 'artifact_store' }),
+    ]);
   });
 
   it('renders text in zh when getLocale returns zh', async () => {

@@ -26,6 +26,43 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
+  it('maps a persisted turn_outcome state row to an assistant result message', () => {
+    const rows = [{
+      type: 'custom',
+      customType: 'turn_outcome',
+      timestamp: '2026-09-01T00:00:00.000Z',
+      data: {
+        version: 1,
+        outcomeId: 'run-1:outcome',
+        runId: 'run-1',
+        turnId: 'run-1',
+        status: 'succeeded',
+        deliverables: [],
+        changeSet: {
+          changeSetId: 'run-1:changes',
+          files: [{ path: 'src/store.ts', status: 'modified' }],
+          added: 5,
+          removed: 2,
+          diff: 'diff',
+          environment: 'workspace',
+        },
+        evidence: [],
+        createdAt: '2026-09-01T00:00:00.000Z',
+      },
+    }] as never[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      expect.objectContaining({
+        role: 'assistant',
+        turnId: 'run-1',
+        content: '',
+        metadata: {
+          turnOutcome: expect.objectContaining({ outcomeId: 'run-1:outcome' }),
+        },
+      }),
+    ]);
+  });
+
   it('exposes only safe source context summaries for user-message chips', () => {
     const rows = [{
       role: 'user',

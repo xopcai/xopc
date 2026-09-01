@@ -11,11 +11,11 @@ import { resolveEffectiveAgentManifestForSession } from '../../config/agent-prof
 /** Minimum per-turn timeout (1 minute). */
 export const MIN_AGENT_TURN_TIMEOUT_MS = 60_000;
 
-/** Maximum per-turn timeout (4 hours), aligned with `maxTaskDurationMs` schema cap. */
-export const MAX_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+/** Maximum configurable per-turn timeout (24 hours). */
+export const MAX_AGENT_TURN_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
-/** Default per-turn timeout (30 minutes). */
-export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
+/** Default per-turn timeout (4 hours). */
+export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 export const DEFAULT_AGENT_ABORT_GRACE_MS = 5_000;
 
 export class AgentTurnUnsettledError extends Error {

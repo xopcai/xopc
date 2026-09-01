@@ -164,32 +164,51 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.activity.durationMs).toBe(3_000);
   });
 
-  it('separates search evidence from deliverables and reports partial completion', () => {
+  it('uses the structured outcome instead of inferring deliverables from write tools', () => {
+    const message = assistantMessage([
+      {
+        type: 'tool_use',
+        id: 'search-1',
+        name: 'web_search',
+        status: 'done',
+        result: JSON.stringify({
+          results: [{ url: 'https://example.com', title: 'Example' }],
+        }),
+      },
+      {
+        type: 'tool_use',
+        id: 'write-1',
+        name: 'write_file',
+        status: 'done',
+        result: 'File written: /tmp/report.md',
+      },
+      {
+        type: 'tool_use',
+        id: 'failed-1',
+        name: 'run_command',
+        status: 'error',
+      },
+    ]);
+    message.outcome = {
+      version: 1,
+      outcomeId: 'run-1:outcome',
+      runId: 'run-1',
+      turnId: 'run-1',
+      status: 'partial',
+      deliverables: [],
+      changeSet: {
+        changeSetId: 'run-1:changes',
+        files: [{ path: 'report.md', status: 'modified' }],
+        added: 2,
+        removed: 1,
+        diff: 'diff',
+        environment: 'workspace',
+      },
+      evidence: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    };
     const view = buildAssistantTurnViewModel({
-      message: assistantMessage([
-        {
-          type: 'tool_use',
-          id: 'search-1',
-          name: 'web_search',
-          status: 'done',
-          result: JSON.stringify({
-            results: [{ url: 'https://example.com', title: 'Example' }],
-          }),
-        },
-        {
-          type: 'tool_use',
-          id: 'write-1',
-          name: 'write_file',
-          status: 'done',
-          result: 'File written: /tmp/report.md',
-        },
-        {
-          type: 'tool_use',
-          id: 'failed-1',
-          name: 'run_command',
-          status: 'error',
-        },
-      ]),
+      message,
       isStreaming: false,
       reasoningLevel: 'stream',
     });
@@ -197,8 +216,46 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.sources).toEqual([
       expect.objectContaining({ url: 'https://example.com', title: 'Example' }),
     ]);
-    expect(view.deliverables.workspacePaths).toHaveLength(1);
+    expect(view.outcome?.deliverables).toEqual([]);
+    expect(view.outcome?.changeSet?.files).toEqual([{ path: 'report.md', status: 'modified' }]);
     expect(view.lifecycle.state).toBe('partial');
     expect(view.activity.failedCount).toBe(1);
+  });
+
+  it('does not render a structured deliverable again as a standalone attachment', () => {
+    const message = assistantMessage([]);
+    message.attachments = [{
+      id: 'artifact-1',
+      name: 'report.pdf',
+      type: 'file',
+      uri: 'media://artifact-1',
+    }];
+    message.outcome = {
+      version: 1,
+      outcomeId: 'run-1:outcome',
+      runId: 'run-1',
+      turnId: 'run-1',
+      status: 'succeeded',
+      deliverables: [{
+        artifactId: 'artifact-1',
+        title: 'report.pdf',
+        kind: 'pdf',
+        availability: 'available',
+        location: 'artifact_store',
+        capabilities: ['preview', 'download'],
+        uri: 'media://artifact-1',
+      }],
+      evidence: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    };
+
+    const view = buildAssistantTurnViewModel({
+      message,
+      isStreaming: false,
+      reasoningLevel: 'stream',
+    });
+
+    expect(view.outcome?.deliverables).toHaveLength(1);
+    expect(view.attachments).toEqual([]);
   });
 });

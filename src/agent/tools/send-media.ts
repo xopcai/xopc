@@ -92,6 +92,25 @@ export function createSendMediaTool(
           content: [{ type: 'text', text: `Media attached: ${fileName} (${media.type})` }],
           details: {
             media: [media],
+            artifacts: [{
+              artifactId: media.id,
+              title: media.name,
+              kind: media.type === 'photo'
+                ? 'image'
+                : media.type === 'video'
+                  ? 'video'
+                  : media.type === 'audio'
+                    ? 'audio'
+                    : media.mimeType === 'application/pdf'
+                      ? 'pdf'
+                      : 'file',
+              mimeType: media.mimeType,
+              sizeBytes: media.size,
+              availability: 'available',
+              location: 'artifact_store',
+              capabilities: ['preview', 'download'],
+              uri: media.uri,
+            }],
             ...(p.caption ? { caption: p.caption } : {}),
           },
         };
