@@ -88,7 +88,7 @@ function resolveContentType(relativePath: string): string {
   return MIME_TYPES[ext] || 'application/octet-stream';
 }
 
-function loadIntoCache(relativePath: string): CachedStaticFile | null {
+function readStaticFile(relativePath: string, cache: boolean): CachedStaticFile | null {
   const filePath = resolve(UI_STATIC_ROOT, relativePath);
   try {
     const content = readFileSync(filePath);
@@ -98,8 +98,10 @@ function loadIntoCache(relativePath: string): CachedStaticFile | null {
       etag: computeEtag(content),
       cacheControl: resolveCacheControl(relativePath),
     };
-    fileCache.set(relativePath, cached);
-    stats.entries = fileCache.size;
+    if (cache) {
+      fileCache.set(relativePath, cached);
+      stats.entries = fileCache.size;
+    }
     stats.misses += 1;
     return cached;
   } catch {
@@ -108,12 +110,16 @@ function loadIntoCache(relativePath: string): CachedStaticFile | null {
 }
 
 function getCachedFile(relativePath: string): CachedStaticFile | null {
+  // The HTML entrypoint names hashed assets and must always reflect the current
+  // build on disk. Keeping it in memory can strand clients on deleted chunks.
+  if (relativePath === 'index.html') return readStaticFile(relativePath, false);
+
   const cached = fileCache.get(relativePath);
   if (cached) {
     stats.hits += 1;
     return cached;
   }
-  return loadIntoCache(relativePath);
+  return readStaticFile(relativePath, true);
 }
 
 export function getStaticUiCacheStats(): StaticUiCacheStats {
@@ -133,7 +139,6 @@ export function resolveStaticUiRootForTests(): string {
 }
 
 const DEFAULT_PREWARM_PATHS = [
-  'index.html',
   'favicon.ico',
   'logo.svg',
   'logo-dark.svg',

@@ -400,14 +400,6 @@ html.dark .markdown-code-copy-btn:hover {
   text-align: center;
 }
 
-.markdown-mermaid-shell.markdown-mermaid-pending {
-  min-height: var(--markdown-mermaid-placeholder-height, 11.25rem);
-}
-
-.markdown-mermaid-pending {
-  background: var(--color-surface-hover);
-}
-
 .markdown-mermaid svg {
   max-width: 100%;
   height: auto;
@@ -496,16 +488,17 @@ html.dark .markdown-code-copy-btn:hover {
   }
 }
 
-/* Fallback: raw source display when render fails */
-.markdown-mermaid-fallback {
-  text-align: left;
+.markdown-mermaid-error {
+  display: flex;
+  min-height: 6rem;
+  align-items: center;
+  justify-content: center;
 }
 
-.markdown-mermaid-fallback pre {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
+.markdown-mermaid-error-message {
+  color: var(--color-danger);
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .markdown-body.markdown-compact .markdown-mermaid {
@@ -617,8 +610,4 @@ html.dark .markdown-body .hljs-addition {
 html.dark .markdown-body .hljs-deletion {
   color: #ffdcd7;
   background-color: #67060c;
-}
-
-html.dark .markdown-mermaid-fallback {
-  background: #0d1117;
 }

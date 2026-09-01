@@ -14,6 +14,7 @@ afterEach(() => {
     act(entry.unmount);
     entry.container.remove();
   }
+  vi.restoreAllMocks();
 });
 
 function renderMarkdown(content: string, props: Omit<MarkdownViewProps, 'content'> = {}): HTMLDivElement {
@@ -65,14 +66,40 @@ describe('MarkdownView security boundary', () => {
 
     await vi.waitFor(() => {
       expect(container.querySelector('svg')).not.toBeNull();
-      expect(container.querySelector('.markdown-mermaid-pending')).toBeNull();
     });
     const shell = container.querySelector<HTMLElement>('.markdown-mermaid-shell');
-    expect(shell?.classList.contains('markdown-mermaid-pending')).toBe(false);
-    expect(shell?.style.getPropertyValue('--markdown-mermaid-placeholder-height')).toBe('');
+    expect(shell?.hasAttribute('data-mermaid-diagram')).toBe(true);
     expect(container.innerHTML).not.toContain('@import');
     expect(container.innerHTML).not.toContain('fonts.googleapis.com');
     expect(container.querySelector('svg script,svg foreignObject,svg [href]')).toBeNull();
+  });
+
+  it('renders the reported flowchart syntax as a diagram', async () => {
+    const container = renderMarkdown([
+      '```mermaid',
+      'flowchart TD',
+      '    OAuth["Google OAuth callback"] --> Multi["upsert connector_account_bindings"]',
+      '    OAuth --> Legacy{"legacy binding 是否存在？"}',
+      '',
+      '    Legacy -->|"不存在"| Insert["插入，成为 legacy primary"]',
+      '    Legacy -->|"已指向当前 connection"| Update["保持原有 reauthorization 行为"]',
+      '    Legacy -->|"已指向其他 connection"| Keep["不覆盖，保留原 primary"]',
+      '```',
+    ].join('\n'));
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-diagram] svg')).not.toBeNull();
+    });
+    expect(container.querySelector('pre code.language-mermaid')).toBeNull();
+  });
+
+  it('shows an explicit error instead of raw source when Mermaid parsing fails', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const container = renderMarkdown('```mermaid\nnot a diagram\n```');
+
+    expect(container.querySelector('[data-mermaid-error] [role="alert"]')?.textContent)
+      .toBe('Diagram render failed');
+    expect(container.querySelector('pre code.language-mermaid')).toBeNull();
   });
 
   it('mounts opt-in Mermaid actions and opens the enlarged preview', async () => {
