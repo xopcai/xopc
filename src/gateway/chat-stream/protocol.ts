@@ -1,4 +1,4 @@
-import type { ToolActivity } from '@xopcai/gateway-contract';
+import type { ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 
 export type ChatStreamStatus = 'success' | 'error' | 'cancelled';
 
@@ -114,6 +114,7 @@ export type TurnDiffEvent = ChatStreamEnvelope<
   'turn_diff',
   { messageId: string; files: string[]; diff: string; added: number; removed: number }
 >;
+export type TurnOutcomeEvent = ChatStreamEnvelope<'turn_outcome', TurnOutcome>;
 export type ReviewStartEvent = ChatStreamEnvelope<
   'review_start',
   { messageId: string; reviewId: string; target: string; stage: 'preparing' | 'reviewing' }
@@ -191,6 +192,7 @@ export type ChatStreamEvent =
   | TurnPlanUpdatedEvent
   | TaskPlanUpdatedEvent
   | TurnDiffEvent
+  | TurnOutcomeEvent
   | ReviewStartEvent
   | ReviewDeltaEvent
   | ReviewEndEvent

@@ -12,6 +12,7 @@ describe('mcp-transport-config', () => {
       kind: 'http',
       transportType: 'streamable-http',
       url: 'https://open.teambition.com/api/mcp',
+      requestTimeoutMs: 30 * 60 * 1000,
     });
   });
 

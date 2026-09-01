@@ -284,7 +284,20 @@ function successResult(
   }).filter(Boolean);
   return {
     content: [{ type: 'text', text: lines.join('\n') }],
-    details: payload,
+    details: {
+      ...payload,
+      artifacts: [{
+        artifactId: `share:${String(payload.shareUrl ?? '')}`,
+        title: String(payload.title ?? 'Shared result'),
+        kind: payload.kind === 'site' ? 'site' : payload.kind === 'zip' ? 'archive' : 'file',
+        availability: 'available',
+        location: 'artifact_store',
+        capabilities: payload.kind === 'site' ? ['preview', 'share'] : ['download', 'share'],
+        shareUrl: String(payload.shareUrl ?? ''),
+        ...(typeof payload.thumbnailUrl === 'string' ? { thumbnailUrl: payload.thumbnailUrl } : {}),
+        ...(typeof payload.expiresAt === 'string' ? { expiresAt: payload.expiresAt } : {}),
+      }],
+    },
   };
 }
 

@@ -72,6 +72,8 @@ export type AgentStreamTurnDiffPayload = {
   removed: number;
 };
 
+export type AgentStreamTurnOutcomePayload = import('./turn-outcome.js').TurnOutcome;
+
 export type AgentStreamTurnPlanUpdatedPayload = {
   explanation?: string;
   plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[];

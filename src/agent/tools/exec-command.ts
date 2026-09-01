@@ -10,8 +10,8 @@ import { resolve } from 'node:path';
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { formatSize, truncateTail } from './truncate.js';
 
-const MAX_COMMAND_TIMEOUT_MS = 300_000;
-const DEFAULT_TIMEOUT_MS = 120_000;
+const MAX_COMMAND_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 const STREAM_DELTA_MAX_CHARS = 16_000;
 
@@ -24,7 +24,7 @@ const ExecCommandSchema = Type.Object({
   ),
   timeoutMs: Type.Optional(
     Type.Number({
-      description: 'Command timeout in milliseconds. Defaults to 120000 and is capped at 300000.',
+      description: 'Command timeout in milliseconds. Defaults to 1800000 (30m) and is capped at 14400000 (4h).',
     }),
   ),
   maxOutputChars: Type.Optional(

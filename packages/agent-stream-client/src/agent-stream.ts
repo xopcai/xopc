@@ -11,6 +11,7 @@ import type {
   AgentStreamRunEndPayload,
   AgentStreamTtsAudioPayload,
   AgentStreamTurnDiffPayload,
+  AgentStreamTurnOutcomePayload,
   AgentStreamTurnPlanUpdatedPayload,
   AgentStreamUserTranscriptAttachment,
   AgentStreamUserTranscriptPayload,
@@ -24,6 +25,7 @@ export type CommandOutputDeltaPayload = AgentStreamCommandOutputDeltaPayload;
 export type CommandCompletedPayload = AgentStreamCommandCompletedPayload;
 export type PatchAppliedPayload = AgentStreamPatchAppliedPayload;
 export type TurnDiffPayload = AgentStreamTurnDiffPayload;
+export type TurnOutcomePayload = AgentStreamTurnOutcomePayload;
 export type TurnPlanUpdatedPayload = AgentStreamTurnPlanUpdatedPayload;
 export type ReviewPayload = AgentStreamReviewPayload;
 
@@ -55,6 +57,7 @@ export type AgentStreamCallbacks = {
   onPatchApplied?: (payload: PatchAppliedPayload) => void;
   onTurnPlanUpdated?: (payload: TurnPlanUpdatedPayload) => void;
   onTurnDiff?: (payload: TurnDiffPayload) => void;
+  onTurnOutcome?: (payload: TurnOutcomePayload) => void;
   onReview?: (payload: ReviewPayload) => void;
   onProgress: (progress: ProgressState) => void;
   onTtsAudio?: (payload: AgentStreamTtsAudioPayload) => void;
@@ -304,6 +307,9 @@ export function dispatchAgentStreamEvent(
         added: typeof p.added === 'number' ? p.added : 0,
         removed: typeof p.removed === 'number' ? p.removed : 0,
       });
+      break;
+    case 'turn_outcome':
+      cb?.onTurnOutcome?.(p as TurnOutcomePayload);
       break;
     case 'turn_plan': {
       const plan = normalizeTurnPlan(p.plan);

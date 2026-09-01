@@ -415,6 +415,18 @@ export function createImageGenerateTool(options: {
             paths,
             workspaceRelativePaths,
             media,
+            artifacts: media.map((item, index) => ({
+              artifactId: item.id,
+              title: item.name,
+              kind: 'image',
+              mimeType: item.mimeType,
+              sizeBytes: item.size,
+              availability: 'available',
+              location: 'artifact_store',
+              capabilities: ['preview', 'download'],
+              uri: item.uri,
+              workspaceRelativePath: workspaceRelativePaths[index],
+            })),
             attempts: result.attempts,
             ...(result.normalization ? { normalization: result.normalization } : {}),
             ...(result.ignoredOverrides.length > 0

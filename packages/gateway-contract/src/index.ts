@@ -1,4 +1,5 @@
 export * from './agent-stream.js';
+export * from './turn-outcome.js';
 export * from './tasks.js';
 export * from './task-lifecycle.js';
 export * from './task-runs.js';

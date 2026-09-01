@@ -44,7 +44,7 @@ export type ResolvedMcpTransportConfig =
   | ResolvedHttpMcpTransportConfig;
 
 const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
-export const DEFAULT_MCP_REQUEST_TIMEOUT_MS = 60_000;
+export const DEFAULT_MCP_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
 
 function getConnectionTimeoutMs(rawServer: unknown): number {
   if (

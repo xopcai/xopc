@@ -17,7 +17,7 @@ import {
   extractUserMessagePlainText,
   messageAttachmentsToWire,
 } from '@/features/chat/messages/user-message-plain-text';
-import { imageBlockToMessageAttachment } from '@/features/chat/messages/assistant-message-artifacts';
+import { imageBlockToMessageAttachment } from '@/features/chat/messages/assistant-message-images';
 import {
   getAssistantCopyMarkdown,
   getAssistantCopyPlainText,
@@ -250,7 +250,7 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const attachmentsForBubble = useMemo(() => {
-    if (assistantTurnView) return assistantTurnView.deliverables.attachments;
+    if (assistantTurnView) return assistantTurnView.attachments;
     return message.attachments;
   }, [assistantTurnView, message.attachments]);
 
@@ -626,8 +626,6 @@ export const MessageBubble = memo(function MessageBubble({
                 view={assistantTurnView}
                 authToken={authToken}
                 sessionKey={sessionKey}
-                projectId={projectId}
-                deliverablesLabel={m.chat.messageArtifactsHeading}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
                   '{{count}}',
                   String(assistantTurnView.sources.length),

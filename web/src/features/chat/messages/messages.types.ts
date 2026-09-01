@@ -1,4 +1,4 @@
-import type { ToolActivity } from '@xopcai/gateway-contract';
+import type { ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
 
@@ -128,6 +128,8 @@ export interface Message {
   /** Client-only hint: reveal this live response progressively even if the transport already ended. */
   progressiveRender?: boolean;
   attachments?: MessageAttachment[];
+  /** Structured completion result for this run. */
+  outcome?: TurnOutcome;
   contextRefs?: MessageContextRef[];
   usage?: {
     inputTokens?: number;

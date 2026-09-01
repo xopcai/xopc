@@ -1,3 +1,5 @@
+import { parseTurnOutcome, type TurnOutcome } from '@xopcai/gateway-contract';
+
 import type { Message } from './types.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
@@ -15,14 +17,17 @@ export interface ClientHistoryMessage {
   media?: Message['media'];
   timestamp?: number;
   /** Whitelisted display metadata; never includes source snapshot text. */
-  metadata?: { sourceContexts: Array<{
-    kind: 'note';
-    sourceId: string;
-    version: string;
-    title: string;
-    tokenEstimate?: number;
-    truncated?: boolean;
-  }> };
+  metadata?: {
+    sourceContexts?: Array<{
+      kind: 'note';
+      sourceId: string;
+      version: string;
+      title: string;
+      tokenEstimate?: number;
+      truncated?: boolean;
+    }>;
+    turnOutcome?: TurnOutcome;
+  };
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
   tokensBefore?: number;
   tokensAfter?: number;
@@ -59,7 +64,7 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
   const rows = (metadata as Record<string, unknown>).sourceContexts;
   if (!Array.isArray(rows)) return undefined;
-  const sourceContexts = rows.flatMap((value): NonNullable<ClientHistoryMessage['metadata']>['sourceContexts'] => {
+  const sourceContexts = rows.flatMap((value): NonNullable<NonNullable<ClientHistoryMessage['metadata']>['sourceContexts']>[number][] => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const row = value as Record<string, unknown>;
     if (
@@ -464,6 +469,20 @@ function customStateRowToClientHistory(row: TranscriptStoredRow): ClientHistoryM
 
   const customType = optionalString(r.customType)?.trim();
   if (!customType) return null;
+  if (customType === 'turn_outcome') {
+    const outcome = parseTurnOutcome(r.data);
+    if (!outcome) return null;
+    return {
+      role: 'assistant',
+      kind: 'message',
+      turnId: outcome.turnId,
+      content: '',
+      timestamp: parseTimestampValue(
+        typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined,
+      ),
+      metadata: { turnOutcome: outcome },
+    };
+  }
   return {
     role: 'system',
     kind: 'custom',

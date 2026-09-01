@@ -1,4 +1,4 @@
-import { resolveToolActivity } from '@xopcai/gateway-contract';
+import { parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type {
   Message,
@@ -125,6 +125,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       if (m.turnId) prev.turnId = m.turnId;
       if (m.progressiveRender) prev.progressiveRender = true;
       if (m.usage) prev.usage = m.usage;
+      if (m.outcome) prev.outcome = m.outcome;
       if (m.attachments?.length) {
         prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);
       }
@@ -187,6 +188,7 @@ export function assistantTurnVisuallyEquivalent(a: Message, b: Message): boolean
     assistantThinkingFingerprint(a.content) === assistantThinkingFingerprint(b.content) &&
     assistantToolsFingerprint(a.content) === assistantToolsFingerprint(b.content) &&
     assistantReviewFingerprint(a.content) === assistantReviewFingerprint(b.content)
+    && JSON.stringify(a.outcome ?? null) === JSON.stringify(b.outcome ?? null)
   );
 }
 
@@ -231,7 +233,8 @@ export function reconcileSessionSnapshot(prev: Message[], loaded: Message[]): Me
 
   const usageChanged = !usageEquivalent(prevLast.usage, loadedLast.usage);
   const attachmentsChanged = !attachmentsEquivalent(prevLast.attachments, loadedLast.attachments);
-  if (!usageChanged && !attachmentsChanged) {
+  const outcomeChanged = JSON.stringify(prevLast.outcome ?? null) !== JSON.stringify(loadedLast.outcome ?? null);
+  if (!usageChanged && !attachmentsChanged && !outcomeChanged) {
     return prev;
   }
 
@@ -242,6 +245,7 @@ export function reconcileSessionSnapshot(prev: Message[], loaded: Message[]): Me
     ...(attachmentsChanged && loadedLast.attachments?.length
       ? { attachments: loadedLast.attachments }
       : {}),
+    ...(outcomeChanged && loadedLast.outcome ? { outcome: loadedLast.outcome } : {}),
   };
   return next;
 }
@@ -346,11 +350,13 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
 function buildAssistantMessage(m: WireMessage): Message {
   const content = mergeAssistantContent(m);
   appendReviewFromMetadata(content, m.metadata);
+  const outcome = parseTurnOutcome(asRecord(m.metadata)?.turnOutcome);
   return {
     role: 'assistant',
     ...(m.turnId ? { turnId: m.turnId } : {}),
     content,
     attachments: wireAttachmentsFromMessage(m),
+    ...(outcome ? { outcome } : {}),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };

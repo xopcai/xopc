@@ -31,6 +31,7 @@ function callbacks(overrides: Partial<Parameters<typeof dispatchAgentStreamEvent
     onPatchApplied: vi.fn(),
     onTurnPlanUpdated: vi.fn(),
     onTurnDiff: vi.fn(),
+    onTurnOutcome: vi.fn(),
     onReview: vi.fn(),
     onProgress: vi.fn(),
     onPetFeedback: vi.fn(),
@@ -279,6 +280,26 @@ describe('dispatchAgentStreamEvent', () => {
       added: 2,
       removed: 1,
     });
+  });
+
+  it('dispatches structured turn outcomes', () => {
+    const cb = callbacks();
+    const outcome = {
+      version: 1,
+      outcomeId: 'run-1:outcome',
+      runId: 'run-1',
+      turnId: 'run-1',
+      status: 'succeeded',
+      deliverables: [],
+      evidence: [],
+      createdAt: '2026-09-01T00:00:00.000Z',
+    };
+    dispatchAgentStreamEvent(
+      'turn_outcome',
+      JSON.stringify(envelope('turn_outcome', 'run-1', outcome)),
+      cb,
+    );
+    expect(cb.onTurnOutcome).toHaveBeenCalledWith(outcome);
   });
 
   it('dispatches turn_plan payloads', () => {

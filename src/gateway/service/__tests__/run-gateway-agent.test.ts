@@ -62,6 +62,7 @@ describe('runGatewayAgent', () => {
       sessionIndex: {
         getSessionMetadata: async () => ({ sessionId: 'session-thinking' }),
         updateSessionMetadata: async () => {},
+        appendTranscriptCustomEntry: async () => {},
       },
       emit: (_type: string, payload: unknown) => {
         broadcastEvents.push(payload as { event?: { type?: string } });
@@ -119,6 +120,7 @@ describe('runGatewayAgent', () => {
       sessionIndex: {
         getSessionMetadata: async () => ({ sessionId: 'session-test' }),
         updateSessionMetadata: async () => {},
+        appendTranscriptCustomEntry: async () => {},
       },
       emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
       publishRealtime: () => {},
@@ -148,6 +150,7 @@ describe('runGatewayAgent', () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
+    const persisted: Array<{ customType: string; data?: unknown }> = [];
     const deps = {
       config: {},
       agentService: {
@@ -165,6 +168,9 @@ describe('runGatewayAgent', () => {
       activeWebchatRunBySession: new Map<string, string>(),
       sessionIndex: {
         getSessionMetadata: async () => ({ sessionId: 's1', name: 'Finish notifications' }),
+        appendTranscriptCustomEntry: async (_key: string, entry: { customType: string; data?: unknown }) => {
+          persisted.push(entry);
+        },
       },
       emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
       publishRealtime: (topic: string, event: string, data: unknown) => {
@@ -209,6 +215,13 @@ describe('runGatewayAgent', () => {
         data: { sessionKey, runId: 'run-terminal', status: 'success' },
       },
     ]);
+    expect(realtimeEvents.some((event) => event.event === 'turn_outcome')).toBe(true);
+    expect(persisted).toEqual([
+      expect.objectContaining({
+        customType: 'turn_outcome',
+        data: expect.objectContaining({ runId: 'run-terminal', status: 'succeeded' }),
+      }),
+    ]);
   });
 
   it('publishes a run-topic terminal when setup fails before active registration', async () => {
@@ -229,7 +242,10 @@ describe('runGatewayAgent', () => {
       bus: { publishInbound: async () => {} },
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
-      sessionIndex: { getSessionMetadata: async () => ({ sessionId: 's1' }) },
+      sessionIndex: {
+        getSessionMetadata: async () => ({ sessionId: 's1' }),
+        appendTranscriptCustomEntry: async () => {},
+      },
       emit: () => {},
       publishRealtime: (topic: string, event: string, data: unknown) => {
         realtimeEvents.push({ topic, event, data });
