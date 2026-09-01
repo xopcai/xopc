@@ -187,22 +187,27 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
-    "playwright-core": "^1.60.0"
+    "playwright-core": "^1.60.0",
+    "sherpa-onnx-node": "1.13.4"
   },
   "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    },
     "@larksuiteoapi/node-sdk": {
       "optional": true
     },
     "playwright-core": {
       "optional": true
+    },
+    "sherpa-onnx-node": {
+      "optional": true
     }
   },
-  "optionalDependencies": {
-    "@huggingface/transformers": "3.8.1",
-    "sherpa-onnx-node": "1.13.4"
-  },
   "devDependencies": {
+    "@huggingface/transformers": "3.8.1",
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.0",
@@ -230,6 +235,7 @@
     "onnxruntime-common": "1.21.0",
     "node-pty": "1.1.0",
     "playwright-core": "^1.60.0",
+    "sherpa-onnx-node": "1.13.4",
     "svgo": "4.0.2",
     "tailwindcss": "^4.3.0",
     "tsdown": "0.21.10",
