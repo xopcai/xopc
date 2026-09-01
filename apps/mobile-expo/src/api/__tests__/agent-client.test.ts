@@ -4,6 +4,8 @@ import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 const testState = vi.hoisted(() => ({
   memory: new Map<string, string>(),
   apiFetch: vi.fn(),
+  apiUploadFile: vi.fn(),
+  language: 'zh' as 'en' | 'zh',
   reconnect: vi.fn(),
   unsubscribe: vi.fn(),
   realtimeAfterSeq: undefined as number | undefined,
@@ -15,10 +17,17 @@ const testState = vi.hoisted(() => ({
 
 vi.mock('../client', () => ({
   apiFetch: testState.apiFetch,
+  apiUploadFile: testState.apiUploadFile,
   formatApiHttpError: vi.fn((status: number, statusText: string, message?: string) =>
     message ? `${status} ${statusText}: ${message}` : `${status} ${statusText}`,
   ),
   notifyUnauthorizedIfNeeded: vi.fn(),
+}));
+
+vi.mock('../../stores/preferences-store', () => ({
+  usePreferencesStore: {
+    getState: () => ({ language: testState.language }),
+  },
 }));
 
 vi.mock('../../features/gateway/use-gateway-realtime', () => ({
@@ -75,6 +84,8 @@ describe('AgentMessageSender voice message', () => {
   beforeEach(() => {
     testState.memory.clear();
     testState.apiFetch.mockReset();
+    testState.apiUploadFile.mockReset();
+    testState.language = 'zh';
     vi.mocked(readUriAsBase64).mockReset();
     clearMobileEndpointTurnClaim();
   });
@@ -114,18 +125,16 @@ describe('AgentMessageSender voice message', () => {
 
   it('uploads voice bytes once and submits only the media reference', async () => {
     publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
-    testState.apiFetch.mockImplementation(async (path, init) => {
-      if (path === '/api/media') {
-        return new Response(JSON.stringify({
-          ok: true,
-          payload: {
-            uri: 'media://inbound/voice---id.m4a',
-            name: 'voice.m4a',
-            mimeType: 'audio/mp4',
-            size: 3,
-          },
-        }), { status: 201, headers: { 'Content-Type': 'application/json' } });
-      }
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      payload: {
+        uri: 'media://inbound/voice---id.m4a',
+        name: 'voice.m4a',
+        mimeType: 'audio/mp4',
+        size: 3,
+      },
+    }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+    testState.apiFetch.mockImplementation(async (_path, init) => {
       const body = JSON.parse(String(init?.body)) as { clientMessageId: string };
       return new Response(JSON.stringify({
         ok: true,
@@ -144,7 +153,12 @@ describe('AgentMessageSender voice message', () => {
     }
 
     expect(readUriAsBase64).not.toHaveBeenCalled();
-    expect(testState.apiFetch.mock.calls[0]?.[0]).toBe('/api/media');
+    expect(testState.apiUploadFile).toHaveBeenCalledWith('/api/media', {
+      uri: 'file:///documents/voice.m4a',
+      fieldName: 'file',
+      mimeType: 'audio/mp4',
+      timeoutMs: 60_000,
+    });
     const sessionCall = testState.apiFetch.mock.calls.find(([path]) => path === '/api/sessions/session-a/inputs');
     const submitted = JSON.parse(String(sessionCall?.[1]?.body)) as {
       attachments: Array<{ uri?: string; data?: string; localUri?: string }>;
@@ -156,8 +170,8 @@ describe('AgentMessageSender voice message', () => {
     expect(submitted.attachments[0]).not.toHaveProperty('localUri');
   });
 
-  it('posts transcription audio as a native multipart file', async () => {
-    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
+  it('uploads transcription audio natively with the preferred UI language', async () => {
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       payload: { text: 'hello', refinementAvailable: false },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -166,13 +180,43 @@ describe('AgentMessageSender voice message', () => {
       .resolves.toEqual({ text: 'hello', refinementAvailable: false });
 
     expect(readUriAsBase64).not.toHaveBeenCalled();
-    const options = testState.apiFetch.mock.calls[0]?.[1];
-    expect(options).toMatchObject({
-      method: 'POST',
+    expect(testState.apiUploadFile).toHaveBeenCalledWith('/api/voice/transcriptions', {
+      uri: 'file:///documents/voice.m4a',
+      fieldName: 'audio',
+      mimeType: 'audio/mp4',
+      parameters: { language: 'zh-CN' },
       timeoutMs: 60_000,
       recoverRouteOnNetworkError: true,
     });
-    expect(options?.body).toBeInstanceOf(FormData);
+  });
+
+  it('allows callers to override the transcription language', async () => {
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      payload: { text: 'hello', refinementAvailable: false },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    await transcribeVoice('file:///documents/voice.m4a', 'audio/mp4', { language: 'en-US' });
+
+    expect(testState.apiUploadFile).toHaveBeenCalledWith(
+      '/api/voice/transcriptions',
+      expect.objectContaining({ parameters: { language: 'en-US' } }),
+    );
+  });
+
+  it('maps the English UI preference to English speech recognition', async () => {
+    testState.language = 'en';
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      payload: { text: 'hello', refinementAvailable: false },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    await transcribeVoice('file:///documents/voice.m4a', 'audio/mp4');
+
+    expect(testState.apiUploadFile).toHaveBeenCalledWith(
+      '/api/voice/transcriptions',
+      expect.objectContaining({ parameters: { language: 'en-US' } }),
+    );
   });
 
   it('refines an already returned transcript through the separate endpoint', async () => {

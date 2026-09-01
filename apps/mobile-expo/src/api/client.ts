@@ -10,6 +10,8 @@
  * don't yet have a network-scoped cached winner — bootstrap GET behaviour
  * without callers having to opt in.
  */
+import { File, UploadType } from 'expo-file-system';
+
 import { recordConnectionEvent } from '../features/gateway/connection-log';
 import { getNetworkSnapshot } from '../features/gateway/network-info';
 import { useGatewayStore } from '../stores/gateway-store';
@@ -47,6 +49,17 @@ export type ApiFetchOptions = RequestInit & {
   noDualFire?: boolean;
   /** Retry once after actively re-resolving LAN vs tunnel. Only enable for
    * idempotent operations or writes protected by an Idempotency-Key. */
+  recoverRouteOnNetworkError?: boolean;
+};
+
+export type ApiFileUploadOptions = {
+  uri: string;
+  fieldName: string;
+  mimeType: string;
+  parameters?: Record<string, string>;
+  headers?: HeadersInit;
+  timeoutMs?: number;
+  signal?: AbortSignal;
   recoverRouteOnNetworkError?: boolean;
 };
 
@@ -163,6 +176,109 @@ export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Re
   });
 
   return res;
+}
+
+/** Upload a local file through expo-file-system's native multipart implementation. */
+export async function apiUploadFile(
+  path: string,
+  options: ApiFileUploadOptions,
+): Promise<Response> {
+  const { token, baseUrl, lanUrl } = useGatewayStore.getState();
+  if (!baseUrl.trim() && !lanUrl?.trim()) {
+    throw new GatewayConnectivityError('misconfigured', 'Gateway base URL is not configured');
+  }
+
+  let file: File;
+  try {
+    file = new File(options.uri);
+  } catch (error) {
+    throw new Error('Recording file URI is invalid', { cause: error });
+  }
+  if (!file.exists) throw new Error('Recording file is no longer available');
+  if ((file.size ?? 0) <= 0) throw new Error('Recording file is empty');
+
+  const headers: Record<string, string> = {};
+  new Headers(options.headers).forEach((value, key) => {
+    headers[key] = value;
+  });
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const url = useGatewayStore.getState().apiUrl(path);
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const callerSignal = options.signal;
+  const onCallerAbort = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener('abort', onCallerAbort);
+  }
+
+  const startedAt = Date.now();
+  try {
+    const result = await file.upload(url, {
+      httpMethod: 'POST',
+      uploadType: UploadType.MULTIPART,
+      fieldName: options.fieldName,
+      mimeType: options.mimeType,
+      parameters: options.parameters,
+      headers,
+      signal: controller.signal,
+    });
+    const response = new Response(result.body, {
+      status: result.status,
+      headers: result.headers,
+    });
+
+    notifyUnauthorizedIfNeeded(response.status);
+    recordConnectionEvent({
+      kind: 'apiFetch',
+      ok: response.ok,
+      url,
+      latencyMs: Date.now() - startedAt,
+      network: getNetworkSnapshot().key,
+      reason: response.ok ? undefined : `http_${response.status}`,
+    });
+    return response;
+  } catch (err) {
+    if (options.recoverRouteOnNetworkError && !callerSignal?.aborted) {
+      try {
+        const recoveredBaseUrl = await useGatewayStore.getState().refreshActiveBaseUrl();
+        recordConnectionEvent({
+          kind: 'apiFetch',
+          ok: Boolean(recoveredBaseUrl),
+          url,
+          reason: recoveredBaseUrl ? 'route-recovery' : 'route-recovery-failed',
+          network: getNetworkSnapshot().key,
+        });
+        if (recoveredBaseUrl) {
+          return apiUploadFile(path, {
+            ...options,
+            recoverRouteOnNetworkError: false,
+          });
+        }
+      } catch {
+        // Preserve the upload failure below.
+      }
+    }
+    const kind = classifyFetchError(err);
+    recordConnectionEvent({
+      kind: 'apiFetch',
+      ok: false,
+      url,
+      reason: kind,
+      message: err instanceof Error ? err.message : String(err),
+      network: getNetworkSnapshot().key,
+    });
+    throw new GatewayConnectivityError(
+      kind,
+      kind === 'offline-network' ? 'No internet connection' : 'Could not reach gateway',
+      { cause: err },
+    );
+  } finally {
+    clearTimeout(timer);
+    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+  }
 }
 
 export { notifyUnauthorizedIfNeeded };
