@@ -26,6 +26,9 @@ vi.mock('../../../storage/mmkv', () => ({
 vi.mock('../../../stores/gateway-store', () => ({
   useGatewayStore: { getState: vi.fn(() => ({})) },
 }));
+vi.mock('../../../stores/preferences-store', () => ({
+  usePreferencesStore: { getState: vi.fn(() => ({ language: 'en' })) },
+}));
 
 import { showLocalMobileNotification } from '../mobile-notifications';
 

@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentRunNotification } from '@/features/notifications/agent-run-notification';
 import { decideNotification } from '@/features/notifications/notification-policy';
+import type { ProductNotificationPresentation } from '@/features/notifications/product-notification';
 
-const notification: AgentRunNotification = {
+const notification: ProductNotificationPresentation = {
   id: 'agent-run:r1',
   title: 'Done',
   body: 'Task',
   route: '/chat/session',
+  target: { kind: 'chat', sessionKey: 'session' },
   status: 'success',
+  source: 'chat',
 };
 
 describe('decideNotification', () => {

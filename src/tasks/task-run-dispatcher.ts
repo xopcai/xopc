@@ -1,5 +1,6 @@
 import { createLogger } from '../utils/logger.js';
 
+import { TaskApplicationService } from './task-application-service.js';
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 
@@ -8,6 +9,7 @@ const log = createLogger('TaskRunDispatcher');
 export class TaskRunDispatcher {
   readonly #runs = new TaskRunRepository();
   readonly #tasks = new TaskRepository();
+  readonly #application = new TaskApplicationService();
   readonly #draining = new Set<string>();
 
   constructor(private readonly deps: {
@@ -50,9 +52,9 @@ export class TaskRunDispatcher {
         } catch (error) {
           const current = this.#runs.get(run.id);
           if (current && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {
-            this.#runs.finalize({
+            this.#application.completeRun({
               runId: current.id,
-              expectedVersion: current.version,
+              expectedRunVersion: current.version,
               terminalCode: 'dispatch_failed',
               terminalMessage: error instanceof Error ? error.message : String(error),
               receipt: {

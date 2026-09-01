@@ -113,7 +113,7 @@ export type AgentRunEndedEvent = {
   sessionKey: string;
   status: AgentStreamRunStatus;
   completedAtMs: number;
-  route: string;
+  target: import('./notifications.js').NotificationTarget;
   source: 'webchat';
   sessionTitle?: string;
 };

@@ -13,6 +13,7 @@ import {
 export function useMobileNotifications(router: ImperativeRouter, ready: boolean): void {
   const configured = useGatewayConfigured();
   const enabled = usePreferencesStore((state) => state.notificationsEnabled);
+  const language = usePreferencesStore((state) => state.language);
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
 
   useEffect(() => {
@@ -23,5 +24,7 @@ export function useMobileNotifications(router: ImperativeRouter, ready: boolean)
   useEffect(() => {
     if (!ready || !configured || !enabled) return;
     void syncMobileNotificationRegistration();
-  }, [activeGatewayId, configured, enabled, ready]);
+    const timer = setInterval(() => void syncMobileNotificationRegistration(), 24 * 60 * 60 * 1_000);
+    return () => clearInterval(timer);
+  }, [activeGatewayId, configured, enabled, language, ready]);
 }
