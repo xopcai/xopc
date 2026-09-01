@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import type { DatabaseSync } from 'node:sqlite';
+
 import {
   USER_CONTEXT_PRINCIPAL_ID,
   type CollaborationRule,
@@ -39,6 +41,37 @@ type UnderstandingRow = {
   statement: string;
   payload_json: string;
 };
+
+export type UnderstandingStatusEvent = {
+  id: string;
+  understandingId: string;
+  fromStatus?: UnderstandingStatus;
+  toStatus: UnderstandingStatus;
+  actorType: 'user' | 'runtime' | 'migration';
+  source: string;
+  createdAt: number;
+};
+
+type UnderstandingStatusEventRow = {
+  event_id: string;
+  understanding_id: string;
+  from_status: UnderstandingStatus | null;
+  to_status: UnderstandingStatus;
+  actor_type: UnderstandingStatusEvent['actorType'];
+  source: string;
+  created_at: number;
+};
+
+function insertUnderstandingStatusEvent(
+  db: DatabaseSync,
+  input: Omit<UnderstandingStatusEvent, 'id'>,
+): void {
+  db.prepare(`INSERT INTO understanding_status_events (
+    event_id, understanding_id, from_status, to_status, actor_type, source, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(randomUUID(), input.understandingId, input.fromStatus ?? null, input.toStatus,
+      input.actorType, input.source, input.createdAt);
+}
 
 type EvidenceRow = {
   evidence_id: string;
@@ -250,6 +283,13 @@ export function createUnderstanding(
       .run(versionId, id, input.statement.trim(), JSON.stringify(input.payload ?? {}), input.createdBy, input.changeReason, now);
     db.prepare('INSERT INTO user_understanding_fts (statement, understanding_id, version_id) VALUES (?, ?, ?)')
       .run(input.statement.trim(), id, versionId);
+    insertUnderstandingStatusEvent(db, {
+      understandingId: id,
+      toStatus: input.status,
+      actorType: input.createdBy === 'user' ? 'user' : 'runtime',
+      source: `create:${input.changeReason}`,
+      createdAt: now,
+    });
   });
   return getUnderstanding(id)!;
 }
@@ -341,22 +381,41 @@ export function reviseUnderstanding(
 export function setUnderstandingStatus(
   id: string,
   status: UnderstandingStatus,
-  confirmation?: { explicitness: UserUnderstanding['explicitness']; confidence: number },
+  options?: {
+    explicitness?: UserUnderstanding['explicitness'];
+    confidence?: number;
+    actorType?: UnderstandingStatusEvent['actorType'];
+    source?: string;
+  },
 ): UserUnderstanding {
+  const current = getUnderstanding(id);
+  if (!current) throw new Error(`User understanding not found: ${id}`);
   const now = Date.now();
-  getSqliteDatabase().prepare(`UPDATE user_understandings
-    SET status = ?,
-        explicitness = COALESCE(?, explicitness),
-        confidence = COALESCE(?, confidence),
-        updated_at = ?
-    WHERE understanding_id = ?`)
-    .run(status, confirmation?.explicitness ?? null, confirmation?.confidence ?? null, now, id);
-  const assertionStatus = status === 'active' ? 'active'
-    : status === 'archived' ? 'closed'
-      : status === 'rejected' ? 'rejected' : 'candidate';
-  getSqliteDatabase().prepare(`UPDATE context_temporal_assertions
-    SET status = ?, updated_at = ? WHERE object_type = 'understanding' AND object_id = ?`)
-    .run(assertionStatus, now, id);
+  runSqliteWriteTransaction((db) => {
+    db.prepare(`UPDATE user_understandings
+      SET status = ?,
+          explicitness = COALESCE(?, explicitness),
+          confidence = COALESCE(?, confidence),
+          updated_at = ?
+      WHERE understanding_id = ?`)
+      .run(status, options?.explicitness ?? null, options?.confidence ?? null, now, id);
+    const assertionStatus = status === 'active' ? 'active'
+      : status === 'archived' ? 'closed'
+        : status === 'rejected' ? 'rejected' : 'candidate';
+    db.prepare(`UPDATE context_temporal_assertions
+      SET status = ?, updated_at = ? WHERE object_type = 'understanding' AND object_id = ?`)
+      .run(assertionStatus, now, id);
+    if (current.status !== status) {
+      insertUnderstandingStatusEvent(db, {
+        understandingId: id,
+        fromStatus: current.status,
+        toStatus: status,
+        actorType: options?.actorType ?? 'runtime',
+        source: options?.source ?? 'repository-status-change',
+        createdAt: now,
+      });
+    }
+  });
   const result = getUnderstanding(id);
   if (!result) throw new Error(`User understanding not found: ${id}`);
   return result;
@@ -370,12 +429,26 @@ export function closeUnderstandingValidity(id: string, validTo = Date.now()): Us
   return result;
 }
 
-export function rejectUnderstanding(id: string, reason: string): UserUnderstanding {
+export function rejectUnderstanding(
+  id: string,
+  reason: string,
+  actorType: UnderstandingStatusEvent['actorType'] = 'runtime',
+): UserUnderstanding {
   const current = getUnderstanding(id);
   if (!current) throw new Error(`User understanding not found: ${id}`);
   const now = Date.now();
   runSqliteWriteTransaction((db) => {
     db.prepare("UPDATE user_understandings SET status = 'rejected', updated_at = ? WHERE understanding_id = ?").run(now, id);
+    if (current.status !== 'rejected') {
+      insertUnderstandingStatusEvent(db, {
+        understandingId: id,
+        fromStatus: current.status,
+        toStatus: 'rejected',
+        actorType,
+        source: reason,
+        createdAt: now,
+      });
+    }
     db.prepare(`INSERT INTO context_suppressions (
       suppression_id, principal_id, canonical_key, scope_type, scope_id, reason, expires_at, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
@@ -383,6 +456,20 @@ export function rejectUnderstanding(id: string, reason: string): UserUnderstandi
       .run(randomUUID(), USER_CONTEXT_PRINCIPAL_ID, current.canonicalKey, current.scope.type, current.scope.id ?? null, reason, now);
   });
   return getUnderstanding(id)!;
+}
+
+export function listUnderstandingStatusEvents(id: string): UnderstandingStatusEvent[] {
+  return (getSqliteDatabase().prepare(`SELECT * FROM understanding_status_events
+    WHERE understanding_id = ? ORDER BY created_at DESC, rowid DESC`).all(id) as UnderstandingStatusEventRow[])
+    .map((row) => ({
+      id: row.event_id,
+      understandingId: row.understanding_id,
+      ...(row.from_status ? { fromStatus: row.from_status } : {}),
+      toStatus: row.to_status,
+      actorType: row.actor_type,
+      source: row.source,
+      createdAt: row.created_at,
+    }));
 }
 
 export function deleteUnderstanding(id: string): boolean {

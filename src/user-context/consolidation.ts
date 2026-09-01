@@ -134,7 +134,7 @@ export async function runContextConsolidation(input: {
       const expired = (understanding.validTo != null && understanding.validTo <= now)
         || (understanding.expiresAt != null && understanding.expiresAt <= now);
       if (expired) {
-        setUnderstandingStatus(understanding.id, 'stale');
+        setUnderstandingStatus(understanding.id, 'stale', { actorType: 'runtime', source: 'consolidation-expired' });
         recordContextConsolidationDecision({
           runId: run.runId, understandingId: understanding.id, action: 'stale',
           reasonCode: 'validity_expired', evidenceCount, now,
@@ -143,7 +143,7 @@ export async function runContextConsolidation(input: {
         continue;
       }
       if (contradictionCount > 0) {
-        setUnderstandingStatus(understanding.id, 'needs_review');
+        setUnderstandingStatus(understanding.id, 'needs_review', { actorType: 'runtime', source: 'consolidation-contradiction' });
         recordContextConsolidationDecision({
           runId: run.runId, understandingId: understanding.id, action: 'needs_review',
           reasonCode: 'contradictory_evidence', evidenceCount: contradictionCount, now,
@@ -152,7 +152,7 @@ export async function runContextConsolidation(input: {
         continue;
       }
       if (understanding.status === 'active' && understanding.reviewAt != null && understanding.reviewAt <= now) {
-        setUnderstandingStatus(understanding.id, 'needs_review');
+        setUnderstandingStatus(understanding.id, 'needs_review', { actorType: 'runtime', source: 'consolidation-review-due' });
         recordContextConsolidationDecision({
           runId: run.runId, understandingId: understanding.id, action: 'needs_review',
           reasonCode: 'review_due', evidenceCount, now,
@@ -161,7 +161,7 @@ export async function runContextConsolidation(input: {
         continue;
       }
       if (understanding.status === 'candidate' && evidenceCount >= resolved.minEvidenceSources) {
-        setUnderstandingStatus(understanding.id, 'needs_review');
+        setUnderstandingStatus(understanding.id, 'needs_review', { actorType: 'runtime', source: 'consolidation-evidence-threshold' });
         recordContextConsolidationDecision({
           runId: run.runId, understandingId: understanding.id, action: 'needs_review',
           reasonCode: 'independent_evidence_threshold', evidenceCount, now,

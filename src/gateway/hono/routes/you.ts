@@ -6,7 +6,7 @@ import {
   createCollaborationRule, createUnderstanding, decideContextConsent,
   deleteCollaborationRule, deleteUnderstanding, getCollaborationRule,
   getTurnPersonalization, getUnderstanding, getUserProfile,
-  listCollaborationRules, listContextConsolidationRuns, listUnderstandingEvidence, listUnderstandings,
+  listCollaborationRules, listContextConsolidationRuns, listUnderstandingEvidence, listUnderstandingStatusEvents, listUnderstandings,
   recordContextFeedback, rejectUnderstanding, reviseCollaborationRule,
   reviseUnderstanding, setCollaborationRuleStatus, setUnderstandingStatus,
   updateUserProfile,
@@ -221,10 +221,12 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     const objects = normalized.map(({ objectType, objectId, action }) => {
       if (objectType === 'understanding') {
         return action === 'accept'
-          ? setUnderstandingStatus(objectId, 'active', { explicitness: 'explicit', confidence: 1 })
+          ? setUnderstandingStatus(objectId, 'active', {
+              explicitness: 'explicit', confidence: 1, actorType: 'user', source: 'context-review',
+            })
           : action === 'reject'
-            ? rejectUnderstanding(objectId, 'Rejected during context review')
-            : setUnderstandingStatus(objectId, 'needs_review');
+            ? rejectUnderstanding(objectId, 'Rejected during context review', 'user')
+            : setUnderstandingStatus(objectId, 'needs_review', { actorType: 'user', source: 'context-review-later' });
       }
       return updateUserFocus(objectId, { status: action === 'accept' ? 'active' : action === 'reject' ? 'rejected' : 'paused' });
     });
@@ -287,7 +289,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
   authenticated.get('/api/you/understandings/:id/evidence', (c) => {
     const understanding = getUnderstanding(c.req.param('id'));
     if (!understanding) return c.json({ error: 'Understanding not found' }, 404);
-    return c.json({ evidence: listUnderstandingEvidence(understanding.id) });
+    return c.json({
+      evidence: listUnderstandingEvidence(understanding.id),
+      statusEvents: listUnderstandingStatusEvents(understanding.id),
+    });
   });
 
   authenticated.patch('/api/you/understandings/:id', write, async (c) => {
@@ -319,11 +324,14 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     if (body.status !== undefined) {
       if (!UNDERSTANDING_STATUSES.has(body.status as UnderstandingStatus)) return c.json({ error: 'Invalid status' }, 400);
       understanding = body.status === 'rejected'
-        ? rejectUnderstanding(id, nonEmptyString(body.reason, 500) ?? 'Rejected by user')
+        ? rejectUnderstanding(id, nonEmptyString(body.reason, 500) ?? 'Rejected by user', 'user')
         : setUnderstandingStatus(
             id,
             body.status as UnderstandingStatus,
-            body.status === 'active' ? { explicitness: 'explicit', confidence: 1 } : undefined,
+            {
+              ...(body.status === 'active' ? { explicitness: 'explicit' as const, confidence: 1 } : {}),
+              actorType: 'user', source: 'understanding-edit',
+            },
           );
     }
     return c.json({ understanding });
@@ -402,9 +410,9 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       ...(typeof body.reason === 'string' ? { reason: body.reason.slice(0, 500) } : {}),
     });
     if (objectType === 'understanding' && typeof objectId === 'string') {
-      if (rating === 'wrong') rejectUnderstanding(objectId, 'Marked wrong from turn feedback');
-      if (rating === 'stale') setUnderstandingStatus(objectId, 'stale');
-      if (rating === 'sensitive') setUnderstandingStatus(objectId, 'needs_review');
+      if (rating === 'wrong') rejectUnderstanding(objectId, 'Marked wrong from turn feedback', 'user');
+      if (rating === 'stale') setUnderstandingStatus(objectId, 'stale', { actorType: 'user', source: 'turn-feedback-stale' });
+      if (rating === 'sensitive') setUnderstandingStatus(objectId, 'needs_review', { actorType: 'user', source: 'turn-feedback-sensitive' });
     }
     if (objectType === 'focus' && typeof objectId === 'string') {
       if (rating === 'wrong') updateUserFocus(objectId, { status: 'rejected' });

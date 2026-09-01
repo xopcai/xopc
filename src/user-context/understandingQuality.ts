@@ -3,6 +3,8 @@ import type { MemoryKind } from '../agent/memory/types.js';
 const INCOMPLETE_PREFIX = /^(?:and\b|also\b|then\b|plus\b|as\s+well\s+as\b|which\b|that\b|并且|并将|以及|然后|同时|另外|还有|而且|或者|的事项|事项[，,、：:]?)/i;
 const DEFERRED_OR_NEGATED_ACTION = /(?:not\s+now|no\s+need\s+to|do\s+not\s+(?:start|proceed)|don't\s+(?:start|proceed)|later\s+maybe|暂时不用|暂时不(?:用|要|开始)?|先不用|无需|不用开始|不要推进|不需要推进)/i;
 const ONE_OFF_ACTION_PREFIX = /^(?:please\s+|update\b|investigate\b|summari[sz]e\b|fix\b|write\b|add\b|record\b|track\b)|^(?:请|帮我|更新|调查|汇总|整理|修复|写入|加入|记录|跟进)/i;
+const DURABLE_MARKER = /(?:从现在起|今后|以后|长期|每次|每回|始终|一直|默认|下次|教训|原则|习惯|from now on|going forward|long[- ]term|every time|always|by default|next time|lesson|principle|habit)/i;
+const TURN_EXECUTION_INSTRUCTION = /(?:不要再问|别再问|直接执行|立即执行|当前任务|这次|本次|现在就|do not ask|don't ask|just do it|execute directly|proceed now|this task|this time)/i;
 
 function meaningfulLength(content: string): number {
   return content.normalize('NFKC').replace(/[\p{P}\p{S}\s]/gu, '').length;
@@ -24,6 +26,8 @@ export function isDurableUnderstandingCandidate(kind: MemoryKind, content: strin
   if ((kind === 'commitment' || kind === 'long_term_goal') && ONE_OFF_ACTION_PREFIX.test(content.trim())) {
     return false;
   }
+  if (kind === 'task_lesson' && !DURABLE_MARKER.test(content)) return false;
+  if (kind === 'boundary' && TURN_EXECUTION_INSTRUCTION.test(content) && !DURABLE_MARKER.test(content)) return false;
   return true;
 }
 

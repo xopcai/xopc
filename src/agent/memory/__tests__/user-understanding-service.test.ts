@@ -6,11 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase, createUnderstanding, getUnderstanding, listUnderstandings,
-  getSqliteDatabase, listUnderstandingEvidence, openXopcDatabase, resetXopcDatabaseSingletonForTest,
+  openXopcDatabase, resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
-import {
-  extractExplicitUnderstandingCandidates, extractHighSignalUnderstandingCandidates, UserUnderstandingService,
-} from '../understanding/service.js';
+import { UserUnderstandingService } from '../understanding/service.js';
 import { inferMemorySensitivity, redactSensitiveMemoryText } from '../sensitivity.js';
 
 const BASE_CANDIDATE = {
@@ -35,39 +33,6 @@ describe('UserUnderstandingService', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
-  });
-
-  it('extracts explicit intent and ignores ordinary turns', () => {
-    const candidates = extractExplicitUnderstandingCandidates(
-      'Please remember that I prefer pnpm over npm for this repo.',
-    );
-    expect(candidates[0]).toMatchObject({
-      kind: 'preference', content: 'I prefer pnpm over npm for this repo.', explicitness: 'explicit',
-    });
-    expect(extractExplicitUnderstandingCandidates('Can you explain the gateway routes?')).toEqual([]);
-  });
-
-  it('keeps recurring high-signal preferences as candidates until the user confirms them', async () => {
-    expect(extractExplicitUnderstandingCandidates('以后请直接执行，不用每次先问我。')).toEqual([]);
-    const candidates = extractHighSignalUnderstandingCandidates('以后请直接执行，不用每次先问我。');
-    expect(candidates[0]).toMatchObject({ kind: 'boundary', explicitness: 'observed' });
-
-    const result = await new UserUnderstandingService().reviewTurn({
-      userContent: '以后请直接执行，不用每次先问我。',
-      assistantContent: '好的。',
-      sessionKey: 'webchat:test',
-    });
-    expect(result.createdRecords[0]).toMatchObject({ status: 'candidate' });
-    expect(getUnderstanding(result.createdRecords[0]!.id)?.status).toBe('candidate');
-    expect(listUnderstandingEvidence(result.createdRecords[0]!.id)[0]).toMatchObject({
-      sourceType: 'conversation', sessionId: 'webchat:test', processingPolicy: 'local_only',
-      extractorId: 'deterministic-signal', extractorVersion: '1', retentionPolicy: 'derived_only',
-    });
-  });
-
-  it('does not infer a durable preference from an ordinary one-off request', () => {
-    expect(extractHighSignalUnderstandingCandidates('Please explain this route concisely.')).toEqual([]);
-    expect(extractHighSignalUnderstandingCandidates('帮我直接修改这个文件。')).toEqual([]);
   });
 
   it('stores explicit understanding and deduplicates by canonical key and scope', async () => {
@@ -112,9 +77,9 @@ describe('UserUnderstandingService', () => {
       confidence: 1, statement: 'Prefer short answers.', createdBy: 'user', changeReason: 'test',
     });
     const service = new UserUnderstandingService();
-    const result = await service.applyCandidates(extractExplicitUnderstandingCandidates(
-      '你记错了我的偏好，我更喜欢详细解释。',
-    ), { supersedesRecordIds: [old.id] });
+    const result = await service.applyCandidates([{
+      ...BASE_CANDIDATE, kind: 'preference', content: '更喜欢详细解释。',
+    }], { supersedesRecordIds: [old.id] });
     expect(result.created).toBe(1);
     expect(getUnderstanding(old.id)?.status).toBe('archived');
     expect(getUnderstanding(result.createdRecords[0]!.id)?.supersedesId).toBe(old.id);
@@ -129,20 +94,6 @@ describe('UserUnderstandingService', () => {
     ], {});
     expect(result).toMatchObject({ proposed: 3, created: 1, rejected: 2 });
     expect(listUnderstandings()).toHaveLength(1);
-  });
-
-  it('does not persist evidence for a sensitive-only turn', async () => {
-    const result = await new UserUnderstandingService().reviewTurn({
-      userContent: 'Please remember that my bank account is 12345678.',
-      assistantContent: 'Understood.',
-      sessionKey: 'webchat:sensitive',
-      turnId: 'turn-sensitive',
-    });
-
-    expect(result).toMatchObject({ proposed: 1, created: 0, rejected: 1 });
-    expect(result.sourceItemId).toBeUndefined();
-    const row = getSqliteDatabase().prepare('SELECT COUNT(*) AS count FROM context_evidence').get() as { count: number };
-    expect(row.count).toBe(0);
   });
 
   it('classifies and redacts regulated identifiers before persistence', () => {

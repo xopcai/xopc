@@ -8,10 +8,8 @@ import {
 import type { UnderstandingKind } from '../domain.js';
 
 export type ExtractorId =
-  | 'explicit-command'
-  | 'deterministic-signal'
+  | 'turn-semantics'
   | 'transcript-synthesis'
-  | 'connector-structural'
   | 'connector-semantic';
 
 export type ExtractorDefinition = {
@@ -31,25 +29,17 @@ const UNDERSTANDING_KINDS: UnderstandingKind[] = [
 ];
 
 const DEFINITIONS: Record<ExtractorId, ExtractorDefinition> = {
-  'explicit-command': {
-    id: 'explicit-command', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
-    authorityCeiling: 'user_explicit', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'active', timeoutMs: 500,
-  },
-  'deterministic-signal': {
-    id: 'deterministic-signal', version: '1', inputKinds: ['conversation', 'task'], requiredProcessingPolicy: 'local_only',
-    authorityCeiling: 'user_observed', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'candidate', timeoutMs: 500,
+  'turn-semantics': {
+    id: 'turn-semantics', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
+    authorityCeiling: 'user_explicit', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'active', timeoutMs: 30_000,
   },
   'transcript-synthesis': {
-    id: 'transcript-synthesis', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'remote_allowed',
+    id: 'transcript-synthesis', version: '1', inputKinds: ['conversation'], requiredProcessingPolicy: 'local_only',
     authorityCeiling: 'system_inferred', candidateKinds: UNDERSTANDING_KINDS, maxAutomaticStatus: 'candidate', timeoutMs: 30_000,
-  },
-  'connector-structural': {
-    id: 'connector-structural', version: '1', inputKinds: ['connector'], requiredProcessingPolicy: 'local_only',
-    authorityCeiling: 'external_untrusted', candidateKinds: ['project_context', 'current_state', 'routine'], maxAutomaticStatus: 'candidate', timeoutMs: 10_000,
   },
   'connector-semantic': {
     id: 'connector-semantic', version: '1', inputKinds: ['connector', 'file'], requiredProcessingPolicy: 'remote_allowed',
-    authorityCeiling: 'external_untrusted', candidateKinds: ['preference', 'routine', 'current_state', 'project_context'],
+    authorityCeiling: 'external_untrusted', candidateKinds: ['preference', 'routine'],
     maxAutomaticStatus: 'candidate', timeoutMs: 30_000,
   },
 };

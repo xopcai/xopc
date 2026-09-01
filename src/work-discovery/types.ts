@@ -219,6 +219,7 @@ export interface WorkDiscoveryProfileCandidate {
   id: string;
   understandingId?: string;
   category: 'role' | 'responsibility' | 'preference' | 'routine';
+  factKey: string;
   statement: string;
   confidence: 'high' | 'medium' | 'low';
   evidence: string[];

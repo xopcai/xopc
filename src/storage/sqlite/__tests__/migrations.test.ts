@@ -212,6 +212,69 @@ describe('SQLite migrations', () => {
       ]);
   });
 
+  it('v137 audits status and moves unsafe active portrait records back to review', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE user_understanding_versions (
+        version_id TEXT PRIMARY KEY,
+        understanding_id TEXT NOT NULL,
+        statement TEXT NOT NULL,
+        created_by TEXT NOT NULL
+      );
+      CREATE TABLE user_understandings (
+        understanding_id TEXT PRIMARY KEY,
+        canonical_key TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        current_version_id TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE context_evidence (
+        evidence_id TEXT PRIMARY KEY,
+        extractor_id TEXT
+      );
+      CREATE TABLE understanding_evidence_links (
+        version_id TEXT NOT NULL,
+        evidence_id TEXT NOT NULL
+      );
+      CREATE TABLE context_temporal_assertions (
+        object_type TEXT NOT NULL,
+        object_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO user_understanding_versions VALUES
+        ('v-connected', 'u-connected', 'Works with Slack integrations.', 'consolidation'),
+        ('v-user', 'u-user', 'Prefers concise responses.', 'user');
+      INSERT INTO user_understandings VALUES
+        ('u-connected', 'connected-semantic:routine:slack', 'routine', 'active', 'v-connected', 1),
+        ('u-user', 'preference:concise', 'preference', 'active', 'v-user', 1);
+      INSERT INTO context_evidence VALUES ('e-connected', 'connector-semantic');
+      INSERT INTO understanding_evidence_links VALUES ('v-connected', 'e-connected');
+      INSERT INTO context_temporal_assertions VALUES
+        ('understanding', 'u-connected', 'active', 1),
+        ('understanding', 'u-user', 'active', 1);
+    `);
+    setSchemaVersion(db, 136);
+
+    expect(applyPendingMigrations(db, {
+      migrationsDir: resolveMigrationsDir(), targetVersion: 137,
+    })).toBe(137);
+    expect(db.prepare('SELECT understanding_id, status FROM user_understandings ORDER BY understanding_id').all())
+      .toEqual([
+        { understanding_id: 'u-connected', status: 'needs_review' },
+        { understanding_id: 'u-user', status: 'active' },
+      ]);
+    expect(db.prepare(`SELECT from_status, to_status, actor_type, source
+      FROM understanding_status_events WHERE understanding_id = 'u-connected' ORDER BY created_at`).all())
+      .toEqual([
+        { from_status: null, to_status: 'active', actor_type: 'migration', source: 'status-audit-baseline' },
+        { from_status: 'active', to_status: 'needs_review', actor_type: 'migration', source: 'repair-untrusted-portrait-v1' },
+      ]);
+  });
+
   it('ensureXopcDatabaseSchema applies baseline then leaves version at release target', () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-schema-'));
     const dbPath = join(dir, 'xopc.db');

@@ -1,7 +1,6 @@
 import type { Config } from '../config/schema.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import type { MemoryManager } from '../agent/memory/manager.js';
-import type { UnderstandingReviewResult } from '../agent/memory/understanding/types.js';
 import {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
@@ -18,8 +17,7 @@ import {
   upsertConnectorConnection,
   type ConnectorLearningJob,
 } from '../storage/sqlite/index.js';
-import { ConnectedKnowledgePipeline, ConnectedUnderstandingPipeline } from '../knowledge/index.js';
-import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
+import { ConnectedKnowledgePipeline } from '../knowledge/index.js';
 import { createLogger } from '../utils/logger.js';
 import {
   createUnderstandingSourceRun,
@@ -271,33 +269,6 @@ export function startConnectorLearningCoordinator(options: {
       itemsIndexed,
     }));
     publish(updateConnectorLearningJob(job.id, { phase: 'deriving' }));
-    const structuralExtraction = claimRegisteredExtraction({
-      extractorId: 'connector-structural', sourceRef: `understanding-source-run:${sourceRun.id}`,
-      contentForHash: `${job.sourceInstanceId}:${itemsSeen}:${itemsIndexed}`,
-      processingPolicy: 'local_only', destination: 'deterministic',
-    });
-    let understanding: UnderstandingReviewResult = {
-      proposed: 0, created: 0, deduplicated: 0, rejected: 0, createdRecords: [], writeOutputs: [],
-    };
-    if (structuralExtraction.shouldExecute) {
-      try {
-        understanding = await new ConnectedUnderstandingPipeline(options.getMemoryManager())
-          .process(job.agentId, structuralExtraction.run.id);
-        finishContextExtractionRun({
-          runId: structuralExtraction.run.id, status: 'completed',
-          outputs: (understanding.writeOutputs ?? []).map((output) => ({
-            candidateKey: output.candidateKey,
-            ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
-            ...(output.versionId ? { versionId: output.versionId } : {}), outcome: output.outcome,
-          })),
-        });
-      } catch (error) {
-        finishContextExtractionRun({
-          runId: structuralExtraction.run.id, status: 'failed', errorCode: 'extractor_failed',
-        });
-        throw error;
-      }
-    }
     let semantic: Awaited<ReturnType<typeof deriveConnectedSourceUnderstanding>> = {
       created: 0,
       focusCount: 0,
@@ -317,7 +288,7 @@ export function startConnectorLearningCoordinator(options: {
       semantic = { created: 0, focusCount: 0, status: 'failed', error: CONNECTED_SOURCE_ANALYSIS_FAILED };
       log.warn({ err: error, jobId: job.id, connectorId: job.connectorId }, `Connected source semantic analysis failed: ${errorMessage}`);
     }
-    const candidatesCreated = understanding.created + semantic.created + semantic.focusCount;
+    const candidatesCreated = semantic.created + semantic.focusCount;
     const incomplete = enrichmentErrors.length > 0 || semantic.status !== 'completed';
     const completed = updateConnectorLearningJob(job.id, {
       status: 'completed',

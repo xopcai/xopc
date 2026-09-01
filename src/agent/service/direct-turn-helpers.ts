@@ -211,7 +211,7 @@ export async function runDirectAgentTurn(
     onEvent: input.onEvent,
   });
 
-  const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
+  const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain, turnId);
   if (understandingReview?.createdRecords.length) {
     const captured = understandingReview.createdRecords.filter((record) => record.status === 'active');
     const candidates = understandingReview.createdRecords.filter((record) => record.status === 'candidate');
