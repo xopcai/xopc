@@ -1,5 +1,7 @@
 import { app, shell } from 'electron';
 
+import { bypassNextAppQuitConfirmation } from '../quit-confirmation.js';
+
 import { UninstallError } from './errors.js';
 import { clearUserDataWithoutRelaunch } from './clear-user-data.js';
 import { disableOpenAtLogin, prepareShutdown } from './prepare-shutdown.js';
@@ -27,6 +29,7 @@ export async function uninstallAppDarwin(options: {
     const appPath = resolveAppPath('darwin', process.execPath);
     const target = resolveShowInFolderTarget('darwin', process.execPath, appPath);
     shell.showItemInFolder(target);
+    bypassNextAppQuitConfirmation();
     app.quit();
 
     return { ok: true, mode: 'manual' };

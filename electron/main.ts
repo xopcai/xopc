@@ -80,6 +80,10 @@ import {
 import { getElectronMenuMessages, type ElectronUiLanguage } from './i18n.js';
 import { buildAppMenu, buildAppMenuModel, invokeAppMenuAction } from './menu.js';
 import {
+  appQuitConfirmationGate,
+  bypassNextAppQuitConfirmation,
+} from './quit-confirmation.js';
+import {
   classifyGatewayStartupFailure,
   enrichGatewayStartupFailure,
   isGatewayStartupError,
@@ -346,6 +350,33 @@ let appIsQuitting = false;
 let quitCleanupStarted = false;
 let quitCleanupComplete = false;
 let quitCleanupPromise: Promise<void> | null = null;
+
+async function confirmAppQuit(): Promise<void> {
+  const copy = currentMenuMessages().quitConfirmation;
+  const options = {
+    type: 'warning' as const,
+    title: copy.title,
+    message: copy.title,
+    detail: copy.detail,
+    buttons: [copy.cancel, copy.quit],
+    defaultId: 1,
+    cancelId: 0,
+    noLink: true,
+  };
+  const owner = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  try {
+    const result = owner
+      ? await dialog.showMessageBox(owner, options)
+      : await dialog.showMessageBox(options);
+    if (appQuitConfirmationGate.resolve(result.response === 1)) {
+      app.quit();
+    }
+  } catch (error) {
+    appQuitConfirmationGate.resolve(false);
+    const message = error instanceof Error ? error.message : String(error);
+    appendElectronStartupLog(`quit confirmation failed: ${message}`);
+  }
+}
 
 /** Track if gateway exited unexpectedly so we can show an error dialog. */
 let gatewayExitedUnexpectedly = false;
@@ -827,14 +858,22 @@ function createWindow(): void {
     appendWindowLifecycleLog(win, 'did-finish-load');
   });
 
-  // Squirrel.Mac only finishes installing when the app process quits. Closing the last window does not call
-  // `app.quit()` on macOS by default, so a pending update would never apply after a red-traffic-light close.
+  // On Windows/Linux closing the main window exits the app, so route it through `before-quit` while the
+  // window is still available as the native confirmation owner. On macOS a normal red-light close only
+  // closes the window; a pending Squirrel update is the exception because it installs on app quit.
   win.on('close', (e) => {
-    if (process.platform !== 'darwin' || !app.isPackaged || appIsQuitting || !hasPendingInstall()) {
+    if (appIsQuitting) {
       return;
     }
-    e.preventDefault();
-    app.quit();
+    if (process.platform !== 'darwin') {
+      e.preventDefault();
+      app.quit();
+      return;
+    }
+    if (app.isPackaged && hasPendingInstall()) {
+      e.preventDefault();
+      app.quit();
+    }
   });
 
   win.on('closed', () => {
@@ -897,6 +936,7 @@ function createWindow(): void {
         return;
       }
       void dialog.showErrorBox('xopc', buildStartupFailureMessage(msg));
+      bypassNextAppQuitConfirmation();
       app.quit();
     }
   })();
@@ -1210,6 +1250,16 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', (event) => {
+  const canConfirm = app.isReady();
+  const confirmationStep = appQuitConfirmationGate.begin(canConfirm);
+  if (confirmationStep !== 'allow') {
+    event.preventDefault();
+    if (confirmationStep === 'confirm') {
+      void confirmAppQuit();
+    }
+    return;
+  }
+
   appIsQuitting = true;
   if (!quitCleanupStarted) {
     quitCleanupStarted = true;
