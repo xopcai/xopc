@@ -103,6 +103,9 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
         forceCloseRequested = true;
         console.warn(`[GatewayRunLoop] Received ${signal} again; force closing connections`);
         server?.forceCloseConnections();
+      } else if (signal === 'SIGINT' || signal === 'SIGTERM') {
+        console.warn(`[GatewayRunLoop] Received ${signal} again; force exiting`);
+        exitProcess(0);
       }
       return;
     }
