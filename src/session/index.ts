@@ -7,7 +7,11 @@ export {
   type SessionTranscriptUpdate,
 } from './transcript-events.js';
 export { SessionStore } from './store.js';
-export type { SessionStoreOptions } from './store.js';
+export type {
+  SessionStoreOptions,
+  ForkSessionAtTurnOptions,
+  ForkSessionResult,
+} from './store.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
 export {
   DEFAULT_ACTIVITY_DETAIL_LEVEL,

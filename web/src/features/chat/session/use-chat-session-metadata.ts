@@ -9,6 +9,8 @@ export interface ChatSessionMetadata {
   sessionType: string | null;
   sourceNoteId: string | null;
   sourceNoteTitle: string | null;
+  parentSessionKey: string | null;
+  forkedFromSessionName: string | null;
 }
 
 /** Read execution bindings from the session's authoritative metadata. */
@@ -39,12 +41,22 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
         sourceBinding?.kind === 'note' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
           ? sourceBinding.sourceId.trim()
           : null;
+      const parentSessionKey =
+        typeof detail.parentSessionKey === 'string' && detail.parentSessionKey.trim()
+          ? detail.parentSessionKey.trim()
+          : null;
+      const rawForkedFromSessionName = detail.customData?.forkedFromSessionName;
       return {
         workflowRunId,
         ownerAgentId,
         sessionType,
         sourceNoteId,
         sourceNoteTitle: null,
+        parentSessionKey,
+        forkedFromSessionName:
+          typeof rawForkedFromSessionName === 'string' && rawForkedFromSessionName.trim()
+            ? rawForkedFromSessionName.trim()
+            : null,
       };
     },
     { revalidateOnFocus: false },

@@ -34,6 +34,7 @@ export const MessageList = memo(function MessageList({
   onSaveAssistantAsNote,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
+  onForkAssistantTurn,
   onEditUserMessage,
   editLatestUserOnly = false,
   editRequiresTurnId = false,
@@ -61,6 +62,7 @@ export const MessageList = memo(function MessageList({
   onSaveAssistantAsNote?: (content: string) => Promise<void> | void;
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
+  onForkAssistantTurn?: (turnId: string) => Promise<void> | void;
   onEditUserMessage?: (message: Message, messageIndex: number) => void;
   editLatestUserOnly?: boolean;
   editRequiresTurnId?: boolean;
@@ -134,6 +136,7 @@ export const MessageList = memo(function MessageList({
               onSaveAssistantAsNote={onSaveAssistantAsNote}
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
+              onForkAssistantTurn={onForkAssistantTurn}
               // Do not unmount action footers from every prior assistant message
               // when a new reply starts; only the live row has no actions.
               suppressAssistantActions={isStreamRow}

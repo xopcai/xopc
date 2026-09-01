@@ -282,6 +282,16 @@ export class SessionIndex extends EventEmitter {
     return result;
   }
 
+  async forkSessionAtTurn(
+    sourceKey: string,
+    options: import('./store.js').ForkSessionAtTurnOptions,
+  ): Promise<import('./store.js').ForkSessionResult> {
+    const result = await this.store.forkSessionAtTurn(sourceKey, options);
+    const metadata = await this.store.getMetadata(result.sessionKey);
+    if (metadata) this.emit('sessionCreated', metadata);
+    return result;
+  }
+
   // ========== Statistics ==========
 
   async getStats(): Promise<GlobalSessionStats> {

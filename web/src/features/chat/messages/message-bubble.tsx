@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import type {
@@ -93,6 +93,7 @@ export const MessageBubble = memo(function MessageBubble({
   onSaveAssistantAsNote,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
+  onForkAssistantTurn,
   readonly = false,
   density = 'normal',
   suppressAssistantActions = false,
@@ -123,6 +124,8 @@ export const MessageBubble = memo(function MessageBubble({
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
+  /** Create a new conversation containing history through this assistant turn. */
+  onForkAssistantTurn?: (turnId: string) => Promise<void> | void;
   readonly?: boolean;
   density?: 'normal' | 'compact';
   /** Hide assistant footer actions while the session is receiving live run updates. */
@@ -299,6 +302,7 @@ export const MessageBubble = memo(function MessageBubble({
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
   const [assistantActionFeedback, setAssistantActionFeedback] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
   const [assistantActionBusy, setAssistantActionBusy] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
+  const [forkBusy, setForkBusy] = useState(false);
   const [responseFeedback, setResponseFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [responseFeedbackLoaded, setResponseFeedbackLoaded] = useState(false);
   const [responseFeedbackBusy, setResponseFeedbackBusy] = useState(false);
@@ -393,6 +397,14 @@ export const MessageBubble = memo(function MessageBubble({
       window.setTimeout(() => setCopyFeedback((f) => (f === 'user' ? null : f)), 2000);
     });
   }, [userCopyText]);
+
+  const handleForkAssistantTurn = useCallback(() => {
+    if (!message.turnId || !onForkAssistantTurn || forkBusy) return;
+    setForkBusy(true);
+    void Promise.resolve(onForkAssistantTurn(message.turnId))
+      .catch(() => undefined)
+      .finally(() => setForkBusy(false));
+  }, [forkBusy, message.turnId, onForkAssistantTurn]);
 
   const handleResponseFeedback = useCallback((
     rating: 'helpful' | 'not_helpful',
@@ -748,6 +760,18 @@ export const MessageBubble = memo(function MessageBubble({
                 retry: m.chat.messageReadAloudRetry,
               }}
             />
+            {onForkAssistantTurn && message.turnId ? (
+              <button
+                type="button"
+                className={messageActionIconButton}
+                onClick={handleForkAssistantTurn}
+                disabled={forkBusy}
+                title={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
+                aria-label={forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
+              >
+                <GitFork className="size-4" strokeWidth={1.75} aria-hidden />
+              </button>
+            ) : null}
             {onSaveAssistantAsNote ? (
               <button
                 type="button"
