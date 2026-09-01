@@ -143,6 +143,36 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('.markdown-stream-block')).toBe(firstBlock);
   });
 
+  it('renders completed Mermaid blocks while the response continues streaming', async () => {
+    render([{
+      type: 'text',
+      text: '```mermaid\ngraph TD\nA --> B\n```\n\nStill streaming',
+    }], true);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-diagram] svg')).not.toBeNull();
+    });
+    expect(container.textContent).toContain('Still streaming');
+  });
+
+  it('renders a tail Mermaid block as soon as streaming completes', async () => {
+    const content: MessageContent[] = [{
+      type: 'text',
+      text: '```mermaid\ngraph TD\nA --> B\n```',
+    }];
+    render(content, true);
+
+    expect(container.querySelector('[data-mermaid-diagram]')).toBeNull();
+    expect(container.querySelector('pre code.language-mermaid')).not.toBeNull();
+
+    render(content, false);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-diagram] svg')).not.toBeNull();
+    });
+    expect(container.querySelector('pre code.language-mermaid')).toBeNull();
+  });
+
   it('coalesces plain-text deltas on the adaptive schedule', () => {
     vi.useFakeTimers();
     render([{ type: 'text', text: 'First' }], true);

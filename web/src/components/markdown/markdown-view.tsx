@@ -18,8 +18,8 @@ import {
   rewriteWorkspaceFileLinksInMarkdown,
   type WorkspaceFileLinkTarget,
 } from './internal-links';
-import { estimateMermaidPlaceholderHeight } from './mermaid-layout';
 import { createMermaidSnapshot, downloadMermaidPng } from './mermaid-export';
+import { renderMermaidSvg } from './mermaid-render';
 import {
   MermaidPreviewDialog,
   type MermaidPreviewLabels,
@@ -129,7 +129,6 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
 
   for (const pre of pres) {
     if (pre.closest('[data-md-code-block]')) continue;
-    if (pre.closest('[data-mermaid-fallback]')) continue;
     const parent = pre.parentNode;
     if (!parent) continue;
 
@@ -205,26 +204,28 @@ function prepareMermaidShell(code: HTMLElement): HTMLElement | null {
     pre.parentNode.insertBefore(shell, pre);
     shell.appendChild(pre);
   }
-  shell.classList.add('markdown-mermaid-shell', 'markdown-mermaid-pending');
-  shell.style.setProperty(
-    '--markdown-mermaid-placeholder-height',
-    `${estimateMermaidPlaceholderHeight(code.textContent ?? '')}px`,
-  );
+  shell.classList.add('markdown-mermaid-shell');
   return shell;
 }
 
-function commitMermaidShell(
-  shell: HTMLElement,
-  renderedNode: Element,
-  error: boolean,
-): void {
-  shell.replaceChildren(...Array.from(renderedNode.childNodes));
-  shell.className = `${renderedNode.className} markdown-mermaid-shell`;
-  shell.style.removeProperty('--markdown-mermaid-placeholder-height');
+function commitMermaidDiagram(shell: HTMLElement, svg: SVGElement): void {
+  shell.replaceChildren(svg);
+  shell.className = 'markdown-mermaid markdown-mermaid-shell';
   shell.removeAttribute('data-md-code-block');
-  shell.removeAttribute('data-mermaid-diagram');
-  shell.removeAttribute('data-mermaid-fallback');
-  shell.setAttribute(error ? 'data-mermaid-fallback' : 'data-mermaid-diagram', '');
+  shell.setAttribute('data-mermaid-diagram', '');
+}
+
+function commitMermaidError(shell: HTMLElement, label: string, error: unknown): void {
+  const message = document.createElement('div');
+  message.className = 'markdown-mermaid-error-message';
+  message.setAttribute('role', 'alert');
+  message.textContent = label;
+  if (error instanceof Error && error.message) message.title = error.message;
+
+  shell.replaceChildren(message);
+  shell.className = 'markdown-mermaid markdown-mermaid-error markdown-mermaid-shell';
+  shell.removeAttribute('data-md-code-block');
+  shell.setAttribute('data-mermaid-error', '');
 }
 
 type MermaidInlineActionLabels = {
@@ -322,7 +323,7 @@ export interface MarkdownViewProps {
   codeCopy?: boolean;
   /** Called when a chat/workspace file link should open in the local preview pane. */
   onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void;
-  /** Render Mermaid diagrams. Disabled while chat Markdown is still streaming. */
+  /** Convert fenced Mermaid blocks to diagrams. */
   renderMermaid?: boolean;
   /** Add preview and image download actions to rendered Mermaid diagrams. */
   mermaidActions?: boolean;
@@ -348,6 +349,7 @@ function MarkdownViewImpl({
     return {
       copy: m.codeBlockCopy,
       copied: m.messageCopied,
+      mermaidRenderError: m.mermaidRenderError,
       mermaidInline: {
         preview: m.mermaidPreview,
         downloadPng: m.mermaidDownloadPng,
@@ -421,38 +423,36 @@ function MarkdownViewImpl({
           entry.shell !== null,
       );
 
-    let cancelled = false;
-    const actionDisposers: Array<() => void> = [];
-    void import('./mermaid-render')
-      .then(({ renderMermaidBlock }) => {
-        if (cancelled) return;
-        for (const [index, { code, shell }] of pending.entries()) {
-          if (!code.isConnected || !shell.isConnected) continue;
-          const rendered = renderMermaidBlock(code.textContent ?? '');
-          const template = document.createElement('template');
-          template.innerHTML = sanitizeMermaidHtml(rendered.html).trim();
-          const node = template.content.firstElementChild;
-          if (node) {
-            commitMermaidShell(shell, node, rendered.error);
-            if (mermaidActions && !rendered.error) {
-              actionDisposers.push(
-                mountMermaidActions(shell, index, labels.mermaidInline, openMermaidPreview),
-              );
-            }
-          }
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        for (const { shell } of pending) {
-          shell.classList.remove('markdown-mermaid-pending');
-          shell.style.removeProperty('--markdown-mermaid-placeholder-height');
-          shell.setAttribute('data-mermaid-fallback', '');
-        }
-      });
+    for (const { code, shell } of pending) {
+      try {
+        const template = document.createElement('template');
+        template.innerHTML = sanitizeMermaidHtml(renderMermaidSvg(code.textContent ?? '')).trim();
+        const svg = template.content.firstElementChild;
+        if (!(svg instanceof SVGElement)) throw new Error('Mermaid renderer returned invalid SVG');
+
+        commitMermaidDiagram(shell, svg);
+      } catch (error) {
+        console.error('[markdown:mermaid] render failed', error);
+        commitMermaidError(shell, labels.mermaidRenderError, error);
+      }
+    }
+  }, [labels.mermaidRenderError, renderMermaid, safeHtml]);
+
+  useLayoutEffect(() => {
+    const el = hostRef.current;
+    if (!el || !mermaidActions) return;
+
+    const actionDisposers = Array.from(
+      el.querySelectorAll<HTMLElement>('[data-mermaid-diagram]'),
+      (shell, index) => mountMermaidActions(
+        shell,
+        index,
+        labels.mermaidInline,
+        openMermaidPreview,
+      ),
+    );
 
     return () => {
-      cancelled = true;
       for (const dispose of actionDisposers) dispose();
     };
   }, [labels.mermaidInline, mermaidActions, openMermaidPreview, renderMermaid, safeHtml]);
