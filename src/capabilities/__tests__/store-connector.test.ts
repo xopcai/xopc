@@ -7,6 +7,7 @@ import type { Config } from '../../config/schema.js';
 import { getStoreConnectorInstallPlan } from '../store-connector.js';
 
 const manifest = {
+  contractVersion: 1,
   id: 'demo-connector',
   displayName: 'Demo Connector',
   description: 'A verified remote MCP connector.',
@@ -122,18 +123,21 @@ describe('store connector install plans', () => {
     );
   });
 
-  it('rejects OAuth manifests because Store connectors have no authorization provider', async () => {
+  it('materializes local MCP OAuth without requiring a platform broker', async () => {
     const oauthManifest = {
       ...manifest,
       capabilities: [...manifest.capabilities, 'auth.oauth'],
-      auth: { mode: 'oauth', provider: 'github' },
+      auth: { mode: 'oauth', clientId: 'public-client-id' },
     };
     const archive = archiveForManifest(oauthManifest);
     mockStore(archive, undefined, oauthManifest);
 
-    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow(
-      'support only none or apiKey authentication',
-    );
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).resolves.toMatchObject({
+      definition: {
+        auth: { mode: 'oauth', clientId: 'public-client-id' },
+        runtime: { serverTemplate: { auth: { type: 'oauth', clientId: 'public-client-id' } } },
+      },
+    });
   });
 
   it('accepts only the pinned npx form for reviewed local Store connectors', async () => {
@@ -150,6 +154,28 @@ describe('store connector install plans', () => {
           serverTemplate: { command: 'npx', args: ['--yes', '@acme/mcp-server@1.2.3'] },
         },
       },
+    });
+  });
+
+  it('accepts declared secret references in a pinned local environment', async () => {
+    const withEnvironment = {
+      ...localManifest,
+      capabilities: ['tools', 'auth.apiKey', 'runtime.mcp.stdio'],
+      auth: { mode: 'apiKey' },
+      setup: { secrets: [{ key: 'MAPS_API_KEY', label: 'Maps API key', required: true }] },
+      runtime: {
+        ...localManifest.runtime,
+        serverTemplate: {
+          ...localManifest.runtime.serverTemplate,
+          env: { MAPS_API_KEY: '{{secrets.MAPS_API_KEY}}' },
+        },
+      },
+    };
+    const archive = archiveForManifest(withEnvironment);
+    mockStore(archive, undefined, withEnvironment);
+
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).resolves.toMatchObject({
+      definition: { runtime: { serverTemplate: { env: { MAPS_API_KEY: '{{secrets.MAPS_API_KEY}}' } } } },
     });
   });
 });

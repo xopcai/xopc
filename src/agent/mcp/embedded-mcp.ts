@@ -1,6 +1,5 @@
 import type { Config } from "../../config/schema.js";
-import type { BundleMcpDiagnostic, BundleMcpServerConfig } from "../../extensions/bundle-mcp.js";
-import { loadMergedBundleMcpConfig } from "./bundle-mcp-config.js";
+import { loadMergedBundleMcpConfig, type BundleMcpDiagnostic, type BundleMcpServerConfig } from "./bundle-mcp-config.js";
 
 export type EmbeddedMcpConfig = {
   mcpServers: Record<string, BundleMcpServerConfig>;

@@ -73,6 +73,7 @@ function installRecord(
         displayName: definition.displayName,
         source: definition.source,
         artifactSha256: definition.provenance?.sha256,
+        definition,
         ...markerExtra,
       },
       runtime: definition.runtime,

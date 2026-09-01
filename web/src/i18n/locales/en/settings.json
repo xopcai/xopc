@@ -1155,7 +1155,7 @@
     "idleTtlHint": "Default is 10 minutes when unset. Set 0 to disable idle eviction.",
     "idleTtlPlaceholder": "10",
     "serversTitle": "Servers",
-    "serversHint": "Each server id becomes the prefix in tool names (server__tool). Extension .mcp.json files merge in automatically.",
+    "serversHint": "Each server id becomes the prefix in tool names (server__tool). Installed Connectors create managed servers; Extensions declare Connector dependencies separately.",
     "customServersTitle": "Custom MCP servers",
     "customServersHint": "Add stdio subprocesses or remote HTTP/SSE endpoints. Installed catalog connectors are managed separately above.",
     "reservedServerId": "This id is reserved by an installed connector. Choose a different server name.",

@@ -525,7 +525,7 @@
       "image": "Analyze or describe images (vision) from the workspace or the current turn.",
       "image_generate": "Generate images using the configured image / image-generation model.",
       "extensions": "Expose tools registered by enabled extensions — disable to block all extension tools.",
-      "bundle-mcp": "Load tools from configured MCP servers (global mcp.servers and extension .mcp.json)."
+      "bundle-mcp": "Load tools from configured MCP servers, including installed Connectors."
     },
     "skillsTitle": "Available skills",
     "skillsHint": "These skills appear in this agent's Chat / menu and <available_skills>. Other skills are hidden from the agent. Inherit uses shared settings; customize sets this agent's skills.",

@@ -95,6 +95,7 @@ export function materializeConnectorMcpServer(
     displayName: definition.displayName,
     source: definition.source,
     artifactSha256: definition.provenance?.sha256,
+    definition,
     ...(input.config && Object.keys(input.config).length > 0 ? { config: input.config } : {}),
   };
   const server = {
@@ -106,6 +107,16 @@ export function materializeConnectorMcpServer(
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid MCP server config.');
   }
   return { serverId, server };
+}
+
+export function connectorDefinitionFromManagedMarker(marker: unknown): ConnectorDefinition | undefined {
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return undefined;
+  const definition = (marker as Record<string, unknown>).definition;
+  if (!definition || typeof definition !== 'object' || Array.isArray(definition)) return undefined;
+  const record = definition as Partial<ConnectorDefinition>;
+  return typeof record.id === 'string' && typeof record.version === 'string' && record.runtime
+    ? record as ConnectorDefinition
+    : undefined;
 }
 
 export function isManagedConnectorServer(server: unknown): server is Record<string, unknown> & { xopcConnector: ManagedConnectorMarker } {

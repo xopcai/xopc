@@ -29,6 +29,7 @@ import {
   type ComposioToolkitAuthState,
   type ComposioSetupStatus,
   waitForActiveComposioConnection,
+  waitForConnectorAuthorization,
 } from '../connectors-api';
 import { ConnectorLogo } from './connector-logo';
 import type { InstallDraft } from './install-connector-draft';
@@ -151,7 +152,8 @@ export function InstallConnectorDialog({
 
   const submit = useCallback(async () => {
     const electron = isElectron();
-    const authWindow = isComposioToolkit && !electron ? window.open('', '_blank') : null;
+    const usesMcpOAuth = connector.runtime.type === 'mcp' && connector.auth.mode === 'oauth';
+    const authWindow = (isComposioToolkit || usesMcpOAuth) && !electron ? window.open('', '_blank') : null;
     if (authWindow) authWindow.opener = null;
     setComposioSetupError(null);
     onChange({ ...draft, installing: true, error: null, result: null, health: null });
@@ -217,6 +219,23 @@ export function InstallConnectorDialog({
               await startAccountLearning(connection.accountId);
             }
           }
+        } else if (usesMcpOAuth) {
+          const authorization = await startConnectorAuthorization(instance.instanceId);
+          if (!authorization.authorizationUrl && authorization.status !== 'connected') {
+            throw new Error('The MCP server did not return an authorization URL.');
+          }
+          if (authorization.authorizationUrl) {
+            if (electron) {
+              const openResult = await window.electronAPI?.shell?.openExternalUrl(authorization.authorizationUrl);
+              if (!openResult?.ok) throw new Error(openResult?.error ?? 'Could not open the system browser.');
+            } else if (authWindow) {
+              authWindow.location.href = authorization.authorizationUrl;
+            } else {
+              window.open(authorization.authorizationUrl, '_blank', 'noopener,noreferrer');
+            }
+          }
+          await waitForConnectorAuthorization(instance.instanceId);
+          authWindow?.close();
         }
       } catch (error) {
         authWindow?.close();

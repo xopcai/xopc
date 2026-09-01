@@ -59,4 +59,37 @@ describe('bundle-mcp-config', () => {
       original: 'configured-demo',
     });
   });
+
+  it('does not expose disabled managed connectors to the agent runtime', () => {
+    const config = {
+      mcp: {
+        servers: {
+          disabled: {
+            command: 'disabled-connector',
+            xopcConnector: { managed: true, connectorId: 'disabled', enabled: false },
+          },
+          custom: {
+            command: 'custom-server',
+            enabled: false,
+          },
+        },
+      },
+    } as Config;
+
+    const merged = loadMergedBundleMcpConfig({
+      workspaceDir: '/tmp/xopc-test-workspace',
+      cfg: config,
+    });
+
+    expect(merged.config.mcpServers.disabled).toBeUndefined();
+    expect(merged.config.mcpServers.custom).toMatchObject({ command: 'custom-server' });
+  });
+
+  it('uses only configured MCP servers and never Extension-owned raw MCP config', () => {
+    const merged = loadMergedBundleMcpConfig({
+      workspaceDir: '/tmp/xopc-test-workspace',
+      cfg: { mcp: { servers: { configured: { command: 'configured' } } } } as Config,
+    });
+    expect(merged.config.mcpServers).toEqual({ configured: { command: 'configured' } });
+  });
 });

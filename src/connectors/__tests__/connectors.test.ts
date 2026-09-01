@@ -8,7 +8,7 @@ import type { CredentialResolver } from '../../auth/credentials.js';
 import type { Config } from '../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
 import { BUILTIN_CONNECTORS } from '../builtin-catalog.js';
-import { installConnector, uninstallConnector, updateConnectorConfig } from '../install.js';
+import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../install.js';
 import { previewConnectorDefinition } from '../health.js';
 import { setConnectorEnabled } from '../lifecycle.js';
 import { listConnectorInstances } from '../instances.js';
@@ -113,6 +113,32 @@ describe('connector install and instances', () => {
         config: { rootPath: '/tmp/two' },
       },
     });
+  });
+
+  it('keeps an immutable Store definition snapshot for restart-safe lifecycle operations', async () => {
+    const config = { mcp: { servers: {} } } as Config;
+    const definition = {
+      id: 'store-demo',
+      version: '1.2.3',
+      displayName: 'Store Demo',
+      description: 'Store connector snapshot test.',
+      category: 'docs',
+      kind: 'mcp',
+      source: 'store',
+      capabilities: ['tools', 'runtime.mcp.streamableHttp'],
+      auth: { mode: 'none' },
+      setup: {},
+      runtime: {
+        type: 'mcp',
+        serverId: 'store_demo',
+        serverTemplate: { url: 'https://mcp.example.com/mcp', transport: 'streamable-http' },
+      },
+    } as const;
+
+    await installConnectorDefinition(config, definition, {});
+    expect(config.mcp?.servers?.store_demo?.xopcConnector?.definition).toEqual(definition);
+    expect(uninstallConnector(config, 'store_demo')).toMatchObject({ connectorId: 'store-demo' });
+    expect(config.mcp?.servers?.store_demo).toBeUndefined();
   });
 
   it('installs and updates the native local-files memory source', async () => {

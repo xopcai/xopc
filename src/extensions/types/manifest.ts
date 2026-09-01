@@ -23,6 +23,8 @@ export interface ExtensionManifest {
   main?: string;
   configSchema?: Record<string, unknown>;
   dependencies?: Record<string, string>;
+  /** Connector ids that must already be installed and enabled. Extensions never embed MCP server configuration. */
+  connectorDependencies?: string[];
 
   enabledByDefault?: boolean;
 
