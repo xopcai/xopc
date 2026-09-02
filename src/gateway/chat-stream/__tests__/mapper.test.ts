@@ -43,6 +43,25 @@ describe('ChatStreamMapper', () => {
     });
   });
 
+  it('forwards only valid canonical turn outcomes', () => {
+    const m = mapper();
+    const outcome = {
+      version: 1 as const,
+      outcomeId: 'run-1:outcome',
+      runId: 'run-1',
+      turnId: 'run-1',
+      status: 'succeeded' as const,
+      deliverables: [],
+      evidence: [],
+      createdAt: '2026-09-03T00:00:00.000Z',
+    };
+
+    expect(m.map({ type: 'turn_outcome', outcome })).toEqual([
+      expect.objectContaining({ type: 'turn_outcome', payload: outcome }),
+    ]);
+    expect(m.map({ type: 'turn_outcome', outcome: { turnId: 'run-1' } })).toEqual([]);
+  });
+
   it('maps persisted media to user message attachments', () => {
     const m = mapper();
     const [event] = m.map({

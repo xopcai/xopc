@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { resolveToolActivity } from '@xopcai/gateway-contract';
+import { parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
 import { createPetFeedback } from './pet-feedback.js';
@@ -167,6 +167,10 @@ export class ChatStreamMapper {
               : [],
           }),
         ];
+      case 'turn_outcome': {
+        const outcome = parseTurnOutcome(event.outcome);
+        return outcome ? [this.make('turn_outcome', outcome)] : [];
+      }
       case 'error':
         return [this.make('error', {
           code: 'AGENT_RUN_ERROR',

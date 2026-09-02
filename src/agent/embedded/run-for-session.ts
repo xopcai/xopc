@@ -1,10 +1,12 @@
 import crypto from 'node:crypto';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/store.js';
+import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { runXopcEmbeddedTurn } from './run-turn.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
@@ -16,6 +18,7 @@ import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { AgentRunSupervisor } from '../orchestration/agent-run-supervisor.js';
+import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -51,6 +54,42 @@ export async function runEmbeddedTurnForSession(
     deadlineAtMs: params.deadlineAtMs,
     parentSignal: params.abortSignal,
   });
+  const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
+    try {
+      const rows = await sessionStore.loadTranscriptRows(sessionKey);
+      const hasTurn = rows.some((source) => {
+        const row = source as TranscriptStoredRow & Record<string, unknown>;
+        return row.turnId === runId;
+      });
+      const alreadyPersisted = rows.some((source) => {
+        const row = source as TranscriptStoredRow & Record<string, unknown>;
+        return row.type === 'custom'
+          && row.customType === 'turn_outcome'
+          && parseTurnOutcome(row.data)?.turnId === runId;
+      });
+      if (!hasTurn || alreadyPersisted) return result;
+
+      const runStatus = result.ok
+        ? 'success'
+        : result.errorMessage === 'aborted'
+          ? 'cancelled'
+          : 'error';
+      const outcome = projectTurnOutcome({
+        rows,
+        turnId: runId,
+        runStatus,
+        summary: result.errorMessage,
+      });
+      await sessionStore.appendTranscriptCustomEntry(sessionKey, {
+        customType: 'turn_outcome',
+        data: outcome,
+      });
+      params.onEvent?.({ type: 'turn_outcome', runId, outcome });
+    } catch (err) {
+      log.warn({ err, sessionKey, runId }, 'Turn outcome persistence failed');
+    }
+    return result;
+  };
 
   try {
     await params.beforeTurn?.();
@@ -229,7 +268,7 @@ export async function runEmbeddedTurnForSession(
               'Agent model fallback succeeded',
             );
           }
-          return turnResult;
+          return finish(turnResult);
         }
 
         lastResult = turnResult;
@@ -251,6 +290,7 @@ export async function runEmbeddedTurnForSession(
       } catch (err) {
         lastError = err;
         if (err instanceof DOMException && err.name === 'AbortError') {
+          await finish({ ok: false, errorMessage: 'aborted' });
           throw err;
         }
         log.warn(
@@ -274,10 +314,16 @@ export async function runEmbeddedTurnForSession(
       }
     }
 
-    if (lastResult) return lastResult;
-    if (lastError instanceof Error) throw lastError;
-    if (lastError != null) throw new Error(String(lastError));
-    return { ok: false, errorMessage: 'No model candidates available' };
+    if (lastResult) return finish(lastResult);
+    if (lastError != null) {
+      const result = await finish({
+        ok: false,
+        errorMessage: lastError instanceof Error ? lastError.message : String(lastError),
+      });
+      if (lastError instanceof Error) throw lastError;
+      throw new Error(result.errorMessage);
+    }
+    return finish({ ok: false, errorMessage: 'No model candidates available' });
   } finally {
     supervisor.dispose();
   }
