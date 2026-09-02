@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -8,6 +8,7 @@ import type { Note, NoteAttachment } from '../notes/types.js';
 import { createLogger } from '../utils/logger.js';
 import type { NoteShareRecord } from './share-types.js';
 import type { ShareStore } from './share-store.js';
+import { issueShareAssetTicket, verifyShareAssetTicket } from './share-asset-ticket.js';
 
 const log = createLogger('NoteShareService');
 const MANIFEST_SCHEMA_VERSION = 1;
@@ -149,40 +150,11 @@ export class NoteShareService {
   }
 
   issueAssetTicket(record: NoteShareRecord): string {
-    const expiresAt = Date.now() + this.store.getConfig().note.assetTicketTtlMs;
-    const payload = Buffer.from(JSON.stringify({
-      shareId: record.id,
-      revision: record.snapshotRevision,
-      expiresAt,
-    })).toString('base64url');
-    const signature = createHmac('sha256', record.assetTicketSecret).update(payload).digest('base64url');
-    return `${payload}.${signature}`;
+    return issueShareAssetTicket(record, this.store.getConfig().note.assetTicketTtlMs);
   }
 
   verifyAssetTicket(record: NoteShareRecord, ticket: string): boolean {
-    const [payload, signature] = ticket.split('.');
-    if (!payload || !signature) return false;
-    const expected = createHmac('sha256', record.assetTicketSecret).update(payload).digest();
-    let actual: Buffer;
-    try {
-      actual = Buffer.from(signature, 'base64url');
-    } catch {
-      return false;
-    }
-    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return false;
-    try {
-      const value = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
-        shareId?: unknown;
-        revision?: unknown;
-        expiresAt?: unknown;
-      };
-      return value.shareId === record.id &&
-        value.revision === record.snapshotRevision &&
-        typeof value.expiresAt === 'number' &&
-        Date.now() < value.expiresAt;
-    } catch {
-      return false;
-    }
+    return verifyShareAssetTicket(record, ticket);
   }
 
   async resolveAsset(record: NoteShareRecord, attachmentId: string): Promise<{

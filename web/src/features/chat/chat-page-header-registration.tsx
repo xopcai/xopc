@@ -17,6 +17,7 @@ import { useSidebarStore } from '@/stores/sidebar-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
+import { SessionShareButton } from '@/features/shares/session-share-button';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -158,6 +159,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               {m.chat.temporarySession}
             </span>
           ) : null}
+          {activeSessionKey ? <SessionShareButton sessionKey={activeSessionKey} /> : null}
           {activeSessionKey && window.electronAPI?.terminal ? (
             <button
               type="button"

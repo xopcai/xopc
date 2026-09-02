@@ -3,7 +3,7 @@ import { apiUrl } from '@/lib/url';
 
 export type ShareReachability = 'public' | 'lan' | 'local-only';
 
-export type ShareKind = 'file' | 'directory' | 'note';
+export type ShareKind = 'file' | 'directory' | 'note' | 'session';
 
 export type ShareDirectoryMeta = {
   mode: 'browse' | 'zip-only';
@@ -34,6 +34,9 @@ export type ShareItem = {
   sourceVersion?: number;
   snapshotRevision?: number;
   attachmentCount?: number;
+  sourceSessionId?: string;
+  cutoffSeq?: number;
+  messageCount?: number;
 };
 
 export type ShareListResponse = {
@@ -48,7 +51,7 @@ export type CreateShareParams = {
   description?: string;
   sessionKey?: string;
   agentId?: string;
-  kind?: Exclude<ShareKind, 'note'>;
+  kind?: Exclude<ShareKind, 'note' | 'session'>;
   directoryMode?: 'browse' | 'zip-only';
   followSymlinks?: boolean;
   maxFileCount?: number;
@@ -111,4 +114,117 @@ export async function extendShare(
     method: 'PATCH',
     body: JSON.stringify({ extendTtlMs }),
   });
+}
+
+export type SessionShareMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  markdown: string;
+  createdAt: string;
+  attachmentIds: string[];
+};
+
+export type SessionShareToolActivity = {
+  id: string;
+  messageId?: string;
+  toolName: string;
+  status: 'completed' | 'failed';
+  createdAt: string;
+};
+
+export type SessionShareAttachmentCandidate = {
+  id: string;
+  messageId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
+
+export type SessionSharePreview = {
+  sessionId: string;
+  cutoffSeq: number;
+  metadataUpdatedAt: string;
+  title: string;
+  snapshotAt: string;
+  messageCount: number;
+  messages: SessionShareMessage[];
+  toolActivities: SessionShareToolActivity[];
+  attachmentCandidates: SessionShareAttachmentCandidate[];
+};
+
+export type SessionShareResult = {
+  id: string;
+  kind: 'session';
+  shareUrl: string;
+  lanUrl: string | null;
+  reachability: ShareReachability;
+  reachabilityHint: string | null;
+  expiresAt: string;
+  maxViews: number | null;
+  fileName: string;
+  messageCount: number;
+  attachmentCount: number;
+  snapshotRevision: number;
+  includeToolActivities: boolean;
+};
+
+export type SessionShareListItem = SessionShareResult & {
+  createdAt: string;
+  viewCount: number;
+  revoked: boolean;
+  expired: boolean;
+  description: string | null;
+  cutoffSeq: number;
+};
+
+export async function fetchSessionSharePreview(sessionKey: string): Promise<SessionSharePreview> {
+  const response = await fetchJson<{ ok: true; payload: SessionSharePreview }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/share-preview`),
+  );
+  return response.payload;
+}
+
+export async function fetchSessionShares(sessionKey: string): Promise<SessionShareListItem[]> {
+  const response = await fetchJson<{ ok: true; payload: { shares: SessionShareListItem[] } }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares`),
+  );
+  return response.payload.shares;
+}
+
+export async function createSessionShare(
+  sessionKey: string,
+  input: {
+    expectedSessionId: string;
+    expectedCutoffSeq: number;
+    expectedMetadataUpdatedAt: string;
+    ttlMs: number;
+    maxViews: number | null;
+    description?: string;
+    includeToolActivities?: boolean;
+    attachmentIds?: string[];
+  },
+): Promise<SessionShareResult> {
+  const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares`),
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return response.payload;
+}
+
+export async function refreshSessionShare(
+  sessionKey: string,
+  shareId: string,
+  input: {
+    expectedSessionId: string;
+    expectedCutoffSeq: number;
+    expectedMetadataUpdatedAt: string;
+    includeToolActivities?: boolean;
+    attachmentIds?: string[];
+  },
+): Promise<SessionShareResult> {
+  const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares/${encodeURIComponent(shareId)}/refresh`),
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return response.payload;
 }

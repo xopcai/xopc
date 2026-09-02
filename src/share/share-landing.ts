@@ -1,5 +1,5 @@
 import type { DirectoryListing, DirectoryListingEntry } from './share-store.js';
-import type { NoteShareRecord, ShareRecord } from './share-types.js';
+import type { NoteShareRecord, SessionShareRecord, ShareRecord } from './share-types.js';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -56,14 +56,14 @@ export interface ShareLandingOgOptions {
   description?: string;
 }
 
-/** Lightweight public shell for Note shares. Crawlers get metadata; browsers continue to the SPA preview. */
-export function renderNoteShareLandingPage(
-  record: NoteShareRecord,
+/** Lightweight public shell for state-owned snapshots. Crawlers get metadata; browsers continue to the SPA preview. */
+export function renderSnapshotShareLandingPage(
+  record: NoteShareRecord | SessionShareRecord,
   previewUrl: string,
-  options?: { og?: ShareLandingOgOptions },
+  options: { label: 'Note' | 'conversation'; og?: ShareLandingOgOptions },
 ): string {
   const title = escapeHtml(record.fileName);
-  const description = escapeHtml(record.description ?? 'A Note shared via xopc');
+  const description = escapeHtml(record.description ?? `A ${options.label} shared via xopc`);
   const target = escapeHtml(previewUrl);
   const ogTags = renderOgTags({
     title,
@@ -83,7 +83,7 @@ ${ogTags}
 <meta http-equiv="refresh" content="0;url=${target}">
 </head>
 <body>
-<p><a href="${target}">Open shared Note</a></p>
+<p><a href="${target}">Open shared ${options.label}</a></p>
 <script>location.replace(${JSON.stringify(previewUrl)})</script>
 </body>
 </html>`;

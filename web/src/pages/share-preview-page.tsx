@@ -14,11 +14,12 @@ import {
 } from '@/features/preview-runtime';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import { blockRemoteMarkdownImages } from '@/features/shares/public-markdown';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 interface ShareMeta {
-  kind: 'file' | 'directory' | 'note';
+  kind: 'file' | 'directory' | 'note' | 'session';
   fileName: string;
   fileSize: number;
   mimeType: string;
@@ -26,6 +27,18 @@ interface ShareMeta {
   expiresAt: string;
   remainingViews: number | null;
   valid: boolean;
+}
+
+interface SharedSessionView {
+  kind: 'session';
+  title: string;
+  snapshotAt: string;
+  expiresAt: string;
+  description: string | null;
+  snapshotRevision: number;
+  messages: Array<{ id: string; role: 'user' | 'assistant'; markdown: string; createdAt: string; attachmentIds: string[] }>;
+  toolActivities: Array<{ id: string; messageId?: string; toolName: string; status: 'completed' | 'failed'; createdAt: string }>;
+  attachments: Array<{ id: string; messageId: string; mimeType: string; fileName: string; size: number; url: string }>;
 }
 
 interface SharedNoteView {
@@ -61,6 +74,7 @@ export function SharePreviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [noteView, setNoteView] = useState<SharedNoteView | null>(null);
+  const [sessionView, setSessionView] = useState<SharedSessionView | null>(null);
 
   const descriptor = useMemo((): PreviewFileDescriptor | null => {
     if (!meta || !token || meta.kind !== 'file') return null;
@@ -88,6 +102,8 @@ export function SharePreviewPage() {
         setLoading(true);
         setError(null);
         setLoad(emptyLoad());
+        setNoteView(null);
+        setSessionView(null);
         const metaRes = await fetch(apiUrl(`/s/${encodeURIComponent(token)}/meta`));
         if (!metaRes.ok) {
           if (!cancelled) setError(metaRes.status === 404 ? t.notFound : t.expired);
@@ -100,14 +116,15 @@ export function SharePreviewPage() {
           setError(t.expired);
           return;
         }
-        if (m.kind === 'note') {
+        if (m.kind === 'note' || m.kind === 'session') {
           const viewRes = await fetch(apiUrl(`/s/${encodeURIComponent(token)}/view`), { method: 'POST' });
           if (!viewRes.ok) {
             setError(viewRes.status === 404 ? t.notFound : t.expired);
             return;
           }
-          const view = await viewRes.json() as { payload?: SharedNoteView };
-          if (!cancelled && view.payload) setNoteView(view.payload);
+          const view = await viewRes.json() as { payload?: SharedNoteView | SharedSessionView };
+          if (!cancelled && view.payload?.kind === 'note') setNoteView(view.payload);
+          if (!cancelled && view.payload?.kind === 'session') setSessionView(view.payload);
           return;
         }
         if (m.kind !== 'file') return;
@@ -195,7 +212,7 @@ export function SharePreviewPage() {
             </div>
           ) : null}
         </div>
-        {meta && meta.kind !== 'note' ? (
+        {meta && meta.kind === 'file' ? (
           <>
             <a
               href={openInlineUrl}
@@ -249,8 +266,45 @@ export function SharePreviewPage() {
             {noteView.description ? (
               <p className="mt-5 rounded-lg bg-surface-subtle px-4 py-3 text-sm leading-6 text-fg-muted">{noteView.description}</p>
             ) : null}
-            <MarkdownView content={blockRemoteImages(noteView.markdown, t.remoteImageBlocked)} className="mt-8" />
+            <MarkdownView content={blockRemoteMarkdownImages(noteView.markdown, t.remoteImageBlocked)} className="mt-8" />
             <footer className="mt-10 border-t border-edge-subtle pt-4 text-center text-xs text-fg-subtle">{t.sharedVia}</footer>
+          </article>
+        ) : meta?.kind === 'session' && sessionView ? (
+          <article className="mx-auto w-full max-w-4xl rounded-xl border border-edge-subtle bg-surface-panel px-4 py-7 shadow-surface sm:px-8 sm:py-9">
+            <header className="mx-auto max-w-3xl border-b border-edge-subtle pb-5">
+              <h1 className="text-2xl font-bold tracking-tight text-fg sm:text-3xl">{sessionView.title}</h1>
+              <div className="mt-2 text-xs text-fg-muted">
+                {t.sharedAt}{' '}{new Date(sessionView.snapshotAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+                {' · '}{t.expiresAt}{' '}{new Date(sessionView.expiresAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+              </div>
+              {sessionView.description ? <p className="mt-4 text-sm leading-6 text-fg-muted">{sessionView.description}</p> : null}
+            </header>
+            <div className="mx-auto mt-6 max-w-3xl space-y-5">
+              {sessionView.messages.map((message) => (
+                <section key={message.id} className={message.role === 'user' ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-full'}>
+                  <div className="mb-1 text-xs font-medium text-fg-subtle">{message.role === 'user' ? t.you : t.assistant}</div>
+                  <div className={message.role === 'user' ? 'rounded-2xl bg-surface-subtle px-4 py-3' : 'px-1 py-1'}>
+                    <MarkdownView content={blockRemoteMarkdownImages(message.markdown, t.remoteImageBlocked)} />
+                    {sessionView.attachments.filter((attachment) => message.attachmentIds.includes(attachment.id)).map((attachment) => (
+                      <SharedSessionAttachment key={attachment.id} attachment={attachment} />
+                    ))}
+                    {sessionView.toolActivities.filter((activity) => activity.messageId === message.id).map((activity) => (
+                      <div key={activity.id} className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-edge-subtle px-2 py-1 text-xs text-fg-muted">
+                        <span>{activity.toolName}</span>
+                        <span aria-hidden>·</span>
+                        <span>{activity.status === 'completed' ? t.toolCompleted : t.toolFailed}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {sessionView.toolActivities.filter((activity) => !activity.messageId).map((activity) => (
+                <div key={activity.id} className="text-center text-xs text-fg-muted">
+                  {activity.toolName} · {activity.status === 'completed' ? t.toolCompleted : t.toolFailed}
+                </div>
+              ))}
+            </div>
+            <footer className="mx-auto mt-10 max-w-3xl border-t border-edge-subtle pt-4 text-center text-xs text-fg-subtle">{t.sharedVia}</footer>
           </article>
         ) : descriptor ? (
           <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
@@ -277,11 +331,19 @@ export function SharePreviewPage() {
   );
 }
 
-function blockRemoteImages(markdown: string, label: string): string {
-  return markdown.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/gi, (_match, alt: string, url: string) => {
-    const text = alt.trim() || label;
-    return `[${text}](${url})`;
-  });
+function SharedSessionAttachment({ attachment }: { attachment: SharedSessionView['attachments'][number] }) {
+  if (attachment.mimeType.startsWith('image/')) {
+    return <img src={attachment.url} alt={attachment.fileName} loading="lazy" className="mt-3 max-h-[28rem] max-w-full rounded-lg border border-edge-subtle object-contain" />;
+  }
+  if (attachment.mimeType.startsWith('audio/')) {
+    return <audio src={attachment.url} controls preload="none" className="mt-3 max-w-full" />;
+  }
+  return (
+    <a href={attachment.url} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-edge-subtle px-3 py-2 text-sm text-accent hover:bg-surface-hover">
+      <span className="min-w-0 truncate">{attachment.fileName}</span>
+      <span className="shrink-0 text-xs text-fg-subtle">{formatBytes(attachment.size)}</span>
+    </a>
+  );
 }
 
 function formatBytes(n: number): string {
@@ -303,6 +365,10 @@ const PREVIEW_LABELS_ZH = {
   tooLarge: '文件过大，无法在线预览，请下载查看。',
   sharedAt: '分享于',
   sharedVia: '通过 xopc 分享',
+  you: '你',
+  assistant: '助手',
+  toolCompleted: '已完成',
+  toolFailed: '失败',
   remoteImageBlocked: '远程图片（点击打开）',
 } as const;
 
@@ -318,5 +384,9 @@ const PREVIEW_LABELS_EN = {
   tooLarge: 'This file is too large to preview here. Please download it instead.',
   sharedAt: 'Shared',
   sharedVia: 'Shared via xopc',
+  you: 'You',
+  assistant: 'Assistant',
+  toolCompleted: 'completed',
+  toolFailed: 'failed',
   remoteImageBlocked: 'Remote image (open manually)',
 } as const;
