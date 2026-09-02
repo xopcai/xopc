@@ -13,6 +13,31 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createGatewayRouteLogger('Media');
 
+type ByteRange = { start: number; end: number };
+
+function parseByteRange(header: string | undefined, size: number): ByteRange | null | 'invalid' {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(header.trim());
+  if (!match || (!match[1] && !match[2]) || size <= 0) return 'invalid';
+
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return 'invalid';
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
+  if (
+    !Number.isSafeInteger(start)
+    || !Number.isSafeInteger(requestedEnd)
+    || start < 0
+    || start >= size
+    || requestedEnd < start
+  ) return 'invalid';
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
 export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const tasks = new TaskRepository();
 
@@ -75,10 +100,36 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
       }
       const { buffer, path } = await readMediaReference(parsed.uri);
       const contentType = mimeTypeFromMediaPath(path);
+      const range = parseByteRange(c.req.header('Range'), buffer.byteLength);
+      const commonHeaders = {
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'private, max-age=3600',
+        'Content-Type': contentType,
+      };
+      if (range === 'invalid') {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            ...commonHeaders,
+            'Content-Range': `bytes */${buffer.byteLength}`,
+          },
+        });
+      }
+      if (range) {
+        const body = buffer.subarray(range.start, range.end + 1);
+        return new Response(body, {
+          status: 206,
+          headers: {
+            ...commonHeaders,
+            'Content-Length': String(body.byteLength),
+            'Content-Range': `bytes ${range.start}-${range.end}/${buffer.byteLength}`,
+          },
+        });
+      }
       return new Response(buffer, {
         headers: {
-          'Content-Type': contentType,
-          'Cache-Control': 'private, max-age=3600',
+          ...commonHeaders,
+          'Content-Length': String(buffer.byteLength),
         },
       });
     } catch (err) {
