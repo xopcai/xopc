@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
 const ticketRequestSchema = z.strictObject({
   clientId: z.string().min(1).max(160),
@@ -16,9 +17,16 @@ export function registerRealtimeRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid realtime ticket request' } }, 400);
     }
     try {
+      const principal = getGatewayPrincipal(c);
       return c.json({ ok: true, payload: deps.service.realtime.tickets.issue(
         parsed.data.clientId,
         parsed.data.clientKind,
+        {
+          principalId: principal.principalId,
+          ...(principal.deviceId ? { deviceId: principal.deviceId } : {}),
+          ...(principal.accessSessionId ? { accessSessionId: principal.accessSessionId } : {}),
+          scopes: principal.scopes,
+        },
       ) });
     } catch (error) {
       return c.json({

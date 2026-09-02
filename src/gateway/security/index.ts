@@ -6,17 +6,19 @@ export {
 export { checkBrowserOrigin } from './origin-check.js';
 export { computeInlineScriptHashes, buildGatewayConsoleCspHeader } from './csp.js';
 export {
-  ADMIN_SCOPE,
-  READ_SCOPE,
-  WRITE_SCOPE,
-  KNOWN_OPERATOR_SCOPES,
-  DEFAULT_OPERATOR_SCOPES,
-  isOperatorScope,
-  authorizeRouteScope,
-  authorizeScope,
-  parseScopesHeader,
-  type OperatorScope,
-} from './operator-scopes.js';
+  GATEWAY_SCOPES,
+  DEFAULT_MOBILE_SCOPES,
+  hasGatewayScope,
+  isGatewayScope,
+  parseGatewayScopes,
+  requiredGatewayScope,
+  type GatewayScope,
+} from './gateway-scopes.js';
+export {
+  getGatewayPrincipal,
+  setGatewayPrincipal,
+  type GatewayPrincipal,
+} from './gateway-principal.js';
 export {
   DEFAULT_GATEWAY_HTTP_TOOL_DENY,
   isDangerousHttpTool,

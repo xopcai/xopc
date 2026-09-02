@@ -1,432 +1,110 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useCameraPermissions } from 'expo-camera';
-import { useFocusEffect } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
-import { Alert, StyleSheet, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { Button, HelperText, Text, TextInput } from 'react-native-paper';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Button, RadioButton, Text, TextInput } from 'react-native-paper';
 
-import { isGatewayConnectivityError } from '@/api/gateway-error';
-import { AppToast } from '@/components/AppToast';
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
-import { type GatewayProfileForm, gatewayProfileSchema } from '@/config/schema';
-import { TOAST_DURATION_LONG, TOAST_DURATION_SHORT } from '@/constants/toast';
 import { useSettingsColors } from '@/features/settings/settings-ui';
 import { useMessages } from '@/i18n/messages';
-import { useGatewayConfigured } from '@/query/sessions';
-import { DEFAULT_GATEWAY_BASE_URL, useGatewayStore } from '@/stores/gateway-store';
-import { gatewayProfileNameFromUrl } from '@/stores/gateway-types';
+import { useGatewayStore } from '@/stores/gateway-store';
 
-import { syncGatewayUrlsFromTunnelQr } from './apply-tunnel-qr-from-api';
-import { gatewayConnectivityErrorMessage } from './gateway-connectivity-error-copy';
-import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
-import { preflightGatewayCredentials } from './preflight-credentials';
-import { saveGatewayProfile } from './save-gateway-profile';
-import {
-  gatewayUrlValidationMessage,
-  zodGatewayBaseUrlErrorMessage,
-} from './gateway-url-messages';
-import { assertNotLoopbackGatewayUrl } from './validate-gateway-url';
-import {
-  GatewayQrScannerModal,
-  requestGatewayQrCameraAccess,
-} from './GatewayQrScannerModal';
-import { GatewayTokenInput } from './GatewayTokenInput';
-import { resolveGatewayCredentialsFromQr } from './pair-gateway';
+import { GatewayQrScannerModal, requestGatewayQrCameraAccess } from './GatewayQrScannerModal';
+import { pairWithGateway } from './pair-gateway';
 import type { ParsedGatewayQr } from './parse-gateway-qr';
-
-function normalizeBaseUrl(raw: string): string {
-  return raw.trim().replace(/\/+$/, '');
-}
 
 export function GatewayEditScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
-
   const m = useMessages();
   const s = m.settings;
-  const g = m.gateway;
-  const l = m.gatewayConnect;
+  const copy = m.gatewayConnect;
   const colors = useSettingsColors();
-
-  const profiles = useGatewayStore((st) => st.profiles);
-  const activeGatewayId = useGatewayStore((st) => st.activeGatewayId);
-  const removeProfile = useGatewayStore((st) => st.removeProfile);
-  const configured = useGatewayConfigured();
-
-  const existingProfile = useMemo(
-    () => (isNew ? null : profiles.find((p) => p.id === id) ?? null),
-    [id, isNew, profiles],
-  );
-
-  const [pendingLanUrl, setPendingLanUrl] = useState<string | null>(existingProfile?.lanUrl ?? null);
-  const [testing, setTesting] = useState(false);
-  const [testMessage, setTestMessage] = useState<string | null>(null);
-  const [testOk, setTestOk] = useState<boolean | null>(null);
+  const profile = useGatewayStore((state) => state.profiles.find((item) => item.gatewayId === id) ?? null);
+  const renameProfile = useGatewayStore((state) => state.renameProfile);
+  const removeProfile = useGatewayStore((state) => state.removeProfile);
+  const selectRoute = useGatewayStore((state) => state.selectRoute);
+  const [name, setName] = useState(profile?.name ?? '');
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scanNotice, setScanNotice] = useState<string | null>(null);
-  const [tokenNotice, setTokenNotice] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [camPermission, requestCamPermission] = useCameraPermissions();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
-  const {
-    control,
-    handleSubmit,
-    setValue,
-    reset,
-    watch,
-    formState: { errors },
-  } = useForm<GatewayProfileForm>({
-    resolver: zodResolver(gatewayProfileSchema),
-    defaultValues: {
-      name: existingProfile?.name ?? '',
-      baseUrl: existingProfile?.baseUrl || DEFAULT_GATEWAY_BASE_URL,
-      token: existingProfile?.token ?? '',
-    },
-  });
+  useEffect(() => setName(profile?.name ?? ''), [profile?.name]);
   useEffect(() => {
-    if (isNew) return;
-    if (!existingProfile) {
-      router.replace('/settings/gateway');
-    }
-  }, [existingProfile, isNew, router]);
-
-  useEffect(() => {
-    reset({
-      name: existingProfile?.name ?? '',
-      baseUrl: existingProfile?.baseUrl || DEFAULT_GATEWAY_BASE_URL,
-      token: existingProfile?.token ?? '',
-    });
-    setPendingLanUrl(existingProfile?.lanUrl ?? null);
-  }, [existingProfile, reset]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!configured || isNew) return;
-      const tunnel = useGatewayStore.getState().baseUrl.trim();
-      if (tunnel && existingProfile?.id === activeGatewayId) {
-        void syncGatewayUrlsFromTunnelQr();
-      }
-    }, [activeGatewayId, configured, existingProfile?.id, isNew]),
-  );
-
-  const applyParsedQr = useCallback(
-    (parsed: ParsedGatewayQr) => {
-      void (async () => {
-        if (parsed.pairingSecret && parsed.baseUrl) {
-          try {
-            const resolved = await resolveGatewayCredentialsFromQr(parsed);
-            if (!resolved) return;
-            setValue('baseUrl', resolved.baseUrl, { shouldValidate: true });
-            setValue('token', resolved.token);
-            setValue('name', gatewayProfileNameFromUrl(resolved.baseUrl));
-            setPendingLanUrl(resolved.lanUrl);
-            setScanNotice(g.qrApplied);
-            setTestMessage(null);
-            setTestOk(null);
-          } catch (err) {
-            setScanNotice(err instanceof Error ? err.message : String(err));
-          }
-          return;
-        }
-
-        setScanNotice('Scan a pairing QR with base URL and pairing secret (ps).');
-      })();
-    },
-    [g.qrApplied, setValue],
-  );
+    if (!isNew && !profile) router.replace('/settings/gateway');
+  }, [isNew, profile, router]);
 
   const openScanner = useCallback(async () => {
-    const ok = await requestGatewayQrCameraAccess(
-      camPermission,
-      requestCamPermission,
-      () => setScanNotice(l.cameraDenied),
+    const granted = await requestGatewayQrCameraAccess(
+      cameraPermission,
+      requestCameraPermission,
+      () => setError(copy.cameraDenied),
     );
-    if (ok) setScannerOpen(true);
-  }, [camPermission, l.cameraDenied, requestCamPermission]);
+    if (granted) setScannerOpen(true);
+  }, [cameraPermission, copy.cameraDenied, requestCameraPermission]);
 
-  const watchedBaseUrl = watch('baseUrl');
-  const watchedToken = watch('token');
-
-  const handleTestConnection = useCallback(async () => {
-    setTesting(true);
-    setTestMessage(null);
-    setTestOk(null);
-    try {
-      const formBaseUrl = normalizeBaseUrl(watchedBaseUrl ?? '');
-      const formToken = watchedToken ?? '';
-      if (!formBaseUrl) return;
-
-      const blocked = assertNotLoopbackGatewayUrl(formBaseUrl);
-      if (blocked) {
-        setTestOk(false);
-        setTestMessage(
-          gatewayUrlValidationMessage(blocked.code, {
-            invalidUrl: s.baseUrlInvalid,
-            loopbackUrl: g.loopbackUrl,
-            unreachableUrl: g.unreachableUrl,
-          }),
-        );
-        return;
-      }
-
-      const result = await preflightGatewayCredentials({
-        baseUrl: formBaseUrl,
-        lanUrl: pendingLanUrl,
-        token: formToken,
-      });
-      if (!result.ok) {
-        setTestOk(false);
-        setTestMessage(gatewayConnectivityErrorMessage(result.error, l));
-        return;
-      }
-      setTestOk(true);
-      setTestMessage(g.testOk);
-    } catch {
-      setTestOk(false);
-      setTestMessage(g.testFailed);
-    } finally {
-      setTesting(false);
-    }
-  }, [g.loopbackUrl, g.testFailed, g.testOk, g.unreachableUrl, l, pendingLanUrl, s.baseUrlInvalid, watchedBaseUrl, watchedToken]);
-
-  const onSubmit = async (data: GatewayProfileForm) => {
-    const nextBaseUrl = normalizeBaseUrl(data.baseUrl);
-    const prevBaseUrl = existingProfile ? normalizeBaseUrl(existingProfile.baseUrl) : '';
-    const baseUrlChanged = !isNew && prevBaseUrl !== nextBaseUrl;
-
-    const blocked = assertNotLoopbackGatewayUrl(data.baseUrl);
-    if (blocked) {
-      Alert.alert(
-        s.editGateway,
-        gatewayUrlValidationMessage(blocked.code, {
-          invalidUrl: s.baseUrlInvalid,
-          loopbackUrl: g.loopbackUrl,
-          unreachableUrl: g.unreachableUrl,
-        }),
-      );
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await saveGatewayProfile({
-        profileId: existingProfile?.id,
-        name: data.name,
-        baseUrl: nextBaseUrl,
-        lanUrl: pendingLanUrl,
-        token: data.token,
-      });
-
-      if (isNew || baseUrlChanged) {
-        await navigateHomeAfterGatewayConnect(router.replace);
-      } else {
-        router.back();
-      }
-    } catch (error) {
-      Alert.alert(
-        s.editGateway,
-        isGatewayConnectivityError(error)
-          ? gatewayConnectivityErrorMessage(error, l)
-          : error instanceof Error
-            ? error.message
-            : g.testFailed,
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+  const connect = useCallback((pairing: ParsedGatewayQr) => {
+    setBusy(true);
+    setError('');
+    void pairWithGateway(pairing)
+      .then(() => router.replace('/'))
+      .catch((cause) => setError(cause instanceof Error ? cause.message : copy.connectFailed))
+      .finally(() => setBusy(false));
+  }, [copy.connectFailed, router]);
 
   const confirmDelete = useCallback(() => {
-    if (!existingProfile) return;
+    if (!profile) return;
     Alert.alert(s.deleteGateway, s.deleteGatewayConfirm, [
       { text: m.common.cancel, style: 'cancel' },
       {
         text: s.deleteGateway,
         style: 'destructive',
         onPress: () => {
-          const wasActive = existingProfile.id === activeGatewayId;
-          removeProfile(existingProfile.id);
-          if (wasActive && useGatewayStore.getState().profiles.length === 0) {
-            router.replace('/');
-          } else {
-            router.replace('/settings/gateway');
-          }
+          removeProfile(profile.gatewayId);
+          router.replace('/settings/gateway');
         },
       },
     ]);
-  }, [
-    activeGatewayId,
-    existingProfile,
-    m.common.cancel,
-    removeProfile,
-    router,
-    s.deleteGateway,
-    s.deleteGatewayConfirm,
-  ]);
-
-  if (!isNew && !existingProfile) {
-    return null;
-  }
+  }, [m.common.cancel, profile, removeProfile, router, s.deleteGateway, s.deleteGatewayConfirm]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
       <NativeScreenHeader title={isNew ? s.newGateway : s.editGateway} onBack={() => router.back()} />
-      <KeyboardAwareScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        bottomOffset={16}
-      >
-        <Controller
-          control={control}
-          name="name"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              label={s.gatewayName}
-              placeholder={s.gatewayNamePlaceholder}
-              value={value}
-              onBlur={onBlur}
-              onChangeText={onChange}
-              mode="outlined"
-            />
-          )}
-        />
-
-        <Controller
-          control={control}
-          name="baseUrl"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              label={s.baseUrl}
-              value={value}
-              placeholder={l.baseUrlPlaceholder}
-              onBlur={onBlur}
-              onChangeText={(text) => {
-                onChange(text);
-                setPendingLanUrl(null);
-                setTestMessage(null);
-                setTestOk(null);
-              }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              mode="outlined"
-              error={!!errors.baseUrl}
-              style={styles.fieldGap}
-            />
-          )}
-        />
-        <HelperText type="error" visible={!!errors.baseUrl}>
-          {zodGatewayBaseUrlErrorMessage(errors.baseUrl?.message, {
-            invalidUrl: s.baseUrlInvalid,
-            loopbackUrl: g.loopbackUrl,
-            unreachableUrl: g.unreachableUrl,
-          })}
-        </HelperText>
-
-        <Controller
-          control={control}
-          name="token"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <GatewayTokenInput
-              label={s.token}
-              value={value}
-              onBlur={onBlur}
-              onChangeText={onChange}
-              mode="outlined"
-              style={styles.fieldGap}
-              copyAccessibilityLabel={l.copyToken}
-              showAccessibilityLabel={l.showToken}
-              hideAccessibilityLabel={l.hideToken}
-              onCopied={() => setTokenNotice(l.tokenCopied)}
-              onCopyFailed={() => setTokenNotice(m.chat.messageCopyFailed)}
-            />
-          )}
-        />
-
-        <View style={styles.actionRow}>
-          <Button mode="outlined" onPress={() => void openScanner()} icon="barcode-scan">
-            {l.scanQr}
-          </Button>
-          <Button mode="outlined" loading={testing} disabled={testing} onPress={() => void handleTestConnection()}>
-            {testing ? g.testingConnection : g.testConnection}
-          </Button>
-        </View>
-        {testMessage ? (
-          <HelperText type={testOk ? 'info' : 'error'} visible>
-            {testMessage}
-          </HelperText>
-        ) : null}
-
-        <View style={styles.saveRow}>
-          <Button
-            mode="contained"
-            loading={saving}
-            disabled={saving}
-            onPress={handleSubmit((d) => void onSubmit(d))}
-          >
-            {s.save}
-          </Button>
-          <Text variant="bodySmall" style={[styles.applyHint, { color: colors.textMuted }]}>
-            {g.applyImmediatelyHint}
-          </Text>
-        </View>
-
-        {!isNew ? (
-          <View style={styles.deleteRow}>
-            <Button mode="outlined" textColor={colors.error} onPress={confirmDelete}>
-              {s.deleteGateway}
+      <ScrollView contentContainerStyle={styles.content}>
+        {isNew ? (
+          <>
+            <Text variant="bodyMedium" style={{ color: colors.textMuted }}>{copy.subline}</Text>
+            <Button mode="contained" icon="qrcode-scan" loading={busy} disabled={busy} onPress={() => void openScanner()}>
+              {copy.scanQr}
             </Button>
-          </View>
+          </>
+        ) : profile ? (
+          <>
+            <TextInput label={s.gatewayName} value={name} onChangeText={setName} mode="outlined" />
+            <Button mode="contained" disabled={!name.trim()} onPress={() => renameProfile(profile.gatewayId, name)}>
+              {s.save}
+            </Button>
+            <Text variant="titleSmall">{s.secureRoutes}</Text>
+            <RadioButton.Group value={profile.activeRouteId} onValueChange={(routeId) => selectRoute(profile.gatewayId, routeId)}>
+              {profile.routes.map((route) => (
+                <RadioButton.Item key={route.id} value={route.id} label={`${route.kind} · ${route.url}`} />
+              ))}
+            </RadioButton.Group>
+            <Button mode="outlined" textColor={colors.error} onPress={confirmDelete}>{s.deleteGateway}</Button>
+          </>
         ) : null}
-      </KeyboardAwareScrollView>
-
+        {error ? <Text style={{ color: colors.error }}>{error}</Text> : null}
+      </ScrollView>
       <GatewayQrScannerModal
         visible={scannerOpen}
         onRequestClose={() => setScannerOpen(false)}
-        onScanned={applyParsedQr}
-        onCameraDenied={() => setScanNotice(l.cameraDenied)}
+        onScanned={connect}
+        onCameraDenied={() => setError(copy.cameraDenied)}
       />
-
-      <AppToast visible={Boolean(scanNotice)} onDismiss={() => setScanNotice(null)} duration={TOAST_DURATION_LONG}>
-        {scanNotice}
-      </AppToast>
-      <AppToast visible={Boolean(tokenNotice)} onDismiss={() => setTokenNotice(null)} duration={TOAST_DURATION_SHORT}>
-        {tokenNotice}
-      </AppToast>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  fieldGap: {
-    marginTop: 8,
-  },
-  actionRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  saveRow: {
-    marginTop: 24,
-    gap: 8,
-  },
-  applyHint: {
-    lineHeight: 18,
-  },
-  deleteRow: {
-    marginTop: 24,
-    alignItems: 'flex-start',
-  },
-});
+const styles = StyleSheet.create({ content: { padding: 20, gap: 16 } });

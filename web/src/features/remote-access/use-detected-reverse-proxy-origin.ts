@@ -18,8 +18,8 @@ function isPrivateIpV4(host: string): boolean {
  *
  * If the user is currently accessing the gateway console through a reverse
  * proxy (e.g. https://gateway.example.com), the origin itself is a strong
- * signal that the URL is publicly reachable. We use it to pre-fill the QR
- * pairing form so the user can scan immediately, with an opt-in to persist
+ * signal that the URL is publicly reachable. We use it to pre-fill the
+ * reverse-proxy form, with an opt-in to persist
  * the value as `gateway.publicUrl`.
  *
  * Returns null for cases that are NOT a reverse-proxy origin:

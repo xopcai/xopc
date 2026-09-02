@@ -4,14 +4,11 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Switch } from 'react-native-paper';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
-import {
-  connectionKindLabel,
-  useGatewayConnectionView,
-} from '@/features/gateway/use-gateway-connection-view';
 import { useMessages } from '@/i18n/messages';
 import { dismissOrHome, useDismissOnHardwareBack } from '@/lib/navigation';
 import { useGatewayConfigured } from '@/query/sessions';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { gatewayProfileHost } from '@/stores/gateway-types';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import {
   disableMobileNotifications,
@@ -37,28 +34,17 @@ export function SettingsScreen() {
   const [notificationsUpdating, setNotificationsUpdating] = useState(false);
 
   const configured = useGatewayConfigured();
-  const connectionView = useGatewayConnectionView();
   const profiles = useGatewayStore((st) => st.profiles);
   const activeProfile = useGatewayStore((st) =>
-    st.activeGatewayId ? st.profiles.find((p) => p.id === st.activeGatewayId) : null,
+    st.activeGatewayId ? st.profiles.find((p) => p.gatewayId === st.activeGatewayId) : null,
   );
-  const mGateway = m.gateway;
   const gatewayValue = useMemo(() => {
-    if (!configured || connectionView.connectionKind === 'unconfigured') {
-      return s.gatewayNotConfigured;
-    }
-    const host = connectionView.activeHost || connectionView.tunnelHost;
-    const kind = connectionKindLabel(connectionView.connectionKind, mGateway);
-    const hostPart = host ? `${host} · ${kind}` : kind;
-    if (profiles.length > 1 && activeProfile?.name) {
-      return `${activeProfile.name} · ${hostPart}`;
-    }
-    return hostPart;
+    if (!configured || !activeProfile) return s.gatewayNotConfigured;
+    const host = gatewayProfileHost(activeProfile);
+    return profiles.length > 1 ? `${activeProfile.name} · ${host}` : host;
   }, [
-    activeProfile?.name,
+    activeProfile,
     configured,
-    connectionView,
-    mGateway,
     profiles.length,
     s.gatewayNotConfigured,
   ]);

@@ -4,6 +4,13 @@
     "pageSubtitle": "Connect to this gateway from other devices. Pick one method — only one exposure mode should be active at a time.",
     "docsLink": "Read the remote access guide",
     "tabsAria": "Remote access methods",
+    "mobilePairingFlow": {
+      "title": "Step 1: Create a secure connection",
+      "hint": "Finish setting up this route and confirm it is active, then continue adding your phone.",
+      "ready": "The secure connection is ready. Continue to create the pairing QR code.",
+      "waiting": "Waiting for secure connection",
+      "continue": "Continue adding phone"
+    },
     "tabs": {
       "guide": "Overview",
       "tailscale": "Tailscale",
@@ -18,7 +25,7 @@
       "public": "Create a Tunnel Registration Key in the Console and save it here, then start the tunnel for a public URL and pair your mobile app.",
       "reverse-proxy": "Front the gateway with your own HTTPS reverse proxy (Caddy / nginx / Cloudflare Tunnel) at a custom domain, then scan to pair your mobile app.",
       "ssh": "CLI SSH port forwarding when VPN or a public tunnel are unavailable.",
-      "lan": "Reach the gateway on the same Wi‑Fi or LAN via its bind address, then scan to pair your mobile app."
+      "lan": "Reach the web console on the same Wi-Fi or LAN via its bind address. The mobile app still requires HTTPS."
     },
     "guide": {
       "pickMethod": "Choose a connection method",
@@ -54,11 +61,7 @@
       "title": "Same network (LAN)",
       "subtitle": "Reach the gateway from phones or laptops on the same Wi‑Fi without exposing it to the internet.",
       "body": "Set the gateway bind address to your LAN IP (or 0.0.0.0) and connect using http://<host>:<port>. Keep firewall rules in mind.",
-      "link": "Open Gateway settings",
-      "pairTitle": "Mobile app pairing",
-      "pairSubtitle": "On the same Wi‑Fi, scan to connect your phone. The app exchanges a one-time pairing key for your gateway token.",
-      "pairBlockedNextSteps": "Or use the Public internet tab to pair through a tunnel.",
-      "pairPublicTabLink": "Open Public internet tab"
+      "link": "Open Gateway settings"
     },
     "tailscale": {
       "title": "Tailscale Serve (recommended)",
@@ -103,23 +106,15 @@
       "saving": "Saving…",
       "clear": "Clear configured URL",
       "certWarning": "Mobile clients require a certificate trusted by the system root store (Let's Encrypt / Cloudflare / commercial CA). Self-signed certificates are not supported in v1.",
-      "qrTitle": "Mobile pairing QR",
-      "qrSubtitle": "Scan from the xopc mobile app to pair through your reverse proxy.",
-      "noUrlYet": "Enter your reverse-proxy public URL above to generate the pairing QR.",
-      "mintingSecret": "Minting pairing secret…",
-      "encoding": "Encoding QR…",
-      "refreshQr": "Refresh QR",
-      "copyLink": "Copy deeplink",
-      "copied": "Copied",
       "probeStatus": {
         "ok": "Reachable",
-        "mobileReady": "mobile pairing ready",
+        "gatewayReady": "gateway ready",
         "codeUnknown": "Probe failed",
         "code_TIMEOUT": "Timed out reaching the URL",
         "code_TLS_INVALID": "TLS / certificate error",
         "code_DNS_OR_CONN_REFUSED": "DNS or connection refused",
         "code_NETWORK_ERROR": "Network error",
-        "code_AUTH_BLOCKED": "Reverse proxy returned 401/403 — remove auth in front of /api/tunnel/pair/ping",
+        "code_AUTH_BLOCKED": "Reverse proxy returned 401/403 — keep /api/health publicly reachable",
         "code_HTTP_ERROR": "HTTP error from the URL",
         "code_NOT_XOPC_GATEWAY": "URL did not identify as an xopc gateway",
         "code_invalid_url": "Invalid URL",

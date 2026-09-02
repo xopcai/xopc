@@ -1,6 +1,5 @@
 /**
- * Settings card listing the most recent connection events. Surfaces race
- * tasks, dual-fire winners, apiFetch failures, and realtime state changes so
+ * Settings card listing the most recent API failures and realtime state changes so
  * the user has something concrete to copy when reporting a problem and we
  * have something concrete to read.
  */
@@ -81,12 +80,11 @@ export const ConnectionLogCard = memo(function ConnectionLogCard({
 function formatEventLine(e: ConnectionEvent): string {
   const ts = formatTimestamp(e.at);
   const status = e.ok ? 'ok' : 'fail';
-  const route = e.route ? ` ${e.route}` : '';
   const latency = typeof e.latencyMs === 'number' ? ` ${Math.round(e.latencyMs)}ms` : '';
   const reason = e.reason ? ` reason=${e.reason}` : '';
   const network = e.network ? ` net=${e.network}` : '';
   const message = e.message ? ` "${e.message.replace(/\n/g, ' ')}"` : '';
-  return `[${ts}] ${e.kind}${route} ${status}${latency}${reason}${network}${message}`.trim();
+  return `[${ts}] ${e.kind} ${status}${latency}${reason}${network}${message}`.trim();
 }
 
 function formatTimestamp(ms: number): string {

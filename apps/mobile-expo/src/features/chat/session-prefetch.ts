@@ -32,7 +32,6 @@ async function createServerSession(
   spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
   initialAgentConfig?: SessionInitialAgentConfig,
 ): Promise<string> {
-  await useGatewayStore.getState().refreshActiveBaseUrl();
   return createSession({
     agentId: spec.agentId,
     ...(spec.projectId ? { projectId: spec.projectId } : {}),

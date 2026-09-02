@@ -133,8 +133,7 @@ export async function extendShare(id: string, patch: { extendTtlMs?: number; max
  *  - other → treat as transient; caller decides whether to retry.
  *
  * Accepts an absolute thumbnail URL (as returned by `createAutoShare`).
- * Internally we use bare `fetch` to avoid dual-fire confusion on an
- * already-resolved URL — the gateway store auth-header is added manually.
+ * Uses the already-resolved public share URL and adds device auth when available.
  */
 export async function probeThumbnail(
   thumbnailUrl: string,

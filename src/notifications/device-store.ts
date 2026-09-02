@@ -69,7 +69,7 @@ function deviceFromRow(row: NotificationDeviceRow): NotificationDevice {
 }
 
 export type RegisterNotificationDeviceInput = {
-  id: string;
+  deviceId: string;
   platform: NotificationDevicePlatform;
   pushToken: string;
   permissions: NotificationPermission;
@@ -82,14 +82,14 @@ export function registerNotificationDevice(input: RegisterNotificationDeviceInpu
   const now = Date.now();
   const preferences = input.preferences
     ? normalizePreferences(input.preferences)
-    : getNotificationDevice(input.id)?.preferences ?? normalizePreferences();
+    : getNotificationDevice(input.deviceId)?.preferences ?? normalizePreferences();
   runSqliteWriteTransaction((db) => {
     db.prepare(
-      `DELETE FROM notification_devices
-       WHERE push_provider = 'expo' AND push_token = ? AND device_id <> ?`,
-    ).run(input.pushToken, input.id);
+      `DELETE FROM device_push_endpoints
+       WHERE push_token = ? AND device_id <> ?`,
+    ).run(input.pushToken, input.deviceId);
     db.prepare(
-      `INSERT INTO notification_devices (
+      `INSERT INTO device_push_endpoints (
         device_id, platform, push_token, enabled, permissions, preferences_json,
         locale, app_version, lease_expires_at, last_seen_at, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -105,7 +105,7 @@ export function registerNotificationDevice(input: RegisterNotificationDeviceInpu
         last_seen_at = excluded.last_seen_at,
         updated_at = excluded.updated_at`,
     ).run(
-      input.id,
+      input.deviceId,
       input.platform,
       input.pushToken,
       input.permissions === 'granted' ? 1 : 0,
@@ -119,19 +119,19 @@ export function registerNotificationDevice(input: RegisterNotificationDeviceInpu
       now,
     );
   });
-  return getNotificationDevice(input.id)!;
+  return getNotificationDevice(input.deviceId)!;
 }
 
 export function getNotificationDevice(deviceId: string): NotificationDevice | null {
   const row = getSqliteDatabase()
-    .prepare('SELECT * FROM notification_devices WHERE device_id = ?')
+    .prepare('SELECT * FROM device_push_endpoints WHERE device_id = ?')
     .get(deviceId) as NotificationDeviceRow | undefined;
   return row ? deviceFromRow(row) : null;
 }
 
 export function listDeliverableNotificationDevices(now = Date.now()): NotificationDevice[] {
   return (getSqliteDatabase().prepare(
-    `SELECT * FROM notification_devices
+    `SELECT * FROM device_push_endpoints
      WHERE enabled = 1 AND permissions = 'granted' AND lease_expires_at > ?
      ORDER BY updated_at DESC`,
   ).all(now) as NotificationDeviceRow[]).map(deviceFromRow);
@@ -145,7 +145,7 @@ export function updateNotificationDevicePreferences(
   if (!current) return null;
   const preferences = normalizePreferences({ ...current.preferences, ...patch });
   runSqliteWriteTransaction((db) => {
-    db.prepare('UPDATE notification_devices SET preferences_json = ?, updated_at = ? WHERE device_id = ?')
+    db.prepare('UPDATE device_push_endpoints SET preferences_json = ?, updated_at = ? WHERE device_id = ?')
       .run(JSON.stringify(preferences), Date.now(), deviceId);
   });
   return getNotificationDevice(deviceId);
@@ -153,13 +153,13 @@ export function updateNotificationDevicePreferences(
 
 export function removeNotificationDevice(deviceId: string): boolean {
   return runSqliteWriteTransaction((db) =>
-    db.prepare('DELETE FROM notification_devices WHERE device_id = ?').run(deviceId).changes > 0,
+    db.prepare('DELETE FROM device_push_endpoints WHERE device_id = ?').run(deviceId).changes > 0,
   );
 }
 
 export function disableNotificationDeviceForPushToken(pushToken: string): void {
   runSqliteWriteTransaction((db) => {
-    db.prepare('UPDATE notification_devices SET enabled = 0, updated_at = ? WHERE push_token = ?')
+    db.prepare('UPDATE device_push_endpoints SET enabled = 0, updated_at = ? WHERE push_token = ?')
       .run(Date.now(), pushToken);
   });
 }

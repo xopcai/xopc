@@ -5,7 +5,6 @@ import { WebView, type WebViewNavigation } from 'react-native-webview';
 
 import { t, useMessages } from '../../i18n/messages';
 import { useGatewayStore } from '../../stores/gateway-store';
-import { resolveEffectiveGatewayBaseUrl } from '../../stores/gateway-types';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import {
   buildHtmlWebViewSource,
@@ -29,13 +28,7 @@ export function HtmlPreviewPane({
   const { colors, isDark } = useTheme();
   const m = useMessages();
   const cm = m.chat;
-  const gatewayBaseUrl = useGatewayStore((s) =>
-    resolveEffectiveGatewayBaseUrl({
-      activeBaseUrl: s.activeBaseUrl,
-      baseUrl: s.baseUrl,
-      lanUrl: s.lanUrl,
-    }),
-  );
+  const gatewayBaseUrl = useGatewayStore((s) => s.getActiveRouteUrl());
   const [loading, setLoading] = useState(true);
   const [webError, setWebError] = useState<string | null>(null);
 

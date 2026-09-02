@@ -152,7 +152,6 @@ function createTunnelCommand(ctx: CLIContext): Command {
         'xopc tunnel start --accept-risk',
         'xopc tunnel stop',
         'xopc tunnel status',
-        'xopc tunnel qr',
         'xopc tunnel consent',
         'xopc tunnel prefetch',
         'xopc tunnel secret set',
@@ -241,7 +240,7 @@ function createTunnelCommand(ctx: CLIContext): Command {
 
       console.log('🚀 Starting tunnel...');
       try {
-        const qr = await tunnel.start(port, token);
+        await tunnel.start(port, token);
         setTunnelEnabledInConfig(config, true);
         await saveConfig(config, ctx.configPath);
 
@@ -249,10 +248,6 @@ function createTunnelCommand(ctx: CLIContext): Command {
         console.log('');
         console.log('✅ Tunnel is active');
         if (status.publicUrl) console.log(`   URL: ${status.publicUrl}`);
-        if (qr.lanUrl) console.log(`   LAN: ${qr.lanUrl}`);
-        console.log('');
-        console.log('📱 Mobile connect QR payload:');
-        console.log(qr.qrPayload);
         console.log('');
         console.log(
           `💡 Gateway must be running at ${host}:${port}. Keep frpc alive or use gateway / Web console.`,
@@ -314,21 +309,6 @@ function createTunnelCommand(ctx: CLIContext): Command {
           2,
         ),
       );
-    });
-
-  cmd
-    .command('qr')
-    .description('Print mobile connect QR payload (tunnel must be active)')
-    .action(async () => {
-      configureTunnel(ctx);
-      const config = loadConfig(ctx.configPath);
-      const { port, host } = resolveGatewayPortHost(config);
-      const qr = await getTunnelService().buildQr(port, host);
-      if (!qr.qrPayload) {
-        console.error('No active tunnel. Run: xopc tunnel start');
-        process.exit(1);
-      }
-      console.log(qr.qrPayload);
     });
 
   cmd

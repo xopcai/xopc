@@ -88,6 +88,6 @@ export function buildTunnelConsentRecord(): NonNullable<Config['tunnel']>['conse
 /** Short risk summary for CLI (keep in sync with web i18n). */
 export const TUNNEL_RISK_SUMMARY_LINES = [
   'Starting remote access exposes your gateway on the public internet via frp.xopc.ai.',
-  'Anyone with the public URL or pairing QR may use your gateway Bearer token.',
+  'A public URL exposes the gateway authentication surface to the internet.',
   'Traffic is proxied through third-party infrastructure; use a strong token and stop the tunnel when not needed.',
 ] as const;
