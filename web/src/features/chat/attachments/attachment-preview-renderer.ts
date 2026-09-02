@@ -257,11 +257,15 @@ export async function renderExcelInContainer(
   options?: RenderExcelInContainerOptions,
 ): Promise<{ cleanup: () => void; truncated: boolean }> {
   const XLSX = await import('xlsx');
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  const workbook = XLSX.read(arrayBuffer, {
+    type: 'array',
+    cellDates: true,
+    cellStyles: true,
+  });
 
   container.innerHTML = '';
   const wrapper = document.createElement('div');
-  wrapper.className = 'flex h-full min-h-0 flex-col overflow-auto';
+  wrapper.className = 'flex h-full min-h-0 flex-col overflow-hidden bg-white';
   container.appendChild(wrapper);
 
   const names = workbook.SheetNames ?? [];
@@ -283,7 +287,7 @@ export async function renderExcelInContainer(
   if (names.length > 1) {
     const tabContainer = document.createElement('div');
     tabContainer.className =
-      'sticky top-0 z-10 mb-4 flex gap-2 border-b border-edge bg-surface-panel dark:border-edge';
+      'z-30 flex shrink-0 gap-1 overflow-x-auto border-b border-edge bg-surface-panel px-2 pt-1 dark:border-edge';
 
     const sheetContents: HTMLElement[] = [];
 
@@ -293,12 +297,12 @@ export async function renderExcelInContainer(
       tab.textContent = sheetName;
       tab.className =
         index === 0
-          ? 'border-b-2 border-accent px-4 py-2 text-sm font-medium text-accent'
-          : 'border-b-2 border-transparent px-4 py-2 text-sm font-medium text-fg-muted hover:border-edge hover:text-fg';
+          ? 'shrink-0 border-b-2 border-accent px-3 py-2 text-xs font-medium text-accent'
+          : 'shrink-0 border-b-2 border-transparent px-3 py-2 text-xs font-medium text-fg-muted hover:border-edge hover:text-fg';
 
       const sheetDiv = document.createElement('div');
       sheetDiv.style.display = index === 0 ? 'flex' : 'none';
-      sheetDiv.className = 'min-h-0 flex-1 overflow-auto';
+      sheetDiv.className = 'min-h-0 flex-1 overflow-hidden';
       const built = buildExcelSheetDomWithXlsx(
         XLSX,
         workbook.Sheets[sheetName],
@@ -313,10 +317,10 @@ export async function renderExcelInContainer(
         tabContainer.querySelectorAll('button').forEach((btn, btnIndex) => {
           if (btnIndex === index) {
             btn.className =
-              'border-b-2 border-accent px-4 py-2 text-sm font-medium text-accent';
+              'shrink-0 border-b-2 border-accent px-3 py-2 text-xs font-medium text-accent';
           } else {
             btn.className =
-              'border-b-2 border-transparent px-4 py-2 text-sm font-medium text-fg-muted hover:border-edge hover:text-fg';
+              'shrink-0 border-b-2 border-transparent px-3 py-2 text-xs font-medium text-fg-muted hover:border-edge hover:text-fg';
           }
         });
         sheetContents.forEach((content, contentIndex) => {
@@ -351,13 +355,108 @@ export async function renderExcelInContainer(
   };
 }
 
-function buildExcelSheetDomWithXlsx(
+type ExcelMergeInfo = {
+  colSpan: number;
+  rowSpan: number;
+};
+
+const EXCEL_DEFAULT_COLUMN_WIDTH_PX = 80;
+const EXCEL_ROW_HEADER_WIDTH_PX = 46;
+const EXCEL_MIN_COLUMN_WIDTH_PX = 28;
+const EXCEL_MAX_COLUMN_WIDTH_PX = 480;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function excelColumnWidthPx(col: import('xlsx').ColInfo | undefined): number {
+  if (!col) return EXCEL_DEFAULT_COLUMN_WIDTH_PX;
+  if (typeof col.wpx === 'number' && Number.isFinite(col.wpx)) {
+    return clamp(col.wpx, EXCEL_MIN_COLUMN_WIDTH_PX, EXCEL_MAX_COLUMN_WIDTH_PX);
+  }
+  const characters = col.wch ?? col.width;
+  if (typeof characters === 'number' && Number.isFinite(characters)) {
+    return clamp(Math.round(characters * 7 + 12), EXCEL_MIN_COLUMN_WIDTH_PX, EXCEL_MAX_COLUMN_WIDTH_PX);
+  }
+  return EXCEL_DEFAULT_COLUMN_WIDTH_PX;
+}
+
+function excelRowHeightPx(row: import('xlsx').RowInfo | undefined): number | undefined {
+  if (!row) return undefined;
+  if (typeof row.hpx === 'number' && Number.isFinite(row.hpx)) return clamp(row.hpx, 16, 240);
+  if (typeof row.hpt === 'number' && Number.isFinite(row.hpt)) {
+    return clamp(Math.round(row.hpt * (96 / 72)), 16, 240);
+  }
+  return undefined;
+}
+
+function normalizedFillColor(cell: import('xlsx').CellObject | undefined): string | undefined {
+  const style = cell?.s as { patternType?: string; fgColor?: { rgb?: string } } | undefined;
+  if (!style?.fgColor?.rgb || style.patternType === 'none') return undefined;
+  const rgb = style.fgColor.rgb.replace(/^#/, '').slice(-6);
+  return /^[0-9a-f]{6}$/i.test(rgb) ? `#${rgb}` : undefined;
+}
+
+function readableTextColor(background: string): string {
+  const rgb = background.slice(1).match(/.{2}/g)?.map((channel) => Number.parseInt(channel, 16));
+  if (!rgb || rgb.length !== 3) return '#0f172a';
+  const luminance = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+  return luminance < 132 ? '#ffffff' : '#0f172a';
+}
+
+function cellDisplayText(
+  XLSX: typeof import('xlsx'),
+  cell: import('xlsx').CellObject | undefined,
+): string {
+  if (!cell || cell.t === 'z') return '';
+  if (typeof cell.w === 'string') return cell.w;
+  try {
+    return XLSX.utils.format_cell(cell);
+  } catch {
+    return cell.v == null ? '' : String(cell.v);
+  }
+}
+
+function buildMergeMaps(
+  merges: import('xlsx').Range[],
+  startRow: number,
+  endRow: number,
+  startCol: number,
+  endCol: number,
+): { anchors: Map<string, ExcelMergeInfo>; covered: Set<string> } {
+  const anchors = new Map<string, ExcelMergeInfo>();
+  const covered = new Set<string>();
+
+  for (const merge of merges) {
+    const top = Math.max(startRow, merge.s.r);
+    const bottom = Math.min(endRow, merge.e.r);
+    const left = Math.max(startCol, merge.s.c);
+    const right = Math.min(endCol, merge.e.c);
+    if (top > bottom || left > right) continue;
+
+    const anchorKey = `${top}:${left}`;
+    anchors.set(anchorKey, {
+      rowSpan: bottom - top + 1,
+      colSpan: right - left + 1,
+    });
+    for (let row = top; row <= bottom; row += 1) {
+      for (let col = left; col <= right; col += 1) {
+        if (row !== top || col !== left) covered.add(`${row}:${col}`);
+      }
+    }
+  }
+
+  return { anchors, covered };
+}
+
+export function buildExcelSheetDomWithXlsx(
   XLSX: typeof import('xlsx'),
   worksheet: import('xlsx').WorkSheet | undefined,
   sheetName: string,
   truncationNotice?: string,
 ): { element: HTMLElement; truncated: boolean } {
   const sheetDiv = document.createElement('div');
+  sheetDiv.className = 'min-h-0 flex-1 overflow-auto bg-white';
 
   if (!worksheet) {
     const p = document.createElement('p');
@@ -376,14 +475,12 @@ function buildExcelSheetDomWithXlsx(
   }
 
   try {
-    const rows: string[][] = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1,
-      defval: '',
-    });
-
-    const rawMaxCol = rows.reduce((m, r) => Math.max(m, r.length), 0);
-    const truncated =
-      rows.length > EXCEL_PREVIEW_MAX_ROWS || rawMaxCol > EXCEL_PREVIEW_MAX_COLS;
+    const range = XLSX.utils.decode_range(worksheet['!ref']!);
+    const rowCount = range.e.r - range.s.r + 1;
+    const colCount = range.e.c - range.s.c + 1;
+    const endRow = Math.min(range.e.r, range.s.r + EXCEL_PREVIEW_MAX_ROWS - 1);
+    const endCol = Math.min(range.e.c, range.s.c + EXCEL_PREVIEW_MAX_COLS - 1);
+    const truncated = rowCount > EXCEL_PREVIEW_MAX_ROWS || colCount > EXCEL_PREVIEW_MAX_COLS;
 
     if (truncated && truncationNotice) {
       const note = document.createElement('p');
@@ -392,26 +489,94 @@ function buildExcelSheetDomWithXlsx(
       sheetDiv.appendChild(note);
     }
 
-    const sliced = rows
-      .slice(0, EXCEL_PREVIEW_MAX_ROWS)
-      .map((row) => row.slice(0, EXCEL_PREVIEW_MAX_COLS));
-
     const table = document.createElement('table');
-    table.className = 'w-full border-collapse text-fg';
+    table.className = 'table-fixed border-separate border-spacing-0 bg-white text-slate-900';
+    table.setAttribute('aria-label', sheetName);
 
-    sliced.forEach((row, ri) => {
+    const colGroup = document.createElement('colgroup');
+    const rowHeaderCol = document.createElement('col');
+    rowHeaderCol.style.width = `${EXCEL_ROW_HEADER_WIDTH_PX}px`;
+    colGroup.appendChild(rowHeaderCol);
+    let tableWidth = EXCEL_ROW_HEADER_WIDTH_PX;
+    for (let col = range.s.c; col <= endCol; col += 1) {
+      const width = excelColumnWidthPx(worksheet['!cols']?.[col]);
+      const colElement = document.createElement('col');
+      colElement.style.width = `${width}px`;
+      colGroup.appendChild(colElement);
+      tableWidth += width;
+    }
+    table.style.width = `${tableWidth}px`;
+    table.appendChild(colGroup);
+
+    const thead = document.createElement('thead');
+    const columnHeaderRow = document.createElement('tr');
+    const corner = document.createElement('th');
+    corner.className =
+      'sticky left-0 top-0 z-30 border-b border-r border-slate-300 bg-slate-100 text-[11px] font-medium text-slate-500';
+    corner.setAttribute('aria-hidden', 'true');
+    columnHeaderRow.appendChild(corner);
+    for (let col = range.s.c; col <= endCol; col += 1) {
+      const header = document.createElement('th');
+      header.className =
+        'sticky top-0 z-20 h-7 border-b border-r border-slate-300 bg-slate-100 px-2 text-center text-[11px] font-medium text-slate-600';
+      header.scope = 'col';
+      header.textContent = XLSX.utils.encode_col(col);
+      columnHeaderRow.appendChild(header);
+    }
+    thead.appendChild(columnHeaderRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const { anchors, covered } = buildMergeMaps(
+      worksheet['!merges'] ?? [],
+      range.s.r,
+      endRow,
+      range.s.c,
+      endCol,
+    );
+
+    for (let row = range.s.r; row <= endRow; row += 1) {
       const tr = document.createElement('tr');
-      if (ri % 2 === 1) {
-        tr.className = 'bg-surface-hover/40';
-      }
-      row.forEach((cell) => {
+      const rowHeight = excelRowHeightPx(worksheet['!rows']?.[row]);
+      if (rowHeight) tr.style.height = `${rowHeight}px`;
+
+      const rowHeader = document.createElement('th');
+      rowHeader.className =
+        'sticky left-0 z-10 w-[46px] border-b border-r border-slate-300 bg-slate-100 px-1 text-center text-[11px] font-medium text-slate-500';
+      rowHeader.scope = 'row';
+      rowHeader.textContent = String(row + 1);
+      tr.appendChild(rowHeader);
+
+      for (let col = range.s.c; col <= endCol; col += 1) {
+        const key = `${row}:${col}`;
+        if (covered.has(key)) continue;
+
+        const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: col })] as
+          | import('xlsx').CellObject
+          | undefined;
+        const merge = anchors.get(key);
+        const text = cellDisplayText(XLSX, cell);
+        const fillColor = normalizedFillColor(cell);
         const td = document.createElement('td');
-        td.className = 'border border-edge px-3 py-2 text-left text-sm dark:border-edge';
-        td.textContent = cell === null || cell === undefined ? '' : String(cell);
+        td.className =
+          'overflow-hidden border-b border-r border-slate-200 px-2 py-1 text-xs leading-5';
+        td.colSpan = merge?.colSpan ?? 1;
+        td.rowSpan = merge?.rowSpan ?? 1;
+        td.style.verticalAlign = 'middle';
+        td.style.textAlign = merge ? 'center' : cell?.t === 'n' || cell?.t === 'd' ? 'right' : 'left';
+        if (fillColor) {
+          td.style.backgroundColor = fillColor;
+          td.style.color = readableTextColor(fillColor);
+        }
+        if (text.includes('\n')) td.style.whiteSpace = 'pre-wrap';
+        else td.style.whiteSpace = 'nowrap';
+        if (text) td.title = cell?.f ? `${text}\n=${cell.f}` : text;
+        td.textContent = text;
         tr.appendChild(td);
-      });
-      table.appendChild(tr);
-    });
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
 
     sheetDiv.appendChild(table);
     return { element: sheetDiv, truncated };
