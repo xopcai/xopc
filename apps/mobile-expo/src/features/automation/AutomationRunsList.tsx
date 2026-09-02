@@ -12,6 +12,7 @@ import { queryKeys } from '../../query/keys';
 import { useGatewayConfigured } from '../../query/sessions';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { spacing, typography, useTheme } from '../../theme';
+import { markdownPreviewText } from '../chat/markdown-plain-text';
 
 import {
   automationRunStart,
@@ -92,7 +93,7 @@ export function AutomationRunsList() {
           </View>
           <Icon source="chevron-right" size={20} color={colors.text.secondary} />
         </View>
-        {item.summary ? <Text style={[styles.summary, { color: colors.text.secondary }]} numberOfLines={4}>{item.summary}</Text> : null}
+        {item.summary ? <Text style={[styles.summary, { color: colors.text.secondary }]} numberOfLines={4}>{markdownPreviewText(item.summary)}</Text> : null}
         {item.error ? <Text style={[styles.error, { color: colors.semantic.error }]} numberOfLines={3}>{item.error}</Text> : null}
       </>
     );

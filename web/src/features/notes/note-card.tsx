@@ -13,9 +13,9 @@ export type NoteCardProps = {
   note: NoteIndexEntry;
   selected?: boolean;
   onPress: (id: string) => void;
-  onPin: (id: string, pinned: boolean) => void;
-  onArchive: (id: string) => void;
-  onDelete: (id: string) => void;
+  onPin: (id: string, pinned: boolean) => Promise<void>;
+  onArchive: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   timeLabels: NoteTimeLabels;
   labels: {
     pin: string;
@@ -108,14 +108,18 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
             >
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
-                onSelect={() => onPin(note.id, !note.pinned)}
+                onSelect={() => {
+                  void onPin(note.id, !note.pinned).catch(() => undefined);
+                }}
               >
                 {note.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
                 {note.pinned ? labels.unpin : labels.pin}
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
-                onSelect={() => onArchive(note.id)}
+                onSelect={() => {
+                  void onArchive(note.id).catch(() => undefined);
+                }}
               >
                 <Archive className="size-4" />
                 {labels.archive}
@@ -123,7 +127,9 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
               <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 outline-none hover:bg-surface-hover focus:bg-surface-hover"
-                onSelect={() => onDelete(note.id)}
+                onSelect={() => {
+                  void onDelete(note.id).catch(() => undefined);
+                }}
               >
                 <Trash2 className="size-4" />
                 {labels.delete}

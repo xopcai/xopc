@@ -6,10 +6,11 @@ import { memo, useCallback } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { Button, Dialog, Portal, RadioButton, Text } from 'react-native-paper';
 
-import { useMessages } from '../../i18n/messages';
+import { t, useMessages } from '../../i18n/messages';
 import type { ChatAgentOption } from '../../query/agents';
 import { radii, spacing } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
+import { agentDisplayName } from '../ai/agent-presentation';
 
 type NewSessionSheetProps = {
   visible: boolean;
@@ -58,9 +59,9 @@ export const NewSessionSheet = memo(function NewSessionSheet({
                     <RadioButton.Item
                       key={agent.id}
                       label={
-                        agent.name
-                          ? `${agent.name}${agent.id === defaultAgentId ? ` ${m.newSession.defaultSuffix}` : ''}`
-                          : `${agent.id}${agent.id === defaultAgentId ? ` ${m.newSession.defaultSuffix}` : ''}`
+                        `${agentDisplayName(agent, m.agentsPage)}${
+                          agent.id === defaultAgentId ? ` ${m.newSession.defaultSuffix}` : ''
+                        }`
                       }
                       value={agent.id}
                       style={[
@@ -79,7 +80,13 @@ export const NewSessionSheet = memo(function NewSessionSheet({
             </>
           ) : (
             <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
-              {m.newSession.creatingHint.replace('{{agentName}}', agents[0]?.name ? ` with ${agents[0].name}` : '')}
+              {t(m.newSession.creatingHint, {
+                agentName: agents[0]
+                  ? t(m.newSession.creatingWithAgent, {
+                      agentName: agentDisplayName(agents[0], m.agentsPage),
+                    })
+                  : '',
+              })}
             </Text>
           )}
         </Dialog.Content>

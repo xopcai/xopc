@@ -114,7 +114,7 @@ function isWebSession(session: SessionMetadata): boolean {
 function rowShellClass(isActive: boolean): string {
   return cn(
     // `px-4` list + `pl-3` row = same inset as nav `px-4` + item `px-3` → aligns with menu icons.
-    'group flex w-full min-w-0 items-center gap-0.5 rounded-lg pl-1.5 pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
+    'group relative flex w-full min-w-0 items-center rounded-lg pl-1.5 pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
     'focus-within:outline-none',
     isActive
       ? 'bg-surface-active font-medium text-fg'
@@ -286,89 +286,95 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           />
         ) : null}
       </Link>
-      <button
-        type="button"
+      <div
         className={cn(
-          'relative z-10 flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-opacity',
-          'opacity-0 group-hover:opacity-100 focus:opacity-100',
-          'hover:bg-surface-hover hover:text-fg',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-          'disabled:cursor-wait',
+          'pointer-events-none absolute inset-y-0 right-1 z-10 flex items-center opacity-0 transition-opacity',
+          'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          isActive ? 'bg-surface-active' : 'bg-surface-hover',
+          menuOpen && 'pointer-events-auto opacity-100',
         )}
-        aria-label={isPinned ? sess.unpin : sess.pin}
-        title={isPinned ? sess.unpin : sess.pin}
-        aria-pressed={isPinned}
-        disabled={pinBusy}
-        onClick={() => void handlePinToggle()}
       >
-        {pinBusy ? (
-          <Loader2 className="size-4 animate-spin" strokeWidth={1.75} aria-hidden />
-        ) : isPinned ? (
-          <PinOff className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
-        ) : (
-          <Pin className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
-        )}
-      </button>
-      <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
-        <Popover.Trigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'relative z-10 flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-opacity',
-              'opacity-0 group-hover:opacity-100 focus:opacity-100',
-              menuOpen && 'opacity-100',
-              'hover:bg-surface-hover hover:text-fg',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-            )}
-            aria-label={sb.taskSessionMenuAria}
-            title={sb.taskSessionMenuAria}
-            aria-expanded={menuOpen}
-          >
-            <MoreHorizontal className="size-4" strokeWidth={2} aria-hidden />
-          </button>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            className="z-50 w-[9.25rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
-            side="bottom"
-            align="end"
-            sideOffset={4}
-            collisionPadding={12}
-            onCloseAutoFocus={(e) => e.preventDefault()}
-          >
+        <button
+          type="button"
+          className={cn(
+            'flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted',
+            'hover:bg-surface-hover hover:text-fg',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+            'disabled:cursor-wait',
+          )}
+          aria-label={isPinned ? sess.unpin : sess.pin}
+          title={isPinned ? sess.unpin : sess.pin}
+          aria-pressed={isPinned}
+          disabled={pinBusy}
+          onClick={() => void handlePinToggle()}
+        >
+          {pinBusy ? (
+            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} aria-hidden />
+          ) : isPinned ? (
+            <PinOff className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
+          ) : (
+            <Pin className="size-4 rotate-45" strokeWidth={1.75} aria-hidden />
+          )}
+        </button>
+        <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+          <Popover.Trigger asChild>
             <button
               type="button"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
-              onClick={() => {
-                setMenuOpen(false);
-                onRequestRename(session.key);
-              }}
+              className={cn(
+                'flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted',
+                'hover:bg-surface-hover hover:text-fg',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+              )}
+              aria-label={sb.taskSessionMenuAria}
+              title={sb.taskSessionMenuAria}
+              aria-expanded={menuOpen}
             >
-              <Pencil className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              {sb.taskRename}
+              <MoreHorizontal className="size-4" strokeWidth={2} aria-hidden />
             </button>
-            <button
-              type="button"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
-              onClick={() => void copyChatId()}
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              className="z-50 w-[9.25rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
+              side="bottom"
+              align="end"
+              sideOffset={4}
+              collisionPadding={12}
+              onCloseAutoFocus={(e) => e.preventDefault()}
             >
-              <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              {sb.taskCopyChatId}
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
-              onClick={() => {
-                setMenuOpen(false);
-                onRequestDelete(session.key);
-              }}
-            >
-              <Trash2 className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              {sb.taskDeleteTask}
-            </button>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+              <button
+                type="button"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRequestRename(session.key);
+                }}
+              >
+                <Pencil className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                {sb.taskRename}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+                onClick={() => void copyChatId()}
+              >
+                <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                {sb.taskCopyChatId}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRequestDelete(session.key);
+                }}
+              >
+                <Trash2 className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                {sb.taskDeleteTask}
+              </button>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
     </div>
   );
 });
