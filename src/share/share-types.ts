@@ -1,5 +1,5 @@
 export type WorkspaceShareKind = 'file' | 'directory';
-export type ShareKind = WorkspaceShareKind | 'note';
+export type ShareKind = WorkspaceShareKind | 'note' | 'session';
 
 export interface ShareDirectoryMeta {
   /** 'browse' shows a file tree; 'zip-only' hides structure and only offers ZIP. */
@@ -88,8 +88,24 @@ export interface NoteShareRecord extends ShareRecordBase {
   directory?: undefined;
 }
 
+export interface SessionShareRecord extends ShareRecordBase {
+  kind: 'session';
+  /** Sessions are state-owned objects, not workspace paths. */
+  workspaceRelativePath: '';
+  sourceSessionId: string;
+  cutoffSeq: number;
+  artifactRelativePath: string;
+  messageCount: number;
+  attachmentCount: number;
+  includeToolActivities: boolean;
+  snapshotRevision: number;
+  /** Private HMAC key for short-lived public asset tickets. */
+  assetTicketSecret: string;
+  directory?: undefined;
+}
+
 export type WorkspaceShareRecord = FileShareRecord | DirectoryShareRecord;
-export type ShareRecord = WorkspaceShareRecord | NoteShareRecord;
+export type ShareRecord = WorkspaceShareRecord | NoteShareRecord | SessionShareRecord;
 
 export interface CreateShareParams {
   /** Workspace-relative file path. */

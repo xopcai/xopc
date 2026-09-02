@@ -17,11 +17,13 @@ import {
   renderShareLandingPage,
   renderShareExpiredPage,
   renderFolderLandingPage,
-  renderNoteShareLandingPage,
+  renderSnapshotShareLandingPage,
 } from '../../../share/share-landing.js';
 import type { ShareExpiredReason } from '../../../share/share-landing.js';
 import type { DirectoryShareRecord, ShareConfig, ShareRecord, WorkspaceShareRecord } from '../../../share/share-types.js';
 import { NoteShareService } from '../../../share/note-share-service.js';
+import { SessionShareService, SessionShareSnapshotConflictError } from '../../../share/session-share-service.js';
+import { loadCompactionSourceSnapshot } from '../../../storage/sqlite/index.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
 import { createZipStream, planDirectoryFiles } from '../../../share/share-zip.js';
@@ -140,6 +142,7 @@ function rfc5987ContentDisposition(disposition: 'inline' | 'attachment', fileNam
 export function registerSharePublicRoutes(app: Hono, service: GatewayService): void {
   const store = getShareStore(resolveShareConfig(service));
   const noteShares = new NoteShareService(store, service.notesServiceInstance);
+  const sessionShares = createSessionShareService(service, store);
 
   /** Landing page — does NOT consume downloadCount. */
   app.get('/s/:token', async (c) => {
@@ -168,12 +171,15 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       return renderDirectoryLanding(c, store, service, record, token);
     }
 
-    if (record.kind === 'note') {
+    if (record.kind === 'note' || record.kind === 'session') {
       const previewUrl = `/#/share/${encodeURIComponent(token)}`;
       c.header('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
       c.header('X-Frame-Options', 'DENY');
       c.header('Referrer-Policy', 'no-referrer');
-      return c.html(renderNoteShareLandingPage(record, previewUrl, { og: buildLandingOg(service, record) }));
+      return c.html(renderSnapshotShareLandingPage(record, previewUrl, {
+        label: record.kind === 'note' ? 'Note' : 'conversation',
+        og: buildLandingOg(service, record),
+      }));
     }
 
     // File: support direct download / inline preview shortcuts
@@ -230,7 +236,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
     return handleFileDownload(c, store, record, clientIp);
   });
 
-  /** Claim one Note view. POST prevents social unfurlers from consuming maxViews. */
+  /** Claim one state-owned snapshot view. POST prevents social unfurlers from consuming maxViews. */
   app.post('/s/:token/view', async (c) => {
     const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
     const rateResult = consumeSharePublicLimit(clientIp);
@@ -240,10 +246,40 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
     }
     const token = c.req.param('token');
     const record = store.getByToken(token);
-    if (!record || record.kind !== 'note') return c.json({ ok: false, error: { message: 'not_found' } }, 404);
+    if (!record || (record.kind !== 'note' && record.kind !== 'session')) {
+      return c.json({ ok: false, error: { message: 'not_found' } }, 404);
+    }
     const validation = store.validateAccess(record);
     if (!validation.valid) return c.json({ ok: false, error: { message: validation.reason } }, 410);
     try {
+      if (record.kind === 'session') {
+        const manifest = await sessionShares.readManifest(record);
+        const consumed = store.consumeAccess(record.id);
+        if (consumed.valid === false) return c.json({ ok: false, error: { message: consumed.reason } }, 410);
+        logShareAudit(
+          'share.access',
+          { shareId: record.id, sourceSessionId: record.sourceSessionId, tokenPrefix: token.slice(0, 8), clientIp, snapshotRevision: record.snapshotRevision },
+          `Session share viewed: ${record.fileName}`,
+        );
+        const ticket = manifest.attachments.length ? sessionShares.issueAssetTicket(record) : null;
+        return c.json({
+          ok: true,
+          payload: {
+            kind: 'session',
+            title: manifest.title,
+            snapshotAt: manifest.snapshotAt,
+            expiresAt: record.expiresAt,
+            description: record.description ?? null,
+            snapshotRevision: record.snapshotRevision,
+            messages: manifest.messages,
+            toolActivities: manifest.toolActivities,
+            attachments: manifest.attachments.map(({ artifactFileName: _artifactFileName, checksum: _checksum, ...attachment }) => ({
+              ...attachment,
+              url: `/s/${encodeURIComponent(token)}/assets/${encodeURIComponent(attachment.id)}?ticket=${encodeURIComponent(ticket ?? '')}`,
+            })),
+          },
+        });
+      }
       const manifest = await noteShares.readManifest(record);
       const consumed = store.consumeAccess(record.id);
       if (consumed.valid === false) return c.json({ ok: false, error: { message: consumed.reason } }, 410);
@@ -267,17 +303,23 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
           attachments: manifest.attachments.map(({ artifactFileName: _artifactFileName, checksum: _checksum, ...attachment }) => attachment),
         },
       });
-    } catch (err) {
+    } catch {
       logShareAudit(
         'share.access_denied',
-        { shareId: record.id, noteId: record.sourceNoteId, tokenPrefix: token.slice(0, 8), clientIp, reason: 'artifact_missing' },
-        'Note share artifact could not be read',
+        {
+          shareId: record.id,
+          ...(record.kind === 'note' ? { noteId: record.sourceNoteId } : { sourceSessionId: record.sourceSessionId }),
+          tokenPrefix: token.slice(0, 8),
+          clientIp,
+          reason: 'artifact_missing',
+        },
+        'Share artifact could not be read',
       );
-      return c.json({ ok: false, error: { message: err instanceof Error ? err.message : 'artifact_missing' } }, 410);
+      return c.json({ ok: false, error: { message: 'artifact_missing' } }, 410);
     }
   });
 
-  /** Serve one snapshotted Note attachment through a short-lived view ticket. */
+  /** Serve one snapshotted attachment through a short-lived view ticket. */
   app.get('/s/:token/assets/:attachmentId', async (c) => {
     const clientIp = getClientIpFromHeaders({ get: (n: string) => c.req.header(n) ?? undefined });
     const rateResult = consumeSharePublicLimit(clientIp);
@@ -286,15 +328,22 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
       return c.text('Too many requests', 429);
     }
     const record = store.getByToken(c.req.param('token'));
-    if (!record || record.kind !== 'note') return c.text('Not found', 404);
+    if (!record || (record.kind !== 'note' && record.kind !== 'session')) return c.text('Not found', 404);
     if (record.revoked || Date.now() >= new Date(record.expiresAt).getTime()) return c.text('Gone', 410);
     const ticket = c.req.query('ticket') ?? '';
-    if (!noteShares.verifyAssetTicket(record, ticket)) return c.text('Forbidden', 403);
-    const resolved = await noteShares.resolveAsset(record, c.req.param('attachmentId')).catch(() => null);
+    const ticketValid = record.kind === 'note'
+      ? noteShares.verifyAssetTicket(record, ticket)
+      : sessionShares.verifyAssetTicket(record, ticket);
+    if (!ticketValid) return c.text('Forbidden', 403);
+    const resolved = record.kind === 'note'
+      ? await noteShares.resolveAsset(record, c.req.param('attachmentId')).catch(() => null)
+      : await sessionShares.resolveAsset(record, c.req.param('attachmentId')).catch(() => null);
     if (!resolved) return c.text('Not found', 404);
     const fileStat = await stat(resolved.path).catch(() => null);
     if (!fileStat?.isFile()) return c.text('Not found', 404);
-    const inline = resolved.attachment.type !== 'file';
+    const inline = record.kind === 'session'
+      ? isSafeInlineSessionMime(resolved.attachment.mimeType)
+      : 'type' in resolved.attachment && resolved.attachment.type !== 'file';
     const stream = createReadStream(resolved.path);
     return new Response(Readable.toWeb(stream) as ReadableStream, {
       status: 200,
@@ -306,6 +355,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
         'Referrer-Policy': 'no-referrer',
+        ...(record.kind === 'session' ? { 'Content-Security-Policy': "sandbox; default-src 'none'" } : {}),
       },
     });
   });
@@ -419,6 +469,12 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
         sourceVersion: record.sourceVersion,
         snapshotRevision: record.snapshotRevision,
         attachmentCount: record.attachmentCount,
+      } : record.kind === 'session' ? {
+        cutoffSeq: record.cutoffSeq,
+        snapshotRevision: record.snapshotRevision,
+        messageCount: record.messageCount,
+        attachmentCount: record.attachmentCount,
+        includeToolActivities: record.includeToolActivities,
       } : {}),
     });
   });
@@ -457,7 +513,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
         },
       });
     }
-    if (record.kind === 'note') {
+    if (record.kind === 'note' || record.kind === 'session') {
       const placeholder = placeholderSvg(record.fileName, 'text');
       return new Response(placeholder, {
         status: 200,
@@ -547,11 +603,143 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   const { service } = deps;
   const store = getShareStore(resolveShareConfig(service));
   const noteShares = new NoteShareService(store, service.notesServiceInstance);
+  const sessionShares = createSessionShareService(service, store);
   const siteStoreEager = getSiteShareStore(resolveSiteShareConfig(service));
   // Register once: when a site share is revoked / expires, drop its staging dir (if any).
   siteStoreEager.setCleanupHook((rec) => {
     const dir = forgetStagedSite(rec.id);
     if (dir) void cleanupStagedSite(dir);
+  });
+
+  authenticated.get('/api/sessions/:key/share-preview', async (c) => {
+    try {
+      const preview = await sessionShares.preview(c.req.param('key'));
+      return c.json({ ok: true, payload: preview });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, message === 'Session not found' ? 404 : 400);
+    }
+  });
+
+  authenticated.get('/api/sessions/:key/shares', async (c) => {
+    const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
+    if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
+    const urlCtx = getShareUrlContext(service);
+    const now = Date.now();
+    const items = sessionShares.list(metadata.sessionId).map((record) => {
+      const resolved = resolveShareUrl(record.token, urlCtx);
+      return {
+        id: record.id,
+        kind: record.kind,
+        fileName: record.fileName,
+        shareUrl: resolved.shareUrl,
+        lanUrl: resolved.lanUrl,
+        reachability: resolved.reachability,
+        reachabilityHint: resolved.reachabilityHint,
+        createdAt: record.createdAt,
+        expiresAt: record.expiresAt,
+        viewCount: record.downloadCount,
+        maxViews: record.maxViews,
+        revoked: record.revoked,
+        expired: now >= new Date(record.expiresAt).getTime(),
+        description: record.description ?? null,
+        cutoffSeq: record.cutoffSeq,
+        snapshotRevision: record.snapshotRevision,
+        messageCount: record.messageCount,
+        attachmentCount: record.attachmentCount,
+        includeToolActivities: record.includeToolActivities,
+      };
+    });
+    return c.json({ ok: true, payload: { shares: items } });
+  });
+
+  authenticated.post('/api/sessions/:key/shares', async (c) => {
+    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
+    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+      return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
+    }
+    try {
+      const record = await sessionShares.create(c.req.param('key'), {
+        expectedSessionId: body.expectedSessionId,
+        expectedCutoffSeq: body.expectedCutoffSeq,
+        expectedMetadataUpdatedAt: body.expectedMetadataUpdatedAt,
+        ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : undefined,
+        maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined,
+        description: typeof body.description === 'string' ? body.description.trim() || undefined : undefined,
+        includeToolActivities: body.includeToolActivities === true,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : undefined,
+        gatewayTokenHash: hashGatewayToken(gatewayToken),
+      });
+      const resolved = resolveShareUrl(record.token, getShareUrlContext(service));
+      return c.json({
+        ok: true,
+        payload: {
+          id: record.id,
+          kind: record.kind,
+          shareUrl: resolved.shareUrl,
+          lanUrl: resolved.lanUrl,
+          reachability: resolved.reachability,
+          reachabilityHint: resolved.reachabilityHint,
+          expiresAt: record.expiresAt,
+          maxViews: record.maxViews,
+          fileName: record.fileName,
+          messageCount: record.messageCount,
+          attachmentCount: record.attachmentCount,
+          snapshotRevision: record.snapshotRevision,
+          includeToolActivities: record.includeToolActivities,
+        },
+      }, 201);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = err instanceof SessionShareSnapshotConflictError
+        ? 409
+        : message === 'Session not found' ? 404 : 400;
+      return c.json({ ok: false, error: { message, code: status === 409 ? 'session_snapshot_conflict' : undefined } }, status);
+    }
+  });
+
+  authenticated.post('/api/sessions/:key/shares/:shareId/refresh', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+      return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
+    }
+    try {
+      const record = await sessionShares.refresh(c.req.param('key'), c.req.param('shareId'), {
+        expectedSessionId: body.expectedSessionId,
+        expectedCutoffSeq: body.expectedCutoffSeq,
+        expectedMetadataUpdatedAt: body.expectedMetadataUpdatedAt,
+        includeToolActivities: typeof body.includeToolActivities === 'boolean' ? body.includeToolActivities : undefined,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : undefined,
+      });
+      const resolved = resolveShareUrl(record.token, getShareUrlContext(service));
+      return c.json({ ok: true, payload: {
+        id: record.id,
+        kind: record.kind,
+        shareUrl: resolved.shareUrl,
+        lanUrl: resolved.lanUrl,
+        reachability: resolved.reachability,
+        reachabilityHint: resolved.reachabilityHint,
+        expiresAt: record.expiresAt,
+        maxViews: record.maxViews,
+        fileName: record.fileName,
+        messageCount: record.messageCount,
+        attachmentCount: record.attachmentCount,
+        snapshotRevision: record.snapshotRevision,
+        includeToolActivities: record.includeToolActivities,
+      } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = err instanceof SessionShareSnapshotConflictError
+        ? 409
+        : message === 'Session share not found' || message === 'Session not found' ? 404 : 400;
+      return c.json({ ok: false, error: { message, code: status === 409 ? 'session_snapshot_conflict' : undefined } }, status);
+    }
   });
 
   authenticated.post('/api/shares', async (c) => {
@@ -804,6 +992,13 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
           sourceVersion: r.sourceVersion,
           snapshotRevision: r.snapshotRevision,
           attachmentCount: r.attachmentCount,
+        } : r.kind === 'session' ? {
+          sourceSessionId: r.sourceSessionId,
+          cutoffSeq: r.cutoffSeq,
+          snapshotRevision: r.snapshotRevision,
+          messageCount: r.messageCount,
+          attachmentCount: r.attachmentCount,
+          includeToolActivities: r.includeToolActivities,
         } : {}),
       };
     });
@@ -840,6 +1035,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const success = store.revoke(id);
     if (!success) return c.json({ ok: false, error: { message: 'Not found' } }, 404);
     if (record?.kind === 'note') await noteShares.removeArtifact(record.id);
+    if (record?.kind === 'session') await sessionShares.removeArtifact(record.id);
     return c.json({ ok: true });
   });
 
@@ -852,11 +1048,13 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     if (body.expired === true) {
-      const expiredNoteShares = store.getAllShares().filter(
-        (record) => record.kind === 'note' && !record.revoked && Date.now() >= new Date(record.expiresAt).getTime(),
+      const expiredStateShares = store.getAllShares().filter(
+        (record) => (record.kind === 'note' || record.kind === 'session') && !record.revoked && Date.now() >= new Date(record.expiresAt).getTime(),
       );
       const count = store.revokeExpired();
-      await Promise.all(expiredNoteShares.map((record) => noteShares.removeArtifact(record.id)));
+      await Promise.all(expiredStateShares.map((record) => record.kind === 'note'
+        ? noteShares.removeArtifact(record.id)
+        : sessionShares.removeArtifact(record.id)));
       return c.json({ ok: true, payload: { revokedCount: count } });
     }
 
@@ -864,11 +1062,14 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (ids.length === 0) {
       return c.json({ ok: false, error: { message: 'Provide ids array or expired: true' } }, 400);
     }
-    const noteRecords = ids.map((id) => store.getById(id)).filter(
-      (record): record is import('../../../share/share-types.js').NoteShareRecord => record?.kind === 'note',
+    const stateRecords = ids.map((id) => store.getById(id)).filter(
+      (record): record is import('../../../share/share-types.js').NoteShareRecord | import('../../../share/share-types.js').SessionShareRecord =>
+        record?.kind === 'note' || record?.kind === 'session',
     );
     const count = store.revokeMany(ids);
-    await Promise.all(noteRecords.map((record) => noteShares.removeArtifact(record.id)));
+    await Promise.all(stateRecords.map((record) => record.kind === 'note'
+      ? noteShares.removeArtifact(record.id)
+      : sessionShares.removeArtifact(record.id)));
     return c.json({ ok: true, payload: { revokedCount: count } });
   });
 
@@ -900,6 +1101,16 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         shareUrl: resolved.shareUrl,
       },
     });
+  });
+}
+
+function createSessionShareService(
+  service: GatewayService,
+  store: ReturnType<typeof getShareStore>,
+): SessionShareService {
+  return new SessionShareService(store, {
+    getMetadata: (sessionKey) => service.sessionIndexInstance.getSessionMetadata(sessionKey),
+    getSnapshot: async (sessionKey) => loadCompactionSourceSnapshot(sessionKey),
   });
 }
 
@@ -946,8 +1157,19 @@ function buildLandingOg(service: GatewayService, record: ShareRecord) {
     absoluteShareUrl: resolved.shareUrl,
     absoluteThumbnailUrl: `${resolved.shareUrl}/thumbnail`,
     title: record.fileName,
-    description: record.description ?? undefined,
+    description: record.description
+      ?? (record.kind === 'session' ? `${record.messageCount} messages shared via xopc` : undefined),
   };
+}
+
+function isSafeInlineSessionMime(mimeType: string): boolean {
+  const normalized = mimeType.split(';')[0]?.trim().toLowerCase();
+  return normalized === 'image/png'
+    || normalized === 'image/jpeg'
+    || normalized === 'image/gif'
+    || normalized === 'image/webp'
+    || normalized?.startsWith('audio/') === true
+    || normalized?.startsWith('video/') === true;
 }
 
 async function handleDirectoryFile(
