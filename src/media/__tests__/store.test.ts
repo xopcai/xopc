@@ -66,4 +66,13 @@ describe('media store', () => {
     expect(() => parseMediaUri('media://inbound/id/extra')).toThrow();
     expect(() => parseMediaUri('media://other/id')).toThrow();
   });
+
+  it('preserves Office MIME types for generated deliverables', () => {
+    expect(mimeTypeFromMediaPath('/workspace/report.xlsx'))
+      .toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(mimeTypeFromMediaPath('/workspace/deck.pptx'))
+      .toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(mimeTypeFromMediaPath('/workspace/document.docx'))
+      .toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  });
 });

@@ -1,15 +1,18 @@
 import {
-  ENDPOINT_PROTOCOL_VERSION,
-  canonicalJson,
+  EndpointToolHostController,
+  EndpointToolRegistry,
+  type EndpointToolApprovalRequest,
+  type EndpointToolDefinition,
+  type EndpointToolFile,
+  type EndpointToolUploadGrant,
+} from '@xopcai/endpoint-tools-client';
+import {
   endpointHelloSigningPayload,
   endpointToolContentSchema,
-  type ClientEndpointMessage,
   type EndpointAvailability,
   type EndpointHelloPayload,
   type EndpointKind,
   type EndpointToolContent,
-  type EndpointToolDescriptor,
-  type ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
 import type { RealtimeEndpointBinding } from '@xopcai/realtime-client';
 
@@ -40,45 +43,32 @@ function availability(): EndpointAvailability {
     : 'background';
 }
 
-async function revision(descriptor: EndpointToolDescriptor): Promise<string> {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalJson(descriptor)));
-  return [...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, '0')).join('');
-}
-
-export interface EndpointToolExecutionResult {
-  content: EndpointToolContent[];
-  afterSend?: () => void;
-}
-
-export interface EndpointToolExecutionContext {
-  uploadFile(file: {
-    name: string;
-    mimeType: string;
-    bytes: Uint8Array;
-  }): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
-}
-
 export interface EndpointToolHostConfig {
   kind: Extract<EndpointKind, 'web' | 'desktop'>;
   platform: string;
   displayName: string;
   appVersion: string;
-  tools: readonly EndpointToolDescriptor[];
-  execute(
-    toolName: string,
-    args: Record<string, unknown>,
-    context: EndpointToolExecutionContext,
-  ): Promise<EndpointToolExecutionResult>;
+  definitions: readonly EndpointToolDefinition[];
   confirmReenrollment(): Promise<boolean>;
 }
 
-interface EndpointChannel {
-  readonly readyState: number;
-  send(data: string): void;
+async function confirmEndpointTool(request: EndpointToolApprovalRequest): Promise<boolean> {
+  if (request.signal.aborted) return false;
+  const onAbort = () => settleEndpointConfirmation(request.invocationId, false);
+  request.signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    return await requestEndpointConfirmation({
+      invocationId: request.invocationId,
+      title: request.descriptor.title,
+      args: request.arguments,
+      deadlineAt: request.deadlineAt,
+    });
+  } finally {
+    request.signal.removeEventListener('abort', onAbort);
+  }
 }
 
 export class EndpointToolHost {
-  private channel?: EndpointChannel;
   private reconnectTimer?: number;
   private connectPromise?: Promise<void>;
   private detachRealtime?: () => void;
@@ -86,17 +76,23 @@ export class EndpointToolHost {
   private registrationBlocked = false;
   private endpointId?: string;
   private turnToken?: string;
-  private readonly cancelled = new Set<string>();
-  private readonly revisionByTool = new Map<string, string>();
+  private readonly registry: EndpointToolRegistry;
+  private readonly controller: EndpointToolHostController;
 
-  constructor(private readonly config: EndpointToolHostConfig) {}
+  constructor(private readonly config: EndpointToolHostConfig) {
+    this.registry = new EndpointToolRegistry(config.definitions);
+    this.controller = new EndpointToolHostController({
+      registry: this.registry,
+      getAvailability: availability,
+      confirm: confirmEndpointTool,
+      uploadFile: (grant, file) => this.uploadFile(grant, file),
+      createMessageId: crypto.randomUUID,
+    });
+  }
 
   async start(): Promise<void> {
     this.stopped = false;
     this.registrationBlocked = false;
-    for (const descriptor of this.config.tools) {
-      this.revisionByTool.set(descriptor.name, await revision(descriptor));
-    }
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     window.addEventListener('token-saved', this.onTokenSaved);
     await this.connect();
@@ -109,7 +105,7 @@ export class EndpointToolHost {
     window.clearTimeout(this.reconnectTimer);
     this.detachRealtime?.();
     this.detachRealtime = undefined;
-    this.channel = undefined;
+    this.controller.disconnect();
     clearEndpointTurnClaim(this.turnToken);
     this.turnToken = undefined;
     this.endpointId = undefined;
@@ -122,7 +118,7 @@ export class EndpointToolHost {
   };
 
   private readonly onVisibilityChange = () => {
-    this.send('endpoint.availability_changed', { availability: availability() });
+    this.controller.publishAvailability();
   };
 
   private connect(allowIdentityRotation = true): Promise<void> {
@@ -183,20 +179,13 @@ export class EndpointToolHost {
           this.endpointId = endpointId;
           this.turnToken = turnToken;
           publishEndpointTurnClaim(endpointId, turnToken);
-          this.channel = {
-            readyState: 1,
-            send: (data) => {
-              const message = JSON.parse(data) as ClientEndpointMessage;
-              this.realtimeSend(message);
-            },
-          };
+          this.controller.connect(sendGatewayEndpointMessage);
         },
         onMessage: (message) => {
-          const channel = this.channel;
-          if (channel) void this.handleMessage(message, channel);
+          void this.controller.handleMessage(message);
         },
         onDisconnected: () => {
-          this.channel = undefined;
+          this.controller.disconnect();
           clearEndpointTurnClaim(this.turnToken);
           this.turnToken = undefined;
           cancelAllEndpointConfirmations();
@@ -234,101 +223,15 @@ export class EndpointToolHost {
       nonce: crypto.randomUUID(),
       signedAt: Date.now(),
       signature: 'pending',
-      tools: [...this.config.tools],
+      tools: this.registry.descriptors(),
     };
     const signature = await signEndpointPayload(identity.privateKey, endpointHelloSigningPayload(unsigned));
     return { ...unsigned, signature };
   }
 
-  private async handleMessage(message: ServerEndpointMessage, channel: EndpointChannel): Promise<void> {
-    if (this.channel !== channel) return;
-    if (message.type === 'tool.cancel') {
-      this.cancelled.add(message.payload.invocationId);
-      settleEndpointConfirmation(message.payload.invocationId, false);
-      return;
-    }
-    await this.invoke(message, channel);
-  }
-
-  private async invoke(
-    message: Extract<ServerEndpointMessage, { type: 'tool.invoke' }>,
-    channel: EndpointChannel,
-  ): Promise<void> {
-    const {
-      invocationId, toolName, arguments: args, descriptorRevision,
-      confirmationRequired, deadlineAt, uploadGrant,
-    } = message.payload;
-    this.sendOn(channel, 'tool.received', { invocationId });
-    const descriptor = this.config.tools.find((tool) => tool.name === toolName);
-    if (!descriptor) {
-      this.sendError(channel, invocationId, 'TOOL_NOT_FOUND', 'Endpoint tool is not registered');
-      return;
-    }
-    if (this.revisionByTool.get(toolName) !== descriptorRevision) {
-      this.sendError(channel, invocationId, 'TOOL_REVISION_MISMATCH', 'Endpoint tool contract changed');
-      return;
-    }
-    const localConfirmationRequired = descriptor.confirmation === 'always' || descriptor.effect !== 'read';
-    if (confirmationRequired !== localConfirmationRequired) {
-      this.sendError(channel, invocationId, 'PROTOCOL_ERROR', 'Endpoint confirmation policy mismatch');
-      return;
-    }
-    try {
-      if (!this.ensureExecutable(channel, invocationId, descriptor, deadlineAt)) return;
-      if (localConfirmationRequired) {
-        const allowed = await requestEndpointConfirmation({
-          invocationId,
-          title: descriptor.title,
-          args,
-          deadlineAt,
-        });
-        if (!this.ensureExecutable(channel, invocationId, descriptor, deadlineAt)) return;
-        if (!allowed) {
-          this.sendError(channel, invocationId, 'USER_DENIED', 'User denied the endpoint tool call');
-          return;
-        }
-      }
-      const result = await this.config.execute(toolName, args, {
-        uploadFile: (file) => this.uploadFile(uploadGrant, file),
-      });
-      if (!this.ensureExecutable(channel, invocationId, descriptor, deadlineAt)) return;
-      this.sendOn(channel, 'tool.result', { invocationId, content: result.content });
-      if (result.afterSend) {
-        window.setTimeout(() => {
-          if (
-            this.channel === channel
-            && channel.readyState === 1
-            && Date.now() < deadlineAt
-            && (!descriptor.requiresForeground || availability() === 'foreground')
-          ) {
-            result.afterSend?.();
-          }
-        }, 50);
-      }
-    } catch (error) {
-      const invalid = error instanceof TypeError;
-      const userDenied = error instanceof DOMException && error.name === 'AbortError';
-      const permissionDenied = error instanceof DOMException && error.name === 'NotAllowedError';
-      this.sendError(
-        channel,
-        invocationId,
-        invalid
-          ? 'INVALID_ARGUMENTS'
-          : userDenied
-            ? 'USER_DENIED'
-            : permissionDenied
-              ? 'PERMISSION_DENIED'
-              : 'PROTOCOL_ERROR',
-        error instanceof Error ? error.message : String(error),
-      );
-    } finally {
-      this.cancelled.delete(invocationId);
-    }
-  }
-
   private async uploadFile(
-    grant: Extract<ServerEndpointMessage, { type: 'tool.invoke' }>['payload']['uploadGrant'],
-    file: { name: string; mimeType: string; bytes: Uint8Array },
+    grant: EndpointToolUploadGrant,
+    file: EndpointToolFile,
   ): Promise<Extract<EndpointToolContent, { type: 'file' }>> {
     if (!grant || !this.endpointId) throw new Error('Endpoint file upload grant is unavailable');
     if (
@@ -365,67 +268,4 @@ export class EndpointToolHost {
     return parsed.data;
   }
 
-  private ensureExecutable(
-    channel: EndpointChannel,
-    invocationId: string,
-    descriptor: EndpointToolDescriptor,
-    deadlineAt: number,
-  ): boolean {
-    if (this.channel !== channel || channel.readyState !== 1) return false;
-    if (this.cancelled.delete(invocationId)) {
-      this.sendOn(channel, 'tool.cancelled', { invocationId });
-      return false;
-    }
-    if (Date.now() >= deadlineAt) {
-      this.sendError(channel, invocationId, 'TOOL_TIMEOUT', 'Endpoint tool deadline expired');
-      return false;
-    }
-    if (descriptor.requiresForeground && availability() !== 'foreground') {
-      this.sendError(channel, invocationId, 'ENDPOINT_NOT_FOREGROUND', 'Endpoint is not foreground');
-      return false;
-    }
-    return true;
-  }
-
-  private sendError(
-    channel: EndpointChannel,
-    invocationId: string,
-    code: Extract<ClientEndpointMessage, { type: 'tool.error' }>['payload']['code'],
-    message: string,
-  ): void {
-    this.sendOn(channel, 'tool.error', { invocationId, code, message });
-  }
-
-  private send<T extends ClientEndpointMessage['type']>(
-    type: T,
-    payload: Extract<ClientEndpointMessage, { type: T }>['payload'],
-  ): void {
-    if (!this.channel || this.channel.readyState !== 1) return;
-    this.channel.send(JSON.stringify({
-      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
-      messageId: crypto.randomUUID(),
-      type,
-      sentAt: Date.now(),
-      payload,
-    }));
-  }
-
-  private sendOn<T extends ClientEndpointMessage['type']>(
-    channel: EndpointChannel,
-    type: T,
-    payload: Extract<ClientEndpointMessage, { type: T }>['payload'],
-  ): void {
-    if (channel.readyState !== 1) return;
-    channel.send(JSON.stringify({
-      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
-      messageId: crypto.randomUUID(),
-      type,
-      sentAt: Date.now(),
-      payload,
-    }));
-  }
-
-  private realtimeSend(message: ClientEndpointMessage): void {
-    if (this.channel) sendGatewayEndpointMessage(message);
-  }
 }

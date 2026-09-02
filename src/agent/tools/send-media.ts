@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import { readFile } from 'fs/promises';
 import { basename } from 'node:path';
 import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
+import { turnOutcomeKindFromFileName } from '@xopcai/gateway-contract';
 import { checkFileSafety } from '../prompt/safety.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
 import { persistToolMedia, type ToolMediaType } from './tool-media.js';
@@ -101,9 +102,7 @@ export function createSendMediaTool(
                   ? 'video'
                   : media.type === 'audio'
                     ? 'audio'
-                    : media.mimeType === 'application/pdf'
-                      ? 'pdf'
-                      : 'file',
+                    : turnOutcomeKindFromFileName(media.name),
               mimeType: media.mimeType,
               sizeBytes: media.size,
               availability: 'available',

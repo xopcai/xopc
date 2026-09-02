@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import { ConfigSchema, type Config } from '../../../config/schema.js';
+import { ConfigSchema } from '../../../config/schema.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import { ExtensionRegistryImpl } from '../../../extensions/extension-registry-impl.js';
 import {
@@ -59,6 +59,7 @@ describe('AgentToolsFactory', () => {
     });
 
     expect(factory.createCoreTools().map((tool) => tool.name)).toContain('skills_marketplace_search');
+    expect(factory.createCoreTools().map((tool) => tool.name)).toContain('publish_artifacts');
   });
 
   it('exposes exactly three stable gateway tools instead of external tool definitions', () => {

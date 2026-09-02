@@ -11,6 +11,7 @@
 import { Type } from '@sinclair/typebox';
 import { createHash } from 'node:crypto';
 import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
+import { turnOutcomeKindFromFileName } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
@@ -289,7 +290,11 @@ function successResult(
       artifacts: [{
         artifactId: `share:${String(payload.shareUrl ?? '')}`,
         title: String(payload.title ?? 'Shared result'),
-        kind: payload.kind === 'site' ? 'site' : payload.kind === 'zip' ? 'archive' : 'file',
+        kind: payload.kind === 'site'
+          ? 'site'
+          : payload.kind === 'zip'
+            ? 'archive'
+            : turnOutcomeKindFromFileName(String(payload.title ?? 'Shared result')),
         availability: 'available',
         location: 'artifact_store',
         capabilities: payload.kind === 'site' ? ['preview', 'share'] : ['download', 'share'],

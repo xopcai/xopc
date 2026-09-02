@@ -275,6 +275,118 @@ describe('SQLite migrations', () => {
       ]);
   });
 
+  it('v139 backfills structured file deliveries into canonical turn outcomes', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      CREATE TABLE transcripts (
+        session_id TEXT PRIMARY KEY,
+        session_key TEXT NOT NULL
+      );
+      CREATE TABLE transcript_entries (
+        entry_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        entry_kind TEXT NOT NULL,
+        role TEXT,
+        payload_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(session_id, seq)
+      );
+      INSERT INTO transcripts(session_id, session_key) VALUES ('session-1', 'session-key-1');
+    `);
+    const insert = db.prepare(`INSERT INTO transcript_entries(
+      entry_id, session_id, seq, entry_kind, role, payload_json, created_at
+    ) VALUES (?, 'session-1', ?, 'message', ?, ?, ?)`);
+    insert.run('assistant-1', 0, 'assistant', JSON.stringify({
+      role: 'assistant', turnId: 'turn-1', content: [{ type: 'toolCall', id: 'write-1', name: 'write_file' }],
+    }), 1_000);
+    insert.run('tool-1', 1, 'toolResult', JSON.stringify({
+      role: 'toolResult',
+      turnId: 'turn-1',
+      toolCallId: 'write-1',
+      toolName: 'write_file',
+      details: {
+        delivery: {
+          version: 1,
+          operation: 'updated',
+          primary: {
+            kind: 'file',
+            id: 'space-id.cmVwb3J0cy9zYWxlcy54bHN4',
+            title: 'sales.xlsx',
+            capabilities: ['preview', 'share'],
+          },
+        },
+      },
+    }), 1_001);
+    insert.run('assistant-2', 2, 'assistant', JSON.stringify({
+      role: 'assistant', turnId: 'turn-1', content: [{ type: 'text', text: 'Done.' }],
+    }), 1_002);
+    insert.run('tool-2', 3, 'toolResult', JSON.stringify({
+      role: 'toolResult',
+      turnId: 'turn-2',
+      toolCallId: 'send-1',
+      toolName: 'send_media',
+      details: {
+        media: [{
+          id: 'media-1.xlsx',
+          name: 'history.xlsx',
+          type: 'document',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          size: 42,
+          uri: 'media://outbound/media-1.xlsx',
+        }],
+      },
+    }), 2_000);
+    insert.run('assistant-3', 4, 'assistant', JSON.stringify({
+      role: 'assistant', turnId: 'turn-2', content: [{ type: 'text', text: 'Done.' }],
+    }), 2_001);
+    insert.run('outcome-2', 5, null, JSON.stringify({
+      type: 'custom',
+      customType: 'turn_outcome',
+      data: {
+        version: 1,
+        outcomeId: 'turn-2:outcome',
+        runId: 'turn-2',
+        turnId: 'turn-2',
+        status: 'succeeded',
+        deliverables: [],
+        evidence: [],
+        createdAt: '2026-09-02T00:00:00.000Z',
+      },
+    }), 2_002);
+    setSchemaVersion(db, 138);
+
+    expect(applyPendingMigrations(db, {
+      migrationsDir: resolveMigrationsDir(), targetVersion: 139,
+    })).toBe(139);
+
+    const outcomes = db.prepare(`
+      SELECT seq, payload_json
+      FROM transcript_entries
+      WHERE json_extract(payload_json, '$.customType') = 'turn_outcome'
+      ORDER BY seq
+    `).all() as Array<{ seq: number; payload_json: string }>;
+    expect(outcomes).toHaveLength(2);
+    expect(JSON.parse(outcomes[0].payload_json).data.deliverables).toEqual([
+      expect.objectContaining({
+        artifactId: 'space-id.cmVwb3J0cy9zYWxlcy54bHN4',
+        title: 'sales.xlsx',
+        kind: 'spreadsheet',
+        uri: 'xopc-file:space-id.cmVwb3J0cy9zYWxlcy54bHN4',
+      }),
+    ]);
+    expect(outcomes[0].seq).toBe(5);
+    expect(JSON.parse(outcomes[1].payload_json).data.deliverables).toEqual([
+      expect.objectContaining({
+        artifactId: 'media-1.xlsx',
+        title: 'history.xlsx',
+        kind: 'spreadsheet',
+        uri: 'media://outbound/media-1.xlsx',
+      }),
+    ]);
+  });
+
   it('ensureXopcDatabaseSchema applies baseline then leaves version at release target', () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-schema-'));
     const dbPath = join(dir, 'xopc.db');

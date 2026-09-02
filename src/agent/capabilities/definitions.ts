@@ -125,7 +125,7 @@ export const AGENT_CAPABILITY_DEFINITIONS = [
     label: 'Data analysis',
     description: 'Analyze local structured data and produce derived tables, summaries, or artifacts.',
     category: 'analysis',
-    tools: ['read_file', 'write_file', 'list_dir', 'grep', 'find'],
+    tools: ['read_file', 'write_file', 'list_dir', 'grep', 'find', 'publish_artifacts'],
     activation: { mode: 'explicit', ttl: 'session' },
     permissions: { writesFiles: true, runsCode: true },
   },

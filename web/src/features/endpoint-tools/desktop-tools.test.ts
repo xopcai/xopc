@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { EndpointToolRegistry, type EndpointToolExecutionContext } from '@xopcai/endpoint-tools-client';
 
-import { executeDesktopEndpointTool } from './desktop-tools';
+import { DESKTOP_ENDPOINT_TOOL_DEFINITIONS } from './desktop-tools';
 
 describe('desktop endpoint tools', () => {
+  const registry = new EndpointToolRegistry(DESKTOP_ENDPOINT_TOOL_DEFINITIONS);
+  const execute = (name: string, args: Record<string, unknown>, context: EndpointToolExecutionContext) =>
+    registry.get(name)!.definition.execute(args, context);
   const writeText = vi.fn(async () => true);
   const readText = vi.fn(async () => 'copied text');
   const openExternalUrl = vi.fn(async () => ({ ok: true as const }));
@@ -23,7 +27,12 @@ describe('desktop endpoint tools', () => {
     size: file.bytes.byteLength,
     sha256: 'a'.repeat(64),
   }));
-  const context = { uploadFile };
+  const context = {
+    uploadFile,
+    invocationId: 'invocation-1',
+    signal: new AbortController().signal,
+    reportProgress: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,22 +48,22 @@ describe('desktop endpoint tools', () => {
   });
 
   it('uses the constrained Electron clipboard bridge', async () => {
-    await expect(executeDesktopEndpointTool('desktop.clipboard.read', {}, context))
+    await expect(execute('desktop.clipboard.read', {}, context))
       .resolves.toEqual({ content: [{ type: 'text', text: 'copied text' }] });
-    await expect(executeDesktopEndpointTool('desktop.clipboard.write', { text: 'next' }, context))
+    await expect(execute('desktop.clipboard.write', { text: 'next' }, context))
       .resolves.toEqual({ content: [{ type: 'text', text: 'Clipboard updated.' }] });
     expect(writeText).toHaveBeenCalledWith('next');
   });
 
   it('allows only HTTP(S) external URLs', async () => {
-    await expect(executeDesktopEndpointTool('desktop.app.open_external', { url: 'file:///tmp/a' }, context))
+    await expect(execute('desktop.app.open_external', { url: 'file:///tmp/a' }, context))
       .rejects.toThrow('Only HTTP and HTTPS');
-    await executeDesktopEndpointTool('desktop.app.open_external', { url: 'https://example.com/a' }, context);
+    await execute('desktop.app.open_external', { url: 'https://example.com/a' }, context);
     expect(openExternalUrl).toHaveBeenCalledWith('https://example.com/a');
   });
 
   it('uploads only the file explicitly returned by the native picker', async () => {
-    await expect(executeDesktopEndpointTool('desktop.file.pick', {}, context)).resolves.toEqual({
+    await expect(execute('desktop.file.pick', {}, context)).resolves.toEqual({
       content: [expect.objectContaining({ type: 'file', fileId: 'file-1', name: 'note.txt' })],
     });
     expect(uploadFile).toHaveBeenCalledWith(expect.objectContaining({
@@ -64,14 +73,14 @@ describe('desktop endpoint tools', () => {
 
   it('treats native picker cancellation as a user denial', async () => {
     pickEndpointFile.mockResolvedValueOnce(null);
-    await expect(executeDesktopEndpointTool('desktop.file.pick', {}, context)).rejects.toMatchObject({
+    await expect(execute('desktop.file.pick', {}, context)).rejects.toMatchObject({
       name: 'AbortError',
     });
     expect(uploadFile).not.toHaveBeenCalled();
   });
 
   it('saves bounded text through the native save dialog', async () => {
-    await expect(executeDesktopEndpointTool(
+    await expect(execute(
       'desktop.file.save',
       { suggestedName: 'answer.txt', content: 'done' },
       context,
@@ -80,7 +89,7 @@ describe('desktop endpoint tools', () => {
   });
 
   it('shows bounded native notifications through the trusted bridge', async () => {
-    await expect(executeDesktopEndpointTool(
+    await expect(execute(
       'desktop.notification.show',
       { title: 'Finished', body: 'Your task is ready.' },
       context,
@@ -90,7 +99,7 @@ describe('desktop endpoint tools', () => {
 
   it('reports denied desktop notification permission', async () => {
     showEndpointNotification.mockResolvedValueOnce({ ok: false as const, error: 'PERMISSION_DENIED' });
-    await expect(executeDesktopEndpointTool(
+    await expect(execute(
       'desktop.notification.show',
       { title: 'Finished', body: 'Your task is ready.' },
       context,
