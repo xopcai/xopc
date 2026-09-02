@@ -315,6 +315,27 @@ export function updateUserProfile(patch: Partial<Pick<UserProfile, 'callName' | 
   });
 }
 
+export async function uploadUserAvatar(file: File): Promise<void> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('Could not read avatar file'));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read avatar file'));
+    reader.readAsDataURL(file);
+  });
+  const separator = dataUrl.indexOf(',');
+  if (separator < 0) throw new Error('Could not read avatar file');
+  await fetchJson(apiUrl('/api/you/avatar'), {
+    method: 'PUT',
+    body: JSON.stringify({ mimeType: file.type, base64: dataUrl.slice(separator + 1) }),
+  });
+}
+
+export async function deleteUserAvatar(): Promise<void> {
+  await fetchJson(apiUrl('/api/you/avatar'), { method: 'DELETE' });
+}
+
 export function createUnderstanding(input: { statement: string; kind: UnderstandingKind; scope?: UserContextScope }): Promise<{ understanding: UserUnderstanding }> {
   return fetchJson(apiUrl('/api/you/understandings'), {
     method: 'POST',

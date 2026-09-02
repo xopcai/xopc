@@ -25,6 +25,11 @@ import {
 import { USER_PERSON_KINDS, type UserPersonKind } from '../../../user-context/relationships/types.js';
 import { listUserFocuses, updateUserFocus } from '../../../user-context/sources/repository.js';
 import { canonicalUnderstandingKey, findDuplicateUnderstanding } from '../../../user-context/understanding.js';
+import {
+  deleteUserAvatar,
+  readUserAvatar,
+  writeUserAvatar,
+} from '../../../user-context/user-avatar.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const UNDERSTANDING_KIND_SET = new Set<UnderstandingKind>(UNDERSTANDING_KINDS);
@@ -91,6 +96,35 @@ function machineCallName(): string {
 
 export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const write = deps.strictRateLimitMiddleware;
+
+  authenticated.get('/api/you/avatar', async (c) => {
+    const result = await readUserAvatar();
+    if (result.ok === false) return c.json({ error: result.error }, result.status);
+    return new Response(result.data.buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': result.data.contentType,
+        'Cache-Control': 'private, no-store',
+      },
+    });
+  });
+
+  authenticated.put('/api/you/avatar', write, async (c) => {
+    const body = await readBody(c);
+    if (!body) return c.json({ error: 'Invalid JSON' }, 400);
+    const result = await writeUserAvatar(
+      typeof body.base64 === 'string' ? body.base64 : '',
+      typeof body.mimeType === 'string' ? body.mimeType : '',
+    );
+    if (result.ok === false) return c.json({ error: result.error }, result.status);
+    return c.json({ ok: true });
+  });
+
+  authenticated.delete('/api/you/avatar', write, async (c) => {
+    const result = await deleteUserAvatar();
+    if (result.ok === false) return c.json({ error: result.error }, result.status);
+    return c.json({ ok: true });
+  });
 
   authenticated.get('/api/you', (c) => c.json({
     profile: getUserProfile(),
