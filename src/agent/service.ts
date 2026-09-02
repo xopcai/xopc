@@ -644,6 +644,10 @@ export class AgentService {
     return this.agentManager.getSessionWorkspaceTrust(sessionKey);
   }
 
+  getResolvedWorkspaceForSession(sessionKey: string): string {
+    return this.agentManager.getResolvedWorkspaceForSession(sessionKey);
+  }
+
   async setSessionWorkspaceTrust(sessionKey: string, trusted: boolean): Promise<WorkspaceTrustState> {
     await this.sessionHydrator.workspace(sessionKey);
     return this.agentManager.setSessionWorkspaceTrust(sessionKey, trusted);

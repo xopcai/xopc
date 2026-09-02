@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildGatewayRawFilePath,
-  imageContentToSource,
-  normalizeGeneratedWorkspacePath,
-} from '../image-source-utils';
+import { imageContentToSource, normalizeGeneratedWorkspacePath } from '../image-source-utils';
 
 const ctx = {
   apiUrl: (path: string) => `http://gateway.test${path}`,
@@ -19,19 +15,15 @@ describe('image-source-utils', () => {
   });
 
   it('converts gateway relative image URLs to absolute URLs with auth headers', () => {
-    expect(imageContentToSource({ type: 'image', source: { data: '/api/workspace/editor/raw?path=a.png' } }, ctx))
+    expect(imageContentToSource({ type: 'image', source: { data: '/api/files/file-id/content' } }, ctx))
       .toEqual({
-        uri: 'http://gateway.test/api/workspace/editor/raw?path=a.png',
+        uri: 'http://gateway.test/api/files/file-id/content',
         headers: { Authorization: 'Bearer token-1' },
       });
   });
 
-  it('converts generated workspace paths to raw gateway URLs', () => {
-    const source = imageContentToSource({ type: 'image', source: { data: 'media/generated/cat.png' } }, ctx);
-    expect(source?.uri).toBe(
-      'http://gateway.test/api/workspace/editor/raw?path=media%2Fgenerated%2Fcat.png&sessionKey=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_1',
-    );
-    expect(source?.headers).toEqual({ Authorization: 'Bearer token-1' });
+  it('does not reinterpret unmanaged workspace paths', () => {
+    expect(imageContentToSource({ type: 'image', source: { data: 'media/generated/cat.png' } }, ctx)).toBeNull();
   });
 
   it('converts media URI images to gateway media read URLs', () => {
@@ -47,8 +39,4 @@ describe('image-source-utils', () => {
       .toBe('media/generated/cat.png');
   });
 
-  it('builds raw file paths with session scope', () => {
-    expect(buildGatewayRawFilePath('media/generated/cat.png', 's:1'))
-      .toBe('/api/workspace/editor/raw?path=media%2Fgenerated%2Fcat.png&sessionKey=s%3A1');
-  });
 });

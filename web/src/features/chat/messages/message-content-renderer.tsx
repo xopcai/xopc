@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
+import { AlertCircle, Copy, File, Loader2, X } from 'lucide-react';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
@@ -36,7 +36,6 @@ import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-s
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
 import {
-  resolveFileReferenceAction,
   resolveWorkspaceFileReference,
   type WorkspaceFileReference,
 } from '@/features/workspace/workspace-api';
@@ -57,7 +56,6 @@ import { assistantTextForDisplay } from '@/features/chat/messages/assistant-text
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
@@ -155,22 +153,18 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
 
 function ChatMarkdownFileActionCard({
   resolution,
-  sessionKey,
   onClose,
 }: {
   resolution: MarkdownFileResolution;
-  sessionKey?: string | null;
   onClose: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).chat.fileReference;
   const [copied, setCopied] = useState(false);
-  const canUseShell = isElectron() && Boolean(window.electronAPI?.shell);
-
   const targetPath = resolution.target.path;
   const ref = resolution.status === 'ready' ? resolution.ref : null;
   const displayName = ref?.displayName ?? targetPath.split(/[\\/]/).pop() ?? targetPath;
-  const displayPath = ref?.absolutePath ?? targetPath;
+  const displayPath = ref?.workspaceRelativePath ?? targetPath;
 
   const copyPath = useCallback(() => {
     void copyTextToClipboard(displayPath).then((ok) => {
@@ -179,22 +173,6 @@ function ChatMarkdownFileActionCard({
       window.setTimeout(() => setCopied(false), 2000);
     });
   }, [displayPath]);
-
-  const runAction = useCallback(
-    async (action: 'openExternal' | 'revealInFolder') => {
-      if (!ref?.fileRefId || !canUseShell) return;
-      const resolved = await resolveFileReferenceAction(ref.fileRefId, action, {
-        sessionKey: sessionKey?.trim() || undefined,
-      });
-      if (!resolved) return;
-      if (action === 'openExternal') {
-        await window.electronAPI?.shell?.openPath(resolved.absolutePath);
-      } else {
-        await window.electronAPI?.shell?.showItemInFolder(resolved.absolutePath);
-      }
-    },
-    [canUseShell, ref?.fileRefId, sessionKey],
-  );
 
   const tone =
     resolution.status === 'ready' && resolution.ref.exists && resolution.ref.scope !== 'missing'
@@ -230,31 +208,9 @@ function ChatMarkdownFileActionCard({
               ? m.missingDescription
               : ref?.scope === 'invalid'
                 ? m.invalidDescription
-                : canUseShell
-                  ? m.externalDescription
-                  : m.browserExternalDescription}
+                : m.browserExternalDescription}
       </p>
       <div className="flex flex-wrap items-center gap-1 pt-0.5">
-        {canUseShell && ref?.capabilities.includes('openExternal') ? (
-          <button
-            type="button"
-            className={fileActionButtonClass}
-            onClick={() => void runAction('openExternal')}
-          >
-            <ExternalLink className="size-3" strokeWidth={1.75} aria-hidden />
-            <span>{m.openExternal}</span>
-          </button>
-        ) : null}
-        {canUseShell && ref?.capabilities.includes('revealInFolder') ? (
-          <button
-            type="button"
-            className={fileActionButtonClass}
-            onClick={() => void runAction('revealInFolder')}
-          >
-            <FolderOpen className="size-3" strokeWidth={1.75} aria-hidden />
-            <span>{m.revealInFolder}</span>
-          </button>
-        ) : null}
         <button type="button" className={fileActionButtonClass} onClick={copyPath}>
           <Copy className="size-3" strokeWidth={1.75} aria-hidden />
           <span>{copied ? messages(language).chat.messageCopied : m.copyPath}</span>
@@ -403,7 +359,6 @@ function ChatMarkdownView({
       {resolution ? (
         <ChatMarkdownFileActionCard
           resolution={resolution}
-          sessionKey={sessionKey}
           onClose={() => setResolution(null)}
         />
       ) : null}

@@ -40,6 +40,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'files',
+    match: (path) => startsWithAny(path, ['/api/files']),
+    load: async () => {
+      const { registerFilesRoutes } = await import('./files.js');
+      return { register: registerFilesRoutes };
+    },
+  },
+  {
     id: 'workspace',
     match: (path) => startsWithAny(path, ['/api/workspace']),
     load: async () => {

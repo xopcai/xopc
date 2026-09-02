@@ -198,7 +198,7 @@ export function useWorkspacePreviewState({
               type: 'loadSuccess',
               payload: {
                 descriptor,
-                hostAbsolutePath: ref?.absolutePath ?? null,
+                hostAbsolutePath: null,
                 mtimeMs: typeof ref?.mtimeMs === 'number' ? ref.mtimeMs : null,
               },
             });
@@ -212,14 +212,14 @@ export function useWorkspacePreviewState({
 
     if (mode === 'text') {
       void readWorkspaceFile(filePath, readOpts)
-        .then(({ content, mtimeMs, absolutePath }) => {
+        .then(({ content, mtimeMs }) => {
           if (!cancelled) {
             dispatchPreview({
               type: 'loadSuccess',
               payload: {
                 descriptor,
                 textContent: content,
-                hostAbsolutePath: absolutePath ?? null,
+                hostAbsolutePath: null,
                 mtimeMs: typeof mtimeMs === 'number' ? mtimeMs : null,
               },
             });
@@ -239,7 +239,7 @@ export function useWorkspacePreviewState({
               payload: {
                 descriptor,
                 binaryBuffer,
-                hostAbsolutePath: ref?.absolutePath ?? null,
+                hostAbsolutePath: null,
                 mtimeMs: typeof ref?.mtimeMs === 'number' ? ref.mtimeMs : null,
               },
             });
