@@ -17,10 +17,13 @@ import { registerYouRoutes } from '../you.js';
 
 describe('structured user context routes', () => {
   let stateDir: string;
+  let previousStateDir: string | undefined;
   let app: Hono;
 
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-you-routes-'));
+    previousStateDir = process.env.XOPC_STATE_DIR;
+    process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     app = new Hono();
@@ -34,6 +37,8 @@ describe('structured user context routes', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+    if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
+    else process.env.XOPC_STATE_DIR = previousStateDir;
   });
 
   it('serves profile, understanding, and rules as separate domains', async () => {
@@ -74,6 +79,30 @@ describe('structured user context routes', () => {
     const body = await response.json() as { profile: { callName: string }; suggestedCallName: string };
     expect(body.profile.callName).toBe('');
     expect(typeof body.suggestedCallName).toBe('string');
+  });
+
+  it('stores, serves, validates, and removes the user avatar', async () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const uploaded = await app.request('/api/you/avatar', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mimeType: 'image/png', base64: png }),
+    });
+    expect(uploaded.status).toBe(200);
+
+    const avatar = await app.request('/api/you/avatar');
+    expect(avatar.status).toBe(200);
+    expect(avatar.headers.get('content-type')).toBe('image/png');
+    expect(avatar.headers.get('cache-control')).toBe('private, no-store');
+    expect((await avatar.arrayBuffer()).byteLength).toBeGreaterThan(0);
+
+    const invalid = await app.request('/api/you/avatar', {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mimeType: 'image/jpeg', base64: png }),
+    });
+    expect(invalid.status).toBe(400);
+
+    expect((await app.request('/api/you/avatar', { method: 'DELETE' })).status).toBe(200);
+    expect((await app.request('/api/you/avatar')).status).toBe(404);
   });
 
   it('serves relationships from You and accepts user corrections', async () => {

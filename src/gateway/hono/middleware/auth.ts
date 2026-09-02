@@ -50,7 +50,7 @@ function extractTokenFromHeader(authHeader: string | null): string | null {
 
 /**
  * SECURITY: query-string tokens leak into server logs, Referer headers, and
- * browser history. We accept them only for agent avatar `<img>` loads, where an
+ * browser history. We accept them only for avatar `<img>` loads, where an
  * Authorization header cannot be set. Realtime WebSocket authentication uses a
  * one-time ticket acquired over authenticated HTTP.
  */
@@ -59,10 +59,11 @@ function extractTokenFromQuery(url: string): string | null {
 }
 
 const AGENT_AVATAR_GET_PATH = /^\/api\/agents\/[^/]+\/avatar$/;
+const USER_AVATAR_GET_PATH = '/api/you/avatar';
 
 /** Exported for gateway security tests. */
 export function isQueryTokenAllowedPath(path: string, method: string): boolean {
-  if (method === 'GET' && AGENT_AVATAR_GET_PATH.test(path)) {
+  if (method === 'GET' && (AGENT_AVATAR_GET_PATH.test(path) || path === USER_AVATAR_GET_PATH)) {
     return true;
   }
   return false;
