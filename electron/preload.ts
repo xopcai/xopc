@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("shell:open-path", filePath) as Promise<
         { ok: true } | { ok: false; error: string; code?: string }
       >,
+    openTemporaryFile: (input: { fileName: string; data: Uint8Array }) =>
+      ipcRenderer.invoke("shell:open-temporary-file", input) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
     showItemInFolder: (filePath: string) =>
       ipcRenderer.invoke("shell:show-item-in-folder", filePath) as Promise<{
         success: boolean;

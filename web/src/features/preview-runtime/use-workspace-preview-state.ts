@@ -341,7 +341,15 @@ export function useWorkspacePreviewState({
 
   const canDownload = !preview.loading && Boolean(filePath);
   const canOpenWithSystemApp =
-    isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath);
+    isElectron()
+    && (
+      (Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath))
+      || (
+        preview.descriptor.type === 'spreadsheet'
+        && Boolean(preview.binaryBuffer)
+        && Boolean(window.electronAPI?.shell?.openTemporaryFile)
+      )
+    );
   const canChooseOpenWithApp =
     isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.chooseAppAndOpenPath);
 
@@ -370,8 +378,21 @@ export function useWorkspacePreviewState({
 
   const onOpenWithSystemApp = useCallback(async () => {
     const p = preview.hostAbsolutePath;
-    if (p && window.electronAPI?.shell?.openPath) await window.electronAPI.shell.openPath(p);
-  }, [preview.hostAbsolutePath]);
+    if (p && window.electronAPI?.shell?.openPath) {
+      return window.electronAPI.shell.openPath(p);
+    }
+    if (
+      preview.descriptor.type === 'spreadsheet'
+      && preview.binaryBuffer
+      && window.electronAPI?.shell?.openTemporaryFile
+    ) {
+      return window.electronAPI.shell.openTemporaryFile({
+        fileName: preview.descriptor.fileName,
+        data: new Uint8Array(preview.binaryBuffer),
+      });
+    }
+    return undefined;
+  }, [preview.binaryBuffer, preview.descriptor.fileName, preview.descriptor.type, preview.hostAbsolutePath]);
 
   const onChooseOpenWithApp = useCallback(async () => {
     const p = preview.hostAbsolutePath;

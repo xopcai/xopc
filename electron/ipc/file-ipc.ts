@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { watch as fsWatch } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -7,6 +7,11 @@ import { type IpcMain, app, dialog, shell } from 'electron';
 import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
 import { assertTrustedRenderer } from './trusted-renderer.js';
+import {
+  cleanupStaleTemporaryPreviews,
+  stageTemporarySpreadsheet,
+  validateTemporarySpreadsheetInput,
+} from './temporary-preview-file.js';
 
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
 const ENDPOINT_SAVE_TEXT_MAX_BYTES = 200 * 1024;
@@ -44,10 +49,13 @@ const watchers = new Map<string, ReturnType<typeof fsWatch>>();
 
 export type ShellOpenErrorCode =
   | 'CANCELED'
+  | 'INVALID_FILE'
   | 'INVALID_PATH'
   | 'NOT_FOUND'
   | 'NOT_OPENABLE'
   | 'INVALID_APP'
+  | 'TOO_LARGE'
+  | 'WRITE_FAILED'
   | 'OPEN_FAILED';
 
 export type ShellOpenResult =
@@ -70,6 +78,7 @@ export type RecommendedOpenWithApp = {
 
 const RECENT_OPEN_WITH_LIMIT = 8;
 const SHELL_PREFS_NAME = 'electron-shell-open-with.json';
+const TEMPORARY_PREVIEW_DIRECTORY_NAME = 'xopc-local-preview';
 
 export type FileIpcOptions = {
   allowedRoots?: string[];
@@ -431,6 +440,10 @@ function shellPrefsPath(): string {
   return join(app.getPath('userData'), SHELL_PREFS_NAME);
 }
 
+function temporaryPreviewRoot(): string {
+  return join(app.getPath('temp'), TEMPORARY_PREVIEW_DIRECTORY_NAME);
+}
+
 function appNameFromPath(appPath: string): string {
   const base = basename(appPath);
   return process.platform === 'darwin' && base.endsWith('.app') ? base.slice(0, -4) : base;
@@ -620,6 +633,7 @@ async function spawnOpenWithApp(filePath: string, appPath: string): Promise<Shel
 
 export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}): void {
   const allowedRoots = options.allowedRoots ?? [];
+  void cleanupStaleTemporaryPreviews(temporaryPreviewRoot()).catch(() => undefined);
 
   ipcMain.handle('file:read', async (event, filePath: string) => {
     assertTrustedRenderer(event);
@@ -729,6 +743,37 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     if (!validation.ok) return validation;
     const err = await shell.openPath(filePath);
     return err ? { ok: false as const, code: 'OPEN_FAILED' as const, error: err } : { ok: true as const };
+  });
+
+  ipcMain.handle('shell:open-temporary-file', async (event, input: unknown): Promise<ShellOpenResult> => {
+    assertTrustedRenderer(event);
+    const validation = validateTemporarySpreadsheetInput(input);
+    if (!validation.ok) return validation;
+
+    let staged: Awaited<ReturnType<typeof stageTemporarySpreadsheet>>;
+    try {
+      staged = await stageTemporarySpreadsheet(temporaryPreviewRoot(), validation.input);
+    } catch (error) {
+      return {
+        ok: false,
+        code: 'WRITE_FAILED',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    try {
+      const error = await shell.openPath(staged.filePath);
+      if (!error) return { ok: true };
+      await rm(staged.directory, { recursive: true, force: true }).catch(() => undefined);
+      return { ok: false, code: 'OPEN_FAILED', error };
+    } catch (error) {
+      await rm(staged.directory, { recursive: true, force: true }).catch(() => undefined);
+      return {
+        ok: false,
+        code: 'OPEN_FAILED',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   });
 
   ipcMain.handle('shell:show-item-in-folder', async (event, filePath: string) => {

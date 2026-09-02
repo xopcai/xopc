@@ -958,6 +958,8 @@
     "attachmentPreviewOpenElsewhereHint": "Download the file to open it in another application on your computer.",
     "attachmentPreviewOpenElsewhereTruncated": "Only part of this file is shown here. Download the full file to open it elsewhere.",
     "attachmentPreviewDownloadFull": "Download file",
+    "attachmentPreviewOpenLocal": "Open in local app",
+    "attachmentPreviewOpenLocalFailed": "Could not open this spreadsheet in a local application",
     "attachmentPreviewImage": "Preview image",
     "attachmentPreviewFullscreen": "Full screen preview",
     "attachmentPreviewExitFullscreen": "Exit full screen",
