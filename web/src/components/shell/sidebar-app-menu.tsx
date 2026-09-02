@@ -4,7 +4,6 @@ import {
   ChevronRight,
   ExternalLink,
   Globe,
-  HeartHandshake,
   Info,
   Palette,
   PawPrint,
@@ -265,17 +264,6 @@ export function SidebarAppMenu({
           <span className="min-w-0 flex-1 text-left">{petToggleLabel}</span>
         </button>
       ) : null}
-
-      <Link
-        to="/you"
-        className={rowClass}
-        onMouseEnter={() => setOpenFlyout(null)}
-        onFocus={() => setOpenFlyout(null)}
-        onClick={() => onNavigate?.()}
-      >
-        <HeartHandshake className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
-        <span className="min-w-0 flex-1">{m.nav.profile}</span>
-      </Link>
 
       <div className="my-2 h-px bg-edge-subtle" role="separator" />
 
