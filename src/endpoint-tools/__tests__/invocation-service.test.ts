@@ -1,6 +1,10 @@
 import crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import type { EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import {
+  ENDPOINT_PROTOCOL_VERSION,
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
+  type EndpointHelloPayload,
+} from '@xopcai/endpoint-tools-protocol';
 
 import {
   EndpointInvocationService,
@@ -24,6 +28,9 @@ function fixture() {
     title: 'Write clipboard',
     description: 'Write clipboard text.',
     inputSchema: { type: 'object' },
+    outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+    policyId: 'user.foreground-write',
+    sensitivity: 'personal' as const,
     effect: 'write' as const,
     confirmation: 'always' as const,
     requiresForeground: true,
@@ -73,14 +80,14 @@ describe('EndpointInvocationService', () => {
     const invoke = JSON.parse(sent[0]!) as { payload: { invocationId: string } };
 
     service.handleMessage('endpoint-1', {
-      protocolVersion: 1,
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
       messageId: crypto.randomUUID(),
       type: 'tool.received',
       sentAt: Date.now(),
       payload: { invocationId: invoke.payload.invocationId },
     });
     service.handleMessage('endpoint-1', {
-      protocolVersion: 1,
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
       messageId: crypto.randomUUID(),
       type: 'tool.result',
       sentAt: Date.now(),
@@ -91,6 +98,39 @@ describe('EndpointInvocationService', () => {
     });
 
     await expect(promise).resolves.toEqual({ content: [{ type: 'text', text: 'written' }] });
+  });
+
+  it('rejects endpoint output that violates the registered result contract', async () => {
+    const { sent, descriptor, service } = fixture();
+    const promise = service.invoke({
+      endpointId: 'endpoint-1',
+      toolCallId: 'tool-call-1',
+      toolName: descriptor.name,
+      arguments: { text: 'hello' },
+      descriptorRevision: endpointToolRevision(descriptor),
+    });
+    const invoke = JSON.parse(sent[0]!) as { payload: { invocationId: string } };
+    service.handleMessage('endpoint-1', {
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
+      messageId: crypto.randomUUID(),
+      type: 'tool.received',
+      sentAt: Date.now(),
+      payload: { invocationId: invoke.payload.invocationId },
+    });
+    service.handleMessage('endpoint-1', {
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
+      messageId: crypto.randomUUID(),
+      type: 'tool.result',
+      sentAt: Date.now(),
+      payload: {
+        invocationId: invoke.payload.invocationId,
+        content: [{ type: 'json', value: { unexpected: true } }],
+      },
+    });
+
+    await expect(promise).rejects.toMatchObject<Partial<EndpointToolExecutionError>>({
+      code: 'PROTOCOL_ERROR',
+    });
   });
 
   it('rejects stale descriptor revisions before sending', async () => {

@@ -8,11 +8,14 @@ import {
   closeXopcDatabase,
   bindEndpointPrincipal,
   createEndpointPrincipal,
+  deleteEndpointSessionBinding,
+  getEndpointSessionBinding,
   getEndpointPrincipal,
   listEndpointPrincipals,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   revokeEndpointPrincipal,
+  setEndpointSessionBinding,
   touchEndpointPrincipal,
 } from '../index.js';
 
@@ -75,5 +78,21 @@ describe('endpoint principal repository', () => {
     expect(bindEndpointPrincipal('tab-1', first.id, 100)).toBe(true);
     expect(bindEndpointPrincipal('tab-1', first.id, 200)).toBe(true);
     expect(bindEndpointPrincipal('tab-1', second.id, 300)).toBe(false);
+  });
+
+  it('persists one explicit endpoint target per session', () => {
+    const principal = createEndpointPrincipal({
+      id: '0196d708-62f0-7000-8000-000000000005',
+      kind: 'mobile', displayName: 'Phone', platform: 'ios', publicKey: 'phone-key',
+    });
+    expect(bindEndpointPrincipal('phone-1', principal.id, 100)).toBe(true);
+    expect(setEndpointSessionBinding({
+      sessionKey: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200,
+    })).toEqual({ sessionKey: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200 });
+    expect(getEndpointSessionBinding('telegram:chat-1')).toEqual({
+      sessionKey: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200,
+    });
+    expect(deleteEndpointSessionBinding('telegram:chat-1')).toBe(true);
+    expect(getEndpointSessionBinding('telegram:chat-1')).toBeUndefined();
   });
 });

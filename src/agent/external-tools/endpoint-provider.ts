@@ -84,6 +84,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       details: {
         endpointId: resolved.endpointId,
         endpointToolName: resolved.tool.descriptor.name,
+        endpointSensitivity: resolved.tool.descriptor.sensitivity,
         ...(result.details ?? {}),
         ...(files.length === 0 ? {} : { endpointFiles: files }),
       },
@@ -91,7 +92,11 @@ export class EndpointToolProvider implements ExternalToolProvider {
   }
 
   private currentEndpoint() {
-    const origin = this.deps.getCurrentContext()?.origin;
+    const context = this.deps.getCurrentContext();
+    if (!context) return undefined;
+    const binding = this.deps.runtime.bindings.get(context.sessionKey);
+    if (binding) return this.deps.runtime.bindings.resolve(context.sessionKey);
+    const origin = context.origin;
     if (origin?.type !== 'endpoint') return undefined;
     return this.deps.runtime.registry.get(origin.endpointId);
   }
