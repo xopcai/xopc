@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
-import { fetchProjectActivity, fetchProjectSessions, pinProject, updateProjectStatus } from '../projects';
+import { fetchProject, fetchProjectActivity, fetchProjectSessions, fetchProjectSkills, pinProject, updateProjectStatus } from '../projects';
 
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn() }));
 
@@ -38,6 +38,44 @@ describe('project queries', () => {
 
     await expect(fetchProjectActivity('project-1')).resolves.toMatchObject([{ id: 'activity-1' }]);
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/projects/project-1/activity?visibility=timeline&limit=8');
+  });
+
+  it('loads project progress details with safe empty collections', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      project: { id: 'project-1', name: 'Mobile', status: 'active', outcome: 'Ship the app' },
+    })));
+
+    await expect(fetchProject('project-1')).resolves.toMatchObject({
+      outcome: 'Ship the app',
+      milestones: [],
+      recentUpdates: [],
+    });
+  });
+
+  it('loads project and inherited skill summaries', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      workspaceRoot: '/workspace',
+      sources: [{ origin: 'xopc-workspace', rootDir: '/workspace/.xopc/skills', state: 'active' }],
+      items: [{
+        key: 'xopc-workspace:review',
+        directoryId: 'review',
+        name: 'review',
+        description: 'Review changes',
+        origin: 'xopc-workspace',
+        path: '/workspace/.xopc/skills/review',
+        effective: true,
+        disableModelInvocation: false,
+      }],
+      inheritedItems: [],
+      diagnostics: [],
+    })));
+
+    await expect(fetchProjectSkills('project/one')).resolves.toMatchObject({
+      items: [{ name: 'review', effective: true }],
+    });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/projects/project%2Fone/skills');
   });
 
   it('uses explicit project actions for pinning and archiving', async () => {

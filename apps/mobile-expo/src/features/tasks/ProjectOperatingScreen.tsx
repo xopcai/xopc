@@ -1,8 +1,9 @@
-import type { Automation, FileResource, ProjectTaskCard, TaskRunReceipt } from '@xopcai/gateway-contract';
+import type { Automation, FileResource, ProjectOperatingView, ProjectTaskCard, TaskRunReceipt } from '@xopcai/gateway-contract';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
@@ -19,19 +20,34 @@ import {
   fetchProjectActivity,
   fetchProjectOperatingView,
   fetchProjectSessions,
+  fetchProjectSkills,
   pinProject,
   unpinProject,
   updateProjectStatus,
   type ProjectActivityEvent,
+  type ProjectDetails,
+  type ProjectMilestone,
   type ProjectSession,
+  type ProjectSkillsResponse,
+  type ProjectUpdate,
 } from '../../query/projects';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { resolveNoteListTitle } from '../notes/note-title';
 
-import { groupProjectTasks } from './project-presentation';
+import { formatProjectRelativeTime, groupProjectTasks } from './project-presentation';
 
-type ProjectSection = 'overview' | 'work' | 'context';
+type ProjectSection = 'overview' | 'work' | 'context' | 'progress';
+
+const PROJECT_SECTION_INDEX: Record<ProjectSection, number> = {
+  overview: 0,
+  work: 1,
+  context: 2,
+  progress: 3,
+};
+
+const PROJECT_SECTIONS: ProjectSection[] = ['overview', 'work', 'context', 'progress'];
 
 function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
@@ -58,6 +74,7 @@ export function ProjectOperatingScreen() {
   const messages = useMessages();
   const labels = messages.tasksPage;
   const [section, setSection] = useState<ProjectSection>('overview');
+  const pagerRef = useRef<PagerView>(null);
   const [createMenuVisible, setCreateMenuVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
 
@@ -88,13 +105,18 @@ export function ProjectOperatingScreen() {
   });
   const activity = useQuery({
     queryKey: queryKeys.projectActivity(projectId),
-    queryFn: () => fetchProjectActivity(projectId),
-    enabled: configured && Boolean(projectId) && section === 'overview',
+    queryFn: () => fetchProjectActivity(projectId, 50),
+    enabled: configured && Boolean(projectId) && section === 'progress',
   });
   const automations = useQuery({
     queryKey: queryKeys.projectAutomations(projectId),
     queryFn: () => fetchAutomations(projectId),
-    enabled: configured && Boolean(projectId) && section === 'overview',
+    enabled: configured && Boolean(projectId) && section === 'progress',
+  });
+  const skills = useQuery({
+    queryKey: queryKeys.projectSkills(projectId),
+    queryFn: () => fetchProjectSkills(projectId),
+    enabled: configured && Boolean(projectId) && section === 'context',
   });
   const details = useQuery({
     queryKey: queryKeys.project(projectId),
@@ -141,12 +163,20 @@ export function ProjectOperatingScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectOperatingView(projectId) });
     },
   });
-  const refreshing = view.isFetching || sessions.isFetching || notes.isFetching || files.isFetching || activity.isFetching || automations.isFetching;
-  const refresh = () => {
+  const selectSection = useCallback((nextSection: ProjectSection) => {
+    setSection(nextSection);
+    pagerRef.current?.setPage(PROJECT_SECTION_INDEX[nextSection]);
+  }, []);
+  const onPageSelected = useCallback((position: number) => {
+    const nextSection = PROJECT_SECTIONS[position];
+    if (nextSection) setSection(nextSection);
+  }, []);
+  const refresh = (nextSection: ProjectSection) => {
     void view.refetch();
-    if (section === 'work') void sessions.refetch();
-    if (section === 'context') { void notes.refetch(); void files.refetch(); }
-    if (section === 'overview') { void activity.refetch(); void automations.refetch(); }
+    void details.refetch();
+    if (nextSection === 'work') void sessions.refetch();
+    if (nextSection === 'context') { void notes.refetch(); void fileSpace.refetch(); void files.refetch(); void skills.refetch(); }
+    if (nextSection === 'progress') { void activity.refetch(); void automations.refetch(); }
   };
 
   if (view.isLoading) return (
@@ -176,63 +206,104 @@ export function ProjectOperatingScreen() {
           { icon: 'plus', onPress: () => setCreateMenuVisible(true), accessibilityLabel: labels.projectCreateTitle },
         ]}
       />
-      <ProjectSectionTabs value={section} onChange={setSection} />
+      <ProjectSectionTabs value={section} onChange={selectSection} />
       {createChat.error || createNote.error || toggleAutomation.error || runAutomation.error ? (
         <Text style={[styles.inlineError, { color: colors.semantic.error }]}>
           {(createChat.error ?? createNote.error ?? toggleAutomation.error ?? runAutomation.error)?.message}
         </Text>
       ) : null}
-      <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <PagerView
+        ref={pagerRef}
+        style={styles.pager}
+        initialPage={PROJECT_SECTION_INDEX.overview}
+        onPageSelected={(event) => onPageSelected(event.nativeEvent.position)}
       >
-        {section === 'overview' ? (
-          <ProjectOverview
-            tasks={data.tasks}
-            receipts={data.recentResults}
-            health={data.digest.health}
-            recommendation={data.digest.recommendedAction}
-            activity={activity.data ?? []}
-            activityLoading={activity.isLoading}
-            activityError={activity.isError}
-            automations={automations.data ?? []}
-            automationsLoading={automations.isLoading}
-            automationsError={automations.isError}
-            automationPendingId={toggleAutomation.isPending
-              ? toggleAutomation.variables?.id
-              : runAutomation.isPending ? runAutomation.variables : undefined}
-            onToggleAutomation={(automation) => toggleAutomation.mutate({ id: automation.id, enabled: !automation.enabled })}
-            onRunAutomation={(automation) => runAutomation.mutate(automation.id)}
-            onTaskPress={(taskId) => router.push(`/tasks/${taskId}`)}
-            onCreateTask={() => router.push(`/tasks/create?projectId=${projectId}`)}
-          />
-        ) : null}
-        {section === 'work' ? (
-          <ProjectWork
-            tasks={data.tasks}
-            sessions={sessions.data ?? []}
-            sessionsLoading={sessions.isLoading}
-            sessionsError={sessions.isError}
-            onTaskPress={(taskId) => router.push(`/tasks/${taskId}`)}
-            onSessionPress={(sessionKey) => openChat(router, sessionKey)}
-            onCreateTask={() => router.push(`/tasks/create?projectId=${projectId}`)}
-            onCreateChat={() => createChat.mutate()}
-          />
-        ) : null}
-        {section === 'context' ? (
-          <ProjectContext
-            notes={notes.data?.items ?? []}
-            files={files.data ?? []}
-            loading={notes.isLoading || fileSpace.isLoading || files.isLoading}
-            notesError={notes.isError}
-            filesError={files.isError}
-            onNotePress={(noteId) => openNoteDetail(router, noteId)}
-            onCreateNote={() => createNote.mutate()}
-            onBrowseFiles={() => router.push(`/files/context/project/${encodeURIComponent(projectId)}` as never)}
-          />
-        ) : null}
-      </ScrollView>
+        <View key="overview" style={styles.page} collapsable={false}>
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={view.isFetching || details.isFetching} onRefresh={() => refresh('overview')} />}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <ProjectOverview
+              tasks={data.tasks}
+              receipts={data.recentResults}
+              project={details.data}
+              fallbackDirection={data.project.description || data.project.brief || data.digest.summary}
+              blockers={data.blockers}
+              health={data.digest.health}
+              recommendation={data.digest.recommendedAction}
+              onTaskPress={(taskId) => router.push(`/tasks/${taskId}`)}
+              onCreateTask={() => router.push(`/tasks/create?projectId=${projectId}`)}
+            />
+          </ScrollView>
+        </View>
+        <View key="work" style={styles.page} collapsable={false}>
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={view.isFetching || sessions.isFetching} onRefresh={() => refresh('work')} />}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <ProjectWork
+              tasks={data.tasks}
+              sessions={sessions.data ?? []}
+              sessionsLoading={sessions.isLoading}
+              sessionsError={sessions.isError}
+              onTaskPress={(taskId) => router.push(`/tasks/${taskId}`)}
+              onSessionPress={(sessionKey) => openChat(router, sessionKey)}
+              onCreateTask={() => router.push(`/tasks/create?projectId=${projectId}`)}
+              onCreateChat={() => createChat.mutate()}
+            />
+          </ScrollView>
+        </View>
+        <View key="context" style={styles.page} collapsable={false}>
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={view.isFetching || notes.isFetching || fileSpace.isFetching || files.isFetching || skills.isFetching} onRefresh={() => refresh('context')} />}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <ProjectContext
+              notes={notes.data?.items ?? []}
+              files={files.data ?? []}
+              loading={notes.isLoading || fileSpace.isLoading || files.isLoading}
+              notesError={notes.isError}
+              filesError={files.isError}
+              skills={skills.data}
+              skillsLoading={skills.isLoading}
+              skillsError={skills.isError}
+              onNotePress={(noteId) => openNoteDetail(router, noteId)}
+              onCreateNote={() => createNote.mutate()}
+              onBrowseFiles={() => router.push(`/files/context/project/${encodeURIComponent(projectId)}` as never)}
+              onBrowseSkills={() => router.push(`/projects/${encodeURIComponent(projectId)}/skills`)}
+            />
+          </ScrollView>
+        </View>
+        <View key="progress" style={styles.page} collapsable={false}>
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={view.isFetching || details.isFetching || activity.isFetching || automations.isFetching} onRefresh={() => refresh('progress')} />}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <ProjectProgress
+              tasks={data.tasks}
+              receipts={data.recentResults}
+              milestones={details.data?.milestones ?? []}
+              updates={details.data?.recentUpdates ?? []}
+              activity={activity.data ?? []}
+              activityLoading={activity.isLoading}
+              activityError={activity.isError}
+              automations={automations.data ?? []}
+              automationsLoading={automations.isLoading}
+              automationsError={automations.isError}
+              automationPendingId={toggleAutomation.isPending
+                ? toggleAutomation.variables?.id
+                : runAutomation.isPending ? runAutomation.variables : undefined}
+              onToggleAutomation={(automation) => toggleAutomation.mutate({ id: automation.id, enabled: !automation.enabled })}
+              onRunAutomation={(automation) => runAutomation.mutate(automation.id)}
+              onTaskPress={(taskId) => router.push(`/tasks/${taskId}`)}
+            />
+          </ScrollView>
+        </View>
+      </PagerView>
       <BottomSheetModal visible={createMenuVisible} onDismiss={() => setCreateMenuVisible(false)} title={labels.projectCreateTitle} subtitle={labels.projectCreateHint} maxHeight="58%">
         <ProjectCreateAction icon="message-plus-outline" title={labels.createProjectChat} description={labels.createProjectChatHint} loading={createChat.isPending} disabled={createChat.isPending || createNote.isPending} onPress={() => createChat.mutate()} />
         <ProjectCreateAction icon="clipboard-plus-outline" title={labels.createProjectTask} description={labels.createProjectTaskHint} disabled={createChat.isPending || createNote.isPending} onPress={() => { setCreateMenuVisible(false); router.push(`/tasks/create?projectId=${projectId}`); }} />
@@ -269,6 +340,7 @@ function ProjectSectionTabs({ value, onChange }: { value: ProjectSection; onChan
     { key: 'overview', label: labels.projectOverview },
     { key: 'work', label: labels.projectWork },
     { key: 'context', label: labels.projectContext },
+    { key: 'progress', label: labels.projectProgress },
   ];
   return <View style={[styles.tabs, { backgroundColor: colors.surface.input }]}>{tabs.map((tab) => {
     const selected = value === tab.key;
@@ -278,11 +350,55 @@ function ProjectSectionTabs({ value, onChange }: { value: ProjectSection; onChan
   })}</View>;
 }
 
-function ProjectOverview({ tasks, receipts, health, recommendation, activity, activityLoading, activityError, automations, automationsLoading, automationsError, automationPendingId, onToggleAutomation, onRunAutomation, onTaskPress, onCreateTask }: {
+function ProjectOverview({ tasks, receipts, project, fallbackDirection, blockers, health, recommendation, onTaskPress, onCreateTask }: {
   tasks: ProjectTaskCard[];
   receipts: Array<{ taskId: string; taskTitle: string; receipt: TaskRunReceipt }>;
+  project?: ProjectDetails;
+  fallbackDirection: string;
+  blockers: ProjectOperatingView['blockers'];
   health: string;
   recommendation?: string;
+  onTaskPress: (taskId: string) => void;
+  onCreateTask: () => void;
+}) {
+  const { colors } = useTheme();
+  const labels = useMessages().tasksPage;
+  const grouped = groupProjectTasks(tasks);
+  const focusTask = grouped.needsUser[0] ?? grouped.moving[0] ?? grouped.other.find((task) => task.phase === 'ready');
+  const healthColor = health === 'attention' ? colors.semantic.warning : health === 'healthy' ? colors.semantic.success : colors.text.tertiary;
+  const direction = project?.outcome?.trim() || project?.description?.trim() || project?.brief?.trim() || fallbackDirection;
+  const currentMilestones = (project?.milestones ?? []).filter((milestone) => milestone.status !== 'cancelled').slice(0, 3);
+  return <>
+    <ProjectCard title={labels.projectDirection}>
+      <View style={styles.summaryBody}>
+        <Text style={[styles.body, { color: colors.text.secondary }]}>{direction}</Text>
+      </View>
+    </ProjectCard>
+    <View style={[styles.pulse, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+      <View style={styles.pulseTitleRow}><View style={[styles.healthDot, { backgroundColor: healthColor }]} /><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text></View>
+      <Text style={[styles.body, { color: colors.text.secondary }]}>{tasks.length ? t(labels.projectPulseSummary, { moving: grouped.moving.length, needsUser: grouped.needsUser.length }) : labels.projectEmptyPulse}</Text>
+      {recommendation ? <Text style={[styles.recommendation, { color: colors.text.primary }]}>{recommendation}</Text> : null}
+      <Button mode="contained" icon={focusTask ? 'arrow-right' : 'plus'} onPress={() => focusTask ? onTaskPress(focusTask.id) : onCreateTask()}>{focusTask ? labels.projectContinue : labels.create}</Button>
+    </View>
+    {blockers.length ? <ProjectCard title={labels.projectBlockers}>
+      {blockers.slice(0, 3).map((blocker) => (
+        <ProjectSimpleRow key={blocker.id} icon="alert-circle-outline" title={blocker.title} subtitle={blocker.detail} onPress={() => onTaskPress(blocker.taskId)} />
+      ))}
+    </ProjectCard> : null}
+    {currentMilestones.length ? <ProjectCard title={labels.projectMilestones}>
+      {currentMilestones.map((milestone) => <ProjectMilestoneRow key={milestone.id} milestone={milestone} />)}
+    </ProjectCard> : null}
+    <ProjectTaskGroup title={labels.projectNeedsYou} tasks={grouped.needsUser.slice(0, 3)} onPress={onTaskPress} emphasis />
+    <ProjectTaskGroup title={labels.projectMoving} tasks={grouped.moving.slice(0, 3)} onPress={onTaskPress} />
+    {receipts.length ? <ProjectCard title={labels.recentResults}>{receipts.slice(0, 3).map((result) => <ProjectReceiptRow key={result.receipt.runId} receipt={result.receipt} taskTitle={result.taskTitle} onPress={() => onTaskPress(result.taskId)} />)}</ProjectCard> : null}
+  </>;
+}
+
+function ProjectProgress({ tasks, receipts, milestones, updates, activity, activityLoading, activityError, automations, automationsLoading, automationsError, automationPendingId, onToggleAutomation, onRunAutomation, onTaskPress }: {
+  tasks: ProjectTaskCard[];
+  receipts: Array<{ taskId: string; taskTitle: string; receipt: TaskRunReceipt }>;
+  milestones: ProjectMilestone[];
+  updates: ProjectUpdate[];
   activity: ProjectActivityEvent[];
   activityLoading: boolean;
   activityError: boolean;
@@ -293,25 +409,23 @@ function ProjectOverview({ tasks, receipts, health, recommendation, activity, ac
   onToggleAutomation: (automation: Automation) => void;
   onRunAutomation: (automation: Automation) => void;
   onTaskPress: (taskId: string) => void;
-  onCreateTask: () => void;
 }) {
-  const { colors } = useTheme();
   const labels = useMessages().tasksPage;
-  const grouped = groupProjectTasks(tasks);
-  const focusTask = grouped.needsUser[0] ?? grouped.moving[0] ?? grouped.other.find((task) => task.phase === 'ready');
-  const healthColor = health === 'attention' ? colors.semantic.warning : health === 'healthy' ? colors.semantic.success : colors.text.tertiary;
+  const completedTasks = tasks.filter((task) => task.phase === 'closed');
+  const visibleMilestones = milestones.filter((milestone) => milestone.status !== 'cancelled');
   return <>
-    <View style={[styles.pulse, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
-      <View style={styles.pulseTitleRow}><View style={[styles.healthDot, { backgroundColor: healthColor }]} /><Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text></View>
-      <Text style={[styles.body, { color: colors.text.secondary }]}>{tasks.length ? t(labels.projectPulseSummary, { moving: grouped.moving.length, needsUser: grouped.needsUser.length }) : labels.projectEmptyPulse}</Text>
-      {recommendation ? <Text style={[styles.recommendation, { color: colors.text.primary }]}>{recommendation}</Text> : null}
-      <Button mode="contained" icon={focusTask ? 'arrow-right' : 'plus'} onPress={() => focusTask ? onTaskPress(focusTask.id) : onCreateTask()}>{focusTask ? labels.projectContinue : labels.create}</Button>
-    </View>
-    <ProjectTaskGroup title={labels.projectNeedsYou} tasks={grouped.needsUser.slice(0, 3)} onPress={onTaskPress} emphasis />
-    <ProjectTaskGroup title={labels.projectMoving} tasks={grouped.moving.slice(0, 3)} onPress={onTaskPress} />
-    {receipts.length ? <ProjectCard title={labels.recentResults}>{receipts.slice(0, 3).map((result) => <ProjectReceiptRow key={result.receipt.runId} receipt={result.receipt} taskTitle={result.taskTitle} onPress={() => onTaskPress(result.taskId)} />)}</ProjectCard> : null}
+    <ProjectCard title={labels.projectMilestones}>
+      {visibleMilestones.length
+        ? visibleMilestones.map((milestone) => <ProjectMilestoneRow key={milestone.id} milestone={milestone} />)
+        : <ProjectEmpty icon="flag-outline" text={labels.projectNoMilestones} />}
+    </ProjectCard>
+    <ProjectCard title={labels.projectUpdates}>
+      {updates.length
+        ? updates.map((update) => <ProjectUpdateRow key={update.id} update={update} />)
+        : <ProjectEmpty icon="chart-timeline-variant" text={labels.projectNoUpdates} />}
+    </ProjectCard>
     <ProjectCard title={labels.projectAutomations}>
-      {automationsLoading ? <ActivityIndicator style={styles.inlineLoader} /> : automationsError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectAutomationsLoadFailed} /> : automations.length ? automations.slice(0, 3).map((automation) => (
+      {automationsLoading ? <ActivityIndicator style={styles.inlineLoader} /> : automationsError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectAutomationsLoadFailed} /> : automations.length ? automations.map((automation) => (
         <ProjectAutomationRow
           key={automation.id}
           automation={automation}
@@ -321,8 +435,18 @@ function ProjectOverview({ tasks, receipts, health, recommendation, activity, ac
         />
       )) : <ProjectEmpty icon="robot-outline" text={labels.projectNoAutomations} />}
     </ProjectCard>
+    <ProjectCard title={labels.projectResults}>
+      {receipts.length
+        ? receipts.map((result) => <ProjectReceiptRow key={result.receipt.runId} receipt={result.receipt} taskTitle={result.taskTitle} onPress={() => onTaskPress(result.taskId)} />)
+        : <ProjectEmpty icon="check-decagram-outline" text={labels.projectNoResults} />}
+    </ProjectCard>
+    <ProjectCard title={labels.projectCompletedWork}>
+      {completedTasks.length
+        ? completedTasks.map((task) => <ProjectTaskRow key={task.id} task={task} onPress={() => onTaskPress(task.id)} />)
+        : <ProjectEmpty icon="check-circle-outline" text={labels.projectNoCompletedWork} />}
+    </ProjectCard>
     <ProjectCard title={labels.projectActivity}>
-      {activityLoading ? <ActivityIndicator style={styles.inlineLoader} /> : activityError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectActivityLoadFailed} /> : activity.length ? activity.slice(0, 5).map((event) => (
+      {activityLoading ? <ActivityIndicator style={styles.inlineLoader} /> : activityError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectActivityLoadFailed} /> : activity.length ? activity.map((event) => (
         <ProjectActivityRow key={event.id} event={event} />
       )) : <ProjectEmpty icon="history" text={labels.projectNoActivity} />}
     </ProjectCard>
@@ -351,25 +475,42 @@ function ProjectWork({ tasks, sessions, sessionsLoading, sessionsError, onTaskPr
   </>;
 }
 
-function ProjectContext({ notes, files, loading, notesError, filesError, onNotePress, onCreateNote, onBrowseFiles }: {
+function ProjectContext({ notes, files, loading, notesError, filesError, skills, skillsLoading, skillsError, onNotePress, onCreateNote, onBrowseFiles, onBrowseSkills }: {
   notes: Awaited<ReturnType<typeof fetchNotes>>['items'];
   files: FileResource[];
   loading: boolean;
   notesError: boolean;
   filesError: boolean;
+  skills?: ProjectSkillsResponse;
+  skillsLoading: boolean;
+  skillsError: boolean;
   onNotePress: (noteId: string) => void;
   onCreateNote: () => void;
   onBrowseFiles: () => void;
+  onBrowseSkills: () => void;
 }) {
   const labels = useMessages().tasksPage;
   const recentFiles = [...files].filter((entry) => entry.kind === 'file').sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, 5);
-  if (loading) return <View style={styles.contextLoading}><ListSkeleton count={4} /></View>;
+  if (loading || skillsLoading) return <View style={styles.contextLoading}><ListSkeleton count={4} /></View>;
+  const skillCount = (skills?.items.length ?? 0) + (skills?.inheritedItems.length ?? 0);
+  const skillWarning = skills?.sources.some((source) => ['untrusted', 'disabled', 'invalid'].includes(source.state))
+    || skills?.diagnostics.some((diagnostic) => diagnostic.type !== 'skipped');
   return <>
     <ProjectCard title={labels.projectNotes} actionLabel={labels.createProjectNote} onAction={onCreateNote}>
       {notesError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectNotesLoadFailed} /> : notes.length ? notes.map((note) => <ProjectSimpleRow key={note.id} icon="note-text-outline" title={resolveNoteListTitle(note, labels.projectUntitledNote)} subtitle={note.snippet} onPress={() => onNotePress(note.id)} />) : <ProjectEmpty icon="note-text-outline" text={labels.projectNoNotes} />}
     </ProjectCard>
     <ProjectCard title={labels.projectFiles} actionLabel={labels.projectBrowseFiles} onAction={onBrowseFiles}>
       {filesError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectFilesLoadFailed} /> : recentFiles.length ? recentFiles.map((file) => <ProjectSimpleRow key={file.id} icon={fileIcon(file)} title={file.name} subtitle={file.relativePath} onPress={onBrowseFiles} />) : <ProjectEmpty icon="folder-open-outline" text={labels.projectNoFiles} />}
+    </ProjectCard>
+    <ProjectCard title={labels.projectSkills} actionLabel={labels.projectViewSkills} onAction={onBrowseSkills}>
+      {skillsError
+        ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectSkillsLoadFailed} />
+        : <ProjectSimpleRow
+          icon="creation-outline"
+          title={skillCount ? t(labels.projectSkillsCount, { count: skillCount }) : labels.projectNoSkills}
+          subtitle={skillWarning ? labels.projectSkillsNeedAttention : labels.projectSkillsSummary}
+          onPress={onBrowseSkills}
+        />}
     </ProjectCard>
   </>;
 }
@@ -397,6 +538,55 @@ function ProjectSimpleRow({ icon, title, subtitle, onPress }: { icon: string; ti
   </Pressable>;
 }
 
+function ProjectMilestoneRow({ milestone }: { milestone: ProjectMilestone }) {
+  const { colors } = useTheme();
+  const language = usePreferencesStore((state) => state.language);
+  const labels = useMessages().tasksPage;
+  const statusLabel = {
+    planned: labels.projectMilestonePlanned,
+    active: labels.projectMilestoneActive,
+    completed: labels.projectMilestoneCompleted,
+    cancelled: labels.projectMilestoneCancelled,
+  }[milestone.status];
+  const target = milestone.targetAt ? formatProjectRelativeTime(milestone.targetAt, language) : '';
+  return <View style={styles.simpleRow}>
+    <View style={[styles.rowIcon, { backgroundColor: milestone.status === 'completed' ? colors.accent.soft : colors.surface.grouped }]}>
+      <Icon source={milestone.status === 'completed' ? 'flag-checkered' : 'flag-outline'} size={20} color={milestone.status === 'completed' ? colors.accent.primary : colors.text.secondary} />
+    </View>
+    <View style={styles.taskBody}>
+      <Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={2}>{milestone.title}</Text>
+      <Text style={[styles.meta, { color: colors.text.tertiary }]}>{target ? `${statusLabel} · ${target}` : statusLabel}</Text>
+      {milestone.description ? <Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={2}>{milestone.description}</Text> : null}
+    </View>
+  </View>;
+}
+
+function ProjectUpdateRow({ update }: { update: ProjectUpdate }) {
+  const { colors } = useTheme();
+  const language = usePreferencesStore((state) => state.language);
+  const labels = useMessages().tasksPage;
+  const healthLabel = {
+    unknown: labels.projectHealthUnknown,
+    on_track: labels.projectHealthOnTrack,
+    at_risk: labels.projectHealthAtRisk,
+    off_track: labels.projectHealthOffTrack,
+  }[update.health];
+  const detail = update.risks[0]
+    ? `${labels.projectRisk}: ${update.risks[0]}`
+    : update.nextSteps[0]
+      ? `${labels.projectNextStep}: ${update.nextSteps[0]}`
+      : update.progress[0];
+  return <View style={styles.updateRow}>
+    <View style={styles.taskBody}>
+      <Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={2}>{update.summary}</Text>
+      <Text style={[styles.meta, { color: update.health === 'at_risk' || update.health === 'off_track' ? colors.semantic.warning : colors.text.tertiary }]}>
+        {healthLabel} · {formatProjectRelativeTime(update.createdAt, language)}
+      </Text>
+      {detail ? <Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={2}>{detail}</Text> : null}
+    </View>
+  </View>;
+}
+
 function ProjectEmpty({ icon, text }: { icon: string; text: string }) {
   const { colors } = useTheme();
   return <View style={styles.empty}><Icon source={icon} size={28} color={colors.text.tertiary} /><Text style={[styles.body, { color: colors.text.tertiary }]}>{text}</Text></View>;
@@ -422,6 +612,7 @@ function ProjectAutomationRow({ automation, pending, onToggle, onRun }: { automa
 
 function ProjectActivityRow({ event }: { event: ProjectActivityEvent }) {
   const { colors } = useTheme();
+  const language = usePreferencesStore((state) => state.language);
   const labels = useMessages().tasksPage;
   const kindLabel = {
     task: labels.projectActivityTask,
@@ -435,9 +626,17 @@ function ProjectActivityRow({ event }: { event: ProjectActivityEvent }) {
     : event.type.includes('completed') ? labels.projectActivityCompleted
       : event.type.includes('deleted') ? labels.projectActivityDeleted
         : labels.projectActivityUpdated;
+  const actor = event.actor.name?.trim() || event.actor.agentId?.trim();
+  const detail = ['summary', 'message', 'reason', 'status', 'phase']
+    .map((key) => event.payload[key])
+    .find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
   return <View style={styles.activityRow}>
     <View style={[styles.activityDot, { backgroundColor: event.importance === 'high' ? colors.semantic.warning : colors.border.default }]} />
-    <View style={styles.taskBody}><Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={1}>{event.primaryObject.title?.trim() || event.primaryObject.id}</Text><Text style={[styles.meta, { color: colors.text.tertiary }]}>{kindLabel} · {actionLabel}</Text></View>
+    <View style={styles.taskBody}>
+      <Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={1}>{event.primaryObject.title?.trim() || event.primaryObject.id}</Text>
+      <Text style={[styles.meta, { color: colors.text.tertiary }]}>{kindLabel} · {actionLabel} · {formatProjectRelativeTime(event.createdAt, language)}</Text>
+      {detail ? <Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={2}>{detail}</Text> : actor ? <Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={1}>{actor}</Text> : null}
+    </View>
   </View>;
 }
 
@@ -471,14 +670,16 @@ function ProjectReceiptRow({ receipt, taskTitle, onPress }: { receipt: TaskRunRe
 
 const styles = StyleSheet.create({
   screen: { flex: 1 }, center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm }, skeleton: { padding: spacing.lg },
+  pager: { flex: 1 }, page: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   tabs: { flexDirection: 'row', marginHorizontal: spacing.lg, marginBottom: spacing.xs, padding: 3, borderRadius: radii.md },
-  tab: { flex: 1, minHeight: 36, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' }, tabText: { ...typography.label, fontWeight: '600' },
+  tab: { flex: 1, minHeight: 44, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center' }, tabText: { ...typography.label, fontWeight: '600' },
+  summaryBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   pulse: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.sm }, pulseTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, healthDot: { width: 8, height: 8, borderRadius: 4 },
   sectionTitle: { ...typography.heading }, recommendation: { ...typography.body, fontWeight: '600' }, body: { ...typography.body }, meta: { ...typography.label }, taskTitle: { ...typography.ui, fontWeight: '600' },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, overflow: 'hidden' }, cardHeader: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, gap: spacing.sm }, cardAction: { ...typography.label, fontWeight: '600' },
   taskRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, simpleRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, rowIcon: { width: 36, height: 36, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' }, taskBody: { flex: 1, minWidth: 0, gap: spacing.xxs },
   receipt: { minHeight: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm, flexDirection: 'row', alignItems: 'center' }, empty: { minHeight: 96, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, padding: spacing.lg }, inlineLoader: { marginVertical: spacing.xl }, contextLoading: { minHeight: 280 },
-  automationRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, iconAction: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }, activityRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, activityDot: { width: 8, height: 8, borderRadius: 4 },
+  automationRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, iconAction: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }, activityRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, activityDot: { width: 8, height: 8, borderRadius: 4 }, updateRow: { minHeight: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   createAction: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md }, createActionIcon: { width: 40, height: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' }, createActionBody: { flex: 1, minWidth: 0, gap: spacing.xxs }, createError: { ...typography.caption, paddingHorizontal: spacing.xl, paddingTop: spacing.sm }, inlineError: { ...typography.caption, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
 });
