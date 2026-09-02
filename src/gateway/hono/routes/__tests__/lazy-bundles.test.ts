@@ -70,6 +70,21 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/chat/workspace-trust')?.id).toBe('commands-skills');
   });
 
+  it('routes session share APIs to the shares bundle', () => {
+    const paths = [
+      '/api/sessions/agent%3Amain%3Achat/share-preview',
+      '/api/sessions/agent%3Amain%3Achat/shares',
+      '/api/sessions/agent%3Amain%3Achat/shares/share-1/refresh',
+      '/api/sessions/agent%3Amain%3Achat/hosted-shares',
+      '/api/sessions/agent%3Amain%3Achat/hosted-shares/share-1/refresh',
+    ];
+    for (const path of paths) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('shares');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/inputs')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/shares-extra')).toBeUndefined();
+  });
+
   it('routes models-json config endpoints to the models bundle', () => {
     // /api/models-json is `/api/models` + `-json`, not `/api/models/...`,
     // so the prefix matcher needs an explicit entry. Without it the
