@@ -78,6 +78,7 @@ export default defineConfig({
             items: [
               { text: 'User understanding', link: '/user-understanding' },
               { text: 'Chat and sessions', link: '/session' },
+              { text: 'Share a conversation', link: '/session-sharing' },
               { text: 'Agents', link: '/routing-system' },
               { text: 'Projects, Tasks & Notes', link: '/projects-tasks-notes' },
               { text: 'Workflows', link: '/workflows' },
@@ -177,6 +178,7 @@ export default defineConfig({
             items: [
               { text: '用户理解', link: '/zh/user-understanding' },
               { text: '聊天与会话', link: '/zh/session' },
+              { text: '分享会话', link: '/zh/session-sharing' },
               { text: 'Agent', link: '/zh/routing-system' },
               { text: 'Project、Task 与笔记', link: '/zh/projects-tasks-notes' },
               { text: '工作流', link: '/zh/workflows' },

@@ -51,6 +51,7 @@ features:
 | 了解 xopc 正在成为怎样的产品 | [产品理念](./product.md) |
 | 查看或纠正 xopc 对你的理解 | [用户理解](./user-understanding.md) |
 | 开始对话并稍后继续 | [聊天与 Session](./session.md) |
+| 分享一份只读的会话快照 | [分享会话](./session-sharing.md) |
 | 为不同工作使用不同助手 | [Agent](./routing-system.md) |
 | 组织长期工作 | [Project、Task 与笔记](./projects-tasks-notes.md) |
 | 重复多步骤流程 | [Workflow](./workflows.md) |

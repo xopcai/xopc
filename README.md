@@ -214,6 +214,7 @@ Full reference: **[Configuration](https://xopcai.github.io/xopc/configuration)**
 | [Getting started](https://xopcai.github.io/xopc/getting-started) | Install, onboard, first chat |
 | [The Continuous Work Model](https://xopcai.github.io/xopc/concepts/loops) | How state, execution, and triggers form resumable, inspectable work loops |
 | [Projects, Tasks, and Notes](https://xopcai.github.io/xopc/projects-tasks-notes) | Keep long-running work in one verified Task model with optional shared project context |
+| [Share a conversation](https://xopcai.github.io/xopc/session-sharing) | Publish a reviewed, read-only Session snapshot with expiration and view limits |
 | [Configuration](https://xopcai.github.io/xopc/configuration) | `xopc.json` reference |
 | [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
 | [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat, Feishu |
