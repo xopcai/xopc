@@ -9,7 +9,7 @@ import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages, t } from '../../i18n/messages';
 import { openChat, useDismissOnHardwareBack } from '../../lib/navigation';
-import { fetchChatAgents, type ChatAgentOption } from '../../query/agents';
+import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
 import { invalidateSessionLists } from '../../query/workspace-sync';
@@ -18,13 +18,10 @@ import { radii, spacing, typography } from '../../theme';
 import { useSettingsColors } from '../settings/settings-ui';
 import { pickEffectiveDefaultId, useSetDefaultAgent } from '../settings/use-set-default-agent';
 import { AgentAvatar } from './AgentAvatar';
+import { agentDisplayDescription, agentDisplayName } from './agent-presentation';
 
 function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
-}
-
-function displayName(agent: ChatAgentOption): string {
-  return agent.name?.trim() || agent.id;
 }
 
 function formatCount(template: string, count: number): string {
@@ -102,6 +99,8 @@ export function AgentDetailScreen() {
   const typedEffective = agent.typedModels?.effective?.length ?? 0;
   const disabledTools = agent.tools?.effectiveDisable?.length ?? 0;
   const skillCount = agent.skills?.effectiveAllowlist?.length ?? 0;
+  const name = agentDisplayName(agent, am);
+  const description = agentDisplayDescription(agent, am);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
@@ -116,7 +115,7 @@ export function AgentDetailScreen() {
           <View style={styles.heroText}>
             <View style={styles.titleRow}>
               <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-                {displayName(agent)}
+                {name}
               </Text>
               <View
                 style={[
@@ -133,10 +132,10 @@ export function AgentDetailScreen() {
               {agent.id}
             </Text>
             <Text
-              style={[styles.description, { color: agent.description ? colors.text : colors.textMuted }]}
+              style={[styles.description, { color: description ? colors.text : colors.textMuted }]}
               numberOfLines={4}
             >
-              {agent.description || am.noDescription}
+              {description || am.noDescription}
             </Text>
           </View>
         </View>

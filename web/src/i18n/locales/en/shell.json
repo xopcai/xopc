@@ -93,6 +93,7 @@
     "errorServer": "Server error ({{status}})",
     "errorNotFound": "Not found (404)",
     "errorForbidden": "Forbidden (403)",
+    "errorRateLimited": "Too many requests. Please try again later.",
     "errorRequest": "Request failed ({{status}})"
   },
   "sidebar": {

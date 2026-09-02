@@ -1,8 +1,75 @@
 import type { WireAttachment } from './composer.types';
 import type { Message, MessageAttachment, MessageContent, TextContent } from './messages.types';
-import { stripRuntimeContextForDisplay } from './wire-text-scrub';
+import { stripRuntimeContextForDisplay, stripUserMessageForDisplay } from './wire-text-scrub';
 
 let optimisticMessageSequence = 0;
+const OPTIMISTIC_USER_RECONCILE_WINDOW_MS = 120_000;
+
+function isUserMessage(message: Message): boolean {
+  return message.role === 'user' || message.role === 'user-with-attachments';
+}
+
+function userMessageDisplayText(message: Message): string {
+  return message.content
+    .filter((block): block is TextContent => block.type === 'text')
+    .map((block) => stripUserMessageForDisplay(block.text))
+    .join('\n\n')
+    .trim();
+}
+
+function userMessageMediaCount(message: Message): number {
+  if (message.attachments?.length) return message.attachments.length;
+  return message.content.filter((block) => block.type === 'image' || block.type === 'audio').length;
+}
+
+function serverMessageReplacesOptimistic(server: Message, optimistic: Message): boolean {
+  if (!isUserMessage(server) || !isUserMessage(optimistic)) return false;
+
+  const serverTimestamp = server.timestamp;
+  const optimisticTimestamp = optimistic.timestamp;
+  if (
+    serverTimestamp == null
+    || optimisticTimestamp == null
+    || Math.abs(serverTimestamp - optimisticTimestamp) > OPTIMISTIC_USER_RECONCILE_WINDOW_MS
+  ) {
+    return false;
+  }
+
+  const optimisticText = userMessageDisplayText(optimistic);
+  const serverText = userMessageDisplayText(server);
+  const optimisticMediaCount = userMessageMediaCount(optimistic);
+  const serverPreservesMedia = userMessageMediaCount(server) >= optimisticMediaCount;
+
+  if (
+    serverPreservesMedia
+    && optimisticText
+    && serverText
+    && (serverText === optimisticText || serverText.startsWith(optimisticText))
+  ) {
+    return true;
+  }
+
+  return optimisticMediaCount > 0 && serverPreservesMedia;
+}
+
+/**
+ * Append local user rows unless the durable transcript tail already contains them.
+ * Only the tail can replace an optimistic row so a genuinely repeated prompt stays visible.
+ */
+export function mergeOptimisticUserMessages(
+  sessionMessages: Message[],
+  optimisticMessages: Message[],
+): Message[] {
+  if (optimisticMessages.length === 0) return sessionMessages;
+
+  const merged = [...sessionMessages];
+  for (const optimistic of optimisticMessages) {
+    const serverTail = merged[merged.length - 1];
+    if (serverTail && serverMessageReplacesOptimistic(serverTail, optimistic)) continue;
+    merged.push(optimistic);
+  }
+  return merged;
+}
 
 export function extractUserMessageText(content: MessageContent[]): string {
   return content

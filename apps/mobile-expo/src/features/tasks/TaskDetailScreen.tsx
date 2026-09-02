@@ -13,6 +13,7 @@ import { queryKeys } from '../../query/keys';
 import { fetchProjects } from '../../query/projects';
 import { commandTask, ensureTaskConversation, fetchTask, TaskApiError } from '../../query/tasks';
 import { radii, spacing, typography, useTheme } from '../../theme';
+import { MarkdownView } from '../chat/MarkdownView';
 
 export function TaskDetailScreen() {
   const router = useRouter();
@@ -171,7 +172,24 @@ export function TaskDetailScreen() {
                   <Section title={labels.runs}>{detail.runs.map((run) => <View key={run.id} style={[styles.detailRow, { borderBottomColor: colors.border.subtle }]}><Text style={[styles.body, { color: colors.text.primary }]}>{run.executorKind} · {run.status}</Text><Text style={[styles.meta, { color: colors.text.tertiary }]}>#{run.attempt} · {new Date(run.startedAt ?? run.queuedAt).toLocaleString()}</Text></View>)}</Section>
                 ) : null}
                 <Section title={hm.taskReceipts}>
-                  {detail.receipts.length === 0 ? <Text style={[styles.body, { color: colors.text.secondary }]}>{hm.taskReceiptsEmpty}</Text> : detail.receipts.map((receipt) => <View key={receipt.runId} style={[styles.detailRow, { borderBottomColor: colors.border.subtle }]}><Text style={[styles.body, { color: colors.text.primary }]}>{receipt.summary}</Text><Text style={[styles.meta, { color: colors.text.tertiary }]}>{verificationLabels[receipt.verification.status]}</Text>{receipt.failure ? <Text style={[styles.meta, { color: colors.semantic.error }]}>{receipt.failure.recoveryAction}</Text> : null}</View>)}
+                  {detail.receipts.length === 0 ? (
+                    <Text style={[styles.body, { color: colors.text.secondary }]}>{hm.taskReceiptsEmpty}</Text>
+                  ) : detail.receipts.map((receipt) => (
+                    <View
+                      key={receipt.runId}
+                      style={[styles.detailRow, { borderBottomColor: colors.border.subtle }]}
+                    >
+                      <MarkdownView content={receipt.summary} allowTrailingMargin />
+                      <Text style={[styles.meta, { color: colors.text.tertiary }]}>
+                        {verificationLabels[receipt.verification.status]}
+                      </Text>
+                      {receipt.failure ? (
+                        <Text style={[styles.meta, { color: colors.semantic.error }]}>
+                          {receipt.failure.recoveryAction}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ))}
                 </Section>
                 {detail.allowedCommands.includes('close') ? <Button mode="text" textColor={colors.semantic.error} disabled={command.isPending} onPress={() => command.mutate({ type: 'close', resolution: 'cancelled' })}>{hm.taskCancel}</Button> : null}
               </View>

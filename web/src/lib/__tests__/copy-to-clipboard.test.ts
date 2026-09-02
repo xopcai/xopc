@@ -34,4 +34,19 @@ describe('copyTextToClipboard', () => {
     expect(document.execCommand).toHaveBeenCalledWith('copy');
     expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
   });
+
+  it('falls back to the Electron bridge when the browser denies clipboard permission', async () => {
+    document.execCommand = undefined as unknown as typeof document.execCommand;
+    vi.mocked(navigator.clipboard.writeText).mockRejectedValue(
+      new DOMException('Write permission denied', 'NotAllowedError'),
+    );
+    const writeText = vi.fn().mockResolvedValue(true);
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { clipboard: { writeText } },
+    });
+
+    await expect(copyTextToClipboard('https://example.com/s/electron')).resolves.toBe(true);
+    expect(writeText).toHaveBeenCalledWith('https://example.com/s/electron');
+  });
 });

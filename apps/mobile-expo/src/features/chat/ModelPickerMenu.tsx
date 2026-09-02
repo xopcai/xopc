@@ -1,30 +1,20 @@
-/**
- * Kimi-style LLM model picker dropdown anchored below the chat header.
- */
 import { memo, useCallback } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
+import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
 import type { ChatModelOption } from '../../query/models';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
 export const ModelPickerMenu = memo(function ModelPickerMenu({
   visible,
-  topOffset,
   models,
   currentModelId,
   onSelect,
   onDismiss,
 }: {
   visible: boolean;
-  topOffset: number;
   models: ChatModelOption[];
   currentModelId: string;
   onSelect: (modelId: string) => void;
@@ -41,84 +31,71 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
     [onDismiss, onSelect],
   );
 
-  const panelBg = colors.surface.panel;
   const titleColor = colors.text.primary;
   const descColor = colors.text.secondary;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <Pressable style={[styles.overlay, { backgroundColor: colors.overlay.scrim }]} onPress={onDismiss}>
-        <Pressable
-          style={[
-            styles.panel,
-            {
-              top: topOffset,
-              backgroundColor: panelBg,
-              shadowColor: colors.text.primary,
-            },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <ScrollView
-            style={styles.scrollArea}
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {models.length === 0 ? (
-              <Text style={[styles.emptyText, { color: descColor }]}>{m.chat.modelPickerEmpty}</Text>
-            ) : (
-              models.map((model) => {
-                const isActive = model.id === currentModelId;
-                return (
-                  <Pressable
-                    key={model.id}
-                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                    onPress={() => handleSelect(model.id)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                  >
-                    <View style={styles.rowText}>
-                      <Text style={[styles.rowTitle, { color: titleColor }]} numberOfLines={1}>
-                        {model.name ?? model.id}
-                      </Text>
-                      {model.description ? (
-                        <Text style={[styles.rowDesc, { color: descColor }]} numberOfLines={2}>
-                          {model.description}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {isActive ? <Icon source="check" size={20} color={colors.accent.primary} /> : null}
-                  </Pressable>
-                );
-              })
-            )}
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <BottomSheetModal
+      visible={visible}
+      onDismiss={onDismiss}
+      title={m.chat.modelPickerTitle}
+      subtitle={m.chat.modelPickerHint}
+      maxHeight="72%"
+      scroll={models.length > 0}
+      testID="chat-model-picker-sheet"
+    >
+      {models.length === 0 ? (
+        <Text style={[styles.emptyText, { color: descColor }]}>{m.chat.modelPickerEmpty}</Text>
+      ) : (
+        models.map((model) => {
+          const isActive = model.id === currentModelId;
+          const title = model.name ?? model.id;
+          return (
+            <Pressable
+              key={model.id}
+              style={({ pressed }) => [
+                styles.row,
+                isActive && { backgroundColor: colors.accent.selectionBg },
+                pressed && { backgroundColor: colors.surface.pressed },
+              ]}
+              onPress={() => handleSelect(model.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`${title}, ${model.id}`}
+              accessibilityState={{ selected: isActive }}
+            >
+              <View style={styles.rowText}>
+                <Text
+                  style={[
+                    styles.rowTitle,
+                    { color: isActive ? colors.accent.primary : titleColor },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {title}
+                </Text>
+                {model.name && model.id !== model.name ? (
+                  <Text style={[styles.rowId, { color: colors.text.tertiary }]} numberOfLines={1}>
+                    {model.id}
+                  </Text>
+                ) : null}
+                {model.description ? (
+                  <Text style={[styles.rowDesc, { color: descColor }]} numberOfLines={2}>
+                    {model.description}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.checkSlot}>
+                {isActive ? <Icon source="check" size={20} color={colors.accent.primary} /> : null}
+              </View>
+            </Pressable>
+          );
+        })
+      )}
+    </BottomSheetModal>
   );
 });
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-  },
-  panel: {
-    position: 'absolute',
-    left: spacing.xl,
-    right: spacing.xl,
-    borderRadius: radii.xl,
-    paddingVertical: spacing.sm,
-    maxHeight: 360,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  scrollArea: {
-    maxHeight: 344,
-  },
   emptyText: {
     ...typography.ui,
     textAlign: 'center',
@@ -128,12 +105,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.lg - spacing.xxs,
-    paddingHorizontal: spacing.xl,
+    minHeight: 60,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     gap: spacing.md,
-  },
-  rowPressed: {
-    opacity: 0.75,
+    borderRadius: radii.md,
+    marginBottom: spacing.xxs,
   },
   rowText: {
     flex: 1,
@@ -141,10 +118,19 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   rowTitle: {
-    ...typography.heading,
+    ...typography.ui,
     fontWeight: '600',
   },
+  rowId: {
+    ...typography.caption,
+    marginTop: spacing.xxs,
+  },
   rowDesc: {
-    ...typography.label,
+    ...typography.caption,
+    marginTop: spacing.xs,
+  },
+  checkSlot: {
+    width: 20,
+    alignItems: 'center',
   },
 });

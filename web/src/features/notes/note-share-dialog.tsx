@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
 import { extendShare, revokeShare } from '@/features/shares/shares-api';
 
@@ -101,9 +102,20 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
   };
 
   const copyUrl = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    setError(null);
+    try {
+      const ok = await copyTextToClipboard(url);
+      if (!ok) {
+        setCopied(false);
+        setError(t.copyFailed);
+        return;
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+      setError(t.copyFailed);
+    }
   };
 
   return (
@@ -244,6 +256,7 @@ const COPY_ZH = {
   title: '分享笔记', description: '创建一个无需登录即可查看的只读快照。', close: '关闭', untitled: '无标题笔记', empty: '空笔记',
   privateExcluded: '不会分享标签、AI 元数据、项目、讨论、历史版本或未引用附件。', attachments: '包含的附件', expires: '有效期', maxViews: '最多查看次数', unlimited: '不限',
   publicDescription: '公开说明（可选）', create: '创建分享链接', creating: '创建中…', copy: '复制', copied: '已复制', open: '打开', activeLinks: '这条笔记的分享',
+  copyFailed: '无法复制到剪贴板，请手动选择链接并复制。',
   stale: '旧版本', inactive: '已失效', active: '有效', views: '查看', refresh: '更新快照', extend: '延长 24 小时', revoke: '撤销',
 } as const;
 
@@ -253,5 +266,6 @@ const COPY_EN: Copy = {
   title: 'Share Note', description: 'Create a read-only snapshot that opens without sign-in.', close: 'Close', untitled: 'Untitled Note', empty: 'Empty Note',
   privateExcluded: 'Tags, AI metadata, projects, discussions, history, and unreferenced attachments are excluded.', attachments: 'Included attachments', expires: 'Expires', maxViews: 'Maximum views', unlimited: 'Unlimited',
   publicDescription: 'Public description (optional)', create: 'Create share link', creating: 'Creating…', copy: 'Copy', copied: 'Copied', open: 'Open', activeLinks: 'Shares for this Note',
+  copyFailed: 'Could not copy to the clipboard. Select the link and copy it manually.',
   stale: 'Older version', inactive: 'Inactive', active: 'Active', views: 'Views', refresh: 'Update snapshot', extend: 'Extend 24 hours', revoke: 'Revoke',
 };

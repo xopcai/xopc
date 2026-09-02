@@ -171,11 +171,26 @@ For LAN access, change the port mapping to `-p 18790:18790`, configure a gateway
 | Symptom | Check |
 | --- | --- |
 | `permission denied` under `/home/node/.xopc` | Use the named volume, or allow UID `1000` to write the bind-mounted host directory |
-| Port `18790` is already in use | Stop the other service or map another host port, for example `-p 127.0.0.1:18791:18790` |
+| Port `18790` is already in use | Stop the other service or map another host port, for example `-p 127.0.0.1:18791:18790`; also configure the browser Origin as described below |
 | Container exits immediately | Run `docker logs xopc-gateway` |
 | Web console does not open | Run `docker ps` and `curl http://127.0.0.1:18790/api/health` |
 | Image cannot be pulled | Confirm the tag on the [package page](https://github.com/xopcai/xopc/pkgs/container/xopc) and retry `docker login ghcr.io` if the package is private |
 | Local model is unreachable | Containers cannot use host `127.0.0.1`; use `host.docker.internal` where supported |
+
+When the host and container ports differ, for example with `-p 127.0.0.1:18791:18790`, the gateway still builds its default browser Origin allowlist from the container port `18790`. Add the actual browser address to the host-mounted `~/.xopc/xopc.json`; otherwise browser API requests return `403 Origin not allowed`:
+
+```json
+{
+  "gateway": {
+    "corsOrigins": [
+      "http://127.0.0.1:18791",
+      "http://localhost:18791"
+    ]
+  }
+}
+```
+
+After saving the file, run `docker compose restart xopc-gateway`. The Origin must exactly match the scheme, hostname, and port in the browser address bar. Do not use `"*"` on a network-accessible gateway.
 
 To inspect the container without starting the gateway:
 

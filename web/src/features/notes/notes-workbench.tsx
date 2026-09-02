@@ -238,11 +238,13 @@ export function NotesWorkbench({
 
   useEffect(() => {
     const onNoteUpdated = () => {
-      void mutate();
+      void mutate().catch((error: unknown) => {
+        setActionError(`${n.refreshFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
+      });
     };
     window.addEventListener('note-updated', onNoteUpdated);
     return () => window.removeEventListener('note-updated', onNoteUpdated);
-  }, [mutate]);
+  }, [mutate, n.quickCaptureFailedHint, n.refreshFailed]);
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -442,26 +444,41 @@ export function NotesWorkbench({
 
   const handlePin = useCallback(
     async (id: string, pinned: boolean) => {
-      await updateNote(id, { pinned });
-      await mutate();
+      setActionError(null);
+      try {
+        await updateNote(id, { pinned });
+        await mutate();
+      } catch (error) {
+        setActionError(`${n.actionFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
+      }
     },
-    [mutate],
+    [mutate, n.actionFailed, n.quickCaptureFailedHint],
   );
 
   const handleArchive = useCallback(
     async (id: string) => {
-      await updateNote(id, { status: 'archived' });
-      await mutate();
+      setActionError(null);
+      try {
+        await updateNote(id, { status: 'archived' });
+        await mutate();
+      } catch (error) {
+        setActionError(`${n.actionFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
+      }
     },
-    [mutate],
+    [mutate, n.actionFailed, n.quickCaptureFailedHint],
   );
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await deleteNote(id);
-      await mutate();
+      setActionError(null);
+      try {
+        await deleteNote(id);
+        await mutate();
+      } catch (error) {
+        setActionError(`${n.actionFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
+      }
     },
-    [mutate],
+    [mutate, n.actionFailed, n.quickCaptureFailedHint],
   );
 
   const handleNoteClick = useCallback((id: string) => {
@@ -798,7 +815,11 @@ export function NotesWorkbench({
           <NoteDetailPanel
             noteId={selectedNoteId}
             onBack={() => navigate(basePath)}
-            onSaved={() => void mutate()}
+            onSaved={() => {
+              void mutate().catch((error: unknown) => {
+                setActionError(`${n.refreshFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
+              });
+            }}
             backButtonClassName="lg:hidden"
             clearHeaderOnCleanup={false}
             onOpenSearch={() => setSearchOpen(true)}

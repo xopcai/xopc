@@ -17,6 +17,7 @@ import {
 import { queryKeys } from '../../query/keys';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
+import { MarkdownView } from '../chat/MarkdownView';
 
 import {
   formatAutomationDate,
@@ -96,7 +97,7 @@ export function AutomationRunDetailScreen() {
             />
             <View style={styles.titleBody}><Text style={[styles.title, { color: colors.text.primary }]}>{statusLabels[run.status]}</Text><Text style={[styles.meta, { color: colors.text.tertiary }]}>{formatAutomationDate(run.startedAtMs ?? run.createdAtMs, locale)}{run.durationMs !== undefined ? ` · ${formatAutomationDuration(run.durationMs)}` : ''}</Text></View>
           </View>
-          {run.summary ? <Text style={[styles.body, { color: colors.text.secondary }]}>{run.summary}</Text> : null}
+          {run.summary ? <MarkdownView content={run.summary} allowTrailingMargin /> : null}
           {run.error ? <Text style={[styles.body, { color: colors.semantic.error }]}>{run.error}</Text> : null}
           {active ? <Button mode="outlined" icon="stop" textColor={colors.semantic.error} loading={cancelMutation.isPending} disabled={cancelMutation.isPending} onPress={() => cancelMutation.mutate()}>{labels.cancel}</Button> : null}
           {canRerun ? <Button mode="contained" icon="refresh" loading={rerunMutation.isPending} disabled={rerunMutation.isPending} onPress={() => rerunMutation.mutate()}>{labels.rerun}</Button> : null}
