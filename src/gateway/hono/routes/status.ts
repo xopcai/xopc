@@ -23,12 +23,6 @@ function contentHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(stableValue(value))).digest('hex');
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
 export function buildEvalRuntimeIdentity(
   service: AuthenticatedRouteDeps['service'],
   agentId: string,
