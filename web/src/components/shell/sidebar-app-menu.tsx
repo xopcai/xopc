@@ -8,6 +8,7 @@ import {
   Info,
   Palette,
   PawPrint,
+  MessageSquareWarning,
   Settings,
   Type,
 } from 'lucide-react';
@@ -71,10 +72,12 @@ function OptionRow({
 export function SidebarAppMenu({
   onNavigate,
   onAboutClick,
+  onSupportClick,
 }: {
   onNavigate?: () => void;
   /** Open About dialog; parent should close the app menu popover when handling this. */
   onAboutClick?: () => void;
+  onSupportClick?: () => void;
 }) {
   const [openFlyout, setOpenFlyout] = useState<FlyoutId | null>(null);
   const [petState, setPetState] = useState<DesktopPetState | null>(null);
@@ -299,6 +302,17 @@ export function SidebarAppMenu({
         <span className="min-w-0 flex-1 text-left">{m.sidebar.helpDocs}</span>
         <ExternalLink className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={2} aria-hidden />
       </a>
+
+      <button
+        type="button"
+        className={rowClass}
+        onClick={() => onSupportClick?.()}
+        onMouseEnter={() => setOpenFlyout(null)}
+        onFocus={() => setOpenFlyout(null)}
+      >
+        <MessageSquareWarning className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+        <span className="min-w-0 flex-1 text-left">{m.supportReport.menu}</span>
+      </button>
 
       <Link
         to="/settings/overview"

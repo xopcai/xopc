@@ -79,7 +79,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       installUpdate: 'Restart and install',
       retry: 'Retry gateway',
       openDataDir: 'Open data folder',
-      copyDiagnostic: 'Copy diagnostic',
+      copyDiagnostic: 'Collect and copy report',
       devHint: 'Development build: rebuild the desktop and gateway bundles, then retry.',
       advancedTitle: 'Advanced options',
       diagnosticTitle: 'Diagnostic details',
@@ -92,8 +92,9 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       retrying: 'Retrying gateway startup...',
       retryFailed: 'Gateway still could not start.',
       openDirFailed: 'Could not open the data folder.',
-      copied: 'Diagnostic copied.',
-      copyFailed: 'Could not copy diagnostic.',
+      copied: 'Redacted diagnostic report copied.',
+      copyFailed: 'Could not collect diagnostics. Run `xopc support report` in a terminal.',
+      collectingDiagnostic: 'Collecting diagnostics...',
       noApi: 'Desktop recovery API is unavailable.',
     };
   }
@@ -134,7 +135,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     installUpdate: '重启并安装',
     retry: '重试网关',
     openDataDir: '打开数据目录',
-    copyDiagnostic: '复制诊断信息',
+    copyDiagnostic: '收集并复制报告',
     devHint: '开发构建：请重新构建桌面端和网关 bundle，然后重试。',
     advancedTitle: '高级选项',
     diagnosticTitle: '诊断详情',
@@ -147,8 +148,9 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     retrying: '正在重试启动网关...',
     retryFailed: '网关仍然未能启动。',
     openDirFailed: '无法打开数据目录。',
-    copied: '诊断信息已复制。',
-    copyFailed: '无法复制诊断信息。',
+    copied: '已复制脱敏后的诊断报告。',
+    copyFailed: '诊断信息收集失败，请在终端运行 `xopc support report`。',
+    collectingDiagnostic: '正在收集诊断信息…',
     noApi: '桌面恢复 API 不可用。',
   };
 }
@@ -420,10 +422,14 @@ export function getStartupRecoveryPageDataUrl(
         });
       });
       copyBtn && copyBtn.addEventListener('click', function () {
+        copyBtn.disabled = true;
+        setStatus(copy.collectingDiagnostic);
         api.copyDiagnostic().then(function (result) {
           setStatus(result && result.ok ? copy.copied : (result && result.message) || copy.copyFailed);
         }).catch(function (err) {
           setStatus(String(err && err.message ? err.message : err));
+        }).finally(function () {
+          copyBtn.disabled = false;
         });
       });
 

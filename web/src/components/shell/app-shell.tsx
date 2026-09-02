@@ -21,6 +21,7 @@ import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GlobalDiscussionCaptureHost } from '@/features/discussions/global-discussion-capture';
 import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridge';
 import { ProductNotificationCoordinator } from '@/features/notifications/product-notification-coordinator';
+import { SupportReportHost } from '@/features/support/support-report-host';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
@@ -190,6 +191,7 @@ export function AppShell() {
       <GlobalCommandPaletteHost />
       <GlobalQuickCaptureHost />
       <GlobalDiscussionCaptureHost />
+      <SupportReportHost />
       <GlobalVoiceInputShortcutHost />
       <GlobalReadAloudPlayer />
       <SideChatSelectionLauncher />
