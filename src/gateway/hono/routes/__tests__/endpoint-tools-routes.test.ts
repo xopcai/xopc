@@ -96,4 +96,38 @@ describe('endpoint tool principal routes', () => {
     });
     expect(body).not.toContain('private-management-key');
   });
+
+  it('creates and removes an explicit session endpoint binding', async () => {
+    const binding = {
+      sessionKey: 'telegram:chat-1',
+      endpointId: 'mobile-1',
+      boundAt: 42,
+    };
+    const bindings = {
+      get: () => binding,
+      bind: () => binding,
+      unbind: () => true,
+    };
+    const app = new Hono();
+    registerEndpointToolRoutes(app, {
+      service: { endpointTools: { bindings } },
+    } as unknown as AuthenticatedRouteDeps);
+
+    const path = '/api/endpoint-tools/bindings/telegram%3Achat-1';
+    const put = await app.request(path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpointId: 'mobile-1' }),
+    });
+    expect(put.status).toBe(200);
+    await expect(put.json()).resolves.toMatchObject({ payload: binding });
+
+    const get = await app.request(path);
+    expect(get.status).toBe(200);
+    await expect(get.json()).resolves.toMatchObject({ payload: binding });
+
+    const remove = await app.request(path, { method: 'DELETE' });
+    expect(remove.status).toBe(200);
+    await expect(remove.json()).resolves.toMatchObject({ payload: { removed: true } });
+  });
 });

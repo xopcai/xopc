@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
   canonicalJson,
+  clientEndpointMessageSchema,
+  endpointDeviceEventSchema,
+  endpointDeviceJobRequestSchema,
   endpointHelloPayloadSchema,
   endpointHelloSigningPayload,
   endpointTurnClaimSchema,
+  serverEndpointMessageSchema,
   turnOriginSchema,
 } from './index.js';
 
@@ -25,6 +30,9 @@ const hello = {
       title: 'Write clipboard',
       description: 'Write text to the browser clipboard.',
       inputSchema: { type: 'object' },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal' as const,
       effect: 'write' as const,
       confirmation: 'always' as const,
       requiresForeground: true as const,
@@ -44,6 +52,16 @@ describe('endpoint tool protocol', () => {
 
   it('rejects unknown wire fields', () => {
     expect(() => endpointHelloPayloadSchema.parse({ ...hello, unexpectedField: true })).toThrow();
+  });
+
+  it('rejects protocol v1 messages instead of entering a compatibility path', () => {
+    expect(() => clientEndpointMessageSchema.parse({
+      protocolVersion: 1,
+      messageId: 'bf1a9f36-caf1-41a7-8d22-e1d6e6b4bb55',
+      type: 'tool.received',
+      sentAt: 1,
+      payload: { invocationId: 'af1a9f36-caf1-41a7-8d22-e1d6e6b4bb55' },
+    })).toThrow();
   });
 
   it('canonicalizes object keys recursively', () => {
@@ -77,5 +95,34 @@ describe('endpoint tool protocol', () => {
       token: 'a'.repeat(32),
     })).toEqual({ type: 'endpoint', endpointId: 'tab-1', token: 'a'.repeat(32) });
     expect(() => endpointTurnClaimSchema.parse({ type: 'endpoint', endpointId: 'tab-1' })).toThrow();
+  });
+
+  it('keeps background jobs and events outside the interactive tool transport', () => {
+    const job = {
+      jobId: 'bf1a9f36-caf1-41a7-8d22-e1d6e6b4bb55',
+      endpointId: 'phone-1',
+      capability: 'mobile.notes.sync',
+      input: { cursor: 'next' },
+      idempotencyKey: 'notes-sync-1',
+      consentGrantId: 'grant-1',
+      createdAt: 1,
+      expiresAt: 2,
+    };
+    expect(endpointDeviceJobRequestSchema.parse(job)).toEqual(job);
+    expect(endpointDeviceEventSchema.parse({
+      eventId: 'af1a9f36-caf1-41a7-8d22-e1d6e6b4bb55',
+      endpointId: 'phone-1',
+      subscriptionId: 'subscription-1',
+      eventType: 'mobile.notes.changed',
+      data: { noteId: 'note-1' },
+      occurredAt: 1,
+    })).toBeTruthy();
+    expect(() => serverEndpointMessageSchema.parse({
+      protocolVersion: 2,
+      messageId: 'cf1a9f36-caf1-41a7-8d22-e1d6e6b4bb55',
+      type: 'device.job',
+      sentAt: 1,
+      payload: job,
+    })).toThrow();
   });
 });

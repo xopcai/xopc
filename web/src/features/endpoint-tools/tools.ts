@@ -2,7 +2,11 @@ import type {
   EndpointToolDefinition,
   EndpointToolExecutionResult,
 } from '@xopcai/endpoint-tools-client';
-import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
+import {
+  ENDPOINT_FILE_OUTPUT_SCHEMA,
+  ENDPOINT_MAX_FILE_BYTES,
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
+} from '@xopcai/endpoint-tools-protocol';
 
 function textResult(text: string): EndpointToolExecutionResult {
   return { content: [{ type: 'text', text }] };
@@ -78,6 +82,9 @@ export const WEB_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = 
       title: 'Choose a local file',
       description: 'Ask the user to choose one browser-accessible file and make it available to the agent.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      outputSchema: ENDPOINT_FILE_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['file-read'], timeoutMs: 120_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['file'],
@@ -113,6 +120,9 @@ export const WEB_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = 
         required: ['suggestedName', 'content'],
         additionalProperties: false,
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['file-download'], timeoutMs: 30_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['text'],
@@ -138,6 +148,9 @@ export const WEB_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = 
       title: 'Read selected text',
       description: 'Read the text currently selected in this browser tab.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'public.foreground-read',
+      sensitivity: 'public',
       effect: 'read', confirmation: 'never', requiresForeground: true,
       requiredPermissions: [], timeoutMs: 10_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: true, resultKinds: ['text'],
@@ -156,6 +169,9 @@ export const WEB_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = 
         type: 'object', properties: { text: { type: 'string', maxLength: 100_000 } },
         required: ['text'], additionalProperties: false,
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['clipboard-write'], timeoutMs: 30_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: true, resultKinds: ['text'],
@@ -180,6 +196,9 @@ export const WEB_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = 
         type: 'object', properties: { url: { type: 'string', maxLength: 4_096 } },
         required: ['url'], additionalProperties: false,
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'destructive', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['navigation'], timeoutMs: 30_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['text'],

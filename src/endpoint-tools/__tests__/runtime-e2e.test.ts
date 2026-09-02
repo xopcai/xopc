@@ -7,6 +7,7 @@ import { join } from 'node:path';
 
 import {
   ENDPOINT_PROTOCOL_VERSION,
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
   endpointHelloSigningPayload,
   type ClientEndpointMessage,
   type EndpointHelloPayload,
@@ -57,9 +58,11 @@ describe('endpoint tools over realtime', () => {
     if (!address || typeof address === 'string') throw new Error('Missing server address');
 
     const descriptor = {
-      name: 'web.test.echo', title: 'Echo', description: 'Echo text.',
+      name: 'web.page.get_selection', title: 'Echo', description: 'Echo text.',
       inputSchema: { type: 'object' }, effect: 'read' as const, confirmation: 'never' as const,
-      requiresForeground: false, requiredPermissions: [], timeoutMs: 10_000,
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'public.foreground-read', sensitivity: 'public' as const,
+      requiresForeground: true, requiredPermissions: [], timeoutMs: 10_000,
       maxConcurrency: 1, supportsCancellation: false, idempotent: true,
       resultKinds: ['text' as const],
     };

@@ -1,4 +1,8 @@
 import type { EndpointToolDefinition } from '@xopcai/endpoint-tools-client';
+import {
+  ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA,
+  ENDPOINT_CONTACT_OUTPUT_SCHEMA,
+} from '@xopcai/endpoint-tools-protocol';
 import * as Contacts from 'expo-contacts';
 
 const CONTACT_FIELDS = [
@@ -71,17 +75,22 @@ function searchArguments(args: Record<string, unknown>): { query: string; limit:
 }
 
 function presentContact(details: ContactDetails) {
+  const name = details.fullName
+    || [details.givenName, details.familyName].filter(Boolean).join(' ')
+    || 'Unnamed contact';
   return {
     id: details.id,
-    name: details.fullName
-      || [details.givenName, details.familyName].filter(Boolean).join(' ')
-      || 'Unnamed contact',
+    name: name.slice(0, 500),
     phones: (details.phones ?? [])
       .map((phone: { number?: string | null }) => phone.number?.trim())
-      .filter((number): number is string => Boolean(number)),
+      .filter((number): number is string => Boolean(number))
+      .filter((number) => number.length <= 100)
+      .slice(0, MAX_RESULTS),
     emails: (details.emails ?? [])
       .map((email: { address?: string | null }) => email.address?.trim())
-      .filter((address): address is string => Boolean(address)),
+      .filter((address): address is string => Boolean(address))
+      .filter((address) => address.length <= 320)
+      .slice(0, MAX_RESULTS),
   };
 }
 
@@ -90,7 +99,7 @@ async function detailsFor(contact: Contacts.Contact): Promise<ContactDetails> {
 }
 
 function jsonResult(value: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] };
+  return { content: [{ type: 'json' as const, value }] };
 }
 
 export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[] = [
@@ -100,6 +109,9 @@ export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
       title: 'Choose a contact',
       description: 'Open the system contact picker and return only the selected contact name, phone numbers, and email addresses.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+      outputSchema: ENDPOINT_CONTACT_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read',
       confirmation: 'always',
       requiresForeground: true,
@@ -108,7 +120,7 @@ export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
       maxConcurrency: 1,
       supportsCancellation: false,
       idempotent: false,
-      resultKinds: ['text'],
+      resultKinds: ['json'],
     },
     async execute(args) {
       if (Object.keys(args).length !== 0) throw new TypeError('Expected no arguments');
@@ -131,6 +143,9 @@ export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
           limit: { type: 'integer', minimum: 1, maximum: MAX_RESULTS, default: 10 },
         },
       },
+      outputSchema: ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read',
       confirmation: 'always',
       requiresForeground: true,
@@ -139,7 +154,7 @@ export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
       maxConcurrency: 1,
       supportsCancellation: false,
       idempotent: true,
-      resultKinds: ['text'],
+      resultKinds: ['json'],
     },
     async execute(args) {
       const { query, limit } = searchArguments(args);
@@ -162,6 +177,9 @@ export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
         required: ['contactId'],
         properties: { contactId: { type: 'string', minLength: 1, maxLength: 512 } },
       },
+      outputSchema: ENDPOINT_CONTACT_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read',
       confirmation: 'always',
       requiresForeground: true,
@@ -170,7 +188,7 @@ export const CONTACT_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
       maxConcurrency: 1,
       supportsCancellation: false,
       idempotent: true,
-      resultKinds: ['text'],
+      resultKinds: ['json'],
     },
     async execute(args) {
       const contactId = exactStringArgument(args, 'contactId', 512);

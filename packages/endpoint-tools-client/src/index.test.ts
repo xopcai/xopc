@@ -1,4 +1,9 @@
-import type { ClientEndpointMessage, EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
+import {
+  ENDPOINT_PROTOCOL_VERSION,
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
+  type ClientEndpointMessage,
+  type EndpointToolDescriptor,
+} from '@xopcai/endpoint-tools-protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -14,6 +19,9 @@ const descriptor: EndpointToolDescriptor = {
   title: 'Echo',
   description: 'Echo text.',
   inputSchema: { type: 'object' },
+  outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+  policyId: 'public.background-read',
+  sensitivity: 'public',
   effect: 'read',
   confirmation: 'never',
   requiresForeground: false,
@@ -27,7 +35,7 @@ const descriptor: EndpointToolDescriptor = {
 
 function invocation(overrides: Record<string, unknown> = {}) {
   return {
-    protocolVersion: 1 as const,
+    protocolVersion: ENDPOINT_PROTOCOL_VERSION,
     messageId: crypto.randomUUID(),
     type: 'tool.invoke' as const,
     sentAt: Date.now(),
@@ -95,7 +103,7 @@ describe('EndpointToolHostController', () => {
     await vi.waitFor(() => expect(sent[0]?.type).toBe('tool.received'));
 
     await host.handleMessage({
-      protocolVersion: 1,
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
       messageId: crypto.randomUUID(),
       type: 'tool.cancel',
       sentAt: Date.now(),
