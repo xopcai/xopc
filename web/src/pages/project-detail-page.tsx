@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { RefreshButton } from '@/components/ui/refresh-button';
@@ -265,9 +266,9 @@ function activityPayloadPreview(activity: ProjectActivityEvent): string {
 
 function projectFileEntriesToTreeEntries(entries: ProjectFileEntry[]): TreeEntry[] {
   return entries.map((entry) => ({
+    fileId: entry.fileId,
     name: entry.name,
     path: entry.path,
-    absolutePath: entry.absolutePath,
     isDirectory: entry.type === 'directory',
     children: entry.type === 'directory' ? [] : undefined,
   }));
@@ -665,6 +666,7 @@ export function ProjectDetailPage() {
   const [projectFileTree, setProjectFileTree] = useState<TreeEntry[]>([]);
   const loadedProjectFileDirsRef = useRef<Set<string>>(new Set());
   const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
+  const [pendingTrashFile, setPendingTrashFile] = useState<TreeEntry | null>(null);
   const [projectFilesPanelWidth, setProjectFilesPanelWidth] = useState(readProjectFilesPanelWidth);
   const [projectFilesPanelResizing, setProjectFilesPanelResizing] = useState(false);
   const [projectFileSearchOpen, setProjectFileSearchOpen] = useState(false);
@@ -1369,27 +1371,27 @@ export function ProjectDetailPage() {
           break;
         case 'copyPath':
           try {
-            const ok = await copyTextToClipboard(entry.absolutePath ?? entry.path);
+            const ok = await copyTextToClipboard(entry.path);
             if (ok) showComposerNotification('success', msg.workspace.pathCopied, undefined, { duration: 2500 });
           } catch {
             showComposerNotification('warning', msg.clipboard.copyFailed, undefined, { duration: 4000 });
           }
           break;
         case 'openDefault':
-          if (!entry.absolutePath || !window.electronAPI?.shell?.openPath) return;
-          await window.electronAPI.shell.openPath(entry.absolutePath);
+          await window.electronAPI?.shell?.openFileResource?.(entry.fileId);
           break;
         case 'openWith':
-          if (!entry.absolutePath || !window.electronAPI?.shell?.chooseAppAndOpenPath) return;
-          await window.electronAPI.shell.chooseAppAndOpenPath(entry.absolutePath);
+          await window.electronAPI?.shell?.chooseAppAndOpenFileResource?.(entry.fileId);
           break;
         case 'openWithApp':
-          if (!entry.absolutePath || !appPath || !window.electronAPI?.shell?.openPathWithApp) return;
-          await window.electronAPI.shell.openPathWithApp(entry.absolutePath, appPath);
+          if (!appPath) return;
+          await window.electronAPI?.shell?.openFileResourceWithApp?.(entry.fileId, appPath);
           break;
         case 'revealInFolder':
-          if (!entry.absolutePath || !window.electronAPI?.shell?.showItemInFolder) return;
-          await window.electronAPI.shell.showItemInFolder(entry.absolutePath);
+          await window.electronAPI?.shell?.showFileResourceInFolder?.(entry.fileId);
+          break;
+        case 'trash':
+          setPendingTrashFile(entry);
           break;
         default:
           break;
@@ -1397,6 +1399,20 @@ export function ProjectDetailPage() {
     },
     [msg.clipboard.copyFailed, msg.workspace.pathCopied, project?.id],
   );
+
+  const confirmTrashProjectFile = useCallback(async () => {
+    const entry = pendingTrashFile;
+    if (!entry) return;
+    const result = await window.electronAPI?.shell?.trashFileResource?.(entry.fileId);
+    if (!result?.ok) {
+      showComposerNotification('warning', result?.error ?? msg.workspace.trashFailed, undefined, { duration: 4000 });
+      return;
+    }
+    if (previewFilePath === entry.path) setPreviewFilePath(null);
+    setPendingTrashFile(null);
+    await refreshProjectFiles();
+    showComposerNotification('success', msg.workspace.trashSuccess, undefined, { duration: 2500 });
+  }, [msg.workspace.trashFailed, msg.workspace.trashSuccess, pendingTrashFile, previewFilePath, refreshProjectFiles]);
 
   const handleProjectFilesResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!window.matchMedia('(min-width: 1024px)').matches) return;
@@ -1937,6 +1953,7 @@ export function ProjectDetailPage() {
                         openDefault: msg.workspace.openSystemApp,
                         openWith: msg.workspace.openWith,
                         revealInFolder: msg.workspace.revealInFolder,
+                        trash: msg.workspace.moveToTrash,
                         recommendedApps: msg.workspace.recommendedApps,
                       }}
                       emptyHint={pm.files.emptyDirectory}
@@ -2352,6 +2369,17 @@ export function ProjectDetailPage() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <ConfirmDialog
+        open={Boolean(pendingTrashFile)}
+        title={msg.workspace.trashConfirmTitle}
+        description={msg.workspace.trashConfirmDescription.replace('{{name}}', pendingTrashFile?.name ?? '')}
+        confirmLabel={msg.workspace.moveToTrash}
+        cancelLabel={msg.workspace.cancel}
+        destructive
+        onConfirm={() => void confirmTrashProjectFile()}
+        onCancel={() => setPendingTrashFile(null)}
+      />
 
       <Dialog.Root
         open={workspaceMigrationOpen}

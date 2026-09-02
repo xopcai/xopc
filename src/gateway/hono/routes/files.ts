@@ -139,6 +139,12 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
     } catch (error) { return errorResponse(c, error); }
   });
 
+  authenticated.get('/api/files/:id/host-path', async (c) => {
+    try {
+      return c.json({ absolutePath: (await files.resource(c.req.param('id'))).absolutePath });
+    } catch (error) { return errorResponse(c, error); }
+  });
+
   authenticated.get('/api/files/:id/content', async (c) => {
     try {
       const { resource, absolutePath } = await files.resource(c.req.param('id'));

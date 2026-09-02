@@ -11,13 +11,18 @@ import { resolveProjectAgentId, type ProjectService } from '../projects/index.js
 
 const SKIPPED_NAMES = new Set(['.DS_Store', '.git', 'node_modules']);
 const TEXT_EXTENSIONS = new Set([
-  'css', 'csv', 'html', 'htm', 'js', 'json', 'jsx', 'md', 'mjs', 'cjs', 'svg', 'ts', 'tsx', 'txt', 'xml', 'yaml', 'yml',
+  'css', 'csv', 'html', 'htm', 'js', 'json', 'jsx', 'md', 'mjs', 'cjs', 'svg', 'ts', 'tsx', 'tsv', 'txt', 'xml', 'yaml', 'yml',
 ]);
 const MIME_TYPES: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
   md: 'text/markdown', txt: 'text/plain', json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css',
   js: 'text/javascript', mjs: 'text/javascript', cjs: 'text/javascript', ts: 'text/typescript', tsx: 'text/typescript',
-  csv: 'text/csv', xml: 'application/xml', yaml: 'application/yaml', yml: 'application/yaml', pdf: 'application/pdf',
+  csv: 'text/csv', tsv: 'text/tab-separated-values', xml: 'application/xml', yaml: 'application/yaml', yml: 'application/yaml',
+  pdf: 'application/pdf', doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  zip: 'application/zip',
   mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
 };
 

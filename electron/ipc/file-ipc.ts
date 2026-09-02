@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { type IpcMain, app, dialog, shell } from 'electron';
 import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
+import { resolveFileResourceHostPath } from './file-resource-path.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
 import {
   cleanupStaleTemporaryPreviews,
@@ -56,6 +57,7 @@ export type ShellOpenErrorCode =
   | 'INVALID_APP'
   | 'TOO_LARGE'
   | 'WRITE_FAILED'
+  | 'TRASH_FAILED'
   | 'OPEN_FAILED';
 
 export type ShellOpenResult =
@@ -745,6 +747,16 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     return err ? { ok: false as const, code: 'OPEN_FAILED' as const, error: err } : { ok: true as const };
   });
 
+  ipcMain.handle('shell:open-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
+    assertTrustedRenderer(event);
+    const resolved = await resolveFileResourceHostPath(fileResourceId);
+    if (!resolved.ok) return resolved;
+    const validation = await validateOpenPath(resolved.path);
+    if (!validation.ok) return validation;
+    const error = await shell.openPath(resolved.path);
+    return error ? { ok: false, code: 'OPEN_FAILED', error } : { ok: true };
+  });
+
   ipcMain.handle('shell:open-temporary-file', async (event, input: unknown): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const validation = validateTemporarySpreadsheetInput(input);
@@ -784,6 +796,34 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     return { success: true as const };
   });
 
+  ipcMain.handle('shell:show-file-resource-in-folder', async (event, fileResourceId: unknown) => {
+    assertTrustedRenderer(event);
+    const resolved = await resolveFileResourceHostPath(fileResourceId);
+    if (!resolved.ok) return { success: false as const, error: resolved.error };
+    const validation = await validateOpenPath(resolved.path);
+    if (!validation.ok) return { success: false as const, error: validation.error };
+    shell.showItemInFolder(resolved.path);
+    return { success: true as const };
+  });
+
+  ipcMain.handle('shell:trash-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
+    assertTrustedRenderer(event);
+    const resolved = await resolveFileResourceHostPath(fileResourceId);
+    if (!resolved.ok) return resolved;
+    const validation = await validateOpenPath(resolved.path);
+    if (!validation.ok) return validation;
+    try {
+      await shell.trashItem(resolved.path);
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        code: 'TRASH_FAILED',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+
   ipcMain.handle('shell:choose-app-and-open-path', async (event, filePath: string): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
     const validation = await validateOpenWithTargetPath(filePath);
@@ -810,11 +850,44 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     return spawnOpenWithApp(filePath, appPath);
   });
 
+  ipcMain.handle('shell:choose-app-and-open-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
+    assertTrustedRenderer(event);
+    const resolved = await resolveFileResourceHostPath(fileResourceId);
+    if (!resolved.ok) return resolved;
+    const validation = await validateOpenWithTargetPath(resolved.path);
+    if (!validation.ok) return validation;
+    const defaultPath =
+      process.platform === 'darwin'
+        ? '/Applications'
+        : process.platform === 'win32'
+          ? 'C:\\Program Files'
+          : '/usr/bin';
+    const res = await dialog.showOpenDialog({
+      title: 'Choose application',
+      defaultPath,
+      properties: process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'],
+      filters: process.platform === 'win32' ? [{ name: 'Applications', extensions: ['exe'] }] : undefined,
+    });
+    const appPath = res.filePaths[0];
+    if (res.canceled || !appPath) return { ok: false, code: 'CANCELED', error: 'Application selection canceled.' };
+    return spawnOpenWithApp(resolved.path, appPath);
+  });
+
   ipcMain.handle(
     'shell:open-path-with-app',
     async (event, filePath: string, appPath: string): Promise<ShellOpenResult> => {
       assertTrustedRenderer(event);
       return spawnOpenWithApp(filePath, appPath);
+    },
+  );
+
+  ipcMain.handle(
+    'shell:open-file-resource-with-app',
+    async (event, fileResourceId: unknown, appPath: string): Promise<ShellOpenResult> => {
+      assertTrustedRenderer(event);
+      const resolved = await resolveFileResourceHostPath(fileResourceId);
+      if (!resolved.ok) return resolved;
+      return spawnOpenWithApp(resolved.path, appPath);
     },
   );
 
@@ -836,6 +909,20 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
       recommended,
       recent: recent.filter((app) => !recommendedPaths.has(app.path)),
     };
+  });
+
+  ipcMain.handle('shell:get-open-with-apps-for-file-resource', async (event, fileResourceId: unknown) => {
+    assertTrustedRenderer(event);
+    const resolved = await resolveFileResourceHostPath(fileResourceId);
+    if (!resolved.ok) return { recommended: [], recent: [] };
+    const validation = await validateOpenWithTargetPath(resolved.path);
+    if (!validation.ok) return { recommended: [], recent: [] };
+    const [recommended, recent] = await Promise.all([
+      getRecommendedOpenWithAppsForPath(resolved.path),
+      readRecentOpenWithApps(),
+    ]);
+    const recommendedPaths = new Set(recommended.map((app) => app.path));
+    return { recommended, recent: recent.filter((app) => !recommendedPaths.has(app.path)) };
   });
 
   ipcMain.handle('shell:clear-recent-open-with-apps', async (event) => {
