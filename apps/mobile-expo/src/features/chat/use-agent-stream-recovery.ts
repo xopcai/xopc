@@ -92,13 +92,17 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
   const runRecovery = useCallback(async () => {
     if (!sessionKey || activeGenerationRef.current !== 0) return;
     clearParkedTimer();
+    if (AppState.currentState !== 'active') {
+      onParkedRef.current();
+      return;
+    }
     const generation = ++generationRef.current;
     activeGenerationRef.current = generation;
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
     const startedAt = Date.now();
-    let pendingInputBlocked = false;
+    let transportBlocked = false;
 
     try {
       for (let attempt = 1; attempt <= STREAM_RECOVERY_FAST_ATTEMPTS; attempt++) {
@@ -115,15 +119,31 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
             onSubmissionFailedRef.current(error);
             return;
           }
-          pendingInputBlocked = true;
+          transportBlocked = true;
         }
         if (controller.signal.aborted || generation !== generationRef.current) return;
 
-        const runId = await resolveResumeRunId(sessionKey);
+        let runId: string | null;
+        try {
+          runId = await resolveResumeRunId(sessionKey);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!isTransientNetworkError(message)) {
+            onSubmissionFailedRef.current(error);
+            return;
+          }
+          transportBlocked = true;
+          if (attempt === STREAM_RECOVERY_FAST_ATTEMPTS) {
+            park();
+            return;
+          }
+          await delay(1_200, controller.signal);
+          continue;
+        }
         if (controller.signal.aborted || generation !== generationRef.current) return;
         if (!runId) {
           if (Date.now() - startedAt >= STREAM_RECOVERY_WAIT_FOR_RUN_MS || attempt === STREAM_RECOVERY_FAST_ATTEMPTS) {
-            if (pendingInputBlocked) park();
+            if (transportBlocked) park();
             else await onReconcileRef.current();
             return;
           }

@@ -8,7 +8,6 @@ describe('shouldWakeStreamRecoveryOnForeground', () => {
       previousAppState: 'background',
       nextAppState: 'active',
       sessionIsActive: true,
-      hasResumableWork: true,
     })).toBe(true);
   });
 
@@ -17,16 +16,22 @@ describe('shouldWakeStreamRecoveryOnForeground', () => {
       previousAppState: 'active',
       nextAppState: 'active',
       sessionIsActive: true,
-      hasResumableWork: true,
     })).toBe(false);
   });
 
-  it('does not wake a chat without resumable work', () => {
+  it('always reconciles an active chat because local pending state can be incomplete', () => {
     expect(shouldWakeStreamRecoveryOnForeground({
       previousAppState: 'inactive',
       nextAppState: 'active',
       sessionIsActive: true,
-      hasResumableWork: false,
+    })).toBe(true);
+  });
+
+  it('does not reconcile a chat that is no longer active', () => {
+    expect(shouldWakeStreamRecoveryOnForeground({
+      previousAppState: 'background',
+      nextAppState: 'active',
+      sessionIsActive: false,
     })).toBe(false);
   });
 });

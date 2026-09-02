@@ -18,6 +18,7 @@ import { resolveEffectiveGatewayBaseUrl } from '../../stores/gateway-types';
 import { recordConnectionEvent } from './connection-log';
 import { emitGatewayEvent } from './gateway-event-bus';
 import { runProbeRound } from './probe-coordinator';
+import { RealtimeTopicCursorStore } from './realtime-topic-cursors';
 
 type TopicListener = {
   onEvent: (event: RealtimeEventPayload) => void;
@@ -25,7 +26,7 @@ type TopicListener = {
 };
 
 const topicListeners = new Map<string, Set<TopicListener>>();
-const topicCursors = new Map<string, number | undefined>();
+const topicCursors = new RealtimeTopicCursorStore();
 let sharedClient: RealtimeClient | null = null;
 let sharedConnectionKey = '';
 let subscriberCount = 0;
@@ -39,7 +40,7 @@ function websocketUrl(): string {
   return url.toString();
 }
 
-function createClient(clientId: string): RealtimeClient {
+function createClient(clientId: string, cursorScopeKey: string): RealtimeClient {
   return new RealtimeClient({
     clientId,
     clientKind: 'mobile',
@@ -78,8 +79,14 @@ function createClient(clientId: string): RealtimeClient {
     onEvent: (event) => {
       if (event.topic === 'gateway' || event.topic === 'sessions') emitGatewayEvent(event.event, event.data);
       for (const listener of topicListeners.get(event.topic) ?? []) listener.onEvent(event);
+      if (topicCursors.isActiveScope(cursorScopeKey)) {
+        topicCursors.advance(event.topic, event.seq);
+      }
     },
     onGap: async (gap) => {
+      if (topicCursors.isActiveScope(cursorScopeKey)) {
+        topicCursors.resetForGap(gap.topic, gap.earliestSeq);
+      }
       emitGatewayEvent('realtime.gap', gap);
       if (gap.topic === 'gateway' || gap.topic === 'sessions') {
         await queryClient.invalidateQueries();
@@ -89,20 +96,25 @@ function createClient(clientId: string): RealtimeClient {
   });
 }
 
-function acquireSharedConnection(connectionKey: string, clientId: string): void {
+function acquireSharedConnection(connectionKey: string, cursorScopeKey: string, clientId: string): void {
   subscriberCount += 1;
   if (disconnectTimer) {
     clearTimeout(disconnectTimer);
     disconnectTimer = null;
   }
-  if (sharedClient && sharedConnectionKey === connectionKey) return;
+  if (
+    sharedClient
+    && sharedConnectionKey === connectionKey
+    && topicCursors.isActiveScope(cursorScopeKey)
+  ) return;
   sharedClient?.disconnect();
-  sharedClient = createClient(clientId);
+  topicCursors.activateScope(cursorScopeKey);
+  sharedClient = createClient(clientId, cursorScopeKey);
   if (endpointBinding) sharedClient.setEndpoint(endpointBinding);
   sharedConnectionKey = connectionKey;
-  sharedClient.subscribe('gateway');
-  sharedClient.subscribe('sessions');
-  for (const topic of topicListeners.keys()) sharedClient.subscribe(topic, topicCursors.get(topic));
+  sharedClient.subscribe('gateway', topicCursors.read('gateway'));
+  sharedClient.subscribe('sessions', topicCursors.read('sessions'));
+  for (const topic of topicListeners.keys()) sharedClient.subscribe(topic, topicCursors.read(topic));
   sharedClient.connect();
 }
 
@@ -133,7 +145,8 @@ export function useGatewayRealtime(): void {
       return;
     }
     const id = `mobile:${profileId ?? 'default'}`;
-    acquireSharedConnection(`${gatewayEndpoint}|${token}`, id);
+    const cursorScopeKey = profileId ? `profile:${profileId}` : `endpoint:${gatewayEndpoint}`;
+    acquireSharedConnection(`${gatewayEndpoint}|${token}`, cursorScopeKey, id);
     return () => releaseSharedConnection();
   }, [configured, token, gatewayEndpoint, profileId]);
 
@@ -145,7 +158,10 @@ export function useGatewayRealtime(): void {
       if (wasActive && next !== 'active') {
         sharedClient?.disconnect();
       } else if (!wasActive && next === 'active') {
-        void runProbeRound('foreground', { force: true }).finally(() => sharedClient?.reconnect());
+        // Reopen immediately on the last-known route. The bounded route probe
+        // may replace the client if LAN/tunnel preference changed.
+        sharedClient?.reconnect();
+        void runProbeRound('foreground', { force: true });
       }
     });
     return () => subscription.remove();
@@ -157,6 +173,7 @@ export function getSharedGatewayRealtimeClient(): RealtimeClient | null {
 }
 
 export function requestMobileRealtimeReconnect(): void {
+  if (AppState.currentState !== 'active') return;
   sharedClient?.reconnect();
 }
 

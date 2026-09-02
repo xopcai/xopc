@@ -17,9 +17,13 @@ export async function resolveResumeRunId(sessionKey: string): Promise<string | n
     }
     clearPendingAgentRun(key);
     return null;
-  } catch {
-    /* gateway may be reconnecting; fall back to local pending run */
+  } catch (error) {
+    // A local run id is enough to attempt topic replay while the active-run
+    // endpoint is temporarily unreachable. With no local id, preserve the
+    // transport failure so recovery retries instead of treating it as an
+    // authoritative "no active run" response.
+    const localRunId = readPendingAgentRunId(key);
+    if (localRunId) return localRunId;
+    throw error;
   }
-
-  return readPendingAgentRunId(key);
 }

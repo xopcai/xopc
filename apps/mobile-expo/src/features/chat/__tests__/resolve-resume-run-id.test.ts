@@ -56,4 +56,11 @@ describe('resolveResumeRunId', () => {
 
     await expect(resolveResumeRunId('session-a')).resolves.toBe('run-local');
   });
+
+  it('preserves a lookup failure when there is no local run to resume', async () => {
+    mockedFetchSessionActiveRun.mockRejectedValueOnce(new Error('Could not reach gateway'));
+    mockedReadPendingAgentRunId.mockReturnValueOnce(null);
+
+    await expect(resolveResumeRunId('session-a')).rejects.toThrow('Could not reach gateway');
+  });
 });
