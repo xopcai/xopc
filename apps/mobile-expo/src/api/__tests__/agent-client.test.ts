@@ -292,6 +292,28 @@ describe('AgentMessageSender local detach', () => {
     expect(testState.memory.get('pending:session-a')).toBeUndefined();
   });
 
+  it('does not let an older attachment clear a newer pending run', async () => {
+    const sender = new AgentMessageSender();
+    const pending = sender.resume('run-old', 'session-a');
+    await vi.waitFor(() => expect(testState.realtimeListener).toBeDefined());
+    testState.memory.set('pending:session-a', JSON.stringify({ runId: 'run-new', lastSeq: 0 }));
+
+    testState.realtimeListener?.onEvent?.({
+      topic: 'run:run-old',
+      seq: 4,
+      event: 'run_end',
+      data: {
+        type: 'run_end',
+        runId: 'run-old',
+        sessionKey: 'session-a',
+        payload: { status: 'success' },
+      },
+    });
+
+    await pending;
+    expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-new', lastSeq: 0 }));
+  });
+
   it('requests an immediate realtime reconnect while waiting for the endpoint claim', async () => {
     clearMobileEndpointTurnClaim();
     testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
@@ -354,6 +376,15 @@ describe('AgentMessageSender local detach', () => {
     expect(testState.memory.has('session-input-outbox:session-a')).toBe(false);
   });
 
+  it('keeps an input durable when a successful response body is truncated', async () => {
+    testState.apiFetch.mockResolvedValue(new Response('not-json', { status: 202 }));
+    const sender = new AgentMessageSender();
+
+    await expect(sender.sendMessage('hello', 'session-a')).rejects.toThrow('Network response was invalid');
+
+    expect(testState.memory.has('session-input-outbox:session-a')).toBe(true);
+  });
+
   it('keeps an ambiguous input across sender instances and reuses its id', async () => {
     vi.useFakeTimers();
     testState.apiFetch.mockRejectedValue(new Error('Network request failed'));
@@ -400,5 +431,16 @@ describe('AgentMessageSender local detach', () => {
     await vi.waitFor(() => expect(testState.realtimeAfterSeq).toBe(7));
     sender.detachLocalStream();
     await second;
+  });
+
+  it('replays from the beginning when the UI projection was rebuilt', async () => {
+    testState.memory.set('pending:session-a', JSON.stringify({ runId: 'run-cursor', lastSeq: 7 }));
+    const sender = new AgentMessageSender();
+
+    const pending = sender.resume('run-cursor', 'session-a', undefined, { replayFromStart: true });
+
+    await vi.waitFor(() => expect(testState.realtimeAfterSeq).toBe(0));
+    sender.detachLocalStream();
+    await pending;
   });
 });
