@@ -49,6 +49,15 @@ function errorResponse(c: Context, error: unknown) {
   throw error;
 }
 
+function contentDisposition(disposition: 'inline' | 'attachment', fileName: string): string {
+  const sanitized = fileName.replace(/[\u0000-\u001f\u007f]/g, '_');
+  const asciiFallback = sanitized.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const encoded = encodeURIComponent(sanitized).replace(/['()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
+}
+
 async function collectFiles(files: FileSpaceService, spaceId: string, query: string, max: number): Promise<FileResource[]> {
   const output: FileResource[] = [];
   const directories = [''];
@@ -137,7 +146,7 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
       if (c.req.header('if-none-match') === resource.revision) return c.body(null, 304);
       c.header('Content-Type', resource.mimeType);
       c.header('ETag', resource.revision);
-      c.header('Content-Disposition', `inline; filename="${resource.name.replace(/["\r\n]/g, '_')}"`);
+      c.header('Content-Disposition', contentDisposition('inline', resource.name));
       return c.body(await readFile(absolutePath));
     } catch (error) { return errorResponse(c, error); }
   });
