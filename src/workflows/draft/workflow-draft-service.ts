@@ -1,6 +1,6 @@
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
-import { resolveModelRef } from '../../config/agent-typed-models.js';
+import { resolveModelSelector } from '../../config/agent-model-intents.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
@@ -93,7 +93,7 @@ export class WorkflowDraftService {
 
 export function resolveDraftModelRef(config: Config, agentId: string): string {
   try {
-    return resolveModelRef(config, agentId, 'large');
+    return resolveModelSelector(config, agentId, 'reasoning');
   } catch {
     return getAgentDefaultModelRef(config) ?? getDefaultModelSync(config);
   }

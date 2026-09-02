@@ -106,7 +106,7 @@ export async function runEmbeddedTurnForSession(
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
     const promptCachePolicy = resolvePromptCachePolicy(
       config
-        ? resolveEffectiveAgentProfileForSession(config, sessionKey).manifest.runtime?.promptCache
+        ? resolveEffectiveAgentProfileForSession(config, sessionKey).config.runtime.promptCache
         : undefined,
     );
     let userMessageForTurn = userMessage;

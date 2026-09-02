@@ -18,6 +18,6 @@ describe('settings-fields browser palette entries', () => {
 
     extension?.run();
     expect(close).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith('/agents');
+    expect(navigate).toHaveBeenCalledWith('/settings/agent-browser');
   });
 });

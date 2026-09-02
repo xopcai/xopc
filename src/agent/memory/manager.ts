@@ -3,7 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { appendMemoryTraceEvent, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
 import { retrievalQueryAuditValue } from '../../retrieval/audit.js';
 import { createLogger } from '../../utils/logger.js';
-import type { MemoryRuntime, MemorySource } from '../../agent-runtime/memory-runtime.js';
+import type { MemoryRuntime, MemorySource } from './runtime.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import { UserUnderstandingService } from './understanding/service.js';
 import type { UnderstandingCandidate } from './understanding/types.js';

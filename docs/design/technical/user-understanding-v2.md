@@ -483,7 +483,7 @@ Initial launch gates:
 
 ## Build versus buy
 
-xopc should own the governance envelope, source and evidence model, scope, planner, trace, feedback, and deletion semantics. These are tightly coupled to xopc's local-first runtime, agent manifests, projects, tasks, and connector permissions.
+xopc should own the governance envelope, source and evidence model, scope, planner, trace, feedback, and deletion semantics. These are tightly coupled to xopc's local-first runtime, effective Agent configuration, projects, tasks, and connector permissions.
 
 Embeddings, generic memory providers, and an optional temporal graph can remain replaceable adapters. No external provider should become the user-visible source of truth.
 

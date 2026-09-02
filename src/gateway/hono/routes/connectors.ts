@@ -448,7 +448,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       const policy = getComposioInstallationPolicy(config, c.req.param('toolkit'));
       const agents = config.agents.list.filter((agent) => agent.enabled).map((agent) => ({
         id: agent.id,
-        name: agent.identity?.name ?? agent.id,
+        name: agent.id,
       }));
       return c.json({ ok: true, payload: { policy, agents } });
     } catch (error) {

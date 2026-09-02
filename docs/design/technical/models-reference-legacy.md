@@ -12,22 +12,16 @@ The **gateway console** (Settings → Providers), **`xopc providers`**, and **`x
 {
   "agents": {
     "default": "main",
+    "defaults": {
+      "models": {
+        "chat": { "primary": "deepseek/deepseek-v4-flash", "fallbacks": [] },
+        "intents": {}
+      }
+    },
     "list": [
       {
         "id": "main",
-        "identity": { "name": "Main", "role": "General assistant" },
-        "responsibilities": { "primary": ["Help the user complete tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-v4-flash" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+        "profile": { "name": "Main" }
       }
     ]
   },
@@ -43,7 +37,7 @@ You can also set the same key from the terminal:
 export DEEPSEEK_API_KEY="sk-..."
 ```
 
-**Default chat model:** xopc resolves the selected agent from `agents.default` and `agents.list`. Put model roles under `agents.list[].models.roles`; workflows can then reference those typed roles instead of hard-coding a model everywhere.
+**Default chat model:** configure it once at `agents.defaults.models.chat`. Workflows may use one of the fixed intents under `agents.defaults.models.intents`; an Agent only stores a different route when it needs an override.
 
 Included built-ins cover, among others: **DeepSeek**, **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo**. **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
 

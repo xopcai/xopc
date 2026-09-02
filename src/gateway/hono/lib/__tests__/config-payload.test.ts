@@ -65,7 +65,7 @@ describe('buildSafeWebConfigPayload', () => {
   it('includes the Web UI activity detail default', async () => {
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {
-        agents: { capabilityPresets: {}, list: [] },
+        agents: { list: [] },
         channels: {},
         gateway: { webchat: { activityDetailDefault: 'stream' } },
       },
@@ -74,27 +74,26 @@ describe('buildSafeWebConfigPayload', () => {
     expect(payload.gateway.webchat.activityDetailDefault).toBe('stream');
   });
 
-  it('includes manifest typed models for config round trips', async () => {
+  it('includes global model intents and agent overrides for config round trips', async () => {
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {
         agents: {
           default: 'main',
-          capabilityPresets: {},
+          defaults: {
+            models: {
+              chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
+              intents: { fast: { primary: 'ollama/AutoGLM-Phone-9B:latest', fallbacks: [] } },
+            },
+          },
           list: [
             {
               id: 'main',
               enabled: true,
-              identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
-              responsibilities: { primary: ['Help'] },
-              workspace: { root: '/tmp/main' },
+              profile: { name: 'Main' },
+              workspace: '/tmp/main',
               models: {
-                defaultRole: 'small',
-                roles: { small: { description: 'Fast model', model: 'ollama/AutoGLM-Phone-9B:latest' } },
+                intents: { review: { primary: 'anthropic/claude-sonnet-4', fallbacks: [] } },
               },
-              tools: { builtin: {} },
-              skills: { mode: 'all' },
-              workflows: {},
-              boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
             },
           ],
         },
@@ -102,9 +101,9 @@ describe('buildSafeWebConfigPayload', () => {
       },
     } as never);
 
-    expect(payload.agents.list[0]?.models.roles.small).toEqual({
-      description: 'Fast model',
-      model: 'ollama/AutoGLM-Phone-9B:latest',
+    expect(payload.agents.list[0]?.models.intents.review).toEqual({
+      primary: 'anthropic/claude-sonnet-4',
+      fallbacks: [],
     });
     expect(payload.gateway.skillsMarketplaceProvider).toBe('store');
     expect(payload.gateway.skillsStoreBaseUrl).toBe('https://store.xopc.ai');
@@ -119,7 +118,7 @@ describe('buildSafeWebConfigPayload', () => {
   it('includes the strict global compaction policy for WebUI round trips', async () => {
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {
-        agents: { default: 'main', capabilityPresets: {}, list: [] },
+        agents: { default: 'main', list: [] },
         channels: {},
         userContext: {
           memory: {

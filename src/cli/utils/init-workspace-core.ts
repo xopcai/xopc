@@ -13,7 +13,7 @@ export interface InitWorkspaceCoreOptions {
   workspacePath: string;
   /** When set with a new config file, overrides schema default port (e.g. Electron). */
   gatewayPort?: number;
-  /** When true, sets the default agent manifest workspace root to `workspacePath`. */
+  /** When true, sets the default agent workspace to `workspacePath`. */
   persistWorkspacePath?: boolean;
   /** Optional channel plugin validator (CLI/gateway only; Electron omits). */
   assertChannelPlugins?: (cfg: Config) => void | Promise<void>;
@@ -107,7 +107,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     persistedWorkspaceRoot === undefined
       ? config.agents.list
       : config.agents.list.map((agent) =>
-          agent.id === defaultAgentId ? { ...agent, workspace: { root: persistedWorkspaceRoot } } : agent,
+          agent.id === defaultAgentId ? { ...agent, workspace: persistedWorkspaceRoot } : agent,
         );
 
   const nextConfig: Config = {

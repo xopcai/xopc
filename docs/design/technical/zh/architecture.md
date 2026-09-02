@@ -71,7 +71,7 @@ HTTP 服务直接运行回合；`gateway` 命令启动的则是与 Web 控制台
 `AgentService` 不是一个简单的“Prompt 加 LLM”类，而是智能体侧的组合根，负责：
 
 - `AgentManager`：按会话维护内嵌 pi-agent 实例。
-- `ModelManager`：默认模型、会话级覆盖、typed model roles 与解析后的模型元数据。
+- `ModelManager`：继承的 Chat 与固定意图模型、Agent 和会话级覆盖，以及解析后的模型元数据。
 - `TurnDispatcher`：直接回合、流式回合、Webchat steering、clarify 与 stream 事件注入。
 - `AgentOrchestrator`：回合执行、生命周期事件、反馈、持久化与压缩。
 - `OutboundCoordinator`：最终响应发布与频道 hooks。

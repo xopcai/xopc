@@ -39,7 +39,7 @@
     "settingsShares": "File sharing",
     "settingsCron": "Scheduled tasks",
     "settingsAgentBrowser": "Browser",
-    "settingsCapabilityPresets": "Capability plans",
+    "settingsAgentDefaults": "Agent defaults",
     "settingsKeyboardShortcuts": "Keyboard shortcuts",
     "settingsSystem": "System permissions",
     "settingsDesktopPet": "Pet",

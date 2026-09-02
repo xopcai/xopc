@@ -12,22 +12,21 @@ import { usePreferencesStore } from '../stores/preferences-store';
 
 export type AgentModelInfo = { primary?: string; fallbacks?: string[] };
 
-export type AgentTypedModelInfo = {
-  defaults: Array<{ id: string; model: string; description?: string }>;
-  entry?: Array<{ id: string; model: string; description?: string }>;
-  effective: Array<{ id: string; model: string; description?: string }>;
+export type AgentModelIntentsInfo = {
+  effective: string[];
+  overrides: string[];
 };
 
 export type AgentSkillsInfo = {
-  defaults: string[];
-  entry?: string[];
-  effectiveAllowlist?: string[];
+  mode?: 'all-enabled' | 'selected';
+  allowlist?: string[];
+  excluded: string[];
+  overrides: string[];
 };
 
 export type AgentToolsInfo = {
-  defaultsDisable: string[];
-  entryDisable: string[];
-  effectiveDisable: string[];
+  denied: string[];
+  overrides: string[];
 };
 
 export type ChatAgentOption = {
@@ -39,7 +38,7 @@ export type ChatAgentOption = {
   workspace?: string;
   profileDir?: string;
   model?: AgentModelInfo;
-  typedModels: AgentTypedModelInfo;
+  modelIntents: AgentModelIntentsInfo;
   isDefault?: boolean;
   skills: AgentSkillsInfo;
   tools: AgentToolsInfo;
@@ -50,10 +49,6 @@ export type ChatAgentsPayload = {
   items: ChatAgentOption[];
   builtinToolIds: string[];
 };
-
-const emptyTypedModels: AgentTypedModelInfo = { defaults: [], effective: [] };
-const emptySkills: AgentSkillsInfo = { defaults: [] };
-const emptyTools: AgentToolsInfo = { defaultsDisable: [], entryDisable: [], effectiveDisable: [] };
 
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -76,51 +71,54 @@ function modelInfo(value: unknown): AgentModelInfo | undefined {
   return { ...(primary ? { primary } : {}), ...(fallbacks.length ? { fallbacks } : {}) };
 }
 
-function typedModelRows(value: unknown): AgentTypedModelInfo['defaults'] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((row) => {
-    if (!row || typeof row !== 'object') return [];
-    const raw = row as { id?: unknown; model?: unknown; description?: unknown };
-    const id = stringOrUndefined(raw.id);
-    const model = stringOrUndefined(raw.model);
-    if (!id || !model) return [];
-    const description = stringOrUndefined(raw.description);
-    return [{ id, model, ...(description ? { description } : {}) }];
-  });
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-function typedModelsInfo(value: unknown): AgentTypedModelInfo {
-  if (!value || typeof value !== 'object') return emptyTypedModels;
-  const raw = value as { defaults?: unknown; entry?: unknown; effective?: unknown };
-  const defaults = typedModelRows(raw.defaults);
-  const entry = typedModelRows(raw.entry);
-  const effective = typedModelRows(raw.effective);
+function modelIntentsInfo(value: unknown): AgentModelIntentsInfo {
+  const raw = objectRecord(value);
+  const effectiveModels = objectRecord(objectRecord(raw.effective).models);
+  const overrideModels = objectRecord(objectRecord(raw.override).models);
+  const effective = Object.keys(objectRecord(effectiveModels.intents)).sort();
+  const overrides = Object.keys(objectRecord(overrideModels.intents)).sort();
   return {
-    defaults,
-    ...(entry.length ? { entry } : {}),
-    effective: effective.length ? effective : defaults,
+    effective,
+    overrides,
   };
 }
 
 function skillsInfo(value: unknown): AgentSkillsInfo {
-  if (!value || typeof value !== 'object') return emptySkills;
-  const raw = value as { defaults?: unknown; entry?: unknown; effectiveAllowlist?: unknown };
-  const entry = stringArray(raw.entry);
-  const effectiveAllowlist = stringArray(raw.effectiveAllowlist);
+  const raw = objectRecord(value);
+  const effective = objectRecord(objectRecord(raw.effective).skills);
+  const override = objectRecord(objectRecord(raw.override).skills);
+  const mode = effective.mode === 'all-enabled' || effective.mode === 'selected'
+    ? effective.mode
+    : undefined;
+  const allowlist = mode === 'selected' ? stringArray(effective.include) : undefined;
+  const excluded = mode === 'all-enabled' ? stringArray(effective.exclude) : [];
+  const overrides = override.mode === 'replace'
+    ? stringArray(override.include)
+    : [...stringArray(override.add), ...stringArray(override.remove)].sort();
   return {
-    defaults: stringArray(raw.defaults),
-    ...(entry.length ? { entry } : {}),
-    ...(effectiveAllowlist.length ? { effectiveAllowlist } : {}),
+    ...(mode ? { mode } : {}),
+    ...(allowlist ? { allowlist } : {}),
+    excluded,
+    overrides,
   };
 }
 
 function toolsInfo(value: unknown): AgentToolsInfo {
-  if (!value || typeof value !== 'object') return emptyTools;
-  const raw = value as { defaultsDisable?: unknown; entryDisable?: unknown; effectiveDisable?: unknown };
+  const raw = objectRecord(value);
+  const effective = objectRecord(objectRecord(raw.effective).tools);
+  const overrides = objectRecord(objectRecord(raw.override).tools);
   return {
-    defaultsDisable: stringArray(raw.defaultsDisable),
-    entryDisable: stringArray(raw.entryDisable),
-    effectiveDisable: stringArray(raw.effectiveDisable),
+    denied: Object.entries(effective)
+      .filter(([, policy]) => objectRecord(policy).mode === 'deny')
+      .map(([id]) => id)
+      .sort(),
+    overrides: Object.keys(overrides).sort(),
   };
 }
 
@@ -192,11 +190,11 @@ export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
         avatar: stringOrUndefined(raw.avatar),
         workspace: stringOrUndefined(raw.workspace),
         profileDir: stringOrUndefined(raw.profileDir),
-        model: modelInfo(raw.model),
-        typedModels: typedModelsInfo(raw.typedModels),
+        model: modelInfo(objectRecord(objectRecord(raw.effective).models).chat),
+        modelIntents: modelIntentsInfo(raw),
         isDefault: typeof raw.isDefault === 'boolean' ? raw.isDefault : undefined,
-        skills: skillsInfo(raw.skills),
-        tools: toolsInfo(raw.tools),
+        skills: skillsInfo(raw),
+        tools: toolsInfo(raw),
       };
     });
   if (items.length === 0) throw new Error('Gateway returned no enabled agents');

@@ -23,7 +23,7 @@ type StarterAgent = {
 };
 
 function denyTools(names: string[]): NonNullable<Config['agents']['list']>[number]['tools'] {
-  return { builtin: Object.fromEntries(names.map((name) => [name, { mode: 'deny' as const }])) };
+  return Object.fromEntries(names.map((name) => [name, { mode: 'deny' as const }]));
 }
 
 function identity(params: { name: string; description: string; creature: string; emoji: string }): string {
@@ -188,13 +188,6 @@ export function ensureStarterAgentsInitialized(cfg: Config): { config: Config; c
     if (hasAgentEntry(next, starter.id)) continue;
     next = applyAgentConfig(next, {
       agentId: starter.id,
-      identity: {
-        name: starter.displayName,
-        description: starter.description,
-        role: starter.role,
-        language: 'en',
-        tone: 'direct',
-      },
       ...(starter.tools ? { tools: starter.tools } : {}),
     });
   }

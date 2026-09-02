@@ -2,9 +2,9 @@ import { useCallback, useMemo, useReducer, useRef } from 'react';
 
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
-  parseAgentDefaultsFromConfig,
+  parseBrowserSettings,
   patchBrowserSettings,
-  type AgentDefaultsState,
+  type BrowserSettingsState,
 } from '@/features/settings/config-api';
 import type { MessageBundle } from '@/i18n/messages';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
@@ -15,15 +15,15 @@ export type UseAgentDefaultsFormResult = {
   hasToken: boolean;
   loading: boolean;
   fetchError: string | null;
-  form: AgentDefaultsState | null;
-  update: (patch: Partial<AgentDefaultsState>) => void;
+  form: BrowserSettingsState | null;
+  update: (patch: Partial<BrowserSettingsState>) => void;
   autosaveStatus: AutosaveStatus;
   error: string | null;
   onBlurCapture: () => void;
   mutate: ReturnType<typeof useGatewayConfigSwr>['mutate'];
 };
 
-const agentDefaultsFormReducer = createFormDraftReducer<AgentDefaultsState>();
+const browserSettingsFormReducer = createFormDraftReducer<BrowserSettingsState>();
 
 export function useAgentDefaultsForm(
   a: MessageBundle['agentSettings'],
@@ -31,19 +31,19 @@ export function useAgentDefaultsForm(
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [formDraft, dispatchForm] = useReducer(agentDefaultsFormReducer, { form: null, baseline: null });
+  const [formDraft, dispatchForm] = useReducer(browserSettingsFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
   const baseline = formDraft.baseline;
   const dirtyRef = useRef(false);
   const formRef = useRef(form);
   formRef.current = form;
-  const trackedParsedRef = useRef<AgentDefaultsState | null>(null);
+  const trackedParsedRef = useRef<BrowserSettingsState | null>(null);
 
   const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
 
   const parsed = useMemo(
     () =>
-      data?.payload?.config !== undefined ? parseAgentDefaultsFromConfig(data.payload.config) : null,
+      data?.payload?.config !== undefined ? parseBrowserSettings(data.payload.config) : null,
     [data],
   );
 
@@ -67,12 +67,12 @@ export function useAgentDefaultsForm(
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
 
-  const update = useCallback((patch: Partial<AgentDefaultsState>) => {
+  const update = useCallback((patch: Partial<BrowserSettingsState>) => {
     dirtyRef.current = true;
     dispatchForm({ type: 'patch', patch });
   }, []);
 
-  const save = useCallback(async (snapshot: AgentDefaultsState) => {
+  const save = useCallback(async (snapshot: BrowserSettingsState) => {
     try {
       await patchBrowserSettings(snapshot);
       dispatchForm({ type: 'saved', value: snapshot });

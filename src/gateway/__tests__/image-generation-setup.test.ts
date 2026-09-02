@@ -12,36 +12,26 @@ function createConfig() {
   return ConfigSchema.parse({
     agents: {
       default: 'main',
+      defaults: {
+        models: { chat: { primary: 'openai/gpt-5', fallbacks: [] }, intents: {} },
+        skills: { mode: 'all-enabled', exclude: [] },
+        tools: {},
+        workflows: {},
+        runtime: {},
+      },
       list: [
         {
           id: 'main',
           enabled: true,
-          identity: { name: 'Main', role: 'Agent' },
-          responsibilities: { primary: ['Help'] },
-          workspace: { root: '/tmp/main' },
-          models: {
-            defaultRole: 'default',
-            roles: { default: { model: 'openai/gpt-5' } },
-          },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          workspace: '/tmp/main',
         },
         {
           id: 'studio',
           enabled: true,
-          identity: { name: 'Studio', role: 'Agent' },
-          responsibilities: { primary: ['Create'] },
-          workspace: { root: '/tmp/studio' },
+          workspace: '/tmp/studio',
           models: {
-            defaultRole: 'default',
-            roles: { default: { model: 'google/gemini-3.1-pro' } },
+            chat: { primary: 'google/gemini-3.1-pro', fallbacks: [] },
           },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
         },
       ],
     },
@@ -68,15 +58,6 @@ describe('image generation setup', () => {
 
   it('initializes models when the requested agent has no local model config', () => {
     const config = createConfig();
-    config.agents.capabilityPresets.image = {
-      id: 'image',
-      name: 'Image defaults',
-      models: {
-        defaultRole: 'inherited',
-        roles: { inherited: { model: 'openai/gpt-5-mini' } },
-      },
-    };
-    config.agents.list[1]!.extends = ['image'];
     delete config.agents.list[1]!.models;
 
     const result = prepareImageGenerationSetup(config, 'studio', {
@@ -87,9 +68,11 @@ describe('image generation setup', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.config.agents.list[1]!.models).toEqual({
-      defaultRole: 'inherited',
-      roles: {},
-      imageGenerationModel: { primary: 'google/gemini-3.1-flash-image' },
+      imageGeneration: {
+        primary: 'google/gemini-3.1-flash-image',
+        fallbacks: [],
+        autoProviderFallback: false,
+      },
     });
     expect(getAgentImageGenerationConfig(result.config, 'studio').model?.primary).toBe(
       'google/gemini-3.1-flash-image',
@@ -151,26 +134,20 @@ describe('image generation setup', () => {
     });
   });
 
-  it('updates only the local image model override without materializing preset models', () => {
+  it('updates only the local image model override without materializing global defaults', () => {
     const config = createConfig();
-    config.agents.capabilityPresets.image = {
-      id: 'image',
-      name: 'Image defaults',
-      models: {
-        defaultRole: 'inherited',
-        roles: { inherited: { model: 'openai/gpt-5-mini' } },
-      },
-    };
-    config.agents.list[1]!.extends = ['image'];
 
     const result = prepareImageGenerationSetup(config, 'studio', { providerId: 'google' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.config.agents.list[1]!.models).toEqual({
-      defaultRole: 'default',
-      roles: { default: { model: 'google/gemini-3.1-pro' } },
-      imageGenerationModel: { primary: 'google/gemini-3.1-flash-image' },
+      chat: { primary: 'google/gemini-3.1-pro', fallbacks: [] },
+      imageGeneration: {
+        primary: 'google/gemini-3.1-flash-image',
+        fallbacks: [],
+        autoProviderFallback: false,
+      },
     });
   });
 

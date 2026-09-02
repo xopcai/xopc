@@ -39,9 +39,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           name?: string;
           description?: string;
           avatar?: string;
-          role?: string;
-          responsibilities?: { primary?: string[]; secondary?: string[] };
-          skills?: { effectiveAllowlist?: string[]; entry?: string[] };
+          effective?: { skills?: { mode?: string; include?: string[] } };
         }>;
       };
     };
@@ -57,12 +55,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           description:
             typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
           ...(typeof a.avatar === 'string' && a.avatar.trim() ? { avatar: a.avatar.trim() } : {}),
-          ...(typeof a.role === 'string' && a.role.trim() ? { role: a.role.trim() } : {}),
-          responsibilities: [
-            ...(Array.isArray(a.responsibilities?.primary) ? a.responsibilities.primary : []),
-            ...(Array.isArray(a.responsibilities?.secondary) ? a.responsibilities.secondary : []),
-          ].filter((item): item is string => typeof item === 'string' && Boolean(item.trim())),
-          skills: (a.skills?.effectiveAllowlist ?? a.skills?.entry ?? []).filter(
+          skills: (a.effective?.skills?.mode === 'selected' ? a.effective.skills.include ?? [] : []).filter(
             (item): item is string => typeof item === 'string' && Boolean(item.trim()),
           ),
         }));

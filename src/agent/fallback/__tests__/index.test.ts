@@ -8,6 +8,21 @@ import {
   isFormatErrorMessage,
 } from '../reason.js';
 import { resolveFallbackCandidates } from '../candidates.js';
+import { ConfigSchema } from '../../../config/schema.js';
+
+const fallbackConfig = ConfigSchema.parse({
+  agents: {
+    defaults: {
+      models: {
+        chat: {
+          primary: 'anthropic/claude-sonnet-4-5',
+          fallbacks: [],
+        },
+        intents: {},
+      },
+    },
+  },
+});
 
 describe('Failover Reason Classification', () => {
   it('classifies rate limit errors', () => {
@@ -48,7 +63,7 @@ describe('Failover Reason Classification', () => {
 describe('resolveFallbackCandidates', () => {
   it('returns default model candidate when no config', () => {
     // When no config is provided, it should return a candidate from the default model
-    const candidates = resolveFallbackCandidates({ cfg: {} as any, provider: 'anthropic', model: 'claude-sonnet-4-5' });
+    const candidates = resolveFallbackCandidates({ cfg: undefined, provider: 'anthropic', model: 'claude-sonnet-4-5' });
     // Should return at least the default model candidate (may be filtered if provider not configured)
     expect(candidates.length).toBeGreaterThanOrEqual(0);
   });
@@ -57,19 +72,7 @@ describe('resolveFallbackCandidates', () => {
     process.env.ANTHROPIC_API_KEY = 'test';
     process.env.OPENAI_API_KEY = 'test';
     const candidates = resolveFallbackCandidates({
-      cfg: {
-        agents: {
-          defaultPreset: 'default',
-          capabilityPresets: {
-            default: {
-              models: {
-                defaultRole: 'deep',
-                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
-              },
-            },
-          },
-        },
-      } as any,
+      cfg: fallbackConfig,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
       fallbacksOverride: ['openai/gpt-4o'],
@@ -84,19 +87,7 @@ describe('resolveFallbackCandidates', () => {
     process.env.ANTHROPIC_API_KEY = 'test';
     process.env.OPENAI_API_KEY = 'test';
     const candidates = resolveFallbackCandidates({
-      cfg: {
-        agents: {
-          defaultPreset: 'default',
-          capabilityPresets: {
-            default: {
-              models: {
-                defaultRole: 'deep',
-                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
-              },
-            },
-          },
-        },
-      } as any,
+      cfg: fallbackConfig,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
       fallbacksOverride: ['openai/gpt-4o'],
@@ -110,19 +101,7 @@ describe('resolveFallbackCandidates', () => {
   it('deduplicates candidates', () => {
     process.env.ANTHROPIC_API_KEY = 'test';
     const candidates = resolveFallbackCandidates({
-      cfg: {
-        agents: {
-          defaultPreset: 'default',
-          capabilityPresets: {
-            default: {
-              models: {
-                defaultRole: 'deep',
-                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
-              },
-            },
-          },
-        },
-      } as any,
+      cfg: fallbackConfig,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
       fallbacksOverride: ['anthropic/claude-sonnet-4-5'],
@@ -136,19 +115,7 @@ describe('resolveFallbackCandidates', () => {
     process.env.ANTHROPIC_API_KEY = 'test';
     delete process.env.OPENAI_API_KEY;
     const candidates = resolveFallbackCandidates({
-      cfg: {
-        agents: {
-          defaultPreset: 'default',
-          capabilityPresets: {
-            default: {
-              models: {
-                defaultRole: 'deep',
-                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
-              },
-            },
-          },
-        },
-      } as any,
+      cfg: fallbackConfig,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
       fallbacksOverride: ['openai/gpt-4o', 'unconfigured/model'],

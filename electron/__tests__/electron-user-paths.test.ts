@@ -61,9 +61,8 @@ describe('resolveElectronFileIpcRoots', () => {
         list: [
           {
             id: 'main',
-            identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
-            responsibilities: { primary: ['Help the user complete tasks'] },
-            workspace: { root: paths.workspacePath },
+            profile: { name: 'Main' },
+            workspace: paths.workspacePath,
           },
         ],
       },

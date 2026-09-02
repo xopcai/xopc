@@ -34,7 +34,7 @@ function createMockService(config: any = {}, listenPort?: number): GatewayServic
         auth: gatewayAuth,
         ...config.gateway,
       },
-      agents: { defaultPreset: 'default', capabilityPresets: {}, list: [] },
+      agents: { default: 'main', list: [] },
       channels: {},
       ...config,
     },

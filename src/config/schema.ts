@@ -1,14 +1,15 @@
 import { z } from 'zod';
 
 import {
-  AgentConfigEntrySchema,
-  CapabilityPresetSchema,
-  DEFAULT_CAPABILITY_PRESET_ID,
-} from '../agent-manifest/schema.js';
-import { linearizePresetIds } from '../agent-manifest/preset-chain.js';
+  AgentModelsOverrideSchema,
+  AgentsConfigSchema as UnifiedAgentsConfigSchema,
+  ImageGenerationRouteSchema,
+  ModelRouteSchema,
+  type AgentModelsOverride,
+} from '../agent-config/index.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
 import { UserContextConfigSchema } from '../user-context/config.js';
-import { DEFAULT_AGENT_MODELS } from './default-model.js';
+import { DEFAULT_MODEL_REF } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
 
 // ============================================
@@ -20,12 +21,7 @@ import { validatePublicUrl } from './public-url.js';
  * `fallbacks` chain. No string-form shorthand — every write site builds the
  * object explicitly so reads never branch on shape.
  */
-export const AgentModelRefSchema = z
-  .object({
-    primary: z.string().min(1),
-    fallbacks: z.array(z.string()).optional(),
-  })
-  .strict();
+export const AgentModelRefSchema = ModelRouteSchema;
 
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
 
@@ -33,109 +29,25 @@ export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
  * Image-generation model ref. {@link AgentModelRefSchema} plus runtime knobs
  * (`timeoutMs`, `autoProviderFallback`) used by the image-generation runtime.
  */
-export const AgentImageGenerationModelSchema = z
-  .object({
-    primary: z.string().min(1),
-    fallbacks: z.array(z.string()).optional(),
-    /** Hard cap for the whole generation attempt (ms). */
-    timeoutMs: z.number().int().positive().optional(),
-    /**
-     * When all `primary + fallbacks` candidates fail, sweep every other
-     * configured provider before giving up.
-     */
-    autoProviderFallback: z.boolean().optional(),
-  })
-  .strict();
+export const AgentImageGenerationModelSchema = ImageGenerationRouteSchema;
 
 export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
 
-export const AgentTypedModelRoleSchema = z
-  .object({
-    description: z.string().max(500).optional(),
-    model: z.string().min(1),
-    fallbacks: z.array(z.string().min(1)).optional(),
-  })
-  .strict()
-  .superRefine((entry, ctx) => {
-    const validateRef = (ref: string) => {
-      const trimmed = ref.trim();
-      const idx = trimmed.indexOf('/');
-      return idx > 0 && idx < trimmed.length - 1;
-    };
-    if (!validateRef(entry.model)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `model must be provider/model format (got '${entry.model}')`,
-        path: ['model'],
-      });
-    }
-    for (const [index, fallback] of (entry.fallbacks ?? []).entries()) {
-      if (!validateRef(fallback)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: `fallback must be provider/model format (got '${fallback}')`,
-          path: ['fallbacks', index],
-        });
-      }
-    }
-  });
-
-export type AgentTypedModelRole = z.infer<typeof AgentTypedModelRoleSchema>;
-
-const AgentTypedModelRolesSchema = z
-  .record(z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/), AgentTypedModelRoleSchema)
-  .optional();
-
-export const AgentModelsSchema = z
-  .object({
-    defaultRole: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).optional(),
-    roles: AgentTypedModelRolesSchema,
-    imageModel: AgentModelRefSchema.optional(),
-    imageGenerationModel: AgentImageGenerationModelSchema.optional(),
-  })
-  .strict()
-  .optional();
-
-export type AgentModelsConfig = z.infer<typeof AgentModelsSchema>;
-
-export type AgentTypedModel = AgentTypedModelRole & { id: string };
-
-export const AgentsConfigSchema = z.object({
-  /** Default agent id when not specified (routing / session creation). */
-  default: z.string().optional(),
-  /** Protected global defaults preset applied before each agent's own presets. */
-  defaultPreset: z.string().default(DEFAULT_CAPABILITY_PRESET_ID),
-  capabilityPresets: z.record(z.string(), CapabilityPresetSchema).default({}),
-  list: z.array(AgentConfigEntrySchema).default([]),
-}).strict().default({
+export const AgentModelsSchema = AgentModelsOverrideSchema;
+export type AgentModelsConfig = AgentModelsOverride;
+export const AgentsConfigSchema = UnifiedAgentsConfigSchema.default({
   default: 'main',
-  defaultPreset: DEFAULT_CAPABILITY_PRESET_ID,
-  capabilityPresets: {
-    [DEFAULT_CAPABILITY_PRESET_ID]: {
-      id: DEFAULT_CAPABILITY_PRESET_ID,
-      name: 'Global defaults',
-      description: 'Default capabilities inherited by every agent.',
-      version: 1,
-      models: DEFAULT_AGENT_MODELS,
+  defaults: {
+    models: {
+      chat: { primary: DEFAULT_MODEL_REF, fallbacks: [] },
+      intents: {},
     },
+    skills: { mode: 'all-enabled', exclude: [] },
+    tools: {},
+    workflows: {},
+    runtime: {},
   },
-  list: [
-    {
-      id: 'main',
-      enabled: true,
-      identity: {
-        name: 'Smart Assistant',
-        description: 'General-purpose personal assistant.',
-        role: 'General assistant',
-        language: 'en',
-        tone: 'direct',
-      },
-      responsibilities: {
-        primary: ['Help the user complete tasks'],
-      },
-      workspace: { root: '~/.xopc/workspace/main' },
-    },
-  ],
+  list: [{ id: 'main', enabled: true }],
 });
 
 const BrowserCloudConfigSchema = z
@@ -564,7 +476,7 @@ export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
 
 /**
  * Workspace-scoped concerns (file import, etc.). Distinct from
- * agent manifest workspace roots; this block carries
+ * per-agent workspace paths; this block carries
  * feature configuration for workspace-related routes.
  */
 export const WorkspaceImportConfigSchema = z.object({
@@ -1293,33 +1205,17 @@ export const ConfigSchema = z.object({
   },
   agents: {
     default: 'main',
-    defaultPreset: DEFAULT_CAPABILITY_PRESET_ID,
-    capabilityPresets: {
-      [DEFAULT_CAPABILITY_PRESET_ID]: {
-        id: DEFAULT_CAPABILITY_PRESET_ID,
-        name: 'Global defaults',
-        description: 'Default capabilities inherited by every agent.',
-        version: 1,
-        models: DEFAULT_AGENT_MODELS,
+    defaults: {
+      models: {
+        chat: { primary: DEFAULT_MODEL_REF, fallbacks: [] },
+        intents: {},
       },
+      skills: { mode: 'all-enabled', exclude: [] },
+      tools: {},
+      workflows: {},
+      runtime: {},
     },
-    list: [
-      {
-        id: 'main',
-        enabled: true,
-        identity: {
-          name: 'Smart Assistant',
-          description: 'General-purpose personal assistant.',
-          role: 'General assistant',
-          language: 'en',
-          tone: 'direct',
-        },
-        responsibilities: {
-          primary: ['Help the user complete tasks'],
-        },
-        workspace: { root: '~/.xopc/workspace/main' },
-      },
-    ],
+    list: [{ id: 'main', enabled: true }],
   },
   bindings: [],
   session: {
@@ -1431,75 +1327,34 @@ export interface ParsedModelRef {
 }
 
 export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
-  const defaultId =
-    config.agents?.default?.trim() ||
-    list.find((entry) => (entry as { default?: boolean }).default === true)?.id?.trim() ||
-    list[0]?.id;
-  const agent = list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? list[0];
-  if (!agent) return undefined;
-
-  let modelRef: string | undefined;
-  const applyModels = (models: AgentModelsConfig | undefined): void => {
-    const roles = models?.roles ?? {};
-    const defaultRole = models?.defaultRole ?? Object.keys(roles)[0];
-    const role = defaultRole ? roles[defaultRole] : undefined;
-    const next = role?.model.trim();
-    if (next) modelRef = next;
-  };
-  const rootPresetIds = [
-    ...(config.agents.capabilityPresets[config.agents.defaultPreset] ? [config.agents.defaultPreset] : []),
-    ...(agent.extends ?? []).filter((id) => id !== config.agents.defaultPreset),
-  ];
-  for (const presetId of linearizePresetIds(rootPresetIds, config.agents.capabilityPresets)) {
-    applyModels(config.agents.capabilityPresets[presetId]?.models);
-  }
-  applyModels(agent.models);
-  return modelRef;
+  const agent = config.agents.list.find(
+    (entry) => entry.enabled !== false && entry.id === config.agents.default,
+  );
+  return agent?.models?.chat?.primary ?? config.agents.defaults.models.chat.primary;
 }
 
 function getAgentDefaultModelsConfig(config: Config, requestedAgentId?: string): AgentModelsConfig | undefined {
-  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
-  const defaultId =
-    requestedAgentId?.trim() ||
-    config.agents?.default?.trim() ||
-    list.find((entry) => (entry as { default?: boolean }).default === true)?.id?.trim() ||
-    list[0]?.id;
-  const agent = list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? list[0];
-  if (!agent) return undefined;
-
-  let modelConfig: AgentModelsConfig | undefined;
-  const applyModels = (models: AgentModelsConfig | undefined): void => {
-    if (!models) return;
-    modelConfig = {
-      ...modelConfig,
-      ...models,
-      roles: {
-        ...(modelConfig?.roles ?? {}),
-        ...(models.roles ?? {}),
-      },
-    };
-  };
-  const rootPresetIds = [
-    ...(config.agents.capabilityPresets[config.agents.defaultPreset] ? [config.agents.defaultPreset] : []),
-    ...(agent.extends ?? []).filter((id) => id !== config.agents.defaultPreset),
-  ];
-  for (const presetId of linearizePresetIds(rootPresetIds, config.agents.capabilityPresets)) {
-    applyModels(config.agents.capabilityPresets[presetId]?.models);
-  }
-  applyModels(agent.models);
-  return modelConfig;
+  const id = requestedAgentId?.trim() || config.agents.default;
+  return config.agents.list.find((entry) => entry.enabled !== false && entry.id === id)?.models;
 }
 
 export function getAgentDefaultImageModelConfig(config: Config): AgentModelConfig | undefined {
-  return getAgentDefaultModelsConfig(config)?.imageModel;
+  const models = getAgentDefaultModelsConfig(config);
+  if (models && Object.hasOwn(models, 'imageUnderstanding')) {
+    return models.imageUnderstanding ?? undefined;
+  }
+  return config.agents.defaults.models.imageUnderstanding;
 }
 
 export function getAgentDefaultImageGenerationModelConfig(
   config: Config,
   agentId: string,
 ): AgentImageGenerationModelConfig | undefined {
-  return getAgentDefaultModelsConfig(config, agentId)?.imageGenerationModel;
+  const models = getAgentDefaultModelsConfig(config, agentId);
+  if (models && Object.hasOwn(models, 'imageGeneration')) {
+    return models.imageGeneration ?? undefined;
+  }
+  return config.agents.defaults.models.imageGeneration;
 }
 
 /** `provider/model` or null when invalid. */

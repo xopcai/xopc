@@ -11,7 +11,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsDesktopPet'
   | 'settingsDesktopApp'
   | 'settingsKeyboardShortcuts'
-  | 'settingsCapabilityPresets'
+  | 'settingsAgentDefaults'
   | 'settingsChannels'
   | 'settingsGateway'
   | 'settingsRuntimes'
@@ -29,7 +29,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsSystem: 'system',
   settingsDesktopPet: 'desktop-pet',
   settingsDesktopApp: 'desktop-app',
-  settingsCapabilityPresets: 'capability-presets',
+  settingsAgentDefaults: 'agent-defaults',
   settingsChannels: 'channels',
   settingsGateway: 'gateway',
   settingsRuntimes: 'runtimes',
@@ -79,8 +79,8 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  *
  *   - `capabilities` group: one Models & Services center with dedicated
  *     routes for models, images, voice, and web search.
- *   - `agent` group: manifest-first. Agent identity, workspace, model roles,
- *     tools, skills, memory, and boundaries are managed from `/agents`.
+ *   - `agent` group: global defaults configure inherited capabilities;
+ *     `/agents` stores only each agent's profile and explicit overrides.
  *
  * Electron system group and extensions append in `SettingsPageLayout`.
  */
@@ -89,7 +89,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'capabilities', tabs: ['settingsCapabilities'] },
   {
     id: 'agent',
-    tabs: ['settingsCapabilityPresets', 'settingsAgentBrowser'],
+    tabs: ['settingsAgentDefaults', 'settingsAgentBrowser'],
   },
   {
     id: 'connection',
