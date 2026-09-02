@@ -86,12 +86,15 @@ export function createWriteFileTool(
         await writeFile(target, p.content, 'utf-8');
         const delivery: ProductDeliveryEnvelope | undefined = writesProfileFile
           ? undefined
-          : await realpath(workspace).then((root) => ({
+          : await Promise.all([realpath(workspace), realpath(target)]).then(([root, canonicalTarget]) => ({
               version: 1,
               operation: 'updated',
               primary: {
                 kind: 'file',
-                id: fileResourceId(fileSpaceId(root), relative(root, target).split(sep).join('/')),
+                id: fileResourceId(
+                  fileSpaceId(root),
+                  relative(root, canonicalTarget).split(sep).join('/'),
+                ),
                 title: basename(target),
                 summary: `${contentBytes} bytes written`,
                 capabilities: ['preview', 'share'],
