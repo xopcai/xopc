@@ -99,6 +99,27 @@ describe('files routes', () => {
     expect(response.headers.get('content-disposition')).toContain(`filename*=UTF-8''${encodeURIComponent(fileName)}`);
   });
 
+  it('resolves absolute file paths only when they stay inside the selected workspace', async () => {
+    const workspace = join(stateDir, 'workspace');
+    const inside = join(workspace, 'result.xlsx');
+    const outside = join(stateDir, 'outside.xlsx');
+    mkdirSync(workspace, { recursive: true });
+    writeFileSync(inside, 'inside');
+    writeFileSync(outside, 'outside');
+    const { app, project } = appFor(workspace);
+    const context = await app.request(`/api/files/contexts/project/${project.id}`);
+    const spaceId = (await context.json() as { space: { id: string } }).space.id;
+
+    const resolvePath = (path: string) => app.request('/api/files/resolve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ spaceId, path }),
+    });
+
+    expect((await resolvePath(inside)).status).toBe(200);
+    expect((await resolvePath(outside)).status).toBe(400);
+  });
+
   it('uses revisions for edits and never overwrites uploads', async () => {
     const workspace = join(stateDir, 'workspace');
     mkdirSync(workspace, { recursive: true });

@@ -172,6 +172,9 @@ export function buildToolingSection(params: {
     hasExec
       ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing.`
       : '',
+    hasWrite || hasExec
+      ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
+      : '',
     hasPlan
       ? `Use \`${planToolName}\` for multi-step coding work: keep exactly one active step when work is in progress, and update it after meaningful progress or review.`
       : '',
