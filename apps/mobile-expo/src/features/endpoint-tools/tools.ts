@@ -2,7 +2,11 @@ import {
   type EndpointToolDefinition,
   type EndpointToolExecutionResult,
 } from '@xopcai/endpoint-tools-client';
-import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
+import {
+  ENDPOINT_FILE_OUTPUT_SCHEMA,
+  ENDPOINT_MAX_FILE_BYTES,
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
+} from '@xopcai/endpoint-tools-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { randomUUID } from 'expo-crypto';
 import * as Device from 'expo-device';
@@ -54,6 +58,9 @@ export const MOBILE_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[]
       title: 'Choose a local file',
       description: 'Ask the user to choose one file and make it available to the agent.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+      outputSchema: ENDPOINT_FILE_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read',
       confirmation: 'always',
       requiresForeground: true,
@@ -101,6 +108,9 @@ export const MOBILE_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[]
           content: { type: 'string', maxLength: 200_000 },
         },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write',
       confirmation: 'always',
       requiresForeground: true,
@@ -164,6 +174,9 @@ export const MOBILE_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[]
           body: { type: 'string', minLength: 1, maxLength: 500 },
         },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write',
       confirmation: 'always',
       requiresForeground: true,
@@ -198,6 +211,9 @@ export const MOBILE_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[]
       title: 'Read device information',
       description: 'Read the mobile device model and operating-system version.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'public.background-read',
+      sensitivity: 'public',
       effect: 'read',
       confirmation: 'never',
       requiresForeground: false,
@@ -230,6 +246,9 @@ export const MOBILE_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[]
         required: ['text'],
         properties: { text: { type: 'string', minLength: 1, maxLength: 100_000 } },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write',
       confirmation: 'always',
       requiresForeground: true,
@@ -256,6 +275,9 @@ export const MOBILE_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[]
         required: ['url'],
         properties: { url: { type: 'string', minLength: 1, maxLength: 2_048 } },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write',
       confirmation: 'always',
       requiresForeground: true,
