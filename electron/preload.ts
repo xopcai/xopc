@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("shell:open-path", filePath) as Promise<
         { ok: true } | { ok: false; error: string; code?: string }
       >,
+    openFileResource: (fileResourceId: string) =>
+      ipcRenderer.invoke("shell:open-file-resource", fileResourceId) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
     openTemporaryFile: (input: { fileName: string; data: Uint8Array }) =>
       ipcRenderer.invoke("shell:open-temporary-file", input) as Promise<
         { ok: true } | { ok: false; error: string; code?: string }
@@ -48,14 +52,33 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("shell:show-item-in-folder", filePath) as Promise<{
         success: boolean;
       }>,
+    showFileResourceInFolder: (fileResourceId: string) =>
+      ipcRenderer.invoke("shell:show-file-resource-in-folder", fileResourceId) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+    trashFileResource: (fileResourceId: string) =>
+      ipcRenderer.invoke("shell:trash-file-resource", fileResourceId) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
     chooseAppAndOpenPath: (filePath: string) =>
       ipcRenderer.invoke("shell:choose-app-and-open-path", filePath) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
+    chooseAppAndOpenFileResource: (fileResourceId: string) =>
+      ipcRenderer.invoke("shell:choose-app-and-open-file-resource", fileResourceId) as Promise<
         { ok: true } | { ok: false; error: string; code?: string }
       >,
     openPathWithApp: (filePath: string, appPath: string) =>
       ipcRenderer.invoke(
         "shell:open-path-with-app",
         filePath,
+        appPath,
+      ) as Promise<{ ok: true } | { ok: false; error: string; code?: string }>,
+    openFileResourceWithApp: (fileResourceId: string, appPath: string) =>
+      ipcRenderer.invoke(
+        "shell:open-file-resource-with-app",
+        fileResourceId,
         appPath,
       ) as Promise<{ ok: true } | { ok: false; error: string; code?: string }>,
     getRecentOpenWithApps: () =>
@@ -71,6 +94,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke(
         "shell:get-open-with-apps-for-path",
         filePath,
+      ) as Promise<{
+        recommended: Array<{
+          name: string;
+          path: string;
+          platform: string;
+          source: "known";
+        }>;
+        recent: Array<{
+          name: string;
+          path: string;
+          platform: string;
+          lastUsedAt: number;
+        }>;
+      }>,
+    getOpenWithAppsForFileResource: (fileResourceId: string) =>
+      ipcRenderer.invoke(
+        "shell:get-open-with-apps-for-file-resource",
+        fileResourceId,
       ) as Promise<{
         recommended: Array<{
           name: string;

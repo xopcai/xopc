@@ -4,6 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -59,6 +60,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const [fileSearchResults, setFileSearchResults] = useState<Array<{ name: string; path: string }>>([]);
   const [fileSearchLoading, setFileSearchLoading] = useState(false);
   const [fileSearchError, setFileSearchError] = useState<string | null>(null);
+  const [pendingTrash, setPendingTrash] = useState<TreeEntry | null>(null);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
@@ -262,7 +264,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
           break;
         case 'copyPath':
           try {
-            const ok = await copyTextToClipboard(entry.absolutePath ?? entry.path);
+            const ok = await copyTextToClipboard(entry.path);
             if (ok) {
               showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2500 });
             }
@@ -271,20 +273,20 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
           }
           break;
         case 'openDefault':
-          if (!entry.absolutePath || !window.electronAPI?.shell?.openPath) return;
-          await window.electronAPI.shell.openPath(entry.absolutePath);
+          await window.electronAPI?.shell?.openFileResource?.(entry.fileId);
           break;
         case 'openWith':
-          if (!entry.absolutePath || !window.electronAPI?.shell?.chooseAppAndOpenPath) return;
-          await window.electronAPI.shell.chooseAppAndOpenPath(entry.absolutePath);
+          await window.electronAPI?.shell?.chooseAppAndOpenFileResource?.(entry.fileId);
           break;
         case 'openWithApp':
-          if (!entry.absolutePath || !appPath || !window.electronAPI?.shell?.openPathWithApp) return;
-          await window.electronAPI.shell.openPathWithApp(entry.absolutePath, appPath);
+          if (!appPath) return;
+          await window.electronAPI?.shell?.openFileResourceWithApp?.(entry.fileId, appPath);
           break;
         case 'revealInFolder':
-          if (!entry.absolutePath || !window.electronAPI?.shell?.showItemInFolder) return;
-          await window.electronAPI.shell.showItemInFolder(entry.absolutePath);
+          await window.electronAPI?.shell?.showFileResourceInFolder?.(entry.fileId);
+          break;
+        case 'trash':
+          setPendingTrash(entry);
           break;
         case 'share':
           await createShareLink({
@@ -299,6 +301,20 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     },
     [createShareLink, m.workspace.pathCopied, setPreviewPath, workspaceReadOpts],
   );
+
+  const confirmTrash = useCallback(async () => {
+    const entry = pendingTrash;
+    if (!entry) return;
+    const result = await window.electronAPI?.shell?.trashFileResource?.(entry.fileId);
+    if (!result?.ok) {
+      showComposerNotification('warning', result?.error ?? m.workspace.trashFailed, undefined, { duration: 4000 });
+      return;
+    }
+    if (previewPath === entry.path) setPreviewPath(null);
+    setPendingTrash(null);
+    await loadRoot();
+    showComposerNotification('success', m.workspace.trashSuccess, undefined, { duration: 2500 });
+  }, [loadRoot, m.workspace.trashFailed, m.workspace.trashSuccess, pendingTrash, previewPath, setPreviewPath]);
 
   return (
     <>
@@ -491,6 +507,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                         openDefault: m.workspace.openSystemApp,
                         openWith: m.workspace.chooseApp,
                         revealInFolder: m.workspace.revealInFolder,
+                        trash: m.workspace.moveToTrash,
                         recommendedApps: m.workspace.recommendedApps,
                       }
                     : {}),
@@ -510,6 +527,16 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
         result={result}
         pendingParams={pendingShareParams}
         onConfirm={(options) => void confirmShareLink(options)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingTrash)}
+        title={m.workspace.trashConfirmTitle}
+        description={m.workspace.trashConfirmDescription.replace('{{name}}', pendingTrash?.name ?? '')}
+        confirmLabel={m.workspace.moveToTrash}
+        cancelLabel={m.workspace.cancel}
+        destructive
+        onConfirm={() => void confirmTrash()}
+        onCancel={() => setPendingTrash(null)}
       />
     </>
   );

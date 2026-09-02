@@ -116,9 +116,9 @@ export type ProjectBlocker = {
 };
 
 export type ProjectFileEntry = {
+  fileId: string;
   name: string;
   path: string;
-  absolutePath?: string;
   type: 'directory' | 'file';
   size?: number;
   updatedAt?: string;
@@ -401,6 +401,7 @@ export async function fetchProjectFiles(projectId: string, path?: string): Promi
     path: path ?? '',
     parentPath: path?.includes('/') ? path.slice(0, path.lastIndexOf('/')) : null,
     entries: result.items.map((item) => ({
+      fileId: item.id,
       name: item.name,
       path: item.relativePath,
       type: item.kind,

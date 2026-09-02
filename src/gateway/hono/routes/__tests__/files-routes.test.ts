@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -72,6 +72,9 @@ describe('files routes', () => {
       body: JSON.stringify({ spaceId: contextBody.space.id, path: 'docs/brief.md' }),
     });
     const resource = (await resolved.json() as { resource: { id: string; revision: string } }).resource;
+    const hostPath = await app.request(`/api/files/${encodeURIComponent(resource.id)}/host-path`);
+    expect(hostPath.status).toBe(200);
+    expect(await hostPath.json()).toEqual({ absolutePath: realpathSync(join(workspace, 'docs', 'brief.md')) });
     const content = await app.request(`/api/files/${encodeURIComponent(resource.id)}/content`);
     expect(await content.text()).toBe('# Brief');
     expect(content.headers.get('etag')).toBe(resource.revision);
@@ -96,6 +99,8 @@ describe('files routes', () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('workbook');
+    expect(response.headers.get('content-type'))
+      .toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     expect(response.headers.get('content-disposition')).toContain(`filename*=UTF-8''${encodeURIComponent(fileName)}`);
   });
 
