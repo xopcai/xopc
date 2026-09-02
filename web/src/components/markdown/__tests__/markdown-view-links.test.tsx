@@ -6,6 +6,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 
 const mounted: Array<{ container: HTMLDivElement; unmount: () => void }> = [];
 
@@ -22,14 +23,17 @@ function LocationProbe() {
   return <output data-location>{location.pathname}</output>;
 }
 
-function renderMarkdown(content = '[Example](https://example.com)'): HTMLDivElement {
+function renderMarkdown(
+  content = '[Example](https://example.com)',
+  onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void,
+): HTMLDivElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   act(() => {
     root.render(
       <MemoryRouter>
-        <MarkdownView content={content} />
+        <MarkdownView content={content} onWorkspaceFileOpen={onWorkspaceFileOpen} />
         <LocationProbe />
       </MemoryRouter>,
     );
@@ -69,5 +73,35 @@ describe('MarkdownView links', () => {
     act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
 
     await vi.waitFor(() => expect(openExternalUrl).toHaveBeenCalledWith('https://example.com/'));
+  });
+
+  it('opens a bare non-ASCII output filename as a workspace file', () => {
+    const onOpen = vi.fn();
+    const container = renderMarkdown(
+      '已完成：**销售明细查询-按客户分类汇总-2026-09-02.xlsx**',
+      onOpen,
+    );
+    const anchor = container.querySelector('a.markdown-file-link');
+
+    expect(anchor?.textContent).toBe('销售明细查询-按客户分类汇总-2026-09-02.xlsx');
+    act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(onOpen).toHaveBeenCalledWith({
+      path: '销售明细查询-按客户分类汇总-2026-09-02.xlsx',
+      kind: 'workspace-relative',
+      line: undefined,
+    });
+  });
+
+  it('normalizes a file URL before opening the workspace file', () => {
+    const onOpen = vi.fn();
+    const container = renderMarkdown('[下载](file:///Users/me/My%20Report.xlsx)', onOpen);
+    const anchor = container.querySelector('a');
+
+    expect(anchor?.getAttribute('href')).toBe('/xopc/workspace/file?path=%2FUsers%2Fme%2FMy+Report.xlsx');
+    act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(onOpen).toHaveBeenCalledWith({
+      path: '/Users/me/My Report.xlsx',
+      kind: 'absolute',
+    });
   });
 });

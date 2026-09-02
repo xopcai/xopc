@@ -75,13 +75,13 @@ export function parseFileResourceId(id: string): { spaceId: string; relativePath
 
 export async function resolveFilePath(root: string, path: string, mustExist = true): Promise<string> {
   const canonicalRoot = await realpath(root).catch(() => { throw new FileServiceError(404, 'File space is unavailable'); });
-  const relativePath = normalizeRelativePath(path);
-  const candidate = resolve(canonicalRoot, relativePath);
-  if (!isWithin(canonicalRoot, candidate)) throw new FileServiceError(400, 'Invalid file path');
+  const candidate = isAbsolute(path)
+    ? resolve(path)
+    : resolve(canonicalRoot, normalizeRelativePath(path));
   if (!mustExist) {
     const parent = await realpath(dirname(candidate)).catch(() => { throw new FileServiceError(404, 'Parent directory not found'); });
     if (!isWithin(canonicalRoot, parent)) throw new FileServiceError(400, 'Invalid file path');
-    return candidate;
+    return resolve(parent, basename(candidate));
   }
   const canonicalTarget = await realpath(candidate).catch(() => { throw new FileServiceError(404, 'File not found'); });
   if (!isWithin(canonicalRoot, canonicalTarget)) throw new FileServiceError(400, 'File is outside its space');
