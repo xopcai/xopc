@@ -34,6 +34,7 @@ import {
   createWebExtractTool,
   createMessageTool,
   createSendMediaTool,
+  createPublishArtifactsTool,
   createReadMediaTool,
   createCreateShareTool,
   isShareToolAvailable,
@@ -417,6 +418,7 @@ export class AgentToolsFactory {
           ]
         : []),
       createSendMediaTool(workspace, bus, () => this.deps.getCurrentContext()),
+      createPublishArtifactsTool(workspace),
       createReadMediaTool(),
       ...(isShareToolAvailable(cfg)
         ? [

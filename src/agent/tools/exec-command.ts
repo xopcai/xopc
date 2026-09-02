@@ -187,6 +187,7 @@ export function createExecCommandTool(
       'Run shell commands for code inspection, builds, tests, type checks, and verification.',
       'Use apply_patch for file edits; do not edit files by shell redirection unless explicitly necessary.',
       'Relative cwd values resolve under the current agent workspace.',
+      'When the command creates final user-facing files, call publish_artifacts afterward with all final paths.',
     ].join(' '),
     parameters: ExecCommandSchema,
     label: 'Run Command',

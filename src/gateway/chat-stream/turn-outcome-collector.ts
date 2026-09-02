@@ -1,11 +1,21 @@
 import type {
   AgentStreamRunStatus,
+  ProductDeliveryEnvelope,
+  ProductReference,
   TurnOutcome,
   TurnOutcomeChangedFile,
   TurnOutcomeDeliverable,
   TurnOutcomeEvidence,
 } from '@xopcai/gateway-contract';
-import { TurnOutcomeDeliverableSchema } from '@xopcai/gateway-contract';
+import {
+  fileResourceArtifactUri,
+  parseProductDeliveryEnvelope,
+  TurnOutcomeDeliverableSchema,
+  turnOutcomeKindFromFileName,
+  turnOutcomeMimeTypeFromFileName,
+} from '@xopcai/gateway-contract';
+
+import { parseFileResourceId } from '../../files/file-service.js';
 
 import type { ChatStreamEvent } from './protocol.js';
 
@@ -44,11 +54,59 @@ function changedFiles(changes: unknown[]): TurnOutcomeChangedFile[] {
   });
 }
 
-function structuredDeliverables(details: Record<string, unknown>): TurnOutcomeDeliverable[] {
+function explicitArtifacts(details: Record<string, unknown>): TurnOutcomeDeliverable[] {
   if (!Array.isArray(details.artifacts)) return [];
   return details.artifacts.flatMap((value): TurnOutcomeDeliverable[] => {
     const parsed = TurnOutcomeDeliverableSchema.safeParse(value);
     return parsed.success ? [parsed.data] : [];
+  });
+}
+
+function fileReferenceDeliverable(
+  reference: ProductReference,
+  operation: ProductDeliveryEnvelope['operation'],
+  environment: 'workspace' | 'worktree' | 'remote_runtime',
+): TurnOutcomeDeliverable | null {
+  if (reference.kind !== 'file') return null;
+  let workspaceRelativePath: string | undefined;
+  try {
+    workspaceRelativePath = parseFileResourceId(reference.id).relativePath;
+  } catch {
+    // External producers may use their own stable file ids.
+  }
+  const mimeType = turnOutcomeMimeTypeFromFileName(reference.title);
+  const available = operation !== 'failed';
+  const capabilities: TurnOutcomeDeliverable['capabilities'] = available
+    ? [
+        ...(reference.capabilities.includes('preview') ? ['preview' as const] : []),
+        'download',
+        ...(reference.capabilities.includes('share') ? ['share' as const] : []),
+      ]
+    : ['regenerate'];
+  return {
+    artifactId: reference.id,
+    title: reference.title,
+    kind: turnOutcomeKindFromFileName(reference.title),
+    ...(mimeType ? { mimeType } : {}),
+    availability: available ? 'available' : 'failed',
+    location: environment,
+    capabilities,
+    ...(available && environment === 'workspace'
+      ? { uri: fileResourceArtifactUri(reference.id) }
+      : {}),
+    ...(workspaceRelativePath ? { workspaceRelativePath } : {}),
+  };
+}
+
+function productDeliveryArtifacts(
+  delivery: ProductDeliveryEnvelope | null,
+  environment: 'workspace' | 'worktree' | 'remote_runtime',
+): TurnOutcomeDeliverable[] {
+  if (!delivery) return [];
+  return [delivery.primary, ...(delivery.related ?? [])].flatMap((reference) => {
+    if (!reference) return [];
+    const artifact = fileReferenceDeliverable(reference, delivery.operation, environment);
+    return artifact ? [artifact] : [];
   });
 }
 
@@ -72,9 +130,15 @@ export class TurnOutcomeCollector {
         this.failedToolCount += 1;
         return;
       }
-      const details = asRecord(event.payload.result?.details);
-      if (!details) return;
-      for (const artifact of structuredDeliverables(details)) {
+      const details = asRecord(event.payload.result?.details) ?? {};
+      const artifacts = [
+        ...explicitArtifacts(details),
+        ...productDeliveryArtifacts(
+          parseProductDeliveryEnvelope(details.delivery),
+          this.environment,
+        ),
+      ];
+      for (const artifact of artifacts) {
         this.deliverables.set(artifact.artifactId, artifact);
       }
       return;
@@ -112,7 +176,9 @@ export class TurnOutcomeCollector {
 
   finalize(status: AgentStreamRunStatus, summary?: string): TurnOutcome {
     const evidence = [...this.evidence.values()];
-    const partial = this.failedToolCount > 0 || evidence.some((item) => item.status === 'failed');
+    const partial = this.failedToolCount > 0
+      || evidence.some((item) => item.status === 'failed')
+      || [...this.deliverables.values()].some((item) => item.availability === 'failed');
     const fullDiff = this.diffs.join('\n');
     const diffTruncated = fullDiff.length > MAX_OUTCOME_DIFF_CHARS;
     return {

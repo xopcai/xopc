@@ -29,7 +29,8 @@
       "softwareKeyboardLayoutMode": "resize",
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.WRITE_CONTACTS"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -122,6 +123,12 @@
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach images in chat.",
           "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to take photos in chat."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow $(PRODUCT_NAME) to find contacts you explicitly ask your assistant to use."
         }
       ],
       "./plugins/with-ios-widget-version",
