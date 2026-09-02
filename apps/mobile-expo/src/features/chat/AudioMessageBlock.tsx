@@ -11,6 +11,8 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import type { AudioContent } from './messages.types';
 import { audioNameFromPath, resolveAudioPlaybackUrl } from './audio-url';
+import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
+import { MessageAudioCache } from './message-audio-cache';
 import { claimAudioPlayback, releaseAudioPlayback } from '../voice/audio-playback-coordinator';
 
 function formatDuration(ms: number): string {
@@ -33,10 +35,12 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
 }) {
   const { colors } = useTheme();
   const m = useMessages();
-  const token = useGatewayStore((s) => s.accessToken);
   const apiUrl = useGatewayStore((s) => s.apiUrl);
   const playbackOwnerId = useId();
   const playerRef = useRef<AudioPlayer | null>(null);
+  const cacheRef = useRef<MessageAudioCache | null>(null);
+  const sourceGenerationRef = useRef(0);
+  const playbackErrorRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [positionMillis, setPositionMillis] = useState(0);
@@ -53,19 +57,28 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
     () => managedFile.data ? apiUrl(fileContentPath(managedFile.data.id)) : resolveAudioPlaybackUrl(audio, sessionKey),
     [apiUrl, audio, managedFile.data, sessionKey],
   );
+  const gatewayPath = useMemo(() => {
+    if (managedFile.data) return fileContentPath(managedFile.data.id);
+    const audioUri = audio.uri?.trim();
+    return audioUri && isMediaUri(audioUri) ? buildGatewayMediaReadPath(audioUri, sessionKey) : null;
+  }, [audio.uri, managedFile.data, sessionKey]);
 
   const title = audio.name?.trim() || audioNameFromPath(audio.workspaceRelativePath ?? audio.uri, 'voice.mp3');
 
   const unload = useCallback(() => {
+    sourceGenerationRef.current += 1;
     releaseAudioPlayback(playbackOwnerId);
     const player = playerRef.current;
     playerRef.current = null;
-    if (!player) return;
-    try {
-      player.remove();
-    } catch {
-      // Ignore unload races when the component unmounts or source changes.
+    if (player) {
+      try {
+        player.remove();
+      } catch {
+        // Ignore unload races when the component unmounts or source changes.
+      }
     }
+    cacheRef.current?.remove();
+    cacheRef.current = null;
   }, [playbackOwnerId]);
 
   useEffect(() => {
@@ -85,18 +98,33 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const ensurePlayer = useCallback(async () => {
     if (playerRef.current) return playerRef.current;
     if (!uri) throw new Error(m.chat.audioMissingSource);
+    const sourceGeneration = sourceGenerationRef.current;
+
+    let playbackUri = uri;
+    if (gatewayPath) {
+      const cache = cacheRef.current ?? new MessageAudioCache();
+      cacheRef.current = cache;
+      playbackUri = await cache.download(gatewayPath, audio.mimeType);
+      if (sourceGeneration !== sourceGenerationRef.current) throw new Error('Audio source changed');
+    }
 
     await setAudioModeAsync({
       allowsRecording: false,
       playsInSilentMode: true,
     });
+    if (sourceGeneration !== sourceGenerationRef.current) throw new Error('Audio source changed');
 
-    const source = {
-      uri,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    };
-    const player = createAudioPlayer(source, { updateInterval: 250 });
+    const player = createAudioPlayer(playbackUri, { updateInterval: 250 });
+    playerRef.current = player;
     player.addListener('playbackStatusUpdate', (status) => {
+      if (status.error && !playbackErrorRef.current) {
+        playbackErrorRef.current = true;
+        console.warn('[AudioMessageBlock] Playback failed', status.error);
+        setError(m.chat.audioPlaybackFailed);
+        setPlaying(false);
+        unload();
+        return;
+      }
       if (!status.isLoaded) {
         setPlaying(false);
         return;
@@ -110,14 +138,14 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
         void player.seekTo(0).catch(() => {});
       }
     });
-    playerRef.current = player;
     return player;
-  }, [durationMillis, m.chat.audioMissingSource, playbackOwnerId, token, uri]);
+  }, [audio.mimeType, durationMillis, gatewayPath, m.chat.audioMissingSource, m.chat.audioPlaybackFailed, playbackOwnerId, unload, uri]);
 
   const toggle = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     setError(null);
+    playbackErrorRef.current = false;
     try {
       const player = await ensurePlayer();
       if (player.playing) {
