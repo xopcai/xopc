@@ -12,6 +12,15 @@ vi.mock('@/lib/build-info', () => ({
   },
 }));
 
+const supportApi = vi.hoisted(() => ({
+  prepareSupportInvestigation: vi.fn(),
+}));
+
+vi.mock('@/features/support/support-report-api', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/features/support/support-report-api')>(),
+  prepareSupportInvestigation: supportApi.prepareSupportInvestigation,
+}));
+
 import { AppErrorBoundary, AppErrorFallback } from './app-error-boundary';
 import { buildAppErrorReport } from './app-error-boundary.utils';
 
@@ -27,6 +36,19 @@ describe('AppErrorFallback', () => {
       configurable: true,
       value: undefined,
       writable: true,
+    });
+    supportApi.prepareSupportInvestigation.mockReset();
+    supportApi.prepareSupportInvestigation.mockResolvedValue({
+      investigationPrompt: 'investigate',
+      report: {
+        schemaVersion: 1,
+        title: '[Bug] Renderer error',
+        capturedAt: '2026-08-28T12:00:00.000Z',
+        markdown: '# redacted diagnostic report',
+        doctor: [],
+        logs: [],
+        redaction: { replacements: 1 },
+      },
     });
     container = document.createElement('div');
     document.body.append(container);
@@ -65,11 +87,14 @@ describe('AppErrorFallback', () => {
     );
     await act(async () => reportButton?.click());
 
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('React error #185'));
+    expect(supportApi.prepareSupportInvestigation).toHaveBeenCalledWith(expect.objectContaining({
+      problem: 'Renderer error (react)',
+      clientContext: expect.objectContaining({ rendererError: expect.stringContaining('React error #185') }),
+    }));
+    expect(writeText).not.toHaveBeenCalled();
     expect(openExternalUrl).toHaveBeenCalledWith(
       expect.stringContaining('github.com/xopcai/xopc/issues/new'),
     );
-    expect(container.textContent).toContain('错误报告已复制');
   });
 
   it('builds a shareable report without exposing route identifiers', () => {
@@ -88,6 +113,35 @@ describe('AppErrorFallback', () => {
     expect(report).toContain('at BrokenComponent');
     expect(report).not.toContain('private-share-token');
     expect(report).not.toContain('access=secret');
+  });
+
+  it('copies only the report returned by the redacted diagnostics API', async () => {
+    localStorage.setItem('xopc.language', 'en');
+    const writeText = vi.fn(async () => true);
+    window.electronAPI = { clipboard: { writeText } } as unknown as Window['electronAPI'];
+
+    act(() => root.render(<AppErrorFallback error={new Error('raw renderer detail')} />));
+    const copyButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Collect and copy report',
+    );
+    await act(async () => copyButton?.click());
+
+    expect(writeText).toHaveBeenCalledWith('# redacted diagnostic report');
+    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('raw renderer detail'));
+    expect(container.textContent).toContain('The redacted diagnostic report was copied.');
+  });
+
+  it('offers the CLI fallback when diagnostics collection fails', async () => {
+    localStorage.setItem('xopc.language', 'en');
+    supportApi.prepareSupportInvestigation.mockRejectedValueOnce(new Error('gateway unavailable'));
+
+    act(() => root.render(<AppErrorFallback error={new Error('renderer failed')} />));
+    const copyButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Collect and copy report',
+    );
+    await act(async () => copyButton?.click());
+
+    expect(container.textContent).toContain('xopc support report');
   });
 
   it('catches renderer errors outside the router', () => {

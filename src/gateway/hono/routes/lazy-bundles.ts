@@ -132,6 +132,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'support',
+    match: (path) => startsWithAny(path, ['/api/support']),
+    load: async () => {
+      const { registerSupportRoutes } = await import('./support.js');
+      return { register: registerSupportRoutes };
+    },
+  },
+  {
     id: 'image-generation',
     match: (path) =>
       startsWithAny(path, ['/api/image-generation']) ||

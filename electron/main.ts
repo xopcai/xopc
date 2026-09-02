@@ -478,8 +478,25 @@ function assertStartupRecoveryRenderer(event: IpcMainInvokeEvent): void {
   }
 }
 
-function startupDiagnosticText(): string {
-  return JSON.stringify(currentStartupFailure ?? { kind: 'none' }, null, 2);
+async function collectStartupSupportReport(): Promise<string> {
+  if (!currentStartupFailure) throw new Error('No startup recovery session is active');
+  const { collectSupportReport } = await import('../src/support/collect-support-report.js');
+  const paths = getElectronUserPaths();
+  const report = await collectSupportReport({
+    problem: `Gateway startup failed: ${currentStartupFailure.message}`,
+    occurredAt: new Date().toISOString(),
+    clientContext: {
+      rendererError: JSON.stringify(currentStartupFailure, null, 2),
+      surface: 'electron',
+    },
+  }, {
+    paths: {
+      configPath: paths.configPath,
+      stateDir: paths.stateDir,
+      workspaceDir: paths.workspacePath,
+    },
+  });
+  return report.markdown;
 }
 
 export function proxyUrlFromElectronSpec(spec: string): string | undefined {
@@ -1125,10 +1142,14 @@ app.whenReady().then(async () => {
     return currentStartupFailure;
   });
 
-  ipcMain.handle('startup:copy-diagnostic', (event) => {
+  ipcMain.handle('startup:copy-diagnostic', async (event) => {
     assertStartupRecoveryRenderer(event);
-    clipboard.writeText(startupDiagnosticText());
-    return { ok: true };
+    try {
+      clipboard.writeText(await collectStartupSupportReport());
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle('startup:open-data-dir', async (event) => {

@@ -22,6 +22,7 @@ describe('lazy route bundles', () => {
   it('maps admin routes to lazy bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/config')?.id).toBe('config');
     expect(findAuthenticatedLazyRouteBundle('/api/logs')?.id).toBe('logs');
+    expect(findAuthenticatedLazyRouteBundle('/api/support/report')?.id).toBe('support');
     expect(findAuthenticatedLazyRouteBundle('/api/extensions')?.id).toBe('auth-registry-extensions');
     expect(findAuthenticatedLazyRouteBundle('/api/automations/abc')?.id).toBe('automations');
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/connectors')?.id).toBe('capabilities');

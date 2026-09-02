@@ -2,6 +2,12 @@ import { Component, useMemo, useState, type ErrorInfo, type ReactNode } from 're
 import { useRouteError } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import {
+  githubIssueUrl,
+  openSupportIssue,
+  prepareSupportInvestigation,
+  type SupportReport,
+} from '@/features/support/support-report-api';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { getLanguage, type StoredLanguage } from '@/lib/storage';
 
@@ -10,9 +16,6 @@ import {
   officialDownloadUrl,
   type AppErrorSource,
 } from './app-error-boundary.utils';
-
-const GITHUB_BUG_REPORT_URL =
-  'https://github.com/xopcai/xopc/issues/new?template=bug_report.yml&title=%5BBug%5D%3A%20Desktop%20renderer%20error';
 
 type ErrorFallbackCopy = {
   eyebrow: string;
@@ -25,6 +28,9 @@ type ErrorFallbackCopy = {
   reportIssue: string;
   copied: string;
   copyFailed: string;
+  collecting: string;
+  collectFailed: string;
+  githubTruncated: string;
   reportHint: string;
   openFailed: string;
 };
@@ -38,11 +44,14 @@ const COPY: Record<StoredLanguage, ErrorFallbackCopy> = {
     download: 'Download the latest version',
     reload: 'Reload',
     details: 'Technical details',
-    copyReport: 'Copy error report',
+    copyReport: 'Collect and copy report',
     reportIssue: 'Report on GitHub',
-    copied: 'Error report copied. Paste it into the GitHub report after checking for sensitive data.',
-    copyFailed: 'Could not copy automatically. Copy the technical details below manually.',
-    reportHint: 'Review the report and remove sensitive data before posting it publicly.',
+    copied: 'The redacted diagnostic report was copied.',
+    copyFailed: 'Could not copy the diagnostic report automatically.',
+    collecting: 'Collecting diagnostics…',
+    collectFailed: 'Could not collect diagnostics. Run `xopc support report` in a terminal instead.',
+    githubTruncated: 'The complete report was copied to the clipboard. Paste it into the issue or upload the downloaded diagnostics file.',
+    reportHint: 'These raw technical details stay on this page. Public reports use the redacted diagnostic report.',
     openFailed: 'Could not open the system browser. Visit xopc.ai to download the latest version.',
   },
   zh: {
@@ -52,11 +61,14 @@ const COPY: Record<StoredLanguage, ErrorFallbackCopy> = {
     download: '去官网下载最新版',
     reload: '重新加载',
     details: '技术详情',
-    copyReport: '复制错误报告',
+    copyReport: '收集并复制报告',
     reportIssue: '上报 GitHub',
-    copied: '错误报告已复制。检查并移除敏感信息后，请粘贴到 GitHub 报告中。',
-    copyFailed: '无法自动复制，请手动复制下方技术详情。',
-    reportHint: '公开提交前，请检查报告并移除可能的敏感信息。',
+    copied: '已复制脱敏后的诊断报告。',
+    copyFailed: '无法自动复制诊断报告。',
+    collecting: '正在收集诊断信息…',
+    collectFailed: '诊断信息收集失败，请在终端运行 `xopc support report`。',
+    githubTruncated: '完整报告已复制到剪贴板，请粘贴到 Issue 中，或上传下载的诊断文件。',
+    reportHint: '这里显示的是本地原始技术详情；公开提交时会使用自动脱敏后的诊断报告。',
     openFailed: '无法打开系统浏览器，请访问 xopc.ai 下载最新版本。',
   },
 };
@@ -90,6 +102,8 @@ export function AppErrorFallback({
   const downloadUrl = officialDownloadUrl(language);
   const [openError, setOpenError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | null>(null);
+  const [collecting, setCollecting] = useState(false);
+  const [supportReport, setSupportReport] = useState<SupportReport | null>(null);
   const [capturedAt] = useState(() => new Date());
   const report = useMemo(
     () => buildAppErrorReport({ error, source, componentStack, capturedAt }),
@@ -101,16 +115,45 @@ export function AppErrorFallback({
     setOpenError(result ? `${copy.openFailed} (${result})` : null);
   };
 
+  const collectReport = async (): Promise<SupportReport | null> => {
+    if (supportReport) return supportReport;
+    setCollecting(true);
+    setOpenError(null);
+    try {
+      const prepared = await prepareSupportInvestigation({
+        problem: `Renderer error (${source})`,
+        occurredAt: capturedAt.toISOString(),
+        clientContext: {
+          rendererError: report,
+          surface: window.electronAPI ? 'electron' : 'web',
+          userAgent: navigator.userAgent,
+        },
+      });
+      const collected = prepared.report;
+      setSupportReport(collected);
+      return collected;
+    } catch {
+      setOpenError(copy.collectFailed);
+      return null;
+    } finally {
+      setCollecting(false);
+    }
+  };
+
   const handleCopyReport = async (): Promise<boolean> => {
-    const copied = await copyTextToClipboard(report);
+    const collected = await collectReport();
+    if (!collected) return false;
+    const copied = await copyTextToClipboard(collected.markdown);
     setCopyStatus(copied ? 'copied' : 'failed');
     return copied;
   };
 
   const handleReportIssue = async () => {
-    await handleCopyReport();
-    const result = await openExternalPage(GITHUB_BUG_REPORT_URL);
-    setOpenError(result ? `${copy.openFailed} (${result})` : null);
+    const collected = await collectReport();
+    if (!collected) return;
+    if (collected.markdown.length > 6_000) await handleCopyReport();
+    const opened = await openSupportIssue(githubIssueUrl(collected, copy.githubTruncated));
+    setOpenError(opened ? null : copy.openFailed);
   };
 
   return (
@@ -130,11 +173,11 @@ export function AppErrorFallback({
         </div>
 
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <Button className="sm:flex-1" variant="ghost" onClick={() => void handleCopyReport()}>
-            {copy.copyReport}
+          <Button className="sm:flex-1" variant="ghost" disabled={collecting} onClick={() => void handleCopyReport()}>
+            {collecting ? copy.collecting : copy.copyReport}
           </Button>
-          <Button className="sm:flex-1" variant="ghost" onClick={() => void handleReportIssue()}>
-            {copy.reportIssue}
+          <Button className="sm:flex-1" variant="ghost" disabled={collecting} onClick={() => void handleReportIssue()}>
+            {collecting ? copy.collecting : copy.reportIssue}
           </Button>
         </div>
 
