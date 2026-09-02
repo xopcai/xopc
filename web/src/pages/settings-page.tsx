@@ -11,7 +11,7 @@ import {
   loadEndpointToolsManagementSettings,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
-  loadCapabilityPresetsSettingsPanel,
+  loadAgentDefaultsSettingsPanel,
   loadRemoteAccessHub,
   loadSetupStatusPanel,
   loadSharesSettingsPanel,
@@ -27,7 +27,7 @@ const SECTIONS: SettingsSectionId[] = [
   'system',
   'desktop-pet',
   'desktop-app',
-  'capability-presets',
+  'agent-defaults',
   'gateway',
   'runtimes',
   'devices',
@@ -59,8 +59,8 @@ const HeartbeatSettingsPanel = lazy(() =>
 );
 const RemoteAccessHub = lazy(() => loadRemoteAccessHub().then((m) => ({ default: m.RemoteAccessHub })));
 const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ default: m.SharesSettingsPanel })));
-const CapabilityPresetsSettingsPanel = lazy(() =>
-  loadCapabilityPresetsSettingsPanel().then((m) => ({ default: m.CapabilityPresetsSettingsPanel })),
+const AgentDefaultsSettingsPanel = lazy(() =>
+  loadAgentDefaultsSettingsPanel().then((m) => ({ default: m.AgentDefaultsSettingsPanel })),
 );
 const EndpointToolsManagementSettings = lazy(() =>
   loadEndpointToolsManagementSettings().then((m) => ({ default: m.EndpointToolsManagementSettings })),
@@ -121,8 +121,8 @@ export function SettingsPage() {
     return renderLazySection(AppManagementSettingsPanel);
   }
 
-  if (id === 'capability-presets') {
-    return renderLazySection(CapabilityPresetsSettingsPanel);
+  if (id === 'agent-defaults') {
+    return renderLazySection(AgentDefaultsSettingsPanel);
   }
 
   if (id === 'gateway') {

@@ -21,7 +21,7 @@ xopc config validate
 
 | 区域 | 控制内容 |
 | --- | --- |
-| `agents` | 默认 Agent、Agent 列表、模型角色、工具、Skill、工作区和边界 |
+| `agents` | 一份全局继承配置（`agents.defaults`），以及 Agent 个性和显式覆盖（`agents.list`） |
 | `userContext` | 用户拥有的共享上下文、隐私和召回行为 |
 | `providers` | 模型服务商配置和凭据引用 |
 | `channels` | Telegram、微信、飞书和扩展通道设置 |

@@ -1,84 +1,57 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
-import type { AgentsSettingsMessages } from '@/i18n/messages';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
-import { ghostIconButton } from '@/lib/interaction';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 
-import { AgentsEditorSidebar } from './agents-editor-sidebar';
-import type { AgentPanel } from './utils';
-
-export function AgentsEditorModal(props: {
+export function AgentsEditorModal({
+  agent,
+  open,
+  onOpenChange,
+  children,
+}: {
+  agent: GatewayAgentRow;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  a: AgentsSettingsMessages;
-  title: string;
-  subtitle: string;
-  panel: AgentPanel;
-  onPanelChange: (p: AgentPanel) => void;
   children: ReactNode;
 }) {
-  const {
-    open,
-    onOpenChange,
-    a,
-    title,
-    subtitle,
-    panel,
-    onPanelChange,
-    children,
-  } = props;
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
-        />
+        <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
         <Dialog.Content
           ref={setPortalContainer}
           className={cn(
-            'xopc-dialog-content fixed flex flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
+            'xopc-dialog-content fixed flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover',
             SETTINGS_SHELL_CONTENT_Z,
-            /* Desktop: roomy editor; inner panels scroll. Small viewports stay inset. */
-            'inset-4 h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] min-h-0',
-            'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(88vh,48rem)] sm:max-h-[min(88vh,48rem)] sm:min-h-[32rem] sm:w-[min(100%-2rem,58rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',
+            'inset-3 h-[calc(100dvh-1.5rem)] min-h-0 sm:inset-auto sm:left-1/2 sm:top-1/2',
+            'sm:h-[min(88vh,48rem)] sm:w-[min(94vw,62rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',
           )}
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          onOpenAutoFocus={(event) => event.preventDefault()}
         >
           <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
-          <div className="flex shrink-0 items-start justify-between gap-2 border-b border-edge-subtle px-4 pb-3 pt-4 dark:border-edge">
-            <div className="min-w-0 pr-2">
-              <Dialog.Title className="text-base font-semibold leading-snug text-fg">{title}</Dialog.Title>
-              <Dialog.Description className="mt-1 font-mono text-xs text-fg-muted">{subtitle}</Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                className={cn(ghostIconButton, 'shrink-0 p-1.5 hover:bg-surface-base')}
-                aria-label={a.closeDialogAria}
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            </Dialog.Close>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col sm:flex-row sm:overflow-hidden">
-            <div className="shrink-0 border-b border-edge-subtle px-4 py-3 dark:border-edge sm:flex sm:w-56 sm:shrink-0 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r sm:px-0 sm:py-4 sm:pl-4 sm:pr-3">
-              <AgentsEditorSidebar a={a} panel={panel} onPanelChange={onPanelChange} />
-            </div>
-
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              {/* Flex column + min-h-0 lets Tools/Skills lists fill remaining height and scroll inside */}
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:pl-2 sm:pr-5">
-                {children}
+            <header className="flex shrink-0 items-center justify-between gap-4 border-b border-edge px-5 py-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={42} className="size-11 shrink-0" />
+                <div className="min-w-0">
+                  <Dialog.Title className="truncate text-base font-semibold text-fg">{agent.name}</Dialog.Title>
+                  <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-fg-muted">{agent.id}</Dialog.Description>
+                </div>
+                {agent.isDefault ? <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">DEFAULT</span> : null}
               </div>
-            </div>
-          </div>
+              <Dialog.Close asChild>
+                <button type="button" className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label="Close">
+                  <X className="size-4" />
+                </button>
+              </Dialog.Close>
+            </header>
+            {children}
           </SettingsShellLayerProvider>
         </Dialog.Content>
       </Dialog.Portal>

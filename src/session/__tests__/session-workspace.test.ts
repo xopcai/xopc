@@ -6,7 +6,7 @@ import {
   normalizeWorkingDirectoryInput,
   effectiveWorkspacePathForSession,
 } from '../session-workspace.js';
-import type { Config } from '../../config/schema.js';
+import { ConfigSchema } from '../../config/schema.js';
 
 describe('normalizeWorkingDirectoryInput', () => {
   it('rejects empty string', () => {
@@ -29,31 +29,18 @@ describe('normalizeWorkingDirectoryInput', () => {
 });
 
 describe('effectiveWorkspacePathForSession', () => {
-  const minimalCfg = {
+  const minimalCfg = ConfigSchema.parse({
     agents: {
       default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          id: 'default',
-          name: 'Global defaults',
-          models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } } },
-        },
-      },
       list: [
         {
           id: 'main',
-          identity: { name: 'Main', role: 'General assistant' },
-          responsibilities: { primary: ['Help the user complete tasks'] },
-          workspace: { root: '~/default-ws' },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          profile: { name: 'Main' },
+          workspace: '~/default-ws',
         },
       ],
     },
-  } as unknown as Config;
+  });
 
   it('uses profile default when no override', () => {
     const p = effectiveWorkspacePathForSession(minimalCfg, 'agent:main:webchat:default:direct:x', null);

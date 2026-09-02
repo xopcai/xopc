@@ -39,7 +39,7 @@
     "settingsShares": "文件分享",
     "settingsCron": "定时任务",
     "settingsAgentBrowser": "浏览器",
-    "settingsCapabilityPresets": "能力方案",
+    "settingsAgentDefaults": "Agent 默认配置",
     "settingsKeyboardShortcuts": "快捷键",
     "settingsSystem": "系统授权",
     "settingsDesktopPet": "宠物",

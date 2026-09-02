@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 
-import { CapabilityPresetSchema } from '../../../agent-manifest/schema.js';
+import { AgentDefaultsSchema } from '../../../agent-config/index.js';
 import type { Config } from '../../../config/schema.js';
 import {
   listGlobalDefaults,
@@ -14,15 +14,10 @@ function parsePatchBody(raw: unknown): UpdateGlobalDefaultsBody | { error: strin
     return { error: 'body must be an object' };
   }
   const body = raw as Record<string, unknown>;
-  const out: UpdateGlobalDefaultsBody = {};
-  if (Object.hasOwn(body, 'models')) {
-    const parsed = CapabilityPresetSchema.pick({ models: true }).safeParse({ models: body.models });
-    if (!parsed.success) {
-      return { error: `models ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
-    }
-    out.models = parsed.data.models;
-  }
-  return out;
+  const parsed = AgentDefaultsSchema.safeParse(body.defaults);
+  return parsed.success
+    ? { defaults: parsed.data }
+    : { error: `defaults ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
 }
 
 function isParseError(value: unknown): value is { error: string } {

@@ -8,7 +8,7 @@ describe('applyMiscPatch browser', () => {
     const config = {
       browser: { enabled: true, backend: 'extension' },
       gateway: { port: 18790, corsOrigins: [] },
-      agents: { default: 'main', capabilityPresets: {}, list: [] },
+      agents: { default: 'main', list: [] },
       channels: {},
     } as unknown as Config;
 

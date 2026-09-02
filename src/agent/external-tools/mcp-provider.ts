@@ -4,7 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
-import { isMcpCatalogToolDenied, mcpToolPolicyId, resolveMcpToolPolicy } from '../mcp/bundle-mcp-policy.js';
+import { mcpToolPolicyId } from '../mcp/bundle-mcp-policy.js';
 import { getOrCreateSessionMcpRuntime } from '../mcp/bundle-mcp-runtime.js';
 import type { McpCatalogTool, SessionMcpRuntime } from '../mcp/bundle-mcp-types.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
@@ -153,16 +153,7 @@ export class McpToolProvider implements ExternalToolProvider {
       ? resolveEffectiveAgentProfileForSession(cfg, sessionKey)
       : undefined;
     const policyName = policyToolId(tool);
-    const policy = resolveMcpToolPolicy(
-      { serverId: tool.safeServerName, policyToolId: policyName },
-      profile?.manifest.tools.mcp,
-    );
-    return !(policy?.scope === 'readonly' && tool.annotations?.readOnlyHint !== true)
-      && !profile?.tools.denied.has(policyName)
-      && !isMcpCatalogToolDenied(
-        { serverId: tool.safeServerName, policyToolId: policyName },
-        profile?.manifest.tools.mcp,
-      );
+    return !profile?.tools.denied.has(policyName);
   }
 
   private executionSignal(tool: McpCatalogTool, signal: AbortSignal | undefined): AbortSignal | undefined {
@@ -171,10 +162,7 @@ export class McpToolProvider implements ExternalToolProvider {
     const profile = cfg && sessionKey
       ? resolveEffectiveAgentProfileForSession(cfg, sessionKey)
       : undefined;
-    const timeoutMs = resolveMcpToolPolicy(
-      { serverId: tool.safeServerName, policyToolId: policyToolId(tool) },
-      profile?.manifest.tools.mcp,
-    )?.limits?.timeoutMs;
+    const timeoutMs = profile?.config.tools[policyToolId(tool)]?.timeoutMs;
     if (!timeoutMs) return signal;
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;

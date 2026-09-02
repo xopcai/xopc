@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildBrowserConfigFromAgentDefaults,
-  parseAgentDefaultsFromConfig,
+  buildBrowserConfig,
+  parseBrowserSettings,
 } from '@/features/settings/config-api';
 
 describe('browser config API', () => {
   it('parses extension connectionTimeout and cloak fingerprint fields', () => {
-    const state = parseAgentDefaultsFromConfig({
+    const state = parseBrowserSettings({
       browser: {
         enabled: true,
         backend: 'cloakbrowser',
@@ -32,7 +32,7 @@ describe('browser config API', () => {
   });
 
   it('round-trips local backend through parse → build → parse', () => {
-    const initial = parseAgentDefaultsFromConfig({
+    const initial = parseBrowserSettings({
       browser: {
         enabled: true,
         backend: 'local',
@@ -42,18 +42,18 @@ describe('browser config API', () => {
 
     expect(initial.browserBackend).toBe('local');
 
-    const built = buildBrowserConfigFromAgentDefaults(initial);
+    const built = buildBrowserConfig(initial);
     expect(built.backend).toBe('local');
 
-    const roundTripped = parseAgentDefaultsFromConfig({
+    const roundTripped = parseBrowserSettings({
       browser: built,
     });
     expect(roundTripped.browserBackend).toBe('local');
     expect(roundTripped.browserHeadless).toBe(true);
   });
 
-  it('buildBrowserConfigFromAgentDefaults serializes extension and cloak slices', () => {
-    const base = parseAgentDefaultsFromConfig({});
+  it('buildBrowserConfig serializes extension and cloak slices', () => {
+    const base = parseBrowserSettings({});
     const state = {
       ...base,
       browserEnabled: true,
@@ -63,7 +63,7 @@ describe('browser config API', () => {
       browserExtensionConnectionTimeout: 30_000,
     };
 
-    expect(buildBrowserConfigFromAgentDefaults(state)).toMatchObject({
+    expect(buildBrowserConfig(state)).toMatchObject({
       enabled: true,
       backend: 'extension',
       extension: {
@@ -81,7 +81,7 @@ describe('browser config API', () => {
       browserCloakExtraArgs: '--foo\n--bar\n',
     };
 
-    expect(buildBrowserConfigFromAgentDefaults(cloakState)).toMatchObject({
+    expect(buildBrowserConfig(cloakState)).toMatchObject({
       backend: 'cloakbrowser',
       cloakbrowser: {
         timezone: 'Europe/Berlin',
@@ -93,7 +93,7 @@ describe('browser config API', () => {
   });
 
   it('round-trips cloak advanced fields through parse → build → parse', () => {
-    const initial = parseAgentDefaultsFromConfig({
+    const initial = parseBrowserSettings({
       browser: {
         enabled: true,
         backend: 'cloakbrowser',
@@ -113,8 +113,8 @@ describe('browser config API', () => {
       },
     });
 
-    const built = buildBrowserConfigFromAgentDefaults(initial);
-    const roundTripped = parseAgentDefaultsFromConfig({
+    const built = buildBrowserConfig(initial);
+    const roundTripped = parseBrowserSettings({
       browser: built,
     });
 
@@ -133,8 +133,8 @@ describe('browser config API', () => {
   });
 
   it('omits empty cloak extraArgs on build', () => {
-    const base = parseAgentDefaultsFromConfig({});
-    const built = buildBrowserConfigFromAgentDefaults({
+    const base = parseBrowserSettings({});
+    const built = buildBrowserConfig({
       ...base,
       browserEnabled: true,
       browserBackend: 'cloakbrowser',

@@ -22,7 +22,7 @@ Avoid marketing-page composition, decorative AI gradients, oversized hero sectio
 
 ## Design Principles
 
-- Configuration follows the runtime model: agent manifests and capability presets are the source of truth.
+- Configuration follows the runtime model: one global Agent default plus explicit per-Agent overrides is the source of truth.
 - Make operational state scannable before making it decorative.
 - Prefer familiar product affordances over invented controls.
 - Use blue only for primary action, selection, and AI/state signals.

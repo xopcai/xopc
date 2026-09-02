@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Config } from '../../../config/schema.js';
+import { ConfigSchema } from '../../../config/schema.js';
 import { ProjectService } from '../../../projects/project-service.js';
 import {
   closeXopcDatabase,
@@ -17,23 +17,18 @@ import { SessionConfigService } from '../session-config-service.js';
 
 const SESSION_KEY = 'agent:main:webchat:default:direct:project-session-config';
 
-const minimalConfig = {
+const minimalConfig = ConfigSchema.parse({
   agents: {
     default: 'main',
     list: [
       {
         id: 'main',
-        identity: { name: 'Main', role: 'General assistant' },
-        responsibilities: { primary: ['Help the user complete tasks'] },
-        workspace: { root: '~/default-ws' },
-        tools: { builtin: {} },
-        skills: { mode: 'all' },
-        workflows: {},
-        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        profile: { name: 'Main' },
+        workspace: '~/default-ws',
       },
     ],
   },
-} as unknown as Config;
+});
 
 describe('SessionConfigService project workspace', () => {
   let stateDir: string;

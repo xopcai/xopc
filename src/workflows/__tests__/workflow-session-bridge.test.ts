@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
+import { ConfigSchema } from '../../config/schema.js';
 import { ProjectService } from '../../projects/project-service.js';
 import { SessionStore } from '../../session/store.js';
 import {
@@ -16,24 +16,18 @@ import {
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { WorkflowSessionBridge } from '../service/workflow-session-bridge.js';
 
-const minimalConfig = {
+const minimalConfig = ConfigSchema.parse({
   agents: {
     default: 'main',
     list: [
       {
         id: 'main',
-        identity: { name: 'Main', role: 'General assistant' },
-        responsibilities: { primary: ['Help the user complete tasks'] },
-        workspace: { root: '~/default-ws' },
-        models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4o' } } },
-        tools: { builtin: {} },
-        skills: { mode: 'all' },
-        workflows: {},
-        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        profile: { name: 'Main' },
+        workspace: '~/default-ws',
       },
     ],
   },
-} as unknown as Config;
+});
 
 describe('WorkflowSessionBridge project association', () => {
   let stateDir: string;

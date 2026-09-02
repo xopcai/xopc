@@ -106,7 +106,7 @@ function createConfigCommand(ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopc config get agents.list',
-        'xopc config get agents.capabilityPresets',
+        'xopc config get agents.defaults',
         'xopc config set agents.default main',
         'xopc config show',
         'xopc config validate',

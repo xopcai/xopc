@@ -1,52 +1,35 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type GlobalDefaultModels = {
-  defaultRole: string;
-  roles: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
-  imageModel?: { primary: string; fallbacks?: string[] };
-  imageGenerationModel?: {
-    primary: string;
-    fallbacks?: string[];
-    timeoutMs?: number;
-    autoProviderFallback?: boolean;
-  };
-};
-
-export type GlobalDefaultsProvider = {
-  id: string;
-  name: string;
-  configured: boolean;
-  source: 'config' | 'env' | 'oauth' | 'extension' | 'models_json' | 'agent' | null;
-};
+import type { AgentDefaults, BuiltinToolSummary } from './types/agent-gateway';
 
 export type GlobalDefaultsPayload = {
-  presetId: string;
-  models: GlobalDefaultModels;
-  providers: GlobalDefaultsProvider[];
-  recommendations: Array<{
-    provider: string;
-    model: string;
-    reason: 'configured-provider' | 'recommended';
-  }>;
+  defaults: AgentDefaults;
+  builtinTools: BuiltinToolSummary[];
 };
 
 export async function fetchGlobalDefaults(): Promise<GlobalDefaultsPayload> {
-  const res = await fetchJson<{ ok?: boolean; payload?: GlobalDefaultsPayload }>(apiUrl('/api/global-defaults'));
-  if (!res.payload || typeof res.payload.presetId !== 'string') {
+  const response = await fetchJson<{ payload?: GlobalDefaultsPayload }>(apiUrl('/api/global-defaults'));
+  if (!response.payload?.defaults || !Array.isArray(response.payload.builtinTools)) {
     throw new Error('Invalid global defaults response');
   }
-  return res.payload;
+  return response.payload;
 }
 
-export async function updateGlobalDefaultModels(models: GlobalDefaultModels): Promise<GlobalDefaultsPayload> {
-  const res = await fetchJson<{ ok?: boolean; payload?: GlobalDefaultsPayload }>(apiUrl('/api/global-defaults'), {
+export async function updateGlobalDefaults(defaults: AgentDefaults): Promise<GlobalDefaultsPayload> {
+  const response = await fetchJson<{ payload?: GlobalDefaultsPayload }>(apiUrl('/api/global-defaults'), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ models }),
+    body: JSON.stringify({ defaults }),
   });
-  if (!res.payload || typeof res.payload.presetId !== 'string') {
+  if (!response.payload?.defaults || !Array.isArray(response.payload.builtinTools)) {
     throw new Error('Invalid global defaults response');
   }
-  return res.payload;
+  const { mutate } = await import('swr');
+  await Promise.all([
+    mutate('settings-gateway-agents'),
+    revalidateGatewayConfig(),
+  ]);
+  return response.payload;
 }

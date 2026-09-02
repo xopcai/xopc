@@ -77,7 +77,7 @@ work executes as normal agent turns with transcript persistence and realtime eve
 composition root for:
 
 - `AgentManager`: per-session embedded pi-agent instances.
-- `ModelManager`: default model, per-session overrides, typed model roles, and resolved model metadata.
+- `ModelManager`: inherited Chat and fixed-intent models, per-Agent and per-session overrides, and resolved model metadata.
 - `TurnDispatcher`: direct, streaming, webchat steering, clarify, and stream event injection.
 - `AgentOrchestrator`: turn execution, lifecycle events, feedback, persistence, and compaction.
 - `OutboundCoordinator`: final response publishing and channel hooks.

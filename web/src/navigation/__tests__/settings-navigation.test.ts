@@ -9,7 +9,7 @@ describe('settings navigation information architecture', () => {
     const agents = SETTINGS_SHELL_NAV_GROUPS.find((group) => group.id === 'agent');
 
     expect(capabilities?.tabs).toEqual(['settingsCapabilities']);
-    expect(agents?.tabs).toEqual(['settingsCapabilityPresets', 'settingsAgentBrowser']);
+    expect(agents?.tabs).toEqual(['settingsAgentDefaults', 'settingsAgentBrowser']);
   });
 
   it('uses distinct service and agent capability labels', () => {

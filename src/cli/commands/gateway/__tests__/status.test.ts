@@ -21,7 +21,7 @@ vi.mock('../../../../config/index.js', () => ({
   },
 }));
 
-vi.mock('../../index.js', () => ({
+vi.mock('../../../context.js', () => ({
   getContextWithOpts: vi.fn(() => ({
     configPath: '/root/.xopc/xopc.json',
     workspacePath: '/root/.xopc/workspace/main',

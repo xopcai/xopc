@@ -40,7 +40,7 @@ export function registerAgentsCli(program: Command): void {
         id: normalizeAgentId(a.id),
         enabled: a.enabled !== false,
         workspace: a.workspace,
-        model: a.models.roles[a.models.defaultRole]?.model,
+        model: a.models?.chat?.primary ?? cfg.agents.defaults.models.chat.primary,
       }));
       const def = resolveDefaultAgentId(cfg);
       if (opts.json) {
@@ -82,6 +82,7 @@ export function registerAgentsCli(program: Command): void {
         const next = applyAgentConfig(cfg, {
           agentId,
           workspace,
+          profile: { name: name.trim() },
           ...(opts.model?.trim() ? { model: opts.model.trim() } : {}),
         });
 

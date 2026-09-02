@@ -23,14 +23,11 @@ function config(workspaceDir: string, enabled = true, time = '03:00'): Config {
     },
     agents: {
       ...base.agents,
-      default: 'main', capabilityPresets: {},
+      default: 'main',
       list: [{
         id: 'main', enabled: true,
-        identity: { name: 'main', role: 'Agent', language: 'en', tone: 'direct' },
-        responsibilities: { primary: ['Help'] }, workspace: { root: workspaceDir },
-        models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
-        tools: { builtin: {} }, skills: { mode: 'all' }, workflows: {},
-        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        profile: { name: 'main' },
+        workspace: workspaceDir,
       }],
     },
   });
