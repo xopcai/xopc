@@ -4,7 +4,7 @@ import {
   getAgentDefaultModelRef,
   parseModelRef,
 } from '../../config/schema.js';
-import { resolveEffectiveAgentManifestForAgent } from '../../config/agent-profile.js';
+import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
@@ -68,16 +68,16 @@ function resolveEffectiveModelsConfig(params: {
   cfg?: Config;
   agentId?: string;
 }): {
-  defaultRole?: string;
-  roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
-  imageModel?: AgentModelConfig;
+  chat: AgentModelConfig;
+  intents: Record<string, AgentModelConfig | undefined>;
+  imageUnderstanding?: AgentModelConfig;
 } | undefined {
   if (!params.cfg) {
     return undefined;
   }
   try {
     const agentId = params.agentId?.trim() || resolveDefaultAgentId(params.cfg);
-    return resolveEffectiveAgentManifestForAgent(params.cfg, agentId).models;
+    return resolveEffectiveAgentConfigForAgent(params.cfg, agentId).config.models;
   } catch {
     return undefined;
   }
@@ -88,7 +88,7 @@ export function resolveConfiguredImageModelConfig(params: {
   agentId?: string;
 }): ToolModelConfig {
   const models = resolveEffectiveModelsConfig(params);
-  const config = models?.imageModel ?? (params.cfg ? getAgentDefaultImageModelConfig(params.cfg) : undefined);
+  const config = models?.imageUnderstanding ?? (params.cfg ? getAgentDefaultImageModelConfig(params.cfg) : undefined);
   return coerceToolModelConfig(config);
 }
 
@@ -131,30 +131,21 @@ function collectRoleImageModelCandidates(params: {
   agentId?: string;
 }): Array<{ ref: string; roleId?: string; roleDescription?: string }> {
   const models = resolveEffectiveModelsConfig(params);
-  const roles = models?.roles ?? {};
-  const roleIds = Object.keys(roles);
-  if (roleIds.length === 0) {
-    return [];
-  }
-
-  const orderedRoleIds = [
-    ...(models?.defaultRole && roles[models.defaultRole] ? [models.defaultRole] : []),
-    ...roleIds.filter((roleId) => roleId !== models?.defaultRole),
-  ];
+  const routes = models ? { chat: models.chat, ...models.intents } : {};
+  const roleIds = Object.keys(routes);
   const seen = new Set<string>();
   const candidates: Array<{ ref: string; roleId?: string; roleDescription?: string }> = [];
 
-  for (const roleId of orderedRoleIds) {
-    const role = roles[roleId];
+  for (const roleId of roleIds) {
+    const role = routes[roleId];
     if (!role) {
       continue;
     }
-    const refs = [role.model, ...(role.fallbacks ?? [])];
+    const refs = [role.primary, ...role.fallbacks];
     for (const ref of refs) {
       addCandidate(candidates, seen, {
         ref,
         roleId,
-        ...(role.description ? { roleDescription: role.description } : {}),
       });
     }
   }
@@ -167,8 +158,7 @@ function resolveDefaultModelRefForAgent(params: {
   agentId?: string;
 }): { provider: string; model: string } {
   const models = resolveEffectiveModelsConfig(params);
-  const role = models?.defaultRole ? models.roles?.[models.defaultRole] : undefined;
-  const ref = role?.model?.trim();
+  const ref = models?.chat.primary.trim();
   if (ref) {
     const parsed = parseModelRef(ref);
     if (parsed) {

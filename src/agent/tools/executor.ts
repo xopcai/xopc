@@ -34,7 +34,7 @@ export interface ToolExecutorConfig {
   /** Default per-tool timeout when the tool does not declare its own `timeoutMs`. */
   defaultTimeoutMs: number;
 
-  /** Per-session policy override resolved from the effective agent manifest. */
+  /** Per-session policy resolved from global defaults and agent overrides. */
   resolveTimeoutMs?: (toolName: string) => number | undefined;
 
   /** Max retry attempts for tools opted into retry via `idempotent: true`. */

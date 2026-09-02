@@ -7,6 +7,7 @@ import {
   MAX_RAW_HTML_CHARS_FOR_WEB_EXTRACT,
   DEFAULT_WEB_EXTRACT_MAX_LENGTH,
 } from '../web-extract.js';
+import { ConfigSchema } from '../../../config/schema.js';
 
 vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
@@ -23,31 +24,21 @@ function htmlBody(inner: string) {
 }
 
 function configWithGlobalModel() {
-  return {
+  return ConfigSchema.parse({
     agents: {
       default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          id: 'default',
-          name: 'Global defaults',
-          models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } } },
-        },
+      defaults: {
+        models: { chat: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] }, intents: {} },
       },
       list: [
         {
           id: 'main',
-          identity: { name: 'Main', role: 'General assistant' },
-          responsibilities: { primary: ['Help the user complete tasks'] },
-          workspace: { root: '~/.xopc/workspace/main' },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          profile: { name: 'Main' },
+          workspace: '~/.xopc/workspace/main',
         },
       ],
     },
-  } as import('../../../config/schema.js').Config;
+  });
 }
 
 describe('stripHtmlBoilerplate', () => {

@@ -13,7 +13,7 @@ function config(memory: UserContextConfig['memory'], understanding?: Partial<Use
 }
 
 describe('resolveBackgroundReviewSettings', () => {
-  it('stays disabled without a resolvable agent manifest', () => {
+  it('stays disabled without a resolvable agent configuration', () => {
     expect(resolveBackgroundReviewSettings(undefined)).toMatchObject({
       enabled: false,
       reviewIntervalTurns: 10,

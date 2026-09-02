@@ -38,8 +38,8 @@ export const loadRuntimeToolsSettingsPanel = () =>
 export const loadHeartbeatSettingsPanel = () => import('@/features/settings/heartbeat-settings');
 export const loadRemoteAccessHub = () => import('@/features/remote-access/remote-access-hub');
 export const loadSharesSettingsPanel = () => import('@/features/shares/shares-settings');
-export const loadCapabilityPresetsSettingsPanel = () =>
-  import('@/features/settings/capability-presets/capability-presets-settings-panel');
+export const loadAgentDefaultsSettingsPanel = () =>
+  import('@/features/settings/agent-defaults/agent-defaults-settings-panel');
 export const loadEndpointToolsManagementSettings = () =>
   import('@/features/endpoint-tools/management-settings');
 
@@ -77,7 +77,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'heartbeat') return preload(loadHeartbeatSettingsPanel);
   if (section === 'tunnel' || section === 'remote-access') return preload(loadRemoteAccessHub);
   if (section === 'shares') return preload(loadSharesSettingsPanel);
-  if (section === 'capability-presets') return preload(loadCapabilityPresetsSettingsPanel);
+  if (section === 'agent-defaults') return preload(loadAgentDefaultsSettingsPanel);
   if (section === 'agent-browser') return preload(loadAgentBrowserSettingsPage);
 }
 

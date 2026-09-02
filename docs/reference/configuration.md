@@ -21,7 +21,7 @@ xopc config validate
 
 | Section | Controls |
 | --- | --- |
-| `agents` | Default Agent, Agent list, model roles, tools, Skills, workspace, and boundaries |
+| `agents` | One inherited default (`agents.defaults`) plus Agent profiles and explicit overrides (`agents.list`) |
 | `userContext` | Shared user-owned context, privacy, and recall behavior |
 | `providers` | Model provider configuration and credential references |
 | `channels` | Telegram, Weixin, Feishu, and extension channel settings |

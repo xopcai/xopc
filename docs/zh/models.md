@@ -58,15 +58,15 @@ xopc 在 Docker 中运行时，`127.0.0.1` 指向容器本身，不是宿主机�
 
 本地运行能提高对请求处理方式的控制，但模型文件、硬件需求和运行日志需要由你自己管理。
 
-## 默认模型与 Agent 模型角色
+## 全局模型与固定意图
 
-Agent 没有指定其它模型时会使用全局默认值：
+所有 Agent 默认继承 `agents.defaults.models.chat`：
 
 ```bash
 xopc models set <provider>/<model>
 ```
 
-高级 Agent 和 Workflow 可以使用具名角色，例如简单步骤用快速模型，综合步骤用更强模型。只有在成本或质量收益明确时再增加这层配置。
+需要任务专用模型时，只使用固定意图：`fast`、`reasoning`、`coding`、`review`、`vision`、`understanding`。没有配置某个意图时回退到 Chat 模型。Agent 只在确有必要时覆盖某个意图，不能创建任意名称的模型槽位。
 
 ## 验证与排障
 

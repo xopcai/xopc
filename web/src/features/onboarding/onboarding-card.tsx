@@ -21,7 +21,7 @@ import {
   fetchUserProfile,
   updateUserProfile,
 } from '@/features/user-context/user-context-api';
-import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
+import { fetchGlobalDefaults, updateGlobalDefaults } from '@/features/settings/global-defaults-api';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
 import { messages } from '@/i18n/messages';
@@ -112,24 +112,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const defaults = await fetchGlobalDefaults();
-        const recommendation = defaults.recommendations[0];
-        if (!recommendation || cancelled) return;
-        // Keep the first step visible; the recommendation is used when the user continues.
-        dispatch({ type: 'patch', patch: { selectedProvider: recommendation.provider } });
-      } catch {
-        /* keep the manual provider step */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -179,16 +161,14 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   const finishSetup = useCallback(async (modelRef: string) => {
     const defaults = await fetchGlobalDefaults();
-    const updatedDefaults = await updateGlobalDefaultModels({
-      ...defaults.models,
-      defaultRole: 'deep',
-      roles: {
-        ...defaults.models.roles,
-        deep: { model: modelRef },
+    const updatedDefaults = await updateGlobalDefaults({
+      ...defaults.defaults,
+      models: {
+        ...defaults.defaults.models,
+        chat: { primary: modelRef, fallbacks: [] },
       },
     });
-    const configuredRole = updatedDefaults.models.defaultRole;
-    if (updatedDefaults.models.roles[configuredRole]?.model !== modelRef) {
+    if (updatedDefaults.defaults.models.chat.primary !== modelRef) {
       throw new Error(language === 'zh'
         ? '默认模型未能保存，请重试。'
         : 'The default model could not be saved. Try again.');

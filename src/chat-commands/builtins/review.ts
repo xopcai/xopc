@@ -194,7 +194,7 @@ async function reviewModelRef(ctx: CommandContext): Promise<string | undefined> 
 
   try {
     const profile = resolveEffectiveAgentProfileForSession(ctx.config, ctx.sessionKey);
-    return profile.manifest.models.roles.review?.model?.trim() || profile.primaryModelRef;
+    return profile.config.models.intents.review?.primary || profile.primaryModelRef;
   } catch {
     return undefined;
   }

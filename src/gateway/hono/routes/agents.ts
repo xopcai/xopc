@@ -1,13 +1,20 @@
 import type { Hono } from 'hono';
 
-import { AgentModelsSchema, type Config } from '../../../config/schema.js';
-import { ToolPolicySetSchema } from '../../../agent-manifest/schema.js';
+import {
+  AgentModelsOverrideSchema,
+  AgentProfileSchema,
+  RuntimePolicySchema,
+  SkillOverrideSchema,
+  ToolPoliciesSchema,
+  WorkflowPolicySchema,
+} from '../../../agent-config/index.js';
+import type { Config } from '../../../config/schema.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
   deleteAgentAvatarFile,
   finalizeCreateAgentDirs,
-  getGatewayAgentEffectiveManifest,
+  getGatewayAgentEffectiveConfig,
   listAgentProfileFiles,
   listGatewayAgents,
   prepareCreateAgent,
@@ -21,23 +28,6 @@ import {
   type CreateAgentBody,
 } from '../../agents-admin.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-
-function parseProfileFiles(raw: unknown): Record<string, string> | undefined | { error: string } {
-  if (raw === undefined) {
-    return undefined;
-  }
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { error: 'profileFiles must be an object' };
-  }
-  const profileFiles: Record<string, string> = {};
-  for (const [name, content] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof content !== 'string') {
-      return { error: `profileFiles["${name}"] must be a string` };
-    }
-    profileFiles[name] = content;
-  }
-  return profileFiles;
-}
 
 function isParseError(value: unknown): value is { error: string } {
   return (
@@ -53,88 +43,21 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     return { error: 'each agent must be an object' };
   }
   const body = raw as Record<string, unknown>;
-  if (Object.hasOwn(body, 'model')) {
-    return { error: 'model is not supported; use models.defaultRole and models.roles' };
-  }
-  if (Object.hasOwn(body, 'toolsDisable')) {
-    return { error: 'toolsDisable was removed; use tools.builtin policies' };
-  }
-  if (Object.hasOwn(body, 'typedModels')) {
-    return { error: 'typedModels is not supported; use models.roles' };
-  }
-  if (Object.hasOwn(body, 'agentDir')) {
-    return { error: 'agentDir was removed from agent manifests' };
-  }
-  if (Object.hasOwn(body, 'name')) {
-    return { error: 'name is not supported; write IDENTITY.md in profileFiles' };
-  }
-  if (Object.hasOwn(body, 'description')) {
-    return { error: 'description is not supported; write IDENTITY.md in profileFiles' };
-  }
-  const workspace = typeof body.workspace === 'string' ? body.workspace : '';
-  const models = Object.hasOwn(body, 'models')
-    ? AgentModelsSchema.safeParse(body.models)
-    : undefined;
-  if (models && !models.success) {
-    return { error: `models ${models.error.issues[0]?.message ?? 'is invalid'}` };
-  }
+  const allowedKeys = new Set(['id', 'workspace', 'profile']);
+  const unknownKey = Object.keys(body).find((key) => !allowedKeys.has(key));
+  if (unknownKey) return { error: `unknown create-agent field "${unknownKey}"` };
+  const workspace = typeof body.workspace === 'string' ? body.workspace : undefined;
+  const profile = AgentProfileSchema.safeParse(body.profile);
+  if (!profile.success) return { error: `profile ${profile.error.issues[0]?.message ?? 'is required'}` };
   const id = typeof body.id === 'string' ? body.id : undefined;
-  const presetIds = Object.hasOwn(body, 'extends')
-    ? Array.isArray(body.extends)
-      ? body.extends.map((x: unknown) => normalizeAgentId(String(x))).filter(Boolean)
-      : null
-    : undefined;
-  if (presetIds === null) {
-    return { error: 'extends must be an array' };
-  }
-  const skills = Object.hasOwn(body, 'skills')
-    ? Array.isArray(body.skills)
-      ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
-      : null
-    : undefined;
-  if (skills === null) {
-    return { error: 'skills must be an array' };
-  }
-  const toolsRaw = Object.hasOwn(body, 'tools') ? body.tools : undefined;
-  let tools: CreateAgentBody['tools'] | undefined;
-  if (toolsRaw !== undefined) {
-    if (toolsRaw === null || typeof toolsRaw !== 'object' || Array.isArray(toolsRaw)) {
-      return { error: 'tools must be an object' };
-    }
-    const parsedTools = ToolPolicySetSchema.safeParse(toolsRaw);
-    if (!parsedTools.success) {
-      return { error: `tools ${parsedTools.error.issues[0]?.message ?? 'is invalid'}` };
-    }
-    tools = parsedTools.data;
-  }
-  let profileFiles: Record<string, string> | undefined;
-  if (Object.hasOwn(body, 'profileFiles')) {
-    const parsed = parseProfileFiles(body.profileFiles);
-    if (isParseError(parsed)) {
-      return parsed;
-    }
-    profileFiles = parsed;
-  }
-  if (!profileFiles?.['IDENTITY.md'] && typeof body.cloneFrom !== 'string') {
-    return { error: 'profileFiles.IDENTITY.md is required' };
-  }
-  const cloneFrom = typeof body.cloneFrom === 'string' ? body.cloneFrom : undefined;
   return {
     workspace,
-    ...(models && models.data !== undefined ? { models: models.data } : {}),
+    profile: profile.data,
     ...(id !== undefined ? { id } : {}),
-    ...(presetIds !== undefined ? { extends: presetIds } : {}),
-    ...(skills !== undefined ? { skills } : {}),
-    ...(tools !== undefined ? { tools } : {}),
-    ...(profileFiles !== undefined ? { profileFiles } : {}),
-    ...(cloneFrom !== undefined ? { cloneFrom } : {}),
   };
 }
 
-type PatchModels = {
-  defaultRole?: string | null;
-  roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
-};
+type PatchModels = import('../../../agent-config/index.js').AgentModelsOverride;
 
 function parsePatchModels(raw: unknown): PatchModels | null | undefined | { error: string } {
   if (raw === undefined) {
@@ -146,23 +69,8 @@ function parsePatchModels(raw: unknown): PatchModels | null | undefined | { erro
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'models must be an object or null' };
   }
-  const body = raw as Record<string, unknown>;
-  const out: PatchModels = {};
-  if (Object.hasOwn(body, 'defaultRole')) {
-    out.defaultRole = body.defaultRole === null ? null : String(body.defaultRole ?? '').trim();
-  }
-  if (Object.hasOwn(body, 'roles')) {
-    if (body.roles === null) {
-      return { error: 'models.roles must be an object' };
-    } else {
-      const parsed = AgentModelsSchema.safeParse({ roles: body.roles });
-      if (!parsed.success) {
-        return { error: `models.roles ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
-      }
-      out.roles = parsed.data?.roles;
-    }
-  }
-  return out;
+  const parsed = AgentModelsOverrideSchema.safeParse(raw);
+  return parsed.success ? parsed.data : { error: `models ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
 }
 
 export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -195,10 +103,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!save.saved) {
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
     }
-    const finalized = await finalizeCreateAgentDirs(service.currentConfig as Config, agentId, {
-      ...(parsed.profileFiles !== undefined ? { profileFiles: parsed.profileFiles } : {}),
-      ...(parsed.cloneFrom ? { cloneFrom: parsed.cloneFrom } : {}),
-    });
+    const finalized = await finalizeCreateAgentDirs(service.currentConfig as Config, agentId);
     if (finalized.ok === false) {
       return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);
     }
@@ -213,9 +118,9 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
-  authenticated.get('/api/agents/:id/effective-manifest', async (c) => {
+  authenticated.get('/api/agents/:id/effective-config', async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
-    const res = getGatewayAgentEffectiveManifest(service.currentConfig as Config, id);
+    const res = getGatewayAgentEffectiveConfig(service.currentConfig as Config, id);
     if (res.ok === false) {
       return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
     }
@@ -230,44 +135,30 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     } catch {
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
-    if (Object.hasOwn(body, 'model')) {
-      return c.json({ ok: false, error: { message: 'model is not supported; use models.defaultRole and models.roles' } }, 400);
+    const allowedPatchKeys = new Set([
+      'workspace',
+      'profile',
+      'models',
+      'skills',
+      'tools',
+      'workflows',
+      'runtime',
+      'setDefault',
+    ]);
+    const unknownPatchKey = Object.keys(body).find((key) => !allowedPatchKeys.has(key));
+    if (unknownPatchKey) {
+      return c.json({ ok: false, error: { message: `unknown agent field "${unknownPatchKey}"` } }, 400);
     }
-    if (Object.hasOwn(body, 'typedModels')) {
-      return c.json({ ok: false, error: { message: 'typedModels is not supported; use models.roles' } }, 400);
+    const skillsPatch = body.skills === null ? null : Object.hasOwn(body, 'skills') ? SkillOverrideSchema.safeParse(body.skills) : undefined;
+    if (skillsPatch && skillsPatch !== null && !skillsPatch.success) {
+      return c.json({ ok: false, error: { message: `skills ${skillsPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
     }
-    if (Object.hasOwn(body, 'toolsDisable')) {
-      return c.json({ ok: false, error: { message: 'toolsDisable was removed; use tools.builtin policies' } }, 400);
-    }
-    if (Object.hasOwn(body, 'agentDir')) {
-      return c.json({ ok: false, error: { message: 'agentDir was removed from agent manifests' } }, 400);
-    }
-    if (Object.hasOwn(body, 'name')) {
-      return c.json({ ok: false, error: { message: 'name is not supported; edit IDENTITY.md' } }, 400);
-    }
-    if (Object.hasOwn(body, 'description')) {
-      return c.json({ ok: false, error: { message: 'description is not supported; edit IDENTITY.md' } }, 400);
-    }
-    const skillsPatch =
-      body.skills === null
-        ? null
-        : Array.isArray(body.skills)
-          ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
-          : undefined;
-    const extendsPatch = Object.hasOwn(body, 'extends')
-      ? Array.isArray(body.extends)
-        ? body.extends.map((x: unknown) => String(x).trim()).filter(Boolean)
-        : undefined
-      : undefined;
-    if (Object.hasOwn(body, 'extends') && extendsPatch === undefined) {
-      return c.json({ ok: false, error: { message: 'extends must be an array' } }, 400);
-    }
-    let toolsPatch: CreateAgentBody['tools'] | null | undefined;
+    let toolsPatch: Config['agents']['list'][number]['tools'] | null | undefined;
     if (Object.hasOwn(body, 'tools')) {
       if (body.tools === null) {
         toolsPatch = null;
       } else if (typeof body.tools === 'object' && !Array.isArray(body.tools)) {
-        const parsedTools = ToolPolicySetSchema.safeParse(body.tools);
+        const parsedTools = ToolPoliciesSchema.safeParse(body.tools);
         if (!parsedTools.success) {
           return c.json({ ok: false, error: { message: `tools ${parsedTools.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
         }
@@ -280,17 +171,50 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (isParseError(modelsPatch)) {
       return c.json({ ok: false, error: { message: modelsPatch.error } }, 400);
     }
-    if (Object.hasOwn(body, 'memory')) {
-      return c.json({ ok: false, error: { message: 'Agent memory configuration is not supported; use userContext' } }, 400);
+    const profilePatch = body.profile === null
+      ? null
+      : Object.hasOwn(body, 'profile')
+        ? AgentProfileSchema.safeParse(body.profile)
+        : undefined;
+    if (profilePatch && profilePatch !== null && !profilePatch.success) {
+      return c.json({ ok: false, error: { message: `profile ${profilePatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
+    }
+    const workflowsPatch = body.workflows === null
+      ? null
+      : Object.hasOwn(body, 'workflows')
+        ? WorkflowPolicySchema.safeParse(body.workflows)
+        : undefined;
+    if (workflowsPatch && workflowsPatch !== null && !workflowsPatch.success) {
+      return c.json({ ok: false, error: { message: `workflows ${workflowsPatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
+    }
+    const runtimePatch = body.runtime === null
+      ? null
+      : Object.hasOwn(body, 'runtime')
+        ? RuntimePolicySchema.safeParse(body.runtime)
+        : undefined;
+    if (runtimePatch && runtimePatch !== null && !runtimePatch.success) {
+      return c.json({ ok: false, error: { message: `runtime ${runtimePatch.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
+    }
+    let workspacePatch: string | null | undefined;
+    if (Object.hasOwn(body, 'workspace')) {
+      if (body.workspace === null) {
+        workspacePatch = null;
+      } else if (typeof body.workspace === 'string') {
+        workspacePatch = body.workspace;
+      } else {
+        return c.json({ ok: false, error: { message: 'workspace must be a string or null' } }, 400);
+      }
     }
 
     const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
-      workspace: typeof body.workspace === 'string' ? body.workspace : undefined,
-      ...(extendsPatch !== undefined ? { extends: extendsPatch } : {}),
+      ...(workspacePatch !== undefined ? { workspace: workspacePatch } : {}),
+      ...(profilePatch !== undefined ? { profile: profilePatch === null ? null : profilePatch.data } : {}),
       ...(modelsPatch !== undefined ? { models: modelsPatch } : {}),
       setDefault: body.setDefault === true,
-      ...(skillsPatch !== undefined ? { skills: skillsPatch } : {}),
+      ...(skillsPatch !== undefined ? { skills: skillsPatch === null ? null : skillsPatch.data } : {}),
       ...(toolsPatch !== undefined ? { tools: toolsPatch } : {}),
+      ...(workflowsPatch !== undefined ? { workflows: workflowsPatch === null ? null : workflowsPatch.data } : {}),
+      ...(runtimePatch !== undefined ? { runtime: runtimePatch === null ? null : runtimePatch.data } : {}),
     });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);

@@ -4,7 +4,7 @@ import { isMemorySubsystemEnabled } from './memory-config.js';
 import { MemoryManager, type MemoryManagerOptions } from './manager.js';
 import type { MemoryKind } from './types.js';
 import { loadMemoryPluginProviders } from './plugin-discovery.js';
-import { buildMemoryRuntime } from '../../agent-runtime/memory-runtime.js';
+import { buildMemoryRuntime } from './runtime.js';
 
 export type MemoryProviderId = 'none' | 'stub';
 

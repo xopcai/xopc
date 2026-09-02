@@ -3,7 +3,7 @@ type PathNode = Record<string, unknown>;
 export function parseConfigPath(raw: string): { ok: boolean; path?: string[]; error?: string } {
   const parts = raw.trim().split('.').map((p) => p.trim());
   if (parts.some((p) => !p)) {
-    return { ok: false, error: 'Invalid path. Use dot notation (e.g. agents.list.0.models.defaultRole).' };
+    return { ok: false, error: 'Invalid path. Use dot notation (e.g. agents.defaults.models.chat.primary).' };
   }
   return { ok: true, path: parts };
 }

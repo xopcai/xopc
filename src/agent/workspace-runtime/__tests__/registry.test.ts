@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentManifest } from '../../../agent-manifest/index.js';
+import type { AgentEntry } from '../../../agent-config/index.js';
 import { ConfigSchema } from '../../../config/schema.js';
 import { WorkspaceRuntimeRegistry } from '../registry.js';
 
-function manifest(id: string): AgentManifest {
+function agent(id: string): AgentEntry {
   return {
     id,
     enabled: true,
-    identity: { name: id, role: 'Agent', language: 'en', tone: 'direct' },
-    responsibilities: { primary: ['Help'] },
-    workspace: { root: '/shared' },
-    models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
-    tools: { builtin: {} },
-    skills: { mode: 'all' },
-    workflows: {},
-    boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+    profile: { name: id },
+    workspace: '/shared',
   };
 }
 
@@ -24,10 +18,9 @@ describe('WorkspaceRuntimeRegistry', () => {
     const config = ConfigSchema.parse({
       agents: {
         default: 'main',
-        capabilityPresets: {},
         list: [
-          manifest('main'),
-          manifest('research'),
+          agent('main'),
+          agent('research'),
         ],
       },
     });

@@ -6,14 +6,8 @@ function config(model: string, providers: Record<string, string>) {
   return {
     agents: {
       default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          models: {
-            defaultRole: 'deep',
-            roles: model ? { deep: { model } } : {},
-          },
-        },
+      defaults: {
+        models: { chat: model ? { primary: model } : undefined },
       },
     },
     providers,

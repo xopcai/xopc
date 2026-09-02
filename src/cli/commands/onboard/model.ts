@@ -67,17 +67,15 @@ export function setPrimaryModel(
     const nextList = [...config.agents.list];
     nextList[index] = {
       ...agent,
-      workspace: { root: workspacePath },
+      workspace: workspacePath,
     };
     nextConfig = { ...config, agents: { ...config.agents, list: nextList } };
   }
-  const presetId = nextConfig.agents.defaultPreset ?? 'default';
-  const currentModels = nextConfig.agents.capabilityPresets[presetId]?.models;
+  const currentModels = nextConfig.agents.defaults.models;
   const prep = prepareUpdateGlobalDefaults(nextConfig, {
-    models: {
-      ...currentModels,
-      defaultRole: 'deep',
-      roles: { ...currentModels?.roles, deep: { model: modelRef } },
+    defaults: {
+      ...nextConfig.agents.defaults,
+      models: { ...currentModels, chat: { primary: modelRef, fallbacks: [] } },
     },
   });
   if (prep.ok === false) {

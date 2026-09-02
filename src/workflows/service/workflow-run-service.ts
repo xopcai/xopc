@@ -9,7 +9,7 @@ import {
   resolveEffectiveAgentProfileForSession,
 } from '../../config/agent-profile.js';
 import { preflightWorkflowConnectors } from '../../connectors/workflow-preflight.js';
-import { resolveModelRef } from '../../config/agent-typed-models.js';
+import { resolveModelSelector } from '../../config/agent-model-intents.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskContextRepository } from '../../tasks/task-context-repository.js';
@@ -122,7 +122,7 @@ export class WorkflowRunService {
       ? resolveEffectiveAgentProfileForSession(
           config,
           params.parentSessionKey ?? `agent:${params.agentId}`,
-        ).manifest.workflows
+        ).config.workflows
       : undefined;
     if (workflowPolicy?.allowed && !workflowPolicy.allowed.includes(params.definitionId)) {
       return {
@@ -640,7 +640,7 @@ export class WorkflowRunService {
       runner,
       hooks: [{ afterRun: ({ runId, status }) => new WorkflowWritebackService().apply(params.runStore, runId, status) }],
       resolveModelId: (modelId) => {
-        return resolveModelById(resolveModelRef(gatewayService.currentConfig, profileAgentId, modelId));
+        return resolveModelById(resolveModelSelector(gatewayService.currentConfig, profileAgentId, modelId));
       },
       parentSessionKey: params.sessionKey,
       subagentSessionKeyFactory: ({ runId, agentId }) => {

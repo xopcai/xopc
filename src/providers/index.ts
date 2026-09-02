@@ -88,7 +88,7 @@ export function resolveModel(ref: string): Model<Api> {
 	const trimmedRef = typeof ref === 'string' ? ref.trim() : '';
 	if (!trimmedRef) {
 		throw new Error(
-			'No default model configured. Choose a model in onboarding or set agents.capabilityPresets.default.models.roles.<role>.model.',
+			'No default model configured. Choose a model in onboarding or set agents.defaults.models.chat.primary.',
 		);
 	}
 

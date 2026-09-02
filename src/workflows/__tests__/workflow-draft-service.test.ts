@@ -6,8 +6,8 @@ vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   return { ...actual, completeSimple: vi.fn() };
 });
 
-vi.mock('../../config/agent-typed-models.js', () => ({
-  resolveModelRef: vi.fn(() => 'openai/gpt-test'),
+vi.mock('../../config/agent-model-intents.js', () => ({
+  resolveModelSelector: vi.fn(() => 'openai/gpt-test'),
 }));
 
 vi.mock('../../providers/index.js', () => ({

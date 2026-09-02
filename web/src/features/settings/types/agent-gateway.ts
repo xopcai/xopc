@@ -1,116 +1,83 @@
-export type GatewayAgentSkillsInfo = {
-  preset: string[];
-  entry?: string[];
-  effectiveAllowlist?: string[];
+export type ModelRoute = { primary: string; fallbacks: string[] };
+export type ModelIntent = 'fast' | 'reasoning' | 'coding' | 'review' | 'vision' | 'understanding';
+export type AgentModelsDefaults = {
+  chat: ModelRoute;
+  intents: Partial<Record<ModelIntent, ModelRoute>>;
+  imageUnderstanding?: ModelRoute;
+  imageGeneration?: ModelRoute & { timeoutMs?: number; autoProviderFallback: boolean };
 };
-
-export type GatewayAgentToolsInfo = {
-  presetDenied: string[];
-  entryDisable: string[];
-  effectiveDisable: string[];
+export type AgentModelsOverride = {
+  chat?: ModelRoute;
+  intents?: Partial<Record<ModelIntent, ModelRoute | null>>;
+  imageUnderstanding?: ModelRoute | null;
+  imageGeneration?: (ModelRoute & { timeoutMs?: number; autoProviderFallback: boolean }) | null;
 };
-
-export type GatewayAgentTypedModelsInfo = {
-  defaultRole: string;
-  preset: Array<{ id: string; model: string; fallbacks?: string[]; description?: string }>;
-  entry?: Array<{ id: string; model: string; fallbacks?: string[]; description?: string }>;
-  effective: Array<{ id: string; model: string; fallbacks?: string[]; description?: string }>;
+export type ToolPolicy = { mode: 'allow' | 'ask' | 'deny'; maxCallsPerTurn?: number; timeoutMs?: number };
+export type BuiltinToolSummary = { id: string; description: { en: string; zh: string } };
+export type SkillDefaults =
+  | { mode: 'all-enabled'; exclude: string[] }
+  | { mode: 'selected'; include: string[] };
+export type SkillOverride =
+  | { mode: 'merge'; add: string[]; remove: string[] }
+  | { mode: 'replace'; include: string[] };
+export type AgentProfile = { name: string; instructions?: string };
+export type AgentDefaults = {
+  models: AgentModelsDefaults;
+  skills: SkillDefaults;
+  tools: Record<string, ToolPolicy>;
+  workflows: { default?: string; allowed?: string[] };
+  runtime: {
+    maxTurns?: number;
+    timeoutMs?: number;
+    maxToolFailuresPerTurn?: number;
+    promptCache?: { mode: 'off' | 'auto'; lifetime: 'short' | 'long' };
+  };
 };
-
+export type AgentOverride = {
+  id: string;
+  enabled: boolean;
+  workspace?: string;
+  profile?: AgentProfile;
+  models?: AgentModelsOverride;
+  skills?: SkillOverride;
+  tools?: Record<string, ToolPolicy>;
+  workflows?: AgentDefaults['workflows'];
+  runtime?: AgentDefaults['runtime'];
+};
+export type EffectiveAgentConfig = Omit<AgentOverride, 'models' | 'skills' | 'tools' | 'workspace'> & {
+  workspace: string;
+  models: AgentModelsDefaults;
+  skills: SkillDefaults;
+  tools: Record<string, ToolPolicy>;
+  workflows: AgentDefaults['workflows'];
+  runtime: AgentDefaults['runtime'];
+};
 export type GatewayAgentRow = {
   id: string;
-  name?: string;
+  name: string;
   description?: string;
   language?: string;
-  /** From `IDENTITY.md` when gateway enriches `/api/agents`. */
   avatar?: string;
   workspace: string;
   profileDir: string;
-  model?: { primary?: string; fallbacks?: string[] };
-  typedModels: GatewayAgentTypedModelsInfo;
-  extends: string[];
+  override: AgentOverride;
+  effective: EffectiveAgentConfig;
+  sources: Record<string, 'system' | 'global' | 'agent'>;
   isDefault: boolean;
-  skills: GatewayAgentSkillsInfo;
-  tools: GatewayAgentToolsInfo;
 };
-
-export type GatewayAgentsPayload = {
-  defaultId: string;
-  agents: GatewayAgentRow[];
-  builtinToolIds: string[];
-};
-
-export type GatewayAgentEffectiveManifestPayload = {
-  manifest: {
-    id: string;
-    enabled?: boolean;
-    extends?: string[];
-    identity?: {
-      name?: string;
-      role?: string;
-      language?: string;
-      tone?: string;
-    };
-    workspace?: { root?: string };
-    models?: {
-      defaultRole?: string;
-      roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
-    };
-    tools?: {
-      builtin?: Record<string, { mode: 'allow' | 'confirm' | 'deny'; scope?: string }>;
-    };
-    skills?: {
-      mode?: 'all' | 'allowlist' | 'denylist' | 'off';
-      allow?: string[];
-      deny?: string[];
-    };
-    workflows?: {
-      default?: string;
-      allowed?: string[];
-    };
-    boundaries?: {
-      requiresConfirmation?: string[];
-      forbidden?: string[];
-      escalation?: string[];
-    };
-  };
-  presetChain?: string[];
-  sources: Record<string, string>;
-  overrides?: Array<{ path: string; from: string; to: string }>;
-  locks?: string[];
+export type GatewayAgentsPayload = { defaultId: string; agents: GatewayAgentRow[]; builtinToolIds: string[] };
+export type GatewayAgentEffectiveConfigPayload = {
+  config: EffectiveAgentConfig;
+  sources: Record<string, 'system' | 'global' | 'agent'>;
 };
 
 export type GatewayConfigBinding = {
   id?: string;
   agentId: string;
   priority?: number;
-  match: {
-    channel: string;
-    accountId?: string;
-    peerKind?: string;
-    peerId?: string;
-    guildId?: string;
-    teamId?: string;
-  };
+  match: { channel: string; accountId?: string; peerKind?: string; peerId?: string };
   enabled?: boolean;
 };
 
-export type SkillCatalogRow = {
-  name: string;
-  directoryId: string;
-  description?: string;
-  enabled?: boolean;
-  hub?: {
-    kind: 'git' | 'archive';
-    source: string;
-    ref?: string;
-    updatedAt?: string;
-  };
-};
-
-export type AgentProfileFileEntry = {
-  name: string;
-  missing: boolean;
-  size?: number;
-  updatedAtMs?: number;
-};
+export type AgentProfileFileEntry = { name: string; missing: boolean; size?: number; updatedAtMs?: number };
+export type SkillCatalogRow = { name: string; description?: string; availableForCurrentAgent?: boolean };

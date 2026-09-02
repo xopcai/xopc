@@ -10,7 +10,7 @@ const TOKEN = 'channel-actions-test-token';
 function createConfig(): Partial<Config> {
   return {
     gateway: { port: 18791, corsOrigins: [] },
-    agents: { defaultPreset: 'default', capabilityPresets: {}, list: [] },
+    agents: { default: 'main', list: [] },
     channels: {
       feishu: { enabled: true },
     },

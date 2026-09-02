@@ -10,7 +10,7 @@ function createImageCommand(_ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopc image providers   # List available image generation providers',
-        'xopc image status      # Explain current manifest-era image behavior',
+        'xopc image status      # Explain current image behavior',
       ]),
     );
 
@@ -18,9 +18,8 @@ function createImageCommand(_ctx: CLIContext): Command {
     .command('status')
     .description('Show image runtime status')
     .action(() => {
-      console.log('Image model defaults were removed.');
-      console.log('Image generation now uses configured providers discovered at runtime.');
-      console.log('Agent-specific capability policy belongs in agent manifests or capability presets.');
+      console.log('Image understanding and generation inherit from agents.defaults.models.');
+      console.log('An agent may override either route in agents.list[].models.');
     });
 
   cmd

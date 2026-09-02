@@ -6,7 +6,7 @@ import { applyMiscPatch } from '../misc.js';
 function baseConfig(): Config {
   return {
     gateway: { port: 18790, corsOrigins: [] },
-    agents: { default: 'main', capabilityPresets: {}, list: [] },
+    agents: { default: 'main', list: [] },
     channels: {},
   } as unknown as Config;
 }

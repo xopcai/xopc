@@ -95,10 +95,10 @@ export function AgentDetailScreen() {
 
   const model = agent.model?.primary?.trim() || am.inheritedValue;
   const fallbacks = joinList(agent.model?.fallbacks, am.noneValue);
-  const typedDefaults = agent.typedModels?.defaults?.length ?? 0;
-  const typedEffective = agent.typedModels?.effective?.length ?? 0;
-  const disabledTools = agent.tools?.effectiveDisable?.length ?? 0;
-  const skillCount = agent.skills?.effectiveAllowlist?.length ?? 0;
+  const effectiveIntents = agent.modelIntents.effective.length;
+  const intentOverrides = agent.modelIntents.overrides.length;
+  const disabledTools = agent.tools.denied.length;
+  const skillCount = agent.skills.allowlist?.length;
   const name = agentDisplayName(agent, am);
   const description = agentDisplayDescription(agent, am);
 
@@ -173,8 +173,8 @@ export function AgentDetailScreen() {
           <DetailRow label={am.modelLabel} value={model} mono />
           <DetailRow label={am.fallbacksLabel} value={fallbacks} mono />
           <DetailRow
-            label={am.typedModelsLabel}
-            value={t(am.typedModelsSummary, { defaults: typedDefaults, effective: typedEffective })}
+            label={am.modelIntentsLabel}
+            value={t(am.modelIntentsSummary, { effective: effectiveIntents, overrides: intentOverrides })}
           />
         </DetailSection>
 
@@ -185,16 +185,16 @@ export function AgentDetailScreen() {
           />
           <DetailRow
             label={am.skillsLabel}
-            value={skillCount > 0 ? formatCount(am.skillsCount, skillCount) : am.skillsInherited}
+            value={skillCount === undefined ? am.skillsInherited : formatCount(am.skillsCount, skillCount)}
           />
           <DetailRow
             label={am.entryToolsLabel}
-            value={joinList(agent.tools?.entryDisable, am.inheritedValue)}
+            value={joinList(agent.tools.overrides, am.inheritedValue)}
             mono
           />
           <DetailRow
             label={am.entrySkillsLabel}
-            value={joinList(agent.skills?.entry, am.inheritedValue)}
+            value={joinList(agent.skills.overrides, am.inheritedValue)}
             mono
           />
         </DetailSection>

@@ -4,6 +4,7 @@ import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { ConfigSchema } from '../../../config/schema.js';
 
 const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const PNG_BASE64 = PNG_HEADER.toString('base64');
@@ -64,7 +65,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeTool(config: any = {}, agentId = 'studio') {
+function makeTool(config?: any, agentId = 'studio') {
   const tool = createImageGenerateTool({ workspace, config, agentId });
   expect(tool).not.toBeNull();
   return tool!;
@@ -79,25 +80,24 @@ describe('image_generate tool — Step 2 input wiring', () => {
       attempts: [],
       ignoredOverrides: [],
     });
-    const tool = makeTool({
+    const tool = makeTool(ConfigSchema.parse({
       agents: {
         default: 'main',
-        defaultPreset: 'default',
-        capabilityPresets: {
-          default: {
-            models: {
-              imageGenerationModel: {
-                primary: 'openai/gpt-image-2',
-                fallbacks: ['google/gemini-3.1-flash-image'],
-                timeoutMs: 120_000,
-                autoProviderFallback: true,
-              },
+        defaults: {
+          models: {
+            chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
+            intents: {},
+            imageGeneration: {
+              primary: 'openai/gpt-image-2',
+              fallbacks: ['google/gemini-3.1-flash-image'],
+              timeoutMs: 120_000,
+              autoProviderFallback: true,
             },
           },
         },
         list: [{ id: 'main', enabled: true }],
       },
-    });
+    }));
 
     await tool.execute('tc-explicit', { prompt: 'sunset' } as any, {} as any, () => {});
 

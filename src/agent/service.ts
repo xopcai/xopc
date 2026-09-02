@@ -364,8 +364,6 @@ export class AgentService {
       sessionHydrator: this.sessionHydrator,
       getConfig: () => this.effectiveAppConfig(),
       getThinkingDefault: () => undefined,
-      getThinkingDefaultForSession: (sessionKey: string) =>
-        this.agentManager.getThinkingDefaultForSession(sessionKey),
       workspaceRoot: this.workspaceDir,
       getWorkspaceRootForSession: (sessionKey: string) =>
         this.agentManager.getResolvedWorkspaceForSession(sessionKey),

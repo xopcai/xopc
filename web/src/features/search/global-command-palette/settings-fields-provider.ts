@@ -48,123 +48,94 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       keywords: ['auth', 'token', 'bearer', 'password', 'security', '认证', '令牌'],
     },
 
-    // --- Agent manifest ---
+    // --- Global agent defaults ---
     {
-      id: 'field:agent:model',
-      title: isZh ? 'Agent 模型配置' : 'Agent model configuration',
-      subtitle: isZh ? '配置智能体的模型角色与回退模型' : 'Configure agent model roles and fallbacks',
-      path: '/agents',
-      keywords: ['agent model', 'model roles', 'llm', 'gpt', 'claude', 'gemini', '智能体模型', '模型角色'],
+      id: 'field:agent-defaults:models',
+      title: isZh ? 'Agent 全局模型' : 'Global agent models',
+      subtitle: isZh ? '设置所有 Agent 继承的模型与回退' : 'Set inherited models and fallbacks',
+      path: '/settings/agent-defaults',
+      keywords: ['agent defaults', 'model intents', 'fallbacks', 'llm', '全局默认', '模型意图'],
     },
     {
-      id: 'field:agent:temperature',
-      title: isZh ? '温度 (Temperature)' : 'Temperature',
-      subtitle: isZh ? '控制回复的随机性' : 'Controls response randomness',
-      path: '/agents',
-      keywords: ['temperature', 'sampling', 'randomness', 'creative', '温度', '随机'],
+      id: 'field:agent-defaults:skills',
+      title: isZh ? 'Agent 全局技能' : 'Global agent skills',
+      subtitle: isZh ? '设置所有 Agent 默认可用或排除的技能' : 'Set skills enabled or excluded for every agent',
+      path: '/settings/agent-defaults',
+      keywords: ['agent defaults', 'skills', 'inherit', '全局默认', '技能', '继承'],
     },
     {
-      id: 'field:agent:maxTokens',
-      title: isZh ? '最大输出 Tokens' : 'Max Output Tokens',
-      subtitle: isZh ? '单次回复的最大 token 数' : 'Maximum tokens per response',
-      path: '/agents',
-      keywords: ['max', 'tokens', 'output', 'length', 'limit', '最大'],
+      id: 'field:agent-defaults:tools',
+      title: isZh ? 'Agent 全局工具权限' : 'Global agent tool permissions',
+      subtitle: isZh ? '设置所有 Agent 继承的 allow、ask 或 deny 策略' : 'Set inherited allow, ask, or deny policies',
+      path: '/settings/agent-defaults',
+      keywords: ['agent defaults', 'tools', 'permissions', 'allow', 'ask', 'deny', '工具权限'],
+    },
+    {
+      id: 'field:agent-defaults:runtime',
+      title: isZh ? 'Agent 全局运行限制' : 'Global agent runtime limits',
+      subtitle: isZh ? '设置继承的轮次、超时和默认工作流' : 'Set inherited turn, timeout, and workflow limits',
+      path: '/settings/agent-defaults',
+      keywords: ['agent defaults', 'runtime', 'turns', 'timeout', 'workflow', '运行限制'],
     },
 
-    // --- Agent manifest: Workspace ---
+    // --- Agent-specific profile ---
+    {
+      id: 'field:agent:profile',
+      title: isZh ? 'Agent 个性' : 'Agent personality',
+      subtitle: isZh ? '设置名称、个性指令和可选覆盖' : 'Set the name, personality, and optional overrides',
+      path: '/agents',
+      keywords: ['agent', 'profile', 'personality', 'instructions', 'agent 个性', '指令'],
+    },
     {
       id: 'field:agent:workspace',
-      title: isZh ? '工作目录' : 'Workspace Directory',
-      subtitle: isZh ? '代理的默认工作目录' : 'Default working directory for the agent',
+      title: isZh ? 'Agent 工作目录' : 'Agent workspace',
+      subtitle: isZh ? '按需覆盖该 Agent 的自动工作目录' : 'Optionally override the automatic workspace',
       path: '/agents',
       keywords: ['workspace', 'directory', 'folder', 'path', 'cwd', '工作目录'],
     },
 
-    // --- Agent manifest: Browser tool policy ---
+    // --- Browser settings ---
     {
       id: 'field:agent:browser',
       title: isZh ? '浏览器自动化' : 'Browser automation',
       subtitle: isZh ? '启用 browser_use 工具' : 'Enable browser_use tools',
-      path: '/agents',
+      path: '/settings/agent-browser',
       keywords: ['browser', 'browser_use', 'automation', '浏览器'],
     },
     {
       id: 'field:agent:browser-extension',
       title: isZh ? 'Chrome 扩展连接' : 'Chrome extension bridge',
       subtitle: isZh ? '安装扩展并启动 WebSocket 桥接' : 'Install extension and start the bridge',
-      path: '/agents',
+      path: '/settings/agent-browser',
       keywords: ['extension', 'chrome', 'bridge', 'websocket', '扩展', '桥接'],
     },
     {
       id: 'field:agent:browser-playwright',
       title: isZh ? '安装 Playwright Chromium' : 'Install Playwright Chromium',
       subtitle: isZh ? '本地 Playwright 后端就绪检查' : 'Local Playwright backend setup',
-      path: '/agents',
+      path: '/settings/agent-browser',
       keywords: ['playwright', 'chromium', 'install', 'local', '安装'],
     },
     {
       id: 'field:agent:browser-cloak',
       title: isZh ? 'CloakBrowser 配置' : 'CloakBrowser settings',
       subtitle: isZh ? '反指纹浏览器下载与高级选项' : 'Stealth browser download and fingerprint options',
-      path: '/agents',
+      path: '/settings/agent-browser',
       keywords: ['cloak', 'cloakbrowser', 'fingerprint', 'stealth', '反指纹'],
     },
     {
       id: 'field:agent:browser-headless',
       title: isZh ? '浏览器无头模式' : 'Browser headless mode',
       subtitle: isZh ? '隐藏浏览器窗口' : 'Run without a visible window',
-      path: '/agents',
+      path: '/settings/agent-browser',
       keywords: ['headless', 'window', 'visible', '无头'],
     },
     {
       id: 'field:agent:browser-private-urls',
       title: isZh ? '允许内网 URL' : 'Allow private URLs',
       subtitle: isZh ? '浏览器导航安全限制' : 'Browser navigation security policy',
-      path: '/agents',
+      path: '/settings/agent-browser',
       keywords: ['private', 'internal', 'localhost', 'security', '内网', '安全'],
-    },
-
-    // --- Agent manifest: Runtime ---
-    {
-      id: 'field:agent:turnLimit',
-      title: isZh ? '轮次限制' : 'Turn Limit',
-      subtitle: isZh ? '单次会话最大对话轮次' : 'Maximum turns per session run',
-      path: '/agents',
-      keywords: ['turn', 'limit', 'iterations', 'max', '轮次', '限制'],
-    },
-    {
-      id: 'field:agent:timeout',
-      title: isZh ? '超时时间' : 'Timeout',
-      subtitle: isZh ? '单次工具调用的超时' : 'Tool execution timeout',
-      path: '/agents',
-      keywords: ['timeout', 'duration', 'seconds', '超时'],
-    },
-
-    // --- Agent manifest: Context ---
-    {
-      id: 'field:agent:compaction',
-      title: isZh ? '上下文压缩' : 'Context Compaction',
-      subtitle: isZh ? '长对话自动压缩策略' : 'Auto-compact strategy for long conversations',
-      path: '/agents',
-      keywords: ['compaction', 'context', 'pruning', 'tokens', 'window', '压缩', '上下文'],
-    },
-
-    // --- Agent manifest: Memory ---
-    {
-      id: 'field:agent:memory',
-      title: isZh ? '记忆设置' : 'Memory Settings',
-      subtitle: isZh ? '会话记忆与回顾配置' : 'Session memory and review configuration',
-      path: '/agents',
-      keywords: ['memory', 'review', 'session', 'recall', '记忆'],
-    },
-
-    // --- Agent manifest: System prompt ---
-    {
-      id: 'field:agent:systemPrompt',
-      title: isZh ? '系统提示词' : 'System Prompt',
-      subtitle: isZh ? '自定义系统指令' : 'Custom system instructions',
-      path: '/agents',
-      keywords: ['system', 'prompt', 'instructions', 'persona', '系统提示词', '指令'],
     },
 
     // --- Voice (STT/TTS) ---

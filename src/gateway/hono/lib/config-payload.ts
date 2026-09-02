@@ -210,15 +210,13 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
         .filter((e) => e.enabled !== false)
         .map((e) => ({
           id: normalizeAgentId(e.id),
-          identity: e.identity,
           workspace: e.workspace,
           models: e.models,
           tools: e.tools,
           skills: e.skills,
           workflows: e.workflows,
-          boundaries: e.boundaries,
         })),
-      capabilityPresets: config.agents?.capabilityPresets ?? {},
+      defaults: config.agents.defaults,
     },
     channels: channelsPayload,
     providers: Object.fromEntries(

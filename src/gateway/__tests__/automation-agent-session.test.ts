@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
+import { ConfigSchema } from '../../config/schema.js';
 import { ProjectService } from '../../projects/index.js';
 import { SessionStore } from '../../session/index.js';
 import {
@@ -14,22 +14,16 @@ import {
 } from '../../storage/sqlite/index.js';
 import { prepareAutomationAgentSession } from '../automation-agent-session.js';
 
-const minimalConfig = {
+const minimalConfig = ConfigSchema.parse({
   agents: {
     default: 'main',
     list: [{
       id: 'main',
-      identity: { name: 'Main', role: 'General assistant' },
-      responsibilities: { primary: ['Help the user complete tasks'] },
-      workspace: { root: '~/default-ws' },
-      models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4o' } } },
-      tools: { builtin: {} },
-      skills: { mode: 'all' },
-      workflows: {},
-      boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+      profile: { name: 'Main' },
+      workspace: '~/default-ws',
     }],
   },
-} as unknown as Config;
+});
 
 describe('prepareAutomationAgentSession', () => {
   let stateDir: string;

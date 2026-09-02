@@ -1349,7 +1349,7 @@ Product metrics:
 - A TaskRun cannot gain capabilities after creation without a new authority grant and a new policy snapshot.
 - External, irreversible, destructive, permission-changing, or paid effects require explicit approval unless a narrowly scoped existing grant allows the exact action.
 - Agent delegation is not ownership transfer.
-- Automation inherits neither gateway authority nor Agent manifest authority implicitly; the effective intersection is recorded in the policy snapshot.
+- Automation inherits neither gateway authority nor Agent capability authority implicitly; the effective intersection is recorded in the policy snapshot.
 - Secrets are referenced, never copied into Task bodies, context edges, events, receipts, or logs.
 
 ## 20. Alternatives considered

@@ -8,35 +8,25 @@ vi.mock('../../providers/model-call.js', async (importOriginal) => {
 import { NotesService } from '../service.js';
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { Note, NoteSnapshot, NoteSnapshotEntry, SnapshotTrigger } from '../types.js';
-import type { Config } from '../../config/schema.js';
+import { ConfigSchema, type Config } from '../../config/schema.js';
 import { onAutomationProductEvent } from '../../automations/product-events.js';
 
 function configWithGlobalModel(model = 'anthropic/claude-sonnet-4-5'): Config {
-  return {
+  return ConfigSchema.parse({
     agents: {
       default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          id: 'default',
-          name: 'Global defaults',
-          models: { defaultRole: 'deep', roles: { deep: { model } } },
-        },
+      defaults: {
+        models: { chat: { primary: model, fallbacks: [] }, intents: {} },
       },
       list: [
         {
           id: 'main',
-          identity: { name: 'Main', role: 'General assistant' },
-          responsibilities: { primary: ['Help the user complete tasks'] },
-          workspace: { root: '~/.xopc/workspace/main' },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          profile: { name: 'Main' },
+          workspace: '~/.xopc/workspace/main',
         },
       ],
     },
-  } as Config;
+  });
 }
 
 class MemoryNotesStore {

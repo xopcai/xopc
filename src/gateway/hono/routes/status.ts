@@ -4,7 +4,7 @@ import type { Context } from 'hono';
 import type { Hono } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
-import { getGatewayAgentEffectiveManifest } from '../../agents-admin.js';
+import { getGatewayAgentEffectiveConfig } from '../../agents-admin.js';
 import { isSTTAvailable, mergeSttConfigFromAppConfig } from '../../../voice/stt/index.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -35,7 +35,7 @@ export function buildEvalRuntimeIdentity(
 ): { ok: true; payload: Record<string, unknown> } | { ok: false; error: string; status: number } {
   const config = service.currentConfig as Config | undefined;
   if (!config) return { ok: false, error: 'Gateway configuration is unavailable', status: 503 };
-  const effective = getGatewayAgentEffectiveManifest(config, agentId);
+  const effective = getGatewayAgentEffectiveConfig(config, agentId);
   if ('error' in effective) {
     return {
       ok: false,
@@ -44,10 +44,7 @@ export function buildEvalRuntimeIdentity(
     };
   }
 
-  const manifest = asRecord(effective.data.manifest);
-  const models = asRecord(manifest.models);
-  const tools = asRecord(manifest.tools);
-  const skills = manifest.skills ?? [];
+  const agentConfig = effective.data.config;
   return {
     ok: true,
     payload: {
@@ -58,13 +55,12 @@ export function buildEvalRuntimeIdentity(
         process.env.GITHUB_SHA?.trim() ||
         null,
       agentId,
-      modelRef: models.primary ?? null,
-      thinkingLevel: manifest.thinkingDefault ?? null,
-      manifestHash: contentHash(effective.data.manifest),
-      systemPromptConfigHash: contentHash(manifest.systemPrompt ?? null),
-      toolPolicyHash: contentHash(tools),
-      skillPolicyHash: contentHash(skills),
-      presetChain: effective.data.sources,
+      modelRef: agentConfig.models.chat.primary,
+      thinkingLevel: null,
+      configHash: contentHash(agentConfig),
+      toolPolicyHash: contentHash(agentConfig.tools),
+      skillPolicyHash: contentHash(agentConfig.skills),
+      sources: effective.data.sources,
     },
   };
 }

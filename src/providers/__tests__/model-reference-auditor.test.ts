@@ -8,16 +8,13 @@ describe('auditModelReferences', () => {
   it('reports unavailable references with their locations and replacement', () => {
     const config = {
       agents: {
-        capabilityPresets: {
-          default: {
-            models: {
-              roles: {
-                deep: {
-                  model: 'cloud/removed',
-                  fallbacks: ['cloud/active'],
-                },
-              },
+        defaults: {
+          models: {
+            chat: {
+              primary: 'cloud/removed',
+              fallbacks: ['cloud/active'],
             },
+            intents: {},
           },
         },
         list: [],
@@ -47,12 +44,12 @@ describe('auditModelReferences', () => {
       {
         ref: 'cloud/active',
         availability: 'available',
-        locations: ['agents.capabilityPresets.default.models.roles.deep.fallbacks[0]'],
+        locations: ['agents.defaults.models.chat.fallbacks[0]'],
       },
       {
         ref: 'cloud/removed',
         availability: 'unavailable',
-        locations: ['agents.capabilityPresets.default.models.roles.deep.model'],
+        locations: ['agents.defaults.models.chat.primary'],
         suggestedRef: 'cloud/active',
       },
     ]);
@@ -61,13 +58,12 @@ describe('auditModelReferences', () => {
   it('checks image-generation references against the image provider registry', () => {
     const config = {
       agents: {
-        capabilityPresets: {
-          images: {
-            models: {
-              imageGenerationModel: {
-                primary: 'minimax/image-01',
-                fallbacks: ['missing/image-model'],
-              },
+        defaults: {
+          models: {
+            intents: {},
+            imageGeneration: {
+              primary: 'minimax/image-01',
+              fallbacks: ['missing/image-model'],
             },
           },
         },
@@ -87,12 +83,12 @@ describe('auditModelReferences', () => {
       {
         ref: 'minimax/image-01',
         availability: 'available',
-        locations: ['agents.capabilityPresets.images.models.imageGenerationModel.primary'],
+        locations: ['agents.defaults.models.imageGeneration.primary'],
       },
       {
         ref: 'missing/image-model',
         availability: 'unavailable',
-        locations: ['agents.capabilityPresets.images.models.imageGenerationModel.fallbacks[0]'],
+        locations: ['agents.defaults.models.imageGeneration.fallbacks[0]'],
       },
     ]);
   });

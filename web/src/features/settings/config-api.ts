@@ -2,485 +2,139 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-// --- Nested shapes (align with `src/config/schema.ts`) ---
-
-export type AgentDefaultsSessionSearchState = {
-  summaryModel: string;
-};
-
-export type AgentDefaultsWebExtractState = {
-  model: string;
-  maxLength: number | undefined;
-};
-
-import type { AgentTypedModelRow } from '@/features/settings/agents/typed-models-lib';
-import {
-  parseTypedModelsFromConfig,
-} from '@/features/settings/agents/typed-models-lib';
-
-export type { AgentTypedModelRow };
-export type AgentDefaultsDelegateState = { enabled: boolean };
-export type AgentDefaultsExecuteCodeState = { enabled: boolean };
-
-export interface AgentDefaultsState {
-  model: string;
-  /** Provider/model refs tried when the primary fails. */
-  modelFallbacks: string[];
-  imageModel: string;
-  imageModelFallbacks: string[];
-  imageGenerationModel: string;
-  imageGenerationModelFallbacks: string[];
-  /** Per-call timeout (ms) for image generation; null = inherit gateway default. */
-  imageGenerationModelTimeoutMs: number | null;
-  /** Sweep every configured provider when primary chain fails. */
-  imageGenerationModelAutoProviderFallback: boolean;
-  mediaMaxMb: number | undefined;
-  maxTokens: number;
-  temperature: number;
-  maxToolIterations: number;
-  /** Config `maxTaskDurationMs` — UI stores whole minutes (empty = unset / gateway default). */
-  maxTaskDurationMinutes: number | undefined;
-  maxRequestsPerTurn: number;
-  maxToolFailuresPerTurn: number;
-  workspace: string;
-  /** `browser_use` runtime (`browser.enabled`). */
+export interface BrowserSettingsState {
   browserEnabled: boolean;
-  /** Headless Chromium when browser tools are on (`browser.headless`; default false = visible window). */
   browserHeadless: boolean;
-  /** Skip private-IP blocking (cloud metadata always blocked). */
   browserAllowPrivateUrls: boolean;
-  /** Per-command timeout in seconds (default 30). */
   browserCommandTimeout: number | undefined;
-  /** Browser backend mode: local, cdp, cloud, extension, or CloakBrowser. */
   browserBackend: 'local' | 'cdp' | 'cloud' | 'extension' | 'cloakbrowser';
-  /** Cloud browser backend: local, browserbase, or browser-use. */
   browserCloudProvider: 'local' | 'browserbase' | 'browser-use';
-  /** Cloud provider API key. Masked as *** when already stored. */
   browserCloudApiKey: string;
-  /** Optional Browserbase project id. */
   browserCloudProjectId: string;
-  /** Optional cloud provider region. */
   browserCloudRegion: string;
-  /** Direct CDP WebSocket endpoint URL. */
   browserCdpUrl: string;
-  /** Chrome Extension bridge port (default 19820). */
   browserExtensionPort: number | undefined;
-  /** Chrome Extension bridge host (default 127.0.0.1). */
   browserExtensionHost: string;
-  /** Extension connection wait timeout in ms (default 30000). */
   browserExtensionConnectionTimeout: number | undefined;
-  /** Keep CloakBrowser alive between tasks. */
   browserCloakKeepOpen: boolean;
-  /** Use a temporary CloakBrowser profile. */
   browserCloakTemporaryProfile: boolean;
-  /** Optional CloakBrowser binary cache directory. */
   browserCloakCacheDir: string;
-  /** Optional CloakBrowser executable path. */
   browserCloakBinaryPath: string;
-  /** CloakBrowser timezone emulation (e.g. America/New_York). */
   browserCloakTimezone: string;
-  /** CloakBrowser locale emulation (e.g. en-US). */
   browserCloakLocale: string;
-  /** Public IP for WebRTC leak prevention. */
   browserCloakWebrtcIp: string;
-  /** Platform fingerprint override (e.g. windows, macos). */
   browserCloakFingerprintPlatform: string;
-  /** Extra Chromium launch args (one per line in UI). */
   browserCloakExtraArgs: string;
-  /** Humanized browser input simulation. */
   browserHumanize: boolean;
-  /** Humanized input behavior preset. */
   browserHumanPreset: 'default' | 'careful';
-  /** JS dialog handling policy. */
   browserDialogPolicy: 'must_respond' | 'auto_dismiss' | 'auto_accept';
-  /** Dialog auto-timeout in seconds (default 300). */
   browserDialogTimeout: number | undefined;
-  thinkingDefault: string;
-  reasoningDefault: string;
-  verboseDefault: string;
-  sessionSearch: AgentDefaultsSessionSearchState;
-  webExtract: AgentDefaultsWebExtractState;
-  delegate: AgentDefaultsDelegateState;
-  executeCode: AgentDefaultsExecuteCodeState;
-  /** Agent skill allowlist draft. */
-  skillsAllowlist: string[];
-  /** Built-in tool deny list draft. */
-  toolsDisable: string[];
-  /** Named model roles for workflows. */
-  typedModels: AgentTypedModelRow[];
-  /** JSON runtime params draft. */
-  paramsJson: string;
 }
 
-const DEFAULT_SESSION_SEARCH: AgentDefaultsSessionSearchState = {
-  summaryModel: '',
+const DEFAULT_BROWSER_SETTINGS: BrowserSettingsState = {
+  browserEnabled: true,
+  browserHeadless: false,
+  browserAllowPrivateUrls: false,
+  browserCommandTimeout: undefined,
+  browserBackend: 'extension',
+  browserCloudProvider: 'local',
+  browserCloudApiKey: '',
+  browserCloudProjectId: '',
+  browserCloudRegion: '',
+  browserCdpUrl: '',
+  browserExtensionPort: undefined,
+  browserExtensionHost: '127.0.0.1',
+  browserExtensionConnectionTimeout: undefined,
+  browserCloakKeepOpen: true,
+  browserCloakTemporaryProfile: false,
+  browserCloakCacheDir: '',
+  browserCloakBinaryPath: '',
+  browserCloakTimezone: '',
+  browserCloakLocale: '',
+  browserCloakWebrtcIp: '',
+  browserCloakFingerprintPlatform: '',
+  browserCloakExtraArgs: '',
+  browserHumanize: true,
+  browserHumanPreset: 'careful',
+  browserDialogPolicy: 'auto_dismiss',
+  browserDialogTimeout: undefined,
 };
 
-const DEFAULT_WEB_EXTRACT: AgentDefaultsWebExtractState = {
-  model: '',
-  maxLength: undefined,
-};
-
-function normalizeModelRef(raw: unknown): string {
-  if (!raw) return '';
-  // API returns a plain string for model refs (via agentModelRefToString).
-  if (typeof raw === 'string') return raw;
-  if (typeof raw === 'object' && !Array.isArray(raw)) {
-    const p = (raw as { primary?: unknown }).primary;
-    return typeof p === 'string' ? p : '';
-  }
-  return '';
+function truthyFlag(value: unknown): boolean {
+  return value === true || value === 'true' || value === 1;
 }
 
-function normalizeModelFallbacks(raw: unknown): string[] {
-  if (typeof raw !== 'object' || raw === null || !('fallbacks' in raw)) {
-    return [];
+export function parseBrowserSettings(cfg: unknown): BrowserSettingsState {
+  const root = cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? cfg as Record<string, unknown> : {};
+  const raw = root.browser;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ...DEFAULT_BROWSER_SETTINGS };
   }
-  const f = (raw as { fallbacks?: unknown }).fallbacks;
-  if (!Array.isArray(f)) {
-    return [];
-  }
-  return f.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
-}
 
-function truthyBrowserFlag(v: unknown): boolean {
-  return v === true || v === 'true' || v === 1;
-}
-
-type BrowserFieldsPick = Pick<
-  AgentDefaultsState,
-  | 'browserEnabled'
-  | 'browserHeadless'
-  | 'browserAllowPrivateUrls'
-  | 'browserCommandTimeout'
-  | 'browserBackend'
-  | 'browserCloudProvider'
-  | 'browserCloudApiKey'
-  | 'browserCloudProjectId'
-  | 'browserCloudRegion'
-  | 'browserCdpUrl'
-  | 'browserExtensionPort'
-  | 'browserExtensionHost'
-  | 'browserExtensionConnectionTimeout'
-  | 'browserCloakKeepOpen'
-  | 'browserCloakTemporaryProfile'
-  | 'browserCloakCacheDir'
-  | 'browserCloakBinaryPath'
-  | 'browserCloakTimezone'
-  | 'browserCloakLocale'
-  | 'browserCloakWebrtcIp'
-  | 'browserCloakFingerprintPlatform'
-  | 'browserCloakExtraArgs'
-  | 'browserHumanize'
-  | 'browserHumanPreset'
-  | 'browserDialogPolicy'
-  | 'browserDialogTimeout'
->;
-
-function parseBrowserConfig(raw: unknown): BrowserFieldsPick {
-  const browser = raw;
-  if (!browser || typeof browser !== 'object' || Array.isArray(browser)) {
-    return {
-      browserEnabled: true,
-      browserHeadless: false,
-      browserAllowPrivateUrls: false,
-      browserCommandTimeout: undefined,
-      browserBackend: 'extension',
-      browserCloudProvider: 'local',
-      browserCloudApiKey: '',
-      browserCloudProjectId: '',
-      browserCloudRegion: '',
-      browserCdpUrl: '',
-      browserExtensionPort: undefined,
-      browserExtensionHost: '127.0.0.1',
-      browserExtensionConnectionTimeout: undefined,
-      browserCloakKeepOpen: true,
-      browserCloakTemporaryProfile: false,
-      browserCloakCacheDir: '',
-      browserCloakBinaryPath: '',
-      browserCloakTimezone: '',
-      browserCloakLocale: '',
-      browserCloakWebrtcIp: '',
-      browserCloakFingerprintPlatform: '',
-      browserCloakExtraArgs: '',
-      browserHumanize: true,
-      browserHumanPreset: 'careful',
-      browserDialogPolicy: 'auto_dismiss',
-      browserDialogTimeout: undefined,
-    };
-  }
-  const b = browser as Record<string, unknown>;
-  const enabled = truthyBrowserFlag(b.enabled);
-  const headlessRaw = b.headless;
-  const headless =
-    headlessRaw === true || headlessRaw === 'true' || headlessRaw === 1 ? true : false;
-
-  const allowPrivateUrls = truthyBrowserFlag(b.allowPrivateUrls);
-
-  const commandTimeout =
-    typeof b.commandTimeout === 'number' && Number.isFinite(b.commandTimeout) && b.commandTimeout >= 5
-      ? Math.floor(b.commandTimeout)
-      : undefined;
-
-  const backendRaw = b.backend;
-  const backend: AgentDefaultsState['browserBackend'] =
-    backendRaw === 'local' ||
-    backendRaw === 'cdp' ||
-    backendRaw === 'cloud' ||
-    backendRaw === 'extension' ||
-    backendRaw === 'cloakbrowser'
-      ? backendRaw
-      : 'extension';
-
-  const cpRaw = b.cloudProvider;
-  const cloudProvider: AgentDefaultsState['browserCloudProvider'] =
-    cpRaw === 'browserbase' || cpRaw === 'browser-use' ? cpRaw : 'local';
-
-  const cloud =
-    typeof b.cloud === 'object' && b.cloud && !Array.isArray(b.cloud)
-      ? (b.cloud as Record<string, unknown>)
-      : {};
-  const cloudApiKey = typeof cloud.apiKey === 'string' ? cloud.apiKey : '';
-  const cloudProjectId = typeof cloud.projectId === 'string' ? cloud.projectId : '';
-  const cloudRegion = typeof cloud.region === 'string' ? cloud.region : '';
-
-  const cdpUrl = typeof b.cdpUrl === 'string' ? b.cdpUrl : '';
-
-  // Extension config
-  const ext = (typeof b.extension === 'object' && b.extension && !Array.isArray(b.extension))
-    ? b.extension as Record<string, unknown>
+  const browser = raw as Record<string, unknown>;
+  const cloud = browser.cloud && typeof browser.cloud === 'object' && !Array.isArray(browser.cloud)
+    ? browser.cloud as Record<string, unknown>
     : {};
-  const extensionPort =
-    typeof ext.port === 'number' && Number.isFinite(ext.port) && ext.port >= 1024 && ext.port <= 65535
-      ? Math.floor(ext.port)
-      : undefined;
-  const extensionHost = typeof ext.host === 'string' && ext.host ? ext.host : '127.0.0.1';
-  const extensionConnectionTimeout =
-    typeof ext.connectionTimeout === 'number' &&
-    Number.isFinite(ext.connectionTimeout) &&
-    ext.connectionTimeout >= 1000
-      ? Math.floor(ext.connectionTimeout)
-      : undefined;
+  const extension = browser.extension && typeof browser.extension === 'object' && !Array.isArray(browser.extension)
+    ? browser.extension as Record<string, unknown>
+    : {};
+  const cloak = browser.cloakbrowser && typeof browser.cloakbrowser === 'object' && !Array.isArray(browser.cloakbrowser)
+    ? browser.cloakbrowser as Record<string, unknown>
+    : {};
 
-  const cloakbrowser =
-    typeof b.cloakbrowser === 'object' && b.cloakbrowser && !Array.isArray(b.cloakbrowser)
-      ? (b.cloakbrowser as Record<string, unknown>)
-      : {};
-  const humanPreset: AgentDefaultsState['browserHumanPreset'] =
-    b.humanPreset === 'default' ? 'default' : 'careful';
-
-  const dpRaw = b.dialogPolicy;
-  const dialogPolicy: AgentDefaultsState['browserDialogPolicy'] =
-    dpRaw === 'must_respond' || dpRaw === 'auto_accept' ? dpRaw : 'auto_dismiss';
-
-  const dialogTimeout =
-    typeof b.dialogTimeoutSeconds === 'number' &&
-    Number.isFinite(b.dialogTimeoutSeconds) &&
-    b.dialogTimeoutSeconds >= 1
-      ? Math.floor(b.dialogTimeoutSeconds)
-      : undefined;
+  const backend = browser.backend;
+  const cloudProvider = browser.cloudProvider;
+  const dialogPolicy = browser.dialogPolicy;
 
   return {
-    browserEnabled: enabled,
-    browserHeadless: headless,
-    browserAllowPrivateUrls: allowPrivateUrls,
-    browserCommandTimeout: commandTimeout,
-    browserBackend: backend,
-    browserCloudProvider: cloudProvider,
-    browserCloudApiKey: cloudApiKey,
-    browserCloudProjectId: cloudProjectId,
-    browserCloudRegion: cloudRegion,
-    browserCdpUrl: cdpUrl,
-    browserExtensionPort: extensionPort,
-    browserExtensionHost: extensionHost,
-    browserExtensionConnectionTimeout: extensionConnectionTimeout,
-    browserCloakKeepOpen: cloakbrowser.keepOpen !== false,
-    browserCloakTemporaryProfile: cloakbrowser.temporaryProfile === true,
-    browserCloakCacheDir: typeof cloakbrowser.cacheDir === 'string' ? cloakbrowser.cacheDir : '',
-    browserCloakBinaryPath: typeof cloakbrowser.binaryPath === 'string' ? cloakbrowser.binaryPath : '',
-    browserCloakTimezone: typeof cloakbrowser.timezone === 'string' ? cloakbrowser.timezone : '',
-    browserCloakLocale: typeof cloakbrowser.locale === 'string' ? cloakbrowser.locale : '',
-    browserCloakWebrtcIp: typeof cloakbrowser.webrtcIp === 'string' ? cloakbrowser.webrtcIp : '',
-    browserCloakFingerprintPlatform:
-      typeof cloakbrowser.fingerprintPlatform === 'string' ? cloakbrowser.fingerprintPlatform : '',
-    browserCloakExtraArgs: Array.isArray(cloakbrowser.extraArgs)
-      ? cloakbrowser.extraArgs
-          .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
-          .join('\n')
+    browserEnabled: truthyFlag(browser.enabled),
+    browserHeadless: truthyFlag(browser.headless),
+    browserAllowPrivateUrls: truthyFlag(browser.allowPrivateUrls),
+    browserCommandTimeout: typeof browser.commandTimeout === 'number' && browser.commandTimeout >= 5
+      ? Math.floor(browser.commandTimeout)
+      : undefined,
+    browserBackend: backend === 'local' || backend === 'cdp' || backend === 'cloud' || backend === 'extension' || backend === 'cloakbrowser'
+      ? backend
+      : 'extension',
+    browserCloudProvider: cloudProvider === 'browserbase' || cloudProvider === 'browser-use'
+      ? cloudProvider
+      : 'local',
+    browserCloudApiKey: typeof cloud.apiKey === 'string' ? cloud.apiKey : '',
+    browserCloudProjectId: typeof cloud.projectId === 'string' ? cloud.projectId : '',
+    browserCloudRegion: typeof cloud.region === 'string' ? cloud.region : '',
+    browserCdpUrl: typeof browser.cdpUrl === 'string' ? browser.cdpUrl : '',
+    browserExtensionPort: typeof extension.port === 'number' && extension.port >= 1024 && extension.port <= 65535
+      ? Math.floor(extension.port)
+      : undefined,
+    browserExtensionHost: typeof extension.host === 'string' && extension.host ? extension.host : '127.0.0.1',
+    browserExtensionConnectionTimeout:
+      typeof extension.connectionTimeout === 'number' && extension.connectionTimeout >= 1000
+        ? Math.floor(extension.connectionTimeout)
+        : undefined,
+    browserCloakKeepOpen: cloak.keepOpen !== false,
+    browserCloakTemporaryProfile: cloak.temporaryProfile === true,
+    browserCloakCacheDir: typeof cloak.cacheDir === 'string' ? cloak.cacheDir : '',
+    browserCloakBinaryPath: typeof cloak.binaryPath === 'string' ? cloak.binaryPath : '',
+    browserCloakTimezone: typeof cloak.timezone === 'string' ? cloak.timezone : '',
+    browserCloakLocale: typeof cloak.locale === 'string' ? cloak.locale : '',
+    browserCloakWebrtcIp: typeof cloak.webrtcIp === 'string' ? cloak.webrtcIp : '',
+    browserCloakFingerprintPlatform: typeof cloak.fingerprintPlatform === 'string' ? cloak.fingerprintPlatform : '',
+    browserCloakExtraArgs: Array.isArray(cloak.extraArgs)
+      ? cloak.extraArgs.filter((arg): arg is string => typeof arg === 'string' && arg.trim().length > 0).join('\n')
       : '',
-    browserHumanize: b.humanize !== false,
-    browserHumanPreset: humanPreset,
-    browserDialogPolicy: dialogPolicy,
-    browserDialogTimeout: dialogTimeout,
+    browserHumanize: browser.humanize !== false,
+    browserHumanPreset: browser.humanPreset === 'default' ? 'default' : 'careful',
+    browserDialogPolicy: dialogPolicy === 'must_respond' || dialogPolicy === 'auto_accept'
+      ? dialogPolicy
+      : 'auto_dismiss',
+    browserDialogTimeout: typeof browser.dialogTimeoutSeconds === 'number' && browser.dialogTimeoutSeconds >= 1
+      ? Math.floor(browser.dialogTimeoutSeconds)
+      : undefined,
   };
 }
 
-function parseSessionSearch(raw: unknown): AgentDefaultsSessionSearchState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_SESSION_SEARCH };
-  }
-  const p = raw as Record<string, unknown>;
+export function buildBrowserConfig(state: BrowserSettingsState): Record<string, unknown> {
   return {
-    summaryModel: typeof p.summaryModel === 'string' ? p.summaryModel : '',
-  };
-}
-
-function parseWebExtract(raw: unknown): AgentDefaultsWebExtractState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_WEB_EXTRACT };
-  }
-  const p = raw as Record<string, unknown>;
-  return {
-    model: typeof p.model === 'string' ? p.model : '',
-    maxLength:
-      typeof p.maxLength === 'number' && p.maxLength > 0 ? p.maxLength : undefined,
-  };
-}
-
-function parseEnabledFlag(raw: unknown, def: boolean): { enabled: boolean } {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { enabled: def };
-  }
-  const p = raw as Record<string, unknown>;
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : def,
-  };
-}
-
-function parseStringList(raw: unknown): string[] {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.filter((x): x is string => typeof x === 'string');
-}
-
-function parseParamsJson(raw: unknown): string {
-  if (raw === undefined || raw === null) {
-    return '';
-  }
-  if (typeof raw === 'string') {
-    const t = raw.trim();
-    if (!t) {
-      return '';
-    }
-    try {
-      const parsed: unknown = JSON.parse(t);
-      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return JSON.stringify(parsed, null, 2);
-      }
-    } catch {
-      return t;
-    }
-    return '';
-  }
-  if (typeof raw === 'object' && !Array.isArray(raw)) {
-    try {
-      return JSON.stringify(raw, null, 2);
-    } catch {
-      return '';
-    }
-  }
-  return '';
-}
-
-function readImageGenerationTimeoutMsFromDefaults(d: Record<string, unknown>): number | null {
-  const flat = d.imageGenerationModelTimeoutMs;
-  if (typeof flat === 'number' && Number.isFinite(flat) && flat > 0) {
-    return Math.floor(flat);
-  }
-  const igm = d.imageGenerationModel;
-  if (igm && typeof igm === 'object' && !Array.isArray(igm)) {
-    const tm = (igm as { timeoutMs?: unknown }).timeoutMs;
-    if (typeof tm === 'number' && Number.isFinite(tm) && tm > 0) {
-      return Math.floor(tm);
-    }
-  }
-  return null;
-}
-
-function readImageGenerationAutoProviderFallbackFromDefaults(d: Record<string, unknown>): boolean {
-  if (d.imageGenerationModelAutoProviderFallback === true) {
-    return true;
-  }
-  const igm = d.imageGenerationModel;
-  if (igm && typeof igm === 'object' && !Array.isArray(igm)) {
-    return (igm as { autoProviderFallback?: unknown }).autoProviderFallback === true;
-  }
-  return false;
-}
-
-/** Parse the browser settings draft from a gateway config root object. */
-export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
-  const d: Record<string, unknown> = {};
-  const modelConfig =
-    d.models && typeof d.models === 'object' && !Array.isArray(d.models)
-      ? (d.models as Record<string, unknown>)
-      : {};
-  const chatModel = modelConfig.chat;
-  const mf = d.modelFallbacks;
-  const modelFallbacksFromApi =
-    Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(chatModel);
-  const imf = d.imageModelFallbacks;
-  const imageModelFallbacksFromApi =
-    Array.isArray(imf) && imf.every((x) => typeof x === 'string')
-      ? imf
-      : normalizeModelFallbacks(d.imageModel);
-  const igf = d.imageGenerationModelFallbacks;
-  const imageGenerationModelFallbacksFromApi =
-    Array.isArray(igf) && igf.every((x) => typeof x === 'string')
-      ? igf
-      : normalizeModelFallbacks(d.imageGenerationModel);
-  const root = cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? (cfg as Record<string, unknown>) : {};
-  const browserFields = parseBrowserConfig(root.browser);
-  const maxTaskMs =
-    typeof d.maxTaskDurationMs === 'number' && Number.isFinite(d.maxTaskDurationMs)
-      ? d.maxTaskDurationMs
-      : undefined;
-  const maxTaskDurationMinutes =
-    maxTaskMs !== undefined ? Math.round(maxTaskMs / 60_000) : undefined;
-
-  return {
-    model: normalizeModelRef(chatModel),
-    modelFallbacks: modelFallbacksFromApi,
-    imageModel: normalizeModelRef(d.imageModel),
-    imageModelFallbacks: imageModelFallbacksFromApi,
-    imageGenerationModel: normalizeModelRef(d.imageGenerationModel),
-    imageGenerationModelFallbacks: imageGenerationModelFallbacksFromApi,
-    imageGenerationModelTimeoutMs: readImageGenerationTimeoutMsFromDefaults(d),
-    imageGenerationModelAutoProviderFallback: readImageGenerationAutoProviderFallbackFromDefaults(d),
-    mediaMaxMb: typeof d.mediaMaxMb === 'number' && !Number.isNaN(d.mediaMaxMb) ? d.mediaMaxMb : undefined,
-    maxTokens: typeof d.maxTokens === 'number' ? d.maxTokens : 8192,
-    temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
-    maxToolIterations: typeof d.maxToolIterations === 'number' ? d.maxToolIterations : 20,
-    maxTaskDurationMinutes,
-    maxRequestsPerTurn: typeof d.maxRequestsPerTurn === 'number' ? d.maxRequestsPerTurn : 50,
-    maxToolFailuresPerTurn: typeof d.maxToolFailuresPerTurn === 'number' ? d.maxToolFailuresPerTurn : 3,
-    workspace: typeof d.workspace === 'string' ? d.workspace : '~/.xopc/workspace',
-    ...browserFields,
-    thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',
-    reasoningDefault: typeof d.reasoningDefault === 'string' ? d.reasoningDefault : 'stream',
-    verboseDefault: typeof d.verboseDefault === 'string' ? d.verboseDefault : 'full',
-    sessionSearch: parseSessionSearch(d.sessionSearch),
-    webExtract: parseWebExtract(d.webExtract),
-    delegate: parseEnabledFlag(d.delegate, false),
-    executeCode: parseEnabledFlag(d.executeCode, false),
-    skillsAllowlist: parseStringList(d.skills),
-    toolsDisable: (() => {
-      const t = d.tools;
-      if (!t || typeof t !== 'object' || Array.isArray(t)) {
-        return [] as string[];
-      }
-      const dis = (t as { disable?: unknown }).disable;
-      return parseStringList(dis);
-    })(),
-    typedModels: parseTypedModelsFromConfig(modelConfig),
-    paramsJson: parseParamsJson(d.params),
-  };
-}
-
-/** Maps browser form fields to top-level `browser` for PATCH payloads. */
-export function buildBrowserConfigFromAgentDefaults(state: AgentDefaultsState): Record<string, unknown> {
-  const config: Record<string, unknown> = {
     enabled: state.browserEnabled,
     headless: state.browserHeadless,
     allowPrivateUrls: state.browserAllowPrivateUrls,
@@ -522,11 +176,8 @@ export function buildBrowserConfigFromAgentDefaults(state: AgentDefaultsState): 
               ? { fingerprintPlatform: state.browserCloakFingerprintPlatform.trim() }
               : {}),
             ...(() => {
-              const args = state.browserCloakExtraArgs
-                .split('\n')
-                .map((line) => line.trim())
-                .filter(Boolean);
-              return args.length > 0 ? { extraArgs: args } : {};
+              const extraArgs = state.browserCloakExtraArgs.split('\n').map((line) => line.trim()).filter(Boolean);
+              return extraArgs.length > 0 ? { extraArgs } : {};
             })(),
           },
           humanize: state.browserHumanize,
@@ -536,15 +187,12 @@ export function buildBrowserConfigFromAgentDefaults(state: AgentDefaultsState): 
     ...(state.browserDialogPolicy !== 'auto_dismiss' ? { dialogPolicy: state.browserDialogPolicy } : {}),
     ...(state.browserDialogTimeout !== undefined ? { dialogTimeoutSeconds: state.browserDialogTimeout } : {}),
   };
-  return config;
 }
 
-export async function patchBrowserSettings(state: AgentDefaultsState): Promise<void> {
+export async function patchBrowserSettings(state: BrowserSettingsState): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
-    body: JSON.stringify({
-      browser: buildBrowserConfigFromAgentDefaults(state),
-    }),
+    body: JSON.stringify({ browser: buildBrowserConfig(state) }),
   });
   void revalidateGatewayConfig();
 }

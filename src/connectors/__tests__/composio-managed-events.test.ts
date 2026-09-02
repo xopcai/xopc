@@ -23,7 +23,7 @@ describe('ManagedComposioEventPoller', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     config = {
-      agents: { capabilityPresets: {}, list: [] },
+      agents: { list: [] },
       connectors: {
         instances: {
           'composio-gmail': {

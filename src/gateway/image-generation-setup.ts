@@ -3,7 +3,7 @@ import {
   listImageGenerationProvidersSummary,
 } from '../agent/image/generation/provider-registry.js';
 import { normalizeAgentId } from '../agent/agent-scope.js';
-import { resolveEffectiveAgentManifestForAgent } from '../config/agent-profile.js';
+import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js';
 import { ConfigSchema, type Config, type ProviderAuthConfig } from '../config/schema.js';
 import { fetchWithTimeoutGuarded } from '../media-shared/http/index.js';
 
@@ -65,10 +65,10 @@ export function getAgentImageGenerationConfig(config: Config, agentIdRaw: string
   if (!config.agents.list.some((entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId)) {
     throw new Error(`Agent not found: ${agentId}`);
   }
-  const manifest = resolveEffectiveAgentManifestForAgent(config, agentId);
+  const effective = resolveEffectiveAgentConfigForAgent(config, agentId).config;
   return {
     agentId,
-    model: manifest.models.imageGenerationModel ?? null,
+    model: effective.models.imageGeneration ?? null,
   };
 }
 
@@ -108,13 +108,10 @@ export function prepareImageGenerationSetup(
     },
   };
   const entry = next.agents.list[index]!;
-  const models = entry.models ?? {
-    defaultRole: resolveEffectiveAgentManifestForAgent(config, agentId).models.defaultRole,
-    roles: {},
-  };
+  const models = entry.models ?? {};
   entry.models = {
     ...models,
-    imageGenerationModel: { primary: `${providerId}/${modelId}` },
+    imageGeneration: { primary: `${providerId}/${modelId}`, fallbacks: [], autoProviderFallback: false },
   };
 
   const parsed = ConfigSchema.safeParse(next);

@@ -32,6 +32,7 @@ import { searchWorkspaceFiles } from '@/features/chat/palette/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { fetchGlobalDefaults, updateGlobalDefaults } from '@/features/settings/global-defaults-api';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
@@ -56,15 +57,15 @@ type PaletteRow = { id: string; title: string; subtitle?: string };
 
 type PaletteLayer = 'main' | 'models' | 'agents';
 
-function buildGlobalDefaultModelPatch(modelRef: string) {
-  return {
+async function setGlobalDefaultModel(modelRef: string): Promise<void> {
+  const { defaults } = await fetchGlobalDefaults();
+  await updateGlobalDefaults({
+    ...defaults,
     models: {
-      defaultRole: 'deep',
-      roles: {
-        deep: { model: modelRef },
-      },
+      ...defaults.models,
+      chat: { primary: modelRef, fallbacks: [] },
     },
-  };
+  });
 }
 
 function selectChatAgentFromPalette(
@@ -575,11 +576,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         const row = displayedLayerRows[selectedIndex - 1];
         if (!row) return;
         void (async () => {
-          await fetchJson(apiUrl('/api/global-defaults'), {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(buildGlobalDefaultModelPatch(row.id)),
-          });
+          await setGlobalDefaultModel(row.id);
           void revalidateGatewayConfig();
           dispatchConfigReload();
           onClose();
@@ -697,11 +694,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                       onClick={() => {
                         if (paletteLayer === 'models') {
                           void (async () => {
-                            await fetchJson(apiUrl('/api/global-defaults'), {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(buildGlobalDefaultModelPatch(row.id)),
-                            });
+                            await setGlobalDefaultModel(row.id);
                             void revalidateGatewayConfig();
                             dispatchConfigReload();
                             onClose();
