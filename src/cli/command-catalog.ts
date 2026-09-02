@@ -23,6 +23,7 @@ export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
   { commandPath: ['onboard'], policy: { loadExtensions: 'never' } },
   { commandPath: ['config'], policy: { loadExtensions: 'never' } },
   { commandPath: ['doctor'], policy: { loadExtensions: 'never' } },
+  { commandPath: ['support'], policy: { loadExtensions: 'never' } },
   { commandPath: ['models'], policy: { loadExtensions: 'never' } },
   { commandPath: ['providers'], policy: { loadExtensions: 'never' } },
   { commandPath: ['auth'], policy: { loadExtensions: 'never' } },
