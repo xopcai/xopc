@@ -1,7 +1,7 @@
 /**
  * Runtime accessors for `gateway.publicUrl` (the user-deployed reverse-proxy
  * URL). Centralizes the "is it configured?" + "normalized origin" lookup so
- * callers (pair-context, exchange-token, CORS allowlist, UI status) all agree
+ * callers (device access, CORS allowlist, UI status) all agree
  * on the same value.
  */
 

@@ -1,6 +1,6 @@
 /**
- * Rolling buffer of the last N connection events — race tasks, dual-fire
- * winners, apiFetch failures, and realtime state changes. Surfaced in settings so the
+ * Rolling buffer of the last N connection events — API failures and realtime state
+ * changes. Surfaced in settings so the
  * user can copy them when reporting a problem, and used for any in-app
  * "what happened, why" diagnostics.
  *
@@ -12,12 +12,7 @@ import { storage } from '../../storage/mmkv';
 const STORAGE_KEY = 'gateway.connectionLog';
 const MAX_EVENTS = 100;
 
-export type ConnectionEventKind =
-  | 'race'
-  | 'dualFire'
-  | 'apiFetch'
-  | 'realtime'
-  | 'state';
+export type ConnectionEventKind = 'apiFetch' | 'realtime';
 
 export type ConnectionEvent = {
   at: number;
@@ -28,7 +23,6 @@ export type ConnectionEvent = {
   message?: string;
   latencyMs?: number;
   network?: string;
-  route?: 'lan' | 'tunnel';
 };
 
 let buffer: ConnectionEvent[] | null = null;

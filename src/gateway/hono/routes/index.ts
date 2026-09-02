@@ -9,12 +9,13 @@ import { registerStatusRoutes } from './status.js';
 import { registerProjectsRoutes } from './projects.js';
 import { registerProjectSkillRoutes } from './project-skills.js';
 import { registerSearchRoutes } from './search.js';
-import { registerMobileRoutes } from './mobile.js';
+import { registerDevicePushRoutes } from './device-push.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerInteractionStateRoutes } from './interaction-state.js';
 import { registerComposerHistoryRoutes } from './composer-history.js';
 import { registerEndpointToolRoutes } from './endpoint-tools.js';
 import { registerRealtimeRoutes } from './realtime.js';
+import { registerDeviceRoutes } from './devices.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import { registerUnderstandingSourceRoutes } from './understanding-sources.js';
@@ -44,12 +45,13 @@ export function registerCoreAuthenticatedRoutes(
   registerTaskRoutes(authenticated, deps);
   registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
-  registerMobileRoutes(authenticated, deps);
+  registerDevicePushRoutes(authenticated);
   registerNotificationRoutes(authenticated, deps);
   registerInteractionStateRoutes(authenticated, deps);
   registerComposerHistoryRoutes(authenticated, deps);
   registerEndpointToolRoutes(authenticated, deps);
   registerRealtimeRoutes(authenticated, deps);
+  registerDeviceRoutes(authenticated, deps);
 }
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {

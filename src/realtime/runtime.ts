@@ -21,6 +21,7 @@ import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
+import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
 import { RealtimeBroker, type RealtimeSubscriptionHandle } from './broker.js';
 import { RealtimeTicketStore } from './tickets.js';
 import { RealtimeSocketWriter } from './writer.js';
@@ -45,13 +46,15 @@ function serverMessage<T extends ServerRealtimeMessage['kind']>(
   } as Extract<ServerRealtimeMessage, { kind: T }>;
 }
 
-function isAuthorizedTopic(topic: string): boolean {
-  return topic === 'gateway'
-    || topic === 'sessions'
-    || topic === 'logs'
-    || (topic.startsWith('session:') && topic.length > 'session:'.length)
-    || (topic.startsWith('run:') && topic.length > 'run:'.length)
-    || (topic.startsWith('workflow:') && topic.length > 'workflow:'.length);
+function isAuthorizedTopic(topic: string, scopes: readonly GatewayScope[]): boolean {
+  if (topic === 'gateway') return hasGatewayScope(scopes, 'gateway.status');
+  if (topic === 'logs') return hasGatewayScope(scopes, 'gateway.admin');
+  if (topic === 'sessions' || topic.startsWith('session:')) {
+    return hasGatewayScope(scopes, 'sessions.read');
+  }
+  if (topic.startsWith('run:')) return hasGatewayScope(scopes, 'agents.run');
+  if (topic.startsWith('workflow:')) return hasGatewayScope(scopes, 'automations.read');
+  return false;
 }
 
 export class RealtimeRuntime {
@@ -67,6 +70,7 @@ export class RealtimeRuntime {
     perMessageDeflate: false,
   });
   private readonly topicCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly socketsByPrincipal = new Map<string, Set<WebSocket>>();
   private closed = false;
 
   constructor(private readonly endpointTools?: EndpointToolRuntime) {
@@ -108,6 +112,13 @@ export class RealtimeRuntime {
     for (const timer of this.topicCleanupTimers.values()) clearTimeout(timer);
     this.topicCleanupTimers.clear();
     this.wss.close();
+    this.socketsByPrincipal.clear();
+  }
+
+  disconnectPrincipal(principalId: string): void {
+    for (const socket of this.socketsByPrincipal.get(principalId) ?? []) {
+      socket.close(4403, 'Device access revoked');
+    }
   }
 
   completeTopic(topic: string, ttlMs = 5 * 60_000): void {
@@ -127,6 +138,8 @@ export class RealtimeRuntime {
     let lastSeenAt = Date.now();
     let connectionId: string | undefined;
     let endpointId: string | undefined;
+    let principalId: string | undefined;
+    let grantedScopes: readonly GatewayScope[] = [];
     let budgetHeld = true;
 
     const releaseBudget = () => {
@@ -147,7 +160,7 @@ export class RealtimeRuntime {
 
     const subscribe = (requested: RealtimeSubscription[]): boolean => {
       const authorized = requested.filter((item) => {
-        if (isAuthorizedTopic(item.topic)) return true;
+        if (isAuthorizedTopic(item.topic, grantedScopes)) return true;
         sendError('FORBIDDEN_TOPIC', `Topic is not available: ${item.topic}`);
         return false;
       });
@@ -215,6 +228,11 @@ export class RealtimeRuntime {
           return;
         }
         authenticated = true;
+        principalId = claim.principalId;
+        grantedScopes = claim.scopes;
+        const principalSockets = this.socketsByPrincipal.get(principalId) ?? new Set<WebSocket>();
+        principalSockets.add(socket);
+        this.socketsByPrincipal.set(principalId, principalSockets);
         connectionId = crypto.randomUUID();
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
         if (message.payload.endpoint) {
@@ -254,7 +272,7 @@ export class RealtimeRuntime {
           ...(endpointReady ? { endpoint: endpointReady } : {}),
         }), 'critical');
         subscribe(message.payload.subscriptions);
-        log.info({ connectionId, clientId: claim.clientId, clientKind: claim.clientKind }, 'Realtime client connected');
+        log.info({ connectionId, principalId, clientId: claim.clientId, clientKind: claim.clientKind }, 'Realtime client connected');
         return;
       }
 
@@ -290,6 +308,11 @@ export class RealtimeRuntime {
       for (const handle of subscriptions.values()) handle.unsubscribe();
       subscriptions.clear();
       if (endpointId && connectionId) this.endpointTools?.remove(endpointId, connectionId);
+      if (principalId) {
+        const principalSockets = this.socketsByPrincipal.get(principalId);
+        principalSockets?.delete(socket);
+        if (principalSockets?.size === 0) this.socketsByPrincipal.delete(principalId);
+      }
       if (connectionId) {
         const reason = reasonBuffer.toString();
         log.info(

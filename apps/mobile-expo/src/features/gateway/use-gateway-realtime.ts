@@ -13,11 +13,10 @@ import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 import { useGatewayConfigured } from '../../query/sessions';
 import { queryClient } from '../../query/query-client';
 import { useGatewayStore } from '../../stores/gateway-store';
-import { resolveEffectiveGatewayBaseUrl } from '../../stores/gateway-types';
+import { getDeviceAccessToken } from './device-auth-session';
 
 import { recordConnectionEvent } from './connection-log';
 import { emitGatewayEvent } from './gateway-event-bus';
-import { runProbeRound } from './probe-coordinator';
 import { RealtimeTopicCursorStore } from './realtime-topic-cursors';
 
 type TopicListener = {
@@ -31,7 +30,6 @@ let sharedClient: RealtimeClient | null = null;
 let sharedConnectionKey = '';
 let subscriberCount = 0;
 let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectFailures = 0;
 let endpointBinding: RealtimeEndpointBinding | undefined;
 
 function websocketUrl(): string {
@@ -47,7 +45,8 @@ function createClient(clientId: string, cursorScopeKey: string): RealtimeClient 
     createMessageId: randomUUID,
     getWebSocketUrl: websocketUrl,
     issueTicket: async (signal) => {
-      const { apiUrl, token } = useGatewayStore.getState();
+      const { apiUrl } = useGatewayStore.getState();
+      const token = await getDeviceAccessToken();
       const response = await fetch(apiUrl('/api/realtime/tickets'), {
         method: 'POST',
         headers: {
@@ -66,12 +65,8 @@ function createClient(clientId: string, cursorScopeKey: string): RealtimeClient 
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {
       if (state === 'connected') {
-        reconnectFailures = 0;
         recordConnectionEvent({ kind: 'realtime', ok: true, message: 'realtime connected' });
         emitGatewayEvent('gateway.realtime-connected', undefined);
-      } else if (state === 'reconnecting') {
-        reconnectFailures += 1;
-        if (reconnectFailures === 3) void runProbeRound('realtime-degraded', { force: true });
       } else if (state === 'error') {
         recordConnectionEvent({ kind: 'realtime', ok: false, message: error ?? 'realtime failed' });
       }
@@ -132,13 +127,9 @@ function releaseSharedConnection(): void {
 
 export function useGatewayRealtime(): void {
   const configured = useGatewayConfigured();
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.accessToken);
   const profileId = useGatewayStore((state) => state.activeGatewayId);
-  const gatewayEndpoint = useGatewayStore((state) => resolveEffectiveGatewayBaseUrl({
-    activeBaseUrl: state.activeBaseUrl,
-    baseUrl: state.baseUrl,
-    lanUrl: state.lanUrl,
-  }));
+  const gatewayEndpoint = useGatewayStore((state) => state.getActiveRouteUrl());
   useEffect(() => {
     if (!configured || !gatewayEndpoint) {
       releaseSharedConnection();
@@ -158,10 +149,7 @@ export function useGatewayRealtime(): void {
       if (wasActive && next !== 'active') {
         sharedClient?.disconnect();
       } else if (!wasActive && next === 'active') {
-        // Reopen immediately on the last-known route. The bounded route probe
-        // may replace the client if LAN/tunnel preference changed.
         sharedClient?.reconnect();
-        void runProbeRound('foreground', { force: true });
       }
     });
     return () => subscription.remove();

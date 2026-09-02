@@ -16,6 +16,8 @@ import {
 import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { safeEqualSecret } from '../../security/secret-equal.js';
 import { authorizeTrustedProxy } from '../../trusted-proxy.js';
+import { authenticateDeviceAccessToken } from '../../../storage/sqlite/device-access-repository.js';
+import { setGatewayPrincipal } from '../../security/gateway-principal.js';
 import { createLogger, logAuthEvent } from '../../../utils/logger.js';
 
 const log = createLogger('Gateway:Auth');
@@ -204,11 +206,21 @@ export function auth(config?: AuthConfig) {
       }
 
       recordSuccess(rl);
+      setGatewayPrincipal(c, {
+        kind: 'trusted-proxy',
+        principalId: result.user,
+        scopes: ['gateway.admin'],
+      });
       await next();
       return;
     }
 
     if (authMode === 'none') {
+      setGatewayPrincipal(c, {
+        kind: 'owner',
+        principalId: 'gateway-owner',
+        scopes: ['gateway.admin'],
+      });
       return next();
     }
 
@@ -240,6 +252,27 @@ export function auth(config?: AuthConfig) {
 
     if (providedCredential && validateCredential(providedCredential, expectedCredential)) {
       recordSuccess(rl);
+      setGatewayPrincipal(c, {
+        kind: 'owner',
+        principalId: 'gateway-owner',
+        scopes: ['gateway.admin'],
+      });
+      await next();
+      return;
+    }
+
+    const deviceIdentity = providedCredential?.startsWith('xopc_at_')
+      ? authenticateDeviceAccessToken(providedCredential)
+      : undefined;
+    if (deviceIdentity) {
+      recordSuccess(rl);
+      setGatewayPrincipal(c, {
+        kind: 'device',
+        principalId: deviceIdentity.deviceId,
+        deviceId: deviceIdentity.deviceId,
+        accessSessionId: deviceIdentity.accessSessionId,
+        scopes: deviceIdentity.scopes,
+      });
       await next();
       return;
     }

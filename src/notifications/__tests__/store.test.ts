@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  createDevice,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
@@ -37,12 +38,18 @@ describe('notification persistence', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  function addDevice(id: string, platform: 'ios' | 'android' = 'ios'): void {
+    createDevice({ id, displayName: id, platform, publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'] });
+  }
+
   it('renews a device lease, rotates duplicate tokens, and keeps explicit preferences', () => {
+    addDevice('old');
+    addDevice('current', 'android');
     registerNotificationDevice({
-      id: 'old', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'en',
+      deviceId: 'old', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'en',
     });
     const current = registerNotificationDevice({
-      id: 'current', platform: 'android', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'zh',
+      deviceId: 'current', platform: 'android', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'zh',
       preferences: { chatFailed: false },
     });
     expect(getNotificationDevice('old')).toBeNull();
@@ -54,8 +61,9 @@ describe('notification persistence', () => {
   });
 
   it('atomically deduplicates events and enqueues their device deliveries', () => {
+    addDevice('device-1');
     registerNotificationDevice({
-      id: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'en',
+      deviceId: 'device-1', platform: 'ios', pushToken: 'ExponentPushToken[token]', permissions: 'granted', locale: 'en',
     });
     const input = {
       dedupeKey: 'chat.completed:run-1',

@@ -1,28 +1,19 @@
-import { Globe, Loader2, RefreshCw } from 'lucide-react';
+import { Globe, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import useSWR, { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { CopyTextRow } from '@/components/ui/copy-text-row';
+import { revalidateGatewayConfig, useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
-import { encodeMobilePairQr } from '@/features/tunnel/mobile-pair-qr';
-import {
-  createTunnelPair,
-  fetchTunnelPairContext,
-  type MobilePairContextResponse,
-} from '@/features/tunnel/tunnel-api';
 import {
   patchReverseProxyPublicUrl,
   probeReverseProxyUrl,
   type ProbeReverseProxyResponse,
 } from '@/features/remote-access/reverse-proxy-api';
 import { useDetectedReverseProxyOrigin } from '@/features/remote-access/use-detected-reverse-proxy-origin';
-import { useAsyncResource } from '@/lib/use-async-resource';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
-import { buildMobileGatewayPairDeepLink } from '@/lib/url';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -37,14 +28,12 @@ function inputClassName(): string {
   );
 }
 
-function pickReverseProxyCandidateUrl(context?: MobilePairContextResponse): string | null {
-  const hit = context?.candidates.find((c) => c.kind === 'reverse-proxy');
-  return hit?.url?.trim() || null;
-}
-
-function pickLanFallback(context?: MobilePairContextResponse): string | null {
-  const lan = context?.candidates.find((c) => c.kind === 'lan' && c.reachable);
-  return lan?.url?.trim() || null;
+function configuredPublicUrl(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const gateway = (value as { gateway?: unknown }).gateway;
+  if (!gateway || typeof gateway !== 'object' || Array.isArray(gateway)) return null;
+  const publicUrl = (gateway as { publicUrl?: unknown }).publicUrl;
+  return typeof publicUrl === 'string' && publicUrl.trim() ? publicUrl.trim() : null;
 }
 
 export function ReverseProxySection() {
@@ -53,16 +42,9 @@ export function ReverseProxySection() {
   const token = useGatewayStore((s) => s.token);
   const hasToken = Boolean(token);
   const detected = useDetectedReverseProxyOrigin();
-  const { mutate: globalMutate } = useSWRConfig();
-
-  const { data: pairContext, mutate: mutPairContext } = useSWR(
-    hasToken ? 'tunnel-pair-context' : null,
-    fetchTunnelPairContext,
-    { refreshInterval: 60_000 },
-  );
-
-  const configuredUrl = pickReverseProxyCandidateUrl(pairContext);
-  // Effective URL the QR will use, in priority order: user override, server config, detected.
+  const config = useGatewayConfigSwr(hasToken);
+  const configuredUrl = configuredPublicUrl(config.data?.payload?.config);
+  // Prefer an explicit draft, then the saved gateway origin, then the browser-detected origin.
   const [draftUrl, setDraftUrl] = useState<string>('');
   const [probeState, setProbeState] = useState<{
     busy: boolean;
@@ -90,29 +72,6 @@ export function ReverseProxySection() {
   }, [configuredUrl, detected, draftUrl]);
 
   const isAutoDetectedOnly = !configuredUrl && Boolean(detected) && effectiveUrl === detected;
-  const lanFallback = pickLanFallback(pairContext);
-
-  // Mint a pairing secret once we have a URL and a gateway token.
-  const { data: pair, mutate: mutPair } = useSWR(
-    hasToken && effectiveUrl ? ['reverse-proxy-pair', effectiveUrl] : null,
-    () => createTunnelPair(),
-    { refreshInterval: 4 * 60_000, revalidateOnFocus: false },
-  );
-
-  const deepLink = useMemo(() => {
-    if (!effectiveUrl || !pair?.pairingSecret) return '';
-    return buildMobileGatewayPairDeepLink({
-      baseUrl: effectiveUrl,
-      pairingSecret: pair.pairingSecret,
-      lanUrl: lanFallback,
-    });
-  }, [effectiveUrl, lanFallback, pair?.pairingSecret]);
-
-  const qrImage = useAsyncResource(
-    () => encodeMobilePairQr(deepLink),
-    [deepLink],
-    { enabled: Boolean(deepLink), initial: null as string | null, errorData: null },
-  );
 
   const handleProbe = useCallback(async () => {
     const url = draftUrl.trim() || effectiveUrl;
@@ -139,8 +98,7 @@ export function ReverseProxySection() {
     setSavingState({ busy: true, error: null });
     try {
       await patchReverseProxyPublicUrl(url);
-      await mutPairContext();
-      await globalMutate('tunnel-pair-context');
+      await revalidateGatewayConfig();
       setSavingState({ busy: false, error: null });
     } catch (error) {
       setSavingState({
@@ -148,14 +106,13 @@ export function ReverseProxySection() {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [effectiveUrl, globalMutate, mutPairContext]);
+  }, [effectiveUrl]);
 
   const handleClear = useCallback(async () => {
     setSavingState({ busy: true, error: null });
     try {
       await patchReverseProxyPublicUrl(null);
-      await mutPairContext();
-      await globalMutate('tunnel-pair-context');
+      await revalidateGatewayConfig();
       setDraftUrl('');
       setProbeState({ busy: false, result: null });
       setSavingState({ busy: false, error: null });
@@ -165,11 +122,7 @@ export function ReverseProxySection() {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [globalMutate, mutPairContext]);
-
-  const handleRefreshQr = useCallback(async () => {
-    await mutPair();
-  }, [mutPair]);
+  }, []);
 
   if (!hasToken) {
     return null;
@@ -258,62 +211,13 @@ export function ReverseProxySection() {
         </div>
       </SettingsFormSection>
 
-      <SettingsFormSection>
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-fg">{rp.qrTitle}</div>
-            <p className="mt-1 text-xs text-fg-subtle">{rp.qrSubtitle}</p>
-          </div>
-          {deepLink ? (
-            <Button type="button" variant="ghost" className="shrink-0" onClick={() => void handleRefreshQr()}>
-              <RefreshCw className="size-4" />
-              {rp.refreshQr}
-            </Button>
-          ) : null}
-        </div>
-
-        {!effectiveUrl ? (
-          <p className="text-sm text-fg-muted">{rp.noUrlYet}</p>
-        ) : !pair?.pairingSecret ? (
-          <p className="text-sm text-fg-muted">{rp.mintingSecret}</p>
-        ) : (
-          <div className="flex flex-col items-center gap-3 sm:items-start">
-            <div className="break-all font-mono text-[11px] text-fg-muted">
-              <span className="font-medium text-fg">baseUrl:</span> {effectiveUrl}
-              {lanFallback ? (
-                <>
-                  <br />
-                  <span className="font-medium text-fg">lanUrl:</span> {lanFallback}
-                </>
-              ) : null}
-            </div>
-            {qrImage.data ? (
-              <img
-                src={qrImage.data}
-                alt=""
-                className="size-56 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
-              />
-            ) : qrImage.loading ? (
-              <p className="text-sm text-fg-muted">{rp.encoding}</p>
-            ) : null}
-            <CopyTextRow
-              text={deepLink}
-              labels={{
-                copy: rp.copyLink,
-                copied: rp.copied,
-                copyFailed: messages(language).clipboard.copyFailed,
-              }}
-            />
-          </div>
-        )}
-      </SettingsFormSection>
     </div>
   );
 }
 
 type ProbeStatusLabels = {
   ok: string;
-  mobileReady: string;
+  gatewayReady: string;
   codeUnknown: string;
   [code: `code_${string}`]: string;
 };
@@ -331,10 +235,10 @@ function ProbeResultPill({
         <span className="font-medium">{labels.ok}</span>
         {' · '}
         <span className="font-mono">{result.latencyMs}ms</span>
-        {result.mobilePairing ? (
+        {result.gatewayReady ? (
           <>
             {' · '}
-            <span>{labels.mobileReady}</span>
+            <span>{labels.gatewayReady}</span>
           </>
         ) : null}
       </div>

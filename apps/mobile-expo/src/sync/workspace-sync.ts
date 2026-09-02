@@ -31,7 +31,7 @@ let flushPromise: Promise<number> | null = null;
 
 function shouldCountWorkspaceRetry(error: unknown): boolean {
   return !isGatewayConnectivityError(error)
-    || !['offline-network', 'offline-device', 'no-route', 'reverse-proxy-unreachable']
+    || !['offline-network', 'no-route']
       .includes(error.kind);
 }
 

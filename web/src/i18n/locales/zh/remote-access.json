@@ -4,6 +4,13 @@
     "pageSubtitle": "从其他设备连接此 Gateway。选择一种方式即可 — 同一时间只应启用一种对外暴露模式。",
     "docsLink": "阅读远程访问指南",
     "tabsAria": "远程访问方式",
+    "mobilePairingFlow": {
+      "title": "第 1 步：建立安全连接",
+      "hint": "完成当前方式的配置并确认状态已启用，然后继续添加手机。",
+      "ready": "安全连接已就绪，可以继续生成配对二维码。",
+      "waiting": "等待安全连接",
+      "continue": "继续添加手机"
+    },
     "tabs": {
       "guide": "概览",
       "tailscale": "Tailscale",
@@ -18,7 +25,7 @@
       "public": "先在 Console 创建 Tunnel Registration Key 并保存，再启动隧道获取公网地址，然后扫码配对移动 App。",
       "reverse-proxy": "用自己的 HTTPS 反向代理（Caddy / nginx / Cloudflare Tunnel）将 Gateway 暴露在自定义域名下，然后扫码配对移动 App。",
       "ssh": "无 VPN 或公网隧道时，通过 CLI 做 SSH 端口转发。",
-      "lan": "在同一 Wi‑Fi 或局域网内，通过 Gateway 绑定地址访问，并扫码配对移动 App。"
+      "lan": "在同一 Wi‑Fi 或局域网内，通过 Gateway 绑定地址访问 Web 控制台。移动 App 仍要求 HTTPS。"
     },
     "guide": {
       "pickMethod": "选择连接方式",
@@ -54,11 +61,7 @@
       "title": "同一网络（局域网）",
       "subtitle": "在同一 Wi‑Fi 下的手机或笔记本访问 Gateway，无需暴露到公网。",
       "body": "将 Gateway 绑定地址设为局域网 IP（或 0.0.0.0），通过 http://<主机>:<端口> 连接。请注意防火墙规则。",
-      "link": "打开 Gateway 设置",
-      "pairTitle": "移动 App 配对",
-      "pairSubtitle": "在同一 Wi‑Fi 下扫码连接手机。App 会用一次性配对密钥换取 Gateway token。",
-      "pairBlockedNextSteps": "或使用「公网访问」标签通过隧道配对。",
-      "pairPublicTabLink": "打开公网访问"
+      "link": "打开 Gateway 设置"
     },
     "tailscale": {
       "title": "Tailscale Serve（推荐）",
@@ -103,23 +106,15 @@
       "saving": "保存中…",
       "clear": "清除已保存的 URL",
       "certWarning": "移动端需要系统信任根证书（Let's Encrypt / Cloudflare / 商业 CA）。v1 不支持自签证书。",
-      "qrTitle": "移动 App 配对 QR",
-      "qrSubtitle": "在 xopc 移动 App 中扫码即可通过反向代理完成配对。",
-      "noUrlYet": "请先在上方输入反代公网 URL 以生成配对 QR。",
-      "mintingSecret": "正在生成配对密钥…",
-      "encoding": "正在生成 QR…",
-      "refreshQr": "刷新 QR",
-      "copyLink": "复制 deeplink",
-      "copied": "已复制",
       "probeStatus": {
         "ok": "可达",
-        "mobileReady": "移动配对就绪",
+        "gatewayReady": "网关就绪",
         "codeUnknown": "测试失败",
         "code_TIMEOUT": "请求超时",
         "code_TLS_INVALID": "TLS / 证书错误",
         "code_DNS_OR_CONN_REFUSED": "DNS 解析失败或连接被拒",
         "code_NETWORK_ERROR": "网络错误",
-        "code_AUTH_BLOCKED": "反代返回 401/403 — 请移除 /api/tunnel/pair/ping 前面的鉴权",
+        "code_AUTH_BLOCKED": "反代返回 401/403 — 请确保 /api/health 可公开访问",
         "code_HTTP_ERROR": "HTTP 错误",
         "code_NOT_XOPC_GATEWAY": "URL 未识别为 xopc gateway",
         "code_invalid_url": "URL 不合法",

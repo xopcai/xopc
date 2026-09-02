@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeXopcDatabase,
+  createDevice,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
@@ -33,8 +34,12 @@ describe('NotificationService', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-notification-service-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    createDevice({
+      id: 'device-1', displayName: 'Phone', platform: 'ios',
+      publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'],
+    });
     registerNotificationDevice({
-      id: 'device-1',
+      deviceId: 'device-1',
       platform: 'ios',
       pushToken: 'ExponentPushToken[token]',
       permissions: 'granted',

@@ -1,54 +1,29 @@
-/**
- * Single, structured fetch wrapper for every gateway request. Three jobs:
- *   1. Build URL + auth header from the active gateway profile.
- *   2. Apply a wallclock timeout so a dead route never hangs the UI.
- *   3. Translate raw fetch failures into `GatewayConnectivityError` so the
- *      UI can show actionable copy ("computer offline" vs "no internet"
- *      vs "token expired") instead of a generic spinner-then-fail.
- *
- * Idempotent calls (GET / HEAD) automatically dual-fire LAN+tunnel when we
- * don't yet have a network-scoped cached winner — bootstrap GET behaviour
- * without callers having to opt in.
- */
 import { File, UploadType } from 'expo-file-system';
 
 import { recordConnectionEvent } from '../features/gateway/connection-log';
+import { getDeviceAccessToken, refreshDeviceAccessToken } from '../features/gateway/device-auth-session';
 import { getNetworkSnapshot } from '../features/gateway/network-info';
 import { useGatewayStore } from '../stores/gateway-store';
-
-import { dualFireFetch, hasCachedRouteWinner } from './dual-fire-fetch';
 import { GatewayConnectivityError, type GatewayErrorKind } from './gateway-error';
-import { notifyUnauthorizedIfNeeded } from './notify-unauthorized';
 
 const DEFAULT_FETCH_TIMEOUT_MS = 8_000;
 
 export function formatApiHttpError(status: number, statusText: string, message?: string): string {
-  const m = message?.trim();
-  if (m) return `${status} ${statusText}: ${m}`;
-  return `${status} ${statusText}`;
+  const detail = message?.trim();
+  return detail ? `${status} ${statusText}: ${detail}` : `${status} ${statusText}`;
 }
 
-function isAbortError(err: unknown): boolean {
-  if (err instanceof Error) {
-    if (err.name === 'AbortError') return true;
-    if (err.message.toLowerCase().includes('abort')) return true;
-  }
-  return false;
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'AbortError' || error.message.toLowerCase().includes('abort'));
 }
 
-function classifyFetchError(err: unknown): GatewayErrorKind {
+function classifyFetchError(error: unknown): GatewayErrorKind {
   if (getNetworkSnapshot().kind === 'offline') return 'offline-network';
-  if (isAbortError(err)) return 'no-route';
-  return 'no-route';
+  return isAbortError(error) ? 'no-route' : 'no-route';
 }
 
 export type ApiFetchOptions = RequestInit & {
   timeoutMs?: number;
-  /** Force single-route even when route confidence is low. Used inside
-   * dual-fire path to avoid recursion. */
-  noDualFire?: boolean;
-  /** Retry once after actively re-resolving LAN vs tunnel. Only enable for
-   * idempotent operations or writes protected by an Idempotency-Key. */
   recoverRouteOnNetworkError?: boolean;
 };
 
@@ -63,131 +38,86 @@ export type ApiFileUploadOptions = {
   recoverRouteOnNetworkError?: boolean;
 };
 
-function isIdempotent(method: string | undefined): boolean {
-  const m = (method ?? 'GET').toUpperCase();
-  return m === 'GET' || m === 'HEAD';
+function routeCandidates(allowFallback: boolean): Array<{ id: string; url: string }> {
+  const profile = useGatewayStore.getState().getActiveProfile();
+  if (!profile) throw new GatewayConnectivityError('misconfigured', 'No paired gateway is active');
+  const active = profile.routes.find((route) => route.id === profile.activeRouteId);
+  if (!active) throw new GatewayConnectivityError('misconfigured', 'Active gateway route is unavailable');
+  return allowFallback ? [active, ...profile.routes.filter((route) => route.id !== active.id)] : [active];
 }
 
-function bothRoutesConfigured(): boolean {
-  const { baseUrl, lanUrl } = useGatewayStore.getState();
-  return Boolean(baseUrl.trim() && lanUrl?.trim());
-}
-
-export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Response> {
-  const { token, baseUrl, lanUrl } = useGatewayStore.getState();
-  if (!baseUrl.trim() && !lanUrl?.trim()) {
-    throw new GatewayConnectivityError('misconfigured', 'Gateway base URL is not configured');
-  }
-
-  // Confidence-aware bootstrap: idempotent calls fan out across both routes
-  // when we haven't pinned a winner for the current network. The user gets
-  // the first 2xx; the other request is aborted.
-  if (
-    !init?.noDualFire &&
-    isIdempotent(init?.method) &&
-    bothRoutesConfigured() &&
-    !hasCachedRouteWinner()
-  ) {
-    return dualFireFetch(path, init ?? { method: 'GET' });
-  }
-
-  const configuredTimeoutMs = init?.timeoutMs;
-  const recoverRouteOnNetworkError = init?.recoverRouteOnNetworkError ?? false;
-  const requestInit: RequestInit = { ...init };
-  delete (requestInit as ApiFetchOptions).timeoutMs;
-  delete (requestInit as ApiFetchOptions).noDualFire;
-  delete (requestInit as ApiFetchOptions).recoverRouteOnNetworkError;
-  const headers = new Headers(requestInit.headers);
-  if (!headers.has('Content-Type') && requestInit.body != null && typeof requestInit.body === 'string') {
-    headers.set('Content-Type', 'application/json');
-  }
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-
-  const url = useGatewayStore.getState().apiUrl(path);
+async function fetchRoute(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   const controller = new AbortController();
-  const timeoutMs = configuredTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const callerSignal = requestInit.signal;
-  const onCallerAbort = () => controller.abort();
+  const callerSignal = init.signal;
+  const onAbort = () => controller.abort();
   if (callerSignal) {
     if (callerSignal.aborted) controller.abort();
-    else callerSignal.addEventListener('abort', onCallerAbort);
+    else callerSignal.addEventListener('abort', onAbort);
   }
-
-  let res: Response;
-  const startedAt = Date.now();
   try {
-    res = await fetch(url, { ...requestInit, headers, signal: controller.signal });
-  } catch (err) {
-    clearTimeout(timer);
-    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
-    if (recoverRouteOnNetworkError && !callerSignal?.aborted) {
-      try {
-        const recoveredBaseUrl = await useGatewayStore.getState().refreshActiveBaseUrl();
-        recordConnectionEvent({
-          kind: 'apiFetch',
-          ok: Boolean(recoveredBaseUrl),
-          url,
-          reason: recoveredBaseUrl ? 'route-recovery' : 'route-recovery-failed',
-          network: getNetworkSnapshot().key,
-        });
-        if (recoveredBaseUrl) {
-          return apiFetch(path, {
-            ...requestInit,
-            headers,
-            timeoutMs,
-            noDualFire: true,
-            recoverRouteOnNetworkError: false,
-          });
-        }
-      } catch {
-        // Preserve the original transport failure below; it best describes
-        // the operation the user initiated.
-      }
-    }
-    const kind = classifyFetchError(err);
-    recordConnectionEvent({
-      kind: 'apiFetch',
-      ok: false,
-      url,
-      reason: kind,
-      message: err instanceof Error ? err.message : String(err),
-      network: getNetworkSnapshot().key,
-    });
-    throw new GatewayConnectivityError(
-      kind,
-      kind === 'offline-network' ? 'No internet connection' : 'Could not reach gateway',
-      { cause: err },
-    );
+    return await fetch(url, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timer);
-    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+    callerSignal?.removeEventListener('abort', onAbort);
   }
-
-  notifyUnauthorizedIfNeeded(res.status);
-
-  recordConnectionEvent({
-    kind: 'apiFetch',
-    ok: res.ok,
-    url,
-    latencyMs: Date.now() - startedAt,
-    network: getNetworkSnapshot().key,
-    reason: res.ok ? undefined : `http_${res.status}`,
-  });
-
-  return res;
 }
 
-/** Upload a local file through expo-file-system's native multipart implementation. */
-export async function apiUploadFile(
-  path: string,
-  options: ApiFileUploadOptions,
-): Promise<Response> {
-  const { token, baseUrl, lanUrl } = useGatewayStore.getState();
-  if (!baseUrl.trim() && !lanUrl?.trim()) {
-    throw new GatewayConnectivityError('misconfigured', 'Gateway base URL is not configured');
+export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promise<Response> {
+  const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, recoverRouteOnNetworkError, ...requestInit } = init;
+  const method = (requestInit.method ?? 'GET').toUpperCase();
+  const canFailOver = recoverRouteOnNetworkError === true || method === 'GET' || method === 'HEAD';
+  let token = await getDeviceAccessToken();
+  let refreshedAfterUnauthorized = false;
+  let lastError: unknown;
+
+  for (const route of routeCandidates(canFailOver)) {
+    const headers = new Headers(requestInit.headers);
+    if (!headers.has('Content-Type') && typeof requestInit.body === 'string') headers.set('Content-Type', 'application/json');
+    headers.set('Authorization', `Bearer ${token}`);
+    const url = `${route.url}${path.startsWith('/') ? path : `/${path}`}`;
+    const startedAt = Date.now();
+    try {
+      let response = await fetchRoute(url, { ...requestInit, headers }, timeoutMs);
+      if (response.status === 401 && !refreshedAfterUnauthorized) {
+        token = await refreshDeviceAccessToken();
+        refreshedAfterUnauthorized = true;
+        headers.set('Authorization', `Bearer ${token}`);
+        response = await fetchRoute(url, { ...requestInit, headers }, timeoutMs);
+      }
+      recordConnectionEvent({
+        kind: 'apiFetch', ok: response.ok, url, latencyMs: Date.now() - startedAt,
+        network: getNetworkSnapshot().key, reason: response.ok ? undefined : `http_${response.status}`,
+      });
+      if (response.ok && route.id !== useGatewayStore.getState().getActiveProfile()?.activeRouteId) {
+        const gatewayId = useGatewayStore.getState().activeGatewayId;
+        if (gatewayId) useGatewayStore.getState().selectRoute(gatewayId, route.id);
+      }
+      if (response.status === 401) useGatewayStore.getState().onUnauthorized();
+      return response;
+    } catch (error) {
+      if (requestInit.signal?.aborted) throw error;
+      lastError = error;
+      recordConnectionEvent({
+        kind: 'apiFetch', ok: false, url, reason: classifyFetchError(error),
+        message: error instanceof Error ? error.message : String(error), network: getNetworkSnapshot().key,
+      });
+    }
   }
 
+  const kind = classifyFetchError(lastError);
+  throw new GatewayConnectivityError(
+    kind,
+    kind === 'offline-network' ? 'No internet connection' : 'Could not reach gateway',
+    { cause: lastError },
+  );
+}
+
+export async function apiUploadFile(path: string, options: ApiFileUploadOptions): Promise<Response> {
   let file: File;
   try {
     file = new File(options.uri);
@@ -197,88 +127,43 @@ export async function apiUploadFile(
   if (!file.exists) throw new Error('Recording file is no longer available');
   if ((file.size ?? 0) <= 0) throw new Error('Recording file is empty');
 
-  const headers: Record<string, string> = {};
-  new Headers(options.headers).forEach((value, key) => {
-    headers[key] = value;
-  });
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const url = useGatewayStore.getState().apiUrl(path);
-  const controller = new AbortController();
-  const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const callerSignal = options.signal;
-  const onCallerAbort = () => controller.abort();
-  if (callerSignal) {
-    if (callerSignal.aborted) controller.abort();
-    else callerSignal.addEventListener('abort', onCallerAbort);
-  }
-
-  const startedAt = Date.now();
-  try {
-    const result = await file.upload(url, {
-      httpMethod: 'POST',
-      uploadType: UploadType.MULTIPART,
-      fieldName: options.fieldName,
-      mimeType: options.mimeType,
-      parameters: options.parameters,
-      headers,
-      signal: controller.signal,
-    });
-    const response = new Response(result.body, {
-      status: result.status,
-      headers: result.headers,
-    });
-
-    notifyUnauthorizedIfNeeded(response.status);
-    recordConnectionEvent({
-      kind: 'apiFetch',
-      ok: response.ok,
-      url,
-      latencyMs: Date.now() - startedAt,
-      network: getNetworkSnapshot().key,
-      reason: response.ok ? undefined : `http_${response.status}`,
-    });
-    return response;
-  } catch (err) {
-    if (options.recoverRouteOnNetworkError && !callerSignal?.aborted) {
-      try {
-        const recoveredBaseUrl = await useGatewayStore.getState().refreshActiveBaseUrl();
-        recordConnectionEvent({
-          kind: 'apiFetch',
-          ok: Boolean(recoveredBaseUrl),
-          url,
-          reason: recoveredBaseUrl ? 'route-recovery' : 'route-recovery-failed',
-          network: getNetworkSnapshot().key,
-        });
-        if (recoveredBaseUrl) {
-          return apiUploadFile(path, {
-            ...options,
-            recoverRouteOnNetworkError: false,
-          });
-        }
-      } catch {
-        // Preserve the upload failure below.
-      }
+  const token = await getDeviceAccessToken();
+  let lastError: unknown;
+  for (const route of routeCandidates(options.recoverRouteOnNetworkError === true)) {
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    new Headers(options.headers).forEach((value, key) => { headers[key] = value; });
+    const url = `${route.url}${path.startsWith('/') ? path : `/${path}`}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
+    const onAbort = () => controller.abort();
+    if (options.signal) {
+      if (options.signal.aborted) controller.abort();
+      else options.signal.addEventListener('abort', onAbort);
     }
-    const kind = classifyFetchError(err);
-    recordConnectionEvent({
-      kind: 'apiFetch',
-      ok: false,
-      url,
-      reason: kind,
-      message: err instanceof Error ? err.message : String(err),
-      network: getNetworkSnapshot().key,
-    });
-    throw new GatewayConnectivityError(
-      kind,
-      kind === 'offline-network' ? 'No internet connection' : 'Could not reach gateway',
-      { cause: err },
-    );
-  } finally {
-    clearTimeout(timer);
-    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+    try {
+      const result = await file.upload(url, {
+        httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: options.fieldName,
+        mimeType: options.mimeType, parameters: options.parameters, headers, signal: controller.signal,
+      });
+      const response = new Response(result.body, { status: result.status, headers: result.headers });
+      if (response.status === 401) useGatewayStore.getState().onUnauthorized();
+      if (response.ok && route.id !== useGatewayStore.getState().getActiveProfile()?.activeRouteId) {
+        const gatewayId = useGatewayStore.getState().activeGatewayId;
+        if (gatewayId) useGatewayStore.getState().selectRoute(gatewayId, route.id);
+      }
+      return response;
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      lastError = error;
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener('abort', onAbort);
+    }
   }
+  const kind = classifyFetchError(lastError);
+  throw new GatewayConnectivityError(kind, kind === 'offline-network' ? 'No internet connection' : 'Could not reach gateway', { cause: lastError });
 }
 
-export { notifyUnauthorizedIfNeeded };
+export function notifyUnauthorizedIfNeeded(status: number): void {
+  if (status === 401) useGatewayStore.getState().onUnauthorized();
+}

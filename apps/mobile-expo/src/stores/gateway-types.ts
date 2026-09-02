@@ -1,118 +1,86 @@
-import { randomUUID } from 'expo-crypto';
+export const GATEWAY_SCOPES = [
+  'gateway.status', 'agents.read', 'agents.run', 'sessions.read', 'sessions.write',
+  'workspace.read', 'workspace.write', 'tasks.read', 'tasks.write',
+  'automations.read', 'automations.write', 'notifications.self', 'device.self',
+  'gateway.admin',
+] as const;
 
+export type GatewayScope = (typeof GATEWAY_SCOPES)[number];
+export type GatewayRouteKind = 'xopc-secure-link' | 'tailscale' | 'custom-https';
+export type GatewayRoute = { id: string; kind: GatewayRouteKind; url: string };
 export type GatewayProfile = {
-  id: string;
+  gatewayId: string;
   name: string;
-  baseUrl: string;
-  lanUrl: string | null;
-  token: string;
+  gatewayPublicKey: string;
+  deviceId: string;
+  scopes: GatewayScope[];
+  routes: GatewayRoute[];
+  activeRouteId: string;
   updatedAt: number;
 };
 
-export type GatewayProfileInput = {
-  name?: string;
-  baseUrl: string;
-  lanUrl?: string | null;
-  token?: string;
-};
+const scopeSet = new Set<string>(GATEWAY_SCOPES);
+const routeKindSet = new Set<string>(['xopc-secure-link', 'tailscale', 'custom-https']);
 
-export function normalizeGatewayBaseUrl(raw: string): string {
-  return ensureGatewayUrlScheme(raw.trim().replace(/\/+$/, ''));
+export function normalizeSecureGatewayUrl(raw: string): string {
+  const parsed = new URL(raw.trim());
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    throw new Error('Mobile gateway routes must use HTTPS');
+  }
+  if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
+    throw new Error('Mobile gateway routes must be HTTPS origins');
+  }
+  return parsed.origin;
 }
 
-/** Add http(s) when missing so React Native fetch gets an absolute URL (browser does this implicitly). */
-export function ensureGatewayUrlScheme(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return '';
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (isLocalOrPrivateGatewayHost(trimmed)) return `http://${trimmed}`;
-  return `https://${trimmed}`;
-}
-
-export function isLocalOrPrivateGatewayHost(host: string): boolean {
-  const candidate = /^https?:\/\//i.test(host) ? host : `http://${host}`;
+function parseRoute(value: unknown): GatewayRoute | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const route = value as Record<string, unknown>;
+  if (
+    typeof route.id !== 'string' || !route.id ||
+    typeof route.kind !== 'string' || !routeKindSet.has(route.kind) ||
+    typeof route.url !== 'string'
+  ) return null;
   try {
-    const { hostname } = new URL(candidate);
-    if (hostname === 'localhost' || hostname.endsWith('.local')) return true;
-    const parts = hostname.split('.');
-    if (parts.length !== 4) return false;
-    const octets = parts.map((p) => Number(p));
-    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
-    if (octets[0] === 10) return true;
-    if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
-    if (octets[0] === 192 && octets[1] === 168) return true;
-    if (octets[0] === 127) return true;
-    return false;
+    return { id: route.id, kind: route.kind as GatewayRouteKind, url: normalizeSecureGatewayUrl(route.url) };
   } catch {
-    return false;
+    return null;
   }
 }
 
-/** True when this gateway root URL points back to the current device. */
-export function isLoopbackGatewayBaseUrl(raw: string): boolean {
-  const normalized = normalizeGatewayBaseUrl(raw);
-  if (!normalized) return false;
-  try {
-    const { hostname } = new URL(normalized);
-    const host = hostname.toLowerCase();
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
-    if (/^127\.\d+\.\d+\.\d+$/.test(host)) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-export function isGatewayLoopbackAllowedInDev(): boolean {
-  return (globalThis as { __DEV__?: boolean }).__DEV__ === true;
-}
-
-export function shouldRejectLoopbackGatewayBaseUrl(raw: string): boolean {
-  return isLoopbackGatewayBaseUrl(raw) && !isGatewayLoopbackAllowedInDev();
-}
-
-export function gatewayProfileNameFromUrl(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).hostname || baseUrl;
-  } catch {
-    return baseUrl;
-  }
-}
-
-export function createGatewayProfileId(): string {
-  return randomUUID();
-}
-
-export function buildGatewayProfile(input: GatewayProfileInput, id?: string): GatewayProfile {
-  const baseUrl = normalizeGatewayBaseUrl(input.baseUrl);
+export function parseGatewayProfile(value: unknown): GatewayProfile | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const profile = value as Record<string, unknown>;
+  if (
+    typeof profile.gatewayId !== 'string' || !profile.gatewayId ||
+    typeof profile.name !== 'string' || !profile.name.trim() ||
+    typeof profile.gatewayPublicKey !== 'string' || !profile.gatewayPublicKey ||
+    typeof profile.deviceId !== 'string' || !profile.deviceId ||
+    !Array.isArray(profile.scopes) || !profile.scopes.every((scope) => typeof scope === 'string' && scopeSet.has(scope)) ||
+    !Array.isArray(profile.routes) || typeof profile.activeRouteId !== 'string' || !profile.activeRouteId ||
+    typeof profile.updatedAt !== 'number' || !Number.isFinite(profile.updatedAt)
+  ) return null;
+  const routes = profile.routes.map(parseRoute);
+  if (routes.length === 0 || routes.some((route) => route === null)) return null;
+  const validRoutes = routes as GatewayRoute[];
+  if (!validRoutes.some((route) => route.id === profile.activeRouteId)) return null;
   return {
-    id: id ?? createGatewayProfileId(),
-    name: input.name?.trim() || gatewayProfileNameFromUrl(baseUrl),
-    baseUrl,
-    lanUrl: input.lanUrl?.trim() ? normalizeGatewayBaseUrl(input.lanUrl) : null,
-    token: (input.token ?? '').trim(),
-    updatedAt: Date.now(),
+    gatewayId: profile.gatewayId,
+    name: profile.name.trim(),
+    gatewayPublicKey: profile.gatewayPublicKey,
+    deviceId: profile.deviceId,
+    scopes: [...new Set(profile.scopes)] as GatewayScope[],
+    routes: validRoutes,
+    activeRouteId: profile.activeRouteId,
+    updatedAt: profile.updatedAt,
   };
 }
 
-/** Best URL for API calls: probed route, tunnel, then LAN fallback. */
-export function resolveEffectiveGatewayBaseUrl(input: {
-  activeBaseUrl: string;
-  baseUrl: string;
-  lanUrl: string | null;
-}): string {
-  for (const raw of [input.activeBaseUrl, input.baseUrl, input.lanUrl ?? '']) {
-    const normalized = normalizeGatewayBaseUrl(raw);
-    if (normalized) return normalized;
-  }
-  return '';
+export function activeGatewayRoute(profile: GatewayProfile | null): GatewayRoute | null {
+  if (!profile) return null;
+  return profile.routes.find((route) => route.id === profile.activeRouteId) ?? null;
 }
 
-export function preferredActiveBaseUrlFromFlat(input: {
-  baseUrl: string;
-  lanUrl: string | null;
-}): string {
-  const base = normalizeGatewayBaseUrl(input.baseUrl);
-  const lan = input.lanUrl ? normalizeGatewayBaseUrl(input.lanUrl) : '';
-  return lan || base;
+export function gatewayProfileHost(profile: GatewayProfile): string {
+  return new URL(activeGatewayRoute(profile)?.url ?? profile.routes[0].url).hostname;
 }

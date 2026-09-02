@@ -7,8 +7,6 @@ import { TunnelBrokerClient, resolveBrokerApiBase } from './broker-client.js';
 import { clearFrpcPathForProcess, ensureFrpcBinary, publishFrpcPathForProcess } from './frpc-binary.js';
 import { writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
-import { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
-import { createPairingSecret } from './pairing.js';
 import { TunnelRegistrationSecretError } from './env.js';
 import {
   canResumePersistedTunnel,
@@ -17,7 +15,7 @@ import {
 } from './tunnel-persist.js';
 import { clearTunnelState, loadTunnelState, saveTunnelState, updateTunnelState } from './tunnel-state.js';
 import { logTunnelAudit } from './tunnel-audit.js';
-import type { PersistedTunnelState, TunnelQrPayload, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
+import type { PersistedTunnelState, TunnelRegistration, TunnelStatus } from './tunnel-types.js';
 import type { FrpcDownloadProgress, TunnelStartPhase, TunnelStartProgress } from './tunnel-types.js';
 
 const log = createLogger('Tunnel');
@@ -108,22 +106,7 @@ export class TunnelService extends EventEmitter {
     this.emit('tunnel:progress');
   }
 
-  async buildQr(gatewayPort: number, gatewayHost: string): Promise<TunnelQrPayload> {
-    const persisted = loadTunnelState();
-    const publicUrl = persisted?.publicUrl ?? null;
-    if (!publicUrl) {
-      return { qrPayload: '', publicUrl: null, lanUrl: null };
-    }
-    const { secret, expiresAt } = createPairingSecret();
-    return buildMobileConnectQrPayload({
-      publicUrl,
-      lanUrl: resolveLanGatewayUrl(gatewayHost, gatewayPort),
-      pairingSecret: secret,
-      expiresAt: expiresAt.toISOString(),
-    });
-  }
-
-  async start(gatewayPort: number, gatewayToken: string): Promise<TunnelQrPayload> {
+  async start(gatewayPort: number, gatewayToken: string): Promise<void> {
     const cfg = this.serviceConfig;
     if (!cfg) throw new Error('Tunnel service not configured');
 
@@ -192,7 +175,6 @@ export class TunnelService extends EventEmitter {
     this.reconnectAttempt = 0;
     this.emit('tunnel:connected');
 
-    const qr = await this.buildQr(gatewayPort, cfg.gatewayHost);
     logTunnelAudit(
       'tunnel.start',
       {
@@ -203,7 +185,6 @@ export class TunnelService extends EventEmitter {
       },
       'Remote access tunnel started',
     );
-    return qr;
   }
 
   async stop(opts?: { release?: boolean }): Promise<{ released: boolean }> {

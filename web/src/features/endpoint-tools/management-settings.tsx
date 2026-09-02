@@ -17,6 +17,7 @@ import {
   revokeManagedEndpointPrincipal,
   type ManagedEndpointPrincipal,
 } from './management-api';
+import { MobileDeviceAccessSection } from './mobile-device-access-section';
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -89,6 +90,8 @@ export function EndpointToolsManagementSettings() {
           {copy.loadError}
         </div>
       ) : null}
+
+      <MobileDeviceAccessSection />
 
       <div className="grid gap-3 sm:grid-cols-3">
         {[

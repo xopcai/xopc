@@ -4,11 +4,11 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useMobileEndpointTools(ready: boolean): void {
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
-  const activeBaseUrl = useGatewayStore((state) => state.activeBaseUrl);
-  const token = useGatewayStore((state) => state.token);
+  const activeRouteUrl = useGatewayStore((state) => state.getActiveRouteUrl());
+  const accessToken = useGatewayStore((state) => state.accessToken);
 
   useEffect(() => {
-    if (!ready || !activeGatewayId || !activeBaseUrl || !token) return;
+    if (!ready || !activeGatewayId || !activeRouteUrl || !accessToken) return;
     let active = true;
     let stop: (() => void) | undefined;
     void import('./host')
@@ -23,5 +23,5 @@ export function useMobileEndpointTools(ready: boolean): void {
       active = false;
       stop?.();
     };
-  }, [activeBaseUrl, activeGatewayId, ready, token]);
+  }, [accessToken, activeGatewayId, activeRouteUrl, ready]);
 }

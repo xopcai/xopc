@@ -33,10 +33,6 @@ vi.mock('expo-notifications', () => ({
 }));
 vi.mock('../../../api/client', () => ({ apiFetch: state.apiFetch }));
 vi.mock('../../../product/usage-metrics', () => ({ recordUsageEvent: vi.fn() }));
-vi.mock('../../../storage/mmkv', () => ({
-  KEYS: { mobileInstallationId: 'mobileInstallationId' },
-  storage: { getString: vi.fn(), set: vi.fn() },
-}));
 vi.mock('../../../stores/gateway-store', () => ({
   useGatewayStore: { getState: vi.fn(() => ({})) },
 }));
@@ -89,8 +85,8 @@ describe('local mobile notifications', () => {
 
     expect(state.requestPermissions).not.toHaveBeenCalled();
     expect(state.getExpoPushToken).toHaveBeenCalledWith({ projectId: 'project-id' });
-    expect(state.apiFetch).toHaveBeenCalledWith('/api/mobile/devices/register', expect.objectContaining({
-      method: 'POST',
+    expect(state.apiFetch).toHaveBeenCalledWith('/api/devices/me/push', expect.objectContaining({
+      method: 'PUT',
     }));
   });
 
@@ -122,7 +118,7 @@ describe('local mobile notifications', () => {
 
     expect(state.setNotificationsEnabled).toHaveBeenCalledWith(false);
     expect(state.apiFetch).toHaveBeenCalledWith(
-      expect.stringMatching(/^\/api\/mobile\/devices\//),
+      '/api/devices/me/push',
       { method: 'DELETE' },
     );
   });

@@ -9,9 +9,7 @@ import { spacing, typography, useTheme } from '../../theme';
 import type { GatewayConnectivityError } from '../../api/gateway-error';
 
 import { cancelGatewaySwitch, switchGatewayProfile } from './gateway-switch-service';
-import { buildGatewaySwitcherSubtitle } from './gateway-switcher-model';
-import { readAnyNetworkLastGoodRoute } from './last-good-route';
-import { useGatewayConnectionView } from './use-gateway-connection-view';
+import { gatewayProfileHost } from '../../stores/gateway-types';
 import { useGatewayHealth } from './use-gateway-health';
 
 export type GatewaySwitcherSheetProps = {
@@ -29,7 +27,6 @@ function failedMessage(
 ): string {
   if (error.kind === 'token-invalid') return messages.gateway.state.tokenInvalidLong;
   if (error.kind === 'offline-network') return messages.gateway.state.offlineNetworkLong;
-  if (error.kind === 'offline-device') return messages.gateway.state.offlineDeviceLong;
   return messages.gateway.state.noRouteLong;
 }
 
@@ -46,7 +43,6 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
   const copy = messages.gateway.switcher;
   const profiles = useGatewayStore((state) => state.profiles);
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
-  const connectionView = useGatewayConnectionView();
   const { gatewayOnline } = useGatewayHealth();
   const [pendingProfileId, setPendingProfileId] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
@@ -129,29 +125,22 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
       {profiles.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.text.secondary }]}>{copy.empty}</Text>
       ) : profiles.map((profile) => {
-        const isActive = profile.id === activeGatewayId;
-        const isPending = profile.id === pendingProfileId;
-        const rowFailure = failure?.profileId === profile.id ? failure.error : null;
+        const isActive = profile.gatewayId === activeGatewayId;
+        const isPending = profile.gatewayId === pendingProfileId;
+        const rowFailure = failure?.profileId === profile.gatewayId ? failure.error : null;
         const subtitle = rowFailure
           ? failedMessage(rowFailure, messages)
-          : buildGatewaySwitcherSubtitle({
-              profile,
-              isActive,
-              gatewayOnline,
-              hasLastAvailableRoute: Boolean(readAnyNetworkLastGoodRoute(profile.id)),
-              connectionView,
-              messages,
-            });
+          : `${gatewayProfileHost(profile)} · ${isActive && gatewayOnline ? copy.online : isActive ? copy.offline : ''}`.replace(/ · $/, '');
 
         return (
-          <View key={profile.id}>
+          <View key={profile.gatewayId}>
             <Pressable
               style={({ pressed }) => [
                 styles.row,
                 isActive && { backgroundColor: colors.accent.selectionBg },
                 pressed && !isPending && { backgroundColor: colors.surface.hover },
               ]}
-              onPress={() => { void selectProfile(profile.id); }}
+              onPress={() => { void selectProfile(profile.gatewayId); }}
               disabled={isPending}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive, busy: isPending }}
@@ -195,10 +184,10 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
             </Pressable>
             {rowFailure ? (
               <View style={styles.failureActions}>
-                <Button compact mode="text" onPress={() => { void selectProfile(profile.id); }}>
+                <Button compact mode="text" onPress={() => { void selectProfile(profile.gatewayId); }}>
                   {copy.retry}
                 </Button>
-                <Button compact mode="text" onPress={() => openEdit(profile.id)}>
+                <Button compact mode="text" onPress={() => openEdit(profile.gatewayId)}>
                   {copy.edit}
                 </Button>
               </View>

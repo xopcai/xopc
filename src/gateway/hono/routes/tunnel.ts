@@ -1,7 +1,6 @@
 import type { Hono, MiddlewareHandler } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
-import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { extractToken } from '../../auth.js';
 import {
   assertTunnelMayStart,
@@ -19,18 +18,7 @@ import {
   TunnelRegistrationSecretError,
 } from '../../../tunnel/env.js';
 import { getTunnelService } from '../../../tunnel/index.js';
-import { createPairingSecret, exchangePairingSecretOnce, getCachedPairingExchange } from '../../../tunnel/pairing.js';
-import { buildMobilePairContext } from '../../../tunnel/pair-context.js';
-import { applyLanPairingGatewayPatch } from '../../../tunnel/enable-lan-pairing.js';
-import {
-  buildMobileConnectUrlOrder,
-  resolveMobilePairLanUrl,
-  validateMobilePairBaseUrl,
-} from '../../../tunnel/pair-url.js';
-import { consumePairingExchangeFailLimit } from '../../../tunnel/pairing-rate-limit.js';
-import { loadTunnelState } from '../../../tunnel/tunnel-state.js';
 import { logTunnelAudit } from '../../../tunnel/tunnel-audit.js';
-import { resolveReverseProxyPublicUrl } from '../../public-url.js';
 import { validatePublicUrl } from '../../../config/public-url.js';
 import {
   applyTunnelConsentToConfig,
@@ -40,8 +28,6 @@ import {
 import { provisionTunnelRegistrationKey } from '../../../tunnel/xopc-cloud-registration.js';
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import type { GatewayService } from '../../service.js';
-import { getClientIpFromHeaders } from '../../security/loopback.js';
 
 async function configureTunnelFromService(
   deps: AuthenticatedRouteDeps,
@@ -103,220 +89,18 @@ function createTunnelMutationRateLimitMiddleware(): MiddlewareHandler {
   };
 }
 
-export function registerTunnelPublicRoutes(app: Hono, service: GatewayService): void {
-  app.get('/api/tunnel/pair/ping', async (c) => {
-    const config = service.currentConfig as Config;
-    const tunnel = getTunnelService();
-    const status = tunnel.getStatus();
-    const context = buildMobilePairContext({
-      config,
-      tunnelPublicUrl: status.publicUrl,
-      tunnelConnected: status.state === 'connected',
-      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(config),
-    });
-    return c.json({
-      ok: true,
-      service: 'xopc-gateway',
-      mobilePairing: true,
-      port: context.port,
-      bindMode: context.bindMode,
-      listenHost: context.listenHost,
-      pairingReady: context.pairingReady,
-      blockReason: context.blockReason ?? null,
-      tunnelConnected: status.state === 'connected',
-      reverseProxyConfigured: Boolean(resolveReverseProxyPublicUrl(config)),
-      connectUrls: context.connectUrls,
-    });
-  });
-
-  app.post('/api/tunnel/pair/validate-url', async (c) => {
-    let body: { baseUrl?: unknown };
-    try {
-      body = (await c.req.json()) as { baseUrl?: unknown };
-    } catch {
-      return c.json({ error: 'Invalid JSON body' }, 400);
-    }
-    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl : '';
-    const result = validateMobilePairBaseUrl(baseUrl);
-    if (result.ok === false) {
-      return c.json({
-        ok: false,
-        code: result.code,
-        message: result.message,
-      });
-    }
-    return c.json({
-      ok: true,
-      url: result.url,
-      loopback: false,
-      probePath: '/api/tunnel/pair/ping',
-    });
-  });
-
-  app.post('/api/tunnel/exchange-token', async (c) => {
-    const clientIp =
-      getClientIpFromHeaders({
-        get: (name: string) => c.req.header(name) ?? undefined,
-      }) ?? 'unknown';
-
-    let body: { pairingSecret?: unknown };
-    try {
-      body = (await c.req.json()) as { pairingSecret?: unknown };
-    } catch {
-      return c.json({ error: 'Invalid JSON body' }, 400);
-    }
-
-    const pairingSecret = typeof body.pairingSecret === 'string' ? body.pairingSecret.trim() : '';
-    if (!pairingSecret) {
-      return c.json({ error: 'pairingSecret required' }, 400);
-    }
-
-    const cached = getCachedPairingExchange(pairingSecret);
-    if (cached) {
-      logTunnelAudit(
-        'tunnel.exchange_token',
-        { ok: true, clientIp, phase: 'pairing_exchange', replay: true },
-        'Pairing secret replayed (duplicate mobile exchange)',
-      );
-      return c.json(cached);
-    }
-
-    const token = service.getAuthToken();
-    if (!token) {
-      return c.json({ error: 'Gateway token not configured' }, 500);
-    }
-
-    const persisted = loadTunnelState();
-    const config = service.currentConfig as Config;
-    const tunnelUrl = persisted?.publicUrl?.trim() || null;
-    const reverseProxyUrl = resolveReverseProxyPublicUrl(config);
-    const lanUrl = resolveMobilePairLanUrl(config);
-    const connectUrls = buildMobileConnectUrlOrder({
-      reverseProxyUrl,
-      baseUrl: reverseProxyUrl ?? tunnelUrl,
-      lanUrl,
-      tunnelUrl,
-    });
-    // Mobile prefers HTTPS user-deployed URL over FRP broker when both exist.
-    const advertisedBaseUrl = reverseProxyUrl ?? tunnelUrl;
-
-    const payload = await exchangePairingSecretOnce(pairingSecret, () => ({
-      token,
-      baseUrl: advertisedBaseUrl,
-      lanUrl,
-      connectUrls,
-    }));
-
-    if (!payload) {
-      const limited = consumePairingExchangeFailLimit(clientIp);
-      if (!limited.allowed) {
-        c.header('Retry-After', String(Math.ceil(limited.retryAfterMs / 1000)));
-      }
-      logTunnelAudit(
-        'tunnel.exchange_token',
-        { ok: false, clientIp, phase: 'pairing_exchange' },
-        'Pairing exchange denied: invalid or expired secret',
-      );
-      return c.json({ error: 'Invalid or expired pairing secret', code: 'PAIRING_INVALID' }, 401);
-    }
-
-    logTunnelAudit(
-      'tunnel.exchange_token',
-      { ok: true, clientIp, subdomain: persisted?.subdomain ?? null, phase: 'pairing_exchange' },
-      'Pairing secret exchanged for gateway token',
-    );
-    return c.json(payload);
-  });
-}
-
 export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { strictRateLimitMiddleware } = deps;
   const tunnel = getTunnelService();
   const tunnelMutationLimit = createTunnelMutationRateLimitMiddleware();
 
-  authenticated.get('/api/tunnel/pair/context', async (c) => {
-    const config = deps.service.currentConfig as Config;
-    const status = tunnel.getStatus();
-    const context = buildMobilePairContext({
-      config,
-      tunnelPublicUrl: status.publicUrl,
-      tunnelConnected: status.state === 'connected',
-      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(config),
-    });
-    return c.json(context);
-  });
-
-  authenticated.post('/api/tunnel/pair/enable-lan', tunnelMutationLimit, async (c) => {
-    const token = requireGatewayToken(c);
-    if (!token) return c.json({ error: 'Gateway token required' }, 401);
-
-    const config = deps.service.currentConfig as Config;
-    const patchResult = applyLanPairingGatewayPatch(config);
-    if (patchResult.ok === false) {
-      return c.json({ ok: false, error: { message: patchResult.message, code: 'LAN_PAIRING_CONFIG' } }, 400);
-    }
-
-    if (patchResult.changed) {
-      const saveResult = await deps.service.saveConfig(config);
-      if (!saveResult.saved) {
-        return c.json(
-          { ok: false, error: { message: saveResult.error ?? 'Failed to save config', code: 'SAVE_FAILED' } },
-          500,
-        );
-      }
-      logTunnelAudit(
-        'tunnel.enable_lan_pairing',
-        { gatewayTokenHash: hashGatewayToken(token).slice(0, 12) },
-        'Gateway bind switched to LAN for mobile pairing',
-      );
-    }
-
-    const status = tunnel.getStatus();
-    let context = buildMobilePairContext({
-      config: deps.service.currentConfig as Config,
-      tunnelPublicUrl: status.publicUrl,
-      tunnelConnected: status.state === 'connected',
-      reverseProxyPublicUrl: resolveReverseProxyPublicUrl(deps.service.currentConfig as Config),
-    });
-
-    if (patchResult.changed) {
-      context = {
-        ...context,
-        pairingReady: false,
-        blockReason: 'GATEWAY_LOOPBACK_ONLY',
-      };
-    }
-
-    return c.json({
-      ok: true,
-      requiresRestart: patchResult.changed,
-      context,
-    });
-  });
-
-  authenticated.post('/api/tunnel/pair', tunnelMutationLimit, async (c) => {
-    const token = requireGatewayToken(c);
-    if (!token) return c.json({ error: 'Gateway token required' }, 401);
-
-    const { secret, expiresAt } = createPairingSecret();
-    logTunnelAudit(
-      'tunnel.pair',
-      {
-        expiresAt: expiresAt.toISOString(),
-        gatewayTokenHash: hashGatewayToken(token).slice(0, 12),
-      },
-      'Mobile pairing session created',
-    );
-    return c.json({ pairingSecret: secret, expiresAt: expiresAt.toISOString() });
-  });
-
   /**
    * Probe a candidate reverse-proxy URL before persisting it. The check round-trips
-   * a `GET /api/tunnel/pair/ping` and validates the response identifies as
+   * a `GET /api/health` and validates the response identifies as
    * `service: 'xopc-gateway'`. Surface-area errors are mapped to stable codes so
    * the UI can render targeted hints (TLS / DNS / wrong service / blocked path).
    */
-  authenticated.post('/api/tunnel/pair/probe-public', tunnelMutationLimit, async (c) => {
+  authenticated.post('/api/tunnel/probe-public', tunnelMutationLimit, async (c) => {
     const token = requireGatewayToken(c);
     if (!token) return c.json({ error: 'Gateway token required' }, 401);
 
@@ -332,7 +116,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ ok: false, code: validation.code, message: validation.message });
     }
 
-    const pingUrl = `${validation.url}/api/tunnel/pair/ping`;
+    const pingUrl = `${validation.url}/api/health`;
     const startedAt = Date.now();
     let response: Response;
     try {
@@ -361,13 +145,13 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!response.ok) {
       return c.json({ ok: false, code: 'HTTP_ERROR', message: `HTTP ${response.status}` });
     }
-    let parsed: { service?: unknown; mobilePairing?: unknown } | null = null;
+    let parsed: { status?: unknown } | null = null;
     try {
-      parsed = (await response.json()) as { service?: unknown; mobilePairing?: unknown };
+      parsed = (await response.json()) as { status?: unknown };
     } catch {
       return c.json({ ok: false, code: 'NOT_XOPC_GATEWAY', message: 'Response was not JSON' });
     }
-    if (!parsed || parsed.service !== 'xopc-gateway') {
+    if (!parsed || (parsed.status !== 'ok' && parsed.status !== 'starting')) {
       return c.json({
         ok: false,
         code: 'NOT_XOPC_GATEWAY',
@@ -378,7 +162,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       ok: true,
       url: validation.url,
       latencyMs: Date.now() - startedAt,
-      mobilePairing: parsed.mobilePairing === true,
+      gatewayReady: true,
     });
   });
 
@@ -464,7 +248,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
     const gateway = config.gateway;
     const port = gateway.port ?? 18790;
     try {
-      const qr = await tunnel.start(port, token);
+      await tunnel.start(port, token);
       setTunnelEnabledInConfig(config, true);
       const saved = await deps.service.saveConfig(config);
       if (!saved.saved) {
@@ -474,10 +258,8 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       const status = tunnel.getStatus();
       return c.json({
-        publicUrl: qr.publicUrl,
+        publicUrl: status.publicUrl,
         subdomain: status.subdomain,
-        qrPayload: qr.qrPayload,
-        lanUrl: qr.lanUrl,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -508,16 +290,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ error: saved.error ?? 'Failed to save tunnel state' }, 500);
     }
     return c.json({ ok: true, released });
-  });
-
-  authenticated.get('/api/tunnel/qr', async (c) => {
-    const gateway = deps.service.currentConfig.gateway;
-    const port = gateway.port ?? 18790;
-    const host = resolveGatewayEffectiveHost(deps.service.currentConfig);
-    const token = requireGatewayToken(c);
-    if (!token) return c.json({ error: 'Gateway token required' }, 401);
-    const qr = await tunnel.buildQr(port, host);
-    return c.json(qr);
   });
 
   authenticated.get('/api/tunnel/transport-status', async (c) => {

@@ -75,7 +75,7 @@ export function MySharesScreen() {
   const pm = m.sharingPage;
   const qc = useQueryClient();
   const list = useShareList();
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.accessToken);
 
   const [extending, setExtending] = useState<ShareListItem | null>(null);
   const [revoking, setRevoking] = useState<ShareListItem | null>(null);
@@ -92,7 +92,7 @@ export function MySharesScreen() {
   const renderItem = ({ item }: { item: ShareListItem }) => (
     <ShareRow
       item={item}
-      token={token}
+      token={token ?? ''}
       palette={palette}
       onPreview={() => setPreviewing({ url: item.shareUrl, title: item.fileName })}
       onExtend={() => setExtending(item)}

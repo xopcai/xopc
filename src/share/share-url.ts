@@ -1,5 +1,5 @@
 import { loadTunnelState } from '../tunnel/tunnel-state.js';
-import { resolveLanGatewayUrl } from '../tunnel/tunnel-qr.js';
+import { enumerateLanGatewayCandidates } from '../gateway/host.js';
 
 import type { ResolvedShareUrl, ShareReachability } from './share-types.js';
 
@@ -63,7 +63,10 @@ export function resolveShareUrl(token: string, ctx: ShareUrlContext): ResolvedSh
 }
 
 function buildLanUrl(host: string, port: number, path: string): string | null {
-  const lanBase = resolveLanGatewayUrl(host, port);
+  const lanBase = isLoopbackHost(host)
+    ? null
+    : enumerateLanGatewayCandidates(port).find((candidate) => candidate.address === host)?.url
+      ?? `http://${host.includes(':') ? `[${host}]` : host}:${port}`;
   if (!lanBase) return null;
   return `${lanBase.replace(/\/+$/, '')}${path}`;
 }

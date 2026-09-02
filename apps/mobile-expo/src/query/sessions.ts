@@ -281,5 +281,5 @@ export async function unpinSession(key: string): Promise<void> {
 // ── Hook ─────────────────────────────────────────────────────────
 
 export function useGatewayConfigured(): boolean {
-  return useGatewayStore((s) => Boolean(s.baseUrl.trim()));
+  return useGatewayStore((s) => s.getActiveProfile() !== null);
 }

@@ -89,7 +89,7 @@ export function useThumbnailReadiness(
 ): { status: 'ready' | 'pending' | 'gone' | 'unknown' | 'unavailable'; attempt: number } {
   const intervalMs = opts.intervalMs ?? 600;
   const maxAttempts = opts.maxAttempts ?? 8;
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.accessToken);
 
   const [status, setStatus] = useState<'ready' | 'pending' | 'gone' | 'unknown' | 'unavailable'>(() =>
     initialStatus ?? 'unknown',
@@ -108,7 +108,7 @@ export function useThumbnailReadiness(
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const next = await probeThumbnail(thumbnailUrl, token);
+      const next = await probeThumbnail(thumbnailUrl, token ?? undefined);
       if (cancelled) return;
       setStatus(next);
       setAttempt((n) => n + 1);

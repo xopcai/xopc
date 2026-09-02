@@ -133,7 +133,7 @@ export function WorkspaceHomeScreen() {
   const language = usePreferencesStore((state) => state.language);
   const gatewayProfiles = useGatewayStore((state) => state.profiles);
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
-  const activeGateway = gatewayProfiles.find((profile) => profile.id === activeGatewayId) ?? null;
+  const activeGateway = gatewayProfiles.find((profile) => profile.gatewayId === activeGatewayId) ?? null;
   const {
     openAskAi,
     prefetchAskAiSession,
@@ -524,7 +524,7 @@ export function WorkspaceHomeScreen() {
         visible={gatewaySwitcherVisible}
         onDismiss={() => setGatewaySwitcherVisible(false)}
         onSwitched={(profileId) => {
-          const profile = useGatewayStore.getState().profiles.find((item) => item.id === profileId);
+          const profile = useGatewayStore.getState().profiles.find((item) => item.gatewayId === profileId);
           if (profile) setToastMessage(t(m.gateway.switcher.switched, { name: profile.name }));
         }}
         onManage={() => router.push('/settings/gateway')}
