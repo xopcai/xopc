@@ -27,6 +27,7 @@ import {
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
+import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { writeWorkspaceFileDrag } from '@/features/workspace/workspace-file-drag';
 import { cn } from '@/lib/cn';
@@ -273,17 +274,29 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
           }
           break;
         case 'openDefault':
-          await window.electronAPI?.shell?.openFileResource?.(entry.fileId);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.openFileResource?.(entry.fileId),
+            m.workspace.openFileFailed,
+          );
           break;
         case 'openWith':
-          await window.electronAPI?.shell?.chooseAppAndOpenFileResource?.(entry.fileId);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.chooseAppAndOpenFileResource?.(entry.fileId),
+            m.workspace.openFileFailed,
+          );
           break;
         case 'openWithApp':
           if (!appPath) return;
-          await window.electronAPI?.shell?.openFileResourceWithApp?.(entry.fileId, appPath);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.openFileResourceWithApp?.(entry.fileId, appPath),
+            m.workspace.openFileFailed,
+          );
           break;
         case 'revealInFolder':
-          await window.electronAPI?.shell?.showFileResourceInFolder?.(entry.fileId);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.showFileResourceInFolder?.(entry.fileId),
+            m.workspace.revealFileFailed,
+          );
           break;
         case 'trash':
           setPendingTrash(entry);
@@ -299,7 +312,14 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
           break;
       }
     },
-    [createShareLink, m.workspace.pathCopied, setPreviewPath, workspaceReadOpts],
+    [
+      createShareLink,
+      m.workspace.openFileFailed,
+      m.workspace.pathCopied,
+      m.workspace.revealFileFailed,
+      setPreviewPath,
+      workspaceReadOpts,
+    ],
   );
 
   const confirmTrash = useCallback(async () => {

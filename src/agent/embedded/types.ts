@@ -5,6 +5,7 @@ import type {
   Api,
   ImageContent,
 } from '@earendil-works/pi-ai';
+import type { TurnOutcome } from '@xopcai/gateway-contract';
 
 import type { SessionStore } from '../../session/store.js';
 import type { EmbeddedTranscriptRuntime } from './transcript-runtime.js';
@@ -47,6 +48,7 @@ export type EmbeddedStreamEvent =
   | { type: 'memory_captured'; runId?: string; records: Array<{ id: string; content: string; kind: string }> }
   | { type: 'memory_candidate'; runId?: string; records: Array<{ id: string; content: string; kind: string }> }
   | { type: 'error'; runId?: string; content: string }
+  | { type: 'turn_outcome'; runId?: string; outcome: TurnOutcome }
   | {
       type: 'compaction';
       runId?: string;

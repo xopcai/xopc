@@ -73,6 +73,7 @@ import type { Message } from './types.js';
 import type { SessionTranscriptUpdate } from './transcript-events.js';
 import { isAppendOnlyLlmTranscriptMessage } from './transcript-stats.js';
 import { transcriptRowsToClientHistory } from './client-history.js';
+import { backfillStructuredTurnOutcomes } from './turn-outcome-projector.js';
 import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
 
 const log = createLogger('SessionStore');
@@ -951,7 +952,8 @@ export class SessionStore {
         routing: metadata.routing,
         customData: metadata.customData,
       });
-      replaceTranscriptRows(targetKey, rows);
+      const normalizedRows = backfillStructuredTurnOutcomes(rows);
+      replaceTranscriptRows(targetKey, normalizedRows);
 
       const sourceKey = typeof metadata.key === 'string' ? metadata.key : undefined;
       const sourceName = typeof metadata.name === 'string' ? metadata.name.trim() : '';
@@ -966,7 +968,7 @@ export class SessionStore {
           importedAt: new Date().toISOString(),
         },
       });
-      return { sessionKey: targetKey, rowCount: rows.length };
+      return { sessionKey: targetKey, rowCount: normalizedRows.length };
     });
   }
 
