@@ -1,7 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { ExternalLink, Loader2, Maximize2, Minimize2, X } from 'lucide-react';
+import { useState } from 'react';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { getAttachmentBinaryPayload } from '@/features/chat/attachments/attachment-utils-core';
 import {
@@ -13,6 +15,7 @@ import {
 } from '@/features/preview-runtime';
 import { useFilePreviewFullscreen } from '@/features/file-preview/use-file-preview-fullscreen';
 import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -52,6 +55,7 @@ export function AttachmentPreviewDialog({
   const resolved = useAttachmentPreviewResolved({ open, attachment, authToken, sessionKey, language });
   const previewController = usePreviewRuntimeController(resolved.descriptor);
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
+  const [openingLocalApp, setOpeningLocalApp] = useState(false);
 
   const { preview, fileType, hasExtractedText, showExtractedText } = resolved;
   const showToggle =
@@ -95,6 +99,33 @@ export function AttachmentPreviewDialog({
   };
 
   const canDownload = Boolean(resolved.binaryBuffer || getAttachmentBinaryPayload(preview ?? {}));
+  const canOpenWithLocalApp =
+    isElectron()
+    && fileType === 'spreadsheet'
+    && /\.xlsx?$/i.test(resolved.fileName)
+    && Boolean(resolved.binaryBuffer)
+    && Boolean(window.electronAPI?.shell?.openTemporaryFile);
+
+  const handleOpenWithLocalApp = async () => {
+    const buffer = resolved.binaryBuffer;
+    const openTemporaryFile = window.electronAPI?.shell?.openTemporaryFile;
+    if (!buffer || !openTemporaryFile || openingLocalApp) return;
+    setOpeningLocalApp(true);
+    try {
+      const result = await openTemporaryFile({
+        fileName: resolved.fileName,
+        data: new Uint8Array(buffer),
+      });
+      if (!result.ok) {
+        showComposerNotification('warning', labels.attachmentPreviewOpenLocalFailed);
+      }
+    } catch {
+      showComposerNotification('warning', labels.attachmentPreviewOpenLocalFailed);
+    } finally {
+      setOpeningLocalApp(false);
+    }
+  };
+
   const previewActions = {
     onDownload: handleDownload,
     canDownload,
@@ -173,6 +204,23 @@ export function AttachmentPreviewDialog({
                         {labels.attachmentPreviewText}
                       </button>
                     </div>
+                  ) : null}
+                  {canOpenWithLocalApp ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+                      title={labels.attachmentPreviewOpenLocal}
+                      aria-label={labels.attachmentPreviewOpenLocal}
+                      disabled={openingLocalApp}
+                      onClick={() => void handleOpenWithLocalApp()}
+                    >
+                      {openingLocalApp ? (
+                        <Loader2 className="size-4 animate-spin" aria-hidden />
+                      ) : (
+                        <ExternalLink className="size-4" aria-hidden />
+                      )}
+                      <span className="hidden sm:inline">{labels.attachmentPreviewOpenLocal}</span>
+                    </button>
                   ) : null}
                   {preview ? <PreviewRuntimeToolbar controller={previewController} actions={previewActions} /> : null}
                   {canPreviewFullscreen ? (
