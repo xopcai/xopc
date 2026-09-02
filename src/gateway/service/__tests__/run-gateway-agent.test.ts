@@ -150,7 +150,6 @@ describe('runGatewayAgent', () => {
     const sessionKey = 'agent:main:webchat:default:direct:chat-test';
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
-    const persisted: Array<{ customType: string; data?: unknown }> = [];
     const deps = {
       config: {},
       agentService: {
@@ -170,6 +169,19 @@ describe('runGatewayAgent', () => {
               },
             };
             yield { type: 'message_end', message };
+            yield {
+              type: 'turn_outcome',
+              outcome: {
+                version: 1,
+                outcomeId: 'run-terminal:outcome',
+                runId: 'run-terminal',
+                turnId: 'run-terminal',
+                status: 'succeeded',
+                deliverables: [],
+                evidence: [],
+                createdAt: '2026-09-03T00:00:00.000Z',
+              },
+            };
           },
         },
         getLastAssistantPlainText: () => 'cached response must not supply the notification preview',
@@ -182,9 +194,6 @@ describe('runGatewayAgent', () => {
       activeWebchatRunBySession: new Map<string, string>(),
       sessionIndex: {
         getSessionMetadata: async () => ({ sessionId: 's1', name: 'Finish notifications' }),
-        appendTranscriptCustomEntry: async (_key: string, entry: { customType: string; data?: unknown }) => {
-          persisted.push(entry);
-        },
       },
       emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
       publishRealtime: (topic: string, event: string, data: unknown) => {
@@ -231,12 +240,6 @@ describe('runGatewayAgent', () => {
       },
     ]);
     expect(realtimeEvents.some((event) => event.event === 'turn_outcome')).toBe(true);
-    expect(persisted).toEqual([
-      expect.objectContaining({
-        customType: 'turn_outcome',
-        data: expect.objectContaining({ runId: 'run-terminal', status: 'succeeded' }),
-      }),
-    ]);
   });
 
   it('publishes a run-topic terminal when setup fails before active registration', async () => {

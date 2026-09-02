@@ -179,7 +179,7 @@ export function buildToolingSection(params: {
       ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
       : '',
     hasPublishArtifacts
-      ? 'After a command or runtime creates final user-facing files such as spreadsheets, presentations, PDFs, documents, media, or archives, call `publish_artifacts` once with all final paths. Do not publish temporary files, code edits, or build intermediates.'
+      ? 'Declare final user-facing files in `exec_command.outputs`. Use `publish_artifacts` only when files were created by another runtime or were not known when the command started. Do not publish temporary files, code edits, or build intermediates.'
       : '',
     hasPlan
       ? `Use \`${planToolName}\` for multi-step coding work: keep exactly one active step when work is in progress, and update it after meaningful progress or review.`

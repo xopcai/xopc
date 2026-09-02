@@ -60,6 +60,7 @@ import {
   fetchWorkspaceFileBlob,
   readWorkspaceFile,
 } from '@/features/workspace/workspace-api';
+import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
 import { messages } from '@/i18n/messages';
@@ -1378,17 +1379,29 @@ export function ProjectDetailPage() {
           }
           break;
         case 'openDefault':
-          await window.electronAPI?.shell?.openFileResource?.(entry.fileId);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.openFileResource?.(entry.fileId),
+            msg.workspace.openFileFailed,
+          );
           break;
         case 'openWith':
-          await window.electronAPI?.shell?.chooseAppAndOpenFileResource?.(entry.fileId);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.chooseAppAndOpenFileResource?.(entry.fileId),
+            msg.workspace.openFileFailed,
+          );
           break;
         case 'openWithApp':
           if (!appPath) return;
-          await window.electronAPI?.shell?.openFileResourceWithApp?.(entry.fileId, appPath);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.openFileResourceWithApp?.(entry.fileId, appPath),
+            msg.workspace.openFileFailed,
+          );
           break;
         case 'revealInFolder':
-          await window.electronAPI?.shell?.showFileResourceInFolder?.(entry.fileId);
+          await runFileShellAction(
+            () => window.electronAPI?.shell?.showFileResourceInFolder?.(entry.fileId),
+            msg.workspace.revealFileFailed,
+          );
           break;
         case 'trash':
           setPendingTrashFile(entry);
@@ -1397,7 +1410,13 @@ export function ProjectDetailPage() {
           break;
       }
     },
-    [msg.clipboard.copyFailed, msg.workspace.pathCopied, project?.id],
+    [
+      msg.clipboard.copyFailed,
+      msg.workspace.openFileFailed,
+      msg.workspace.pathCopied,
+      msg.workspace.revealFileFailed,
+      project?.id,
+    ],
   );
 
   const confirmTrashProjectFile = useCallback(async () => {

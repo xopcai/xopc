@@ -6,8 +6,10 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import type { TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
+import { publishArtifactPaths } from './publish-artifacts.js';
 import { formatSize, truncateTail } from './truncate.js';
 
 const MAX_COMMAND_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -32,6 +34,12 @@ const ExecCommandSchema = Type.Object({
       description: 'Maximum characters returned to the model. UI streaming still receives output deltas.',
     }),
   ),
+  outputs: Type.Optional(
+    Type.Array(Type.String({ minLength: 1 }), {
+      maxItems: 50,
+      description: 'Final user-facing files created by this command. Relative paths resolve under the effective cwd and are persisted as chat deliverables after a successful command.',
+    }),
+  ),
 });
 
 export interface ExecCommandDetails {
@@ -50,6 +58,7 @@ export interface ExecCommandDetails {
   stderr: string;
   aggregatedOutput: string;
   failureHint?: string;
+  artifacts?: TurnOutcomeDeliverable[];
 }
 
 export interface ExecCommandUpdateDetails {
@@ -72,6 +81,7 @@ type ExecCommandParams = {
   cwd?: string;
   timeoutMs?: number;
   maxOutputChars?: number;
+  outputs?: string[];
 };
 
 function clampTimeoutMs(raw: unknown): number {
@@ -187,7 +197,7 @@ export function createExecCommandTool(
       'Run shell commands for code inspection, builds, tests, type checks, and verification.',
       'Use apply_patch for file edits; do not edit files by shell redirection unless explicitly necessary.',
       'Relative cwd values resolve under the current agent workspace.',
-      'When the command creates final user-facing files, call publish_artifacts afterward with all final paths.',
+      'When the command creates final user-facing files, declare all final paths in outputs so they are persisted with this command.',
     ].join(' '),
     parameters: ExecCommandSchema,
     label: 'Run Command',
@@ -197,7 +207,7 @@ export function createExecCommandTool(
     finalGuardRelevant: true,
 
     async execute(
-      _toolCallId: string,
+      toolCallId: string,
       params: ExecCommandParams,
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<ExecCommandUpdateDetails>,
@@ -314,7 +324,7 @@ export function createExecCommandTool(
           });
         };
 
-        const finish = (
+        const finish = async (
           exitCode: number | null,
           errorText?: string,
         ) => {
@@ -356,8 +366,20 @@ export function createExecCommandTool(
             outputBytes: formatted.outputBytes,
           };
 
+          let resultText = formatted.text;
+          if (details.status === 'success' && params.outputs?.length) {
+            details.artifacts = await publishArtifactPaths({
+              paths: params.outputs,
+              baseDir: policy.effectiveCwd,
+              toolCallId,
+            });
+            const published = details.artifacts.filter((item) => item.availability === 'available').length;
+            const failed = details.artifacts.length - published;
+            resultText += `\n\nArtifacts: ${published} published${failed > 0 ? `, ${failed} failed` : ''}.`;
+          }
+
           const result: AgentToolResult<ExecCommandDetails> = {
-            content: [{ type: 'text', text: formatted.text }],
+            content: [{ type: 'text', text: resultText }],
             details,
           };
 
@@ -382,8 +404,8 @@ export function createExecCommandTool(
 
         proc.stdout?.on('data', (data) => publishDelta('stdout', data));
         proc.stderr?.on('data', (data) => publishDelta('stderr', data));
-        proc.on('error', (err) => finish(null, `Error: ${err.message}`));
-        proc.on('close', (code) => finish(code));
+        proc.on('error', (err) => void finish(null, `Error: ${err.message}`));
+        proc.on('close', (code) => void finish(code));
       });
     },
   } as any;

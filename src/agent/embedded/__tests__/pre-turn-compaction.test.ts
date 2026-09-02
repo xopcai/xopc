@@ -52,6 +52,7 @@ function createMockSessionStore(opts: {
     ] as AgentMessage[]),
     compact: vi.fn().mockResolvedValue(compactResult),
     loadTranscriptRows: vi.fn().mockResolvedValue([]),
+    appendTranscriptCustomEntry: vi.fn().mockResolvedValue(undefined),
     prepareModelFallback: vi.fn().mockResolvedValue('prompt'),
   };
 }
@@ -219,6 +220,53 @@ describe('pre-turn auto-compaction', () => {
 
     // The embedded turn still ran
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalled();
+  });
+
+  it('persists and emits one canonical outcome for the completed turn', async () => {
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    sessionStore.loadTranscriptRows.mockResolvedValue([{
+      role: 'toolResult',
+      turnId: 'run-outcome',
+      toolCallId: 'publish-1',
+      toolName: 'publish_artifacts',
+      details: {
+        artifacts: [{
+          artifactId: 'report-id',
+          title: 'report.xlsx',
+          kind: 'spreadsheet',
+          availability: 'available',
+          location: 'artifact_store',
+          capabilities: ['preview', 'download'],
+          uri: 'media://outbound/report-id.xlsx',
+        }],
+      },
+    }]);
+    const events: EmbeddedStreamEvent[] = [];
+
+    await runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      runId: 'run-outcome',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any,
+      onEvent: (event) => events.push(event),
+    });
+
+    expect(sessionStore.appendTranscriptCustomEntry).toHaveBeenCalledWith(
+      'agent:main:test-session',
+      expect.objectContaining({
+        customType: 'turn_outcome',
+        data: expect.objectContaining({
+          turnId: 'run-outcome',
+          deliverables: [expect.objectContaining({ artifactId: 'report-id' })],
+        }),
+      }),
+    );
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'turn_outcome',
+      runId: 'run-outcome',
+    }));
   });
 
   it('forces compaction when the active transcript exceeds the byte limit', async () => {
@@ -449,6 +497,33 @@ describe('pre-turn auto-compaction', () => {
     expect(result).toEqual({ ok: false, errorMessage: 'aborted' });
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledTimes(1);
     expect(sessionStore.prepareModelFallback).not.toHaveBeenCalled();
+  });
+
+  it('persists a partial outcome when the provider aborts by throwing', async () => {
+    mockRunXopcEmbeddedTurn.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    sessionStore.loadTranscriptRows.mockResolvedValue([{
+      role: 'assistant',
+      turnId: 'run-aborted',
+      content: [{ type: 'text', text: 'partial' }],
+    }]);
+
+    await expect(runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      runId: 'run-aborted',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(sessionStore.appendTranscriptCustomEntry).toHaveBeenCalledWith(
+      'agent:main:test-session',
+      expect.objectContaining({
+        customType: 'turn_outcome',
+        data: expect.objectContaining({ turnId: 'run-aborted', status: 'partial' }),
+      }),
+    );
   });
 
   it('respects memory.retention.compaction.enabled=false config', async () => {

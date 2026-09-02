@@ -86,7 +86,7 @@ export class EndpointToolHost {
       getAvailability: availability,
       confirm: confirmEndpointTool,
       uploadFile: (grant, file) => this.uploadFile(grant, file),
-      createMessageId: crypto.randomUUID,
+      createMessageId: () => crypto.randomUUID(),
     });
   }
 

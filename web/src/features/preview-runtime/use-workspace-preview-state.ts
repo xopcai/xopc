@@ -400,6 +400,7 @@ export function useWorkspacePreviewState({
     if (!fileResourceId || !window.electronAPI?.shell?.chooseAppAndOpenFileResource) return;
     const result = await window.electronAPI.shell.chooseAppAndOpenFileResource(fileResourceId);
     if (result.ok) void refreshOpenWithApps();
+    return result;
   }, [preview.fileResourceId, refreshOpenWithApps]);
 
   const onOpenWithRecentApp = useCallback(
@@ -408,6 +409,7 @@ export function useWorkspacePreviewState({
       if (!fileResourceId || !appPath || !window.electronAPI?.shell?.openFileResourceWithApp) return;
       const result = await window.electronAPI.shell.openFileResourceWithApp(fileResourceId, appPath);
       if (result.ok) void refreshOpenWithApps();
+      return result;
     },
     [preview.fileResourceId, refreshOpenWithApps],
   );
@@ -417,8 +419,9 @@ export function useWorkspacePreviewState({
   const onRevealInFolder = useCallback(async () => {
     const fileResourceId = preview.fileResourceId;
     if (fileResourceId && window.electronAPI?.shell?.showFileResourceInFolder) {
-      await window.electronAPI.shell.showFileResourceInFolder(fileResourceId);
+      return window.electronAPI.shell.showFileResourceInFolder(fileResourceId);
     }
+    return undefined;
   }, [preview.fileResourceId]);
 
   return {

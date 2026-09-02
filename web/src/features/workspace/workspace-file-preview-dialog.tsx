@@ -35,6 +35,7 @@ import {
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { getSessionDetail } from '@/features/sessions/session-api';
+import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
@@ -187,15 +188,32 @@ export function WorkspaceFilePreviewPanel({
   }, [agentId, createShareLink, filePath, projectId, sessionKey]);
 
   const handleOpenWithSystemApp = useCallback(async () => {
-    try {
-      const result = await state.onOpenWithSystemApp();
-      if (result && !result.ok) {
-        showComposerNotification('warning', m.chat.attachmentPreviewOpenLocalFailed);
-      }
-    } catch {
-      showComposerNotification('warning', m.chat.attachmentPreviewOpenLocalFailed);
-    }
+    await runFileShellAction(
+      () => state.onOpenWithSystemApp(),
+      m.chat.attachmentPreviewOpenLocalFailed,
+    );
   }, [m.chat.attachmentPreviewOpenLocalFailed, state.onOpenWithSystemApp]);
+
+  const handleChooseOpenWithApp = useCallback(async () => {
+    await runFileShellAction(
+      () => state.onChooseOpenWithApp(),
+      m.workspace.openFileFailed,
+    );
+  }, [m.workspace.openFileFailed, state.onChooseOpenWithApp]);
+
+  const handleOpenWithRecentApp = useCallback(async (appPath: string) => {
+    await runFileShellAction(
+      () => state.onOpenWithRecentApp(appPath),
+      m.workspace.openFileFailed,
+    );
+  }, [m.workspace.openFileFailed, state.onOpenWithRecentApp]);
+
+  const handleRevealInFolder = useCallback(async () => {
+    await runFileShellAction(
+      () => state.onRevealInFolder(),
+      m.workspace.revealFileFailed,
+    );
+  }, [m.workspace.revealFileFailed, state.onRevealInFolder]);
 
   const handleClose = useCallback(() => {
     setExpanded(false);
@@ -442,7 +460,7 @@ export function WorkspaceFilePreviewPanel({
                       label={m.workspace.chooseApp}
                       onClick={() => {
                         setMoreMenuOpen(false);
-                        void state.onChooseOpenWithApp();
+                        void handleChooseOpenWithApp();
                       }}
                     />
                   ) : null}
@@ -460,7 +478,7 @@ export function WorkspaceFilePreviewPanel({
                           title={app.path}
                           onClick={() => {
                             setMoreMenuOpen(false);
-                            void state.onOpenWithRecentApp(app.path);
+                            void handleOpenWithRecentApp(app.path);
                           }}
                         >
                           <span className="block truncate">{app.name}</span>
@@ -482,7 +500,7 @@ export function WorkspaceFilePreviewPanel({
                           title={app.path}
                           onClick={() => {
                             setMoreMenuOpen(false);
-                            void state.onOpenWithRecentApp(app.path);
+                            void handleOpenWithRecentApp(app.path);
                           }}
                         >
                           <span className="block truncate">{app.name}</span>
@@ -496,7 +514,7 @@ export function WorkspaceFilePreviewPanel({
                       label={m.workspace.revealInFolder}
                       onClick={() => {
                         setMoreMenuOpen(false);
-                        void state.onRevealInFolder();
+                        void handleRevealInFolder();
                       }}
                     />
                   ) : null}
