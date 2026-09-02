@@ -109,6 +109,43 @@ describe('TurnOutcomeCollector', () => {
     expect(collector.finalize('success').deliverables).toEqual([]);
   });
 
+  it('aggregates the canonical file ProductDelivery into the turn outcome', () => {
+    const collector = new TurnOutcomeCollector('run-1');
+    collector.capture(event('tool_end', {
+      messageId: 'msg-1',
+      toolCallId: 'write-1',
+      toolName: 'write_file',
+      status: 'success',
+      activity: { category: 'file', action: 'write', status: 'completed' },
+      result: {
+        details: {
+          delivery: {
+            version: 1,
+            operation: 'updated',
+            primary: {
+              kind: 'file',
+              id: 'space-id.cmVwb3J0cy9zYWxlcy54bHN4',
+              title: 'sales.xlsx',
+              capabilities: ['preview', 'share'],
+            },
+          },
+        },
+      },
+    }));
+
+    expect(collector.finalize('success').deliverables).toEqual([{
+      artifactId: 'space-id.cmVwb3J0cy9zYWxlcy54bHN4',
+      title: 'sales.xlsx',
+      kind: 'spreadsheet',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      availability: 'available',
+      location: 'workspace',
+      capabilities: ['preview', 'download', 'share'],
+      uri: 'xopc-file:space-id.cmVwb3J0cy9zYWxlcy54bHN4',
+      workspaceRelativePath: 'reports/sales.xlsx',
+    }]);
+  });
+
   it('marks the result partial when a verification command fails', () => {
     const collector = new TurnOutcomeCollector('run-1');
     collector.capture(event('command_completed', {

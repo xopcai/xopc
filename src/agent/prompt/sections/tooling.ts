@@ -13,6 +13,7 @@ const CORE_TOOL_ORDER = [
   'browser_use',
   'send_message',
   'send_media',
+  'publish_artifacts',
   'memory_search',
   'memory_get',
   'session_recall',
@@ -51,6 +52,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   browser_use: 'Control the configured browser',
   send_message: 'Send messages to the current conversation or an explicit configured channel',
   send_media: 'Send media attachments to the current channel',
+  publish_artifacts: 'Publish final generated files as durable chat deliverables',
   memory_search: 'Semantic search over indexed memory sources',
   memory_get: 'Read specific lines from memory sources returned by search',
   session_recall: 'Search exact raw turns in the current session, including compacted history',
@@ -133,6 +135,7 @@ export function buildToolingSection(params: {
   const hasFind = availableTools.has('find');
   const hasExec = availableTools.has('exec_command');
   const hasPlan = availableTools.has('update_plan');
+  const hasPublishArtifacts = availableTools.has('publish_artifacts');
 
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
@@ -174,6 +177,9 @@ export function buildToolingSection(params: {
       : '',
     hasWrite || hasExec
       ? 'When delivering a user-facing workspace file, include a clickable Markdown link in the final response using `xopc://workspace/file?path=<workspace-relative-path>`; URL-encode spaces and special characters, and do not invent an HTTP or `file://` URL.'
+      : '',
+    hasPublishArtifacts
+      ? 'After a command or runtime creates final user-facing files such as spreadsheets, presentations, PDFs, documents, media, or archives, call `publish_artifacts` once with all final paths. Do not publish temporary files, code edits, or build intermediates.'
       : '',
     hasPlan
       ? `Use \`${planToolName}\` for multi-step coding work: keep exactly one active step when work is in progress, and update it after meaningful progress or review.`

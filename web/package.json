@@ -49,6 +49,7 @@
     "@tiptap/react": "^3.26.0",
     "@tiptap/starter-kit": "^3.26.0",
     "@tiptap/suggestion": "^3.26.1",
+    "@xopcai/endpoint-tools-client": "workspace:*",
     "@xopcai/endpoint-tools-protocol": "workspace:*",
     "@xopcai/extension-ui-sdk": "workspace:*",
     "@xopcai/gateway-contract": "workspace:*",

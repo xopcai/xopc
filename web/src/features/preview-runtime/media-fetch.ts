@@ -1,3 +1,5 @@
+import { parseFileResourceArtifactUri } from '@xopcai/gateway-contract';
+
 import { mediaUriToReadUrl } from '@/features/chat/attachments/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -14,7 +16,11 @@ export async function fetchMediaUriBlob(params: {
 }): Promise<FetchPreviewBlobResult> {
   const { uri, sessionKey, taskId } = params;
   try {
-    const res = await apiFetch(apiUrl(mediaUriToReadUrl(uri, sessionKey, taskId)));
+    const fileResourceId = parseFileResourceArtifactUri(uri);
+    const readPath = fileResourceId
+      ? `/api/files/${encodeURIComponent(fileResourceId)}/content`
+      : mediaUriToReadUrl(uri, sessionKey, taskId);
+    const res = await apiFetch(apiUrl(readPath));
     if (!res.ok) return { ok: false, reason: 'http', status: res.status };
     return { ok: true, blob: await res.blob() };
   } catch (e) {

@@ -97,7 +97,7 @@ describe('send_media', () => {
     }));
     expect(result.details).toMatchObject({
       media: [{ uri: 'media://outbound/photo---id.webp' }],
-      artifacts: [{ kind: 'file', uri: 'media://outbound/photo---id.webp' }],
+      artifacts: [{ kind: 'image', uri: 'media://outbound/photo---id.webp' }],
     });
   });
 

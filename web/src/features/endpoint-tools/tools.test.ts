@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EndpointToolRegistry, type EndpointToolExecutionContext } from '@xopcai/endpoint-tools-client';
 
-import { executeWebEndpointTool } from './tools';
+import { WEB_ENDPOINT_TOOL_DEFINITIONS } from './tools';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe('web endpoint tools', () => {
+  const registry = new EndpointToolRegistry(WEB_ENDPOINT_TOOL_DEFINITIONS);
+  const execute = (name: string, args: Record<string, unknown>, context: EndpointToolExecutionContext) =>
+    registry.get(name)!.definition.execute(args, context);
   const uploadFile = vi.fn(async (file: { name: string; mimeType: string; bytes: Uint8Array }) => ({
     type: 'file' as const,
     fileId: 'file-1',
@@ -15,16 +19,21 @@ describe('web endpoint tools', () => {
     size: file.bytes.byteLength,
     sha256: 'a'.repeat(64),
   }));
-  const context = { uploadFile };
+  const context = {
+    uploadFile,
+    invocationId: 'invocation-1',
+    signal: new AbortController().signal,
+    reportProgress: vi.fn(),
+  };
 
   it('reads selection without accepting undeclared arguments', async () => {
     vi.stubGlobal('window', {
       getSelection: () => ({ toString: () => 'selected text' }),
     });
-    await expect(executeWebEndpointTool('web.page.get_selection', {}, context)).resolves.toEqual({
+    await expect(execute('web.page.get_selection', {}, context)).resolves.toEqual({
       content: [{ type: 'text', text: 'selected text' }],
     });
-    await expect(executeWebEndpointTool('web.page.get_selection', { extra: true }, context)).rejects.toThrow(
+    await expect(execute('web.page.get_selection', { extra: true }, context)).rejects.toThrow(
       'exactly',
     );
   });
@@ -33,7 +42,7 @@ describe('web endpoint tools', () => {
     const writeText = vi.fn(async () => undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     vi.stubGlobal('document', { hasFocus: () => true });
-    await expect(executeWebEndpointTool('web.clipboard.write', { text: 'hello' }, context)).resolves.toEqual({
+    await expect(execute('web.clipboard.write', { text: 'hello' }, context)).resolves.toEqual({
       content: [{ type: 'text', text: 'Clipboard updated.' }],
     });
     expect(writeText).toHaveBeenCalledWith('hello');
@@ -41,7 +50,7 @@ describe('web endpoint tools', () => {
 
   it('rejects non-web navigation schemes', async () => {
     vi.stubGlobal('window', { location: { href: 'https://example.com/' } });
-    await expect(executeWebEndpointTool('web.page.navigate', { url: 'javascript:alert(1)' }, context))
+    await expect(execute('web.page.navigate', { url: 'javascript:alert(1)' }, context))
       .rejects.toThrow('HTTP or HTTPS');
   });
 
@@ -63,7 +72,7 @@ describe('web endpoint tools', () => {
     vi.stubGlobal('navigator', { userActivation: { isActive: true } });
     vi.stubGlobal('document', { createElement: vi.fn(() => input) });
 
-    await expect(executeWebEndpointTool('web.file.pick', {}, context)).resolves.toEqual({
+    await expect(execute('web.file.pick', {}, context)).resolves.toEqual({
       content: [expect.objectContaining({ type: 'file', fileId: 'file-1', name: 'note.txt' })],
     });
     expect(input.click).toHaveBeenCalledOnce();
@@ -76,7 +85,7 @@ describe('web endpoint tools', () => {
     const createElement = vi.fn();
     vi.stubGlobal('navigator', { userActivation: { isActive: false } });
     vi.stubGlobal('document', { createElement });
-    await expect(executeWebEndpointTool('web.file.pick', {}, context)).rejects.toMatchObject({
+    await expect(execute('web.file.pick', {}, context)).rejects.toMatchObject({
       name: 'NotAllowedError',
     });
     expect(createElement).not.toHaveBeenCalled();
@@ -89,7 +98,7 @@ describe('web endpoint tools', () => {
     vi.stubGlobal('navigator', { userActivation: { isActive: true } });
     vi.stubGlobal('document', { createElement: vi.fn(() => anchor) });
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
-    await expect(executeWebEndpointTool(
+    await expect(execute(
       'web.file.download',
       { suggestedName: 'result.txt', content: 'done' },
       context,
