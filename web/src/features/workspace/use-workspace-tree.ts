@@ -6,6 +6,7 @@ import { fetchWorkspaceDirectoryListing, listWorkspaceDir, type WorkspaceEntry }
 /** Convert flat API entries into TreeEntry nodes (children initially empty for dirs). */
 function toTreeEntries(entries: WorkspaceEntry[]): TreeEntry[] {
   return entries.map((entry) => ({
+    fileId: entry.id,
     name: entry.name,
     path: entry.path,
     isDirectory: entry.isDirectory,
