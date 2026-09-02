@@ -77,6 +77,28 @@ describe('files routes', () => {
     expect(content.headers.get('etag')).toBe(resource.revision);
   });
 
+  it('downloads files with non-ASCII names using an RFC 5987 content disposition', async () => {
+    const workspace = join(stateDir, 'workspace');
+    const fileName = '销售明细查询-按客户分类汇总.xlsx';
+    mkdirSync(workspace, { recursive: true });
+    writeFileSync(join(workspace, fileName), 'workbook');
+    const { app, project } = appFor(workspace);
+
+    const context = await app.request(`/api/files/contexts/project/${project.id}`);
+    const spaceId = (await context.json() as { space: { id: string } }).space.id;
+    const resolved = await app.request('/api/files/resolve', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ spaceId, path: fileName }),
+    });
+    const resource = (await resolved.json() as { resource: { id: string } }).resource;
+
+    const response = await app.request(`/api/files/${encodeURIComponent(resource.id)}/content`);
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('workbook');
+    expect(response.headers.get('content-disposition')).toContain(`filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  });
+
   it('uses revisions for edits and never overwrites uploads', async () => {
     const workspace = join(stateDir, 'workspace');
     mkdirSync(workspace, { recursive: true });
