@@ -203,9 +203,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return path === '/api/notes' && contentType?.includes('multipart/form-data') === true;
   };
 
-  const isProjectFileUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => (
+  const isFileUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => (
     method === 'POST'
-    && /^\/api\/projects\/[^/]+\/files\/upload$/.test(path)
+    && /^\/api\/files\/spaces\/[^/]+\/upload$/.test(path)
     && contentType?.includes('multipart/form-data') === true
   );
 
@@ -244,7 +244,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
             ? MEDIA_UPLOAD_BODY_MAX
           : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
             ? NOTE_MEDIA_BODY_MAX
-            : isProjectFileUploadRequest(c.req.path, c.req.method, contentType)
+            : isFileUploadRequest(c.req.path, c.req.method, contentType)
               ? NOTE_MEDIA_BODY_MAX
               : discussionUploadBodyMax(c.req.path, c.req.method, contentType)
                 ?? DEFAULT_API_BODY_MAX;

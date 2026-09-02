@@ -1,13 +1,15 @@
+import { useQuery } from '@tanstack/react-query';
+import type { FileResource } from '@xopcai/gateway-contract';
 import { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { t, useMessages } from '../../i18n/messages';
+import { fileContentPath, resolveContextFileResources } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import { FilePreviewModal, type PreviewableFile } from './FilePreviewModal';
-import { buildGatewayRawFilePath } from './image-source-utils';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 import type { AudioContent, MessageAttachment } from './messages.types';
 import { mimeTypeFromFileName } from './tool-result-file-paths';
@@ -31,12 +33,14 @@ function attachmentPayload(att: MessageAttachment): string | undefined {
 function attachmentToPreviewable(
   att: MessageAttachment,
   index: number,
+  resource: FileResource | null,
   sessionKey?: string | null,
 ): PreviewableFile {
   const name = attachmentName(att, index);
   return {
     name,
-    mimeType: att.mimeType || mimeTypeFromFileName(name),
+    fileId: resource?.id,
+    mimeType: resource?.mimeType || att.mimeType || mimeTypeFromFileName(name),
     contentBase64: attachmentPayload(att),
     workspaceRelativePath: att.workspaceRelativePath,
     remoteUri: isMediaUri(att.uri) ? useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)) : undefined,
@@ -46,6 +50,7 @@ function attachmentToPreviewable(
 
 function imageSource(
   att: MessageAttachment,
+  resource: FileResource | null,
   sessionKey: string | null | undefined,
   apiUrl: (path: string) => string,
   token: string,
@@ -60,20 +65,23 @@ function imageSource(
   if (isMediaUri(att.uri)) {
     return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)), headers };
   }
-  const rel = att.workspaceRelativePath?.replace(/^\/+/, '').trim();
-  if (rel) {
-    return { uri: apiUrl(buildGatewayRawFilePath(rel, sessionKey ?? undefined)), headers };
+  if (resource) {
+    return { uri: apiUrl(fileContentPath(resource.id)), headers };
   }
   return null;
 }
 
-function attachmentToAudioContent(att: MessageAttachment): AudioContent {
+function attachmentToAudioContent(
+  att: MessageAttachment,
+  resource: FileResource | null,
+  apiUrl: (path: string) => string,
+): AudioContent {
   const payload = attachmentPayload(att)?.trim();
   const mimeType = att.mimeType || 'audio/mpeg';
   return {
     type: 'audio',
     workspaceRelativePath: att.workspaceRelativePath,
-    uri: att.uri ?? (
+    uri: resource ? apiUrl(fileContentPath(resource.id)) : att.uri ?? (
       payload && !att.workspaceRelativePath
         ? payload.startsWith('data:') || payload.startsWith('file:')
           ? payload
@@ -101,6 +109,14 @@ export function AttachmentRenderer({
   const token = useGatewayStore((s) => s.token);
   const [active, setActive] = useState<PreviewableFile | null>(null);
   const items = useMemo(() => attachments?.filter(Boolean) ?? [], [attachments]);
+  const workspacePaths = useMemo(() => items.map((item) => item.workspaceRelativePath), [items]);
+  const resourcesQuery = useQuery({
+    queryKey: ['files', 'message-attachments', sessionKey ?? '', workspacePaths],
+    queryFn: () => resolveContextFileResources('session', sessionKey!, workspacePaths),
+    enabled: Boolean(sessionKey && workspacePaths.some(Boolean)),
+    staleTime: 30_000,
+  });
+  const resourceByItem = resourcesQuery.data ?? [];
   const audioItems = useMemo(() => items.filter(isAudioAttachment), [items]);
   const nonAudioItems = useMemo(
     () => items.filter((att) => !isAudioAttachment(att)),
@@ -117,21 +133,25 @@ export function AttachmentRenderer({
     <>
       {audioItems.length > 0 ? (
         <View style={[styles.audioWrap, compact && styles.wrapCompact]}>
-          {audioItems.map((att, index) => (
+          {audioItems.map((att, index) => {
+            const itemIndex = items.indexOf(att);
+            return (
             <AudioMessageBlock
               key={att.id ?? `${attachmentName(att, index)}-${index}`}
-              audio={attachmentToAudioContent(att)}
-              sessionKey={sessionKey}
+              audio={attachmentToAudioContent(att, resourceByItem[itemIndex] ?? null, apiUrl)}
             />
-          ))}
+            );
+          })}
         </View>
       ) : null}
       {nonAudioItems.length > 0 ? (
       <View style={[styles.wrap, compact && styles.wrapCompact]}>
         {nonAudioItems.map((att, index) => {
           const name = attachmentName(att, index);
-          const preview = attachmentToPreviewable(att, index, sessionKey);
-          const source = isImageAttachment(att) ? imageSource(att, sessionKey, apiUrl, token) : null;
+          const itemIndex = items.indexOf(att);
+          const resource = resourceByItem[itemIndex] ?? null;
+          const preview = attachmentToPreviewable(att, index, resource, sessionKey);
+          const source = isImageAttachment(att) ? imageSource(att, resource, sessionKey, apiUrl, token) : null;
           if (source) {
             return (
               <Pressable
@@ -164,7 +184,6 @@ export function AttachmentRenderer({
       <FilePreviewModal
         visible={Boolean(active)}
         file={active}
-        sessionKey={sessionKey}
         onClose={() => setActive(null)}
       />
     </>

@@ -14,32 +14,27 @@ import { ActivityIndicator, IconButton, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
-import type { ShareAutoRequest } from '../../api/share';
-import { apiFetch } from '../../api/client';
 import { t, useMessages } from '../../i18n/messages';
-import { useCreateShare } from '../../query/shares';
+import { fetchFileContent } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
-import { ShareSheet } from '../share/ShareSheet';
 import { HtmlPreviewPane } from './HtmlPreviewPane';
 import { isHtmlFile } from './html-preview-source';
 import { MarkdownView } from './MarkdownView';
 import { mimeTypeFromFileName } from './tool-result-file-paths';
-import { readWorkspaceFile, readWorkspaceFileBase64 } from './workspace-api';
 
 export type PreviewableFile = {
+  fileId?: string;
   name: string;
   mimeType?: string;
   /** Base64 binary payload, without data URI prefix. */
   contentBase64?: string;
   /** Plain text payload. */
   textContent?: string;
-  /** Workspace-relative path to load on demand. */
+  /** Display-only path for managed files. */
   workspaceRelativePath?: string;
   /** Remote HTTP(S) URI to load on demand (e.g. gateway inbound file). */
   remoteUri?: string;
-  /** Gateway host absolute path, only for display/copy on mobile. */
-  absolutePath?: string;
   /** Optional extracted text fallback for documents. */
   extractedText?: string;
 };
@@ -47,9 +42,6 @@ export type PreviewableFile = {
 export type FilePreviewModalProps = {
   visible: boolean;
   file: PreviewableFile | null;
-  sessionKey?: string | null;
-  agentId?: string | null;
-  projectId?: string | null;
   onClose: () => void;
 };
 
@@ -60,8 +52,6 @@ type LoadedPreview = {
   mimeType: string;
   text: string | null;
   base64: string | null;
-  absolutePath?: string;
-  workspaceRelativePath?: string;
 };
 
 function extensionOf(name: string): string {
@@ -104,13 +94,9 @@ function dataUri(mimeType: string, base64: string): string {
 
 async function loadPreview(
   file: PreviewableFile,
-  sessionKey?: string | null,
-  agentId?: string | null,
-  projectId?: string | null,
 ): Promise<LoadedPreview> {
   const name = file.name || fileName(file.workspaceRelativePath ?? 'preview');
   const mimeType = file.mimeType || mimeTypeFromFileName(name);
-  const absolutePath = file.absolutePath;
   const kind: PreviewKind = isImageFile(name, mimeType)
     ? 'image'
     : isMarkdownFile(name, mimeType)
@@ -121,9 +107,25 @@ async function loadPreview(
           ? 'text'
           : 'binary';
 
+  if (file.fileId) {
+    const response = await fetchFileContent(file.fileId);
+    if (kind === 'image') {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = '';
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      return { kind, mimeType, text: null, base64: globalThis.btoa(binary) };
+    }
+    if (kind === 'markdown' || kind === 'html' || kind === 'text') {
+      return { kind, mimeType, text: await response.text(), base64: null };
+    }
+    return { kind: 'binary', mimeType, text: null, base64: null };
+  }
+
   if (kind === 'image') {
     const direct = normalizeBase64Payload(file.contentBase64);
-    if (direct) return { kind, mimeType, text: null, base64: direct, absolutePath };
+    if (direct) return { kind, mimeType, text: null, base64: direct };
     if (file.remoteUri) {
       const token = useGatewayStore.getState().token;
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -135,57 +137,35 @@ async function loadPreview(
       for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]!);
       }
-      return { kind, mimeType, text: null, base64: globalThis.btoa(binary), absolutePath };
+      return { kind, mimeType, text: null, base64: globalThis.btoa(binary) };
     }
-    if (file.workspaceRelativePath) {
-      const loaded = await readWorkspaceFileBase64(file.workspaceRelativePath, { sessionKey, agentId, projectId });
-      return { kind, mimeType, text: null, base64: loaded.contentBase64, absolutePath: loaded.absolutePath ?? absolutePath };
-    }
-    return { kind, mimeType, text: null, base64: null, absolutePath };
+    return { kind, mimeType, text: null, base64: null };
   }
 
   if (kind === 'html') {
-    if (file.workspaceRelativePath && projectId) {
-      const loaded = await readWorkspaceFile(file.workspaceRelativePath, { projectId });
-      return { kind, mimeType, text: loaded.content, base64: null, absolutePath: loaded.absolutePath ?? absolutePath };
-    }
-    if (file.workspaceRelativePath) {
-      return {
-        kind,
-        mimeType,
-        text: null,
-        base64: null,
-        absolutePath,
-        workspaceRelativePath: file.workspaceRelativePath,
-      };
-    }
     if (file.textContent != null) {
-      return { kind, mimeType, text: file.textContent, base64: null, absolutePath };
+      return { kind, mimeType, text: file.textContent, base64: null };
     }
     const fromBase64 = normalizeBase64Payload(file.contentBase64);
     if (fromBase64) {
       try {
-        return { kind, mimeType, text: globalThis.atob(fromBase64), base64: null, absolutePath };
+        return { kind, mimeType, text: globalThis.atob(fromBase64), base64: null };
       } catch {
-        return { kind, mimeType, text: null, base64: null, absolutePath };
+        return { kind, mimeType, text: null, base64: null };
       }
     }
   }
 
   if (kind === 'markdown' || kind === 'text') {
     if (file.textContent != null) {
-      return { kind, mimeType, text: file.textContent, base64: null, absolutePath };
-    }
-    if (file.workspaceRelativePath) {
-      const loaded = await readWorkspaceFile(file.workspaceRelativePath, { sessionKey, agentId, projectId });
-      return { kind, mimeType, text: loaded.content, base64: null, absolutePath: loaded.absolutePath ?? absolutePath };
+      return { kind, mimeType, text: file.textContent, base64: null };
     }
     const fromBase64 = normalizeBase64Payload(file.contentBase64);
     if (fromBase64) {
       try {
-        return { kind, mimeType, text: globalThis.atob(fromBase64), base64: null, absolutePath };
+        return { kind, mimeType, text: globalThis.atob(fromBase64), base64: null };
       } catch {
-        return { kind, mimeType, text: null, base64: null, absolutePath };
+        return { kind, mimeType, text: null, base64: null };
       }
     }
   }
@@ -195,22 +175,6 @@ async function loadPreview(
     mimeType,
     text: file.extractedText ?? null,
     base64: normalizeBase64Payload(file.contentBase64),
-    absolutePath,
-  };
-}
-
-function buildShareRequestForFile(
-  file: PreviewableFile,
-  sessionKey?: string | null,
-  agentId?: string | null,
-): ShareAutoRequest | null {
-  const rel = file.workspaceRelativePath?.trim();
-  if (!rel) return null;
-  return {
-    path: rel.replace(/\\/g, '/').replace(/^\/+/, ''),
-    audience: 'friend',
-    ...(sessionKey?.trim() ? { sessionKey: sessionKey.trim() } : {}),
-    ...(!sessionKey?.trim() && agentId?.trim() ? { agentId: agentId.trim() } : {}),
   };
 }
 
@@ -224,7 +188,7 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId, onClose }: FilePreviewModalProps) {
+export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const m = useMessages();
@@ -232,16 +196,10 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<LoadedPreview | null>(null);
-  const [shareTarget, setShareTarget] = useState<ShareAutoRequest | null>(null);
   const [downloadPending, setDownloadPending] = useState(false);
   const [downloadError, setDownloadError] = useState('');
-  const createDownloadShare = useCreateShare();
 
   const title = useMemo(() => (file ? file.name || fileName(file.workspaceRelativePath ?? 'Preview') : ''), [file]);
-  const shareRequest = useMemo(
-    () => (file && !projectId ? buildShareRequestForFile(file, sessionKey, agentId) : null),
-    [agentId, file, projectId, sessionKey],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -250,7 +208,7 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
     setLoaded(null);
     if (!visible || !file) return;
     setLoading(true);
-    void loadPreview(file, sessionKey, agentId, projectId)
+    void loadPreview(file)
       .then((next) => {
         if (!cancelled) setLoaded(next);
       })
@@ -263,7 +221,7 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
     return () => {
       cancelled = true;
     };
-  }, [agentId, file, projectId, sessionKey, visible]);
+  }, [file, visible]);
 
   useEffect(() => {
     if (!downloadError) return;
@@ -271,21 +229,19 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
     return () => clearTimeout(timer);
   }, [downloadError]);
 
-  const canDownload = Boolean(file?.workspaceRelativePath || file?.remoteUri);
+  const canDownload = Boolean(file?.fileId || file?.remoteUri);
   const downloadFile = async () => {
     if (!file) return;
     setDownloadError('');
     setDownloadPending(true);
     try {
-      if (projectId?.trim() && file.workspaceRelativePath) {
+      if (file.fileId) {
         if (!(await Sharing.isAvailableAsync())) throw new Error(cm.filePreviewShareUnavailable);
-        const params = new URLSearchParams({ path: file.workspaceRelativePath });
-        const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId.trim())}/files/raw?${params.toString()}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const directory = new Directory(Paths.cache, 'project-file-share', `${Date.now()}`);
+        const response = await fetchFileContent(file.fileId);
+        const directory = new Directory(Paths.cache, 'file-share', `${Date.now()}`);
         directory.create({ intermediates: true });
         try {
-          const localFile = new File(directory, file.name || 'project-file');
+          const localFile = new File(directory, file.name || 'file');
           localFile.create();
           localFile.write(new Uint8Array(await response.arrayBuffer()));
           await Sharing.shareAsync(localFile.uri, { mimeType: file.mimeType, dialogTitle: cm.shareFile });
@@ -299,9 +255,6 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
         await Linking.openURL(remoteUrl);
         return;
       }
-      if (!shareRequest) return;
-      const payload = await createDownloadShare.mutateAsync(shareRequest);
-      await Linking.openURL(payload.share.lanUrl ?? payload.share.shareUrl);
     } catch (e) {
       setDownloadError(t(cm.filePreviewDownloadFailed, { message: errorMessage(e) }));
     } finally {
@@ -328,16 +281,7 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
               iconColor={textColor}
               onPress={downloadFile}
               accessibilityLabel={m.chat.filePreviewDownload}
-              disabled={downloadPending || createDownloadShare.isPending}
-            />
-          ) : null}
-          {shareRequest ? (
-            <IconButton
-              icon="share-variant"
-              size={20}
-              iconColor={textColor}
-              onPress={() => setShareTarget(shareRequest)}
-              accessibilityLabel={m.chat.shareFile}
+              disabled={downloadPending}
             />
           ) : null}
           <IconButton icon="close" size={22} iconColor={textColor} onPress={onClose} accessibilityLabel={cm.filePreviewClose} />
@@ -383,10 +327,7 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
             </ScrollView>
           ) : loaded?.kind === 'html' ? (
             <HtmlPreviewPane
-              workspaceRelativePath={loaded.workspaceRelativePath ?? file?.workspaceRelativePath}
               htmlContent={loaded.text}
-              sessionKey={sessionKey}
-              agentId={agentId}
               mutedColor={muted}
             />
           ) : loaded?.kind === 'text' && loaded.text != null ? (
@@ -412,11 +353,6 @@ export function FilePreviewModal({ visible, file, sessionKey, agentId, projectId
           )}
         </View>
       </View>
-      <ShareSheet
-        visible={Boolean(shareTarget)}
-        request={shareTarget}
-        onClose={() => setShareTarget(null)}
-      />
     </Modal>
   );
 }

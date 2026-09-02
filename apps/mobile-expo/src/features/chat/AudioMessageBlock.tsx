@@ -1,10 +1,12 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import type { AudioPlayer } from 'expo-audio';
+import { useQuery } from '@tanstack/react-query';
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
+import { fileContentPath, resolveContextFileResources } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import type { AudioContent } from './messages.types';
@@ -32,6 +34,7 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const { colors } = useTheme();
   const m = useMessages();
   const token = useGatewayStore((s) => s.token);
+  const apiUrl = useGatewayStore((s) => s.apiUrl);
   const playbackOwnerId = useId();
   const playerRef = useRef<AudioPlayer | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,7 +43,16 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const [durationMillis, setDurationMillis] = useState((audio.durationSeconds ?? 0) * 1000);
   const [error, setError] = useState<string | null>(null);
 
-  const uri = useMemo(() => resolveAudioPlaybackUrl(audio, sessionKey), [audio, sessionKey]);
+  const managedFile = useQuery({
+    queryKey: ['files', 'audio', sessionKey ?? '', audio.workspaceRelativePath ?? ''],
+    queryFn: async () => (await resolveContextFileResources('session', sessionKey!, [audio.workspaceRelativePath]))[0],
+    enabled: Boolean(sessionKey && audio.workspaceRelativePath && !audio.uri),
+    staleTime: 30_000,
+  });
+  const uri = useMemo(
+    () => managedFile.data ? apiUrl(fileContentPath(managedFile.data.id)) : resolveAudioPlaybackUrl(audio, sessionKey),
+    [apiUrl, audio, managedFile.data, sessionKey],
+  );
 
   const title = audio.name?.trim() || audioNameFromPath(audio.workspaceRelativePath ?? audio.uri, 'voice.mp3');
 

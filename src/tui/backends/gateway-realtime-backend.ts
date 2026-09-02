@@ -171,18 +171,25 @@ export class GatewayRealtimeBackend implements TuiBackend {
       const params = new URLSearchParams();
       params.set('q', query);
       params.set('limit', String(options?.limit ?? 15));
-      params.set('sessionKey', sessionKey);
-      const res = await gatewayFetch(
+      const context = await gatewayFetch(
         this.baseUrl,
-        `/api/workspace/editor/files/search?${params.toString()}`,
+        `/api/files/contexts/session/${encodeURIComponent(sessionKey)}`,
         this.credential,
       );
+      if (!context.ok) return [];
+      const contextJson = await context.json() as { space?: { id?: string } };
+      if (!contextJson.space?.id) return [];
+      params.set('spaceId', contextJson.space.id);
+      const res = await gatewayFetch(this.baseUrl, `/api/files/search?${params.toString()}`, this.credential);
       if (!res.ok) return [];
       const json = (await res.json()) as {
-        ok?: boolean;
-        payload?: { entries?: TuiWorkspaceFileSearchEntry[] };
+        items?: Array<{ name: string; relativePath: string; kind: 'file' | 'directory' }>;
       };
-      return json.payload?.entries ?? [];
+      return (json.items ?? []).map((item) => ({
+        name: item.name,
+        path: item.relativePath,
+        isDirectory: item.kind === 'directory',
+      } satisfies TuiWorkspaceFileSearchEntry));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, sessionKey, errorMessage }, `Gateway workspace file search failed: ${errorMessage}`);

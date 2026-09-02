@@ -148,7 +148,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
           onAgentPress={openAgentsPicker}
           onAutoReadAloudToggle={() => setAutoReadAloudEnabled(!autoReadAloudEnabled)}
           onModelSelect={handleModelSelect}
-          onFilesPress={sessionKey ? () => router.push(`/files?sessionKey=${encodeURIComponent(sessionKey)}`) : undefined}
+          onFilesPress={sessionKey ? () => router.push(`/files/context/session/${encodeURIComponent(sessionKey)}` as never) : undefined}
           onNewChat={handleNewChat}
         />
       </AnimatedView>

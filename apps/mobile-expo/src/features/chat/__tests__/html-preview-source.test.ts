@@ -16,45 +16,10 @@ describe('isHtmlFile', () => {
 });
 
 describe('buildHtmlWebViewSource', () => {
-  const apiUrl = (path: string) => `http://gateway.test${path}`;
-
-  it('prefers workspace raw URL for relative assets', () => {
-    expect(
-      buildHtmlWebViewSource({
-        workspaceRelativePath: 'docs/guide.html',
-        htmlContent: '<html></html>',
-        sessionKey: 's:1',
-        apiUrl,
-        token: 'tok',
-        gatewayBaseUrl: 'http://gateway.test',
-      }),
-    ).toEqual({
-      uri: 'http://gateway.test/api/workspace/editor/raw?path=docs%2Fguide.html&sessionKey=s%3A1',
-      headers: { Authorization: 'Bearer tok' },
-    });
-  });
-
-  it('uses agent scope when building workspace raw URL without a session', () => {
-    expect(
-      buildHtmlWebViewSource({
-        workspaceRelativePath: 'docs/guide.html',
-        agentId: 'writer',
-        apiUrl,
-        token: '',
-        gatewayBaseUrl: 'http://gateway.test',
-      }),
-    ).toEqual({
-      uri: 'http://gateway.test/api/workspace/editor/raw?path=docs%2Fguide.html&agentId=writer',
-      headers: undefined,
-    });
-  });
-
-  it('falls back to inline html when no workspace path', () => {
+  it('renders managed HTML content inline', () => {
     expect(
       buildHtmlWebViewSource({
         htmlContent: '<html><body>Hi</body></html>',
-        apiUrl,
-        token: '',
         gatewayBaseUrl: 'http://gateway.test/',
       }),
     ).toEqual({
@@ -65,13 +30,13 @@ describe('buildHtmlWebViewSource', () => {
 });
 
 describe('shouldAllowHtmlWebViewNavigation', () => {
-  const previewUri = 'http://gateway.test/api/workspace/editor/raw?path=guide.html';
+  const previewUri = 'http://gateway.test/api/files/resource/content';
 
   it('allows preview and gateway URLs', () => {
     expect(shouldAllowHtmlWebViewNavigation(previewUri, previewUri, 'http://gateway.test')).toBe(true);
     expect(
       shouldAllowHtmlWebViewNavigation(
-        'http://gateway.test/api/workspace/editor/raw?path=styles.css',
+        'http://gateway.test/api/files/styles/content',
         previewUri,
         'http://gateway.test',
       ),

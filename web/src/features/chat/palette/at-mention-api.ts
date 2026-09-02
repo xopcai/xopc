@@ -1,6 +1,8 @@
-import { listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/workspace-api';
-import { fetchJson } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
+import {
+  listWorkspaceDir,
+  searchWorkspaceFiles as searchManagedFiles,
+  type WorkspaceEntry,
+} from '@/features/workspace/workspace-api';
 
 export interface AtMentionFileItem {
   kind: 'file';
@@ -23,13 +25,6 @@ export interface AtMentionNoteItem {
 }
 
 export type AtMentionItem = AtMentionFileItem | AtMentionNoteItem;
-
-interface SearchResponse {
-  ok: boolean;
-  payload: {
-    entries: Array<{ name: string; path: string; isDirectory: boolean }>;
-  };
-}
 
 const EMPTY_QUERY_CACHE_TTL_MS = 30_000;
 let emptyQueryCache: { key: string; at: number; items: AtMentionFileItem[] } | null = null;
@@ -56,12 +51,6 @@ export async function searchWorkspaceFiles(
   const aid = options.agentId?.trim();
   const limit = options.limit ?? 15;
   const q = query.trim();
-  const params = new URLSearchParams();
-  params.set('q', q);
-  params.set('limit', String(limit));
-  if (sk) params.set('sessionKey', sk);
-  else if (aid) params.set('agentId', aid);
-
   if (sk && q.length === 0) {
     const ck = cacheKey(sk);
     const now = Date.now();
@@ -70,10 +59,11 @@ export async function searchWorkspaceFiles(
     }
   }
 
-  const res = await fetchJson<SearchResponse>(
-    apiUrl(`/api/workspace/editor/files/search?${params.toString()}`),
-  );
-  const items = mapFileEntries(res.payload.entries ?? []);
+  const requestOptions = { sessionKey: sk, agentId: aid };
+  const entries = q.length === 0
+    ? await listWorkspaceDir('', requestOptions)
+    : await searchManagedFiles(q, requestOptions, limit);
+  const items = mapFileEntries(entries);
 
   if (sk && q.length === 0) {
     emptyQueryCache = { key: cacheKey(sk), at: Date.now(), items };
