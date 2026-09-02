@@ -64,10 +64,6 @@ export const ChatHeader = memo(function ChatHeader({
     onAgentPress();
   }, [onAgentPress]);
 
-  const toggleAutoReadAloud = useCallback(() => {
-    onAutoReadAloudToggle();
-  }, [onAutoReadAloudToggle]);
-
   return (
     <>
       <View style={[styles.header, { paddingTop }]}>
@@ -96,6 +92,22 @@ export const ChatHeader = memo(function ChatHeader({
         <View style={styles.rightActions}>
           <Pressable
             style={styles.iconButton}
+            onPress={onAutoReadAloudToggle}
+            hitSlop={6}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: autoReadAloudEnabled }}
+            accessibilityLabel={autoReadAloudEnabled
+              ? m.chat.autoReadAloudDisable
+              : m.chat.autoReadAloudEnable}
+          >
+            <Icon
+              source={autoReadAloudEnabled ? 'volume-high' : 'volume-off'}
+              size={23}
+              color={pillText}
+            />
+          </Pressable>
+          <Pressable
+            style={styles.iconButton}
             onPress={() => setActionsVisible(true)}
             accessibilityRole="button"
             accessibilityLabel={m.chat.headerActions}
@@ -108,10 +120,8 @@ export const ChatHeader = memo(function ChatHeader({
       <ChatActionsSheet
         visible={actionsVisible}
         agentName={agentName}
-        autoReadAloudEnabled={autoReadAloudEnabled}
         onDismiss={() => setActionsVisible(false)}
         onAgentPress={openAgentPicker}
-        onAutoReadAloudToggle={toggleAutoReadAloud}
         onFilesPress={onFilesPress ? openFiles : undefined}
         onNewChat={startNewChat}
       />
@@ -141,11 +151,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sideSlot: {
-    width: 44,
+    width: 88,
     alignItems: 'flex-start',
   },
   rightActions: {
-    width: 44,
+    width: 88,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
