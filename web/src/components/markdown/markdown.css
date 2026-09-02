@@ -17,6 +17,13 @@
   color: inherit;
 }
 
+/* Chat owns its reading scale; shared Markdown keeps the compact document default. */
+.assistant-markdown-content .markdown-body,
+.chat-user-message .markdown-body {
+  font-size: inherit;
+  line-height: inherit;
+}
+
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
@@ -62,7 +69,7 @@
   font-size: 0.875em;
   background: color-mix(in srgb, var(--color-fg) 8%, transparent);
   padding: 0.15em 0.4em;
-  border-radius: var(--radius-sm);
+  border-radius: 0.4rem;
   color: var(--color-fg-muted);
 }
 
@@ -232,11 +239,11 @@ html.dark .markdown-code-copy-btn:hover {
 
 .markdown-body blockquote {
   margin: 0 0 1em;
-  padding: 0.75em 1em;
-  border-left: 3px solid var(--color-accent);
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 2px solid var(--color-edge-strong);
   color: var(--color-fg-muted);
-  background: var(--color-surface-hover);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .markdown-body a {
@@ -348,7 +355,7 @@ html.dark .markdown-code-copy-btn:hover {
 }
 
 .markdown-body strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .markdown-body em {
@@ -359,12 +366,18 @@ html.dark .markdown-code-copy-btn:hover {
 .markdown-body.markdown-compact h1,
 .markdown-body.markdown-compact h2,
 .markdown-body.markdown-compact h3 {
-  margin-top: 0.75em;
-  margin-bottom: 0.25em;
+  margin-top: 1.25em;
+  margin-bottom: 0.4em;
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .markdown-body.markdown-compact p {
-  margin: 0 0 0.5em;
+  margin: 0 0 0.8em;
+}
+
+.markdown-body.markdown-compact > :first-child {
+  margin-top: 0;
 }
 
 /* Only the final rendered block is the end of the complete Markdown document. */

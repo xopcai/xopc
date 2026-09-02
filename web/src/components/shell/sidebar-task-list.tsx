@@ -114,11 +114,20 @@ function isWebSession(session: SessionMetadata): boolean {
 function rowShellClass(isActive: boolean): string {
   return cn(
     // `px-4` list + `pl-3` row = same inset as nav `px-4` + item `px-3` → aligns with menu icons.
-    'group flex w-full min-w-0 items-center gap-0.5 rounded-xl pl-1.5 pr-1 text-left text-sm font-medium leading-5 transition-colors duration-200 ease-out',
+    'group flex w-full min-w-0 items-center gap-0.5 rounded-lg pl-1.5 pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
     'focus-within:outline-none',
-    isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+    isActive
+      ? 'bg-surface-active font-medium text-fg'
+      : 'font-normal text-fg-muted hover:bg-surface-hover hover:text-fg',
   );
 }
+
+const sidebarSectionLabelClass =
+  'text-xs font-normal leading-5 text-fg-subtle';
+const sidebarSectionButtonClass = cn(
+  sidebarSectionLabelClass,
+  'transition-colors hover:text-fg-muted',
+);
 
 function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean }) {
   return (
@@ -141,7 +150,7 @@ function SidebarTaskListSkeleton() {
       </div>
       <div>
         <Skeleton className="mb-1.5 h-2.5 w-16 animate-none" />
-        <div className="rounded-xl border border-edge-subtle/70 py-1">
+        <div className="flex flex-col gap-0.5">
           <SidebarSessionSkeletonRow />
           <SidebarSessionSkeletonRow indented />
           <SidebarSessionSkeletonRow indented />
@@ -222,7 +231,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
         className={cn(
-          'min-w-0 flex-1 rounded-xl py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          'min-w-0 flex-1 rounded-lg py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           'flex min-w-0 items-center gap-2',
         )}
         title={title}
@@ -256,12 +265,12 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             aria-label={sb.taskSessionAgentRunning}
           >
             <span className="absolute size-full animate-ping rounded-full bg-accent/70" aria-hidden />
-            <span className="relative size-2 rounded-full bg-accent shadow-sm" aria-hidden />
+            <span className="relative size-2 rounded-full bg-accent" aria-hidden />
           </span>
         ) : runPresence?.unread ? (
           <span
             className={cn(
-              'pointer-events-none size-2.5 shrink-0 rounded-full shadow-sm',
+              'pointer-events-none size-2.5 shrink-0 rounded-full',
               runPresence.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500',
             )}
             title={
@@ -561,8 +570,8 @@ function SidebarProjectSection({
     <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
       <div
         className={cn(
-          'group flex h-7 min-w-0 items-center gap-1.5 rounded-xl px-2 text-sm font-medium leading-5',
-          hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
+          'group flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium leading-5',
+          hasActiveSession ? 'text-fg' : 'text-fg-muted',
         )}
       >
         <button
@@ -693,7 +702,10 @@ function SidebarInboxSection({
       <div className="group flex min-w-0 items-center pb-1">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-1 px-2 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-1 px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+            sidebarSectionButtonClass,
+          )}
           onClick={onToggleCollapsed}
           aria-expanded={!isCollapsed}
         >
@@ -786,7 +798,7 @@ function SidebarPinnedSection({
 
   return (
     <section className="mb-3 flex flex-col gap-0.5" aria-label={sess.pinnedSessions}>
-      <h2 className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+      <h2 className={cn('px-2 pb-1', sidebarSectionLabelClass)}>
         {sess.pinnedSessions}
       </h2>
       <div className="flex flex-col gap-0.5">
@@ -1320,7 +1332,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                 <div className="group flex items-center justify-between px-2 pb-1">
                   <button
                     type="button"
-                    className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+                    className={cn(
+                      'flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                      sidebarSectionButtonClass,
+                    )}
                     onClick={() => setProjectsCollapsed((value) => !value)}
                     aria-expanded={!projectsCollapsed}
                   >

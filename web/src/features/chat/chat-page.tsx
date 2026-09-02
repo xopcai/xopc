@@ -921,7 +921,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
   if (!auth.hasToken) {
     return (
-      <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
+      <div className="mx-auto w-full max-w-[var(--max-width-chat-frame)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
         {m.chat.needToken}
       </div>
     );
@@ -969,7 +969,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         onWorkspaceChange={session.onSessionWorkingDirectoryChange}
       /> : null}
 
-      <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat)+8rem)]')}>
+      <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat-frame)+8rem)]')}>
         {!embedded && scopedProject ? (
           <ChatProjectScopeBar
             project={scopedProject}
@@ -1051,7 +1051,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
               onSelectMessage={handleTimelineSelect}
             />
           </div> : null}
-          <div className={cn('mx-auto flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'xl:max-w-[58rem]')}>
+          <div className={cn('mx-auto flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'xl:max-w-[var(--max-width-chat-frame)]')}>
             <div
               ref={scrollRef}
               className={cn(
