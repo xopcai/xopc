@@ -7,6 +7,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  MessageSquare,
   StickyNote,
   Trash2,
 } from 'lucide-react';
@@ -639,7 +640,9 @@ function ShareRow({
             />
             {share.kind === 'note'
               ? <StickyNote className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
-              : <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />}
+              : share.kind === 'session'
+                ? <MessageSquare className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
+                : <FileText className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium text-fg">{share.fileName}</span>
@@ -648,7 +651,11 @@ function ShareRow({
               <p className="truncate text-xs text-fg-subtle">
                 {share.kind === 'note'
                   ? (language === 'zh' ? `笔记快照 · 版本 ${share.snapshotRevision ?? 1}` : `Note snapshot · revision ${share.snapshotRevision ?? 1}`)
-                  : share.workspaceRelativePath}
+                  : share.kind === 'session'
+                    ? (language === 'zh'
+                        ? `会话快照 · ${share.messageCount ?? 0} 条消息 · 版本 ${share.snapshotRevision ?? 1}`
+                        : `Conversation snapshot · ${share.messageCount ?? 0} messages · revision ${share.snapshotRevision ?? 1}`)
+                    : share.workspaceRelativePath}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
                 <span>{formatFileSize(share.fileSize)}</span>

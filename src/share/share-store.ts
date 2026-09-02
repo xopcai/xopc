@@ -15,6 +15,7 @@ import type {
   WorkspaceShareKind,
   WorkspaceShareRecord,
   NoteShareRecord,
+  SessionShareRecord,
   DirectoryShareRecord,
   ShareDirectoryMeta,
 } from './share-types.js';
@@ -399,6 +400,101 @@ export class ShareStore {
     );
   }
 
+  createSessionShare(input: {
+    id: string;
+    sourceSessionId: string;
+    cutoffSeq: number;
+    artifactRelativePath: string;
+    artifactSize: number;
+    messageCount: number;
+    attachmentCount?: number;
+    includeToolActivities?: boolean;
+    snapshotRevision?: number;
+    fileName: string;
+    ttlMs?: number;
+    maxViews?: number | null;
+    description?: string;
+    gatewayTokenHash: string;
+  }): SessionShareRecord {
+    if (!this.config.enabled) throw new Error('Session sharing is disabled');
+    if (this.getActiveShares().length >= this.config.maxActiveShares) {
+      throw new Error(`Maximum active shares reached (${this.config.maxActiveShares})`);
+    }
+    const ttlMs = input.ttlMs ?? this.config.defaultTtlMs;
+    if (ttlMs < 60_000 || ttlMs > this.config.maxTtlMs) {
+      throw new Error(`TTL must be between 60s and ${this.config.maxTtlMs / 1000}s`);
+    }
+    if (input.maxViews !== undefined && input.maxViews !== null && (input.maxViews < 1 || input.maxViews > 1000)) {
+      throw new Error('maxViews must be between 1 and 1000');
+    }
+    const now = new Date();
+    const record: SessionShareRecord = {
+      id: input.id,
+      token: randomBytes(32).toString('base64url'),
+      kind: 'session',
+      fileName: input.fileName,
+      fileSize: input.artifactSize,
+      mimeType: 'application/x-xopc-session',
+      workspaceRelativePath: '',
+      sourceSessionId: input.sourceSessionId,
+      cutoffSeq: input.cutoffSeq,
+      artifactRelativePath: input.artifactRelativePath,
+      messageCount: input.messageCount,
+      attachmentCount: input.attachmentCount ?? 0,
+      includeToolActivities: input.includeToolActivities ?? false,
+      snapshotRevision: input.snapshotRevision ?? 1,
+      assetTicketSecret: randomBytes(32).toString('base64url'),
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + ttlMs).toISOString(),
+      maxViews: input.maxViews ?? null,
+      downloadCount: 0,
+      revoked: false,
+      createdByTokenHash: input.gatewayTokenHash,
+      description: input.description,
+    };
+    this.shares.set(record.id, record);
+    this.tokenIndex.set(record.token, record.id);
+    this.persistAndAudit(record, 'share.create', `Session share created: ${record.fileName}`, {
+      sourceSessionId: record.sourceSessionId,
+      cutoffSeq: record.cutoffSeq,
+      messageCount: record.messageCount,
+      ttlMs,
+    });
+    return record;
+  }
+
+  getSessionShares(sessionId: string): SessionShareRecord[] {
+    return this.getAllShares().filter(
+      (record): record is SessionShareRecord => record.kind === 'session' && record.sourceSessionId === sessionId,
+    );
+  }
+
+  updateSessionSnapshot(id: string, patch: {
+    cutoffSeq: number;
+    artifactSize: number;
+    messageCount: number;
+    attachmentCount: number;
+    includeToolActivities: boolean;
+    fileName: string;
+  }): SessionShareRecord | null {
+    const record = this.shares.get(id);
+    if (!record || record.kind !== 'session') return null;
+    record.cutoffSeq = patch.cutoffSeq;
+    record.fileSize = patch.artifactSize;
+    record.messageCount = patch.messageCount;
+    record.attachmentCount = patch.attachmentCount;
+    record.includeToolActivities = patch.includeToolActivities;
+    record.fileName = patch.fileName;
+    record.snapshotRevision += 1;
+    this.persistSync();
+    logShareAudit(
+      'share.update',
+      { shareId: id, sourceSessionId: record.sourceSessionId, cutoffSeq: record.cutoffSeq, snapshotRevision: record.snapshotRevision },
+      `Session share snapshot updated: ${record.fileName}`,
+    );
+    return record;
+  }
+
   private persistAndAudit(
     record: ShareRecord,
     event: Parameters<typeof logShareAudit>[0],
@@ -595,7 +691,7 @@ export class ShareStore {
     const record = this.shares.get(id);
     if (!record) return false;
     record.revoked = true;
-    this.cleanupNoteArtifact(record);
+    this.cleanupStateArtifact(record);
     this.invalidateListingCache(id);
     this.persistSync();
     logShareAudit(
@@ -612,7 +708,7 @@ export class ShareStore {
       const record = this.shares.get(id);
       if (record && !record.revoked) {
         record.revoked = true;
-        this.cleanupNoteArtifact(record);
+        this.cleanupStateArtifact(record);
         this.invalidateListingCache(id);
         count++;
         logShareAudit(
@@ -632,7 +728,7 @@ export class ShareStore {
     for (const record of this.shares.values()) {
       if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
         record.revoked = true;
-        this.cleanupNoteArtifact(record);
+        this.cleanupStateArtifact(record);
         this.invalidateListingCache(record.id);
         count++;
       }
@@ -754,7 +850,7 @@ export class ShareStore {
     let removed = 0;
     for (const [id, record] of this.shares) {
       const expiredMs = now - new Date(record.expiresAt).getTime();
-      if (expiredMs >= 0) this.cleanupNoteArtifact(record);
+      if (expiredMs >= 0) this.cleanupStateArtifact(record);
       if (expiredMs > EXPIRED_RETENTION_MS) {
         this.shares.delete(id);
         this.tokenIndex.delete(record.token);
@@ -808,15 +904,15 @@ export class ShareStore {
     return abs;
   }
 
-  private cleanupNoteArtifact(record: ShareRecord): void {
-    if (record.kind !== 'note') return;
+  private cleanupStateArtifact(record: ShareRecord): void {
+    if (record.kind !== 'note' && record.kind !== 'session') return;
     const expected = join('share-artifacts', record.id);
     if (record.artifactRelativePath !== expected) {
-      log.warn({ shareId: record.id, artifactRelativePath: record.artifactRelativePath }, 'Skipped unsafe Note share artifact cleanup path');
+      log.warn({ shareId: record.id, artifactRelativePath: record.artifactRelativePath }, 'Skipped unsafe share artifact cleanup path');
       return;
     }
     void rm(join(resolveStateDir(), expected), { recursive: true, force: true }).catch((err) => {
-      log.warn({ err, shareId: record.id }, 'Failed to clean Note share artifact');
+      log.warn({ err, shareId: record.id }, 'Failed to clean share artifact');
     });
   }
 }
