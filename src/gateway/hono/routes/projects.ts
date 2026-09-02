@@ -5,9 +5,11 @@ import * as path from 'node:path';
 
 import { ActivityService } from '../../../activity/index.js';
 import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
+import { ExecutionEnvironmentStore } from '../../../execution-environments/store.js';
 import {
   buildProjectLoopOverview,
   inferProjectKind,
+  inferProjectExecutionMode,
   inferSuggestedProjectDefaultAgentId,
   isValidProjectAgentId,
   normalizeProjectAgentId,
@@ -16,6 +18,7 @@ import {
   type Project,
   resolveProjectAgentId,
   type ProjectStatus,
+  type ProjectExecutionMode,
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
 import {
@@ -46,6 +49,10 @@ function parseProjectStatus(raw: unknown): ProjectStatus | undefined {
     || raw === 'completed' || raw === 'cancelled' || raw === 'archived'
     ? raw
     : undefined;
+}
+
+function parseProjectExecutionMode(raw: unknown): ProjectExecutionMode | undefined {
+  return raw === 'local_checkout' || raw === 'managed_worktree' ? raw : undefined;
 }
 
 function parseLimit(raw: string | undefined, fallback = 50): number | undefined {
@@ -411,12 +418,17 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   const { service } = deps;
   const activity = new ActivityService();
   const operatingViews = new ProjectOperatingViewService(service.projects);
+  const environments = new ExecutionEnvironmentStore();
 
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const name = textField(body, 'name')?.trim();
     const workspaceRoot = textField(body, 'workspaceRoot')?.trim();
     if (!name && !workspaceRoot) return c.json({ ok: false, error: 'Missing name' }, 400);
+    const executionMode = parseProjectExecutionMode(body.executionMode);
+    if (body.executionMode !== undefined && !executionMode) {
+      return c.json({ ok: false, error: 'Invalid project execution mode' }, 400);
+    }
     const hasDefaultAgentPatch = Object.hasOwn(body, 'defaultAgentId');
     const explicitDefaultAgentId = normalizeProjectAgentId(textField(body, 'defaultAgentId'));
     const defaultAgentId = hasDefaultAgentPatch
@@ -439,6 +451,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         workspaceRoot,
         createWorkspaceRoot: body.createWorkspaceRoot === true,
         projectKind: textField(body, 'projectKind'),
+        executionMode,
         brief: textField(body, 'brief'),
         instructions: textField(body, 'instructions'),
         outcome: textField(body, 'outcome'),
@@ -502,7 +515,8 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       config: service.currentConfig,
       ...input,
     });
-    return c.json({ ok: true, inference, defaultAgentId });
+    const executionMode = inferProjectExecutionMode(input);
+    return c.json({ ok: true, inference, defaultAgentId, executionMode });
   });
 
   authenticated.post('/api/projects/resolve-workspace', async (c) => {
@@ -748,22 +762,42 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.patch('/api/projects/:id', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const projectId = c.req.param('id');
     const status = parseProjectStatus(body.status);
     const defaultAgentPatch = optionalTextField(body, 'defaultAgentId');
     const defaultAgentId = defaultAgentPatch === undefined ? undefined : normalizeProjectAgentId(defaultAgentPatch);
     if (body.status !== undefined && !status) return c.json({ ok: false, error: 'Invalid project status' }, 400);
     if (body.health !== undefined && !projectHealth(body.health)) return c.json({ ok: false, error: 'Invalid project health' }, 400);
+    const executionMode = parseProjectExecutionMode(body.executionMode);
+    if (body.executionMode !== undefined && !executionMode) {
+      return c.json({ ok: false, error: 'Invalid project execution mode' }, 400);
+    }
     if (defaultAgentId && !isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
       return c.json({ ok: false, error: 'Default agent not found' }, 400);
     }
+    const currentProject = service.projects.get(projectId);
+    const requestedWorkspaceRoot = optionalTextField(body, 'workspaceRoot');
+    if (
+      currentProject
+      && requestedWorkspaceRoot !== undefined
+      && requestedWorkspaceRoot !== (currentProject.workspaceRoot ?? null)
+      && environments.list({ projectId, limit: 1 }).length > 0
+    ) {
+      return c.json({
+        ok: false,
+        code: 'execution_environments_exist',
+        error: 'Delete the project execution environments before changing its workspace',
+      }, 409);
+    }
     try {
-      const project = service.projects.update(c.req.param('id'), {
+      const project = service.projects.update(projectId, {
         ...(textField(body, 'name') !== undefined ? { name: textField(body, 'name') } : {}),
         ...(optionalTextField(body, 'description') !== undefined ? { description: optionalTextField(body, 'description') } : {}),
         ...(status ? { status } : {}),
         ...(defaultAgentPatch !== undefined ? { defaultAgentId: defaultAgentId ?? null } : {}),
         ...(optionalTextField(body, 'workspaceRoot') !== undefined ? { workspaceRoot: optionalTextField(body, 'workspaceRoot') } : {}),
         createWorkspaceRoot: body.createWorkspaceRoot === true,
+        ...(executionMode ? { executionMode } : {}),
         ...(optionalTextField(body, 'brief') !== undefined ? { brief: optionalTextField(body, 'brief') } : {}),
         ...(optionalTextField(body, 'instructions') !== undefined ? { instructions: optionalTextField(body, 'instructions') } : {}),
         ...(optionalTextField(body, 'outcome') !== undefined ? { outcome: optionalTextField(body, 'outcome') } : {}),
@@ -787,7 +821,15 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.delete('/api/projects/:id', async (c) => {
-    service.projects.delete(c.req.param('id'));
+    const projectId = c.req.param('id');
+    if (environments.list({ projectId, limit: 1 }).length > 0) {
+      return c.json({
+        ok: false,
+        code: 'execution_environments_exist',
+        error: 'Delete the project execution environments before deleting the project',
+      }, 409);
+    }
+    service.projects.delete(projectId);
     return c.json({ ok: true });
   });
 

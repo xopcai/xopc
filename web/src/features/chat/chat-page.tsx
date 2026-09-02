@@ -503,6 +503,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     !session.showSessionLoading &&
     !session.sessionRoutePending &&
     session.workspaceSource !== 'project' &&
+    session.workspaceSource !== 'execution_environment' &&
     msgSlice.items.length === 0,
   );
 
@@ -580,7 +581,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     sourceNoteTitle,
     effectiveWorkspacePath: session.effectiveWorkspacePath,
     workingDirectoryLocked:
-      session.workspaceSource === 'session_override' || session.workspaceSource === 'agent_workspace',
+      session.workspaceSource === 'execution_environment' ||
+      session.workspaceSource === 'session_override' ||
+      session.workspaceSource === 'agent_workspace',
     task: taskDetail,
     file: launchFile,
     workflow: workflowRunView,

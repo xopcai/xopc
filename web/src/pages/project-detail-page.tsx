@@ -95,6 +95,7 @@ type ProjectSettingsDraft = {
   description: string;
   status: ProjectStatus;
   defaultAgentId: string;
+  executionMode: Project['executionMode'];
   workspaceRoot: string;
   brief: string;
   instructions: string;
@@ -105,6 +106,7 @@ function projectSettingsDirty(draft: ProjectSettingsDraft, project: Project): bo
     || draft.description !== (project.description ?? '')
     || draft.status !== project.status
     || draft.defaultAgentId !== (project.defaultAgentId ?? '')
+    || draft.executionMode !== project.executionMode
     || draft.brief !== (project.brief ?? '')
     || draft.instructions !== (project.instructions ?? '');
 }
@@ -697,6 +699,7 @@ export function ProjectDetailPage() {
     description: '',
     status: 'active' as ProjectStatus,
     defaultAgentId: '',
+    executionMode: 'local_checkout',
     workspaceRoot: '',
     brief: '',
     instructions: '',
@@ -786,6 +789,7 @@ export function ProjectDetailPage() {
           description: projectResult.description ?? '',
           status: projectResult.status,
           defaultAgentId: projectResult.defaultAgentId ?? '',
+          executionMode: projectResult.executionMode,
           workspaceRoot: projectResult.workspaceRoot ?? '',
           brief: projectResult.brief ?? '',
           instructions: projectResult.instructions ?? '',
@@ -1202,6 +1206,7 @@ export function ProjectDetailPage() {
         status: snapshot.status,
         description: snapshot.description,
         defaultAgentId: snapshot.defaultAgentId,
+        executionMode: snapshot.executionMode,
         brief: snapshot.brief,
         instructions: snapshot.instructions,
       });
@@ -1213,6 +1218,7 @@ export function ProjectDetailPage() {
         description: currentDraft.description === snapshot.description ? (updated.description ?? '') : currentDraft.description,
         status: currentDraft.status === snapshot.status ? updated.status : currentDraft.status,
         defaultAgentId: currentDraft.defaultAgentId === snapshot.defaultAgentId ? (updated.defaultAgentId ?? '') : currentDraft.defaultAgentId,
+        executionMode: currentDraft.executionMode === snapshot.executionMode ? updated.executionMode : currentDraft.executionMode,
         brief: currentDraft.brief === snapshot.brief ? (updated.brief ?? '') : currentDraft.brief,
         instructions: currentDraft.instructions === snapshot.instructions ? (updated.instructions ?? '') : currentDraft.instructions,
       };
@@ -2204,6 +2210,16 @@ export function ProjectDetailPage() {
                         <SelectOption value="paused">{pm.settings.statuses.paused}</SelectOption>
                       </Select>
                     )}
+                  </Field>
+                  <Field label={pm.settings.executionMode} hint={pm.settings.executionModeHint}>
+                    <Select
+                      className={inputClass()}
+                      value={draft.executionMode}
+                      onChange={(event) => updateProjectDraft({ executionMode: event.target.value as Project['executionMode'] }, true)}
+                    >
+                      <SelectOption value="managed_worktree">{pm.settings.executionModeWorktree}</SelectOption>
+                      <SelectOption value="local_checkout">{pm.settings.executionModeLocal}</SelectOption>
+                    </Select>
                   </Field>
                   <Field label={pm.settings.description} hint={pm.settings.descriptionHint}>
                     <textarea className={inputClass(true)} value={draft.description} onChange={(event) => updateProjectDraft({ description: event.target.value })} />

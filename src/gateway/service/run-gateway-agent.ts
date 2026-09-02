@@ -128,9 +128,9 @@ export async function *runGatewayAgent(
       channel,
       metadata: webchatMetadata,
     });
-    if (/remote/i.test(executionContext.strategy ?? '')) {
+    if (executionContext.executionHostId && executionContext.executionHostId !== 'local') {
       outcomeEnvironment = 'remote_runtime';
-    } else if (/worktree/i.test(executionContext.strategy ?? '')) {
+    } else if (executionContext.executionKind === 'managed_worktree') {
       outcomeEnvironment = 'worktree';
     }
     taskRun = TaskRunCoordinator.start({

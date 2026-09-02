@@ -282,7 +282,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
           source: 'session' | 'default';
         };
         effectiveWorkspacePath?: string | null;
-        workspaceSource?: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+        workspaceSource?: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
       },
     ) => {
       patchSessionAgentConfigView(sessionKey, cfg);
