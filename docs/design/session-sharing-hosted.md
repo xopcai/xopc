@@ -1,6 +1,6 @@
 # Hosted Session sharing — phase 3 design
 
-> Status: detailed design; implementation intentionally deferred until phases 1 and 2 are accepted
+> Status: implemented for the initial hosted release
 >
 > Audience: product, Gateway, Share, Web UI, cloud, and security maintainers
 >
@@ -44,7 +44,7 @@ The share dialog will offer two delivery choices when the user is signed in and 
 | This device | Existing local/LAN/tunnel behavior | Owner's xopc state directory | Yes |
 | Hosted link | Phase 3 | xopc object storage and metadata service | No |
 
-“This device” remains the default until hosted sharing exits beta. Selecting “Hosted link” must display a direct disclosure: the reviewed snapshot and selected attachments will be uploaded to xopc hosting. There is no implicit fallback from local to hosted and no automatic upload of existing local shares.
+Hosted delivery is the default choice in the share dialog. It requires explicit OAuth authorization and the create action remains disabled until authorization succeeds. There is no implicit fallback from local to hosted and no automatic upload of existing local shares.
 
 ## Privacy model
 
@@ -136,7 +136,7 @@ interface SessionShareSnapshotBuilder {
 
 The existing `SessionShareService` remains responsible for local artifact storage and local tokens. A new `HostedSessionSharePublisher` owns hosted API calls and upload streams. It must not branch throughout `SessionShareService` on `delivery === 'hosted'`; composition at the route/application-service layer keeps local storage and remote publishing independent.
 
-Hosted records also must not be inserted into the local `shares.json` union. Their authoritative lifecycle lives on the server. Store a small SQLite binding instead:
+Hosted records are not inserted into the local `shares.json` union. Their authoritative lifecycle lives on the server. The client stores a small mode-0600 atomic JSON binding under the xopc state directory:
 
 ```ts
 interface HostedSessionShareBinding {
@@ -187,13 +187,11 @@ Automatic follow mode is out of scope. Later private messages never become publi
 Owner endpoints require account/device authentication:
 
 ```text
-POST   /v1/session-shares
-GET    /v1/session-shares
-GET    /v1/session-shares/:shareId
-POST   /v1/session-shares/:shareId/revisions
-POST   /v1/session-shares/:shareId/uploads/:uploadId/finalize
-PATCH  /v1/session-shares/:shareId          # expiry or maxViews only
-DELETE /v1/session-shares/:shareId          # revoke
+POST   /api/v1/session-shares
+GET    /api/v1/session-shares
+POST   /api/v1/session-shares/:shareId/revisions
+POST   /api/v1/session-shares/:shareId/uploads/:uploadId/finalize
+DELETE /api/v1/session-shares/:shareId          # revoke
 ```
 
 Public endpoints use only the random public token:
