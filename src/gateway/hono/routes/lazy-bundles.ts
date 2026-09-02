@@ -253,7 +253,9 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'shares',
-    match: (path) => startsWithAny(path, ['/api/shares']),
+    match: (path) =>
+      startsWithAny(path, ['/api/shares']) ||
+      /^\/api\/sessions\/[^/]+\/(?:share-preview|shares|hosted-shares)(?:\/.*)?$/.test(path),
     load: async () => {
       const { registerShareRoutes } = await import('./shares.js');
       return { register: registerShareRoutes };
