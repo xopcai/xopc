@@ -1,8 +1,8 @@
 export interface TreeEntry {
+  /** Opaque managed-file id used for local desktop actions. */
+  fileId: string;
   name: string;
   path: string;
-  /** Host absolute path when provided by the gateway (copy path). */
-  absolutePath?: string;
   isDirectory: boolean;
   children?: TreeEntry[];
 }
@@ -15,4 +15,5 @@ export type FileTreeAction =
   | 'openDefault'
   | 'openWith'
   | 'openWithApp'
-  | 'revealInFolder';
+  | 'revealInFolder'
+  | 'trash';

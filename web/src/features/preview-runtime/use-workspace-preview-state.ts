@@ -63,7 +63,7 @@ type WorkspacePreviewAction =
         descriptor: PreviewFileDescriptor;
         textContent?: string | null;
         binaryBuffer?: ArrayBuffer | null;
-        hostAbsolutePath?: string | null;
+        fileResourceId?: string | null;
         mtimeMs?: number | null;
       };
     }
@@ -79,7 +79,7 @@ function emptyLoaded(descriptor: PreviewFileDescriptor): WorkspacePreviewLoadSta
     descriptor,
     textContent: null,
     binaryBuffer: null,
-    hostAbsolutePath: null,
+    fileResourceId: null,
     mtimeMs: null,
     loadError: null,
     loading: false,
@@ -101,7 +101,7 @@ function previewReducer(state: WorkspacePreviewLoadState, action: WorkspacePrevi
         descriptor: action.payload.descriptor,
         textContent: action.payload.textContent ?? null,
         binaryBuffer: action.payload.binaryBuffer ?? null,
-        hostAbsolutePath: action.payload.hostAbsolutePath ?? null,
+        fileResourceId: action.payload.fileResourceId ?? null,
         mtimeMs: action.payload.mtimeMs ?? null,
         loadError: null,
         loading: false,
@@ -198,7 +198,7 @@ export function useWorkspacePreviewState({
               type: 'loadSuccess',
               payload: {
                 descriptor,
-                hostAbsolutePath: null,
+                fileResourceId: ref?.fileId ?? null,
                 mtimeMs: typeof ref?.mtimeMs === 'number' ? ref.mtimeMs : null,
               },
             });
@@ -211,15 +211,18 @@ export function useWorkspacePreviewState({
     }
 
     if (mode === 'text') {
-      void readWorkspaceFile(filePath, readOpts)
-        .then(({ content, mtimeMs }) => {
+      void Promise.all([
+        readWorkspaceFile(filePath, readOpts),
+        resolveWorkspaceFileReference(filePath, readOpts).catch(() => null),
+      ])
+        .then(([{ content, mtimeMs }, ref]) => {
           if (!cancelled) {
             dispatchPreview({
               type: 'loadSuccess',
               payload: {
                 descriptor,
                 textContent: content,
-                hostAbsolutePath: null,
+                fileResourceId: ref?.fileId ?? null,
                 mtimeMs: typeof mtimeMs === 'number' ? mtimeMs : null,
               },
             });
@@ -239,7 +242,7 @@ export function useWorkspacePreviewState({
               payload: {
                 descriptor,
                 binaryBuffer,
-                hostAbsolutePath: null,
+                fileResourceId: ref?.fileId ?? null,
                 mtimeMs: typeof ref?.mtimeMs === 'number' ? ref.mtimeMs : null,
               },
             });
@@ -343,7 +346,7 @@ export function useWorkspacePreviewState({
   const canOpenWithSystemApp =
     isElectron()
     && (
-      (Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath))
+      (Boolean(preview.fileResourceId) && Boolean(window.electronAPI?.shell?.openFileResource))
       || (
         preview.descriptor.type === 'spreadsheet'
         && Boolean(preview.binaryBuffer)
@@ -351,35 +354,33 @@ export function useWorkspacePreviewState({
       )
     );
   const canChooseOpenWithApp =
-    isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.chooseAppAndOpenPath);
+    isElectron() && Boolean(preview.fileResourceId) && Boolean(window.electronAPI?.shell?.chooseAppAndOpenFileResource);
 
   const refreshOpenWithApps = useCallback(async () => {
-    const p = preview.hostAbsolutePath;
-    if (!isElectron() || !p || !window.electronAPI?.shell) {
+    const fileResourceId = preview.fileResourceId;
+    if (!isElectron() || !fileResourceId || !window.electronAPI?.shell?.getOpenWithAppsForFileResource) {
       setRecommendedOpenWithApps([]);
       setRecentOpenWithApps([]);
       return;
     }
     try {
-      if (window.electronAPI.shell.getOpenWithAppsForPath) {
-        const apps = await window.electronAPI.shell.getOpenWithAppsForPath(p);
-        setRecommendedOpenWithApps(apps.recommended.map((app) => ({ name: app.name, path: app.path })));
-        setRecentOpenWithApps(apps.recent.map((app) => ({ name: app.name, path: app.path, lastUsedAt: app.lastUsedAt })));
-      }
+      const apps = await window.electronAPI.shell.getOpenWithAppsForFileResource(fileResourceId);
+      setRecommendedOpenWithApps(apps.recommended.map((app) => ({ name: app.name, path: app.path })));
+      setRecentOpenWithApps(apps.recent.map((app) => ({ name: app.name, path: app.path, lastUsedAt: app.lastUsedAt })));
     } catch {
       setRecommendedOpenWithApps([]);
       setRecentOpenWithApps([]);
     }
-  }, [preview.hostAbsolutePath]);
+  }, [preview.fileResourceId]);
 
   useEffect(() => {
     void refreshOpenWithApps();
   }, [refreshOpenWithApps]);
 
   const onOpenWithSystemApp = useCallback(async () => {
-    const p = preview.hostAbsolutePath;
-    if (p && window.electronAPI?.shell?.openPath) {
-      return window.electronAPI.shell.openPath(p);
+    const fileResourceId = preview.fileResourceId;
+    if (fileResourceId && window.electronAPI?.shell?.openFileResource) {
+      return window.electronAPI.shell.openFileResource(fileResourceId);
     }
     if (
       preview.descriptor.type === 'spreadsheet'
@@ -392,31 +393,33 @@ export function useWorkspacePreviewState({
       });
     }
     return undefined;
-  }, [preview.binaryBuffer, preview.descriptor.fileName, preview.descriptor.type, preview.hostAbsolutePath]);
+  }, [preview.binaryBuffer, preview.descriptor.fileName, preview.descriptor.type, preview.fileResourceId]);
 
   const onChooseOpenWithApp = useCallback(async () => {
-    const p = preview.hostAbsolutePath;
-    if (!p || !window.electronAPI?.shell?.chooseAppAndOpenPath) return;
-    const result = await window.electronAPI.shell.chooseAppAndOpenPath(p);
+    const fileResourceId = preview.fileResourceId;
+    if (!fileResourceId || !window.electronAPI?.shell?.chooseAppAndOpenFileResource) return;
+    const result = await window.electronAPI.shell.chooseAppAndOpenFileResource(fileResourceId);
     if (result.ok) void refreshOpenWithApps();
-  }, [preview.hostAbsolutePath, refreshOpenWithApps]);
+  }, [preview.fileResourceId, refreshOpenWithApps]);
 
   const onOpenWithRecentApp = useCallback(
     async (appPath: string) => {
-      const p = preview.hostAbsolutePath;
-      if (!p || !appPath || !window.electronAPI?.shell?.openPathWithApp) return;
-      const result = await window.electronAPI.shell.openPathWithApp(p, appPath);
+      const fileResourceId = preview.fileResourceId;
+      if (!fileResourceId || !appPath || !window.electronAPI?.shell?.openFileResourceWithApp) return;
+      const result = await window.electronAPI.shell.openFileResourceWithApp(fileResourceId, appPath);
       if (result.ok) void refreshOpenWithApps();
     },
-    [preview.hostAbsolutePath, refreshOpenWithApps],
+    [preview.fileResourceId, refreshOpenWithApps],
   );
 
   const canRevealInFolder =
-    isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.showItemInFolder);
+    isElectron() && Boolean(preview.fileResourceId) && Boolean(window.electronAPI?.shell?.showFileResourceInFolder);
   const onRevealInFolder = useCallback(async () => {
-    const p = preview.hostAbsolutePath;
-    if (p && window.electronAPI?.shell?.showItemInFolder) await window.electronAPI.shell.showItemInFolder(p);
-  }, [preview.hostAbsolutePath]);
+    const fileResourceId = preview.fileResourceId;
+    if (fileResourceId && window.electronAPI?.shell?.showFileResourceInFolder) {
+      await window.electronAPI.shell.showFileResourceInFolder(fileResourceId);
+    }
+  }, [preview.fileResourceId]);
 
   return {
     ...preview,

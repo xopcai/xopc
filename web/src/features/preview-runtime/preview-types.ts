@@ -57,7 +57,7 @@ export type PreviewLoadedSource = {
   textContent: string | null;
   binaryBuffer: ArrayBuffer | null;
   rawUrl?: string;
-  hostAbsolutePath?: string | null;
+  fileResourceId?: string | null;
   mtimeMs?: number | null;
   loadError: string | null;
   loading: boolean;

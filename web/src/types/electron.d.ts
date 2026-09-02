@@ -135,18 +135,27 @@ export type ElectronRecommendedOpenWithApp = {
 export interface ElectronShellAPI {
   openExternalUrl(url: string): Promise<{ ok: true } | { ok: false; error: string }>;
   openPath(filePath: string): Promise<ElectronShellOpenResult>;
+  openFileResource(fileResourceId: string): Promise<ElectronShellOpenResult>;
   openTemporaryFile(input: {
     fileName: string;
     data: Uint8Array;
   }): Promise<ElectronShellOpenResult>;
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
+  showFileResourceInFolder(fileResourceId: string): Promise<{ success: boolean; error?: string }>;
+  trashFileResource(fileResourceId: string): Promise<ElectronShellOpenResult>;
   chooseAppAndOpenPath(filePath: string): Promise<ElectronShellOpenResult>;
+  chooseAppAndOpenFileResource(fileResourceId: string): Promise<ElectronShellOpenResult>;
   openPathWithApp(
     filePath: string,
     appPath: string,
   ): Promise<ElectronShellOpenResult>;
+  openFileResourceWithApp(fileResourceId: string, appPath: string): Promise<ElectronShellOpenResult>;
   getRecentOpenWithApps(): Promise<ElectronRecentOpenWithApp[]>;
   getOpenWithAppsForPath(filePath: string): Promise<{
+    recommended: ElectronRecommendedOpenWithApp[];
+    recent: ElectronRecentOpenWithApp[];
+  }>;
+  getOpenWithAppsForFileResource(fileResourceId: string): Promise<{
     recommended: ElectronRecommendedOpenWithApp[];
     recent: ElectronRecentOpenWithApp[];
   }>;

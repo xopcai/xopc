@@ -14,6 +14,7 @@ type FileTreeActionLabels = {
   openDefault?: string;
   openWith?: string;
   revealInFolder?: string;
+  trash?: string;
   recommendedApps?: string;
 };
 
@@ -34,16 +35,16 @@ function ActionMenu({
     if (
       !menuOpen ||
       entry.isDirectory ||
-      !entry.absolutePath ||
+      !entry.fileId ||
       !isElectron() ||
-      !window.electronAPI?.shell?.getOpenWithAppsForPath
+      !window.electronAPI?.shell?.getOpenWithAppsForFileResource
     ) {
       setRecommendedApps([]);
       return;
     }
     let cancelled = false;
     void window.electronAPI.shell
-      .getOpenWithAppsForPath(entry.absolutePath)
+      .getOpenWithAppsForFileResource(entry.fileId)
       .then((apps) => {
         if (!cancelled) {
           setRecommendedApps(apps.recommended.map((app) => ({ name: app.name, path: app.path })));
@@ -55,11 +56,11 @@ function ActionMenu({
     return () => {
       cancelled = true;
     };
-  }, [entry.absolutePath, entry.isDirectory, menuOpen]);
+  }, [entry.fileId, entry.isDirectory, menuOpen]);
 
   // Directories only get share + copy-path; preview/download have no sensible meaning.
   const recommendedItems: { action: FileTreeAction; label: string; appPath: string }[] =
-    entry.absolutePath && !entry.isDirectory
+    entry.fileId && !entry.isDirectory
       ? recommendedApps.map((app) => ({
           action: 'openWithApp' as const,
           label: app.name,
@@ -67,16 +68,20 @@ function ActionMenu({
         }))
       : [];
 
-  const localItems: { action: FileTreeAction; label: string; appPath?: string }[] = entry.absolutePath
+  const shell = isElectron() ? window.electronAPI?.shell : undefined;
+  const localItems: { action: FileTreeAction; label: string; appPath?: string }[] = entry.fileId
     ? [
-        ...(entry.isDirectory || !labels.openDefault
+        ...(entry.isDirectory || !labels.openDefault || !shell?.openFileResource
           ? []
           : [{ action: 'openDefault' as const, label: labels.openDefault }]),
-        ...(entry.isDirectory || !labels.openWith
+        ...(entry.isDirectory || !labels.openWith || !shell?.chooseAppAndOpenFileResource
           ? []
           : [{ action: 'openWith' as const, label: labels.openWith }]),
-        ...(labels.revealInFolder
+        ...(labels.revealInFolder && shell?.showFileResourceInFolder
           ? [{ action: 'revealInFolder' as const, label: labels.revealInFolder }]
+          : []),
+        ...(!entry.isDirectory && labels.trash && shell?.trashFileResource
+          ? [{ action: 'trash' as const, label: labels.trash }]
           : []),
       ]
     : [];
@@ -134,7 +139,7 @@ function ActionMenu({
             className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
             onPointerDown={(e) => e.stopPropagation()}
           >
-            {localItems.slice(0, labels.openDefault && !entry.isDirectory ? 1 : 0).map(({ action, label, appPath }) => (
+            {localItems.filter((item) => item.action === 'openDefault').map(({ action, label, appPath }) => (
               <button
                 key={appPath ? `${action}:${appPath}` : action}
                 type="button"
@@ -178,7 +183,10 @@ function ActionMenu({
                 key={appPath ? `${action}:${appPath}` : action}
                 type="button"
                 role="menuitem"
-                className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                className={cn(
+                  'block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
+                  action === 'trash' && 'text-danger hover:bg-danger/10 hover:text-danger',
+                )}
                 title={appPath}
                 onClick={() => {
                   onAction(action, entry, appPath);
@@ -302,8 +310,7 @@ function TreeRow({
 function fileTreeEntryMatches(entry: TreeEntry, query: string) {
   return (
     entry.name.toLocaleLowerCase().includes(query) ||
-    entry.path.toLocaleLowerCase().includes(query) ||
-    entry.absolutePath?.toLocaleLowerCase().includes(query)
+    entry.path.toLocaleLowerCase().includes(query)
   );
 }
 

@@ -165,8 +165,7 @@ export function WorkspaceFilePreviewPanel({
 
   const handleCopyPath = useCallback(async () => {
     if (!filePath) return;
-    const pathToCopy = desktop && state.hostAbsolutePath ? state.hostAbsolutePath : filePath;
-    const ok = await copyTextToClipboard(pathToCopy);
+    const ok = await copyTextToClipboard(filePath);
     if (ok) {
       setPathCopied(true);
       showComposerNotification('success', m.workspace.pathCopied, undefined, { duration: 2500 });
@@ -174,7 +173,7 @@ export function WorkspaceFilePreviewPanel({
       return;
     }
     showComposerNotification('warning', m.clipboard.copyFailed, undefined, { duration: 4000 });
-  }, [desktop, filePath, m.clipboard.copyFailed, m.workspace.pathCopied, state.hostAbsolutePath]);
+  }, [filePath, m.clipboard.copyFailed, m.workspace.pathCopied]);
 
   const handleShare = useCallback(() => {
     if (!filePath || projectId) return;
@@ -548,7 +547,7 @@ export function WorkspaceFilePreviewPanel({
         loadError={state.loadError}
         textContent={state.textContent}
         binaryBuffer={state.binaryBuffer}
-        hostAbsolutePath={state.hostAbsolutePath}
+        fileResourceId={state.fileResourceId}
         mtimeMs={state.mtimeMs}
         targetLine={targetLine}
         extractedText={state.extractedText}
