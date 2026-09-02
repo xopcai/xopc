@@ -30,14 +30,75 @@ const ProjectSessionSchema = z.object({
   routing: z.object({ agentId: z.string().optional() }).passthrough().optional(),
 }).passthrough();
 
+const ProjectMilestoneSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  status: z.enum(['planned', 'active', 'completed', 'cancelled']),
+  targetAt: z.number().optional(),
+  sortOrder: z.number(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+const ProjectUpdateSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  health: z.enum(['unknown', 'on_track', 'at_risk', 'off_track']),
+  summary: z.string(),
+  progress: z.array(z.string()),
+  risks: z.array(z.string()),
+  nextSteps: z.array(z.string()),
+  actor: z.record(z.string(), z.unknown()),
+  createdAt: z.number(),
+});
+
 const ProjectDetailsSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
+  brief: z.string().optional(),
+  outcome: z.string().optional(),
   status: z.string(),
   defaultAgentId: z.string().optional(),
+  workspaceRoot: z.string().optional(),
+  effectiveWorkspaceRoot: z.string().optional(),
   pinnedAt: z.number().optional(),
+  milestones: z.array(ProjectMilestoneSchema).default([]),
+  recentUpdates: z.array(ProjectUpdateSchema).default([]),
 }).passthrough();
+
+const ProjectSkillSchema = z.object({
+  key: z.string(),
+  directoryId: z.string(),
+  name: z.string(),
+  description: z.string(),
+  origin: z.enum(['extra', 'bundled', 'agents-global', 'agents-workspace', 'custom-global', 'xopc-global', 'xopc-workspace']),
+  path: z.string(),
+  effective: z.boolean(),
+  shadowedBy: z.string().optional(),
+  disableModelInvocation: z.boolean(),
+});
+
+const ProjectSkillSourceSchema = z.object({
+  origin: z.enum(['xopc-workspace', 'agents-workspace']),
+  rootDir: z.string(),
+  state: z.enum(['active', 'missing', 'disabled', 'untrusted', 'invalid']),
+});
+
+const ProjectSkillsResponseSchema = z.object({
+  ok: z.literal(true),
+  workspaceRoot: z.string(),
+  sources: z.array(ProjectSkillSourceSchema),
+  items: z.array(ProjectSkillSchema),
+  inheritedItems: z.array(ProjectSkillSchema),
+  diagnostics: z.array(z.object({
+    type: z.enum(['skipped', 'warning', 'collision', 'error']),
+    message: z.string(),
+    path: z.string().optional(),
+  })),
+});
 
 const ProjectActivityEventSchema = z.object({
   id: z.string(),
@@ -52,6 +113,11 @@ const ProjectActivityEventSchema = z.object({
 export type Project = z.infer<typeof ProjectSchema>;
 export type ProjectSession = z.infer<typeof ProjectSessionSchema>;
 export type ProjectDetails = z.infer<typeof ProjectDetailsSchema>;
+export type ProjectMilestone = z.infer<typeof ProjectMilestoneSchema>;
+export type ProjectUpdate = z.infer<typeof ProjectUpdateSchema>;
+export type ProjectSkill = z.infer<typeof ProjectSkillSchema>;
+export type ProjectSkillSource = z.infer<typeof ProjectSkillSourceSchema>;
+export type ProjectSkillsResponse = z.infer<typeof ProjectSkillsResponseSchema>;
 export type ProjectActivityEvent = z.infer<typeof ProjectActivityEventSchema>;
 
 async function readError(response: Response): Promise<Error> {
@@ -90,6 +156,12 @@ export async function fetchProjectActivity(projectId: string, limit = 8): Promis
   if (!response.ok) throw await readError(response);
   return z.object({ ok: z.literal(true), items: z.array(ProjectActivityEventSchema) })
     .parse(await response.json()).items;
+}
+
+export async function fetchProjectSkills(projectId: string): Promise<ProjectSkillsResponse> {
+  const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/skills`);
+  if (!response.ok) throw await readError(response);
+  return ProjectSkillsResponseSchema.parse(await response.json());
 }
 
 async function projectAction(projectId: string, action: 'pin' | 'unpin'): Promise<ProjectDetails> {
