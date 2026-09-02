@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseTurnOutcome } from './turn-outcome.js';
+import {
+  fileResourceArtifactUri,
+  parseFileResourceArtifactUri,
+  parseTurnOutcome,
+  turnOutcomeKindFromFileName,
+  turnOutcomeMimeTypeFromFileName,
+} from './turn-outcome.js';
 
 describe('turn outcome contract', () => {
   it('accepts the versioned result model and rejects invalid payloads', () => {
@@ -25,5 +31,14 @@ describe('turn outcome contract', () => {
 
     expect(outcome?.changeSet?.files[0]?.path).toBe('src/store.ts');
     expect(parseTurnOutcome({ version: 2 })).toBeNull();
+  });
+
+  it('classifies office deliverables and round-trips file resource URIs', () => {
+    expect(turnOutcomeKindFromFileName('季度报表.xlsx')).toBe('spreadsheet');
+    expect(turnOutcomeKindFromFileName('roadmap.pptx')).toBe('presentation');
+    expect(turnOutcomeMimeTypeFromFileName('季度报表.xlsx'))
+      .toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const uri = fileResourceArtifactUri('space.id/with spaces');
+    expect(parseFileResourceArtifactUri(uri)).toBe('space.id/with spaces');
   });
 });
