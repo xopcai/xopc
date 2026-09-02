@@ -53,6 +53,8 @@ Sessions are stored in the local xopc database under the state directory. If you
 
 For backup and deletion locations, see [Data and file locations](./workspace.md).
 
+To publish a reviewed, read-only snapshot of a conversation, see [Share a conversation](./session-sharing.md).
+
 ## Troubleshooting
 
 | Problem | Check |
