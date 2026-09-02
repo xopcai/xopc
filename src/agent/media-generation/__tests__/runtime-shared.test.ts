@@ -239,7 +239,7 @@ describe('buildNoCapabilityModelConfiguredMessage', () => {
   it('formats with registered providers and env hints', () => {
     const msg = buildNoCapabilityModelConfiguredMessage({
       capabilityLabel: 'image-generation',
-      modelConfigKey: 'imageGenerationModel',
+      modelConfigKey: 'imageGeneration',
       providers: [
         { id: 'openai', defaultModel: 'gpt-image-2' },
         { id: 'dashscope', defaultModel: 'wan2.7-image-pro' },
@@ -247,7 +247,7 @@ describe('buildNoCapabilityModelConfiguredMessage', () => {
       getProviderEnvVars: (id) => (id === 'openai' ? ['OPENAI_API_KEY'] : ['DASHSCOPE_API_KEY']),
     });
     expect(msg).toContain('No image-generation model configured');
-    expect(msg).toContain('manifest/runtime model policy');
+    expect(msg).toContain('agents.defaults.models.imageGeneration');
     expect(msg).toContain('- openai default=gpt-image-2 (env: OPENAI_API_KEY)');
     expect(msg).toContain('- dashscope default=wan2.7-image-pro (env: DASHSCOPE_API_KEY)');
   });
@@ -255,7 +255,7 @@ describe('buildNoCapabilityModelConfiguredMessage', () => {
   it('omits the providers section when none registered', () => {
     const msg = buildNoCapabilityModelConfiguredMessage({
       capabilityLabel: 'image-generation',
-      modelConfigKey: 'imageGenerationModel',
+      modelConfigKey: 'imageGeneration',
       providers: [],
     });
     expect(msg).not.toContain('Registered providers');

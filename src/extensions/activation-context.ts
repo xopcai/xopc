@@ -156,18 +156,13 @@ function defaultModelId(config: unknown): string | undefined {
   const entry =
     list.find((candidate) => isRecord(candidate) && candidate.id === defaultId) ??
     list.find((candidate) => isRecord(candidate) && candidate.enabled !== false);
-  if (!isRecord(entry)) return undefined;
-  const models = entry.models;
-  if (!isRecord(models)) return undefined;
-  const defaultRole = typeof models.defaultRole === 'string' ? models.defaultRole : undefined;
-  const roles = models.roles;
-  if (!defaultRole || !isRecord(roles)) return undefined;
-  const role = roles[defaultRole];
-  if (isRecord(role)) {
-    const model = role.model;
-    if (typeof model === 'string' && model.trim().length > 0) return model;
-  }
-  return undefined;
+  const overrideModels = isRecord(entry) && isRecord(entry.models) ? entry.models : undefined;
+  const overrideChat = overrideModels && isRecord(overrideModels.chat) ? overrideModels.chat : undefined;
+  if (typeof overrideChat?.primary === 'string' && overrideChat.primary.trim()) return overrideChat.primary;
+  const defaults = isRecord(agents.defaults) ? agents.defaults : undefined;
+  const models = defaults && isRecord(defaults.models) ? defaults.models : undefined;
+  const chat = models && isRecord(models.chat) ? models.chat : undefined;
+  return typeof chat?.primary === 'string' && chat.primary.trim() ? chat.primary : undefined;
 }
 
 /**

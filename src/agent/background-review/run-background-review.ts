@@ -3,7 +3,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
-import { resolveTypedModelRef } from '../../config/agent-typed-models.js';
+import { resolveModelIntentRef } from '../../config/agent-model-intents.js';
 import type { Config } from '../../config/schema.js';
 import { getApiKeySync, resolveModel } from '../../providers/index.js';
 import {
@@ -122,14 +122,12 @@ function resolveInterpreterRuntime(params: Pick<RunBackgroundReviewParams, 'sess
   let model: Model<Api> | undefined;
   if (config) {
     const agentId = extractProfileAgentId(params.sessionKey, config);
-    for (const role of ['understanding', 'small']) {
-      const ref = resolveTypedModelRef(config, agentId, role);
-      if (!ref) continue;
+    const ref = resolveModelIntentRef(config, agentId, 'understanding');
+    if (ref) {
       try {
         model = resolveModel(ref);
-        break;
       } catch (err) {
-        log.debug({ err, agentId, role, modelRef: ref }, 'Configured understanding model could not be resolved');
+        log.debug({ err, agentId, modelRef: ref }, 'Configured understanding model could not be resolved');
       }
     }
   }

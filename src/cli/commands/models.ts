@@ -75,11 +75,9 @@ function currentModelRef(config: Config): string | undefined {
 
 function setDefaultModel(config: Config, modelRef: string): Config {
   const prep = prepareUpdateGlobalDefaults(config, {
-    models: {
-      defaultRole: 'deep',
-      roles: {
-        deep: { model: modelRef },
-      },
+    defaults: {
+      ...config.agents.defaults,
+      models: { ...config.agents.defaults.models, chat: { primary: modelRef, fallbacks: [] } },
     },
   });
   if (prep.ok === false) {

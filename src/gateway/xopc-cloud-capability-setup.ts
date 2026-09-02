@@ -2,10 +2,7 @@ import type { Config } from '../config/schema.js';
 import type { CatalogModel, CatalogSource } from '../providers/model-catalog-store.js';
 import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../providers/model-catalog-ranking.js';
-import {
-  ensureGlobalDefaultsConfig,
-  prepareUpdateGlobalDefaults,
-} from './global-defaults-admin.js';
+import { prepareUpdateGlobalDefaults } from './global-defaults-admin.js';
 
 type CloudCapability = 'chat' | 'vision' | 'image-generation' | 'stt' | 'tts';
 
@@ -103,29 +100,23 @@ export function prepareXopcCloudCapabilitySetup(
   }
 
   const selection = selected.selection;
-  const normalized = ensureGlobalDefaultsConfig(config);
-  const presetId = normalized.agents.defaultPreset;
-  const preset = normalized.agents.capabilityPresets[presetId];
-  const currentModels = preset?.models;
-  const defaultRole = currentModels?.defaultRole ?? 'deep';
-  const defaultsUpdate = prepareUpdateGlobalDefaults(normalized, {
-    models: {
-      ...currentModels,
-      defaultRole,
-      roles: {
-        ...(currentModels?.roles ?? {}),
-        [defaultRole]: {
-          ...currentModels?.roles?.[defaultRole],
-          model: `xopc-cloud/${selection.chat}`,
+  const currentModels = config.agents.defaults.models;
+  const defaultsUpdate = prepareUpdateGlobalDefaults(config, {
+    defaults: {
+      ...config.agents.defaults,
+      models: {
+        ...currentModels,
+        chat: { primary: `xopc-cloud/${selection.chat}`, fallbacks: [] },
+        imageUnderstanding: {
+          ...currentModels.imageUnderstanding,
+          primary: `xopc-cloud/${selection.vision}`,
+          fallbacks: currentModels.imageUnderstanding?.fallbacks ?? [],
         },
-      },
-      imageModel: {
-        ...currentModels?.imageModel,
-        primary: `xopc-cloud/${selection.vision}`,
-      },
-      imageGenerationModel: {
-        ...currentModels?.imageGenerationModel,
-        primary: `xopc-cloud/${selection.imageGeneration}`,
+        imageGeneration: {
+          ...currentModels.imageGeneration,
+          primary: `xopc-cloud/${selection.imageGeneration}`,
+          fallbacks: currentModels.imageGeneration?.fallbacks ?? [],
+        },
       },
     },
   });

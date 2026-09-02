@@ -24,6 +24,8 @@ function haystack(m: ConfiguredModel): string {
   return `${m.id} ${m.name} ${m.provider}`.toLowerCase();
 }
 
+const EMPTY_MODELS: ConfiguredModel[] = [];
+
 function modelsMatchingQuery(models: ConfiguredModel[], query: string): ConfiguredModel[] {
   const raw = query.trim().toLowerCase();
   if (!raw) return models;
@@ -80,6 +82,8 @@ export function ModelSelector({
   outOfFilterNote,
   /** When `capabilitiesFilter` yields an empty registry and no current value to prepend. */
   registryEmptyHint,
+  allowEmpty = false,
+  emptyLabel,
   compact,
   showProviderInTrigger = true,
   contentSide = 'bottom',
@@ -89,6 +93,7 @@ export function ModelSelector({
   /** Chat header: footer link to provider (API key) settings. */
   showProviderSettingsFooter,
   settingsFooterLink,
+  ariaLabel,
   onChange,
 }: {
   value: string;
@@ -103,6 +108,9 @@ export function ModelSelector({
   capabilitiesFilter?: 'vision';
   outOfFilterNote?: string;
   registryEmptyHint?: string;
+  /** Adds a first option that clears the current model selection. */
+  allowEmpty?: boolean;
+  emptyLabel?: string;
   compact?: boolean;
   /** When false, trigger shows model name only (dropdown rows still include provider). */
   showProviderInTrigger?: boolean;
@@ -115,6 +123,7 @@ export function ModelSelector({
   popoverContentClassName?: string;
   showProviderSettingsFooter?: boolean;
   settingsFooterLink?: { label: string; path: string };
+  ariaLabel?: string;
   onChange: (modelId: string) => void;
 }) {
   const navigate = useNavigate();
@@ -133,7 +142,7 @@ export function ModelSelector({
   const registry = useSWR(suppliedModels ? null : CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
   });
-  const models = suppliedModels ?? registry.data ?? [];
+  const models = suppliedModels ?? registry.data ?? EMPTY_MODELS;
   const isLoading = suppliedModels ? Boolean(modelsLoading) : registry.isLoading;
   const error = suppliedModels ? modelsError : registry.error;
 
@@ -165,6 +174,7 @@ export function ModelSelector({
       <Popover.Trigger asChild>
         <button
           type="button"
+          aria-label={ariaLabel}
           disabled={disabled || isLoading}
           title={selected ? `${selected.name} (${selected.provider})` : placeholder}
           className={cn(
@@ -198,6 +208,7 @@ export function ModelSelector({
           {showSearch ? (
             <input
               type="search"
+              aria-label={searchPlaceholder}
               className={cn(
                 'mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled dark:bg-surface-hover/40',
                 formControlBorderFocusClass,
@@ -208,6 +219,23 @@ export function ModelSelector({
             />
           ) : null}
           <div className="max-h-60 overflow-auto">
+            {allowEmpty ? (
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
+                  valueTrimmed === '' && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
+                )}
+                onClick={() => {
+                  onChange('');
+                  setOpen(false);
+                  setQuery('');
+                }}
+              >
+                <Check className={cn('size-4 shrink-0', valueTrimmed !== '' && 'invisible')} aria-hidden />
+                <span className="min-w-0 truncate text-fg-muted">{emptyLabel ?? placeholder}</span>
+              </button>
+            ) : null}
             {error ? (
               <div className="p-2 text-xs text-red-600 dark:text-red-400">
                 {error instanceof Error ? error.message : 'Failed to load models'}

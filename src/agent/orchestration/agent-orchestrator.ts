@@ -43,8 +43,6 @@ export interface AgentOrchestratorConfig {
   /** Per-session hydration (workspace override + model override) before the agent runs. */
   sessionHydrator: SessionHydrator;
   getThinkingDefault: () => ThinkLevel | undefined;
-  /** Per-session default from merged `agents.list` / defaults (optional). */
-  getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   /** Default workspace root when no per-session resolver is set. */
   workspaceRoot: string;
   /** Per-agent workspace root for attachments (optional; defaults to `workspaceRoot`). */
@@ -68,7 +66,6 @@ export class AgentOrchestrator {
   private sessionConfigStore: SessionConfigStore;
   private sessionHydrator: SessionHydrator;
   private getThinkingDefault: () => ThinkLevel | undefined;
-  private getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   private enqueueAutoTitle?: (sessionKey: string) => void;
   private getConfig?: () => Config | undefined;
   private onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
@@ -81,7 +78,6 @@ export class AgentOrchestrator {
     this.sessionConfigStore = config.sessionConfigStore;
     this.sessionHydrator = config.sessionHydrator;
     this.getThinkingDefault = config.getThinkingDefault;
-    this.getThinkingDefaultForSession = config.getThinkingDefaultForSession;
     this.enqueueAutoTitle = config.enqueueAutoTitle;
     this.getConfig = config.getConfig;
     this.onEmbeddedStreamEvent = config.onEmbeddedStreamEvent;
@@ -132,8 +128,7 @@ export class AgentOrchestrator {
         this.agentManager.applyTurnChannelSystemPrompt(sessionKey, channelSystemPrompt);
       }
 
-      const thinkingDefault =
-        this.getThinkingDefaultForSession?.(sessionKey) ?? this.getThinkingDefault();
+      const thinkingDefault = this.getThinkingDefault();
       const thinkingLevel = await resolveEffectiveThinkingLevel(
         this.sessionConfigStore,
         sessionKey,

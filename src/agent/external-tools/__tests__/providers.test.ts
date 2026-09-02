@@ -106,7 +106,7 @@ describe('external tool providers', () => {
     expect(callTool).toHaveBeenCalledWith('demo server', 'lookup', { id: '42' }, undefined);
   });
 
-  it('enforces MCP read-only scope and execution timeout policies', async () => {
+  it('enforces flat MCP tool and timeout policies', async () => {
     const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
     const runtime = {
       markUsed: vi.fn(),
@@ -126,18 +126,20 @@ describe('external tool providers', () => {
     const config = {
       agents: {
         default: 'main',
-        defaultPreset: 'default',
-        capabilityPresets: {
-          default: { id: 'default', name: 'Default', version: 1, models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } } },
+        defaults: {
+          models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
+          skills: { mode: 'all-enabled', exclude: [] },
+          tools: {
+            'mcp:demo:write': { mode: 'deny' },
+            'mcp:demo:read': { mode: 'allow', timeoutMs: 1_000 },
+          },
+          workflows: {},
+          runtime: {},
         },
         list: [{
           id: 'main', enabled: true,
-          identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
-          responsibilities: { primary: ['Help'] },
-          workspace: { root: '/tmp/main' },
-          tools: { builtin: {}, mcp: { servers: { demo: { mode: 'allow', scope: 'readonly', limits: { timeoutMs: 1_000 } } } } },
-          skills: { mode: 'all' }, workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          profile: { name: 'Main' },
+          workspace: '/tmp/main',
         }],
       },
     } as Config;

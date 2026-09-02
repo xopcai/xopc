@@ -17,20 +17,24 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
 
   addRef(getAgentDefaultModelRef(cfg));
 
-  const addRoles = (roles: Record<string, { model?: string }> | undefined) => {
-    for (const role of Object.values(roles ?? {})) {
-      addRef(role.model);
+  const addRoutes = (routes: Record<string, { primary?: string } | undefined> | undefined) => {
+    for (const route of Object.values(routes ?? {})) {
+      addRef(route?.primary);
     }
   };
 
-  for (const preset of Object.values(cfg.agents.capabilityPresets ?? {})) {
-    addRoles(preset.models?.roles);
-  }
+  addRef(cfg.agents.defaults.models.chat.primary);
+  addRoutes(cfg.agents.defaults.models.intents);
+  addRef(cfg.agents.defaults.models.imageUnderstanding?.primary);
+  addRef(cfg.agents.defaults.models.imageGeneration?.primary);
 
   const list = cfg.agents?.list;
   if (Array.isArray(list)) {
     for (const e of list) {
-      addRoles(e?.models?.roles);
+      addRef(e?.models?.chat?.primary);
+      addRoutes(e?.models?.intents);
+      addRef(e?.models?.imageUnderstanding?.primary);
+      addRef(e?.models?.imageGeneration?.primary);
     }
   }
 

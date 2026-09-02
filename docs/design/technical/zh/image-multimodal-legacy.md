@@ -8,8 +8,8 @@ xopc 支持在对话中**接收图片**、通过 **`image` 工具**做**图像�
 
 | 字段 | 类型 | 作用 |
 |------|------|------|
-| Agent 模型角色 | `agents.list[].models.roles` | 所选对话模型支持视觉时，图片可直接进入模型。 |
-| 图片生成模型 | `agents.list[].models.imageGenerationModel` | 为每个 Agent 选择一个内置 Provider/模型。 |
+| 图片理解 | `agents.defaults.models.imageUnderstanding` | 默认视觉路由，单个 Agent 可覆盖。 |
+| 图片生成 | `agents.defaults.models.imageGeneration` | 默认生成路由，单个 Agent 可覆盖。 |
 | 媒体大小限制 | 运行时 / gateway 限制 | 上传和工具载荷上限取决于具体路由或工具。 |
 
 目录包含 OpenAI、Google、阿里云百炼、MiniMax 和 fal。连接 XOPC Model Service
@@ -27,7 +27,7 @@ xopc 会自动把第一个可生成图片的模型配置为默认图片生成模
 
 - **入站图片** — 当**会话主模型**支持视觉时，图片以原生图像部件进入模型；否则会先用支持视觉的模型转成文字描述再进入主流程。  
 - **`image` 工具** — 使用运行时解析出的视觉能力做描述或分析。  
-- **`image_generate` 工具** — 使用 `imageGenerationModel` 与已注册的生成提供方。部分提供方支持**图生图 / 编辑**；具体参数以当前版本的工具 schema 为准。
+- **`image_generate` 工具** — 使用最终生效的 `models.imageGeneration` 路由与已注册的生成提供方。部分提供方支持**图生图 / 编辑**；具体参数以当前版本的工具 schema 为准。
 
 参数摘要见 [内置工具 — 图像](tools.md#图像)。
 

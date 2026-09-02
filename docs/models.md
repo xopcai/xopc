@@ -58,15 +58,15 @@ When xopc runs in Docker, `127.0.0.1` points to the container, not the host. Use
 
 Local execution improves control over request handling, but model files, hardware requirements, and runtime logs remain your responsibility.
 
-## Default model and Agent model roles
+## Default model and model intents
 
-The global default is used when an Agent does not specify another model. Set it with:
+The global chat model is used when an Agent does not specify another model. Set it with:
 
 ```bash
 xopc models set <provider>/<model>
 ```
 
-Advanced Agents and Workflows can use named roles such as a fast model for simple steps and a larger model for synthesis. Configure these in the Agent editor only when the extra complexity gives a clear cost or quality benefit.
+Advanced Agents and Workflows can use six fixed intents: `fast`, `reasoning`, `coding`, `review`, `vision`, and `understanding`. Configure them globally, then override only an Agent that genuinely needs a different route.
 
 ## Verify and troubleshoot
 

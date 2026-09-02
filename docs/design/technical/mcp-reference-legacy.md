@@ -109,27 +109,23 @@ xopc mcp unset fetch
 
 ---
 
-## Deny MCP tools for an agent
+## Deny MCP tools
 
-Put MCP policy in an Agent entry or capability preset. To deny every tool from a configured server:
+Use the tool's stable policy id in the global defaults, or place the same override on one Agent:
 
 ```json
 {
   "agents": {
-    "capabilityPresets": {
-      "no-fetch": {
-        "id": "no-fetch",
-        "name": "No fetch MCP",
-        "tools": {
-          "mcp": { "servers": { "fetch": { "mode": "deny" } } }
-        }
+    "defaults": {
+      "tools": {
+        "mcp:fetch:browse": { "mode": "deny" }
       }
     }
   }
 }
 ```
 
-Apply the plan through the Agent's `extends` list. To deny one MCP tool, use its stable policy id under `tools.mcp.tools`, for example `"mcp:fetch:browse": { "mode": "deny" }`. Policy ids are not model-visible tools. The same policy can be set directly on an Agent entry.
+Policy ids are not model-visible tools. List each tool from a server that should be denied; there is no separate server policy hierarchy.
 
 Delegate sub-agents cannot use MCP tools.
 

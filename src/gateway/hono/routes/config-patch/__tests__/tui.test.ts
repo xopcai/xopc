@@ -7,7 +7,6 @@ function config(): Config {
   return {
     agents: {
       default: 'main',
-      capabilityPresets: {},
       list: [
         { id: 'main' },
         { id: 'coder' },

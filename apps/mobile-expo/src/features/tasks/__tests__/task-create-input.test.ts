@@ -12,9 +12,9 @@ function agents(defaultId = 'default', ids = ['default', 'project', 'selected'])
     builtinToolIds: [],
     items: ids.map((id) => ({
       id,
-      typedModels: { defaults: [], effective: [] },
-      skills: { defaults: [] },
-      tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+      modelIntents: { effective: [], overrides: [] },
+      skills: { excluded: [], overrides: [] },
+      tools: { denied: [], overrides: [] },
     })),
   };
 }

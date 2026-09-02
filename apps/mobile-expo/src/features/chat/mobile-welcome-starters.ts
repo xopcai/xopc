@@ -35,11 +35,7 @@ function agentForWelcome(
     id: agent?.id ?? fallbackId,
     name: agent ? agentDisplayName(agent, messages) : undefined,
     description: agent ? agentDisplayDescription(agent, messages) : undefined,
-    skills: [
-      ...(agent?.skills.effectiveAllowlist ?? []),
-      ...(agent?.skills.entry ?? []),
-      ...(agent?.skills.defaults ?? []),
-    ],
+    skills: agent?.skills.allowlist ?? [],
   };
 }
 

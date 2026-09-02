@@ -8,8 +8,8 @@ xopc can **receive images** in chat, run **vision / image understanding** with t
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| Agent model roles | `agents.list[].models.roles` | The selected chat model may receive images directly when it supports vision. |
-| Image generation model | `agents.list[].models.imageGenerationModel` | Selects one built-in provider/model for each agent. |
+| Image understanding | `agents.defaults.models.imageUnderstanding` | Default vision route; an Agent may override it. |
+| Image generation | `agents.defaults.models.imageGeneration` | Default generation route; an Agent may override it. |
 | Media size limits | Runtime/gateway limits | Maximum upload and tool payload sizes depend on the route/tool in use. |
 
 The catalog contains OpenAI, Google, Alibaba Model Studio, MiniMax, and fal. When
@@ -28,7 +28,7 @@ image-generation settings are preserved.
 
 - **Inbound images** — When the **session model** supports vision, images are sent to the model as native image parts. Otherwise a vision-capable model may describe them as text first.
 - **`image` tool** — Describes or analyses images using the resolved vision-capable runtime.
-- **`image_generate` tool** — Creates images using `imageGenerationModel` and the configured generation providers. Some providers support **edits** (image-to-image) via the HTTP API; tool parameters follow the published schema for your xopc version.
+- **`image_generate` tool** — Creates images using the effective `models.imageGeneration` route and configured providers. Some providers support **edits** (image-to-image) via the HTTP API; tool parameters follow the published schema for your xopc version.
 
 See [Built-in Tools](tools.md#vision--image-generation) for parameter summaries.
 

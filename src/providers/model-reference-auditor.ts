@@ -55,24 +55,31 @@ function collectToolModel(
 function collectModelPolicy(out: CollectedReference[], value: unknown, location: string): void {
   const policy = asRecord(value);
   if (!policy) return;
-  const roles = asRecord(policy.roles);
-  for (const [roleId, roleValue] of Object.entries(roles ?? {})) {
-    const role = asRecord(roleValue);
-    if (!role) continue;
-    addRef(out, role.model, `${location}.roles.${roleId}.model`);
-    if (Array.isArray(role.fallbacks)) {
-      role.fallbacks.forEach((ref, index) => addRef(
+  const chat = asRecord(policy.chat);
+  if (chat) {
+    addRef(out, chat.primary, `${location}.chat.primary`);
+    if (Array.isArray(chat.fallbacks)) chat.fallbacks.forEach((ref, index) => addRef(
+      out, ref, `${location}.chat.fallbacks[${index}]`,
+    ));
+  }
+  const intents = asRecord(policy.intents);
+  for (const [intent, routeValue] of Object.entries(intents ?? {})) {
+    const route = asRecord(routeValue);
+    if (!route) continue;
+    addRef(out, route.primary, `${location}.intents.${intent}.primary`);
+    if (Array.isArray(route.fallbacks)) {
+      route.fallbacks.forEach((ref, index) => addRef(
         out,
         ref,
-        `${location}.roles.${roleId}.fallbacks[${index}]`,
+        `${location}.intents.${intent}.fallbacks[${index}]`,
       ));
     }
   }
-  collectToolModel(out, policy.imageModel, `${location}.imageModel`);
+  collectToolModel(out, policy.imageUnderstanding, `${location}.imageUnderstanding`);
   collectToolModel(
     out,
-    policy.imageGenerationModel,
-    `${location}.imageGenerationModel`,
+    policy.imageGeneration,
+    `${location}.imageGeneration`,
     'image-generation',
   );
 }
@@ -82,9 +89,7 @@ function collectReferences(
   sessionConfigs: ReadonlyMap<string, SessionAgentConfig>,
 ): CollectedReference[] {
   const out: CollectedReference[] = [];
-  for (const [presetId, preset] of Object.entries(config.agents.capabilityPresets)) {
-    collectModelPolicy(out, preset.models, `agents.capabilityPresets.${presetId}.models`);
-  }
+  collectModelPolicy(out, config.agents.defaults.models, 'agents.defaults.models');
   for (const agent of config.agents.list) {
     collectModelPolicy(out, agent.models, `agents.list.${agent.id}.models`);
   }

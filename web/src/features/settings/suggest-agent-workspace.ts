@@ -2,7 +2,7 @@
 
 import { normalizeAgentId } from '@/lib/agent-id';
 
-/** Gateway default workspace parent for new agent manifests. */
+/** Gateway default workspace parent for new agents. */
 export const DEFAULT_AGENT_WORKSPACE = '~/.xopc/workspace';
 
 /** Empty string if `name` is blank; else `~/.xopc/workspace/<agentId>`. */

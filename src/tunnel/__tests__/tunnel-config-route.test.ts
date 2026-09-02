@@ -11,7 +11,7 @@ function mockService() {
       bind: 'loopback' as const,
       auth: { mode: 'token' as const, token: 'gateway-secret-token' },
     },
-    agents: { default: 'main', capabilityPresets: {}, list: [] },
+    agents: { default: 'main', list: [] },
     channels: {},
     tunnel: {
       enabled: true,

@@ -81,15 +81,10 @@ describe('XOPC Cloud capability setup', () => {
   it('writes chat, STT, TTS, image understanding, and image generation in one config', () => {
     const config = ConfigSchema.parse({
       agents: {
-        capabilityPresets: {
-          default: {
-            id: 'default',
-            name: 'Global defaults',
-            version: 1,
-            models: {
-              defaultRole: 'deep',
-              roles: { deep: { model: 'deepseek/deepseek-v4-flash' } },
-            },
+        defaults: {
+          models: {
+            chat: { primary: 'deepseek/deepseek-v4-flash', fallbacks: [] },
+            intents: {},
           },
         },
       },
@@ -108,11 +103,10 @@ describe('XOPC Cloud capability setup', () => {
     expect(prepared.ok).toBe(true);
     if (!prepared.ok) return;
 
-    const preset = prepared.config.agents.capabilityPresets[prepared.config.agents.defaultPreset];
-    expect(preset.models).toMatchObject({
-      roles: { deep: { model: 'xopc-cloud/chat' } },
-      imageModel: { primary: 'xopc-cloud/vision-recommended' },
-      imageGenerationModel: { primary: 'xopc-cloud/image-recommended' },
+    expect(prepared.config.agents.defaults.models).toMatchObject({
+      chat: { primary: 'xopc-cloud/chat' },
+      imageUnderstanding: { primary: 'xopc-cloud/vision-recommended' },
+      imageGeneration: { primary: 'xopc-cloud/image-recommended' },
     });
     expect(prepared.config.tools.media?.audio).toMatchObject({
       enabled: true,

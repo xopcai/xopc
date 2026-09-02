@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import type { Config } from '../../../config/schema.js';
+import type { AgentModelsDefaults } from '../../../agent-config/index.js';
 
 const mocks = vi.hoisted(() => ({
   configuredProviders: new Set<string>(),
@@ -28,32 +29,18 @@ function addModel(provider: string, id: string, input: Array<'text' | 'image'> =
   mocks.models.set(`${provider}/${id}`, { provider, id, input });
 }
 
-function baseConfig(models: NonNullable<Config['agents']['capabilityPresets'][string]['models']>): Config {
+function baseConfig(models: AgentModelsDefaults): Config {
   return {
     agents: {
       default: 'main',
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          id: 'default',
-          name: 'Global defaults',
-          version: 1,
-          models,
-        },
+      defaults: {
+        models,
+        skills: { mode: 'all-enabled', exclude: [] },
+        tools: {},
+        workflows: {},
+        runtime: {},
       },
-      list: [
-        {
-          id: 'main',
-          enabled: true,
-          identity: { name: 'Main', role: 'assistant' },
-          responsibilities: { primary: ['Assist'] },
-          workspace: { root: '/tmp' },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {},
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
-        },
-      ],
+      list: [{ id: 'main', enabled: true, workspace: '/tmp' }],
     },
   } as Config;
 }
@@ -71,12 +58,9 @@ describe('resolveEffectiveImageModelConfig', () => {
 
     const result = resolveEffectiveImageModelConfig({
       cfg: baseConfig({
-        defaultRole: 'deep',
-        roles: {
-          deep: { model: 'text/default' },
-          vision: { model: 'vision/role-model' },
-        },
-        imageModel: { primary: 'manual/model', fallbacks: ['manual/fallback'] },
+        chat: { primary: 'text/default', fallbacks: [] },
+        intents: { vision: { primary: 'vision/role-model', fallbacks: [] } },
+        imageUnderstanding: { primary: 'manual/model', fallbacks: ['manual/fallback'] },
       }),
     });
 
@@ -94,11 +78,8 @@ describe('resolveEffectiveImageModelConfig', () => {
 
     const result = resolveEffectiveImageModelConfig({
       cfg: baseConfig({
-        defaultRole: 'deep',
-        roles: {
-          deep: { model: 'text/default' },
-          vision: { model: 'vision/role-model', description: 'Vision role' },
-        },
+        chat: { primary: 'text/default', fallbacks: [] },
+        intents: { vision: { primary: 'vision/role-model', fallbacks: [] } },
       }),
     });
 
@@ -106,7 +87,6 @@ describe('resolveEffectiveImageModelConfig', () => {
       primary: 'vision/role-model',
       source: 'auto-role',
       roleId: 'vision',
-      roleDescription: 'Vision role',
     });
   });
 
@@ -117,18 +97,15 @@ describe('resolveEffectiveImageModelConfig', () => {
 
     const result = resolveEffectiveImageModelConfig({
       cfg: baseConfig({
-        defaultRole: 'deep',
-        roles: {
-          deep: { model: 'text/default' },
-          small: { model: 'text/default', fallbacks: ['vision/fallback-model'] },
-        },
+        chat: { primary: 'text/default', fallbacks: [] },
+        intents: { fast: { primary: 'text/default', fallbacks: ['vision/fallback-model'] } },
       }),
     });
 
     expect(result).toEqual({
       primary: 'vision/fallback-model',
       source: 'auto-role',
-      roleId: 'small',
+      roleId: 'fast',
     });
   });
 
@@ -137,10 +114,8 @@ describe('resolveEffectiveImageModelConfig', () => {
 
     const result = resolveEffectiveImageModelConfig({
       cfg: baseConfig({
-        defaultRole: 'vision',
-        roles: {
-          vision: { model: 'vision/role-model' },
-        },
+        chat: { primary: 'vision/role-model', fallbacks: [] },
+        intents: {},
       }),
     });
 
@@ -154,10 +129,8 @@ describe('resolveEffectiveImageModelConfig', () => {
 
     const result = resolveEffectiveImageModelConfig({
       cfg: baseConfig({
-        defaultRole: 'deep',
-        roles: {
-          deep: { model: 'openai/text-model' },
-        },
+        chat: { primary: 'openai/text-model', fallbacks: [] },
+        intents: {},
       }),
     });
 

@@ -86,8 +86,7 @@ import { BackgroundReviewCoordinator } from './background-review/coordinator.js'
 import { runTurnUnderstandingReview } from './background-review/run-background-review.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
-import { checkBoundary } from '../agent-runtime/boundary-guard.js';
-import { mcpToolPolicyId, resolveMcpToolPolicy } from './mcp/bundle-mcp-policy.js';
+import { mcpToolPolicyId } from './mcp/bundle-mcp-policy.js';
 import { parseExternalToolRef } from './external-tools/refs.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
@@ -390,17 +389,6 @@ export class AgentManager implements AgentInstanceGateway {
     }
   }
 
-  /** Merged `thinkingDefault` for this session's agent id (defaults + `agents.list`). */
-  getThinkingDefaultForSession(
-    sessionKey: string,
-  ): import('./transcript/thinking-types.js').ThinkLevel | undefined {
-    const cfg = this.mergedConfig();
-    if (!cfg) {
-      return undefined;
-    }
-    return resolveEffectiveAgentProfileForSession(cfg, sessionKey).thinkingDefault;
-  }
-
   private pickDefaultModelRef(): string {
     const cfg = this.mergedConfig();
     const ref = getAgentDefaultModelRef(cfg);
@@ -455,7 +443,7 @@ export class AgentManager implements AgentInstanceGateway {
           const config = this.mergedConfig();
           const sessionKey = this.config.getCurrentContext?.()?.sessionKey;
           return resolveEffectiveAgentProfileForSession(config, sessionKey)
-            .manifest.tools.builtin[toolName]?.limits?.timeoutMs;
+            .config.tools[toolName]?.timeoutMs;
         },
       },
       getConfig: () => this.mergedConfig(),
@@ -677,7 +665,6 @@ export class AgentManager implements AgentInstanceGateway {
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
       (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
-      (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
       this.config.thinkingLevel ??
       'medium';
     return rt.systemPromptBuilder.build(contextFiles, {
@@ -827,15 +814,16 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private buildAgentSkillAvailability(
-    profile: EffectiveAgentProfile,
+    unresolvedProfile: EffectiveAgentProfile,
     workspaceDir: string,
     registeredToolNames?: string[],
   ): AgentSkillAvailabilityPayload {
     const cfg = this.config.config!;
+    const rt = this.workspaceRuntimes.getOrCreate(workspaceDir, unresolvedProfile.agentId);
+    const profile = this.materializeSkillAllowlist(unresolvedProfile, rt);
     const entry = Array.isArray(cfg.agents?.list)
       ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === profile.agentId.toLowerCase())
       : undefined;
-    const rt = this.workspaceRuntimes.getOrCreate(workspaceDir, profile.agentId);
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
     const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
@@ -888,9 +876,24 @@ export class AgentManager implements AgentInstanceGateway {
       loadedAt: rt.skillManager.getLoadedAt(),
       diagnostics: rt.skillManager.getDiagnostics(),
       status: rt.skillManager.getStatus(),
-      ...(entry?.skills?.mode === 'allowlist' ? { agentAllowlist: [...(entry.skills.allow ?? [])] } : {}),
+      ...(entry?.skills?.mode === 'replace' ? { agentAllowlist: [...entry.skills.include] } : {}),
       ...(profile.skillsAllowlist !== undefined ? { effectiveAllowlist: [...profile.skillsAllowlist] } : {}),
       skills,
+    };
+  }
+
+  private materializeSkillAllowlist(
+    profile: EffectiveAgentProfile,
+    runtime: WorkspaceRuntime,
+  ): EffectiveAgentProfile {
+    if (profile.skillsAllowlist !== undefined || profile.skillsDenylist.length === 0) return profile;
+    const denied = new Set(profile.skillsDenylist.map((name) => name.toLowerCase()));
+    return {
+      ...profile,
+      skillsAllowlist: runtime.skillManager
+        .getSkills()
+        .map((skill) => skill.name)
+        .filter((name) => !denied.has(name.toLowerCase())),
     };
   }
 
@@ -969,10 +972,7 @@ export class AgentManager implements AgentInstanceGateway {
         sessionKey: instance.sessionKey,
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
-        thinkingLevel:
-          (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
-          this.config.thinkingLevel ??
-          'medium',
+        thinkingLevel: this.config.thinkingLevel ?? 'medium',
         activeProjectContext: this.composeDynamicProjectContext(
           instance.activeProjectContext,
           instance.activeSelfVerifyContext,
@@ -1085,10 +1085,7 @@ export class AgentManager implements AgentInstanceGateway {
         sessionKey: instance.sessionKey,
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
-        thinkingLevel:
-          (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
-          this.config.thinkingLevel ??
-          'medium',
+        thinkingLevel: this.config.thinkingLevel ?? 'medium',
         activeProjectContext: this.composeDynamicProjectContext(
           instance.activeProjectContext,
           instance.activeSelfVerifyContext,
@@ -1117,9 +1114,10 @@ export class AgentManager implements AgentInstanceGateway {
       }
     }
 
-    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    let profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
     const resolvedPath = targetPath;
     const rt = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
+    profile = this.materializeSkillAllowlist(profile, rt);
 
     if (isMemorySubsystemEnabled(cfg)) {
       void rt.memoryManager
@@ -1245,9 +1243,7 @@ export class AgentManager implements AgentInstanceGateway {
     const contextFiles = this.resolveContextFilesForSession(sessionKey, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
-      (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
-      this.config.thinkingLevel ??
-      'medium';
+      this.config.thinkingLevel ?? 'medium';
 
     const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
     const activeSelfVerifyContext = this.getSelfVerifyPromptContext(
@@ -1384,8 +1380,7 @@ export class AgentManager implements AgentInstanceGateway {
     });
     const registeredToolNames = tools.map((t) => t.name);
 
-    const thinkingLevel =
-      (profile.thinkingDefault as ThinkingLevel | undefined) ?? this.config.thinkingLevel ?? 'medium';
+    const thinkingLevel = this.config.thinkingLevel ?? 'medium';
     const turnPolicy = this.buildAgentTurnPolicy(sessionKey, profile);
 
     agent = new Agent({
@@ -1429,25 +1424,18 @@ export class AgentManager implements AgentInstanceGateway {
     profile: EffectiveAgentProfile,
   ): AgentTurnPolicy {
     return buildAgentTurnPolicy({
-      maxTurns: profile.manifest.runtime?.maxTurns,
-      maxToolFailures: profile.manifest.runtime?.maxToolFailuresPerTurn,
+      maxTurns: profile.config.runtime.maxTurns,
+      maxToolFailures: profile.config.runtime.maxToolFailuresPerTurn,
       resolveToolLimit: (toolName, args) => {
         const policy = this.resolveToolPolicy(profile, toolName, args);
-        const maxCalls = policy?.limits?.maxCallsPerTurn;
+        const maxCalls = policy?.maxCallsPerTurn;
         return policy && maxCalls ? { id: policy.id, maxCalls } : undefined;
       },
       authorizeToolCall: async ({ toolCall, args }) => {
         const toolName = toolCall.name;
         const policy = this.resolveToolPolicy(profile, toolName, args);
         const detail = JSON.stringify(args ?? {});
-        const boundary = checkBoundary({ manifest: profile.manifest, action: policy?.id ?? toolName, detail });
-        if (boundary.decision === 'deny') {
-          return { block: true, terminate: true, reason: `Blocked by boundary rule: ${boundary.matchedRule}` };
-        }
-        if (boundary.decision === 'escalate') {
-          return { block: true, terminate: true, reason: `Escalation required by boundary rule: ${boundary.matchedRule}` };
-        }
-        if (policy?.mode === 'confirm' || boundary.decision === 'confirm') {
+        if (policy?.mode === 'ask') {
           const approved = await this.requestToolConfirmation(
             sessionKey,
             policy?.id ?? toolName,
@@ -1511,9 +1499,9 @@ export class AgentManager implements AgentInstanceGateway {
     profile: EffectiveAgentProfile,
     toolName: string,
     args: unknown,
-  ): ({ id: string } & NonNullable<EffectiveAgentProfile['manifest']['tools']['builtin'][string]>) | undefined {
+  ): ({ id: string; mode: 'allow' | 'ask' | 'deny'; maxCallsPerTurn?: number; timeoutMs?: number }) | undefined {
     if (toolName !== 'xopc_tool_execute') {
-      const policy = profile.manifest.tools.builtin[toolName];
+      const policy = profile.config.tools[toolName];
       return policy ? { id: toolName, ...policy } : undefined;
     }
     const toolRef = typeof (args as { toolRef?: unknown })?.toolRef === 'string'
@@ -1522,10 +1510,7 @@ export class AgentManager implements AgentInstanceGateway {
     const parsed = parseExternalToolRef(toolRef, 'mcp');
     if (!parsed) return undefined;
     const id = mcpToolPolicyId(parsed.namespace, parsed.toolName);
-    const policy = resolveMcpToolPolicy(
-      { serverId: parsed.namespace, policyToolId: id },
-      profile.manifest.tools.mcp,
-    );
+    const policy = profile.config.tools[id];
     return policy ? { id, ...policy } : undefined;
   }
 
@@ -1562,7 +1547,6 @@ export class AgentManager implements AgentInstanceGateway {
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
       (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
-      (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
       this.config.thinkingLevel ??
       'medium';
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
@@ -1615,7 +1599,6 @@ export class AgentManager implements AgentInstanceGateway {
       );
       const thinkingLevel =
         (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
-        (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
         this.config.thinkingLevel ??
         'medium';
 

@@ -212,11 +212,8 @@ function resolveDefinitionId(
   }
   const configuredDefault = config
     ? (() => {
-        const policy = resolveEffectiveAgentProfileForSession(config, sessionKey).manifest.workflows;
-        const intent = params.intent?.trim().toLowerCase();
-        return (intent
-          ? policy.suggested?.find((entry) => entry.intent.toLowerCase() === intent)?.workflow
-          : undefined) ?? policy.default;
+        const policy = resolveEffectiveAgentProfileForSession(config, sessionKey).config.workflows;
+        return policy.default;
       })()
     : undefined;
   if (configuredDefault) {

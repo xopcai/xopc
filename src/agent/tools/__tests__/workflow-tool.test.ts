@@ -55,7 +55,7 @@ describe('workflow tool async run start', () => {
     expect(result.details).toMatchObject({ error: 'workflow_run_unavailable' });
   });
 
-  it('uses a suggested workflow for an intent and otherwise uses the default', async () => {
+  it('uses an explicit workflow and otherwise uses the default', async () => {
     const startWorkflowRun = vi.fn(async () => ({
       ok: true as const,
       runId: 'run-1',
@@ -65,28 +65,15 @@ describe('workflow tool async run start', () => {
     const config = {
       agents: {
         default: 'main',
-        defaultPreset: 'default',
-        capabilityPresets: {
-          default: {
-            id: 'default',
-            name: 'Default',
-            version: 1,
-            models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
-          },
+        defaults: {
+          models: { chat: { primary: 'openai/gpt-4.1', fallbacks: [] }, intents: {} },
+          workflows: { default: 'general', allowed: ['general', 'review-code'] },
         },
         list: [{
           id: 'main',
           enabled: true,
-          identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
-          responsibilities: { primary: ['Help'] },
-          workspace: { root: '/tmp/main' },
-          tools: { builtin: {} },
-          skills: { mode: 'all' },
-          workflows: {
-            default: 'general',
-            suggested: [{ intent: 'review', workflow: 'review-code' }],
-          },
-          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          profile: { name: 'Main' },
+          workspace: '/tmp/main',
         }],
       },
     };
@@ -97,7 +84,7 @@ describe('workflow tool async run start', () => {
       startWorkflowRun,
     });
 
-    await tool.execute('suggested', { intent: 'review' });
+    await tool.execute('explicit', { name: 'review-code' });
     await tool.execute('default', {});
 
     expect(startWorkflowRun.mock.calls[0]?.[0].definitionId).toBe('review-code');

@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path';
 
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
-import { defaultCapabilityPresetMigration } from './config/default-capability-preset.js';
 import { listRegisteredMigrations } from './registry.js';
 import type { Migration, MigrationContext, MigrationLedger, MigrationPlanItem } from './types.js';
 
@@ -11,8 +10,7 @@ const log = createLogger('Migrations');
 const MIGRATION_LEDGER_FILENAME = 'migrations.json';
 const CONFIG_BACKUP_COUNT = 10;
 
-const CONFIG_MIGRATIONS: readonly Migration[] = [defaultCapabilityPresetMigration];
-export const CORE_MIGRATIONS: readonly Migration[] = [...CONFIG_MIGRATIONS];
+export const CORE_MIGRATIONS: readonly Migration[] = [];
 
 function listAllMigrations(): Migration[] {
   return [...CORE_MIGRATIONS, ...listRegisteredMigrations().map((entry) => entry.migration)];

@@ -1,170 +1,181 @@
-import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
+import { Plus } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import useSWR from 'swr';
+
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
+import { AgentEditor } from '@/features/settings/agents/agent-editor';
+import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
+import { AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
+import { CreateAgentDialog } from '@/features/settings/agents/create-agent-dialog';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
+import {
+  createGatewayAgent,
+  deleteGatewayAgent,
+  fetchGatewayAgents,
+} from '@/features/settings/agents-admin-api';
+import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
+import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
-import { AgentDeleteConfirmDialog } from './agent-delete-confirm-dialog';
-import { agentsAppDetailPath } from './agents-app-path';
-import { AgentsEditorModal } from './agents-editor-modal';
-import { AgentsEditorPanelContent } from './agents-editor-panel-content';
-import { AgentsListGrid } from './agents-list-grid';
-import { CreateAgentDialog } from './create-agent-dialog';
-import { useAgentsSettingsPanel } from './use-agents-settings-panel';
-
-function AgentsSettingsSkeleton() {
+function AgentsSkeleton() {
   return (
-    <div className="grid gap-4" aria-hidden="true">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-2">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-3 w-64 max-w-full" />
-        </div>
-        <Skeleton className="h-9 w-28 rounded-lg" />
+    <SettingsPageFrame gap="gap-5">
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-2"><Skeleton className="h-7 w-28" /><Skeleton className="h-4 w-80 max-w-full" /></div>
+        <Skeleton className="h-9 w-28" />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="rounded-xl bg-surface-base p-4 shadow-surface">
-            <div className="flex items-start gap-3">
-              <Skeleton className="size-11 rounded-xl" />
-              <div className="min-w-0 flex-1">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="mt-2 h-3 w-24" />
-              </div>
-            </div>
-            <Skeleton className="mt-4 h-3 w-full" />
-            <Skeleton className="mt-2 h-3 w-4/5" />
-            <div className="mt-4 flex gap-2">
-              <Skeleton className="h-6 w-16 rounded-full" />
-              <Skeleton className="h-6 w-20 rounded-full" />
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {[0, 1, 2].map((item) => <Skeleton key={item} className="h-64 rounded-2xl" />)}
       </div>
-    </div>
+    </SettingsPageFrame>
   );
 }
 
 export function AgentsSettingsPanel() {
-  const vm = useAgentsSettingsPanel();
+  const token = useGatewayStore((state) => state.token);
+  const language = useLocaleStore((state) => state.language);
+  const zh = language === 'zh';
+  const navigate = useNavigate();
+  const { agentId } = useParams();
+  const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
+  const [createDraft, setCreateDraft] = useState({ open: false, name: '', instructions: '' });
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const editorDirtyRef = useRef(false);
 
-  if (!vm.hasToken) {
-    return (
-      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-panel">
-        <SettingsPageHeader title={vm.a.title} />
-        <p className="text-sm text-fg-muted">{vm.a.needToken}</p>
-      </SettingsPageFrame>
-    );
+  const selected = data?.agents.find((agent) => agent.id === agentId);
+
+  const createAgent = async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const next = await createGatewayAgent({
+        profile: {
+          name: createDraft.name.trim(),
+          ...(createDraft.instructions.trim() ? { instructions: createDraft.instructions.trim() } : {}),
+        },
+      });
+      setCreateDraft({ open: false, name: '', instructions: '' });
+      navigate(`/agents/${next.createdAgentId}`);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteAgent = async (agent: GatewayAgentRow) => {
+    if (!window.confirm(zh ? `删除 ${agent.name}？此操作无法撤销。` : `Delete ${agent.name}? This cannot be undone.`)) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await deleteGatewayAgent(agent.id);
+      navigate('/agents');
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startChat = (id: string) => {
+    rememberSelectedAgent(id);
+    navigate('/chat/new');
+  };
+
+  const openAgent = (id: string) => {
+    // Mount the Radix dialog after the originating card click has completed so
+    // that the same pointer event cannot be interpreted as an outside click.
+    editorDirtyRef.current = false;
+    window.setTimeout(() => navigate(`/agents/${id}`), 0);
+  };
+
+  const closeAgent = () => {
+    if (editorDirtyRef.current && !window.confirm(zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')) return;
+    editorDirtyRef.current = false;
+    navigate('/agents');
+  };
+
+  const openDefaults = () => {
+    if (editorDirtyRef.current && !window.confirm(zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')) return;
+    editorDirtyRef.current = false;
+    navigate('/settings/agent-defaults');
+  };
+
+  const handleEditorDirty = useCallback((dirty: boolean) => {
+    editorDirtyRef.current = dirty;
+  }, []);
+
+  if (!token) {
+    return <SettingsPageFrame><p className="text-sm text-fg-muted">Gateway token required.</p></SettingsPageFrame>;
   }
+  if (error && !data) {
+    return <SettingsPageFrame><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
+  }
+  if (isLoading || !data) return <AgentsSkeleton />;
 
   return (
-    <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-panel">
-      {vm.displayError ? (
-        <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 shadow-surface dark:text-red-300">
-          {vm.displayError}
-        </div>
-      ) : null}
+    <SettingsPageFrame gap="gap-5">
+      <SettingsPageHeader
+        title="Agents"
+        subtitle={zh ? '所有 Agent 默认继承全局能力；这里只配置身份和必要差异。' : 'Every agent inherits global capabilities; configure only identity and necessary differences here.'}
+        actions={(
+          <>
+            <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
+            <Button variant="primary" onClick={() => { setActionError(null); setCreateDraft((current) => ({ ...current, open: true })); }}><Plus className="size-4" />{zh ? '新建 Agent' : 'New agent'}</Button>
+          </>
+        )}
+      />
 
-      {vm.loading ? (
-        <AgentsSettingsSkeleton />
-      ) : vm.data ? (
-        <div className="flex flex-col gap-4">
-          <AgentsListGrid
-            a={vm.a}
-            agents={vm.data.agents}
-            defaultAgentId={vm.data.defaultId}
-            tuiDefaultAgentId={vm.effectiveTuiDefaultAgentId}
-            tuiDefaultInherited={!vm.savedTuiDefaultAgentId || vm.tuiDefaultAgentUnavailable}
-            searchQuery={vm.listSearchQuery}
-            onOpenAgent={(id) => vm.navigate(agentsAppDetailPath(id))}
-            onChatWithAgent={(id) => {
-              const agentId = id.trim().toLowerCase();
-              rememberSelectedAgent(agentId);
-              vm.navigate('/chat/new?projectScope=none', { state: { agentId } });
-            }}
-            busy={vm.busy}
-          />
-        </div>
-      ) : null}
+      {(error || actionError) && !selected ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{actionError ?? String(error)}</p> : null}
 
-      {vm.routeAgentId && vm.hasToken ? (
+      <AgentsListGrid
+        agents={data.agents}
+        busy={busy}
+        zh={zh}
+        onOpen={openAgent}
+        onChat={startChat}
+      />
+
+      {selected ? (
         <AgentsEditorModal
-          open={Boolean(vm.routeAgentId)}
-          onOpenChange={vm.onAgentModalOpenChange}
-          a={vm.a}
-          title={vm.modalTitle}
-          subtitle={vm.modalSubtitle}
-          panel={vm.panel}
-          onPanelChange={vm.setPanel}
+          agent={selected}
+          open
+          onOpenChange={(open) => { if (!open) closeAgent(); }}
         >
-          {vm.loading || !vm.data ? (
-            <AgentsSettingsSkeleton />
-          ) : (
-            <AgentsEditorPanelContent {...vm.editorPanelProps} />
-          )}
+          <AgentEditor
+            key={selected.id}
+            agent={selected}
+            toolIds={data.builtinToolIds}
+            zh={zh}
+            externalError={actionError}
+            onDirtyChange={handleEditorDirty}
+            onClose={closeAgent}
+            onOpenDefaults={openDefaults}
+            onChat={() => startChat(selected.id)}
+            onDelete={() => void deleteAgent(selected)}
+          />
         </AgentsEditorModal>
       ) : null}
 
       <CreateAgentDialog
-        open={vm.addAgentModalOpen}
+        open={createDraft.open}
+        busy={busy}
+        error={actionError}
+        name={createDraft.name}
+        instructions={createDraft.instructions}
+        zh={zh}
+        onNameChange={(name) => setCreateDraft((current) => ({ ...current, name }))}
+        onInstructionsChange={(instructions) => setCreateDraft((current) => ({ ...current, instructions }))}
+        onCreate={() => void createAgent()}
         onOpenChange={(open) => {
-          vm.setAddAgentModalOpen(open);
-          if (!open) {
-            vm.createWorkspaceSuggestedRef.current = '';
-            vm.setCreateDisplayName('');
-            vm.setCreateAgentId('');
-            vm.setCreateDescription('');
-            vm.setCreateWorkspace('');
-            vm.setCreateModel('');
-            vm.setCreateModalError(null);
-            vm.onSelectDuplicateSource(null);
-            vm.setCreatePresetIds([]);
-          }
+          if (busy) return;
+          setCreateDraft((current) => ({ ...current, open }));
+          if (!open) setActionError(null);
         }}
-        a={vm.a}
-        chat={vm.chat}
-        busy={vm.busy}
-        modalError={vm.createModalError}
-        profileLanguageLabel={vm.currentLanguageLabel}
-        createDisplayName={vm.createDisplayName}
-        setCreateDisplayName={vm.setCreateDisplayName}
-        createAgentId={vm.createAgentId}
-        setCreateAgentId={vm.setCreateAgentId}
-        createDescription={vm.createDescription}
-        setCreateDescription={vm.setCreateDescription}
-        createWorkspace={vm.createWorkspace}
-        setCreateWorkspace={vm.setCreateWorkspace}
-        createModel={vm.createModel}
-        setCreateModel={vm.setCreateModel}
-        onCreate={vm.onCreate}
-        onSuggestWorkspace={() => vm.applyCreateWorkspaceSuggestion()}
-        agents={vm.data?.agents ?? []}
-        duplicateSourceId={vm.duplicateSourceId}
-        onSelectDuplicateSource={vm.onSelectDuplicateSource}
-        capabilityPlans={vm.editorPanelProps.capabilityPresets}
-        defaultPresetId={vm.editorPanelProps.defaultPresetId ?? 'default'}
-        selectedCapabilityPlanIds={vm.createPresetIds}
-        onSelectedCapabilityPlanIdsChange={vm.setCreatePresetIds}
-      />
-
-      <AgentDeleteConfirmDialog
-        open={vm.deleteDialogOpen}
-        onOpenChange={(open) => {
-          vm.setDeleteDialogOpen(open);
-          if (!open) {
-            vm.setDeleteTarget(null);
-            vm.setDeleteConfirmText('');
-          }
-        }}
-        busy={vm.busy}
-        deletePurge={vm.deletePurge}
-        deleteTarget={vm.deleteTarget}
-        deleteConfirmText={vm.deleteConfirmText}
-        onDeleteConfirmTextChange={vm.setDeleteConfirmText}
-        onConfirm={() => {
-          if (!vm.deleteTarget) return;
-          void vm.performDelete(vm.deleteTarget, vm.deletePurge);
-        }}
-        onCancel={() => vm.setDeleteDialogOpen(false)}
-        a={vm.a}
       />
     </SettingsPageFrame>
   );

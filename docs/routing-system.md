@@ -1,6 +1,6 @@
 # Agents
 
-An Agent is a named assistant configured for a particular kind of work. Each Agent can have its own role, workspace, model roles, tools, skills, and safety boundaries, while user-owned context can remain available across Agents according to your settings.
+An Agent is a named assistant configured for a particular kind of work. Every Agent inherits one global capability configuration and stores only its profile, workspace choice, and explicit overrides. User-owned context remains available across Agents according to your settings.
 
 ## When to create another Agent
 
@@ -19,10 +19,9 @@ Do not create a new Agent only to start a different conversation. A new [Session
 
 1. Open **Agents**.
 2. Choose **Add Agent**.
-3. Give it a clear name and responsibility.
-4. Select its primary model and workspace.
-5. Enable only the tools and skills it needs.
-6. Save, then start a new chat with that Agent.
+3. Give it a clear name and personality instruction.
+4. Save, then start a new chat with that Agent.
+5. Add an Agent-specific override only when it must differ from the global defaults.
 
 Test a read-only request before allowing tools that write files, run commands, send messages, or access external accounts.
 

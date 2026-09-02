@@ -88,7 +88,7 @@ const configCommand: CommandDefinition = {
     '/config show',
     '/config show agents.list',
     '/config set agents.default=main',
-    '/config show agents.capabilityPresets',
+    '/config show agents.defaults',
     '/config unset tts',
   ],
   handler: async (ctx: CommandContext, args: string) => {
@@ -221,7 +221,7 @@ const configCommand: CommandDefinition = {
         'Examples:\n' +
         '`/config show agents.list`\n' +
         '`/config set agents.default=main`\n' +
-        '`/config show agents.capabilityPresets`\n' +
+        '`/config show agents.defaults`\n' +
         '`/config unset tts`',
     };
   },

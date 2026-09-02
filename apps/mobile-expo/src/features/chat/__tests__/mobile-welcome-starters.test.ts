@@ -9,9 +9,9 @@ function agent(overrides: Partial<ChatAgentOption> = {}): ChatAgentOption {
     id: 'creative',
     name: 'Creative',
     description: 'Brainstorm visual ideas and content directions.',
-    typedModels: { defaults: [], effective: [] },
-    skills: { defaults: [], entry: [], effectiveAllowlist: [] },
-    tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+    modelIntents: { effective: [], overrides: [] },
+    skills: { excluded: [], overrides: [] },
+    tools: { denied: [], overrides: [] },
     ...overrides,
   };
 }

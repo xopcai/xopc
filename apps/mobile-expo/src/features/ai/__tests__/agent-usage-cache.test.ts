@@ -26,9 +26,9 @@ import {
 function agent(id: string, overrides: Partial<ChatAgentOption> = {}): ChatAgentOption {
   return {
     id,
-    typedModels: { defaults: [], effective: [] },
-    skills: { defaults: [] },
-    tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+    modelIntents: { effective: [], overrides: [] },
+    skills: { excluded: [], overrides: [] },
+    tools: { denied: [], overrides: [] },
     ...overrides,
   };
 }

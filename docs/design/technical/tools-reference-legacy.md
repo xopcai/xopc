@@ -327,7 +327,7 @@ Programmatic generation may support reference images for some providers; the `im
 
 ## Browser (optional)
 
-Registered when browser automation is enabled by config and allowed by the selected agent manifest. The local
+Registered when browser automation is enabled by config and allowed by the effective Agent tool policy. The local
 browser runtime is optional:
 
 ```bash
@@ -342,7 +342,7 @@ Add `-g` to the install command when xopc itself is installed globally.
 | `browser_use` | Operates the browser with actions such as opening pages, inspecting content, clicking, typing, scrolling, taking screenshots, and waiting for page changes. For complex tasks, call `tool_manual({ tool: "browser_use" })` first. |
 | `browser_recipe` | Saves, lists, runs, pauses, and updates reusable [Browser automations](browser-workflows.md) when the Gateway provides the browser automation service. |
 
-To disable browser automation for an agent, set the selected agent manifest's `tools.builtin.browser_use.mode` to `"deny"` or omit browser access from the relevant capability preset.
+To disable browser automation globally, set `agents.defaults.tools.browser_use.mode` to `"deny"`. A single Agent may override that exact tool id.
 
 **URL policy:** Navigation rejects URLs that embed credentials, target **cloud metadata / IMDS** hosts and link-local ranges (always, even if private URLs are allowed), or contain patterns that look like **API keys or tokens** in the query (anti-exfiltration). Top-level `browser.allowPrivateUrls` relaxes private-IP blocking only; metadata and suspicious token patterns remain blocked.
 
@@ -358,13 +358,13 @@ Uses a per-session tab; `browser.headless` controls whether local browser runs s
 
 Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **text summary** only. Parameters include `goal`, optional `context`, optional `toolset` (subset of allowed tools), optional `maxIterations` (default 30). Sub-agents cannot use nested `delegate_task`, `clarify`, outbound messaging, memory tools, `todo`, `automation`, or skill management.
 
-Availability is controlled by the selected agent manifest and capability presets.
+Availability is controlled by the effective Agent tool policy.
 
 ### `execute_code`
 
 Runs JavaScript in a VM with `tools.*` wrappers for an allowlisted set (`web_search`, `web_fetch`, `read_file`, `write_file`, `grep`, `find`, `shell`, `skills_list`, `skill_view`) plus `console.log`. Wall clock, tool-call count, and stdout/stderr sizes are capped.
 
-Availability is controlled by the selected agent manifest and capability presets. Not a strong security boundary (`node:vm`); enable only with trusted models and environments.
+Availability is controlled by the effective Agent tool policy. This is not a strong security boundary (`node:vm`); enable only with trusted models and environments.
 
 ---
 

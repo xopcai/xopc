@@ -19,8 +19,10 @@ vi.mock('../../../providers/index.js', () => ({
 vi.mock('../../../config/index.js', () => ({
   loadConfig: vi.fn(() => ({
     agents: {
-      defaultPreset: 'default',
-      capabilityPresets: { default: { id: 'default', models: { defaultRole: 'deep', roles: {} } } },
+      default: 'main',
+      defaults: {
+        models: { chat: { primary: 'deepseek/deepseek-v4-flash', fallbacks: [] }, intents: {} },
+      },
       list: [],
     },
   })),

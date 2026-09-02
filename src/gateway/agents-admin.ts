@@ -2,7 +2,7 @@
  * Gateway REST helpers for multi-agent management.
  */
 
-import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve as pathResolve } from 'node:path';
 
 import {
@@ -20,11 +20,7 @@ import {
   REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET,
 } from '../agent/context/workspace.js';
 import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
-import {
-  resolveCapabilityPresetLayer,
-  resolveEffectiveAgentManifest,
-  type ResolveManifestResult,
-} from '../agent-manifest/resolver.js';
+import type { AgentModelsOverride, EffectiveAgentConfig, SkillOverride } from '../agent-config/index.js';
 import {
   applyAgentConfig,
   findAgentEntryIndex,
@@ -32,52 +28,28 @@ import {
   pruneAgentConfig,
   removeAgentDirsFromDisk,
 } from '../commands/agents.config.js';
-import type { AgentModelsConfig, Config } from '../config/schema.js';
+import type { Config } from '../config/schema.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
-import type { AgentTypedModel } from '../config/schema.js';
-import { resolveEffectiveTypedModels } from '../config/agent-typed-models.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
 
 const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES]);
-
-export type GatewayAgentTypedModelsInfo = {
-  defaultRole: string;
-  preset: AgentTypedModel[];
-  entry?: AgentTypedModel[];
-  effective: AgentTypedModel[];
-};
 
 export type GatewayAgentRow = {
   id: string;
   name?: string;
   description?: string;
   language?: string;
-  role?: string;
-  responsibilities?: {
-    primary: string[];
-    secondary?: string[];
-  };
   /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
   avatar?: string;
   workspace: string;
   /** Absolute directory for profile Markdown (`SOUL.md`, …) and gateway avatars: `agents/<id>/profile/`. */
   profileDir: string;
-  model?: { primary?: string; fallbacks?: string[] };
-  typedModels: GatewayAgentTypedModelsInfo;
-  extends: string[];
+  override: Config['agents']['list'][number];
+  effective: EffectiveAgentConfig;
+  sources: Record<string, 'system' | 'global' | 'agent'>;
   isDefault: boolean;
-  skills: {
-    preset: string[];
-    entry?: string[];
-    effectiveAllowlist?: string[];
-  };
-  tools: {
-    presetDenied: string[];
-    entryDisable: string[];
-    effectiveDisable: string[];
-  };
 };
 
 export type GatewayAgentsListResponse = {
@@ -86,7 +58,10 @@ export type GatewayAgentsListResponse = {
   builtinToolIds: string[];
 };
 
-export type GatewayAgentEffectiveManifestResponse = ResolveManifestResult;
+export type GatewayAgentEffectiveConfigResponse = {
+  config: EffectiveAgentConfig;
+  sources: Record<string, 'system' | 'global' | 'agent'>;
+};
 
 function collectAgentIdsForList(cfg: Config): string[] {
   const entries = listAgentEntries(cfg).filter((e) => e.enabled !== false);
@@ -100,14 +75,6 @@ function collectAgentIdsForList(cfg: Config): string[] {
   }
   ids.add(defaultId);
   return [...ids];
-}
-
-function rolesToTypedModels(
-  roles: Record<string, { model: string; fallbacks?: string[]; description?: string }> | undefined,
-): AgentTypedModel[] {
-  return Object.entries(roles ?? {})
-    .map(([id, role]) => ({ id, ...role }))
-    .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /** Extract `**Avatar:**` value from profile IDENTITY.md (same line shape as the gateway console parser). */
@@ -146,32 +113,7 @@ export async function listGatewayAgents(
   for (const id of collectAgentIdsForList(cfg)) {
     const profile = resolveEffectiveAgentProfile(cfg, id);
     const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
-    const presetLayer = resolveCapabilityPresetLayer({
-      presetIds: entry?.extends,
-      presets: cfg.agents.capabilityPresets,
-      defaultPresetId: cfg.agents.defaultPreset,
-    });
-    const presetSkills =
-      presetLayer.patch.skills?.mode === 'allowlist' ? presetLayer.patch.skills.allow ?? [] : undefined;
-    const presetDenied = Object.entries(presetLayer.patch.tools?.builtin ?? {})
-      .filter(([, policy]) => policy.mode === 'deny')
-      .map(([name]) => name);
-    const presetTypedModels = rolesToTypedModels(presetLayer.patch.models?.roles);
-    const model =
-      profile.primaryModelRef || profile.fallbacks.length > 0
-        ? {
-            ...(profile.primaryModelRef ? { primary: profile.primaryModelRef } : {}),
-            ...(profile.fallbacks.length > 0 ? { fallbacks: profile.fallbacks } : {}),
-          }
-        : undefined;
-    const entrySkills = entry?.skills?.mode === 'allowlist' ? entry.skills.allow ?? [] : undefined;
-    const entryDisable = Object.entries(entry?.tools?.builtin ?? {})
-      .filter(([, policy]) => policy.mode === 'deny')
-      .map(([name]) => name);
-    const entryTypedModels = rolesToTypedModels(entry?.models?.roles);
-    const effectiveTypedModels = [...resolveEffectiveTypedModels(cfg, id).values()].sort((a, b) =>
-      a.id.localeCompare(b.id),
-    );
+    if (!entry) continue;
     let identity: ReturnType<typeof parseIdentityMarkdown> = {};
     try {
       const identityPath = join(resolveAgentProfileDir(cfg, id), WORKSPACE_FILES.IDENTITY);
@@ -182,50 +124,26 @@ export async function listGatewayAgents(
     }
     agents.push({
       id,
-      ...(identity.name ? { name: identity.name } : {}),
+      name: entry.profile?.name ?? identity.name ?? id,
       ...(identity.description ? { description: identity.description } : {}),
       ...(identity.language ? { language: identity.language } : {}),
-      ...(profile.manifest.identity.role ? { role: profile.manifest.identity.role } : {}),
-      responsibilities: {
-        primary: [...profile.manifest.responsibilities.primary],
-        ...(profile.manifest.responsibilities.secondary
-          ? { secondary: [...profile.manifest.responsibilities.secondary] }
-          : {}),
-      },
       ...(identity.avatar ? { avatar: identity.avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(cfg, id),
-      ...(model ? { model } : {}),
-      typedModels: {
-        defaultRole: profile.manifest.models.defaultRole,
-        preset: [...presetTypedModels],
-        ...(entryTypedModels.length > 0 ? { entry: entryTypedModels } : {}),
-        effective: effectiveTypedModels,
-      },
-      extends: [...(entry?.extends ?? [])],
+      override: structuredClone(entry),
+      effective: structuredClone(profile.config),
+      sources: { ...profile.sources },
       isDefault: id === defaultId,
-      skills: {
-        preset: presetSkills ? [...presetSkills] : [],
-        ...(entrySkills !== undefined ? { entry: [...entrySkills] } : {}),
-        ...(profile.skillsAllowlist !== undefined
-          ? { effectiveAllowlist: [...profile.skillsAllowlist] }
-          : {}),
-      },
-      tools: {
-        presetDenied: [...presetDenied],
-        entryDisable: [...entryDisable],
-        effectiveDisable: [...profile.tools.denied].sort((a, b) => a.localeCompare(b)),
-      },
     });
   }
   agents.sort((a, b) => a.id.localeCompare(b.id));
   return { defaultId, agents, builtinToolIds: [...GATEWAY_BUILTIN_TOOL_IDS] };
 }
 
-export function getGatewayAgentEffectiveManifest(
+export function getGatewayAgentEffectiveConfig(
   cfg: Config,
   agentIdRaw: string,
-): AgentAdminResult<GatewayAgentEffectiveManifestResponse> {
+): AgentAdminResult<GatewayAgentEffectiveConfigResponse> {
   const agentId = normalizeAgentId(agentIdRaw);
   const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === agentId);
   if (!entry) {
@@ -234,11 +152,10 @@ export function getGatewayAgentEffectiveManifest(
   try {
     return {
       ok: true,
-      data: resolveEffectiveAgentManifest({
-        agent: entry,
-        presets: cfg.agents.capabilityPresets,
-        defaultPresetId: cfg.agents.defaultPreset,
-      }),
+      data: (() => {
+        const profile = resolveEffectiveAgentProfile(cfg, agentId);
+        return { config: profile.config, sources: profile.sources };
+      })(),
     };
   } catch (err) {
     return {
@@ -250,20 +167,10 @@ export function getGatewayAgentEffectiveManifest(
 }
 
 export type CreateAgentBody = {
-  /** Optional id seed; normalized agent id defaults from `profileFiles["IDENTITY.md"]` name when omitted. */
+  /** Optional id seed; normalized agent id defaults from the profile name when omitted. */
   id?: string;
-  workspace: string;
-  models?: AgentModelsConfig;
-  /** Reusable capability plans applied after the global baseline. */
-  extends?: string[];
-  /** Initial `agents.list[].skills` for the new entry. */
-  skills?: string[];
-  /** Initial `agents.list[].tools` for the new entry. */
-  tools?: NonNullable<Config['agents']['list']>[number]['tools'];
-  /** Profile markdown files to write after seeding (e.g. `IDENTITY.md`, `SOUL.md`). */
-  profileFiles?: Record<string, string>;
-  /** Clone from an existing agent id — copies config entry fields and profile directory. */
-  cloneFrom?: string;
+  workspace?: string;
+  profile: NonNullable<Config['agents']['list'][number]['profile']>;
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -276,33 +183,7 @@ export function prepareCreateAgent(
   cfg: Config,
   body: CreateAgentBody,
 ): AgentAdminResult<{ nextConfig: Config; agentId: string; workspace: string }> {
-  const workspace = body.workspace?.trim() ?? '';
-  if (!workspace) {
-    return { ok: false, error: 'workspace is required', status: 400 };
-  }
-  if (body.profileFiles !== undefined) {
-    if (typeof body.profileFiles !== 'object' || body.profileFiles === null || Array.isArray(body.profileFiles)) {
-      return { ok: false, error: 'profileFiles must be an object', status: 400 };
-    }
-    for (const [name, content] of Object.entries(body.profileFiles)) {
-      const bad = assertAllowedFile(name);
-      if (bad) {
-        return bad;
-      }
-      if (typeof content !== 'string') {
-        return { ok: false, error: `profileFiles["${name}"] must be a string`, status: 400 };
-      }
-    }
-  }
-  if (!body.cloneFrom && typeof body.profileFiles?.[WORKSPACE_FILES.IDENTITY] !== 'string') {
-    return { ok: false, error: `profileFiles["${WORKSPACE_FILES.IDENTITY}"] is required`, status: 400 };
-  }
-
-  const identity = body.profileFiles?.[WORKSPACE_FILES.IDENTITY]
-    ? parseIdentityMarkdown(body.profileFiles[WORKSPACE_FILES.IDENTITY])
-    : {};
-  const nameSeed = identity.name ?? body.id ?? '';
-  const idRes = validateAgentIdForNewAgent(body.id, nameSeed);
+  const idRes = validateAgentIdForNewAgent(body.id, body.profile.name);
   if (idRes.ok === false) {
     return { ok: false, error: idRes.error, status: 400 };
   }
@@ -311,47 +192,11 @@ export function prepareCreateAgent(
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
 
-  // Resolve fields from cloneFrom source when present
-  let cloneSourceEntry: ReturnType<typeof listAgentEntries>[number] | undefined;
-  if (body.cloneFrom) {
-    const srcId = normalizeAgentId(body.cloneFrom);
-    cloneSourceEntry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === srcId);
-    if (!cloneSourceEntry && srcId !== resolveDefaultAgentId(cfg)) {
-      return { ok: false, error: `source agent "${srcId}" not found`, status: 404 };
-    }
-  }
-
-  const wsAbs = resolveUserPath(workspace);
-
-  const rawModels = body.models ?? cloneSourceEntry?.models;
-  const inheritedPresetIds = body.extends ?? cloneSourceEntry?.extends ?? [];
-  for (const presetId of inheritedPresetIds) {
-    if (!cfg.agents.capabilityPresets[presetId]) {
-      return { ok: false, error: `capability preset "${presetId}" not found`, status: 400 };
-    }
-  }
-  const effectiveModels =
-    rawModels?.roles
-      ? {
-          defaultRole: rawModels.defaultRole ?? Object.keys(rawModels.roles)[0] ?? 'deep',
-          roles: rawModels.roles,
-        }
-      : undefined;
-  if (effectiveModels && !effectiveModels.roles[effectiveModels.defaultRole]) {
-    return { ok: false, error: 'models.defaultRole must reference models.roles', status: 400 };
-  }
-
-  let next = applyAgentConfig(cfg, {
+  const wsAbs = resolveUserPath(body.workspace?.trim() || `~/.xopc/workspace/${agentId}`);
+  const next = applyAgentConfig(cfg, {
     agentId,
-    workspace: wsAbs,
-    extends: [...inheritedPresetIds],
-    ...(effectiveModels ? { models: effectiveModels } : {}),
-    ...(body.skills !== undefined
-      ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }
-      : cloneSourceEntry?.skills?.mode === 'allowlist' && body.cloneFrom
-        ? { skills: [...(cloneSourceEntry.skills.allow ?? [])] }
-        : {}),
-    ...(body.tools !== undefined ? { tools: body.tools } : cloneSourceEntry?.tools && body.cloneFrom ? { tools: cloneSourceEntry.tools } : {}),
+    ...(body.workspace?.trim() ? { workspace: wsAbs } : {}),
+    profile: structuredClone(body.profile),
   });
 
   return { ok: true, data: { nextConfig: next, agentId, workspace: wsAbs } };
@@ -360,7 +205,6 @@ export function prepareCreateAgent(
 export async function finalizeCreateAgentDirs(
   cfg: Config,
   agentId: string,
-  opts?: { profileFiles?: Record<string, string>; cloneFrom?: string },
 ): Promise<AgentAdminResult<void>> {
   const wsPath = resolveAgentWorkspaceDir(cfg, agentId);
   const profilePath = resolveAgentProfileDir(cfg, agentId);
@@ -369,63 +213,21 @@ export async function finalizeCreateAgentDirs(
   await mkdir(profilePath, { recursive: true });
   await mkdir(adPath, { recursive: true });
   const id = normalizeAgentId(agentId);
-  const displayName = opts?.profileFiles?.[WORKSPACE_FILES.IDENTITY]
-    ? (parseIdentityMarkdown(opts.profileFiles[WORKSPACE_FILES.IDENTITY]).name ?? id)
-    : id;
-
-  // When cloning, copy the entire source profile directory instead of seeding
-  if (opts?.cloneFrom) {
-    const srcProfilePath = resolveAgentProfileDir(cfg, normalizeAgentId(opts.cloneFrom));
-    try {
-      const srcStat = await stat(srcProfilePath);
-      if (srcStat.isDirectory()) {
-        const srcFiles = await readdir(srcProfilePath);
-        for (const fileName of srcFiles) {
-          const srcFile = join(srcProfilePath, fileName);
-          const dstFile = join(profilePath, fileName);
-          try {
-            const fileStat = await stat(srcFile);
-            if (fileStat.isFile()) {
-              await cp(srcFile, dstFile);
-            }
-          } catch {
-            /* skip unreadable files */
-          }
-        }
-      }
-    } catch {
-      // Source profile dir doesn't exist — fall through to normal seed
-      seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
-    }
-  } else {
-    seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName });
-  }
-
-  const profileFiles = opts?.profileFiles;
-  if (profileFiles && Object.keys(profileFiles).length > 0) {
-    for (const [name, content] of Object.entries(profileFiles)) {
-      const written = await writeAgentProfileFile(cfg, agentId, name, content);
-      if (written.ok === false) {
-        return written;
-      }
-    }
-  }
+  const entry = listAgentEntries(cfg).find((candidate) => normalizeAgentId(candidate.id) === id);
+  seedAgentProfileMarkdownFiles(profilePath, wsPath, { displayName: entry?.profile?.name ?? id });
 
   return { ok: true, data: undefined };
 }
 
 export type UpdateAgentBody = {
-  workspace?: string;
-  extends?: string[];
-  models?: {
-    defaultRole?: string | null;
-    roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
-  } | null;
+  workspace?: string | null;
+  profile?: Config['agents']['list'][number]['profile'] | null;
+  models?: AgentModelsOverride | null;
   setDefault?: boolean;
-  /** Replace `agents.list[].skills`; `null` resets to all skills. */
-  skills?: string[] | null;
-  /** Replace `agents.list[].tools`; `null` resets to no explicit policies. */
+  skills?: SkillOverride | null;
   tools?: NonNullable<Config['agents']['list']>[number]['tools'] | null;
+  workflows?: NonNullable<Config['agents']['list']>[number]['workflows'] | null;
+  runtime?: NonNullable<Config['agents']['list']>[number]['runtime'] | null;
 };
 
 export function prepareUpdateAgent(
@@ -434,18 +236,8 @@ export function prepareUpdateAgent(
   body: UpdateAgentBody,
 ): AgentAdminResult<{ nextConfig: Config }> {
   const agentId = normalizeAgentId(agentIdRaw);
-  let list = [...listAgentEntries(cfg)];
-  let idx = findAgentEntryIndex(list, agentId);
-  if (idx < 0 && agentId === resolveDefaultAgentId(cfg)) {
-    list = [...list, {
-      id: agentId,
-      enabled: true as const,
-      identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
-      responsibilities: { primary: ['Help the user complete tasks'] },
-      workspace: { root: `~/.xopc/workspace/${agentId}` },
-    }];
-    idx = list.length - 1;
-  }
+  const list = [...listAgentEntries(cfg)];
+  const idx = findAgentEntryIndex(list, agentId);
   if (idx < 0) {
     return { ok: false, error: `agent "${agentId}" not found`, status: 404 };
   }
@@ -454,71 +246,19 @@ export function prepareUpdateAgent(
   const entry: Entry = { ...list[idx] };
 
   if (body.workspace !== undefined) {
-    const w = body.workspace.trim();
-    if (w) {
-      entry.workspace = { root: resolveUserPath(w) };
-    }
+    const workspace = body.workspace?.trim();
+    if (workspace) entry.workspace = resolveUserPath(workspace);
+    else delete entry.workspace;
   }
-  if (body.extends !== undefined) {
-    const nextExtends = Array.from(new Set(body.extends.map((id) => normalizeAgentId(id)).filter(Boolean)));
-    for (const presetId of nextExtends) {
-      if (!cfg.agents.capabilityPresets[presetId]) {
-        return { ok: false, error: `capability preset "${presetId}" not found`, status: 400 };
-      }
-    }
-    if (nextExtends.length > 0) {
-      entry.extends = nextExtends;
-    } else {
-      delete entry.extends;
-    }
+  if (body.profile !== undefined) {
+    if (body.profile === null) delete entry.profile;
+    else entry.profile = structuredClone(body.profile);
   }
   if (body.models !== undefined) {
     if (body.models === null) {
       delete entry.models;
     } else {
-      if (body.models.defaultRole !== undefined) {
-        if (body.models.defaultRole === null || !body.models.defaultRole.trim()) {
-          return { ok: false, error: 'models.defaultRole must be a non-empty string', status: 400 };
-        }
-        entry.models = {
-          defaultRole: body.models.defaultRole.trim(),
-          roles: entry.models?.roles ?? {},
-          ...(entry.models?.policy ? { policy: entry.models.policy } : {}),
-        };
-      }
-      if (Object.hasOwn(body.models, 'roles')) {
-        if (body.models.roles !== undefined) {
-          const roles = Object.fromEntries(
-            Object.entries(body.models.roles)
-              .map(([id, row]) => ({
-                id: id.trim(),
-                model: row.model.trim(),
-                fallbacks: (row.fallbacks ?? []).map((ref) => ref.trim()).filter(Boolean),
-                description: row.description?.trim(),
-              }))
-              .filter((row) => row.id && row.model)
-              .map((row) => [
-                row.id,
-                {
-                  model: row.model,
-                  ...(row.fallbacks.length > 0 ? { fallbacks: row.fallbacks } : {}),
-                  ...(row.description ? { description: row.description } : {}),
-                },
-              ]),
-          );
-          entry.models = {
-            defaultRole: entry.models?.defaultRole ?? Object.keys(roles)[0] ?? 'deep',
-            roles,
-            ...(entry.models?.policy ? { policy: entry.models.policy } : {}),
-          };
-        }
-      }
-      const roles = entry.models?.roles ?? {};
-      const defaultRole = entry.models?.defaultRole ?? Object.keys(roles)[0];
-      if (!defaultRole || !roles[defaultRole]) {
-        return { ok: false, error: 'models.defaultRole must reference models.roles', status: 400 };
-      }
-      entry.models = { ...entry.models, defaultRole };
+      entry.models = structuredClone(body.models);
     }
   }
 
@@ -526,12 +266,7 @@ export function prepareUpdateAgent(
     if (body.skills === null) {
       delete entry.skills;
     } else {
-      const next = body.skills.map((s) => String(s).trim()).filter(Boolean);
-      if (next.length === 0) {
-        entry.skills = { mode: 'allowlist', allow: [] };
-      } else {
-        entry.skills = { mode: 'allowlist', allow: next };
-      }
+      entry.skills = structuredClone(body.skills);
     }
   }
 
@@ -541,6 +276,14 @@ export function prepareUpdateAgent(
     } else {
       entry.tools = body.tools;
     }
+  }
+  if (body.workflows !== undefined) {
+    if (body.workflows === null) delete entry.workflows;
+    else entry.workflows = structuredClone(body.workflows);
+  }
+  if (body.runtime !== undefined) {
+    if (body.runtime === null) delete entry.runtime;
+    else entry.runtime = structuredClone(body.runtime);
   }
 
   list[idx] = entry;

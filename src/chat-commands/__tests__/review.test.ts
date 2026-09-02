@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
+import { ConfigSchema } from '../../config/schema.js';
 import { commandRegistry } from '../registry.js';
 import { registerReviewCommand } from '../builtins/review.js';
 import type { CommandContext } from '../types.js';
@@ -27,27 +27,26 @@ function createContext(
     chatId: 'review-test',
     senderId: 'local-user',
     isGroup: false,
-    config: {
+    config: ConfigSchema.parse({
       agents: {
         default: 'main',
-        capabilityPresets: {},
+        defaults: {
+          models: {
+            chat: { primary: 'openai/gpt-4.1', fallbacks: [] },
+            intents: { review: { primary: 'openai/gpt-4.1', fallbacks: [] } },
+          },
+        },
         list: [
           {
             id: 'main',
             enabled: true,
-            identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
-            responsibilities: { primary: ['Review code'] },
-            workspace: { root },
-            models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
-            tools: { builtin: {} },
-            skills: { mode: 'all' },
-            workflows: {},
-            boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+            profile: { name: 'Main', instructions: 'Review code' },
+            workspace: root,
           },
         ],
       },
       workspace: { root },
-    } as Config,
+    }),
     setTyping: vi.fn(async () => undefined),
     supports: () => false,
     btwQuery,
@@ -125,8 +124,9 @@ describe('/review command', () => {
       }),
     }));
     const context = createContext(repo, btwQuery);
-    const roles = context.config.agents.list[0]?.models.roles as Record<string, { model: string }>;
-    roles.review = { model: 'anthropic/claude-sonnet-4-5' };
+    context.config.agents.list[0]!.models = {
+      intents: { review: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] } },
+    };
     context.getSessionConfigStore = () => ({
       get: vi.fn(async () => ({ modelOverride: 'openai/gpt-5.3-codex' })),
     }) as never;
@@ -175,8 +175,9 @@ describe('/review command', () => {
       }),
     }));
     const context = createContext(repo, btwQuery);
-    const roles = context.config.agents.list[0]?.models.roles as Record<string, { model: string }>;
-    roles.review = { model: 'anthropic/claude-sonnet-4-5' };
+    context.config.agents.list[0]!.models = {
+      intents: { review: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: [] } },
+    };
 
     await commandRegistry.execute('review', context, '');
 

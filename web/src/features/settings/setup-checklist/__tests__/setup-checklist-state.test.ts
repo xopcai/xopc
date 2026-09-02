@@ -23,14 +23,8 @@ const labels = {
 function configWithGlobalModel(model: string) {
   return {
     agents: {
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          models: {
-            defaultRole: 'deep',
-            roles: model ? { deep: { model } } : {},
-          },
-        },
+      defaults: {
+        models: { chat: model ? { primary: model } : undefined },
       },
     },
   };

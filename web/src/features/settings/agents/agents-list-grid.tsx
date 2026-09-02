@@ -1,266 +1,102 @@
-import * as Tooltip from '@radix-ui/react-tooltip';
 import { MessageSquarePlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
-import {
-  agentListDisplayDescription,
-  agentListDisplayName,
-} from '@/features/settings/agents/agent-display-names';
+import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
-import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
-import type { AgentsSettingsMessages } from '@/i18n/messages';
 
-function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSettingsMessages): GatewayAgentRow[] {
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    return agents;
-  }
-  return agents.filter((ag) => {
-    const name = agentListDisplayName(ag, a).toLowerCase();
-    const id = ag.id.toLowerCase();
-    const ws = ag.workspace.toLowerCase();
-    const displayDesc = agentListDisplayDescription(ag, a).toLowerCase();
-    return (
-      name.includes(q) ||
-      id.includes(q) ||
-      ws.includes(q) ||
-      displayDesc.includes(q)
-    );
-  });
+function capabilitySummary(agent: GatewayAgentRow, zh: boolean): string[] {
+  const deniedTools = Object.values(agent.effective.tools).filter((policy) => policy.mode === 'deny').length;
+  const skills = agent.effective.skills;
+  const skillText = skills.mode === 'selected'
+    ? (zh ? `${skills.include.length} 个技能` : `${skills.include.length} skills`)
+    : skills.exclude.length > 0
+      ? (zh ? `全部技能，排除 ${skills.exclude.length}` : `All skills, ${skills.exclude.length} excluded`)
+      : (zh ? '全部技能' : 'All skills');
+  const toolText = deniedTools > 0
+    ? (zh ? `${deniedTools} 个工具禁用` : `${deniedTools} tools denied`)
+    : (zh ? '工具全部可用' : 'All tools available');
+  return [skillText, toolText];
 }
 
-function formatCount(template: string, count: number): string {
-  return template.replace('{{count}}', String(count));
-}
-
-function agentCapabilityMeta(ag: GatewayAgentRow, a: AgentsSettingsMessages): string {
-  const disabledTools = ag.tools.effectiveDisable.length;
-  const skillCount = ag.skills.effectiveAllowlist?.length ?? 0;
-  const toolsText = disabledTools > 0
-    ? formatCount(a.listToolsDisabledCount, disabledTools)
-    : a.listToolsAllEnabled;
-  const skillsText = skillCount > 0
-    ? formatCount(a.listSkillsCount, skillCount)
-    : a.listInheritedValue;
-
-  return `${a.listToolsLabel} ${toolsText} · ${a.listSkillsLabel} ${skillsText}`;
-}
-
-function agentCapabilityLabels(ag: GatewayAgentRow, a: AgentsSettingsMessages): string[] {
-  const disabledTools = ag.tools.effectiveDisable.length;
-  const skillCount = ag.skills.effectiveAllowlist?.length ?? 0;
-  const toolsText = disabledTools > 0
-    ? formatCount(a.listToolsDisabledCount, disabledTools)
-    : a.listToolsAllEnabled;
-  const skillsText = skillCount > 0
-    ? formatCount(a.listSkillsCount, skillCount)
-    : a.listInheritedValue;
-  return [`${a.listToolsLabel} ${toolsText}`, `${a.listSkillsLabel} ${skillsText}`];
-}
-
-function TextTooltip({
-  text,
-  children,
-  className,
+export function AgentsListGrid({
+  agents,
+  busy,
+  zh,
+  onOpen,
+  onChat,
 }: {
-  text: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <Tooltip.Provider delayDuration={300} skipDelayDuration={100}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <span className={className} title={text}>
-            {children}
-          </span>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            side="top"
-            align="start"
-            sideOffset={6}
-            className={cn(
-              'max-w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-edge bg-surface-panel px-2.5 py-2',
-              'text-left text-xs leading-snug text-fg shadow-popover',
-              SETTINGS_SHELL_POPOVER_Z,
-            )}
-          >
-            {text}
-            <Tooltip.Arrow className="fill-surface-panel" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
-}
-
-export function AgentsListGrid(props: {
-  a: AgentsSettingsMessages;
   agents: GatewayAgentRow[];
-  defaultAgentId: string;
-  tuiDefaultAgentId: string;
-  tuiDefaultInherited: boolean;
-  searchQuery: string;
-  onOpenAgent: (id: string) => void;
-  onChatWithAgent: (id: string) => void;
   busy: boolean;
+  zh: boolean;
+  onOpen: (agentId: string) => void;
+  onChat: (agentId: string) => void;
 }) {
-  const {
-    a,
-    agents,
-    defaultAgentId,
-    tuiDefaultAgentId,
-    tuiDefaultInherited,
-    searchQuery,
-    onOpenAgent,
-    onChatWithAgent,
-    busy,
-  } = props;
-  const filtered = filterAgents(agents, searchQuery, a);
-  const searchMiss = agents.length > 0 && filtered.length === 0 && searchQuery.trim().length > 0;
-
-  if (agents.length === 0) {
-    return (
-      <p className="rounded-lg bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted shadow-surface">
-        {a.listNoAgentsYet}
-      </p>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4">
-      {searchMiss ? (
-        <p className="rounded-lg bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted shadow-surface">
-          {a.listEmpty}
-        </p>
-      ) : null}
-
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((ag) => {
-          const title = agentListDisplayName(ag, a);
-          const monoId = ag.id;
-          const descTrim = agentListDisplayDescription(ag, a);
-          const capabilityMeta = agentCapabilityMeta(ag, a);
-          const capabilityLabels = agentCapabilityLabels(ag, a);
-          const isGlobalDefault = ag.id === defaultAgentId || ag.isDefault;
-          const isTuiDefault = ag.id === tuiDefaultAgentId;
-          const showInheritedTuiBadge = isTuiDefault && tuiDefaultInherited;
-          const showExplicitTuiBadge = isTuiDefault && !tuiDefaultInherited;
-          const openAgent = () => {
-            if (busy) return;
-            onOpenAgent(ag.id);
-          };
-          return (
-            <li key={ag.id} className="h-full min-h-0">
-              <article
-                role="button"
-                tabIndex={busy ? -1 : 0}
-                aria-disabled={busy}
-                aria-label={`${title} ${monoId}`}
-                onClick={openAgent}
-                onKeyDown={(event) => {
-                  if (busy) return;
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  onOpenAgent(ag.id);
-                }}
-                className={cn(
-                  'flex min-h-[15.5rem] cursor-pointer flex-col rounded-xl bg-surface-panel p-4 shadow-surface',
-                  'transition-[background-color,transform,box-shadow] duration-150 ease-out',
-                  'hover:bg-surface-hover/45',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                  'aria-disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
-                  interaction.pressCard,
-                )}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex min-w-0 items-start gap-3 text-left">
-                    <div
-                      className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-base text-fg ring-1 ring-edge-subtle/40"
-                      aria-hidden
-                    >
-                      <AgentAvatarDisplay agentId={ag.id} avatar={ag.avatar} size={48} className="size-full" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-base font-semibold text-fg">{title}</h2>
-                      <p className="mt-1 truncate font-mono text-xs text-fg-muted" title={monoId}>
-                        {monoId}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex max-w-[9rem] shrink-0 flex-wrap justify-end gap-1.5">
-                    {isGlobalDefault ? (
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
-                        {a.globalDefaultBadge}
-                      </span>
-                    ) : null}
-                    {showExplicitTuiBadge ? (
-                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg">
-                        {a.tuiDefaultBadge}
-                      </span>
-                    ) : null}
-                    {showInheritedTuiBadge ? (
-                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg">
-                        {a.tuiDefaultInheritedBadge}
-                      </span>
-                    ) : null}
-                    {!isGlobalDefault && !isTuiDefault ? (
-                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted">
-                        {a.listCustomBadge}
-                      </span>
-                    ) : null}
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {agents.map((agent) => {
+        const capabilities = capabilitySummary(agent, zh);
+        return (
+          <li key={agent.id} className="min-h-0">
+            <article
+              className={cn(
+                'group relative flex min-h-64 flex-col rounded-2xl border border-edge bg-surface-panel p-4 shadow-surface',
+                'transition duration-150 hover:-translate-y-0.5 hover:border-accent/30 hover:bg-surface-hover/35',
+              )}
+            >
+              <button
+                type="button"
+                disabled={busy}
+                aria-label={zh ? `配置 ${agent.name}` : `Configure ${agent.name}`}
+                onClick={() => onOpen(agent.id)}
+                className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+              <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={48} className="size-12 shrink-0" />
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-semibold text-fg">{agent.name}</h2>
+                    <p className="mt-0.5 truncate font-mono text-xs text-fg-muted">{agent.id}</p>
                   </div>
                 </div>
+                <span className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  agent.isDefault ? 'bg-accent-soft text-accent' : 'bg-surface-hover text-fg-muted',
+                )}>
+                  {agent.isDefault ? 'DEFAULT' : (zh ? '自定义' : 'CUSTOM')}
+                </span>
+              </div>
 
-                <div className="mt-5 min-h-[6.25rem] text-left">
-                  <div className="rounded-lg bg-surface-base p-3">
-                    <p
-                      className={cn(
-                        'line-clamp-2 text-sm leading-5',
-                        descTrim ? 'text-fg' : 'text-fg-muted',
-                      )}
-                      title={descTrim || undefined}
-                    >
-                      {descTrim || a.listNoDescription}
-                    </p>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5" title={capabilityMeta}>
-                    {capabilityLabels.map((label) => (
-                      <TextTooltip
-                        key={label}
-                        text={label}
-                        className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted"
-                      >
-                        {label}
-                      </TextTooltip>
-                    ))}
-                  </div>
-                </div>
+              <p className="pointer-events-none relative z-10 mt-5 line-clamp-2 min-h-10 text-sm leading-5 text-fg-muted">
+                {agent.description || agent.override.profile?.instructions || (zh ? '继承全局能力，仅保存这个 Agent 的差异。' : 'Inherits global capabilities and stores only this agent’s differences.')}
+              </p>
 
-                <div className="mt-auto pt-4">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onChatWithAgent(ag.id);
-                    }}
-                    className="w-full rounded-2xl py-2.5"
-                  >
-                    <MessageSquarePlus className="size-4 shrink-0" strokeWidth={2} aria-hidden />
-                    {a.listChatWithAgent}
-                  </Button>
-                </div>
-              </article>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+              <div className="pointer-events-none relative z-10 mt-4 rounded-xl bg-surface-base px-3 py-2.5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">{zh ? '当前模型' : 'Current model'}</p>
+                <p className="mt-1 truncate font-mono text-xs text-fg">{agent.effective.models.chat.primary}</p>
+              </div>
+
+              <div className="pointer-events-none relative z-10 mt-3 flex flex-wrap gap-1.5">
+                {capabilities.map((label) => <span key={label} className="rounded-full bg-surface-hover px-2 py-1 text-[11px] text-fg-muted">{label}</span>)}
+              </div>
+
+              <div className="relative z-10 mt-auto pt-4">
+                <Button
+                  className="w-full"
+                  disabled={busy}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onChat(agent.id);
+                  }}
+                >
+                  <MessageSquarePlus className="size-4" />
+                  {zh ? '与这个 Agent 对话' : 'Chat with this agent'}
+                </Button>
+              </div>
+            </article>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

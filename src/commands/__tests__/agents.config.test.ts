@@ -31,24 +31,21 @@ function cfg(): Config {
 }
 
 describe('agents.config', () => {
-  it('uses a supplied identity when creating an agent', () => {
+  it('uses a supplied profile when creating an agent', () => {
     const result = applyAgentConfig(
       { agents: { default: 'main', list: [] } } as Config,
       {
         agentId: 'main',
-        identity: {
+        profile: {
           name: 'Smart Assistant',
-          description: 'General-purpose personal assistant.',
-          role: 'General assistant',
-          language: 'en',
-          tone: 'direct',
+          instructions: 'General-purpose personal assistant.',
         },
       },
     );
 
-    expect(result.agents.list[0]?.identity).toMatchObject({
+    expect(result.agents.list[0]?.profile).toMatchObject({
       name: 'Smart Assistant',
-      description: 'General-purpose personal assistant.',
+      instructions: 'General-purpose personal assistant.',
     });
   });
 

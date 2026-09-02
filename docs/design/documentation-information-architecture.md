@@ -67,12 +67,12 @@ Store durable decisions under `docs/adr/`. Both directories are excluded from th
 | `memory-architecture.md` | `design/technical/memory-architecture.md` |
 | `realtime.md` | `design/technical/realtime.md` |
 | `agent-capabilities.md` | `design/technical/agent-capabilities.md` |
-| `agent-manifest.md` | `design/technical/agent-manifest.md`; public Agent guidance stays in `routing-system.md` |
+| `agent-configuration.md` | `design/technical/agent-configuration.md`; public Agent guidance stays in `routing-system.md` |
 | `concepts/system-prompt.md` | `design/technical/concepts/system-prompt.md` |
 | `skills-testing.md` | `design/technical/skills-testing.md` |
 | `mobile-build-release.md` | `design/release/mobile-build-release.md` |
 | `documentation-quality.md` | `design/process/documentation-quality-legacy.md` |
-| Previous long-form `configuration.md` | `design/technical/configuration-legacy.md`; a task-oriented public page now uses the original URL |
+| Agent configuration internals | `design/technical/agent-configuration.md`; the public configuration page remains task-oriented |
 | Previous tool schema reference | `design/technical/tools-reference-legacy.md`; the public page now focuses on selection, permission, and diagnosis |
 | Previous Skill authoring/test reference | `design/technical/skills-reference-legacy.md`; the public page now focuses on install, trust, and use |
 | Previous MCP API reference | `design/technical/mcp-reference-legacy.md`; the public page now covers connection and Agent access |

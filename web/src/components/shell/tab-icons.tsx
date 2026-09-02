@@ -40,7 +40,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsDesktopPet: PawPrint,
   settingsDesktopApp: Package,
   settingsAgentBrowser: Globe,
-  settingsCapabilityPresets: Layers,
+  settingsAgentDefaults: Layers,
   settingsChannels: Plug,
   settingsGateway: Globe,
   settingsRuntimes: TerminalSquare,

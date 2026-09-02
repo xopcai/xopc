@@ -12,22 +12,16 @@ xopc 可以直接使用内置 LLM 服务商；只有在添加自定义服务商�
 {
   "agents": {
     "default": "main",
+    "defaults": {
+      "models": {
+        "chat": { "primary": "deepseek/deepseek-v4-flash", "fallbacks": [] },
+        "intents": {}
+      }
+    },
     "list": [
       {
         "id": "main",
-        "identity": { "name": "Main", "role": "General assistant" },
-        "responsibilities": { "primary": ["Help the user complete tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-v4-flash" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+        "profile": { "name": "Main" }
       }
     ]
   },
@@ -43,7 +37,7 @@ xopc 可以直接使用内置 LLM 服务商；只有在添加自定义服务商�
 export DEEPSEEK_API_KEY="sk-..."
 ```
 
-**默认对话模型**：xopc 从 `agents.default` 与 `agents.list` 解析当前 agent。模型角色放在 `agents.list[].models.roles` 下；workflow 可以引用这些 typed roles，避免在每个步骤里硬编码模型。
+**默认对话模型**：统一配置在 `agents.defaults.models.chat`。Workflow 可引用 `agents.defaults.models.intents` 下的固定用途；只有确实需要不同路由的 Agent 才保存覆盖项。
 
 当前内置覆盖（节选）：**DeepSeek**、**OpenAI**、**Anthropic**、**Google / Vertex**、**Azure OpenAI**、**AWS Bedrock**、**Groq**、**xAI**、**Mistral**、**Cerebras**、**OpenRouter**、**Vercel AI Gateway**、**智谱 z.ai**、**MiniMax**（国际/国内）、**Kimi Coding**、**Moonshot**（`moonshotai` / `moonshotai-cn`）、**Hugging Face**、**Fireworks**、**Together**、**OpenCode / OpenCode Go**、**Cloudflare Workers AI** 与 **Cloudflare AI Gateway**、**GitHub Copilot**、**OpenAI Codex**（OAuth）、**Google Gemini CLI / Antigravity**、**小米 MiMo**。**`dashscope`** 为 xopc 侧文生图/语音等 HTTP 能力的环境 id，不是 pi-ai 的 LLM `KnownProvider`。
 

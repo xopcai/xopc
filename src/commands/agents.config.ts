@@ -28,12 +28,10 @@ export function applyAgentConfig(
   cfg: Config,
   params: {
     agentId: string;
-    /** Used only when creating a previously absent agent entry. */
-    identity?: AgentEntry['identity'];
     workspace?: string;
+    profile?: AgentEntry['profile'];
     model?: string;
     models?: AgentEntry['models'];
-    extends?: AgentEntry['extends'];
     skills?: string[];
     tools?: AgentEntry['tools'];
   },
@@ -45,26 +43,22 @@ export function applyAgentConfig(
   const base = index >= 0 ? list[index] : {
     id: agentId,
     enabled: true as const,
-    identity: params.identity ?? { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
-    responsibilities: { primary: ['Help the user complete tasks'] },
-    workspace: { root: `~/.xopc/workspace/${agentId}` },
   };
   const nextEntry: AgentEntry = {
     ...base,
     enabled: base.enabled ?? true,
-    ...(params.extends !== undefined ? { extends: params.extends } : {}),
-    ...(params.workspace ? { workspace: { root: params.workspace } } : {}),
+    ...(params.workspace ? { workspace: params.workspace } : {}),
+    ...(params.profile ? { profile: params.profile } : {}),
     ...(params.models ? { models: params.models } : {}),
     ...(params.model
       ? {
           models: {
             ...(base.models ?? {}),
-            defaultRole: 'deep',
-            roles: { ...(base.models?.roles ?? {}), deep: { model: params.model } },
+            chat: { primary: params.model, fallbacks: [] },
           },
         }
       : {}),
-    ...(params.skills ? { skills: { mode: 'allowlist' as const, allow: params.skills } } : {}),
+    ...(params.skills ? { skills: { mode: 'replace' as const, include: params.skills } } : {}),
     ...(nextTools ? { tools: nextTools } : {}),
   };
   const nextList = [...list];
@@ -75,9 +69,6 @@ export function applyAgentConfig(
       nextList.push({
         id: resolveDefaultAgentId(cfg),
         enabled: true,
-        identity: { name: resolveDefaultAgentId(cfg), role: 'Agent', language: 'en', tone: 'direct' },
-        responsibilities: { primary: ['Help the user complete tasks'] },
-        workspace: { root: `~/.xopc/workspace/${resolveDefaultAgentId(cfg)}` },
       });
     }
     nextList.push(nextEntry);

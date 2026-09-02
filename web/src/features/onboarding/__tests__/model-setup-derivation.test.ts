@@ -5,14 +5,9 @@ import { computeNeedsModelSetup, type ModelSetupDerivationInput } from '@/featur
 function configWithGlobalModel(model: string) {
   return {
     agents: {
-      defaultPreset: 'default',
-      capabilityPresets: {
-        default: {
-          models: {
-            defaultRole: 'deep',
-            roles: model ? { deep: { model } } : {},
-          },
-        },
+      default: 'main',
+      defaults: {
+        models: { chat: model ? { primary: model } : undefined },
       },
     },
   };
@@ -60,24 +55,14 @@ describe('computeNeedsModelSetup', () => {
     ).toBe(true);
   });
 
-  it('returns true for the first-run default preset shape with no role model', () => {
+  it('returns true when global defaults have no chat model', () => {
     expect(
       computeNeedsModelSetup({
         ...readyInput,
         config: {
           agents: {
             default: 'main',
-            defaultPreset: 'default',
-            capabilityPresets: {
-              default: {
-                id: 'default',
-                name: 'Global defaults',
-                models: {
-                  defaultRole: 'deep',
-                  roles: {},
-                },
-              },
-            },
+            defaults: { models: {} },
             list: [
               {
                 id: 'main',
@@ -91,33 +76,20 @@ describe('computeNeedsModelSetup', () => {
     ).toBe(true);
   });
 
-  it('uses the default agent model when the global default preset is intentionally empty', () => {
+  it('uses the default agent override when the global chat model is empty', () => {
     expect(
       computeNeedsModelSetup({
         ...readyInput,
         config: {
           agents: {
             default: 'coder',
-            defaultPreset: 'default',
-            capabilityPresets: {
-              default: {
-                id: 'default',
-                name: 'Global defaults',
-                models: {
-                  defaultRole: 'deep',
-                  roles: {},
-                },
-              },
-            },
+            defaults: { models: {} },
             list: [
               {
                 id: 'coder',
                 enabled: true,
                 models: {
-                  defaultRole: 'deep',
-                  roles: {
-                    deep: { model: 'openai/gpt-4o' },
-                  },
+                  chat: { primary: 'openai/gpt-4o' },
                 },
               },
             ],

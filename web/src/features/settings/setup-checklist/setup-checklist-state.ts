@@ -84,27 +84,15 @@ function readDefaultModel(config: unknown): string {
   const agents = (config as Record<string, unknown>).agents;
   if (!agents || typeof agents !== 'object' || Array.isArray(agents)) return '';
   const agentRecord = agents as Record<string, unknown>;
-  const defaultPreset = typeof agentRecord.defaultPreset === 'string' && agentRecord.defaultPreset.trim()
-    ? agentRecord.defaultPreset.trim()
-    : 'default';
-  const presets = agentRecord.capabilityPresets;
-  const preset = presets && typeof presets === 'object' && !Array.isArray(presets)
-    ? (presets as Record<string, unknown>)[defaultPreset]
-    : undefined;
-  const models = preset && typeof preset === 'object' && !Array.isArray(preset)
-    ? (preset as Record<string, unknown>).models
+  const defaults = agentRecord.defaults;
+  const models = defaults && typeof defaults === 'object' && !Array.isArray(defaults)
+    ? (defaults as Record<string, unknown>).models
     : undefined;
   if (!models || typeof models !== 'object' || Array.isArray(models)) return '';
   const modelRecord = models as Record<string, unknown>;
-  const roles = modelRecord.roles;
-  if (!roles || typeof roles !== 'object' || Array.isArray(roles)) return '';
-  const roleMap = roles as Record<string, unknown>;
-  const defaultRole = typeof modelRecord.defaultRole === 'string' && modelRecord.defaultRole.trim()
-    ? modelRecord.defaultRole.trim()
-    : Object.keys(roleMap)[0];
-  const role = defaultRole ? roleMap[defaultRole] : undefined;
-  if (!role || typeof role !== 'object' || Array.isArray(role)) return '';
-  const model = (role as Record<string, unknown>).model;
+  const chat = modelRecord.chat;
+  if (!chat || typeof chat !== 'object' || Array.isArray(chat)) return '';
+  const model = (chat as Record<string, unknown>).primary;
   return typeof model === 'string' ? model.trim() : '';
 }
 

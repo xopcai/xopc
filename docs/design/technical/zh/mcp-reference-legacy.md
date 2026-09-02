@@ -141,25 +141,21 @@ Extension 不持有 MCP 配置，只能声明 `connectorDependencies`；用户�
 
 **按 Agent 拒绝 MCP 工具：**
 
-把 MCP 策略写入 Agent 条目或能力方案。要拒绝某个已配置服务的全部工具：
+在全局默认配置中使用工具的稳定策略 id；也可以把相同覆盖写到单个 Agent：
 
 ```json
 {
   "agents": {
-    "capabilityPresets": {
-      "no-fetch": {
-        "id": "no-fetch",
-        "name": "禁用 fetch MCP",
-        "tools": {
-          "mcp": { "servers": { "fetch": { "mode": "deny" } } }
-        }
+    "defaults": {
+      "tools": {
+        "mcp:fetch:browse": { "mode": "deny" }
       }
     }
   }
 }
 ```
 
-通过 Agent 的 `extends` 列表应用该方案。要拒绝单个 MCP 工具，在 `tools.mcp.tools` 中写稳定策略 id，例如 `"mcp:fetch:browse": { "mode": "deny" }`；策略 id 不是模型可见工具。同一策略也可直接写在 Agent 条目中。
+策略 id 不是模型可见工具。若要禁用一个服务的所有工具，应逐项列出；配置中没有另一套服务级策略层级。
 
 委托子任务（delegate）**不能** 使用 MCP 工具。
 

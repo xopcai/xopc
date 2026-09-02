@@ -246,7 +246,7 @@ function buildNoImageGenerationModelConfiguredMessage(
   const list = (deps.listProviders ?? listImageGenerationProviders)(cfg);
   return buildNoCapabilityModelConfiguredMessage({
     capabilityLabel: 'image-generation',
-    modelConfigKey: 'imageGenerationModel',
+    modelConfigKey: 'imageGeneration',
     providers: list.map(toCapabilityCandidate),
     getProviderEnvVars: deps.getProviderEnvVars ?? ((id) => PROVIDER_ENV_MAP[id]),
   });
