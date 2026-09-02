@@ -495,12 +495,14 @@ export const MessageBubble = memo(function MessageBubble({
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
 
   return (
-    <article className={cn('group/msg flex w-full min-w-0', density === 'compact' && 'text-sm', isUser ? 'justify-end' : 'justify-start')}>
+    <article className={cn('group/msg flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'min-w-0 max-w-[min(85%,var(--max-width-chat))]',
+          'min-w-0',
+          isUser
+            ? 'flex w-full max-w-[min(78%,var(--max-width-chat-user))] flex-col items-end'
+            : 'w-full max-w-[var(--max-width-chat-reading)]',
           readonly && 'max-w-full',
-          isUser ? 'flex w-full flex-col items-end' : 'w-full',
         )}
       >
         <span className="sr-only">{roleLabel}</span>
@@ -552,9 +554,15 @@ export const MessageBubble = memo(function MessageBubble({
         <div
           dir={isUser ? 'ltr' : undefined}
           className={cn(
-            'min-w-0 text-sm leading-relaxed text-fg',
+            'min-w-0 text-fg',
+            isUser && 'chat-user-message',
+            density === 'compact'
+              ? 'text-sm leading-relaxed'
+              : isUser
+                ? 'text-[0.9375rem] leading-[1.6667]'
+                : 'text-base leading-[1.6875]',
             isUser &&
-              'w-fit max-w-full rounded-xl border border-edge-subtle/70 bg-surface-hover/90 px-4 py-3 text-left shadow-sm dark:border-edge-subtle dark:bg-surface-hover/50',
+              'w-fit max-w-full rounded-2xl bg-surface-hover/80 px-4 py-3 text-left dark:bg-surface-hover/50',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">

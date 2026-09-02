@@ -1,6 +1,6 @@
 # xopc 工作站 · 产品设计系统 (Design System)
 
-> **版本**: v1.4 · **建立时间**: 2026-03 · **修订**: 2026-07-19（§9.3 全局反馈体系：就地反馈、单条瞬时提示、活动中心；此前 2026-06-08：Toast 顶栏与 banner 联动）
+> **版本**: v1.5 · **建立时间**: 2026-03 · **修订**: 2026-09-02（聊天阅读层、轻量导航表面、紧凑圆角）
 > 本文档是 xopc 所有产品的设计宪法，所有 UI 决策应以此为准。
 >
 > **工程实现：** 网关 Web 应用中的 **`globals.css`**（Tailwind v4 `@theme`）为语义 token 的单一来源；本文数值与其保持一致。
@@ -40,7 +40,7 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 - **Light 模式**：浅灰「分组」底（类似 macOS/iOS grouped background）托底、白面板浮起，通过亮度差区分层级，层级越高越亮
 - **Dark 模式**：深灰阶梯（类似 Apple 深色界面 elevated surfaces），避免死黑；层级越高越亮；浮层以边框（rim light）为主、弥散阴影为辅
 
-> **Gateway Web**：中性灰已对齐 **Apple 系统标签 / 表面色阶**（如 `#f5f5f7`、`#1d1d1f`，深色 `#1c1c1e` / `#2c2c2e`）；**品牌蓝**仍为唯一彩色强调，原则不变（见 §2.2）。
+> **Gateway Web**：默认主题采用低饱和蓝灰表面与近黑正文；**品牌蓝**仍为唯一彩色强调，原则不变（见 §2.2）。
 
 ---
 
@@ -52,10 +52,11 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 
 | 层级语义 | Utility / 变量 | Light Hex | Dark Hex |
 |----------|----------------|-----------|----------|
-| 全局底层 App Background | `bg-surface-base` / `--color-surface-base` | `#f5f5f7` | `#1c1c1e` |
-| 主内容区 / 卡片面板 | `bg-surface-panel` / `--color-surface-panel` | `#ffffff` | `#2c2c2e` |
-| 悬浮 Hover | `bg-surface-hover` / `--color-surface-hover` | `#e8e8ed` | `#3a3a3c` |
-| 次级激活 Active | `bg-surface-active` / `--color-surface-active` | `#dcdcde` | `#48484a` |
+| 全局底层 App Background | `bg-surface-base` / `--color-surface-base` | `#f7f8fa` | `#14171c` |
+| 侧栏 Rail | `bg-surface-rail` / `--color-surface-rail` | `#eef1f5` | `#111318` |
+| 主内容区 / 卡片面板 | `bg-surface-panel` / `--color-surface-panel` | `#ffffff` | `#1b1f26` |
+| 悬浮 Hover | `bg-surface-hover` / `--color-surface-hover` | `#e8ecf1` | `#242933` |
+| 次级激活 Active | `bg-surface-active` / `--color-surface-active` | `#dfe5ec` | `#2e3440` |
 
 > **层级规律**：Light 模式下层级越高越亮（白面板 > 浅灰底）；Dark 模式下层级越高越亮（elevated 灰阶梯）。卡片与列表行可再加 `border-edge` / `border-edge-subtle` 编组（见 §2.3）。
 
@@ -69,12 +70,10 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 
 | 用途 | Light Token | Light Hex | Dark Token | Dark Hex |
 |------|-------------|-----------|------------|----------|
-| 主操作按钮 | `bg-blue-600` | `#2563eb` | `dark:bg-blue-500` | `#3b82f6` |
-| 按钮悬浮态 | `bg-blue-700` | `#1d4ed8` | `dark:bg-blue-600` | `#2563eb` |
-| 选中/激活指示 | `bg-blue-600` | `#2563eb` | `dark:bg-blue-500` | `#3b82f6` |
-| 柔和选中背景 | `bg-blue-50` | `#eff6ff` | `dark:bg-blue-900/40` | `rgba(30,58,138,0.4)` |
-| 蓝色文字/链接 | `text-blue-600` | `#2563eb` | `dark:text-blue-400` | `#60a5fa` |
-| AI 功能标识 | `text-blue-500` | `#3b82f6` | `dark:text-blue-400` | `#60a5fa` |
+| 主操作按钮 | `bg-accent` | `#3a6bff` | `dark:bg-accent` | `#3a6bff` |
+| 按钮悬浮态 | `bg-accent-hover` | `#315ce6` | `dark:bg-accent-hover` | `#6f91ff` |
+| 柔和强调背景 | `bg-accent-soft` | `#eef3ff` | `dark:bg-accent-soft` | `rgba(58,107,255,0.2)` |
+| 蓝色文字/链接 | `text-accent-fg` | `#2f5ef6` | `dark:text-accent-fg` | `#adc0ff` |
 
 > ⚠️ **克制原则**：一个页面超过 3 处蓝色即为滥用，必须重新审视。Dark 模式下蓝色整体提亮一档（600→500），保证对比度。
 
@@ -86,18 +85,18 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 
 | 层级 | Utility / 变量 | Light Hex | Dark Hex | 用途 |
 |------|----------------|-----------|----------|------|
-| 主要文本 | `text-fg` / `--color-fg` | `#1d1d1f` | `#f5f5f7` | 标题、核心正文、重要数据 |
-| 次要文本 | `text-fg-muted` / `--color-fg-muted` | `#6e6e73` | `#a1a1a6` | 正文说明、描述性文字 |
-| 辅助文本 | `text-fg-subtle` / `--color-fg-subtle` | `#86868b` | `#8e8e93` | 时间戳、元信息、占位符 |
-| 弱化 / 禁用 | `text-fg-disabled` / `--color-fg-disabled` | `#aeaeb2` | `#636366` | 禁用状态、极弱提示 |
+| 主要文本 | `text-fg` / `--color-fg` | `#111111` | `#f4f6f8` | 标题、核心正文、重要数据 |
+| 次要文本 | `text-fg-muted` / `--color-fg-muted` | `#666666` | `#b8bec8` | 正文说明、描述性文字 |
+| 辅助文本 | `text-fg-subtle` / `--color-fg-subtle` | `#999999` | `#87909d` | 时间戳、元信息、占位符 |
+| 弱化 / 禁用 | `text-fg-disabled` / `--color-fg-disabled` | `#b8b8b8` | `#626b78` | 禁用状态、极弱提示 |
 
 **边框色阶：**
 
 | 层级 | Utility / 变量 | Light Hex | Dark Hex | 用途 |
 |------|----------------|-----------|----------|------|
-| 细边框 | `border-edge-subtle` / `--color-edge-subtle` | `#ebebed` | `#3a3a3c` | 列表项分割、内部细节 |
-| 主边框 | `border-edge` / `--color-edge` | `#d2d2d7` | `#48484a` | 卡片、输入框、分割线 |
-| 强调边框 | `border-edge-strong` / `--color-edge-strong` | `#bcbcc0` | `#636366` | 需要明确区分的容器 |
+| 细边框 | `border-edge-subtle` / `--color-edge-subtle` | `#f2f2f2` | `#252932` | 列表项分割、内部细节 |
+| 主边框 | `border-edge` / `--color-edge` | `#ececec` | `#323844` | 卡片、输入框、分割线 |
+| 强调边框 | `border-edge-strong` / `--color-edge-strong` | `#d8dce8` | `#465061` | 需要明确区分的容器 |
 
 > **Dark 模式边框策略**：浮层以 `border-edge` 勾勒轮廓（Rim Light）；弥散阴影在深色下减弱，与 `web` 中 `html.dark` 的 `--shadow-*` 定义一致（见 §5.2）。
 
@@ -122,54 +121,56 @@ Gateway 控制台将所有语义 token 写在 **网关控制台的 `globals.css`
 
 ```css
 /* Light — @theme 内 */
---color-surface-base: #f5f5f7;
+--color-surface-base: #f7f8fa;
+--color-surface-rail: #eef1f5;
 --color-surface-panel: #ffffff;
---color-surface-hover: #e8e8ed;
---color-surface-active: #dcdcde;
---color-fg: #1d1d1f;
---color-fg-muted: #6e6e73;
---color-fg-subtle: #86868b;
---color-fg-disabled: #aeaeb2;
---color-edge-subtle: #ebebed;
---color-edge: #d2d2d7;
---color-edge-strong: #bcbcc0;
---color-accent: #2563eb;
---color-accent-hover: #1d4ed8;
---color-accent-soft: #eff6ff;
---color-accent-fg: #2563eb;
+--color-surface-hover: #e8ecf1;
+--color-surface-active: #dfe5ec;
+--color-fg: #111111;
+--color-fg-muted: #666666;
+--color-fg-subtle: #999999;
+--color-fg-disabled: #b8b8b8;
+--color-edge-subtle: #f2f2f2;
+--color-edge: #ececec;
+--color-edge-strong: #d8dce8;
+--color-accent: #3a6bff;
+--color-accent-hover: #315ce6;
+--color-accent-soft: #eef3ff;
+--color-accent-fg: #2f5ef6;
 --color-scrim: rgb(0 0 0 / 0.36);   /* 模态 / 抽屉遮罩，utility: bg-scrim */
 
-/* 圆角 — 映射到 rounded-*（略大于旧版 slate 系，贴近 macOS 控件） */
---radius-sm: 0.625rem;   /* 10px */
---radius-md: 0.75rem;    /* 12px */
---radius-lg: 0.875rem;   /* 14px */
---radius-xl: 1.125rem;   /* 18px */
+/* 圆角 — 映射到 rounded-*；大型曲线只用于大型表面 */
+--radius-sm: 0.375rem;   /* 6px */
+--radius-md: 0.5rem;     /* 8px */
+--radius-lg: 0.625rem;   /* 10px */
+--radius-xl: 0.875rem;   /* 14px */
 --radius-pill: 9999px;
 
 /* 阴影 — utility: shadow-surface | shadow-elevated | shadow-float | shadow-popover */
---shadow-surface: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 6px rgb(0 0 0 / 0.06);
---shadow-elevated: 0 2px 8px rgb(0 0 0 / 0.06), 0 4px 24px rgb(0 0 0 / 0.08);
---shadow-float: 0 4px 16px rgb(0 0 0 / 0.1), 0 12px 40px rgb(0 0 0 / 0.08);
---shadow-popover: 0 8px 32px rgb(0 0 0 / 0.12), 0 2px 12px rgb(0 0 0 / 0.08);
+--shadow-surface: 0 1px 2px rgb(17 17 17 / 0.04), 0 6px 18px rgb(17 17 17 / 0.04);
+--shadow-elevated: 0 2px 10px rgb(17 17 17 / 0.06), 0 8px 28px rgb(17 17 17 / 0.06);
+--shadow-float: 0 8px 24px rgb(17 17 17 / 0.08), 0 18px 48px rgb(17 17 17 / 0.08);
+--shadow-popover: 0 10px 32px rgb(17 17 17 / 0.1), 0 2px 10px rgb(17 17 17 / 0.06);
 ```
 
 ```css
 /* Dark — html.dark 内覆盖 */
---color-surface-base: #1c1c1e;
---color-surface-panel: #2c2c2e;
---color-surface-hover: #3a3a3c;
---color-surface-active: #48484a;
---color-fg: #f5f5f7;
---color-fg-muted: #a1a1a6;
---color-fg-subtle: #8e8e93;
---color-fg-disabled: #636366;
---color-edge-subtle: #3a3a3c;
---color-edge: #48484a;
---color-edge-strong: #636366;
---color-accent: #3b82f6;
---color-accent-hover: #60a5fa;
---color-accent-soft: rgb(30 58 138 / 0.55);
---color-accent-fg: #60a5fa;
+--color-surface-base: #14171c;
+--color-surface-rail: #111318;
+--color-surface-panel: #1b1f26;
+--color-surface-hover: #242933;
+--color-surface-active: #2e3440;
+--color-fg: #f4f6f8;
+--color-fg-muted: #b8bec8;
+--color-fg-subtle: #87909d;
+--color-fg-disabled: #626b78;
+--color-edge-subtle: #252932;
+--color-edge: #323844;
+--color-edge-strong: #465061;
+--color-accent: #3a6bff;
+--color-accent-hover: #6f91ff;
+--color-accent-soft: rgb(58 107 255 / 0.2);
+--color-accent-fg: #adc0ff;
 --color-scrim: rgb(0 0 0 / 0.52);
 /* 深色下 --shadow-* 减弱或改为轻描边式，与 border-edge 配合 */
 ```
@@ -210,7 +211,7 @@ xopc 是知识工作者长时间使用的工具，排版必须服务于**长时�
 > **Tailwind v4**：字体在 `@theme` 中扩展，无需单独的 `tailwind.config.js` `fontFamily` 片段；以 `globals.css` 为准。
 
 ### 3.2 字号层级 (Type Scale)
-严格的 6 级层级，每级都有明确的使用场景，不允许随意使用中间值。
+严格的基础 UI 字阶，并为聊天阅读面单独保留阅读字号；不要用全局放大代替层级设计。
 
 | 层级 | Token | 大小/行高 | 字重 | 使用场景 |
 |------|-------|-----------|------|----------|
@@ -218,10 +219,11 @@ xopc 是知识工作者长时间使用的工具，排版必须服务于**长时�
 | Title | `text-xl tracking-tight` | 20px / 28px | `font-semibold` | 页面主标题、模态框标题 |
 | Heading | `text-base` | 16px / 24px | `font-semibold` | 卡片标题、区块标题 |
 | Body | `text-sm leading-relaxed` | 14px / 22px | `font-normal` | 正文内容、知识库文章 |
+| Chat Reading | 聊天阅读层 | 16px / 27px | `font-normal` | 助手正文；用户正文使用 15px / 25px |
 | UI | `text-sm leading-6` | 14px / 24px | `font-medium` | 按钮、输入框、列表项（最常用） |
 | Caption | `text-xs leading-5` | 12px / 20px | `font-normal` | 时间戳、标签、元信息 |
 
-**Gateway Web 基线**：`html` 保持 **16px**（`rem` 基准）；`body` 默认继承字号为 **15px**（`0.9375rem`）、`line-height: 1.47059`，与 SF 常见 UI 行高一致。组件仍优先用 `text-sm` / `text-base` 等工具类明确字阶。
+**Gateway Web 基线**：`html` 保持 **16px**（`rem` 基准）；`body` 默认继承字号为 **15px**（`0.9375rem`）、`line-height: 1.47059`。聊天正文使用独立阅读层，不继承侧栏和控件的紧凑字号。
 
 ### 3.3 字重使用规范 (Font Weight)
 - `font-normal` (400) — 正文、说明文字
@@ -275,29 +277,29 @@ Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结
 
 左侧可滚动的会话列表属于 **工作台模式** 下的高密度区，遵循 §4 的 **8pt 网格**，在 **紧凑** 与 **可扫读** 之间平衡：
 
-- **项间距**：相邻会话行之间用 **`gap-1.5`（6px）** 左右即可，**不要**用过大的 `gap-3`+；也避免 `gap-0.5`（2px）过粘。
-- **单行内边距**：宜 **偏小**（如 `px-2 py-1.5`），避免厚内边距把行撑得过肥、显得项与项之间「挤」；命中区仍靠整行可点保证。
-- **列表水平内边距**：`px-2.5`～`px-3` 与主导航对齐即可。
-- **字阶**：保持 `text-sm` + `leading-6`（见 §3.2 UI 字阶）。
+- **项间距**：同组会话使用 **`gap-0.5`（2px）**，组间通过 12–16px 留白表达层级，不给每一行增加多余空隙。
+- **单行高度**：会话约 28–32px，整行可点击；使用紧凑纵向内边距，避免列表按钮化。
+- **列表水平内边距**：外层 16px，行内 6–8px，与主导航文字边界对齐。
+- **字阶**：普通会话 `text-sm` + `leading-5` + `font-normal`；仅当前会话使用 `font-medium`。
 
 ---
 
 ## 5. 形状与阴影 (Shapes & Elevation)
 
 ### 5.1 有机感圆角 (Border Radius)
-圆角是传递"亲切感"的核心元素。xopc 选择有机感（圆润）风格，圆角比例偏大。
+圆角用于表达容器层级，不作为普遍装饰。控件保持紧凑，大型曲线只用于消息、输入器和浮层。
 
 | 元素类型 | Token | 大小 | 说明 |
 |----------|-------|------|------|
-| 卡片、弹窗、大容器 | `rounded-xl` / `rounded-2xl` | 以 `@theme` `--radius-xl`（18px）等为基准 | 主要容器；具体 class 与组件一致 |
-| 按钮、输入框 | `rounded-xl` | 映射 `--radius-xl`（18px）或略小一级 | 交互组件，亲切但不失专业 |
+| 卡片、弹窗、大容器 | `rounded-xl` / `rounded-2xl` | 14–16px | 主要容器与消息表面 |
+| 按钮、输入框 | `rounded-md` / `rounded-lg` | 8–10px | 常规交互组件 |
 | **分段控件**（顶栏语言 / 主题、列表网格切换等） | 轨道 `rounded-full` + 滑块 `rounded-full` | CSS `--radius-pill` → `rounded-pill` | 灰色轨道 (`bg-surface-hover`)、浅色浮起滑块 (`bg-surface-panel` + 轻阴影)，与参考图一致的大圆角「胶囊」语义，不是直角分段 |
-| 小型标签、Badge | `rounded-lg` | 映射 `--radius-lg`（14px） | 微小元素 |
+| 小型标签、Badge | `rounded-sm` / `rounded-md` | 6–8px | 微小元素 |
 | 头像、图标容器 | `rounded-full` | 50% | 完全圆形，用于人物和品牌标识 |
 
 **分段控件实现约定（Gateway / Web）**：轨道与每项使用同一套 class，避免顶栏各开关风格漂移。共享常量见 分段控件共享样式常量（网关 Web 源码中的 `segmented-styles` 模块）（`segmentedTrackClassName`、`segmentedThumbBaseClassName`、`segmentedThumbActiveClassName`）。选中项需要强调色时在外层追加 `text-accent-fg`（如主题、图标型分段）。
 
-> **有机感原则**：圆角应该让人感觉"柔软"，而不是"锋利"。当你不确定用多大圆角时，选更大的那个。
+> **克制原则**：同一页面最多出现三档圆角。只有标签、状态和头像使用全圆角，普通导航行不做胶囊。
 
 ### 5.2 阴影策略 (Shadows)
 克制使用阴影。通过**多层、低对比**的弥散阴影区分层级，避免深色硬阴影。
@@ -326,14 +328,14 @@ Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结
 - **React 友好**：`lucide-react` 包支持按需引入，不增加包体积
 
 ```bash
-npm install lucide-react
+pnpm add lucide-react
 ```
 
 ### 6.2 图标使用规范
 
 | 场景 | 尺寸 | Token |
 |------|------|-------|
-| 导航菜单图标 | 20px | `size={20}` |
+| 导航菜单图标 | 16px | `size={16}` |
 | 按钮内图标 | 16px | `size={16}` |
 | 列表项图标 | 16px | `size={16}` |
 | 空状态插图图标 | 48px | `size={48}` |
@@ -616,18 +618,18 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 ---
 
 ## 10. 暗色模式体系 (Dark Mode)
-遵循**深邃但不死黑**的原则。**Gateway Web** 采用与 Apple 深色界面相近的 **elevated gray**（`#1c1c1e` / `#2c2c2e` 阶梯），而非偏蓝的 slate 堆栈；语义上仍满足「层级越高越亮」。
+遵循**深邃但不死黑**的原则。**Gateway Web** 使用低饱和蓝灰阶梯；语义上仍满足「层级越高越亮」。
 
 ### 10.1 背景与层级映射 (Dark Backgrounds)
 在暗色模式下，层级越高的元素（离用户越近的元素），背景色应该越亮。
 
-- **全局背景**: `bg-surface-base`（`#1c1c1e`）— 最远基底
-- **卡片/主内容面板**: `bg-surface-panel`（`#2c2c2e`）— 相对浮起
+- **全局背景**: `bg-surface-base`（`#14171c`）— 最远基底
+- **卡片/主内容面板**: `bg-surface-panel`（`#1b1f26`）— 相对浮起
 - **悬浮/激活态**: `bg-surface-hover` / `bg-surface-active`
 - **侧边栏**: `bg-surface-base` — 与主内容区用 **相邻背景色阶** 区分（与 [4.2](#42-应用壳左侧导航与主工作区区块色块与边框边界) 一致），**不依赖**侧栏与主区之间的竖向大边框
 
 ### 10.2 文本与边框翻转 (Dark Typography & Borders)
-- **主要文本**: `text-fg`（`#f5f5f7`）
+- **主要文本**: `text-fg`（`#f4f6f8`）
 - **次要文本**: `text-fg-muted`
 - **辅助文本**: `text-fg-subtle`
 - **弱化 / 禁用**: `text-fg-disabled`
@@ -636,8 +638,8 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 ### 10.3 色彩适应 (Color Adaptation)
 暗色模式下的彩色需要稍微"提亮"以保证对比度。
 
-- **主色**: `dark:bg-blue-500` — 比亮色模式的 blue-600 更亮，保证可见性
-- **柔和主色**: `dark:bg-blue-900/40` 配合 `dark:text-blue-400`
+- **主色**: `bg-accent`；深色模式通过 `text-accent-fg` 提高前景亮度
+- **柔和主色**: `bg-accent-soft` 配合 `text-accent-fg`
 - **语义色彩**: 均调整为高亮文字 + 极暗透明背景。例如成功：`dark:text-emerald-400 dark:bg-emerald-950/50`
 
 ### 10.4 阴影策略 (Dark Shadows)
@@ -717,7 +719,7 @@ h1, h2, h3 {
 - **可延展**：能在深色/浅色背景上都表现良好
 
 ### 12.2 品牌色在 Logo 中的应用
-- **主版本**：深色 Logo（与 `text-fg` / `#1d1d1f` 同级）用于浅色背景
+- **主版本**：深色 Logo（与 `text-fg` / `#111111` 同级）用于浅色背景
 - **反色版本**：白色 Logo 用于深色背景和品牌色背景
 - **品牌色版本**：`blue-600` 底色 + 白色 Logo，用于启动屏、营销场景
 - **禁止**：在 Logo 上使用渐变色，保持克制的单色原则
@@ -902,7 +904,7 @@ xopc 工作站优先覆盖三个端：**Web（浏览器）**、**PC 客户端（
 |--------|----------|
 | **色彩系统** | 完全共享第 2 章；Gateway 控制台以全局 CSS 语义色为准，含 Light / Dark |
 | **字体家族** | 完全共享第 3 章的系统字体栈 |
-| **圆角风格** | 有机感大圆角；Web 以 `@theme` `--radius-*` 为准（如 `rounded-xl` 对应 18px 档），Phone 与 Web 保持同一套比例关系 |
+| **圆角风格** | 紧凑分级圆角；Web 以 `@theme` `--radius-*` 为准，Phone 保持相同层级关系而非相同像素值 |
 | **语义色彩** | 成功/错误/警告/信息的颜色完全一致 |
 | **品牌声音** | 文案风格、AI 功能表述完全一致 |
 | **图标库** | 统一使用 Lucide Icons，风格一致 |
@@ -1029,8 +1031,8 @@ xopc 工作站优先覆盖三个端：**Web（浏览器）**、**PC 客户端（
 <meta name="color-scheme" content="light dark" />
 
 <!-- 随主题切换更新，匹配页面背景色 -->
-<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
-<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#14171c" media="(prefers-color-scheme: dark)" />
 ```
 
 - `<html>` 在暗色模式下需有 `color-scheme: dark`（`globals.css` 中 `html.dark` 已处理）

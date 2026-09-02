@@ -73,7 +73,7 @@ function navRowClass(
     'group relative flex w-full items-center text-sm font-medium leading-6 transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     collapsed ? 'justify-center rounded-xl p-2.5' : 'gap-2 rounded-lg px-3 py-2 text-left',
-    isActive ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+    isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
     dragging && 'opacity-40',
     dropHint === 'before' && 'shadow-[inset_0_2px_0_0_var(--color-accent)]',
     dropHint === 'after' && 'shadow-[inset_0_-2px_0_0_var(--color-accent)]',
@@ -88,7 +88,7 @@ function popoverRowClass(
   return cn(
     'group relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium leading-5 transition-colors',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-    isActive ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+    isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
     dragging && 'opacity-40',
     dropHint === 'before' && 'shadow-[inset_0_2px_0_0_var(--color-accent)]',
     dropHint === 'after' && 'shadow-[inset_0_-2px_0_0_var(--color-accent)]',
