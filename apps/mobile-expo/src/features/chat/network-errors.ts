@@ -6,8 +6,13 @@ export function isTransientNetworkError(message: string): boolean {
     normalized.includes('network request failed') ||
     normalized.includes('network error') ||
     normalized.includes('failed to fetch') ||
+    normalized.includes('network response was invalid') ||
     normalized.includes('network connection was lost') ||
     normalized.includes('internet connection appears to be offline') ||
+    normalized.includes('no internet connection') ||
+    normalized.includes('could not reach gateway') ||
+    normalized.includes('no route to gateway') ||
+    normalized.includes('gateway computer may be offline') ||
     normalized.includes('connection lost') ||
     normalized.includes('timeout') ||
     normalized.includes('timed out') ||
