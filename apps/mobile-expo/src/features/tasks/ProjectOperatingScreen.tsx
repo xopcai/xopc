@@ -34,6 +34,7 @@ import {
 import { createSession, useGatewayConfigured } from '../../query/sessions';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
+import { markdownPreviewText } from '../chat/markdown-plain-text';
 import { resolveNoteListTitle } from '../notes/note-title';
 
 import { formatProjectRelativeTime, groupProjectTasks } from './project-presentation';
@@ -665,7 +666,7 @@ function ProjectReceiptRow({ receipt, taskTitle, onPress }: { receipt: TaskRunRe
   const { colors } = useTheme();
   const labels = useMessages().tasksPage;
   const verification = { passed: labels.resultPassed, failed: labels.resultFailed, unverified: labels.resultUnverified }[receipt.verification.status];
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.receipt, pressed && { backgroundColor: colors.surface.pressed }]}><View style={styles.taskBody}><Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={1}>{taskTitle}</Text><Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={2}>{receipt.summary}</Text><Text style={[styles.meta, { color: receipt.verification.status === 'failed' ? colors.semantic.error : colors.text.tertiary }]}>{verification}</Text></View><Icon source="chevron-right" size={20} color={colors.text.tertiary} /></Pressable>;
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.receipt, pressed && { backgroundColor: colors.surface.pressed }]}><View style={styles.taskBody}><Text style={[styles.taskTitle, { color: colors.text.primary }]} numberOfLines={1}>{taskTitle}</Text><Text style={[styles.body, { color: colors.text.secondary }]} numberOfLines={2}>{markdownPreviewText(receipt.summary)}</Text><Text style={[styles.meta, { color: receipt.verification.status === 'failed' ? colors.semantic.error : colors.text.tertiary }]}>{verification}</Text></View><Icon source="chevron-right" size={20} color={colors.text.tertiary} /></Pressable>;
 }
 
 const styles = StyleSheet.create({

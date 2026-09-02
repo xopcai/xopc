@@ -1,10 +1,11 @@
 import { memo, useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon, Menu, Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
 import type { ChatModelOption } from '../../query/models';
 
+import { ChatActionsSheet } from './ChatActionsSheet';
 import { ModelPickerMenu } from './ModelPickerMenu';
 
 export const ChatHeader = memo(function ChatHeader({
@@ -39,10 +40,8 @@ export const ChatHeader = memo(function ChatHeader({
   const m = useMessages();
   const [actionsVisible, setActionsVisible] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
-  const pickerTopOffset = paddingTop + 52;
 
   const openModelPicker = useCallback(() => {
-    setActionsVisible(false);
     setModelPickerVisible(true);
   }, []);
 
@@ -60,6 +59,15 @@ export const ChatHeader = memo(function ChatHeader({
     onFilesPress?.();
   }, [onFilesPress]);
 
+  const openAgentPicker = useCallback(() => {
+    setActionsVisible(false);
+    onAgentPress();
+  }, [onAgentPress]);
+
+  const toggleAutoReadAloud = useCallback(() => {
+    onAutoReadAloudToggle();
+  }, [onAutoReadAloudToggle]);
+
   return (
     <>
       <View style={[styles.header, { paddingTop }]}>
@@ -74,71 +82,41 @@ export const ChatHeader = memo(function ChatHeader({
         <View style={styles.headerCenter}>
           <Pressable
             style={styles.titlePressable}
-            onPress={onAgentPress}
+            onPress={openModelPicker}
             accessibilityRole="button"
-            accessibilityLabel={m.chat.headerAgentPicker}
+            accessibilityLabel={`${m.chat.headerModelPicker}: ${modelName}`}
           >
-            <Text style={[styles.agentTitle, { color: pillText }]} numberOfLines={1}>
-              {agentName}
+            <Text style={[styles.modelTitle, { color: pillText }]} numberOfLines={1}>
+              {modelName}
             </Text>
+            <Icon source="chevron-down" size={16} color={pillText} />
           </Pressable>
         </View>
 
         <View style={styles.rightActions}>
           <Pressable
             style={styles.iconButton}
-            onPress={onAutoReadAloudToggle}
-            hitSlop={6}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: autoReadAloudEnabled }}
-            accessibilityLabel={autoReadAloudEnabled
-              ? m.chat.autoReadAloudDisable
-              : m.chat.autoReadAloudEnable}
+            onPress={() => setActionsVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel={m.chat.headerActions}
           >
-            <Icon
-              source={autoReadAloudEnabled ? 'volume-high' : 'volume-off'}
-              size={23}
-              color={pillText}
-            />
+            <Icon source="dots-horizontal" size={24} color={pillText} />
           </Pressable>
-          <Menu
-            visible={actionsVisible}
-            onDismiss={() => setActionsVisible(false)}
-            anchor={(
-              <Pressable
-                style={styles.iconButton}
-                onPress={() => setActionsVisible(true)}
-                accessibilityRole="button"
-                accessibilityLabel={m.chat.headerActions}
-              >
-                <Icon source="view-grid-outline" size={23} color={pillText} />
-              </Pressable>
-            )}
-          >
-            <Menu.Item
-              leadingIcon="swap-horizontal"
-              title={`${m.chat.headerModelPicker} · ${modelName}`}
-              onPress={openModelPicker}
-            />
-            <Menu.Item
-              leadingIcon="square-edit-outline"
-              title={m.chat.headerNewChat}
-              onPress={startNewChat}
-            />
-            {onFilesPress ? (
-              <Menu.Item
-                leadingIcon="folder-outline"
-                title={m.chat.openSessionFiles}
-                onPress={openFiles}
-              />
-            ) : null}
-          </Menu>
         </View>
       </View>
 
+      <ChatActionsSheet
+        visible={actionsVisible}
+        agentName={agentName}
+        autoReadAloudEnabled={autoReadAloudEnabled}
+        onDismiss={() => setActionsVisible(false)}
+        onAgentPress={openAgentPicker}
+        onAutoReadAloudToggle={toggleAutoReadAloud}
+        onFilesPress={onFilesPress ? openFiles : undefined}
+        onNewChat={startNewChat}
+      />
       <ModelPickerMenu
         visible={modelPickerVisible}
-        topOffset={pickerTopOffset}
         models={models}
         currentModelId={currentModelId}
         onSelect={onModelSelect}
@@ -163,11 +141,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sideSlot: {
-    width: 88,
+    width: 44,
     alignItems: 'flex-start',
   },
   rightActions: {
-    width: 88,
+    width: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -182,9 +160,15 @@ const styles = StyleSheet.create({
   },
   titlePressable: {
     maxWidth: '100%',
-    paddingHorizontal: 4,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
   },
-  agentTitle: {
+  modelTitle: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',

@@ -19,18 +19,21 @@ import { radii, spacing, typography } from '../../theme';
 import { useSettingsColors } from '../settings/settings-ui';
 import { pickEffectiveDefaultId } from '../settings/use-set-default-agent';
 import { AgentAvatar } from './AgentAvatar';
+import { agentDisplayDescription, agentDisplayName } from './agent-presentation';
 
-function displayName(agent: ChatAgentOption): string {
-  return agent.name?.trim() || agent.id;
-}
-
-function matchesAgent(agent: ChatAgentOption, query: string): boolean {
+function matchesAgent(
+  agent: ChatAgentOption,
+  query: string,
+  messages: ReturnType<typeof useMessages>['agentsPage'],
+): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   return [
     agent.id,
     agent.name,
     agent.description,
+    agentDisplayName(agent, messages),
+    agentDisplayDescription(agent, messages),
     agent.workspace,
     agent.model?.primary,
   ].some((value) => value?.toLowerCase().includes(q));
@@ -64,8 +67,8 @@ export function AgentsScreen() {
   const agents = agentsQuery.data?.items ?? [];
   const effectiveId = pickEffectiveDefaultId(agentsQuery.data, localOverride);
   const filteredAgents = useMemo(
-    () => agents.filter((agent) => matchesAgent(agent, search)),
-    [agents, search],
+    () => agents.filter((agent) => matchesAgent(agent, search, am)),
+    [agents, search, am],
   );
 
   const handleChatWith = useCallback(
@@ -196,8 +199,8 @@ function AgentCard({
 }) {
   const colors = useSettingsColors();
   const am = useMessages().agentsPage;
-  const name = displayName(agent);
-  const subtitle = agent.description?.trim() || agent.id;
+  const name = agentDisplayName(agent, am);
+  const subtitle = agentDisplayDescription(agent, am) || agent.id;
 
   return (
     <View style={[styles.card, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>

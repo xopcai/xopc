@@ -10,6 +10,7 @@ import type { MessageBundle } from '../../i18n/messages';
 import type { ChatAgentOption } from '../../query/agents';
 import type { ProjectDetails } from '../../query/projects';
 import type { TaskDetail } from '../../query/tasks';
+import { agentDisplayDescription, agentDisplayName } from '../ai/agent-presentation';
 
 export type MobileWelcomeStarter = {
   id: string;
@@ -25,11 +26,15 @@ export type MobileWelcomeModel = {
   starters: MobileWelcomeStarter[];
 };
 
-function agentForWelcome(agent: ChatAgentOption | undefined, fallbackId: string): WelcomeSuggestionAgent {
+function agentForWelcome(
+  agent: ChatAgentOption | undefined,
+  fallbackId: string,
+  messages: MessageBundle['agentsPage'],
+): WelcomeSuggestionAgent {
   return {
     id: agent?.id ?? fallbackId,
-    name: agent?.name,
-    description: agent?.description,
+    name: agent ? agentDisplayName(agent, messages) : undefined,
+    description: agent ? agentDisplayDescription(agent, messages) : undefined,
     skills: [
       ...(agent?.skills.effectiveAllowlist ?? []),
       ...(agent?.skills.entry ?? []),
@@ -94,7 +99,7 @@ export function buildMobileWelcomeModel({
   const spotlight = buildWelcomeSpotlight(
     context,
     messages.chat.welcomeSpotlight as WelcomeSpotlightCopy,
-    agentForWelcome(agent, agentId || 'main'),
+    agentForWelcome(agent, agentId || 'main', messages.agentsPage),
     {
       affinity: context.kind === 'empty' ? { 'explore-ai-news:0': 35 } : undefined,
       explorationSeed: new Date().toISOString().slice(0, 10),

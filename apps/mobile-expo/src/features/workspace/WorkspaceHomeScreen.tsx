@@ -45,6 +45,7 @@ import {
   useTheme,
 } from '../../theme';
 import { AgentAvatar } from '../ai/AgentAvatar';
+import { agentDisplayDescription, agentDisplayName } from '../ai/agent-presentation';
 import { readAgentUsage, sortHomeAgents, touchAgentUsage } from '../ai/agent-usage-cache';
 import { subscribeGatewayEvent } from '../gateway/gateway-event-bus';
 import { GatewaySwitcherSheet } from '../gateway/GatewaySwitcherSheet';
@@ -865,7 +866,8 @@ function AgentsSection({
   onManage: () => void;
 }) {
   const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
+  const messages = useMessages();
+  const hm = messages.homePage;
   if (!loading && agents.length === 0) return null;
   return (
     <View style={styles.section}>
@@ -883,6 +885,8 @@ function AgentsSection({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentList}>
           {agents.map((agent) => {
             const isDefault = agent.id === defaultAgentId || agent.isDefault === true;
+            const name = agentDisplayName(agent, messages.agentsPage);
+            const description = agentDisplayDescription(agent, messages.agentsPage);
             return (
               <Pressable
                 key={agent.id}
@@ -890,13 +894,13 @@ function AgentsSection({
                 onPress={() => onAgentPress(agent)}
                 disabled={pending}
                 accessibilityRole="button"
-                accessibilityLabel={agent.name || agent.id}
+                accessibilityLabel={name}
                 accessibilityState={{ disabled: pending, busy: pending }}
               >
                 <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={48} />
-                <Text numberOfLines={1} style={[styles.agentName, { color: colors.text.primary }]}>{agent.name || agent.id}</Text>
+                <Text numberOfLines={1} style={[styles.agentName, { color: colors.text.primary }]}>{name}</Text>
                 <Text numberOfLines={1} style={[styles.agentDescription, { color: isDefault ? colors.accent.primary : colors.text.tertiary }]}>
-                  {isDefault ? hm.defaultAgent : agent.description || hm.askAiHint}
+                  {isDefault ? hm.defaultAgent : description || hm.askAiHint}
                 </Text>
               </Pressable>
             );

@@ -193,17 +193,21 @@ function NoteDetailPanelInner({
   );
   const isPreviewingSnapshot = previewSnapshot !== null;
 
+  const showRefreshError = useCallback((error: unknown) => {
+    setActionError(`${n.refreshFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`);
+  }, [n.quickCaptureFailedHint, n.refreshFailed]);
+
   useEffect(() => {
     if (!noteId) return undefined;
     const onNoteUpdated = (event: Event) => {
       const detail = (event as CustomEvent<{ noteId?: string }>).detail;
       if (detail?.noteId === noteId) {
-        void mutate();
+        void mutate().catch(showRefreshError);
       }
     };
     window.addEventListener('note-updated', onNoteUpdated);
     return () => window.removeEventListener('note-updated', onNoteUpdated);
-  }, [mutate, noteId]);
+  }, [mutate, noteId, showRefreshError]);
 
   useEffect(() => {
     titleInitRef.current = false;
@@ -539,9 +543,9 @@ function NoteDetailPanelInner({
   const handleHistoryRestored = useCallback(() => {
     setActiveSidePanel(null);
     setPreviewSnapshot(null);
-    mutate();
+    void mutate().catch(showRefreshError);
     onSaved?.();
-  }, [mutate, onSaved]);
+  }, [mutate, onSaved, showRefreshError]);
 
   useEffect(() => {
     return () => {
@@ -554,7 +558,10 @@ function NoteDetailPanelInner({
       const patch: Partial<import('./notes-api').Note> = {};
       if (pendingMarkdown !== null) patch.markdown = pendingMarkdown;
       if (pendingTitle !== null) patch.title = pendingTitle;
-      if (Object.keys(patch).length > 0) void updateNote(noteId, patch);
+      if (Object.keys(patch).length > 0) {
+        // The component is already unmounting, so only consume the best-effort save failure here.
+        void updateNote(noteId, patch).catch(() => undefined);
+      }
     };
   }, [noteId]);
 

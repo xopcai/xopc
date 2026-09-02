@@ -1,5 +1,5 @@
 import { ArrowLeft, MessageCircle, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -37,11 +37,28 @@ export function NoteBreakdownPanel({
   const navigate = useNavigate();
   const catalysis = note?.aiDeep?.catalysis;
   const catalysisReport = catalysis?.report ?? null;
+  const [contextRebuildError, setContextRebuildError] = useState<string | null>(null);
+  const [contextRebuilding, setContextRebuilding] = useState(false);
   const { data: contextStatus, mutate: mutateContextStatus, isLoading: contextStatusLoading } = useSWR(
     noteId ? ['note-agent-context-status', noteId] : null,
     () => getNoteAgentContextStatus(noteId),
     { revalidateOnFocus: false },
   );
+
+  const handleContextRebuild = useCallback(async () => {
+    if (contextRebuilding) return;
+    setContextRebuilding(true);
+    setContextRebuildError(null);
+    try {
+      await mutateContextStatus(() => rebuildNoteAgentContext(noteId), { revalidate: false });
+    } catch (error) {
+      setContextRebuildError(
+        `${n.contextRebuildFailed}: ${error instanceof Error ? error.message : n.quickCaptureFailedHint}`,
+      );
+    } finally {
+      setContextRebuilding(false);
+    }
+  }, [contextRebuilding, mutateContextStatus, n.contextRebuildFailed, n.quickCaptureFailedHint, noteId]);
 
   const handleCatalysisFeedback = useCallback(
     async (feedback: 'helpful' | 'not_helpful') => {
@@ -82,11 +99,11 @@ export function NoteBreakdownPanel({
               <div className="text-xs font-medium text-fg-muted">{n.contextStatusTitle}</div>
               <button
                 type="button"
-                onClick={() => void mutateContextStatus(() => rebuildNoteAgentContext(noteId), { revalidate: false })}
-                disabled={contextStatusLoading}
+                onClick={() => void handleContextRebuild()}
+                disabled={contextStatusLoading || contextRebuilding}
                 className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {n.contextRebuild}
+                {contextRebuilding ? n.processing : n.contextRebuild}
               </button>
               <span className={cn(
                 'rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -102,6 +119,11 @@ export function NoteBreakdownPanel({
                 .replace('{{attachments}}', String(contextStatus.attachments.length))
                 .replace('{{tokens}}', String(contextStatus.tokenEstimate ?? 0))}
             </div>
+            {contextRebuildError ? (
+              <p className="mt-3 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
+                {contextRebuildError}
+              </p>
+            ) : null}
             {contextStatus.attachments.length > 0 ? (
               <div className="mt-3 space-y-1.5">
                 {contextStatus.attachments.slice(0, 5).map((att) => (

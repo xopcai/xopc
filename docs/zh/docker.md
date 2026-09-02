@@ -171,11 +171,26 @@ docker compose up -d
 | 现象 | 检查方法 |
 | --- | --- |
 | `/home/node/.xopc` 出现 `permission denied` | 使用 Docker 数据卷，或确保 UID `1000` 可以写入宿主机挂载目录 |
-| 端口 `18790` 已被占用 | 停止旧服务，或更换宿主机端口，例如 `-p 127.0.0.1:18791:18790` |
+| 端口 `18790` 已被占用 | 停止旧服务，或更换宿主机端口，例如 `-p 127.0.0.1:18791:18790`；同时按下方说明配置浏览器 Origin |
 | 容器启动后立即退出 | 执行 `docker logs xopc-gateway` 查看原因 |
 | 网页控制台打不开 | 执行 `docker ps` 和 `curl http://127.0.0.1:18790/api/health` |
 | 无法拉取镜像 | 在[镜像包页面](https://github.com/xopcai/xopc/pkgs/container/xopc)确认标签；如果镜像还是私有状态，执行 `docker login ghcr.io` |
 | 容器访问不到本机模型 | 容器内的 `127.0.0.1` 不是宿主机；在支持的平台上改用 `host.docker.internal` |
+
+如果宿主机端口和容器端口不同，例如使用 `-p 127.0.0.1:18791:18790`，gateway 仍会根据容器内端口 `18790` 生成默认浏览器 Origin 白名单。请在宿主机挂载的 `~/.xopc/xopc.json` 中加入实际访问地址，否则浏览器 API 请求会返回 `403 Origin not allowed`：
+
+```json
+{
+  "gateway": {
+    "corsOrigins": [
+      "http://127.0.0.1:18791",
+      "http://localhost:18791"
+    ]
+  }
+}
+```
+
+保存后执行 `docker compose restart xopc-gateway`。Origin 必须与浏览器地址栏中的协议、主机名和端口完全一致；不要在网络可访问的 gateway 上使用 `"*"`。
 
 只检查镜像内 CLI、不启动 gateway：
 

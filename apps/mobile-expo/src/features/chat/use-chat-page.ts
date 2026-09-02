@@ -19,6 +19,7 @@ import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/nav
 
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
+import { agentDisplayName } from '../ai/agent-presentation';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
 import { useRouteOverrideToast } from '../gateway/use-route-override-toast';
@@ -34,7 +35,11 @@ import { getColors } from '../../theme';
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 import { captureWorkspaceText } from '../../sync/workspace-sync';
-import { buildUserResendPayload, findPrecedingUserMessage } from './composer-send-helpers';
+import {
+  buildUserResendPayload,
+  findPrecedingUserMessage,
+  mergeOptimisticUserMessages,
+} from './composer-send-helpers';
 import type { ComposerAttachment, WireAttachment } from './composer.types';
 import { coerceReasoningLevel, type Message } from './messages.types';
 import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
@@ -232,8 +237,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const defaultId = resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId);
     const sessionAgentId = currentSessionAgentId || defaultId;
     const agent = agents.find((a) => a.id === sessionAgentId);
-    return agent?.name ?? agent?.id ?? sessionAgentId;
-  }, [agentsQuery.data, currentSessionAgentId, localDefaultAgentId]);
+    return agent ? agentDisplayName(agent, m.agentsPage) : sessionAgentId;
+  }, [agentsQuery.data, currentSessionAgentId, localDefaultAgentId, m.agentsPage]);
   const welcomeAgentId = useMemo(
     () => currentSessionAgentId || resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId),
     [agentsQuery.data, currentSessionAgentId, localDefaultAgentId],
@@ -264,10 +269,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const displayMessages = useMemo<Message[]>(() => {
     if (sessionRefreshComplete) return sessionMessages;
-    const base =
-      chatSession.optimisticMessages.length > 0
-        ? [...sessionMessages, ...chatSession.optimisticMessages]
-        : sessionMessages;
+    const base = mergeOptimisticUserMessages(sessionMessages, chatSession.optimisticMessages);
     if (!chatSession.streamingMsg) return base;
     return mergeStreamingAssistantIntoMessages(base, chatSession.streamingMsg);
   }, [sessionRefreshComplete, sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);

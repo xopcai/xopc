@@ -12,6 +12,11 @@ function isRedundantServerMessage(message: string, status: number, statusText: s
   if (!t) return true;
   if (t === `http ${status}`) return true;
   if (statusText && t === statusText.trim().toLowerCase()) return true;
+  if (status === 429 && (
+    t === 'rate_limited' ||
+    t === 'too many requests' ||
+    t === 'too many authentication attempts'
+  )) return true;
   if (status === 500 && t === 'internal server error') return true;
   return false;
 }
@@ -39,5 +44,6 @@ export function formatApiHttpError(
   }
   if (status === 404) return L.errorNotFound;
   if (status === 403) return L.errorForbidden;
+  if (status === 429) return L.errorRateLimited;
   return L.errorRequest.replace('{{status}}', String(status));
 }

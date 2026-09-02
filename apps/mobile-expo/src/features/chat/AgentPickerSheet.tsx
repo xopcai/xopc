@@ -10,6 +10,7 @@ import { BottomSheetModal } from '../../components/BottomSheetModal';
 import type { ChatAgentOption } from '../../query/agents';
 import { useMessages } from '../../i18n/messages';
 import { useTheme } from '../../theme';
+import { agentDisplayDescription, agentDisplayName } from '../ai/agent-presentation';
 
 export const AgentPickerSheet = memo(function AgentPickerSheet({
   visible,
@@ -40,11 +41,14 @@ export const AgentPickerSheet = memo(function AgentPickerSheet({
       visible={visible}
       onDismiss={onDismiss}
       title={m.chat.agentPickerTitle}
+      subtitle={m.chat.agentPickerHint}
       maxHeight="60%"
       scroll
     >
       {agents.map((agent) => {
         const isActive = agent.id === currentAgentId;
+        const name = agentDisplayName(agent, m.agentsPage);
+        const description = agentDisplayDescription(agent, m.agentsPage);
         return (
           <Pressable
             key={agent.id}
@@ -54,6 +58,9 @@ export const AgentPickerSheet = memo(function AgentPickerSheet({
               pressed && { backgroundColor: colors.surface.hover },
             ]}
             onPress={() => handleSelect(agent.id)}
+            accessibilityRole="button"
+            accessibilityLabel={name}
+            accessibilityState={{ selected: isActive }}
           >
             <View style={styles.rowContent}>
               <Text
@@ -64,11 +71,11 @@ export const AgentPickerSheet = memo(function AgentPickerSheet({
                 ]}
                 numberOfLines={1}
               >
-                {agent.name ?? agent.id}
+                {name}
               </Text>
-              {agent.description ? (
+              {description ? (
                 <Text style={[styles.agentDesc, { color: colors.text.tertiary }]} numberOfLines={1}>
-                  {agent.description}
+                  {description}
                 </Text>
               ) : null}
             </View>
