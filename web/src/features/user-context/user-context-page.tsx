@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowUpRight, Brain, Cable, ChevronLeft, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, MessageCircle, Moon, Plus, Settings2, ShieldCheck, Sparkles, Trash2, UserRoundPen, Users, X } from 'lucide-react';
+import { ArrowUpRight, Brain, Cable, Camera, ChevronLeft, ChevronRight, CircleUserRound, Database, ExternalLink, Handshake, Loader2, MessageCircle, Moon, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Trash2, UserRoundPen, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -23,7 +23,7 @@ import {
   readConnectedContent,
   refreshUnderstandingSourceGrant,
   revokeUnderstandingSourceGrant,
-  updateCollaborationRule, updateUserProfile,
+  updateCollaborationRule, updateUserProfile, uploadUserAvatar, deleteUserAvatar,
   updateUserContextSettings,
   type ContextConsolidationRun,
   type CollaborationRule, type ConnectedContentCandidate, type UserContextResponse,
@@ -31,6 +31,8 @@ import {
   type SourceRevocationImpact,
   type UnderstandingSourceGrant, type UnderstandingSourceRun, type UserProfile,
 } from './user-context-api';
+import { bumpUserAvatarCacheRevision } from './user-avatar-cache';
+import { UserAvatarDisplay } from './user-avatar-display';
 import { SharedUnderstandingPanel } from './shared-understanding-panel';
 import { focusNeedsReview } from './shared-understanding-model';
 import { RelationshipPortraitCard, RelationshipsPanel } from './relationships-panel';
@@ -57,6 +59,7 @@ const copy = {
     primaryGoal: 'What are you mainly trying to achieve?', primaryGoalPlaceholder: 'The outcome you want xopc to optimize for',
     pronouns: 'Pronouns (optional)', pronounsPlaceholder: 'For example: she/her, he/him, they/them',
     timezone: 'Timezone', locale: 'Language / locale', detect: 'Use this device',
+    avatar: 'Profile photo', avatarHint: 'PNG, JPEG, or WebP. Up to 2 MB; square images work best.', changeAvatar: 'Choose photo', removeAvatar: 'Use default', avatarUploading: 'Uploading…', avatarUploadError: 'Could not update your profile photo.', editAvatar: 'Edit profile photo',
     add: 'Add', cancel: 'Cancel', delete: 'Delete', confirmDelete: 'Delete now',
     rulesHint: 'Explicit instructions for how xopc should collaborate with you. Rules outrank inferred understanding.',
     addRule: 'Add rule', ruleStatement: 'How should xopc work with you?', category: 'Category', disable: 'Disable', enable: 'Enable',
@@ -83,6 +86,7 @@ const copy = {
     primaryGoal: '你目前最想达成什么？', primaryGoalPlaceholder: '希望 xopc 优先帮助你实现的结果',
     pronouns: '代词（可选）', pronounsPlaceholder: '例如：she/her、he/him、they/them',
     timezone: '时区', locale: '语言 / 地区', detect: '使用本机时区',
+    avatar: '头像', avatarHint: '支持 PNG、JPEG 或 WebP，最大 2 MB；建议使用正方形图片。', changeAvatar: '选择图片', removeAvatar: '恢复默认', avatarUploading: '正在上传…', avatarUploadError: '头像更新失败，请重试。', editAvatar: '编辑头像',
     add: '添加', cancel: '取消', delete: '删除', confirmDelete: '确认删除',
     rulesHint: '你明确设定的协作方式。协作约定的优先级高于推断出的理解。',
     addRule: '添加约定', ruleStatement: '希望 xopc 如何与你协作？', category: '类别', disable: '停用', enable: '启用',
@@ -246,7 +250,6 @@ function PortraitOverview({ data, language, t, onNavigate, onProfileChanged }: {
     + data.focuses.filter((focus) => focus.status === 'candidate' || focusNeedsReview(focus)).length;
   const activeRules = data.rules.filter((rule) => rule.status === 'active');
   const displayName = data.profile.callName.trim() || (language === 'zh' ? '你' : 'You');
-  const initial = [...displayName][0]?.toLocaleUpperCase() ?? 'Y';
 
   return <div className="space-y-5">
     <section className="relative overflow-hidden rounded-3xl border border-edge bg-surface-panel">
@@ -255,7 +258,18 @@ function PortraitOverview({ data, language, t, onNavigate, onProfileChanged }: {
         <div className="min-w-0">
           <div className="mb-7 flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-accent"><Sparkles className="size-3.5" />{t.portraitEyebrow}</div>
           <div className="flex items-center gap-4">
-            <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-muted text-2xl font-semibold text-fg sm:size-20 sm:text-3xl">{initial}</div>
+            <button
+              type="button"
+              className="group relative shrink-0 rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel"
+              onClick={() => setEditingProfile(true)}
+              title={t.editAvatar}
+              aria-label={t.editAvatar}
+            >
+              <UserAvatarDisplay callName={displayName} size={80} className="size-16 rounded-2xl border border-edge sm:size-20" />
+              <span className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-sm transition-colors group-hover:text-accent">
+                <Camera className="size-3.5" aria-hidden="true" />
+              </span>
+            </button>
             <div className="min-w-0">
               <h2 className="truncate text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
               <button className="mt-1 text-left text-sm text-fg-muted transition-colors hover:text-accent" onClick={() => setEditingProfile(true)}>{data.profile.role.trim() || t.roleMissing}</button>
@@ -391,6 +405,7 @@ function ProfilePanel({ profile, language, t, onChanged, bare = false }: {
     <label className="space-y-1.5 text-sm"><span className="font-medium text-fg">{label}</span><input className={inputClass} placeholder={placeholder} value={draft[key]} onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))} /></label>
   );
   const content = <div onBlurCapture={autosave.onBlurCapture}>
+    <AvatarEditor callName={draft.callName} t={t} />
     <div className="grid gap-4 sm:grid-cols-2">
       {field('callName', t.callName, t.callNamePlaceholder)}
       {field('role', t.role, t.rolePlaceholder)}
@@ -403,6 +418,76 @@ function ProfilePanel({ profile, language, t, onChanged, bare = false }: {
   </div>;
   if (bare) return content;
   return <Card><p className="mb-5 text-sm leading-6 text-fg-muted">{t.profileHint}</p>{content}</Card>;
+}
+
+function AvatarEditor({ callName, t }: {
+  callName: string;
+  t: typeof copy.en | typeof copy.zh;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const chooseAvatar = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setError(t.avatarHint);
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+    setBusy(true);
+    try {
+      await uploadUserAvatar(file);
+      bumpUserAvatarCacheRevision(true);
+    } catch {
+      setError(t.avatarUploadError);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const removeAvatar = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteUserAvatar();
+      bumpUserAvatarCacheRevision(false);
+    } catch {
+      setError(t.avatarUploadError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-5 flex items-center gap-4 rounded-2xl border border-edge bg-surface-base p-3 sm:p-4">
+      <UserAvatarDisplay callName={callName} size={64} className="size-16" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-fg">{t.avatar}</p>
+        <p className="mt-1 text-xs leading-5 text-fg-muted">{t.avatarHint}</p>
+        {error ? <p className="mt-1 text-xs text-danger" role="alert">{error}</p> : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+            {busy ? t.avatarUploading : t.changeAvatar}
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => void removeAvatar()} disabled={busy}>
+            <RotateCcw className="size-3.5" />
+            {t.removeAvatar}
+          </Button>
+        </div>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="sr-only"
+        onChange={(event) => void chooseAvatar(event.target.files?.[0])}
+      />
+    </div>
+  );
 }
 
 function RulesPanel({ rules, language, t, onChanged }: { rules: CollaborationRule[]; language: 'en' | 'zh'; t: typeof copy.en | typeof copy.zh; onChanged: () => Promise<unknown> }) {
