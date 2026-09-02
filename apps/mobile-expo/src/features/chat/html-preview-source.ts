@@ -1,5 +1,3 @@
-import { buildGatewayRawFilePath } from './image-source-utils';
-
 function extensionOf(name: string): string {
   const i = name.lastIndexOf('.');
   return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
@@ -23,24 +21,10 @@ export type HtmlWebViewInlineSource = {
 export type HtmlWebViewSource = HtmlWebViewUriSource | HtmlWebViewInlineSource;
 
 export function buildHtmlWebViewSource(options: {
-  workspaceRelativePath?: string;
   htmlContent?: string | null;
-  sessionKey?: string | null;
-  agentId?: string | null;
-  apiUrl: (path: string) => string;
-  token: string;
   gatewayBaseUrl: string;
 }): HtmlWebViewSource | null {
-  const { workspaceRelativePath, htmlContent, sessionKey, agentId, apiUrl, token, gatewayBaseUrl } = options;
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-  const rel = workspaceRelativePath?.trim();
-  if (rel) {
-    return {
-      uri: apiUrl(buildGatewayRawFilePath(rel, sessionKey ?? undefined, agentId ?? undefined)),
-      headers,
-    };
-  }
+  const { htmlContent, gatewayBaseUrl } = options;
 
   if (htmlContent != null && htmlContent.length > 0) {
     const base = gatewayBaseUrl.replace(/\/$/, '');

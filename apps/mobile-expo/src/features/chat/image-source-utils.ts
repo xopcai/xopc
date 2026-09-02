@@ -20,20 +20,6 @@ function looksLikeBase64(value: string): boolean {
   return /^[A-Za-z0-9+/=\r\n\t ]+$/.test(value) && value.length > 32;
 }
 
-export function buildGatewayRawFilePath(
-  workspaceRelativePath: string,
-  sessionKey?: string,
-  agentId?: string,
-): string {
-  const params = new URLSearchParams({ path: workspaceRelativePath });
-  if (sessionKey) {
-    params.set('sessionKey', sessionKey);
-  } else if (agentId) {
-    params.set('agentId', agentId);
-  }
-  return `/api/workspace/editor/raw?${params.toString()}`;
-}
-
 export function normalizeGeneratedWorkspacePath(value: string): string | null {
   const normalized = value.replace(/\\/g, '/').trim();
   const mediaIndex = normalized.lastIndexOf('/media/generated/');
@@ -70,14 +56,6 @@ export function imageContentToSource(
 
   if (isMediaUri(raw)) {
     return { uri: ctx.apiUrl(buildGatewayMediaReadPath(raw, ctx.sessionKey)), headers };
-  }
-
-  const generatedPath = normalizeGeneratedWorkspacePath(raw);
-  if (generatedPath) {
-    return {
-      uri: ctx.apiUrl(buildGatewayRawFilePath(generatedPath, ctx.sessionKey)),
-      headers,
-    };
   }
 
   if (looksLikeBase64(raw)) {

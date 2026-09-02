@@ -5,6 +5,8 @@ import {
   type ProjectMonitoringPolicy,
   type ProjectMonitoringUpdate,
   type ProjectOperatingView,
+  FileResourcesResponseSchema,
+  FileSpaceSchema,
 } from '@xopcai/gateway-contract';
 
 import { readNewSessionPreferences } from '@/features/chat/session/new-session-preferences';
@@ -383,20 +385,37 @@ export async function createProjectBlocker(projectId: string, input: { title: st
 }
 
 export async function fetchProjectFiles(projectId: string, path?: string): Promise<ProjectFilesResponse> {
+  const context = await fetchJson<{ space: unknown }>(
+    apiUrl(`/api/files/contexts/project/${encodeURIComponent(projectId)}`),
+  );
+  const space = FileSpaceSchema.parse(context.space);
   const params = new URLSearchParams();
   if (path) params.set('path', path);
   const suffix = params.toString();
-  return fetchJson<ProjectFilesResponse>(
-    apiUrl(`/api/projects/${encodeURIComponent(projectId)}/files${suffix ? `?${suffix}` : ''}`),
-  );
+  const result = FileResourcesResponseSchema.parse(await fetchJson(
+    apiUrl(`/api/files/spaces/${encodeURIComponent(space.id)}/children${suffix ? `?${suffix}` : ''}`),
+  ));
+  return {
+    ok: true,
+    root: '',
+    path: path ?? '',
+    parentPath: path?.includes('/') ? path.slice(0, path.lastIndexOf('/')) : null,
+    entries: result.items.map((item) => ({
+      name: item.name,
+      path: item.relativePath,
+      type: item.kind,
+      size: item.size,
+      updatedAt: new Date(item.modifiedAt).toISOString(),
+    })),
+  };
 }
 
 export async function searchProjectFiles(projectId: string, query: string, limit = 50): Promise<ProjectFileSearchEntry[]> {
-  const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
-  const res = await fetchJson<{ ok: true; entries: ProjectFileSearchEntry[] }>(
-    apiUrl(`/api/projects/${encodeURIComponent(projectId)}/files/search?${params.toString()}`),
-  );
-  return res.entries;
+  const context = await fetchJson<{ space: unknown }>(apiUrl(`/api/files/contexts/project/${encodeURIComponent(projectId)}`));
+  const space = FileSpaceSchema.parse(context.space);
+  const params = new URLSearchParams({ q: query.trim(), limit: String(limit), spaceId: space.id });
+  const result = FileResourcesResponseSchema.parse(await fetchJson(apiUrl(`/api/files/search?${params}`)));
+  return result.items.map((item) => ({ name: item.name, path: item.relativePath, isDirectory: item.kind === 'directory' }));
 }
 
 export async function createProjectSession(projectId: string, agentId?: string): Promise<ProjectSession> {

@@ -1,169 +1,32 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { FileResource } from '@xopcai/gateway-contract';
+import { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
-import type { ShareAutoRequest } from '../../api/share';
 import { t, useMessages } from '../../i18n/messages';
+import { fileContentPath, resolveContextFileResources } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
-import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
-import { ShareSheet } from '../share/ShareSheet';
-import { mapManageRouteToAppPath } from './file-reference-routes';
 import { FilePreviewModal, type PreviewableFile } from './FilePreviewModal';
 import type { ExtractedFilePath } from './tool-result-file-paths';
 import { isImageMimeType } from './tool-result-file-paths';
-import {
-  resolveWorkspaceFileReference,
-  type FileReferenceLocationKind,
-  type FileReferenceScope,
-  type WorkspaceFileReference,
-} from './workspace-api';
 
-type ResolvedArtifact = ExtractedFilePath & { refInfo: WorkspaceFileReference };
-type ArtifactResolution = ExtractedFilePath & { refInfo: WorkspaceFileReference | null };
-type VisiblePath = ResolvedArtifact & { rel: string };
+type ManagedArtifact = {
+  source: ExtractedFilePath;
+  resource: FileResource | null;
+};
 
-function normalizeRel(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '');
+function artifactKey(path: ExtractedFilePath, index: number): string {
+  return path.workspaceRelativePath?.trim() || path.absolutePath || `artifact-${index}`;
 }
 
-function artifactRowKey(path: ExtractedFilePath, index: number): string {
-  const rel = path.workspaceRelativePath?.replace(/\\/g, '/').trim();
-  if (rel) return `rel:${rel}`;
-  if (path.absolutePath) return `abs:${path.absolutePath}`;
-  return `artifact-${index}`;
-}
-
-function rawPath(rel: string, sessionKey?: string | null): string {
-  const params = new URLSearchParams({ path: rel });
-  const sk = sessionKey?.trim();
-  if (sk) params.set('sessionKey', sk);
-  return `/api/workspace/editor/raw?${params.toString()}`;
-}
-
-function toPreviewable(path: VisiblePath): PreviewableFile {
+function toPreviewable(resource: FileResource): PreviewableFile {
   return {
-    name: path.fileName,
-    mimeType: path.mimeType,
-    workspaceRelativePath: path.rel,
-    absolutePath: path.refInfo.absolutePath,
-  };
-}
-
-function isOffWorkspaceScope(scope: FileReferenceScope): boolean {
-  return scope === 'external' || scope === 'agent-profile' || scope === 'session-artifact';
-}
-
-function locationKindBadgeLabel(
-  kind: FileReferenceLocationKind | undefined,
-  m: ReturnType<typeof useMessages>,
-): string {
-  if (!kind) return m.chat.fileReferenceExternalBadge;
-  return m.chat.fileReferenceLocationKind[kind] ?? m.chat.fileReferenceExternalBadge;
-}
-
-function fileReferenceDescription(refInfo: WorkspaceFileReference, m: ReturnType<typeof useMessages>) {
-  if (refInfo.scope === 'missing') return m.chat.fileReferenceMissingDescription;
-  if (refInfo.scope === 'invalid') return m.chat.fileReferenceInvalidDescription;
-  if (isOffWorkspaceScope(refInfo.scope) && refInfo.exists) {
-    return m.chat.fileReferenceOffWorkspaceBaseDescription;
-  }
-  return m.chat.fileReferenceExternalDescription;
-}
-
-function OffWorkspaceArtifactCard({
-  path,
-  refInfo,
-  border,
-  chipBg,
-  textColor,
-  muted,
-  warning,
-}: {
-  path: ExtractedFilePath;
-  refInfo: WorkspaceFileReference;
-  border: string;
-  chipBg: string;
-  textColor: string;
-  muted: string;
-  warning: string;
-}) {
-  const router = useRouter();
-  const m = useMessages();
-  const displayPath = refInfo.absolutePath ?? path.absolutePath;
-  const isMissingOrInvalid = refInfo.scope === 'missing' || refInfo.scope === 'invalid';
-  const offWorkspace = isOffWorkspaceScope(refInfo.scope) && refInfo.exists;
-  const icon = isMissingOrInvalid ? 'alert-circle-outline' : 'file-outline';
-  const iconColor = isMissingOrInvalid ? warning : muted;
-  const appRoute = mapManageRouteToAppPath(refInfo.manageRoute);
-  const showSettingsHint =
-    refInfo.manageRoute && !appRoute && (refInfo.locationKind === 'xopc-skills' || refInfo.locationKind === 'xopc-sessions');
-
-  const copyPath = () => {
-    void setAppClipboardStringAsync(displayPath);
-  };
-
-  return (
-    <View
-      style={[
-        styles.externalCard,
-        {
-          borderColor: isMissingOrInvalid ? warning : border,
-          backgroundColor: chipBg,
-        },
-      ]}
-    >
-      <View style={styles.externalHeader}>
-        <Icon source={icon} size={16} color={iconColor} />
-        <Text style={[styles.externalTitle, { color: textColor }]} numberOfLines={1}>
-          {path.fileName || refInfo.displayName}
-        </Text>
-        {offWorkspace || refInfo.scope === 'external' || refInfo.scope === 'agent-profile' ? (
-          <Text style={[styles.badge, { color: muted, borderColor: border }]}>
-            {locationKindBadgeLabel(refInfo.locationKind, m)}
-          </Text>
-        ) : null}
-      </View>
-      <Text style={[styles.externalDescription, { color: muted }]}>
-        {fileReferenceDescription(refInfo, m)}
-      </Text>
-      {showSettingsHint ? (
-        <Text style={[styles.externalDescription, { color: muted }]}>{m.chat.fileReferenceManageOnDesktop}</Text>
-      ) : null}
-      <View style={styles.actionRow}>
-        {appRoute ? (
-          <Pressable
-            style={({ pressed }) => [styles.copyButton, { borderColor: border }, pressed && styles.pressed]}
-            onPress={() => router.push(appRoute as never)}
-            accessibilityRole="button"
-            accessibilityLabel={m.chat.fileReferenceOpenInSettings}
-          >
-            <Icon source="cog-outline" size={14} color={muted} />
-            <Text style={[styles.copyText, { color: textColor }]}>{m.chat.fileReferenceOpenInSettings}</Text>
-          </Pressable>
-        ) : null}
-        {refInfo.capabilities.includes('copyPath') ? (
-          <Pressable
-            style={({ pressed }) => [styles.copyButton, { borderColor: border }, pressed && styles.pressed]}
-            onPress={copyPath}
-            accessibilityRole="button"
-            accessibilityLabel={m.chat.fileReferenceCopyPath}
-          >
-            <Icon source="content-copy" size={14} color={muted} />
-            <Text style={[styles.copyText, { color: textColor }]}>{m.chat.fileReferenceCopyPath}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function buildShareRequest(rel: string, sessionKey?: string | null): ShareAutoRequest {
-  return {
-    path: rel,
-    audience: 'friend',
-    ...(sessionKey?.trim() ? { sessionKey: sessionKey.trim() } : {}),
+    fileId: resource.id,
+    name: resource.name,
+    mimeType: resource.mimeType,
+    workspaceRelativePath: resource.relativePath,
   };
 }
 
@@ -175,60 +38,21 @@ export function WorkspaceArtifactStrip({
   sessionKey?: string | null;
 }) {
   const { colors } = useTheme();
-  const apiUrl = useGatewayStore((s) => s.apiUrl);
-  const token = useGatewayStore((s) => s.token);
   const m = useMessages();
-  const [resolved, setResolved] = useState<ArtifactResolution[] | null>(null);
+  const apiUrl = useGatewayStore((state) => state.apiUrl);
+  const token = useGatewayStore((state) => state.token);
   const [active, setActive] = useState<PreviewableFile | null>(null);
-  const [shareTarget, setShareTarget] = useState<ShareAutoRequest | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!paths.length) {
-      setResolved([]);
-      return;
-    }
-    setResolved(null);
-    void (async () => {
-      const next = await Promise.all(paths.map(async (path): Promise<ArtifactResolution> => {
-        try {
-          const refInfo = await resolveWorkspaceFileReference(
-            path.workspaceRelativePath || path.absolutePath,
-            { sessionKey },
-          );
-          return { ...path, refInfo };
-        } catch {
-          return { ...path, refInfo: null };
-        }
-      }));
-      if (!cancelled) setResolved(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [paths, sessionKey]);
-
-  const visible = useMemo(
-    () => (resolved ?? []).filter(
-      (path): path is ResolvedArtifact => path.refInfo !== null,
-    ),
-    [resolved],
+  const relativePaths = useMemo(() => paths.map((path) => path.workspaceRelativePath), [paths]);
+  const resolution = useQuery({
+    queryKey: ['files', 'session-artifacts', sessionKey ?? '', relativePaths],
+    queryFn: () => resolveContextFileResources('session', sessionKey!, relativePaths),
+    enabled: Boolean(sessionKey && paths.length),
+    staleTime: 30_000,
+  });
+  const artifacts = useMemo<ManagedArtifact[]>(
+    () => paths.map((source, index) => ({ source, resource: resolution.data?.[index] ?? null })),
+    [paths, resolution.data],
   );
-  const unresolved = useMemo(
-    () => (resolved ?? []).filter((path) => path.refInfo === null),
-    [resolved],
-  );
-  const workspacePaths = useMemo(
-    () =>
-      visible
-        .filter((p) => p.refInfo.scope === 'workspace' && Boolean(p.refInfo.workspaceRelativePath))
-        .map((p) => ({ ...p, rel: normalizeRel(p.refInfo.workspaceRelativePath!) })),
-    [visible],
-  );
-
-  const imagePaths = useMemo(() => workspacePaths.filter((p) => isImageMimeType(p.mimeType)), [workspacePaths]);
-  const otherPaths = useMemo(() => workspacePaths.filter((p) => !isImageMimeType(p.mimeType)), [workspacePaths]);
-  const nonWorkspacePaths = useMemo(() => visible.filter((p) => p.refInfo.scope !== 'workspace'), [visible]);
 
   if (!paths.length) return null;
 
@@ -238,7 +62,7 @@ export function WorkspaceArtifactStrip({
   const muted = colors.text.secondary;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  if (resolved === null) {
+  if (resolution.isLoading) {
     return (
       <View style={[styles.loadingChip, { backgroundColor: chipBg }]}>
         <View style={[styles.loadingIcon, { backgroundColor: border }]} />
@@ -250,98 +74,47 @@ export function WorkspaceArtifactStrip({
   return (
     <>
       <View style={styles.wrap}>
-        {imagePaths.map((p, index) => (
-          <View key={artifactRowKey(p, index)} style={[styles.thumb, { borderColor: border }]}>
+        {artifacts.map(({ source, resource }, index) => {
+          if (resource && isImageMimeType(resource.mimeType)) {
+            const preview = toPreviewable(resource);
+            return (
+              <Pressable
+                key={artifactKey(source, index)}
+                style={({ pressed }) => [styles.thumb, { borderColor: border }, pressed && styles.pressed]}
+                onPress={() => setActive(preview)}
+                accessibilityRole="button"
+                accessibilityLabel={t(m.chat.previewFile, { name: resource.name })}
+              >
+                <Image
+                  source={{ uri: apiUrl(fileContentPath(resource.id)), headers }}
+                  style={styles.thumbImage}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            );
+          }
+
+          const name = resource?.name || source.fileName;
+          return (
             <Pressable
-              style={({ pressed }) => [styles.thumbFill, pressed && styles.pressed]}
-              onPress={() => setActive(toPreviewable(p))}
-              accessibilityRole="button"
-              accessibilityLabel={t(m.chat.previewFile, { name: p.fileName })}
-            >
-              <Image
-                source={{ uri: apiUrl(rawPath(p.rel, sessionKey)), headers }}
-                style={styles.thumbImage}
-                resizeMode="cover"
-              />
-            </Pressable>
-            <Pressable
+              key={artifactKey(source, index)}
               style={({ pressed }) => [
-                styles.thumbShareBadge,
-                { backgroundColor: colors.accent.primary },
-                pressed && styles.pressed,
+                styles.chip,
+                { borderColor: border, backgroundColor: chipBg },
+                pressed && resource && styles.pressed,
               ]}
-              onPress={() => setShareTarget(buildShareRequest(p.rel, sessionKey))}
-              accessibilityRole="button"
-              accessibilityLabel={m.chat.shareFile}
-              hitSlop={6}
+              onPress={resource ? () => setActive(toPreviewable(resource)) : undefined}
+              accessibilityRole={resource ? 'button' : undefined}
+              accessibilityLabel={resource ? t(m.chat.previewFile, { name }) : undefined}
             >
-              <Icon source="share-variant" size={14} color={colors.accent.onPrimary} />
+              <Icon source={resource ? 'file-outline' : 'file-alert-outline'} size={16} color={muted} />
+              <Text style={[styles.chipText, { color: textColor }]} numberOfLines={1}>{name}</Text>
+              {resource ? <Icon source="eye-outline" size={14} color={muted} /> : null}
             </Pressable>
-          </View>
-        ))}
-        {otherPaths.map((p, index) => (
-          <View
-            key={artifactRowKey(p, index)}
-            style={[styles.chip, { borderColor: border, backgroundColor: chipBg }]}
-          >
-            <Pressable
-              style={({ pressed }) => [styles.chipBody, pressed && styles.pressed]}
-              onPress={() => setActive(toPreviewable(p))}
-              accessibilityRole="button"
-              accessibilityLabel={t(m.chat.previewFile, { name: p.fileName })}
-            >
-              <Icon source="file-outline" size={16} color={muted} />
-              <Text style={[styles.chipText, { color: textColor }]} numberOfLines={1}>{p.fileName}</Text>
-              <Icon source="eye-outline" size={14} color={muted} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.chipShareButton, pressed && styles.pressed]}
-              onPress={() => setShareTarget(buildShareRequest(p.rel, sessionKey))}
-              accessibilityRole="button"
-              accessibilityLabel={m.chat.shareFile}
-              hitSlop={6}
-            >
-              <Icon source="share-variant" size={14} color={muted} />
-            </Pressable>
-          </View>
-        ))}
-        {nonWorkspacePaths.map((p, index) => (
-          <OffWorkspaceArtifactCard
-            key={artifactRowKey(p, index)}
-            path={p}
-            refInfo={p.refInfo}
-            border={border}
-            chipBg={chipBg}
-            textColor={textColor}
-            muted={muted}
-            warning={colors.semantic.warning}
-          />
-        ))}
-        {unresolved.map((path, index) => (
-          <View
-            key={artifactRowKey(path, index)}
-            style={[styles.chip, { borderColor: border, backgroundColor: chipBg }]}
-          >
-            <View style={styles.chipBody}>
-              <Icon source="file-outline" size={16} color={muted} />
-              <Text style={[styles.chipText, { color: textColor }]} numberOfLines={1}>
-                {path.fileName}
-              </Text>
-            </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
-      <FilePreviewModal
-        visible={Boolean(active)}
-        file={active}
-        sessionKey={sessionKey}
-        onClose={() => setActive(null)}
-      />
-      <ShareSheet
-        visible={Boolean(shareTarget)}
-        request={shareTarget}
-        onClose={() => setShareTarget(null)}
-      />
+      <FilePreviewModal visible={Boolean(active)} file={active} onClose={() => setActive(null)} />
     </>
   );
 }
@@ -378,104 +151,26 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     overflow: 'hidden',
-    position: 'relative',
-  },
-  thumbFill: {
-    width: '100%',
-    height: '100%',
   },
   thumbImage: {
     width: '100%',
     height: '100%',
   },
-  thumbShareBadge: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   chip: {
     maxWidth: '100%',
-    minHeight: 34,
+    minHeight: 36,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,
-    paddingLeft: 10,
-    paddingRight: 4,
-    paddingVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  chipBody: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexShrink: 1,
-    paddingVertical: 3,
-  },
-  chipShareButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   chipText: {
     flexShrink: 1,
     fontSize: 12,
     fontWeight: '500',
-  },
-  externalCard: {
-    width: '100%',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    gap: 7,
-  },
-  externalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  externalTitle: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  badge: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    fontSize: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  externalDescription: {
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  copyButton: {
-    alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  copyText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   pressed: {
     opacity: 0.72,

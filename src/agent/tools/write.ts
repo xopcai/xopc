@@ -5,8 +5,9 @@ import {
   appendProductDeliveryText,
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
-import { writeFile, mkdir } from 'fs/promises';
-import { basename, dirname } from 'path';
+import { writeFile, mkdir, realpath } from 'fs/promises';
+import { basename, dirname, relative, sep } from 'path';
+import { fileResourceId, fileSpaceId } from '../../files/file-service.js';
 import { checkFileSafety } from '../prompt/safety.js';
 import {
   isBareProfileMarkdownFileName,
@@ -83,23 +84,27 @@ export function createWriteFileTool(
           : resolvePathUnderWorkspace(p.path, workspace);
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, p.content, 'utf-8');
-        const delivery: ProductDeliveryEnvelope = {
-          version: 1,
-          operation: 'updated',
-          primary: {
-            kind: 'file',
-            id: target,
-            title: basename(target),
-            summary: `${contentBytes} bytes written`,
-            capabilities: ['preview', 'reveal', 'share'],
-          },
-        };
+        const delivery: ProductDeliveryEnvelope | undefined = writesProfileFile
+          ? undefined
+          : await realpath(workspace).then((root) => ({
+              version: 1,
+              operation: 'updated',
+              primary: {
+                kind: 'file',
+                id: fileResourceId(fileSpaceId(root), relative(root, target).split(sep).join('/')),
+                title: basename(target),
+                summary: `${contentBytes} bytes written`,
+                capabilities: ['preview', 'share'],
+              },
+            }));
         return {
           content: [{
             type: 'text',
-            text: appendProductDeliveryText(`File written: ${target}`, delivery),
+            text: delivery
+              ? appendProductDeliveryText(`File written: ${target}`, delivery)
+              : `File written: ${target}`,
           }],
-          details: { size: contentBytes, path: target, delivery },
+          details: { size: contentBytes, path: target, ...(delivery ? { delivery } : {}) },
         };
       } catch (error) {
         return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };

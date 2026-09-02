@@ -8,7 +8,6 @@ function toTreeEntries(entries: WorkspaceEntry[]): TreeEntry[] {
   return entries.map((entry) => ({
     name: entry.name,
     path: entry.path,
-    absolutePath: entry.absolutePath,
     isDirectory: entry.isDirectory,
     children: entry.isDirectory ? [] : undefined,
   }));
@@ -35,7 +34,6 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
   const loadedDirsRef = useRef<Set<string>>(new Set());
   const trimmedAgentId = agentId.trim();
   const trimmedSessionKey = sessionKey?.trim() ?? '';
@@ -56,7 +54,6 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
     try {
       const listing = await fetchWorkspaceDirectoryListing('', editorOpts);
       setTree(toTreeEntries(listing.entries));
-      setWorkspaceRoot(listing.root?.trim() || null);
       loadedDirsRef.current.add('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -83,9 +80,8 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const reset = useCallback(() => {
     setTree([]);
     setError(null);
-    setWorkspaceRoot(null);
     loadedDirsRef.current.clear();
   }, []);
 
-  return { tree, loading, error, workspaceRoot, loadRoot, loadChildren, reset };
+  return { tree, loading, error, loadRoot, loadChildren, reset };
 }

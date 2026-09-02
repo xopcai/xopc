@@ -53,7 +53,6 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
           <ProductDeliveryCard
             key={`${delivery.operation}:${delivery.primary?.kind ?? 'none'}:${delivery.primary?.id ?? 'none'}`}
             delivery={delivery}
-            sessionKey={sessionKey}
           />
         ))}
       </View>
