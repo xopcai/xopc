@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { AboutDialog } from '@/components/shell/about-dialog';
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { SidebarAppMenu } from '@/components/shell/sidebar-app-menu';
+import { openSupportReport } from '@/features/support/support-report-host';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -114,6 +115,10 @@ export function SidebarFooter({
               onAboutClick={() => {
                 setAboutOpen(true);
                 setOpen(false);
+              }}
+              onSupportClick={() => {
+                setOpen(false);
+                openSupportReport();
               }}
             />
           </Popover.Content>
