@@ -93,6 +93,7 @@
     "errorServer": "服务器错误 ({{status}})",
     "errorNotFound": "未找到 (404)",
     "errorForbidden": "禁止访问 (403)",
+    "errorRateLimited": "请求过于频繁，请稍后再试。",
     "errorRequest": "请求失败 ({{status}})"
   },
   "sidebar": {

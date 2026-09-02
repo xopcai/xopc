@@ -27,6 +27,7 @@ import { fetchProjectOperatingView, fetchProjects } from '../../query/projects';
 import { useGatewayConfigured } from '../../query/sessions';
 import { createTask } from '../../query/tasks';
 import { radii, spacing, typography, useTheme } from '../../theme';
+import { agentDisplayDescription, agentDisplayName } from '../ai/agent-presentation';
 
 import { buildMobileTaskCreateRequest } from './task-create-input';
 
@@ -43,7 +44,8 @@ export function CreateTaskScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { colors } = useTheme();
-  const { tasksPage: labels } = useMessages();
+  const messages = useMessages();
+  const labels = messages.tasksPage;
   const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
   const agents = useQuery({ queryKey: queryKeys.agents, queryFn: fetchChatAgents, enabled: configured });
   const [title, setTitle] = useState(firstParam(params.title));
@@ -61,9 +63,11 @@ export function CreateTaskScreen() {
   const automaticAgent = agents.data?.items.find((item) => (
     item.id === selectedProject?.defaultAgentId
   )) ?? agents.data?.items.find((item) => item.id === agents.data?.defaultId);
-  const agentValue = selectedAgent?.name ?? selectedAgent?.id
-    ?? automaticAgent?.name ?? automaticAgent?.id
-    ?? labels.automaticAgent;
+  const agentValue = selectedAgent
+    ? agentDisplayName(selectedAgent, messages.agentsPage)
+    : automaticAgent
+      ? agentDisplayName(automaticAgent, messages.agentsPage)
+      : labels.automaticAgent;
   const projectValue = selectedProject?.name
     ?? (projectId ? labels.selectionUnavailable : labels.noProject);
 
@@ -289,7 +293,9 @@ export function CreateTaskScreen() {
       >
         <ChoiceRow
           label={labels.automaticAgent}
-          description={automaticAgent?.name ?? automaticAgent?.id ?? labels.automaticAgentHint}
+          description={automaticAgent
+            ? agentDisplayName(automaticAgent, messages.agentsPage)
+            : labels.automaticAgentHint}
           selected={!selectedAgentId}
           onPress={() => selectAgent('')}
         />
@@ -298,8 +304,8 @@ export function CreateTaskScreen() {
         ) : (agents.data?.items ?? []).map((agent) => (
           <ChoiceRow
             key={agent.id}
-            label={agent.name ?? agent.id}
-            description={agent.description}
+            label={agentDisplayName(agent, messages.agentsPage)}
+            description={agentDisplayDescription(agent, messages.agentsPage)}
             selected={agent.id === selectedAgentId}
             onPress={() => selectAgent(agent.id)}
           />
