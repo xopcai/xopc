@@ -5,14 +5,20 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import {
+  createHostedSessionShare,
   createSessionShare,
+  fetchHostedSessionShares,
+  fetchHostedShareAuthStatus,
   fetchSessionSharePreview,
   fetchSessionShares,
+  refreshHostedSessionShare,
   refreshSessionShare,
+  revokeHostedSessionShare,
   revokeShare,
   type SessionSharePreview,
   type SessionShareResult,
 } from '@/features/shares/shares-api';
+import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { ReachabilityHint, ShareUrlCopyRows } from '@/features/shares/share-link-dialog';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -30,16 +36,28 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
   const [description, setDescription] = useState('');
   const [includeToolActivities, setIncludeToolActivities] = useState(false);
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+  const [delivery, setDelivery] = useState<'hosted' | 'local'>('hosted');
+  const [hostedConnected, setHostedConnected] = useState(false);
 
   useEffect(() => {
     if (!open || preview || result) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void Promise.all([fetchSessionSharePreview(sessionKey), fetchSessionShares(sessionKey)])
-      .then(([value, shares]) => {
+    void Promise.all([
+      fetchSessionSharePreview(sessionKey),
+      fetchSessionShares(sessionKey),
+      fetchHostedShareAuthStatus(),
+    ])
+      .then(async ([value, localShares, connected]) => {
         if (cancelled) return;
         setPreview(value);
+        setHostedConnected(connected);
+        const hostedShares = connected
+          ? await fetchHostedSessionShares(sessionKey).catch(() => [])
+          : [];
+        if (cancelled) return;
+        const shares = [...hostedShares, ...localShares];
         const active = shares.find((share) => !share.revoked && !share.expired);
         if (active) setResult(active);
       })
@@ -63,7 +81,8 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setLoading(true);
     setError(null);
     try {
-      setResult(await createSessionShare(sessionKey, {
+      const createShare = delivery === 'hosted' ? createHostedSessionShare : createSessionShare;
+      setResult(await createShare(sessionKey, {
         expectedSessionId: preview.sessionId,
         expectedCutoffSeq: preview.cutoffSeq,
         expectedMetadataUpdatedAt: preview.metadataUpdatedAt,
@@ -87,7 +106,8 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     try {
       const latest = await fetchSessionSharePreview(sessionKey);
       setPreview(latest);
-      setResult(await refreshSessionShare(sessionKey, result.id, {
+      const refreshShare = result.delivery === 'hosted' ? refreshHostedSessionShare : refreshSessionShare;
+      setResult(await refreshShare(sessionKey, result.id, {
         expectedSessionId: latest.sessionId,
         expectedCutoffSeq: latest.cutoffSeq,
         expectedMetadataUpdatedAt: latest.metadataUpdatedAt,
@@ -104,7 +124,8 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setLoading(true);
     setError(null);
     try {
-      await revokeShare(result.id);
+      if (result.delivery === 'hosted') await revokeHostedSessionShare(sessionKey, result.id);
+      else await revokeShare(result.id);
       setOpen(false);
       reset();
     } catch (err) {
@@ -159,7 +180,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
                 <div>
                   <p className="text-sm font-medium text-fg">{result.fileName}</p>
                   <p className="mt-1 text-xs text-fg-muted">{t.snapshotMessages.replace('{{count}}', String(result.messageCount))}</p>
-                  <p className="mt-1 text-xs text-fg-subtle">{t.revision.replace('{{revision}}', String(result.snapshotRevision))} · {t.sharedAttachments.replace('{{count}}', String(result.attachmentCount))}</p>
+                  <p className="mt-1 text-xs text-fg-subtle">{result.delivery === 'hosted' ? t.hosted : t.local} · {t.revision.replace('{{revision}}', String(result.snapshotRevision))} · {t.sharedAttachments.replace('{{count}}', String(result.attachmentCount))}</p>
                 </div>
                 <ShareUrlCopyRows shareUrl={result.shareUrl} lanUrl={result.lanUrl} reachability={result.reachability} />
                 <ReachabilityHint reachability={result.reachability} reachabilityHint={result.reachabilityHint} />
@@ -174,7 +195,33 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
                   <p className="mt-1 text-xs text-fg-muted">{t.snapshotMessages.replace('{{count}}', String(preview.messageCount))}</p>
                   <p className="mt-1 text-xs text-fg-subtle">{new Date(preview.snapshotAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>
                 </div>
+                <details className="rounded-lg border border-edge-subtle">
+                  <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-fg">{t.reviewContent}</summary>
+                  <div className="max-h-64 space-y-3 overflow-y-auto border-t border-edge-subtle p-3">
+                    {preview.messages.map((message) => (
+                      <div key={message.id} className={cn('rounded-lg px-3 py-2', message.role === 'user' ? 'bg-surface-muted' : 'bg-surface-subtle')}>
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">{message.role === 'user' ? t.you : t.assistant}</p>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-fg">{message.markdown}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
                 <div className="rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-fg-muted">{t.scope}</div>
+                <label className="block space-y-1.5 text-xs font-medium text-fg">
+                  <span>{t.delivery}</span>
+                  <Select value={delivery} disabled={loading} onChange={(event) => setDelivery(event.target.value as 'hosted' | 'local')}>
+                    <SelectOption value="hosted">{t.hosted}</SelectOption>
+                    <SelectOption value="local">{t.local}</SelectOption>
+                  </Select>
+                </label>
+                {delivery === 'hosted' && !hostedConnected ? (
+                  <OAuthProviderConnect
+                    providerId="xopc-share"
+                    displayName={t.hosted}
+                    connected={false}
+                    onConnected={() => setHostedConnected(true)}
+                  />
+                ) : null}
                 {preview.toolActivities.length ? (
                   <label className="flex items-start gap-2 rounded-lg border border-edge-subtle px-3 py-2.5 text-sm text-fg">
                     <input type="checkbox" checked={includeToolActivities} disabled={loading} onChange={(event) => setIncludeToolActivities(event.target.checked)} className="mt-0.5 size-4 rounded border-edge" />
@@ -251,7 +298,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
             ) : (
               <>
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="button" disabled={!preview || loading || preview.messageCount === 0} onClick={() => void create()}>
+                <Button type="button" disabled={!preview || loading || preview.messageCount === 0 || (delivery === 'hosted' && !hostedConnected)} onClick={() => void create()}>
                   {loading ? <Loader2 className="size-4 animate-spin" /> : null}{t.create}
                 </Button>
               </>
@@ -277,6 +324,8 @@ const LABELS_ZH = {
   oneHour: '1 小时', oneDay: '24 小时', sevenDays: '7 天', thirtyDays: '30 天', unlimited: '不限', description: '说明（可选）',
   publicWarning: '任何获得链接的人都可以查看这份快照。后续会话消息不会自动加入。', cancel: '取消', create: '创建分享', revoke: '撤销分享', refresh: '更新到当前会话', open: '打开分享页面',
   revision: '快照版本 {{revision}}', sharedAttachments: '{{count}} 个附件', newShare: '新建分享',
+  delivery: '分享方式', hosted: 'XOPC 托管分享', local: '本机 Gateway 分享',
+  reviewContent: '检查将要公开的内容', you: '你', assistant: '助手',
 };
 
 const LABELS_EN = {
@@ -287,4 +336,6 @@ const LABELS_EN = {
   oneHour: '1 hour', oneDay: '24 hours', sevenDays: '7 days', thirtyDays: '30 days', unlimited: 'Unlimited', description: 'Description (optional)',
   publicWarning: 'Anyone with the link can view this snapshot. Later conversation messages are not added automatically.', cancel: 'Cancel', create: 'Create share', revoke: 'Revoke share', refresh: 'Update to current conversation', open: 'Open shared page',
   revision: 'Snapshot revision {{revision}}', sharedAttachments: '{{count}} attachments', newShare: 'New share',
+  delivery: 'Delivery', hosted: 'XOPC Hosted Share', local: 'Local Gateway Share',
+  reviewContent: 'Review the content to publish', you: 'You', assistant: 'Assistant',
 };

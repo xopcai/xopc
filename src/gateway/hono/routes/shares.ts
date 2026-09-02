@@ -23,6 +23,13 @@ import type { ShareExpiredReason } from '../../../share/share-landing.js';
 import type { DirectoryShareRecord, ShareConfig, ShareRecord, WorkspaceShareRecord } from '../../../share/share-types.js';
 import { NoteShareService } from '../../../share/note-share-service.js';
 import { SessionShareService, SessionShareSnapshotConflictError } from '../../../share/session-share-service.js';
+import {
+  HostedSessionShareBuilder,
+  HostedSessionSharePublisher,
+  HostedShareAuthorizationError,
+  HostedShareBindingStore,
+  type HostedShareBinding,
+} from '../../../share/hosted-session-share.js';
 import { loadCompactionSourceSnapshot } from '../../../storage/sqlite/index.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
@@ -604,6 +611,9 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   const store = getShareStore(resolveShareConfig(service));
   const noteShares = new NoteShareService(store, service.notesServiceInstance);
   const sessionShares = createSessionShareService(service, store);
+  const hostedBuilder = new HostedSessionShareBuilder(createSessionShareSource(service));
+  const hostedPublisher = new HostedSessionSharePublisher();
+  const hostedBindings = new HostedShareBindingStore();
   const siteStoreEager = getSiteShareStore(resolveSiteShareConfig(service));
   // Register once: when a site share is revoked / expires, drop its staging dir (if any).
   siteStoreEager.setCleanupHook((rec) => {
@@ -631,6 +641,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       return {
         id: record.id,
         kind: record.kind,
+        delivery: 'local',
         fileName: record.fileName,
         shareUrl: resolved.shareUrl,
         lanUrl: resolved.lanUrl,
@@ -680,6 +691,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         payload: {
           id: record.id,
           kind: record.kind,
+          delivery: 'local',
           shareUrl: resolved.shareUrl,
           lanUrl: resolved.lanUrl,
           reachability: resolved.reachability,
@@ -721,6 +733,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: true, payload: {
         id: record.id,
         kind: record.kind,
+        delivery: 'local',
         shareUrl: resolved.shareUrl,
         lanUrl: resolved.lanUrl,
         reachability: resolved.reachability,
@@ -739,6 +752,107 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         ? 409
         : message === 'Session share not found' || message === 'Session not found' ? 404 : 400;
       return c.json({ ok: false, error: { message, code: status === 409 ? 'session_snapshot_conflict' : undefined } }, status);
+    }
+  });
+
+  authenticated.get('/api/sessions/:key/hosted-shares', async (c) => {
+    const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
+    if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
+    try {
+      await hostedBindings.reconcile(await hostedPublisher.list());
+      return c.json({
+        ok: true,
+        payload: { shares: (await hostedBindings.list(metadata.sessionId)).map(hostedBindingResponse) },
+      });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/sessions/:key/hosted-shares', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+      return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
+    }
+    try {
+      const snapshot = await hostedBuilder.build(c.req.param('key'), hostedBuildInput(body));
+      const result = await hostedPublisher.create(snapshot, {
+        ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 86_400_000,
+        maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : null,
+      });
+      const now = new Date().toISOString();
+      const binding: HostedShareBinding = {
+        ...result,
+        sessionId: snapshot.sessionId,
+        cutoffSeq: snapshot.cutoffSeq,
+        title: snapshot.manifest.title,
+        description: snapshot.manifest.description ?? null,
+        messageCount: snapshot.manifest.messages.length,
+        attachmentCount: snapshot.manifest.attachments.length,
+        includeToolActivities: body.includeToolActivities === true,
+        attachmentIds: snapshot.manifest.attachments.map((attachment) => attachment.id),
+        createdAt: now,
+        updatedAt: now,
+        revoked: false,
+      };
+      await hostedBindings.upsert(binding);
+      return c.json({ ok: true, payload: hostedBindingResponse(binding) }, 201);
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/sessions/:key/hosted-shares/:shareId/refresh', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+      return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
+    }
+    const previous = (await hostedBindings.list(body.expectedSessionId))
+      .find((binding) => binding.id === c.req.param('shareId') && !binding.revoked);
+    if (!previous) return c.json({ ok: false, error: { message: 'Hosted share not found' } }, 404);
+    try {
+      const snapshot = await hostedBuilder.build(c.req.param('key'), {
+        ...hostedBuildInput(body),
+        description: previous.description ?? undefined,
+        includeToolActivities: typeof body.includeToolActivities === 'boolean'
+          ? body.includeToolActivities
+          : previous.includeToolActivities,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : previous.attachmentIds,
+      });
+      const result = await hostedPublisher.refresh(previous.id, previous.snapshotRevision, previous.shareUrl, snapshot);
+      const binding: HostedShareBinding = {
+        ...previous,
+        ...result,
+        cutoffSeq: snapshot.cutoffSeq,
+        title: snapshot.manifest.title,
+        messageCount: snapshot.manifest.messages.length,
+        attachmentCount: snapshot.manifest.attachments.length,
+        includeToolActivities: typeof body.includeToolActivities === 'boolean'
+          ? body.includeToolActivities
+          : previous.includeToolActivities,
+        attachmentIds: snapshot.manifest.attachments.map((attachment) => attachment.id),
+        updatedAt: new Date().toISOString(),
+      };
+      await hostedBindings.upsert(binding);
+      return c.json({ ok: true, payload: hostedBindingResponse(binding) });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.delete('/api/sessions/:key/hosted-shares/:shareId', async (c) => {
+    const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
+    if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
+    const binding = (await hostedBindings.list(metadata.sessionId)).find((item) => item.id === c.req.param('shareId'));
+    if (!binding) return c.json({ ok: false, error: { message: 'Hosted share not found' } }, 404);
+    try {
+      await hostedPublisher.revoke(binding.id);
+      await hostedBindings.upsert({ ...binding, revoked: true, updatedAt: new Date().toISOString() });
+      return c.json({ ok: true, payload: { revoked: binding.id } });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
     }
   });
 
@@ -1108,10 +1222,72 @@ function createSessionShareService(
   service: GatewayService,
   store: ReturnType<typeof getShareStore>,
 ): SessionShareService {
-  return new SessionShareService(store, {
+  return new SessionShareService(store, createSessionShareSource(service));
+}
+
+function createSessionShareSource(service: GatewayService) {
+  return {
     getMetadata: (sessionKey) => service.sessionIndexInstance.getSessionMetadata(sessionKey),
     getSnapshot: async (sessionKey) => loadCompactionSourceSnapshot(sessionKey),
-  });
+  };
+}
+
+function hostedBuildInput(body: Record<string, unknown>) {
+  return {
+    expectedSessionId: String(body.expectedSessionId),
+    expectedCutoffSeq: Number(body.expectedCutoffSeq),
+    expectedMetadataUpdatedAt: String(body.expectedMetadataUpdatedAt),
+    description: typeof body.description === 'string' ? body.description.trim() || undefined : undefined,
+    includeToolActivities: body.includeToolActivities === true,
+    attachmentIds: Array.isArray(body.attachmentIds)
+      ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+      : undefined,
+  };
+}
+
+function hostedBindingResponse(binding: HostedShareBinding) {
+  return {
+    id: binding.id,
+    kind: 'session' as const,
+    delivery: 'hosted' as const,
+    shareUrl: binding.shareUrl,
+    lanUrl: null,
+    reachability: 'public' as const,
+    reachabilityHint: null,
+    expiresAt: binding.expiresAt,
+    maxViews: binding.maxViews,
+    fileName: binding.title,
+    messageCount: binding.messageCount,
+    attachmentCount: binding.attachmentCount,
+    snapshotRevision: binding.snapshotRevision,
+    includeToolActivities: binding.includeToolActivities,
+    createdAt: binding.createdAt,
+    viewCount: binding.viewCount,
+    revoked: binding.revoked,
+    expired: Date.now() >= new Date(binding.expiresAt).getTime(),
+    description: binding.description,
+    cutoffSeq: binding.cutoffSeq,
+  };
+}
+
+function hostedShareErrorResponse(c: Context, err: unknown): Response {
+  const message = err instanceof Error ? err.message : String(err);
+  const status = err instanceof HostedShareAuthorizationError
+    ? 401
+    : err instanceof SessionShareSnapshotConflictError
+      ? 409
+      : message === 'Session not found' || message === 'Hosted share not found'
+        ? 404
+        : 400;
+  return c.json({
+    ok: false,
+    error: {
+      message,
+      code: err instanceof HostedShareAuthorizationError
+        ? 'hosted_share_auth_required'
+        : status === 409 ? 'session_snapshot_conflict' : undefined,
+    },
+  }, status);
 }
 
 // ── Directory landing / file / zip helpers ────────────────────────────────────

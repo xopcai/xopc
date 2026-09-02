@@ -6,13 +6,13 @@ import { kimiCodingOAuthProvider } from './kimi-coding.js';
 import { minimaxCnOAuthProvider } from './minimax-cn.js';
 import { minimaxOAuthProvider } from './minimax.js';
 import { openaiCodexOAuthProvider } from './openai-codex.js';
-import { xopcCloudOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
+import { xopcCloudOAuthProvider, xopcShareOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
 import type { OAuthProviderInterface } from './types.js';
 
 export interface OAuthProviderDefinition {
   displayName: string;
   oauthOnly?: boolean;
-  purpose: 'models' | 'tunnel';
+  purpose: 'models' | 'tunnel' | 'share';
   provider: OAuthProviderInterface;
   profileId: string;
   urlPrompt: string;
@@ -35,6 +35,7 @@ function definition(
 export const OAUTH_PROVIDER_DEFINITIONS: Readonly<Record<string, OAuthProviderDefinition>> = {
   'xopc-cloud': { ...definition(xopcCloudOAuthProvider, 'models'), oauthOnly: true },
   'xopc-tunnel': { ...definition(xopcTunnelOAuthProvider, 'tunnel'), oauthOnly: true },
+  'xopc-share': { ...definition(xopcShareOAuthProvider, 'share'), oauthOnly: true },
   anthropic: definition(anthropicOAuthProvider, 'models', 'Anthropic (Claude)'),
   minimax: definition(minimaxOAuthProvider, 'models', 'MiniMax (幂维智能)'),
   'minimax-cn': {
