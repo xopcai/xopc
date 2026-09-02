@@ -214,6 +214,7 @@ xopc extensions dev ./my-extension
 | [快速开始](https://xopcai.github.io/xopc/zh/getting-started) | 安装、向导、第一次对话 |
 | [持续工作模型](https://xopcai.github.io/xopc/zh/concepts/loops) | 状态、执行与触发如何组成可恢复、可检查的工作闭环 |
 | [Project、Task 与笔记](https://xopcai.github.io/xopc/zh/projects-tasks-notes) | 用唯一且可验证的 Task 模型推进长期工作，并按需增加 Project 上下文 |
+| [分享会话](https://xopcai.github.io/xopc/zh/session-sharing) | 发布经过检查、带有效期和访问上限的只读 Session 快照 |
 | [配置](https://xopcai.github.io/xopc/zh/configuration) | `xopc.json` 字段 |
 | [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
 | [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |

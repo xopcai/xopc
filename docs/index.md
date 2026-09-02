@@ -52,6 +52,7 @@ features:
 | Understand what xopc is becoming | [Product philosophy](./product.md) |
 | Review or correct what xopc knows about you | [User understanding](./user-understanding.md) |
 | Start a conversation and return to it later | [Chat and Sessions](./session.md) |
+| Share a read-only conversation snapshot | [Share a conversation](./session-sharing.md) |
 | Use different assistants for different work | [Agents](./routing-system.md) |
 | Keep long-running work organized | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |
 | Repeat a multi-step process | [Workflows](./workflows.md) |
