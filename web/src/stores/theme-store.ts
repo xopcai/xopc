@@ -10,13 +10,13 @@ const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
 
 const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = {
   light: {
-    default: '#ffffff',
+    default: '#f7f8fa',
     emerald: '#f0fdf4',
     mono: '#ffffff',
     clay: '#fffaf0',
   },
   dark: {
-    default: '#0a0a0a',
+    default: '#14171c',
     emerald: '#000000',
     mono: '#101010',
     clay: '#0a1a1a',
@@ -53,7 +53,6 @@ function prefersReducedMotion(): boolean {
 }
 
 function normalizeColorScheme(value: unknown): ColorScheme {
-  if (value === 'cal') return 'mono';
   return value === 'default' || value === 'emerald' || value === 'mono' || value === 'clay'
     ? value
     : DEFAULT_COLOR_SCHEME;

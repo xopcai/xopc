@@ -105,7 +105,7 @@ export const MessageList = memo(function MessageList({
   }
 
   return (
-    <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-10 pb-8">
+    <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
       {list.map((msg, index) => {
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
