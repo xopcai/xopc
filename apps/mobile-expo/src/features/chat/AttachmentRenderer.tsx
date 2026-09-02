@@ -106,7 +106,7 @@ export function AttachmentRenderer({
   const { colors } = useTheme();
   const m = useMessages();
   const apiUrl = useGatewayStore((s) => s.apiUrl);
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.accessToken);
   const [active, setActive] = useState<PreviewableFile | null>(null);
   const items = useMemo(() => attachments?.filter(Boolean) ?? [], [attachments]);
   const workspacePaths = useMemo(() => items.map((item) => item.workspaceRelativePath), [items]);
@@ -151,7 +151,7 @@ export function AttachmentRenderer({
           const itemIndex = items.indexOf(att);
           const resource = resourceByItem[itemIndex] ?? null;
           const preview = attachmentToPreviewable(att, index, resource, sessionKey);
-          const source = isImageAttachment(att) ? imageSource(att, resource, sessionKey, apiUrl, token) : null;
+          const source = isImageAttachment(att) ? imageSource(att, resource, sessionKey, apiUrl, token ?? '') : null;
           if (source) {
             return (
               <Pressable

@@ -76,10 +76,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    // Eagerly refresh the network snapshot before/while we hydrate so the
-    // very first dual-fire decision (LAN viable? cellular? offline?) is
-    // based on real OS state instead of the 'unknown' default. Bounded so
-    // a slow OS query never blocks app start.
+    // Seed connectivity state without blocking app startup.
     void refreshNetworkSnapshotWithDeadline(150);
     hydrateGateway();
     hydratePrefs();

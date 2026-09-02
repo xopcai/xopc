@@ -16,7 +16,7 @@ import { checkBrowserOrigin } from '../security/origin-check.js';
 import { isLoopbackIpAddress, isTrustedProxyAddress } from '../client-ip.js';
 import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { auth } from './middleware/auth.js';
-import { operatorScopes } from './middleware/scopes.js';
+import { gatewayScopes } from './middleware/scopes.js';
 import {
   createChatRateLimitMiddleware,
   createChannelRateLimitMiddleware,
@@ -32,6 +32,7 @@ import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-exten
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
 import { registerPublicLocalAppPreviewRoutes } from './routes/local-apps.js';
+import { registerDeviceAuthPublicRoutes } from './routes/devices.js';
 import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
 import { registerSiteShareMiddleware } from '../../share/site-share-router.js';
@@ -259,6 +260,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   registerPublicGatewayRoutes(app, service);
+  registerDeviceAuthPublicRoutes(app);
 
   // Extension UI assets are served without auth: sandboxed iframes (no allow-same-origin)
   // have an opaque origin of `null` and cannot forward the ?token= from the parent HTML URL.
@@ -278,7 +280,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }),
     }),
   );
-  authenticated.use(operatorScopes());
+  authenticated.use(gatewayScopes());
 
   const strictRateLimitMiddleware = createStrictRateLimitMiddleware({
     getTrustedProxyContext: () => ({

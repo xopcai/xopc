@@ -30,6 +30,35 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  authenticateDeviceAccessToken,
+  buildRefreshProofMessage,
+  createDevice,
+  getDevice,
+  issueDeviceTokenPair,
+  listDevices,
+  revokeDevice,
+  rotateDeviceRefreshToken,
+  type DeviceAccessIdentity,
+  type DevicePlatform,
+  type DevicePublicKeyJwk,
+  type DeviceRecord,
+  type DeviceTokenPair,
+} from './device-access-repository.js';
+export {
+  clearGatewayIdentityForTest,
+  getOrCreateGatewayIdentity,
+  signGatewayPayload,
+  type GatewayIdentity,
+} from './gateway-identity-repository.js';
+export {
+  consumeDevicePairingToken,
+  createDevicePairingSetup,
+  isDevicePairingSetupActive,
+  type DevicePairingSetup,
+  type DeviceRoute,
+  type PairingConsumeResult,
+} from './device-pairing-repository.js';
+export {
   claimContextExtractionRun,
   finishContextExtractionRun,
   getContextExtractionRun,

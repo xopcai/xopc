@@ -1,34 +1,5 @@
 import { z } from 'zod';
 
-import { shouldRejectLoopbackGatewayBaseUrl } from '../stores/gateway-types';
-
-function isValidHttpUrl(s: string): boolean {
-  try {
-    const u = new URL(s);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-export const gatewaySettingsSchema = z.object({
-  baseUrl: z
-    .string()
-    .trim()
-    .min(1, 'Base URL is required')
-    .refine(isValidHttpUrl, 'Must be a valid http(s) URL')
-    .refine((url) => !shouldRejectLoopbackGatewayBaseUrl(url), 'LOOPBACK_NOT_REACHABLE'),
-  token: z.string(),
-});
-
-export type GatewaySettingsForm = z.infer<typeof gatewaySettingsSchema>;
-
-export const gatewayProfileSchema = gatewaySettingsSchema.extend({
-  name: z.string().trim(),
-});
-
-export type GatewayProfileForm = z.infer<typeof gatewayProfileSchema>;
-
 export const sessionListItemSchema = z
   .object({
     key: z.string(),

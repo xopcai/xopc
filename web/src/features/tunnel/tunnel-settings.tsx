@@ -21,7 +21,6 @@ import {
   openOAuthAuthorizationUrl,
   reserveOAuthAuthorizationWindow,
 } from '@/features/settings/oauth-authorization-window';
-import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
 import { TunnelConsentDialog } from '@/features/tunnel/tunnel-consent-dialog';
 import { TunnelControlCard } from '@/features/tunnel/tunnel-control-card';
 import { BrokerSecretSetupSection } from '@/features/tunnel/tunnel-broker-secret-section';
@@ -34,7 +33,6 @@ import {
   startTunnel,
   stopTunnel,
 } from '@/features/tunnel/tunnel-api';
-import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -96,8 +94,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
   } = ui;
   const brokerSecretSectionRef = useRef<HTMLDivElement>(null);
 
-  const pairQr = useMobilePairQr(token ?? '');
-
   const { data: cfgData } = useGatewayConfigSwr(hasToken);
 
   const {
@@ -158,10 +154,9 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     dispatchUi({ type: 'patch', patch: { actionError: null } });
     dispatchUi({ type: 'patch', patch: { starting: true } });
     try {
-      const res = await startTunnel();
+      await startTunnel();
       await mutStatus();
       void revalidateGatewayConfig();
-      await pairQr.refreshQr(res.qrPayload);
     } catch (e) {
       dispatchUi({
         type: 'patch',
@@ -170,7 +165,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     } finally {
       dispatchUi({ type: 'patch', patch: { starting: false } });
     }
-  }, [mutStatus, pairQr.refreshQr]);
+  }, [mutStatus]);
 
   const handleStartClick = useCallback(() => {
     if (!brokerReady) {
@@ -204,7 +199,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     dispatchUi({ type: 'patch', patch: { stopping: true } });
     try {
       await stopTunnel();
-      await Promise.all([pairQr.refreshQr(), mutStatus()]);
+      await mutStatus();
       void revalidateGatewayConfig();
     } catch (e) {
       dispatchUi({
@@ -214,7 +209,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     } finally {
       dispatchUi({ type: 'patch', patch: { stopping: false } });
     }
-  }, [mutStatus, pairQr.refreshQr]);
+  }, [mutStatus]);
 
   const applyAutoStart = useCallback(
     async (next: boolean) => {
@@ -289,7 +284,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         patch: { brokerSecretDraft: '', brokerSecretNotice: t.brokerSecretCleared },
       });
       void revalidateGatewayConfig();
-      await Promise.all([pairQr.refreshQr(), mutStatus()]);
+      await mutStatus();
     } catch (e) {
       dispatchUi({
         type: 'patch',
@@ -298,7 +293,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     } finally {
       dispatchUi({ type: 'patch', patch: { savingBrokerSecret: false } });
     }
-  }, [mutStatus, pairQr.refreshQr, t.brokerSecretCleared]);
+  }, [mutStatus, t.brokerSecretCleared]);
 
   const authorizeBrokerSecret = useCallback(async () => {
     const popup = reserveOAuthAuthorizationWindow();
@@ -354,7 +349,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     dispatchUi({ type: 'patch', patch: { releaseConfirmOpen: false, actionError: null, releasing: true } });
     try {
       await stopTunnel({ release: true });
-      await Promise.all([pairQr.refreshQr(), mutStatus()]);
+      await mutStatus();
       void revalidateGatewayConfig();
     } catch (e) {
       dispatchUi({
@@ -364,7 +359,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
     } finally {
       dispatchUi({ type: 'patch', patch: { releasing: false } });
     }
-  }, [mutStatus, pairQr.refreshQr]);
+  }, [mutStatus]);
 
   const copyLabels = useMemo(
     () => ({
@@ -483,13 +478,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
           onStop={() => void handleStop()}
         />
 
-        <MobilePairQrSection
-          pairQr={pairQr}
-          gatewayToken={token ?? ''}
-          streamlined
-          onRefreshQr={() => void pairQr.refreshQr()}
-        />
-
         <SettingsCollapsibleSection showLabel={t.showOptions} hideLabel={t.hideOptions}>
           <label
             className={cn(
@@ -580,8 +568,6 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         onStart={handleStartClick}
         onStop={() => void handleStop()}
       />
-
-      <MobilePairQrSection pairQr={pairQr} gatewayToken={token ?? ''} />
 
       {st.subdomain || st.publicUrl ? (
         <div className="flex flex-wrap gap-2">

@@ -111,8 +111,8 @@ export function AgentAvatar({
   size: number;
 }) {
   const colors = useSettingsColors();
-  const token = useGatewayStore((s) => s.token);
-  const activeBaseUrl = useGatewayStore((s) => s.activeBaseUrl);
+  const token = useGatewayStore((s) => s.accessToken);
+  const activeBaseUrl = useGatewayStore((s) => s.getActiveRouteUrl());
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {

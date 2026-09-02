@@ -5,7 +5,6 @@ import { Platform } from 'react-native';
 
 import { apiFetch } from '../../api/client';
 import { recordUsageEvent } from '../../product/usage-metrics';
-import { KEYS, storage } from '../../storage/mmkv';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
 
@@ -29,7 +28,6 @@ export type MobileNotificationEnableResult =
     };
 
 type DeviceRegistration = {
-  id: string;
   pushToken: string;
   platform: 'ios' | 'android';
   permissions: NotificationPermission;
@@ -60,14 +58,6 @@ function ensureNotificationHandler(Notifications: NotificationsModule): void {
   notificationHandlerConfigured = true;
 }
 
-function installationId(): string {
-  const existing = storage.getString(KEYS.mobileInstallationId)?.trim();
-  if (existing) return existing;
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-  storage.set(KEYS.mobileInstallationId, id);
-  return id;
-}
-
 function notificationPermission(status: NotificationStatus): NotificationPermission {
   if (status === 'granted') return 'granted';
   if (status === 'denied') return 'denied';
@@ -91,8 +81,8 @@ async function registerWithGateway(registration: DeviceRegistration): Promise<bo
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
     try {
-      const response = await apiFetch('/api/mobile/devices/register', {
-        method: 'POST',
+      const response = await apiFetch('/api/devices/me/push', {
+        method: 'PUT',
         body: JSON.stringify(registration),
         signal: controller.signal,
       });
@@ -131,7 +121,6 @@ async function buildRegistration(requestPermission: boolean): Promise<DeviceRegi
   if (!projectId) throw new Error('Expo project ID is unavailable');
   const token = await Notifications.getExpoPushTokenAsync({ projectId });
   return {
-    id: installationId(),
     pushToken: token.data,
     platform: Platform.OS === 'android' ? 'android' : 'ios',
     permissions: permission,
@@ -176,7 +165,7 @@ export async function syncMobileNotificationRegistration(): Promise<boolean> {
 export async function disableMobileNotifications(): Promise<void> {
   if (!supportsRemoteNotifications()) return;
   try {
-    await apiFetch(`/api/mobile/devices/${encodeURIComponent(installationId())}`, { method: 'DELETE' });
+    await apiFetch('/api/devices/me/push', { method: 'DELETE' });
   } catch {
     // The local preference still prevents future automatic registration.
   }

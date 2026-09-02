@@ -18,12 +18,11 @@
         "tinted": "./assets/icon-tinted.png"
       },
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "Allow xopc to connect to your gateway on the local network when available.",
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
-        },
         "ITSAppUsesNonExemptEncryption": false
       },
+      "associatedDomains": [
+        "applinks:link.xopc.ai"
+      ],
       "bundleIdentifier": "ai.xopc.xopc"
     },
     "android": {
@@ -43,6 +42,23 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.CAMERA"
       ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "link.xopc.ai",
+              "pathPrefix": "/connect"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "versionCode": 18,
       "package": "ai.xopc.xopc",
       "googleServicesFile": "./google-services.json"
@@ -58,7 +74,7 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true,
+            "usesCleartextTraffic": false,
             "buildArchs": [
               "arm64-v8a"
             ],

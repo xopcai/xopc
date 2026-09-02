@@ -3,8 +3,6 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 export const KEYS = {
   profiles: 'gateway.profiles',
   activeId: 'gateway.activeId',
-  routeWinnerPrefix: 'gateway.routeWinner:',
-  routeOverridePrefix: 'gateway.routeOverride:',
   queryCachePrefix: 'gateway.queryCache:',
   pendingRunPrefix: 'xopc:pendingRun:',
   language: 'prefs.language',
@@ -14,7 +12,6 @@ export const KEYS = {
   clipboardLatestAppHash: 'clipboard.latestAppHash',
   defaultAgentId: 'prefs.defaultAgentId',
   newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
-  mobileInstallationId: 'mobile.installationId',
   endpointId: 'endpointTools.endpointId',
   notificationsEnabled: 'prefs.notificationsEnabled',
   autoReadAloudEnabled: 'prefs.autoReadAloudEnabled',

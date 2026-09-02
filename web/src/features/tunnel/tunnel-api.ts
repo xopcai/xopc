@@ -44,62 +44,7 @@ export type TunnelStatusResponse = {
 export type TunnelStartResponse = {
   publicUrl: string | null;
   subdomain: string | null;
-  qrPayload: string;
-  lanUrl: string | null;
 };
-
-export type TunnelQrResponse = {
-  qrPayload: string;
-  publicUrl: string | null;
-  lanUrl: string | null;
-  expiresAt?: string;
-};
-
-export type TunnelPairResponse = {
-  pairingSecret: string;
-  expiresAt: string;
-};
-
-export type MobilePairCandidateKind = 'lan' | 'tunnel' | 'reverse-proxy';
-
-export type MobilePairBlockReason = 'GATEWAY_LOOPBACK_ONLY' | 'NO_REACHABLE_URL';
-
-export type MobilePairContextResponse = {
-  port: number;
-  bindMode: string;
-  listenHost: string;
-  pairingReady: boolean;
-  blockReason?: MobilePairBlockReason;
-  candidates: Array<{
-    kind: MobilePairCandidateKind;
-    url: string;
-    label?: string;
-    reachable: boolean;
-    note?: string;
-  }>;
-  recommended: {
-    mode: MobilePairCandidateKind | null;
-    url: string | null;
-  };
-  connectUrls: string[];
-};
-
-export async function fetchTunnelPairContext(): Promise<MobilePairContextResponse> {
-  return fetchJson<MobilePairContextResponse>(apiUrl('/api/tunnel/pair/context'));
-}
-
-export type EnableLanPairingResponse = {
-  ok: boolean;
-  requiresRestart: boolean;
-  context: MobilePairContextResponse;
-};
-
-export async function enableLanMobilePairing(): Promise<EnableLanPairingResponse> {
-  return fetchJson<EnableLanPairingResponse>(apiUrl('/api/tunnel/pair/enable-lan'), {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-}
 
 export async function fetchTunnelStatus(): Promise<TunnelStatusResponse> {
   return fetchJson<TunnelStatusResponse>(apiUrl('/api/tunnel/status'));
@@ -127,17 +72,6 @@ export async function stopTunnel(opts?: { release?: boolean }): Promise<{ ok: bo
   return fetchJson<{ ok: boolean; released?: boolean }>(apiUrl('/api/tunnel/stop'), {
     method: 'POST',
     body: JSON.stringify({ release: opts?.release === true }),
-  });
-}
-
-export async function fetchTunnelQr(): Promise<TunnelQrResponse> {
-  return fetchJson<TunnelQrResponse>(apiUrl('/api/tunnel/qr'));
-}
-
-export async function createTunnelPair(): Promise<TunnelPairResponse> {
-  return fetchJson<TunnelPairResponse>(apiUrl('/api/tunnel/pair'), {
-    method: 'POST',
-    body: JSON.stringify({}),
   });
 }
 

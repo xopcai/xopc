@@ -165,7 +165,7 @@ const DELIVERY_JOIN = `
          n.push_token, n.locale
   FROM notification_deliveries d
   JOIN notification_events e ON e.event_id = d.event_id
-  JOIN notification_devices n ON n.device_id = d.device_id
+  JOIN device_push_endpoints n ON n.device_id = d.device_id
 `;
 
 export function listDueNotificationDeliveries(
@@ -258,7 +258,7 @@ export function notificationDeliveryMetrics(): {
        SUM(CASE WHEN enabled = 1 AND permissions = 'granted' AND lease_expires_at > ? THEN 1 ELSE 0 END) AS deliverable,
        SUM(CASE WHEN enabled = 1 AND lease_expires_at <= ? THEN 1 ELSE 0 END) AS expired,
        SUM(CASE WHEN enabled = 0 OR permissions <> 'granted' THEN 1 ELSE 0 END) AS disabled
-     FROM notification_devices`,
+     FROM device_push_endpoints`,
   ).get(now, now) as { deliverable: number | null; expired: number | null; disabled: number | null };
   const oldest = getSqliteDatabase().prepare(
     `SELECT MIN(next_attempt_at) AS value FROM notification_deliveries
@@ -303,7 +303,7 @@ export function expireUndeliverableNotificationDeliveries(now = Date.now()): num
      SET status = 'dead', last_error = 'Device registration is disabled or expired', updated_at = ?
      WHERE status IN ('pending', 'accepted')
        AND EXISTS (
-         SELECT 1 FROM notification_devices n
+         SELECT 1 FROM device_push_endpoints n
          WHERE n.device_id = notification_deliveries.device_id
            AND (n.enabled = 0 OR n.permissions <> 'granted' OR n.lease_expires_at <= ?)
        )`,

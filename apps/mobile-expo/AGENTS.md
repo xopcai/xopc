@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`apps/mobile-expo` is the Expo mobile client for the xopc gateway. It connects to a user-hosted gateway over HTTP/WebSocket, supports LAN-first routing, and pairs with FRP by QR code. Before changing Expo or React Native code, confirm Expo `~56` in `package.json` and use the SDK 56 docs.
+`apps/mobile-expo` is the native Expo client for the xopc gateway. It pairs each phone as a device and connects only through verified HTTPS/WSS routes. Before changing Expo or React Native code, confirm Expo `~56` in `package.json` and use the SDK 56 docs.
 
 ## Project Structure & Module Organization
 
@@ -42,7 +42,7 @@ All scrollable lists share this contract: tap opens, swipe left uses `SwipeableR
 
 ## Testing Guidelines
 
-Use Vitest for parsing, cache behavior, sync, route strategy, and other pure logic. Place tests near code in `__tests__/`, for example `notes-local.test.ts`. Run realtime and agent stream tests when touching their workspace packages.
+Use Vitest for parsing, cache behavior, sync, secure route failover, and other pure logic. Place tests near code in `__tests__/`, for example `notes-local.test.ts`. Run realtime and agent stream tests when touching their workspace packages.
 
 ## Commit & Pull Request Guidelines
 
@@ -50,4 +50,4 @@ Recent history uses concise Conventional Commit-style subjects such as `feat(pag
 
 ## Security & Configuration
 
-Do not commit secrets, `.env` files, gateway tokens, pairing tokens, or API keys. Do not upgrade Expo SDK or major dependencies unless requested. After changing `app.json`, native network settings, or config plugins, run `expo prebuild --clean` and rebuild.
+Do not commit secrets, `.env` files, device credentials, pairing tokens, or API keys. Mobile gateway routes must be HTTPS origins; do not add manual shared-token setup, cleartext LAN access, or concurrent multi-route writes. Do not upgrade Expo SDK or major dependencies unless requested. After changing `app.json`, native network settings, or config plugins, run `expo prebuild --clean` and rebuild.

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import type { RealtimeClientKind } from '@xopcai/realtime-protocol';
+import type { GatewayScope } from '../gateway/security/gateway-scopes.js';
 
 const TICKET_TTL_MS = 30_000;
 const MAX_OUTSTANDING_TICKETS = 1_000;
@@ -8,6 +9,10 @@ const MAX_OUTSTANDING_TICKETS = 1_000;
 export interface RealtimeTicketClaim {
   clientId: string;
   clientKind: RealtimeClientKind;
+  principalId: string;
+  deviceId?: string;
+  accessSessionId?: string;
+  scopes: readonly GatewayScope[];
   expiresAt: number;
 }
 
@@ -25,6 +30,7 @@ export class RealtimeTicketStore {
   issue(
     clientId: string,
     clientKind: RealtimeClientKind,
+    principal: Omit<RealtimeTicketClaim, 'clientId' | 'clientKind' | 'expiresAt'>,
     now = Date.now(),
   ): IssuedRealtimeTicket {
     this.prune(now);
@@ -32,7 +38,7 @@ export class RealtimeTicketStore {
       throw new Error('Too many outstanding realtime tickets');
     }
     const ticket = crypto.randomBytes(32).toString('base64url');
-    const claim = { clientId, clientKind, expiresAt: now + TICKET_TTL_MS };
+    const claim = { clientId, clientKind, ...principal, expiresAt: now + TICKET_TTL_MS };
     this.claims.set(ticketKey(ticket), claim);
     return { ticket, ...claim };
   }

@@ -2,7 +2,8 @@ import { Globe, Network, Server, Shield, Terminal } from 'lucide-react';
 import useSWR from 'swr';
 
 import { fetchExposureStatus } from '@/features/remote-access/remote-access-api';
-import { fetchTunnelStatus, fetchTunnelPairContext } from '@/features/tunnel/tunnel-api';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { fetchTunnelStatus } from '@/features/tunnel/tunnel-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -42,11 +43,7 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
   const { data: tunnel } = useSWR(hasToken ? 'tunnel-status' : null, fetchTunnelStatus, {
     refreshInterval: 15_000,
   });
-  const { data: pairContext } = useSWR(
-    hasToken ? 'tunnel-pair-context' : null,
-    fetchTunnelPairContext,
-    { refreshInterval: 60_000 },
-  );
+  const config = useGatewayConfigSwr(hasToken);
 
   if (!hasToken) return null;
 
@@ -59,8 +56,12 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
       tunnelState === 'reconnecting' ||
       Boolean(tunnel?.startProgress) ||
       Boolean(tunnel?.frpcDownload));
-  const reverseProxyActive = (pairContext?.candidates ?? []).some(
-    (c) => c.kind === 'reverse-proxy',
+  const gatewayConfig = config.data?.payload?.config;
+  const reverseProxyActive = Boolean(
+    gatewayConfig
+    && typeof gatewayConfig === 'object'
+    && !Array.isArray(gatewayConfig)
+    && (gatewayConfig as { gateway?: { publicUrl?: unknown } }).gateway?.publicUrl,
   );
 
   const items: Array<{

@@ -1,198 +1,133 @@
-import { shouldRejectLoopbackGatewayBaseUrl } from '../../stores/gateway-types';
-import type { ParsedGatewayQr } from './parse-gateway-qr';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
 
-export type PairGatewayInput = {
-  baseUrl: string;
-  lanUrl?: string | null;
-  pairingSecret: string;
-};
+import { getOrCreateDevicePrivateKey, writeDeviceRefreshToken } from '../../storage/device-credentials';
+import { useGatewayStore } from '../../stores/gateway-store';
+import { parseGatewayProfile, type GatewayProfile, type GatewayScope } from '../../stores/gateway-types';
+import {
+  decodeBase64UrlJson,
+  devicePublicKeyJwk,
+  verifyGatewayPayload,
+} from './device-crypto';
+import { parseGatewayQrPayload, type ParsedGatewayQr } from './parse-gateway-qr';
 
-export type PairGatewayResult = {
-  token: string;
-  baseUrl: string;
-  lanUrl: string | null;
-  connectUrls?: string[];
-};
-
-function normalizeOrigin(raw: string): string {
-  return raw.trim().replace(/\/+$/, '');
-}
-
-/**
- * HTTPS URLs (FRP tunnel, user-deployed reverse proxy, any public TLS origin)
- * are reachable from cellular networks and typically come from a stable
- * public hostname — prefer them over LAN unless we explicitly know the phone
- * is on the same network.
- */
-function shouldPreferOriginForPair(origin: string): boolean {
-  try {
-    return new URL(origin).protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Origins to try for POST /api/tunnel/exchange-token.
- *
- * Priority:
- *   1. baseUrl when it is HTTPS (reverse-proxy / FRP / any TLS-terminated URL).
- *   2. lanUrl (zero-RTT, but only works on the same Wi-Fi).
- *   3. baseUrl as a final fallback when it is plain http (e.g. LAN-only deploys).
- *
- * The mobile app does NOT need to know which "mode" produced the URL —
- * `connectUrls` from the server (when present) already encodes the desired
- * order; this is the heuristic for when we have to derive an order from
- * `baseUrl` + `lanUrl` alone.
- */
-export function buildPairExchangeOrigins(baseUrl: string, lanUrl?: string | null): string[] {
-  const base = normalizeOrigin(baseUrl);
-  const lan = lanUrl?.trim() ? normalizeOrigin(lanUrl) : '';
-  const out: string[] = [];
-
-  const baseUsable = Boolean(base) && !shouldRejectLoopbackGatewayBaseUrl(base);
-  const lanUsable = Boolean(lan) && !shouldRejectLoopbackGatewayBaseUrl(lan);
-  const preferBaseFirst = baseUsable && shouldPreferOriginForPair(base);
-
-  if (preferBaseFirst) out.push(base);
-  if (lanUsable && lan !== base) out.push(lan);
-  if (baseUsable && !out.includes(base)) out.push(base);
-  return out;
-}
-
-export function resolvePairExchangeOrigins(
-  input: PairGatewayInput,
-  connectUrls?: string[] | null,
-): string[] {
-  const fromServer = (connectUrls ?? [])
-    .map((url) => normalizeOrigin(url))
-    .filter((url) => url && !shouldRejectLoopbackGatewayBaseUrl(url));
-  if (fromServer.length > 0) {
-    return [...new Set(fromServer)];
-  }
-  return buildPairExchangeOrigins(input.baseUrl, input.lanUrl);
-}
-
-function resolveStoredUrlsFromExchange(
-  data: { baseUrl?: string | null; lanUrl?: string | null; connectUrls?: string[] | null },
-  input: PairGatewayInput,
-): { baseUrl: string; lanUrl: string | null; connectUrls: string[] } {
-  const connectUrls = resolvePairExchangeOrigins(input, data.connectUrls);
-  const resolvedBase = data.baseUrl?.trim()
-    ? normalizeOrigin(data.baseUrl)
-    : connectUrls.find((url) => url.startsWith('https://')) ??
-      connectUrls[connectUrls.length - 1] ??
-      normalizeOrigin(input.baseUrl);
-  const resolvedLan =
-    (data.lanUrl?.trim() ? normalizeOrigin(data.lanUrl) : null) ??
-    connectUrls.find((url) => url.startsWith('http://')) ??
-    (input.lanUrl?.trim() ? normalizeOrigin(input.lanUrl) : null);
-
-  return {
-    baseUrl: resolvedBase,
-    lanUrl: resolvedLan,
-    connectUrls,
+type SignedResponse = { ok?: boolean; signedPayload?: string; signature?: string; error?: { message?: string } };
+type ExchangePayload = {
+  gateway: { id: string; name: string };
+  device: { id: string; scopes: GatewayScope[] };
+  routes: ParsedGatewayQr['routes'];
+  tokens: {
+    accessToken: string;
+    accessTokenExpiresAt: number;
+    refreshToken: string;
+    refreshTokenExpiresAt: number;
   };
-}
-
-let inflightPair: { key: string; promise: Promise<PairGatewayResult> } | null = null;
-
-async function pairWithGatewayOnce(input: PairGatewayInput): Promise<PairGatewayResult> {
-  const pairingSecret = input.pairingSecret.trim();
-  if (!pairingSecret) throw new Error('Pairing secret is required');
-
-  if (shouldRejectLoopbackGatewayBaseUrl(input.baseUrl)) {
-    throw new Error(
-      '127.0.0.1 and localhost only work on the gateway computer. Scan the QR from the desktop console or enter a LAN IP.',
-    );
-  }
-
-  const candidates = buildPairExchangeOrigins(input.baseUrl, input.lanUrl);
-  if (candidates.length === 0) throw new Error('Gateway base URL is required for pairing');
-
-  let lastError = 'Pairing failed';
-
-  for (const origin of candidates) {
-    try {
-      const res = await fetch(`${origin}/api/tunnel/exchange-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pairingSecret }),
-      });
-
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        lastError = body.error?.trim() || `Pairing failed (${res.status})`;
-        continue;
-      }
-
-      const data = (await res.json()) as {
-        token?: string;
-        baseUrl?: string | null;
-        lanUrl?: string | null;
-        connectUrls?: string[] | null;
-      };
-
-      const token = data.token?.trim();
-      if (!token) {
-        lastError = 'Gateway did not return a token';
-        continue;
-      }
-
-      const resolved = resolveStoredUrlsFromExchange(data, input);
-
-      return {
-        token,
-        baseUrl: resolved.baseUrl,
-        lanUrl: resolved.lanUrl,
-        connectUrls: resolved.connectUrls,
-      };
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-    }
-  }
-
-  throw new Error(lastError);
-}
-
-/** Deduplicate parallel pairing attempts for the same QR scan. */
-export async function pairWithGateway(input: PairGatewayInput): Promise<PairGatewayResult> {
-  const key = input.pairingSecret.trim();
-  if (!key) throw new Error('Pairing secret is required');
-  if (inflightPair?.key === key) return inflightPair.promise;
-  const promise = pairWithGatewayOnce(input);
-  inflightPair = { key, promise };
-  try {
-    return await promise;
-  } finally {
-    if (inflightPair?.key === key) inflightPair = null;
-  }
-}
-
-export type ResolvedGatewayCredentials = {
-  baseUrl: string;
-  lanUrl: string | null;
-  token: string;
 };
 
-/**
- * Resolve store-ready credentials from parsed QR — exchanges `ps` when present.
- */
-export async function resolveGatewayCredentialsFromQr(
-  parsed: ParsedGatewayQr,
-): Promise<ResolvedGatewayCredentials | null> {
-  if (parsed.pairingSecret?.trim() && parsed.baseUrl?.trim()) {
-    if (shouldRejectLoopbackGatewayBaseUrl(parsed.baseUrl)) {
-      throw new Error(
-        'This QR points at localhost, which your phone cannot reach. Enable LAN pairing or remote access on the desktop gateway and scan again.',
-      );
-    }
-    return pairWithGateway({
-      baseUrl: parsed.baseUrl,
-      lanUrl: parsed.lanUrl,
-      pairingSecret: parsed.pairingSecret,
-    });
-  }
+const PAIRING_REQUEST_TIMEOUT_MS = 8_000;
 
-  return null;
+function pairingId(pairingToken: string): string {
+  const value = pairingToken.slice('xopc_pair_'.length);
+  const separator = value.indexOf('_');
+  if (separator < 1) throw new Error('Invalid pairing token');
+  return value.slice(0, separator);
+}
+
+async function postSigned(origin: string, path: string, body: unknown): Promise<SignedResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PAIRING_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${origin}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({})) as SignedResponse;
+    if (!response.ok) throw new Error(data.error?.message ?? `Gateway request failed (${response.status})`);
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function verifyRoute(pairing: ParsedGatewayQr, origin: string): Promise<void> {
+  const response = await postSigned(origin, '/api/device-pairing/probe', {
+    pairingId: pairingId(pairing.pairingToken),
+  });
+  if (!response.signedPayload || !response.signature || !verifyGatewayPayload(
+    pairing.gatewayPublicKey,
+    response.signedPayload,
+    response.signature,
+  )) throw new Error('Gateway identity verification failed');
+  const proof = decodeBase64UrlJson<{ gatewayId?: string; pairingId?: string; issuedAt?: number }>(response.signedPayload);
+  if (
+    proof.gatewayId !== pairing.gatewayId || proof.pairingId !== pairingId(pairing.pairingToken) ||
+    typeof proof.issuedAt !== 'number' || Math.abs(Date.now() - proof.issuedAt) > 5 * 60_000
+  ) throw new Error('Gateway identity proof is invalid');
+}
+
+export async function pairWithGateway(pairing: ParsedGatewayQr): Promise<GatewayProfile> {
+  if (pairing.expiresAt <= Date.now()) throw new Error('Pairing link has expired');
+  const privateKey = getOrCreateDevicePrivateKey();
+  let selectedOrigin = '';
+  let lastError: unknown;
+  for (const route of pairing.routes) {
+    try {
+      await verifyRoute(pairing, route.url);
+      selectedOrigin = route.url;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!selectedOrigin) throw new Error('No secure gateway route is reachable', { cause: lastError });
+
+  const response = await postSigned(selectedOrigin, '/api/device-pairing/exchange', {
+    pairingToken: pairing.pairingToken,
+    device: {
+      displayName: Device.modelName ?? (Platform.OS === 'ios' ? 'iPhone' : 'Android'),
+      platform: Platform.OS,
+      publicKeyJwk: devicePublicKeyJwk(privateKey),
+    },
+  });
+  if (!response.signedPayload || !response.signature || !verifyGatewayPayload(
+    pairing.gatewayPublicKey,
+    response.signedPayload,
+    response.signature,
+  )) throw new Error('Pairing response signature is invalid');
+  const payload = decodeBase64UrlJson<ExchangePayload>(response.signedPayload);
+  if (payload.gateway?.id !== pairing.gatewayId) throw new Error('Pairing response gateway does not match');
+  const activeRouteId = payload.routes.find((route) => route.url === selectedOrigin)?.id ?? payload.routes[0]?.id;
+  const profile = parseGatewayProfile({
+    gatewayId: payload.gateway.id,
+    name: payload.gateway.name || pairing.gatewayName,
+    gatewayPublicKey: pairing.gatewayPublicKey,
+    deviceId: payload.device.id,
+    scopes: payload.device.scopes,
+    routes: payload.routes,
+    activeRouteId,
+    updatedAt: Date.now(),
+  });
+  if (
+    !profile || !payload.tokens?.accessToken || !payload.tokens.refreshToken ||
+    !Number.isFinite(payload.tokens.accessTokenExpiresAt) ||
+    !Number.isFinite(payload.tokens.refreshTokenExpiresAt) ||
+    payload.tokens.accessTokenExpiresAt <= Date.now() || payload.tokens.refreshTokenExpiresAt <= Date.now()
+  ) {
+    throw new Error('Gateway returned invalid device credentials');
+  }
+  writeDeviceRefreshToken(profile.gatewayId, payload.tokens.refreshToken);
+  useGatewayStore.getState().savePairedProfile(
+    profile,
+    payload.tokens.accessToken,
+    payload.tokens.accessTokenExpiresAt,
+  );
+  return profile;
+}
+
+export async function pairGatewayLink(link: string): Promise<GatewayProfile> {
+  const pairing = parseGatewayQrPayload(link);
+  if (!pairing) throw new Error('Scan a current xopc mobile pairing QR code');
+  return pairWithGateway(pairing);
 }

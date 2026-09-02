@@ -2,7 +2,7 @@
 
 English | [简体中文](./README.zh-CN.md)
 
-Expo mobile client for the [xopc](https://github.com/xopcai/xopc) gateway. The app connects to a user-hosted gateway over HTTP/WebSocket, with LAN-first routing and optional FRP remote access after QR pairing.
+Expo mobile client for the [xopc](https://github.com/xopcai/xopc) gateway. The native app connects over HTTPS/WSS and pairs each phone as an independently revocable device.
 
 The mobile client is designed as a calm, content-first workspace for notes, inbox triage, assistant conversations, and automation control. Visual and interaction standards live in [DESIGN.md](./DESIGN.md).
 
@@ -18,11 +18,11 @@ If xopc helps you keep long-running AI work moving across terminal, web, desktop
 ## How the App Connects
 
 1. Start `xopc gateway` on the machine that has your xopc config and model credentials.
-2. Open the gateway console and go to **Settings -> Remote access**.
-3. Choose a route: LAN, FRP public tunnel, Tailscale Serve, or your own HTTPS reverse proxy.
-4. Pair the mobile app with the gateway QR code, or enter the gateway base URL and optional bearer token in app settings.
+2. Configure at least one secure route: XOPC Secure Link, Tailscale Serve, or your own HTTPS reverse proxy.
+3. In the gateway console, open **Settings -> Endpoint tools -> Mobile access** and create a pairing QR code.
+4. Scan the QR code in the app. Pairing links expire after 10 minutes and can be used once.
 
-Remote access uses LAN-first routing. When FRP is enabled, broker-terminated TLS serves `*.frp.xopc.ai`; remote API calls use HTTPS plus the gateway bearer token after QR pairing.
+The app verifies the gateway's Ed25519 identity before exchanging credentials. It keeps the short-lived access token only in memory and stores the rotating, device-signed refresh credential in SecureStore. There is no manual gateway URL, shared bearer token, or cleartext LAN mode.
 
 ## Tech Stack
 
@@ -32,7 +32,7 @@ Remote access uses LAN-first routing. When FRP is enabled, broker-terminated TLS
 | Routing | Expo Router |
 | Server state | TanStack React Query |
 | Client state | Zustand |
-| Storage | react-native-mmkv, with an Expo Go in-memory fallback |
+| Storage | react-native-mmkv for non-secret state; SecureStore for device credentials |
 | UI | react-native-paper plus project design tokens |
 | Gestures and motion | react-native-gesture-handler, react-native-reanimated |
 | Keyboard | react-native-keyboard-controller |
@@ -47,7 +47,7 @@ app/                         Expo Router routes
 src/                         Features, components, API, query, theme, stores
 src/theme/                   Design tokens and Paper theme mapping
 src/i18n/                    Localized message bundles
-src/storage/                 MMKV and fallback storage
+src/storage/                 MMKV state and SecureStore device credentials
 ../../packages/realtime-client/    Shared realtime WebSocket client
 ../../packages/agent-stream-client/ Agent stream event dispatcher
 plugins/                     Expo config plugins
@@ -89,22 +89,17 @@ Common scripts:
 | `pnpm run mobile:test` | Run the Vitest suite |
 | `pnpm run mobile:test:stream` | Run agent stream client tests |
 
-## Configure the Gateway
+## Pair a Device
 
-Open app settings and configure:
+Mobile routes must be HTTPS origins. The gateway can publish any combination of:
 
-- Gateway base URL, without a trailing slash.
-- Optional bearer token, matching gateway auth in `xopc.json`.
+- XOPC Secure Link.
+- Tailscale Serve.
+- A configured HTTPS reverse proxy origin.
 
-Examples:
+The signed pairing payload contains the gateway identity and currently available secure routes. The app tries them sequentially and remembers the last successful route. Writes are never sent to multiple routes concurrently.
 
-```text
-http://192.168.1.44:18790
-https://your-name.frp.xopc.ai
-https://xopc.example.com
-```
-
-The app can probe available routes from gateway settings and prefers LAN when `/health` succeeds.
+For Universal Links/App Links to open the installed app, `link.xopc.ai` must serve an Apple `apple-app-site-association` entry for `<APPLE_TEAM_ID>.ai.xopc.xopc` and an Android `assetlinks.json` entry for package `ai.xopc.xopc` with the production signing certificate fingerprint.
 
 ## Expo Go vs Development Builds
 
@@ -132,7 +127,7 @@ Before distributing a build, complete these account-side steps (do not commit cr
 1. In Expo/EAS, ensure this project's ID matches `app.json` and build a development or production client; Expo Go is not a valid push-notification test target on Android.
 2. For Android, create the Firebase Android app with package ID `ai.xopc.xopc`, then configure FCM v1 credentials in the Expo project credentials. Save the downloaded client configuration as `apps/mobile-expo/google-services.json` (Git-ignored), or configure an EAS file environment variable named `GOOGLE_SERVICES_JSON`. GitHub Android releases also require the Base64-encoded file in the repository secret `GOOGLE_SERVICES_JSON_BASE64`. Run `pnpm -C apps/mobile-expo run verify:android-push` to validate its package and required fields.
 3. For iOS, enable Push Notifications for `ai.xopc.xopc` in the Apple Developer portal and configure an APNs key or profile in EAS credentials. Test on a physical iPhone or iPad.
-4. Make sure the gateway host can make outbound HTTPS requests to `https://exp.host`; device-to-gateway traffic continues to use the paired LAN or remote URL.
+4. Make sure the gateway host can make outbound HTTPS requests to `https://exp.host`; device-to-gateway traffic uses the paired secure route.
 
 After the first credential setup or any native notification config change, rebuild the app:
 
@@ -142,37 +137,9 @@ pnpm -C apps/mobile-expo run build:android:preview
 pnpm -C apps/mobile-expo run build:ios:preview
 ```
 
-## Native Networking Notes
+## Native Network Security
 
-Local gateways often use plain HTTP on a LAN IP, such as `http://192.168.1.44:18790`. Expo Go and installed native builds can behave differently because native builds use this app's own bundle ID, permissions, and network policy.
-
-### Android HTTP Cleartext
-
-Android 9+ blocks HTTP by default. This project enables LAN HTTP through `expo-build-properties` with `android.usesCleartextTraffic: true`.
-
-After changing native network settings:
-
-```bash
-pnpm -C apps/mobile-expo exec expo prebuild --clean
-pnpm run android:mobile
-```
-
-If LAN works in Expo Go but fails in a dev-client or release APK, rebuild the Android app. Cleartext settings are applied at prebuild time.
-
-### iOS Local Network and ATS
-
-The iOS config in `app.json` includes:
-
-- `NSAppTransportSecurity.NSAllowsLocalNetworking`, allowing HTTP to local IPs.
-- `NSLocalNetworkUsageDescription`, required for the iOS Local Network privacy prompt.
-
-On first LAN access, iOS asks whether the app may find devices on the local network. Expo Go and the installed xopc app have different bundle IDs, so allowing Expo Go does not grant access to the standalone app.
-
-If LAN is unreachable after install:
-
-1. Open **Settings -> Privacy & Security -> Local Network** and enable **xopc**.
-2. Confirm the phone and gateway are on the same Wi-Fi.
-3. Open gateway settings in the app and re-detect the route.
+The app accepts HTTPS/WSS gateway routes only. Android is built with `usesCleartextTraffic: false`; iOS has no ATS local-network exception. `app.json` declares the verified `https://link.xopc.ai/connect` App Link and the matching iOS associated domain. After changing these settings, run `pnpm -C apps/mobile-expo exec expo prebuild --clean` and rebuild the native app.
 
 ## iOS CocoaPods and Proxy Notes
 

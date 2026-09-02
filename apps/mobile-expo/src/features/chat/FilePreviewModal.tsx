@@ -127,7 +127,7 @@ async function loadPreview(
     const direct = normalizeBase64Payload(file.contentBase64);
     if (direct) return { kind, mimeType, text: null, base64: direct };
     if (file.remoteUri) {
-      const token = useGatewayStore.getState().token;
+      const token = useGatewayStore.getState().accessToken;
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
       const res = await fetch(file.remoteUri, headers ? { headers } : undefined);
       if (!res.ok) throw new Error(`Failed to load image (${res.status})`);

@@ -57,7 +57,10 @@ describe('RealtimeRuntime', () => {
     if (!address || typeof address === 'string') throw new Error('Missing test server address');
 
     runtime.broker.publish('run:r1', 'run.start', {});
-    const issued = runtime.tickets.issue('client-1', 'web');
+    const issued = runtime.tickets.issue('client-1', 'web', {
+      principalId: 'owner',
+      scopes: ['gateway.admin'],
+    });
     socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
     await waitForOpen(socket);
     const messages = collectMessages(socket);

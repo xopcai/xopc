@@ -2,7 +2,7 @@
 
 [English](./README.md) | 简体中文
 
-[xopc](https://github.com/xopcai/xopc) gateway 的 Expo 移动客户端。App 通过 HTTP/WebSocket 连接用户自托管 gateway，支持 LAN 优先路由，并可在 QR 配对后通过 FRP 远程访问。
+[xopc](https://github.com/xopcai/xopc) gateway 的 Expo 移动客户端。原生 App 仅通过 HTTPS/WSS 连接，并将每台手机配对为可独立撤销的设备。
 
 移动端定位为克制、内容优先的工作空间，用于笔记、收件整理、助手会话与自动化控制。视觉与交互规范见 [DESIGN.md](./DESIGN.md)。
 
@@ -18,11 +18,11 @@
 ## App 如何连接
 
 1. 在保存 xopc 配置和模型凭据的机器上启动 `xopc gateway`。
-2. 打开 gateway 控制台，进入 **Settings -> Remote access**。
-3. 选择连接方式：LAN、FRP 公网隧道、Tailscale Serve，或你自己的 HTTPS 反向代理。
-4. 在移动端扫描 gateway QR 码配对，或在 App 设置中手动填写 gateway base URL 和可选 bearer token。
+2. 至少配置一种安全路由：XOPC Secure Link、Tailscale Serve，或自己的 HTTPS 反向代理。
+3. 在 gateway 控制台打开 **Settings -> Endpoint tools -> Mobile access**，创建配对二维码。
+4. 在 App 中扫码。配对链接 10 分钟过期，并且只能使用一次。
 
-远程访问采用 LAN 优先路由。启用 FRP 后，`*.frp.xopc.ai` 由 broker 终止 TLS；QR 配对后，远程 API 调用使用 HTTPS 加 gateway bearer token。
+App 会先校验 gateway 的 Ed25519 身份，再交换设备凭据。短期 access token 只保存在内存，轮换且需要设备签名的 refresh credential 保存在 SecureStore。不再支持手填 gateway URL、共享 bearer token 或明文 LAN 模式。
 
 ## 技术栈
 
@@ -32,7 +32,7 @@
 | 路由 | Expo Router |
 | 服务端状态 | TanStack React Query |
 | 客户端状态 | Zustand |
-| 存储 | react-native-mmkv，Expo Go 环境使用内存 fallback |
+| 存储 | react-native-mmkv 保存非敏感状态；SecureStore 保存设备凭据 |
 | UI | react-native-paper 加项目设计 token |
 | 手势与动画 | react-native-gesture-handler, react-native-reanimated |
 | 键盘 | react-native-keyboard-controller |
@@ -47,7 +47,7 @@ app/                         Expo Router 路由
 src/                         Feature、组件、API、query、theme、store
 src/theme/                   设计 token 与 Paper theme 映射
 src/i18n/                    本地化消息包
-src/storage/                 MMKV 与 fallback 存储
+src/storage/                 MMKV 状态与 SecureStore 设备凭据
 ../../packages/realtime-client/    共享实时 WebSocket client
 ../../packages/agent-stream-client/ agent stream 事件分发器
 plugins/                     Expo config plugins
@@ -89,22 +89,17 @@ pnpm run dev:mobile
 | `pnpm run mobile:test` | 运行 Vitest 测试 |
 | `pnpm run mobile:test:stream` | 运行 agent stream client 测试 |
 
-## 配置 Gateway
+## 配对设备
 
-在 App 设置中配置：
+移动端路由必须是 HTTPS origin。Gateway 可以发布以下任意组合：
 
-- Gateway base URL，不要带结尾斜杠。
-- 可选 bearer token，需要与 `xopc.json` 中的 gateway auth 匹配。
+- XOPC Secure Link。
+- Tailscale Serve。
+- 已配置的 HTTPS 反向代理 origin。
 
-示例：
+签名后的配对数据包含 gateway 身份和当前可用的安全路由。App 会按顺序尝试，并记住最近成功的路由；写请求不会并发发送到多条路由。
 
-```text
-http://192.168.1.44:18790
-https://your-name.frp.xopc.ai
-https://xopc.example.com
-```
-
-App 可在 gateway 设置中探测可用路由，并在 `/health` 成功时优先使用 LAN。
+要让 Universal Links/App Links 直接打开已安装的 App，`link.xopc.ai` 必须提供 Apple `apple-app-site-association`（App ID 为 `<APPLE_TEAM_ID>.ai.xopc.xopc`）以及 Android `assetlinks.json`（包名 `ai.xopc.xopc`，包含生产签名证书指纹）。
 
 ## Expo Go 与 Development Build
 
@@ -132,7 +127,7 @@ Gateway 会在本地 SQLite 中保存设备注册信息，并为“Task 需要�
 1. 在 Expo/EAS 中确认项目 ID 与 `app.json` 相同，并使用 development 或 production client 测试；Android 的 Expo Go 不能作为推送通知测试目标。
 2. Android：在 Firebase 创建包名为 `ai.xopc.xopc` 的 Android App，并在 Expo 项目凭据中配置 FCM v1。将下载的客户端配置保存为 `apps/mobile-expo/google-services.json`（已忽略 Git），或在 EAS 中配置名为 `GOOGLE_SERVICES_JSON` 的 file 环境变量。GitHub Android 发布还需将该文件的 Base64 内容保存为仓库 Secret `GOOGLE_SERVICES_JSON_BASE64`。可运行 `pnpm -C apps/mobile-expo run verify:android-push` 校验包名和必需字段。
 3. iOS：在 Apple Developer 中为 `ai.xopc.xopc` 开启 Push Notifications，并在 EAS 凭据中配置 APNs key 或 profile；请在真机 iPhone/iPad 上测试。
-4. 确认 gateway 主机可通过 HTTPS 访问 `https://exp.host`；手机仍通过已配对的 LAN 或远程 URL 访问 gateway。
+4. 确认 gateway 主机可通过 HTTPS 访问 `https://exp.host`；手机通过已配对的安全路由访问 gateway。
 
 首次完成凭据配置、或变更原生通知配置后，需要重新构建：
 
@@ -142,37 +137,9 @@ pnpm -C apps/mobile-expo run build:android:preview
 pnpm -C apps/mobile-expo run build:ios:preview
 ```
 
-## 原生网络说明
+## 原生网络安全
 
-本地 gateway 通常在 LAN IP 上使用普通 HTTP，例如 `http://192.168.1.44:18790`。Expo Go 与已安装的原生构建行为可能不同，因为原生构建使用本 App 自己的 bundle ID、权限和网络策略。
-
-### Android HTTP Cleartext
-
-Android 9+ 默认阻止 HTTP。本项目通过 `expo-build-properties` 设置 `android.usesCleartextTraffic: true`，允许 LAN HTTP。
-
-修改原生网络设置后：
-
-```bash
-pnpm -C apps/mobile-expo exec expo prebuild --clean
-pnpm run android:mobile
-```
-
-如果 LAN 在 Expo Go 中可用，但在 dev-client 或 release APK 中失败，请重新构建 Android App。Cleartext 设置在 prebuild 阶段写入。
-
-### iOS Local Network 与 ATS
-
-`app.json` 中的 iOS 配置包含：
-
-- `NSAppTransportSecurity.NSAllowsLocalNetworking`，允许访问本地 IP 的 HTTP。
-- `NSLocalNetworkUsageDescription`，用于 iOS Local Network 隐私弹窗。
-
-首次访问 LAN 时，iOS 会询问是否允许 App 查找本地网络设备。Expo Go 与已安装的 xopc App 使用不同 bundle ID；允许 Expo Go 不等于允许独立 App。
-
-安装后如果 LAN 不可达：
-
-1. 打开 **Settings -> Privacy & Security -> Local Network**，启用 **xopc**。
-2. 确认手机和 gateway 在同一个 Wi-Fi。
-3. 在 App gateway 设置中重新探测路由。
+App 只接受 HTTPS/WSS gateway 路由。Android 使用 `usesCleartextTraffic: false` 构建；iOS 不包含 ATS 本地网络例外。`app.json` 已声明校验后的 `https://link.xopc.ai/connect` App Link 和对应的 iOS associated domain。修改这些设置后，请运行 `pnpm -C apps/mobile-expo exec expo prebuild --clean` 并重新构建原生 App。
 
 ## iOS CocoaPods 与代理说明
 

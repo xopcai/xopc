@@ -18,11 +18,6 @@ vi.mock('../../api/client', () => ({
   ),
 }));
 
-vi.mock('../../api/dual-fire-fetch', () => ({
-  dualFireFetch: vi.fn(),
-  hasCachedRouteWinner: vi.fn(() => true),
-}));
-
 vi.mock('../../features/gateway/sessions-cache', () => ({
   readCachedSessions: vi.fn(() => null),
   writeCachedSessions: vi.fn(),
