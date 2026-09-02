@@ -371,14 +371,17 @@ function MarkdownViewImpl({
   const safeHtml = useMemo(() => {
     if (!content.trim()) return '';
     const startedAt = streamingMetricsKey ? performance.now() : 0;
-    const normalized = rewriteWorkspaceFileLinksInMarkdown(rewriteSupportedAppLinksInMarkdown(content));
+    const normalized = rewriteWorkspaceFileLinksInMarkdown(
+      rewriteSupportedAppLinksInMarkdown(content),
+      Boolean(onWorkspaceFileOpen),
+    );
     const raw = parseMarkdown(normalized, breaks ? { breaks: true } : undefined);
     const sanitized = sanitizeMarkdownHtml(raw);
     if (streamingMetricsKey) {
       recordStreamingParse(streamingMetricsKey, performance.now() - startedAt);
     }
     return sanitized;
-  }, [content, breaks, streamingMetricsKey]);
+  }, [content, breaks, onWorkspaceFileOpen, streamingMetricsKey]);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [mermaidPreview, setMermaidPreview] = useState<MermaidPreviewState | null>(null);
