@@ -30,6 +30,12 @@ export {
 } from './connection.js';
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
+  deleteEndpointSessionBinding,
+  getEndpointSessionBinding,
+  setEndpointSessionBinding,
+  type StoredEndpointSessionBinding,
+} from './endpoint-session-binding-repository.js';
+export {
   authenticateDeviceAccessToken,
   buildRefreshProofMessage,
   createDevice,

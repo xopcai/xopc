@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
 
+import Ajv2020 from 'ajv/dist/2020.js';
+
 import {
   ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS,
   ENDPOINT_MAX_CONCURRENT_INVOCATIONS,
   canonicalJson,
   type ClientEndpointMessage,
   type EndpointToolContent,
+  type EndpointToolDescriptor,
   type EndpointToolErrorCode,
 } from '@xopcai/endpoint-tools-protocol';
 
@@ -20,6 +23,7 @@ interface PendingInvocation {
   id: string;
   endpointId: string;
   toolName: string;
+  descriptor: EndpointToolDescriptor;
   state: PendingState;
   receiptTimer: ReturnType<typeof setTimeout>;
   deadlineTimer: ReturnType<typeof setTimeout>;
@@ -75,6 +79,7 @@ export class EndpointToolExecutionError extends Error {
 export class EndpointInvocationService {
   private readonly pending = new Map<string, PendingInvocation>();
   private readonly policy: EndpointToolPolicy;
+  private readonly ajv = new Ajv2020({ allErrors: true, strict: true });
 
   constructor(
     private readonly registry: EndpointRegistry,
@@ -145,6 +150,7 @@ export class EndpointInvocationService {
         id: invocationId,
         endpointId: params.endpointId,
         toolName: params.toolName,
+        descriptor: tool.descriptor,
         state: 'sent',
         receiptTimer: setTimeout(() => {
           this.fail(invocationId, this.error('TOOL_TIMEOUT', 'Endpoint did not receive the invocation'));
@@ -200,6 +206,10 @@ export class EndpointInvocationService {
       case 'tool.result':
         if (pending.state !== 'running') return;
         try {
+          const validate = this.ajv.compile(pending.descriptor.outputSchema);
+          if (!validate(message.payload.content)) {
+            throw new Error(`Endpoint result does not match its contract: ${this.ajv.errorsText(validate.errors)}`);
+          }
           this.options.uploads?.validateAndClose(invocationId, message.payload.content);
         } catch (error) {
           this.fail(invocationId, this.error(

@@ -47,6 +47,12 @@ export interface ManagedEndpointInvocation {
   completedAt?: number;
 }
 
+export interface ManagedEndpointSessionBinding {
+  sessionKey: string;
+  endpointId: string;
+  boundAt: number;
+}
+
 async function payload<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null) as {
     payload?: T;
@@ -66,12 +72,39 @@ export function endpointInvocationsKey(): string {
   return apiUrl('/api/endpoint-tools/invocations?limit=50');
 }
 
+export function endpointBindingKey(sessionKey: string): string {
+  return apiUrl(`/api/endpoint-tools/bindings/${encodeURIComponent(sessionKey)}`);
+}
+
 export async function fetchEndpointPrincipals(): Promise<ManagedEndpointPrincipal[]> {
   return payload<ManagedEndpointPrincipal[]>(await apiFetch(endpointPrincipalsKey()));
 }
 
 export async function fetchEndpointInvocations(): Promise<ManagedEndpointInvocation[]> {
   return payload<ManagedEndpointInvocation[]>(await apiFetch(endpointInvocationsKey()));
+}
+
+export async function fetchEndpointBinding(sessionKey: string): Promise<ManagedEndpointSessionBinding | undefined> {
+  const response = await apiFetch(endpointBindingKey(sessionKey));
+  if (response.status === 404) return undefined;
+  return payload<ManagedEndpointSessionBinding>(response);
+}
+
+export async function bindEndpointToSession(
+  sessionKey: string,
+  endpointId: string,
+): Promise<ManagedEndpointSessionBinding> {
+  return payload<ManagedEndpointSessionBinding>(await apiFetch(endpointBindingKey(sessionKey), {
+    method: 'PUT',
+    body: JSON.stringify({ endpointId }),
+  }));
+}
+
+export async function unbindEndpointFromSession(sessionKey: string): Promise<boolean> {
+  const result = await payload<{ removed: boolean }>(await apiFetch(endpointBindingKey(sessionKey), {
+    method: 'DELETE',
+  }));
+  return result.removed;
 }
 
 export async function revokeManagedEndpointPrincipal(principalId: string): Promise<void> {

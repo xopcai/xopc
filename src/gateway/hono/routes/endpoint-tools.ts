@@ -1,4 +1,7 @@
-import { endpointPrincipalRegistrationSchema } from '@xopcai/endpoint-tools-protocol';
+import {
+  endpointPrincipalRegistrationSchema,
+  endpointSessionBindingRequestSchema,
+} from '@xopcai/endpoint-tools-protocol';
 import type { Hono } from 'hono';
 
 import {
@@ -123,6 +126,44 @@ export function registerEndpointToolRoutes(
       ok: true,
       payload: listEndpointToolInvocationAudits(Number.isFinite(limit) ? limit : 100),
     });
+  });
+
+  authenticated.get('/api/endpoint-tools/bindings/:sessionKey', (c) => {
+    try {
+      const binding = deps.service.endpointTools.bindings.get(c.req.param('sessionKey'));
+      return binding
+        ? c.json({ ok: true, payload: binding })
+        : c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint binding not found' } }, 404);
+    } catch {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session key' } }, 400);
+    }
+  });
+
+  authenticated.put('/api/endpoint-tools/bindings/:sessionKey', async (c) => {
+    const parsed = endpointSessionBindingRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint binding' } }, 400);
+    }
+    try {
+      const binding = deps.service.endpointTools.bindings.bind(
+        c.req.param('sessionKey'),
+        parsed.data.endpointId,
+      );
+      return c.json({ ok: true, payload: binding });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const status = message === 'Endpoint is offline' ? 409 : 400;
+      return c.json({ ok: false, error: { code: 'BINDING_FAILED', message } }, status);
+    }
+  });
+
+  authenticated.delete('/api/endpoint-tools/bindings/:sessionKey', (c) => {
+    try {
+      const removed = deps.service.endpointTools.bindings.unbind(c.req.param('sessionKey'));
+      return c.json({ ok: true, payload: { removed } });
+    } catch {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session key' } }, 400);
+    }
   });
 
   authenticated.post('/api/endpoint-tools/invocations/:invocationId/files', async (c) => {

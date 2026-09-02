@@ -8,13 +8,17 @@ import {
 import { resolveStateDir } from '../config/paths.js';
 import {
   bindEndpointPrincipal,
+  deleteEndpointSessionBinding,
   finishEndpointToolInvocationAudit,
   getEndpointPrincipal,
+  getEndpointSessionBinding,
   startEndpointToolInvocationAudit,
+  setEndpointSessionBinding,
   touchEndpointPrincipal,
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import { EndpointAuthenticator, type EndpointAuthenticatorDeps } from './auth.js';
+import { EndpointBindingService } from './binding-service.js';
 import {
   EndpointInvocationService,
   type EndpointInvocationAuditSink,
@@ -34,6 +38,7 @@ export class EndpointToolRuntime {
   readonly registry: EndpointRegistry;
   readonly invocations: EndpointInvocationService;
   readonly uploads: EndpointUploadService;
+  readonly bindings: EndpointBindingService;
 
   private readonly authenticator: EndpointAuthenticator;
   private closed = false;
@@ -45,6 +50,11 @@ export class EndpointToolRuntime {
   } = {}) {
     const policy = new EndpointToolPolicy();
     this.registry = new EndpointRegistry(policy);
+    this.bindings = new EndpointBindingService(this.registry, {
+      get: getEndpointSessionBinding,
+      set: setEndpointSessionBinding,
+      delete: deleteEndpointSessionBinding,
+    });
     this.authenticator = new EndpointAuthenticator(options.auth ?? {
       getPrincipal: getEndpointPrincipal,
       bindEndpoint: bindEndpointPrincipal,

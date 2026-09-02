@@ -17,6 +17,18 @@ vi.mock('expo-device', () => ({
 }));
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: state.pick }));
 vi.mock('expo-linking', () => ({ openURL: vi.fn() }));
+vi.mock('expo-contacts', () => ({
+  ContactField: {
+    FULL_NAME: 'fullName',
+    GIVEN_NAME: 'givenName',
+    FAMILY_NAME: 'familyName',
+    PHONES: 'phones',
+    EMAILS: 'emails',
+  },
+  Contact: class {},
+  getPermissionsAsync: vi.fn(),
+  requestPermissionsAsync: vi.fn(),
+}));
 vi.mock('expo-sharing', () => ({
   isAvailableAsync: state.sharingAvailable,
   shareAsync: state.share,

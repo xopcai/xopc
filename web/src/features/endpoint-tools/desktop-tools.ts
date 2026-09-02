@@ -2,7 +2,11 @@ import type {
   EndpointToolDefinition,
   EndpointToolExecutionResult,
 } from '@xopcai/endpoint-tools-client';
-import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
+import {
+  ENDPOINT_FILE_OUTPUT_SCHEMA,
+  ENDPOINT_MAX_FILE_BYTES,
+  ENDPOINT_TEXT_OUTPUT_SCHEMA,
+} from '@xopcai/endpoint-tools-protocol';
 
 function textResult(text: string): EndpointToolExecutionResult {
   return { content: [{ type: 'text', text }] };
@@ -41,6 +45,9 @@ export const DESKTOP_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
       title: 'Choose a local file',
       description: 'Ask the user to choose one local file and make it available to the agent.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+      outputSchema: ENDPOINT_FILE_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['file-read'], timeoutMs: 120_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['file'],
@@ -72,6 +79,9 @@ export const DESKTOP_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
           content: { type: 'string', maxLength: 200_000 },
         },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['file-write'], timeoutMs: 120_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['text'],
@@ -107,6 +117,9 @@ export const DESKTOP_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
           body: { type: 'string', minLength: 1, maxLength: 500 },
         },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['notifications'], timeoutMs: 10_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['text'],
@@ -143,6 +156,9 @@ export const DESKTOP_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
       title: 'Read the clipboard',
       description: 'Read plain text from the desktop clipboard.',
       inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'personal.foreground-read',
+      sensitivity: 'personal',
       effect: 'read', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['clipboard-read'], timeoutMs: 10_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: true, resultKinds: ['text'],
@@ -163,6 +179,9 @@ export const DESKTOP_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
         type: 'object', additionalProperties: false, required: ['text'],
         properties: { text: { type: 'string', minLength: 1, maxLength: 100_000 } },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['clipboard-write'], timeoutMs: 10_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: true, resultKinds: ['text'],
@@ -185,6 +204,9 @@ export const DESKTOP_ENDPOINT_TOOL_DEFINITIONS: readonly EndpointToolDefinition[
         type: 'object', additionalProperties: false, required: ['url'],
         properties: { url: { type: 'string', minLength: 1, maxLength: 2_048 } },
       },
+      outputSchema: ENDPOINT_TEXT_OUTPUT_SCHEMA,
+      policyId: 'user.foreground-write',
+      sensitivity: 'personal',
       effect: 'write', confirmation: 'always', requiresForeground: true,
       requiredPermissions: ['open-external-url'], timeoutMs: 15_000, maxConcurrency: 1,
       supportsCancellation: false, idempotent: false, resultKinds: ['text'],
