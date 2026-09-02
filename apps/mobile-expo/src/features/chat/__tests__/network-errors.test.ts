@@ -13,7 +13,14 @@ describe('isTransientNetworkError', () => {
 
   it('detects fetch and timeout failures', () => {
     expect(isTransientNetworkError('Failed to fetch')).toBe(true);
+    expect(isTransientNetworkError('Network response was invalid')).toBe(true);
     expect(isTransientNetworkError('The request timed out')).toBe(true);
+  });
+
+  it('detects normalized gateway route failures', () => {
+    expect(isTransientNetworkError('Could not reach gateway')).toBe(true);
+    expect(isTransientNetworkError('No route to gateway')).toBe(true);
+    expect(isTransientNetworkError('No internet connection')).toBe(true);
   });
 
   it('ignores server-side application errors', () => {

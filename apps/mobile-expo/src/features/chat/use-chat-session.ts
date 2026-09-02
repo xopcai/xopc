@@ -139,6 +139,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const displayMessagesRef = useRef<Message[]>([]);
   const messageListAtBottomRef = useRef(true);
   const sessionDataUpdatedAtRef = useRef(0);
+  const sessionHeadRefreshGenerationRef = useRef(new Map<string, number>());
   const prevGatewayOnlineForStreamRef = useRef(gatewayOnline);
 
   const streamRecoveryRef = useRef({
@@ -262,7 +263,19 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }, [activeGatewayId, queryClient]);
 
   const refreshSessionHeadByKey = useCallback(async (targetSessionKey: string) => {
-    const latestPage = await fetchSessionMessagePage(targetSessionKey, { limit: 50 });
+    const generations = sessionHeadRefreshGenerationRef.current;
+    const generation = (generations.get(targetSessionKey) ?? 0) + 1;
+    generations.set(targetSessionKey, generation);
+    let latestPage: SessionMessagePage | null;
+    try {
+      latestPage = await fetchSessionMessagePage(targetSessionKey, { limit: 50 });
+    } catch (error) {
+      if (generations.get(targetSessionKey) !== generation) return;
+      throw error;
+    }
+    // Weak networks can complete an older foreground/finalize request after a
+    // newer one. Only the newest started refresh may update the transcript.
+    if (generations.get(targetSessionKey) !== generation) return;
     if (!latestPage) {
       invalidateSessionByKey(targetSessionKey);
       return;
@@ -295,6 +308,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Session key change ───────────────────────────────────
   useEffect(() => {
+    senderRef.current.detachLocalStream();
     activeSessionKeyRef.current = sessionKey;
     clearAllState();
   }, [sessionKey, clearAllState]);
@@ -832,7 +846,12 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       streamingRef.current = true;
       lastStreamActivityAtRef.current = Date.now();
       try {
-        await senderRef.current.resume(runId, sessionKey, buildCallbacks(sessionKey));
+        await senderRef.current.resume(
+          runId,
+          sessionKey,
+          buildCallbacks(sessionKey),
+          { replayFromStart: streamingMsgRef.current === null },
+        );
         streamRecoveryRef.current.markRecoverySucceeded();
       } catch (e) {
         if (activeSessionKeyRef.current !== sessionKey) {
@@ -925,21 +944,18 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       const previousAppState = previous;
       previous = next;
       const sessionIsActive = Boolean(sessionKey) && activeSessionKeyRef.current === sessionKey;
-      const hasResumableWork = Boolean(sessionKey) && (
-        senderRef.current.isStreamingFor(sessionKey)
-        || Boolean(readPendingSessionInput(sessionKey))
-        || Boolean(readPendingAgentRunId(sessionKey))
-      );
       if (!shouldWakeStreamRecoveryOnForeground({
         previousAppState,
         nextAppState: next,
         sessionIsActive,
-        hasResumableWork,
       })) return;
+      // Pull the durable transcript immediately so a run that completed while
+      // suspended becomes visible without waiting for realtime replay.
+      void refreshSessionHeadByKey(sessionKey).catch(() => invalidateSessionByKey(sessionKey));
       wakeStreamRecovery();
     });
     return () => subscription.remove();
-  }, [sessionKey, wakeStreamRecovery]);
+  }, [sessionKey, wakeStreamRecovery, refreshSessionHeadByKey, invalidateSessionByKey]);
 
   // Resolve server-side active runs on session entry. Local pending run storage is
   // only a cache; the gateway is the source of truth when the screen remounts.

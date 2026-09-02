@@ -59,6 +59,11 @@ async function postSessionInput(path: string, body: string, headers?: Record<str
 
 export type MessagingCallbacks = AgentStreamCallbacks;
 
+export type AgentStreamResumeOptions = {
+  /** Rebuild an empty in-memory assistant projection from the retained run log. */
+  replayFromStart?: boolean;
+};
+
 export class AgentStreamReplayExpiredError extends Error {
   constructor() {
     super('Run not found or realtime replay expired');
@@ -270,8 +275,8 @@ export class AgentMessageSender {
   private _sessionKey = '';
   /** `runId` from the `run_start` event for this POST/resume; do not clear a newer pending run. */
   private _trackedRunId?: string;
-  /** Local transport teardown for resume/recovery — do not abort the server run or clear pending runId. */
-  private _localDetach = false;
+  /** Abort controllers detached locally without cancelling their server runs. */
+  private readonly _localDetaches = new WeakSet<AbortController>();
   private _streamCleanup?: () => void;
 
   get isSending() {
@@ -293,8 +298,8 @@ export class AgentMessageSender {
    */
   detachLocalStream(): void {
     if (!this._abort) return;
-    this._localDetach = true;
     const abortController = this._abort;
+    this._localDetaches.add(abortController);
     abortController.abort();
     this._streamCleanup?.();
     this._streamCleanup = undefined;
@@ -341,8 +346,7 @@ export class AgentMessageSender {
     this._trackedRunId = undefined;
   }
 
-  private _clearPendingRun(): void {
-    const sessionKey = this._sessionKey;
+  private _clearPendingRun(sessionKey: string, expectedRunId: string): void {
     if (!sessionKey) return;
     try {
       const key = pendingRunStorageKey(sessionKey);
@@ -350,7 +354,7 @@ export class AgentMessageSender {
       if (raw) {
         const pr = JSON.parse(raw) as { runId?: string };
         const stored = typeof pr?.runId === 'string' ? pr.runId : '';
-        if (this._trackedRunId && stored && stored !== this._trackedRunId) {
+        if (stored && stored !== expectedRunId) {
           return;
         }
       }
@@ -423,17 +427,25 @@ export class AgentMessageSender {
       completeSessionInput(entry.sessionKey, entry.clientMessageId);
       throw new Error(formatApiHttpError(res.status, res.statusText, body?.error?.message));
     }
-    completeSessionInput(entry.sessionKey, entry.clientMessageId);
     const json = await res.json().catch(() => {
       throw new Error('Network response was invalid');
     }) as { payload?: { state?: {
       activeRunId?: string; activeInputId?: string;
       inputs?: Array<{ id: string; clientMessageId: string }>;
     } } };
+    // Keep the durable outbox entry until the acknowledgement body is usable.
+    // A truncated 202 response is ambiguous: the gateway may already be
+    // running the input, and retrying the same clientMessageId is idempotent.
+    completeSessionInput(entry.sessionKey, entry.clientMessageId);
     const state = json.payload?.state;
     const own = state?.inputs?.find((input) => input.clientMessageId === entry.clientMessageId);
     if (attachRun && state?.activeRunId && own?.id === state.activeInputId) {
-      return this.resume(state.activeRunId, entry.sessionKey, callbacks);
+      return this.resume(
+        state.activeRunId,
+        entry.sessionKey,
+        callbacks,
+        { replayFromStart: true },
+      );
     }
   }
 
@@ -458,7 +470,12 @@ export class AgentMessageSender {
     return this.sendMessage('', sessionKey, callbacks, [wire], taskId);
   }
 
-  async resume(runId: string, sessionKey: string, callbacks?: MessagingCallbacks): Promise<void> {
+  async resume(
+    runId: string,
+    sessionKey: string,
+    callbacks?: MessagingCallbacks,
+    options: AgentStreamResumeOptions = {},
+  ): Promise<void> {
     if (this.isStreamingFor(sessionKey)) {
       this.detachLocalStream();
     }
@@ -471,6 +488,12 @@ export class AgentMessageSender {
     const terminal = wrapTerminalCallbacks(callbacks);
     const opts = streamDispatchOptions(sessionKey, this);
     let preservePending = false;
+    let unsubscribe: (() => void) | undefined;
+    const cleanupStream = () => {
+      unsubscribe?.();
+      unsubscribe = undefined;
+      if (this._streamCleanup === cleanupStream) this._streamCleanup = undefined;
+    };
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -480,8 +503,7 @@ export class AgentMessageSender {
           if (settled) return;
           settled = true;
           if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
-          this._streamCleanup?.();
-          this._streamCleanup = undefined;
+          cleanupStream();
           if (error) reject(error);
           else resolve();
         };
@@ -489,8 +511,13 @@ export class AgentMessageSender {
           requestMobileRealtimeReconnect();
           finish(new Error('Realtime stream attach timed out'));
         }, STREAM_ATTACH_TIMEOUT_MS);
-        const afterSeq = readPendingAgentRunCursor(sessionKey, runId);
-        this._streamCleanup = subscribeMobileRealtimeTopic(`run:${runId}`, {
+        // The persisted cursor belongs to the previous UI projection. After a
+        // cold start or screen remount that projection is empty, so replay the
+        // retained run from zero and reconstruct the full assistant message.
+        const afterSeq = options.replayFromStart
+          ? 0
+          : readPendingAgentRunCursor(sessionKey, runId);
+        unsubscribe = subscribeMobileRealtimeTopic(`run:${runId}`, {
           onEvent: (message) => {
             if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
             const event = message.data && typeof message.data === 'object'
@@ -505,21 +532,24 @@ export class AgentMessageSender {
             finish(new AgentStreamReplayExpiredError());
           },
         }, afterSeq);
+        this._streamCleanup = cleanupStream;
         abortController.signal.addEventListener('abort', () => finish(), { once: true });
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      preservePending = this._localDetach
+      const localDetach = this._localDetaches.has(abortController);
+      preservePending = localDetach
         || (!abortController.signal.aborted && isTransientNetworkError(message));
-      if (this._localDetach) return;
+      if (localDetach) return;
       throw e;
     } finally {
-      const localDetach = this._localDetach;
-      this._localDetach = false;
+      const localDetach = this._localDetaches.has(abortController);
+      this._localDetaches.delete(abortController);
+      cleanupStream();
       if (localDetach || preservePending) {
-        this._rePersistPendingRunAfterDetach();
+        this._rePersistPendingRunAfterDetach(sessionKey, runId);
       } else {
-        this._clearPendingRun();
+        this._clearPendingRun(sessionKey, runId);
       }
       if (this._abort === abortController) {
         this._abort = undefined;
@@ -527,15 +557,10 @@ export class AgentMessageSender {
     }
   }
 
-  private _rePersistPendingRunAfterDetach(): void {
-    const sessionKey = this._sessionKey;
-    const runId =
-      this._trackedRunId?.trim() ||
-      (sessionKey ? readPendingAgentRunId(sessionKey) : null) ||
-      undefined;
-    if (sessionKey && runId) {
-      setPendingAgentRun(sessionKey, runId);
-    }
+  private _rePersistPendingRunAfterDetach(sessionKey: string, runId: string): void {
+    const storedRunId = readPendingAgentRunId(sessionKey);
+    if (storedRunId && storedRunId !== runId) return;
+    setPendingAgentRun(sessionKey, runId);
   }
 
 }
