@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon, Switch, Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
@@ -65,19 +65,15 @@ function ChatActionRow({
 export const ChatActionsSheet = memo(function ChatActionsSheet({
   visible,
   agentName,
-  autoReadAloudEnabled,
   onDismiss,
   onAgentPress,
-  onAutoReadAloudToggle,
   onFilesPress,
   onNewChat,
 }: {
   visible: boolean;
   agentName: string;
-  autoReadAloudEnabled: boolean;
   onDismiss: () => void;
   onAgentPress: () => void;
-  onAutoReadAloudToggle: () => void;
   onFilesPress?: () => void;
   onNewChat: () => void;
 }) {
@@ -107,22 +103,7 @@ export const ChatActionsSheet = memo(function ChatActionsSheet({
             label={m.chat.headerCurrentAgent}
             description={agentName}
             onPress={onAgentPress}
-          />
-          <ChatActionRow
-            icon={autoReadAloudEnabled ? 'volume-high' : 'volume-off'}
-            label={m.chat.headerAutoReadAloud}
-            description={m.chat.headerAutoReadAloudHint}
-            onPress={onAutoReadAloudToggle}
             isLast
-            accessibilityRole="switch"
-            selected={autoReadAloudEnabled}
-            trailing={(
-              <Switch
-                value={autoReadAloudEnabled}
-                pointerEvents="none"
-                color={colors.accent.primary}
-              />
-            )}
           />
         </View>
 
