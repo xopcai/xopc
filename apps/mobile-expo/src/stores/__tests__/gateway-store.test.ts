@@ -1,231 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const memory = new Map<string, string>();
-const tokenMemory = new Map<string, string>();
-const { runProbeRound } = vi.hoisted(() => ({ runProbeRound: vi.fn() }));
-
-vi.mock('../../storage/mmkv', () => ({
-  KEYS: {
-    profiles: 'gateway.profiles',
-    activeId: 'gateway.activeId',
-    routeWinnerPrefix: 'gateway.routeWinner:',
-    routeOverridePrefix: 'gateway.routeOverride:',
-    pendingRunPrefix: 'xopc:pendingRun:',
-    language: 'prefs.language',
-    themePreference: 'prefs.themePreference',
-    defaultAgentId: 'prefs.defaultAgentId',
-  },
-  storage: {
-    getString: (key: string) => memory.get(key),
-    set: (key: string, value: string | number | boolean) => {
-      memory.set(key, String(value));
-    },
-    delete: (key: string) => {
-      memory.delete(key);
-    },
-  },
-  pendingRunStorageKey: (sessionKey: string) => `xopc:pendingRun:${sessionKey}`,
+vi.mock('../../storage/device-credentials', () => ({ deleteDeviceRefreshToken: vi.fn() }));
+vi.mock('expo-constants', () => ({
+  default: { executionEnvironment: 'storeClient' },
+  ExecutionEnvironment: { StoreClient: 'storeClient' },
 }));
 
-vi.mock('../../storage/gateway-token-storage', () => ({
-  readGatewayToken: (profileId: string) => tokenMemory.get(profileId) ?? '',
-  writeGatewayToken: (profileId: string, token: string) => {
-    if (token) tokenMemory.set(profileId, token);
-    else tokenMemory.delete(profileId);
-  },
-  deleteGatewayToken: (profileId: string) => {
-    tokenMemory.delete(profileId);
-  },
-  __clearGatewayTokenMemoryForTests: () => {
-    tokenMemory.clear();
-  },
-}));
-
-vi.mock('../../api/connection-strategy', () => ({
-  resolvePreferredBaseUrl: vi.fn(async (tunnel: string) => tunnel.replace(/\/+$/, '')),
-  raceGatewayRoutes: vi.fn(async (tunnel: string, lan: string | undefined) => ({
-    winner: lan ? 'lan' : tunnel ? 'tunnel' : 'none',
-    url: lan ? lan.replace(/\/+$/, '') : tunnel ? tunnel.replace(/\/+$/, '') : '',
-    lan: null,
-    tunnel: null,
-  })),
-}));
-
-vi.mock('../../features/gateway/probe-coordinator', () => ({
-  runProbeRound,
-}));
-
-import { KEYS } from '../../storage/mmkv';
+import { KEYS, storage } from '../../storage/mmkv';
 import { useGatewayStore } from '../gateway-store';
+import type { GatewayProfile } from '../gateway-types';
 
-function resetStore(): void {
-  memory.clear();
-  tokenMemory.clear();
-  useGatewayStore.setState({
-    profiles: [],
-    activeGatewayId: null,
-    baseUrl: '',
-    lanUrl: null,
-    activeBaseUrl: '',
-    token: '',
-    unauthorized: false,
-  });
-}
+const profile: GatewayProfile = {
+  gatewayId: 'gateway-1',
+  name: 'Studio',
+  gatewayPublicKey: 'public-key',
+  deviceId: 'device-1',
+  scopes: ['gateway.status'],
+  routes: [
+    { id: 'primary', kind: 'custom-https', url: 'https://gateway.example.com' },
+    { id: 'backup', kind: 'tailscale', url: 'https://gateway.tailnet.ts.net' },
+  ],
+  activeRouteId: 'primary',
+  updatedAt: 1,
+};
 
-describe('useGatewayStore', () => {
+describe('gateway store', () => {
   beforeEach(() => {
-    resetStore();
-    runProbeRound.mockReset();
-  });
-
-  it('does not activate a profile before the connection service verifies it', () => {
-    useGatewayStore.getState().addProfile({
-      name: 'Unverified',
-      baseUrl: 'https://unverified.example.com',
-      token: 'token',
-    });
-
-    expect(useGatewayStore.getState().profiles).toHaveLength(1);
-    expect(useGatewayStore.getState().activeGatewayId).toBeNull();
-    expect(useGatewayStore.getState().baseUrl).toBe('');
-  });
-
-  it('adds, updates, switches, and removes profiles', () => {
-    const firstId = useGatewayStore.getState().addProfile({
-      name: 'Home',
-      baseUrl: 'https://home.example.com',
-      token: 'a',
-    });
-    const secondId = useGatewayStore.getState().addProfile({
-      name: 'Office',
-      baseUrl: 'https://office.example.com',
-      token: 'b',
-    });
-    useGatewayStore.getState().activateProfile(firstId);
-
-    expect(useGatewayStore.getState().profiles).toHaveLength(2);
-    expect(useGatewayStore.getState().activeGatewayId).toBe(firstId);
-    expect(useGatewayStore.getState().baseUrl).toBe('https://home.example.com');
-
-    useGatewayStore.getState().activateProfile(secondId);
-    expect(useGatewayStore.getState().activeGatewayId).toBe(secondId);
-    expect(useGatewayStore.getState().baseUrl).toBe('https://office.example.com');
-    expect(useGatewayStore.getState().token).toBe('b');
-
-    useGatewayStore.getState().updateProfile(secondId, { token: 'b2' });
-    expect(useGatewayStore.getState().token).toBe('b2');
-    expect(useGatewayStore.getState().profiles.find((p) => p.id === secondId)?.token).toBe('b2');
-    expect(JSON.parse(memory.get(KEYS.profiles) ?? '[]').find((p: { id: string }) => p.id === secondId)?.token).toBe('');
-    expect(tokenMemory.get(secondId)).toBe('b2');
-
-    useGatewayStore.getState().removeProfile(firstId);
-    expect(useGatewayStore.getState().profiles).toHaveLength(1);
-    expect(useGatewayStore.getState().activeGatewayId).toBe(secondId);
-    expect(tokenMemory.has(firstId)).toBe(false);
-  });
-
-  it('clears flat fields when the last profile is removed', () => {
-    const id = useGatewayStore.getState().addProfile({
-      baseUrl: 'https://only.example.com',
-      token: 'x',
-    });
-    useGatewayStore.getState().removeProfile(id);
-
-    const st = useGatewayStore.getState();
-    expect(st.profiles).toHaveLength(0);
-    expect(st.activeGatewayId).toBeNull();
-    expect(st.baseUrl).toBe('');
-    expect(st.token).toBe('');
-  });
-
-  it('finds profiles by normalized baseUrl', () => {
-    useGatewayStore.getState().addProfile({
-      baseUrl: 'https://dup.example.com/',
-      token: 't',
-    });
-
-    const found = useGatewayStore.getState().findProfileByBaseUrl('https://dup.example.com');
-    expect(found?.baseUrl).toBe('https://dup.example.com');
-  });
-
-  it('persists profiles and active id', () => {
-    useGatewayStore.getState().addProfile({
-      baseUrl: 'https://persist.example.com',
-      token: 'save-me',
-    });
-
+    storage.delete(KEYS.profiles);
+    storage.delete(KEYS.activeId);
     useGatewayStore.setState({
-      profiles: [],
-      activeGatewayId: null,
-      baseUrl: '',
-      lanUrl: null,
-      activeBaseUrl: '',
-      token: '',
-      unauthorized: false,
+      profiles: [], activeGatewayId: null, accessToken: null,
+      accessTokenExpiresAt: 0, unauthorized: false,
     });
+  });
+
+  it('persists profile metadata but keeps access credentials in memory', () => {
+    useGatewayStore.getState().savePairedProfile(profile, 'access-secret', 10_000);
+    expect(storage.getString(KEYS.profiles)).not.toContain('access-secret');
     useGatewayStore.getState().hydrateFromStorage();
-
-    const st = useGatewayStore.getState();
-    expect(st.profiles).toHaveLength(1);
-    expect(st.baseUrl).toBe('https://persist.example.com');
-    expect(st.token).toBe('save-me');
-    expect(JSON.parse(memory.get(KEYS.profiles) ?? '[]')[0]?.token).toBe('');
+    expect(useGatewayStore.getState().getActiveProfile()).toEqual(profile);
+    expect(useGatewayStore.getState().accessToken).toBeNull();
   });
 
-  it('apiUrl falls back to lanUrl when activeBaseUrl was cleared', () => {
-    useGatewayStore.setState({
-      profiles: [],
-      activeGatewayId: 'gw1',
-      baseUrl: '',
-      lanUrl: 'http://192.168.1.44:18790',
-      activeBaseUrl: '',
-      token: 'tok',
-      unauthorized: false,
-    });
-
-    expect(useGatewayStore.getState().apiUrl('/api/sessions/test/inputs')).toBe(
-      'http://192.168.1.44:18790/api/sessions/test/inputs',
-    );
+  it('selects an explicit secure route', () => {
+    useGatewayStore.getState().savePairedProfile(profile, 'access-secret', 10_000);
+    useGatewayStore.getState().selectRoute(profile.gatewayId, 'backup');
+    expect(useGatewayStore.getState().apiUrl('/api/status')).toBe('https://gateway.tailnet.ts.net/api/status');
   });
 
-  it('does not let an earlier profile refresh overwrite the newly active gateway URL', async () => {
-    const firstId = useGatewayStore.getState().addProfile({
-      name: 'Unavailable',
-      baseUrl: 'https://unavailable.example.com',
-      token: 'old',
-    });
-    const secondId = useGatewayStore.getState().addProfile({
-      name: 'Healthy',
-      baseUrl: 'https://healthy.example.com',
-      token: 'new',
-    });
-    useGatewayStore.getState().activateProfile(firstId);
-
-    let resolveFirst!: (task: {
-      result: { winner: 'tunnel'; url: string };
-      online: true;
-    }) => void;
-    runProbeRound
-      .mockReturnValueOnce(new Promise((resolve) => {
-        resolveFirst = resolve;
-      }))
-      .mockResolvedValueOnce({
-        result: { winner: 'tunnel', url: 'https://healthy.example.com' },
-        online: true,
-      });
-
-    expect(useGatewayStore.getState().activeGatewayId).toBe(firstId);
-    const staleRefresh = useGatewayStore.getState().refreshActiveBaseUrl();
-    useGatewayStore.getState().activateProfile(secondId);
-    await useGatewayStore.getState().refreshActiveBaseUrl();
-
-    resolveFirst({
-      result: { winner: 'tunnel', url: 'https://unavailable.example.com' },
-      online: true,
-    });
-    await staleRefresh;
-
-    expect(useGatewayStore.getState().activeGatewayId).toBe(secondId);
-    expect(useGatewayStore.getState().activeBaseUrl).toBe('https://healthy.example.com');
+  it('deletes obsolete flat profiles instead of migrating them', () => {
+    storage.set(KEYS.profiles, JSON.stringify([{ id: 'old', baseUrl: 'http://192.168.1.2', token: 'old' }]));
+    useGatewayStore.getState().hydrateFromStorage();
+    expect(useGatewayStore.getState().profiles).toEqual([]);
+    expect(storage.getString(KEYS.profiles)).toBeUndefined();
   });
 });

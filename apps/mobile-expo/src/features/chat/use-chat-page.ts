@@ -22,7 +22,6 @@ import { usePreferencesStore } from '../../stores/preferences-store';
 import { agentDisplayName } from '../ai/agent-presentation';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
-import { useRouteOverrideToast } from '../gateway/use-route-override-toast';
 import { useKeyboardVisible } from '../../hooks/use-keyboard-visible';
 import { useMessages, t } from '../../i18n/messages';
 import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId } from '../../query/agents';
@@ -79,7 +78,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   useDismissOnHardwareBack(router, { enabled: !embedded });
   const queryClient = useQueryClient();
   const { gatewayOnline } = useGatewayHealth();
-  const routeOverrideToast = useRouteOverrideToast();
   const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
   const isDark = usePreferencesStore((s) => s.resolvedTheme === 'dark');
   const keyboardVisible = useKeyboardVisible();
@@ -660,7 +658,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
     // Gateway
     activeGatewayId,
-    routeOverrideToast,
 
     // Picker sheets
     agentSheetVisible,

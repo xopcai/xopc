@@ -30,19 +30,19 @@ afterEach(() => {
 
 describe('connection-log', () => {
   it('records events and returns them in chronological order', () => {
-    recordConnectionEvent({ kind: 'race', ok: true });
+    recordConnectionEvent({ kind: 'realtime', ok: true });
     recordConnectionEvent({ kind: 'apiFetch', ok: false, reason: 'no-route' });
 
     const events = readConnectionEvents();
     expect(events).toHaveLength(2);
-    expect(events[0].kind).toBe('race');
+    expect(events[0].kind).toBe('realtime');
     expect(events[1].reason).toBe('no-route');
     expect(events[0].at).toBeLessThanOrEqual(events[1].at);
   });
 
   it('caps the buffer at MAX_EVENTS so storage never grows unbounded', () => {
     for (let i = 0; i < 150; i++) {
-      recordConnectionEvent({ kind: 'race', ok: i % 2 === 0 });
+      recordConnectionEvent({ kind: 'apiFetch', ok: i % 2 === 0 });
     }
     expect(readConnectionEvents().length).toBeLessThanOrEqual(100);
   });

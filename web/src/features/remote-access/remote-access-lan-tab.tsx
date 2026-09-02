@@ -5,17 +5,12 @@ import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
-import { MobilePairQrSection } from '@/features/tunnel/mobile-pair-qr-section';
-import { useMobilePairQr } from '@/features/tunnel/use-mobile-pair-qr';
 import { messages } from '@/i18n/messages';
-import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function RemoteAccessLanTab() {
   const language = useLocaleStore((s) => s.language);
-  const token = useGatewayStore((s) => s.token);
   const lan = messages(language).remoteAccess.lan;
-  const pairQr = useMobilePairQr(token ?? '', { preferLan: true });
 
   return (
     <div className="flex flex-col gap-4">
@@ -32,13 +27,6 @@ export function RemoteAccessLanTab() {
           </Link>
         </div>
       </SettingsFormSection>
-
-      <MobilePairQrSection
-        pairQr={pairQr}
-        gatewayToken={token ?? ''}
-        lanOnly
-        onRefreshQr={() => void pairQr.refreshQr()}
-      />
     </div>
   );
 }

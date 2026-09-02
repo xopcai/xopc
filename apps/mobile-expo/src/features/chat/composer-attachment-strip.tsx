@@ -73,7 +73,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   readOnly?: boolean;
 }) {
   const { colors } = useTheme();
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.accessToken);
   const [preview, setPreview] = useState<PreviewableFile | null>(null);
   const [audioPreview, setAudioPreview] = useState<AudioContent | null>(null);
   const [editing, setEditing] = useState<{ index: number; attachment: ComposerAttachment } | null>(null);

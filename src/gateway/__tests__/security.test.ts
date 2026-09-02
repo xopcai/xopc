@@ -279,7 +279,7 @@ describe('Gateway Security Fixes', () => {
       });
       const app = createHonoApp({ service, token: 'test' });
 
-      const res = await app.request('/api/tunnel/pair', {
+      const res = await app.request('/api/status', {
         method: 'POST',
         headers: {
           Origin: 'http://localhost:3000',

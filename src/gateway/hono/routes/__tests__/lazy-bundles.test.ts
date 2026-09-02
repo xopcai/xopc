@@ -27,11 +27,6 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/connectors')?.id).toBe('capabilities');
   });
 
-  it('keeps authenticated tunnel pair routes off the public lazy bundle', () => {
-    expect(findAuthenticatedLazyRouteBundle('/api/tunnel/pair/context')?.id).toBe('tunnel');
-    expect(findAuthenticatedLazyRouteBundle('/api/tunnel/pair/enable-lan')?.id).toBe('tunnel');
-  });
-
   it('uses distinct bundles for voice models vs voice settings', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/voice/models')?.id).toBe('agents');
     expect(findAuthenticatedLazyRouteBundle('/api/voice/providers')?.id).toBe('voice');

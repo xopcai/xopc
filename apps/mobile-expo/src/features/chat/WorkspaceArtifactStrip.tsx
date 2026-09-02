@@ -40,7 +40,7 @@ export function WorkspaceArtifactStrip({
   const { colors } = useTheme();
   const m = useMessages();
   const apiUrl = useGatewayStore((state) => state.apiUrl);
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.accessToken);
   const [active, setActive] = useState<PreviewableFile | null>(null);
   const relativePaths = useMemo(() => paths.map((path) => path.workspaceRelativePath), [paths]);
   const resolution = useQuery({

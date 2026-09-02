@@ -46,8 +46,5 @@ export { consumeTunnelMutationLimit, resetTunnelMutationLimitsForTests } from '.
 export { getTunnelService, hashGatewayToken, TunnelService } from './tunnel-service.js';
 export type { TunnelServiceConfig } from './tunnel-service.js';
 export { resolveFrpSubdomainHost } from './frp-subdomain-host.js';
-export { createPairingSecret, consumePairingSecret, resetPairingSessionsForTests } from './pairing.js';
-export type { PairingSecretResult } from './pairing.js';
-export { buildMobileConnectQrPayload, resolveLanGatewayUrl } from './tunnel-qr.js';
 export { loadTunnelState, saveTunnelState, resolveTunnelStatePath } from './tunnel-state.js';
-export type { PersistedTunnelState, TunnelQrPayload, TunnelStatus, TunnelRegistration } from './tunnel-types.js';
+export type { PersistedTunnelState, TunnelStatus, TunnelRegistration } from './tunnel-types.js';

@@ -67,10 +67,3 @@ export type TunnelStatus = {
     };
   };
 };
-
-export type TunnelQrPayload = {
-  qrPayload: string;
-  publicUrl: string | null;
-  lanUrl: string | null;
-  expiresAt?: string;
-};

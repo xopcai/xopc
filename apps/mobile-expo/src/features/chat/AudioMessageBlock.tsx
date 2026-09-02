@@ -33,7 +33,7 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
 }) {
   const { colors } = useTheme();
   const m = useMessages();
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.accessToken);
   const apiUrl = useGatewayStore((s) => s.apiUrl);
   const playbackOwnerId = useId();
   const playerRef = useRef<AudioPlayer | null>(null);

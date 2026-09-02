@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
-import { RouteOverrideToastView } from '../gateway/RouteOverrideToastView';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { t } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
@@ -78,7 +77,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     bootstrap,
     chat,
     activeGatewayId,
-    routeOverrideToast,
     agentSheetVisible,
     setAgentSheetVisible,
     handleBack,
@@ -295,11 +293,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
       >
         {chat.snackMsg}
       </AppToast>
-
-      <RouteOverrideToastView
-        toast={routeOverrideToast}
-        onDismiss={() => { /* hook auto-clears */ }}
-      />
 
       <AgentPickerSheet
         visible={agentSheetVisible}

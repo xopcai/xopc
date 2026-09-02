@@ -1,35 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasPairableGatewayQr, parseGatewayQrPayload } from '../parse-gateway-qr';
+import { encodeBase64Url } from '../device-crypto';
+import { parseGatewayQrPayload } from '../parse-gateway-qr';
+
+function link(overrides: Record<string, unknown> = {}): string {
+  const payload = {
+    version: 2,
+    pairingToken: 'xopc_pair_123_secret',
+    gatewayId: 'gateway-1',
+    gatewayName: 'Studio',
+    gatewayPublicKey: 'public-key',
+    routes: [{ id: 'secure-1', kind: 'custom-https', url: 'https://gateway.example.com' }],
+    expiresAt: Date.now() + 60_000,
+    ...overrides,
+  };
+  const encoded = encodeBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  return `https://link.xopc.ai/connect#p=${encoded}`;
+}
 
 describe('parseGatewayQrPayload', () => {
-  it('parses mobile-connect deep link with ps', () => {
-    const raw =
-      'xopc://gateway/mobile-connect?baseUrl=https%3A%2F%2Fabc123.frp.xopc.ai&lanUrl=http%3A%2F%2F192.168.1.10%3A18790&ps=one-time-secret';
-    const parsed = parseGatewayQrPayload(raw);
-    expect(parsed.baseUrl).toBe('https://abc123.frp.xopc.ai');
-    expect(parsed.lanUrl).toBe('http://192.168.1.10:18790');
-    expect(parsed.pairingSecret).toBe('one-time-secret');
+  it('parses the current Universal Link payload', () => {
+    expect(parseGatewayQrPayload(link())).toMatchObject({
+      version: 2,
+      gatewayId: 'gateway-1',
+      routes: [{ url: 'https://gateway.example.com' }],
+    });
   });
 
-  it('ignores token query params on deep links', () => {
-    const raw = 'xopc://gateway/mobile-connect?baseUrl=https%3A%2F%2Flocal&token=ignored';
-    const parsed = parseGatewayQrPayload(raw);
-    expect(parsed.baseUrl).toBe('https://local');
-    expect(parsed.pairingSecret).toBeUndefined();
-  });
-});
-
-describe('hasPairableGatewayQr', () => {
-  it('accepts pairing secret with baseUrl', () => {
-    expect(hasPairableGatewayQr({ baseUrl: 'https://a', pairingSecret: 'ps' })).toBe(true);
-  });
-
-  it('rejects pairing secret without baseUrl', () => {
-    expect(hasPairableGatewayQr({ pairingSecret: 'ps' })).toBe(false);
-  });
-
-  it('rejects baseUrl without pairing secret', () => {
-    expect(hasPairableGatewayQr({ baseUrl: 'https://a' })).toBe(false);
+  it('rejects expired, non-HTTPS, and old custom-scheme links', () => {
+    expect(parseGatewayQrPayload(link({ expiresAt: Date.now() - 1 }))).toBeNull();
+    expect(parseGatewayQrPayload(link({ routes: [{ id: 'lan', kind: 'custom-https', url: 'http://192.168.1.2' }] }))).toBeNull();
+    expect(parseGatewayQrPayload('xopc://gateway/mobile-connect?baseUrl=https://example.com&ps=old')).toBeNull();
   });
 });

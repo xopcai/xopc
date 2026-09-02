@@ -6,7 +6,7 @@ export type ProbeReverseProxyResponse =
       ok: true;
       url: string;
       latencyMs: number;
-      mobilePairing: boolean;
+      gatewayReady: boolean;
     }
   | {
       ok: false;
@@ -29,7 +29,7 @@ export type ProbeReverseProxyResponse =
     };
 
 export async function probeReverseProxyUrl(url: string): Promise<ProbeReverseProxyResponse> {
-  const res = await apiFetch(apiUrl('/api/tunnel/pair/probe-public'), {
+  const res = await apiFetch(apiUrl('/api/tunnel/probe-public'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
