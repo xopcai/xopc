@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { xopcCloudOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
+import { xopcCloudOAuthProvider, xopcShareOAuthProvider, xopcTunnelOAuthProvider } from './xopc-cloud.js';
 
 const nativeFetch = globalThis.fetch;
 
@@ -95,6 +95,37 @@ describe('xopcCloudOAuthProvider', () => {
     await expect(login).resolves.toMatchObject({
       access: 'tunnel-access-token',
       scope: ['tunnel:register'],
+    });
+  });
+
+  it('requests only hosted-share scopes for hosted sharing', async () => {
+    vi.useFakeTimers();
+    process.env.XOPC_CONSOLE_URL = 'https://console.test/';
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      const body = new URLSearchParams(String(init?.body));
+      if (url.endsWith('/oauth/device_authorization')) {
+        expect(body.get('scope')).toBe('shares:read shares:write offline_access');
+        return Response.json({
+          device_code: 'share-device-code', user_code: 'SHAR-LINK',
+          verification_uri: 'https://console.test/oauth/device',
+          expires_in: 600, interval: 1,
+        });
+      }
+      return Response.json({
+        access_token: 'share-access-token', refresh_token: 'share-refresh-token',
+        expires_in: 900, scope: 'shares:read shares:write offline_access',
+      });
+    }));
+
+    const login = xopcShareOAuthProvider.login({
+      onAuth: vi.fn(), onDeviceCode: vi.fn(), onPrompt: async () => '',
+      onSelect: async () => 'device_code',
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(login).resolves.toMatchObject({
+      access: 'share-access-token',
+      scope: ['shares:read', 'shares:write', 'offline_access'],
     });
   });
 

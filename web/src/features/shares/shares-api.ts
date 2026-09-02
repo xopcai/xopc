@@ -155,6 +155,7 @@ export type SessionSharePreview = {
 export type SessionShareResult = {
   id: string;
   kind: 'session';
+  delivery: 'local' | 'hosted';
   shareUrl: string;
   lanUrl: string | null;
   reachability: ShareReachability;
@@ -191,6 +192,20 @@ export async function fetchSessionShares(sessionKey: string): Promise<SessionSha
   return response.payload.shares;
 }
 
+export async function fetchHostedSessionShares(sessionKey: string): Promise<SessionShareListItem[]> {
+  const response = await fetchJson<{ ok: true; payload: { shares: SessionShareListItem[] } }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares`),
+  );
+  return response.payload.shares;
+}
+
+export async function fetchHostedShareAuthStatus(): Promise<boolean> {
+  const response = await fetchJson<{ ok: true; payload: { authStatus: string } }>(
+    apiUrl('/api/auth/oauth/xopc-share'),
+  );
+  return response.payload.authStatus === 'connected';
+}
+
 export async function createSessionShare(
   sessionKey: string,
   input: {
@@ -206,6 +221,17 @@ export async function createSessionShare(
 ): Promise<SessionShareResult> {
   const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
     apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares`),
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return response.payload;
+}
+
+export async function createHostedSessionShare(
+  sessionKey: string,
+  input: Parameters<typeof createSessionShare>[1],
+): Promise<SessionShareResult> {
+  const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares`),
     { method: 'POST', body: JSON.stringify(input) },
   );
   return response.payload;
@@ -227,4 +253,23 @@ export async function refreshSessionShare(
     { method: 'POST', body: JSON.stringify(input) },
   );
   return response.payload;
+}
+
+export async function refreshHostedSessionShare(
+  sessionKey: string,
+  shareId: string,
+  input: Parameters<typeof refreshSessionShare>[2],
+): Promise<SessionShareResult> {
+  const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares/${encodeURIComponent(shareId)}/refresh`),
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return response.payload;
+}
+
+export async function revokeHostedSessionShare(sessionKey: string, shareId: string): Promise<void> {
+  await fetchJson(
+    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares/${encodeURIComponent(shareId)}`),
+    { method: 'DELETE' },
+  );
 }
