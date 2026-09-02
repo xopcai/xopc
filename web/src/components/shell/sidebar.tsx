@@ -106,7 +106,7 @@ export function SidebarNav({
               className={cn(
                 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium leading-5 transition-colors duration-200 ease-out',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                'bg-surface-panel text-fg hover:bg-surface-hover',
+                'text-fg hover:bg-surface-hover',
               )}
               title={m.sidebar.newTask}
               onClick={() => onNavigate?.()}

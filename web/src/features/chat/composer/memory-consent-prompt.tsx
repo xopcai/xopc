@@ -88,7 +88,7 @@ export function MemoryConsentPrompt({ sessionKey, language }: { sessionKey: stri
   return (
     <section
       aria-label={t.memoryConsentAria}
-      className="mx-auto mb-2 w-full max-w-[var(--max-width-chat)] rounded-xl border border-accent/25 bg-accent-soft/45 px-3.5 py-3"
+      className="mx-auto mb-2 w-full max-w-[var(--max-width-chat-frame)] rounded-xl border border-accent/25 bg-accent-soft/45 px-3.5 py-3"
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-surface-panel text-accent" aria-hidden>
@@ -153,7 +153,7 @@ export function MemoryCaptureReceipt({ sessionKey, language }: { sessionKey: str
   };
 
   return (
-    <div role="status" className="mx-auto mb-2 flex w-full max-w-[var(--max-width-chat)] items-center gap-2.5 rounded-xl border border-edge bg-surface-panel px-3.5 py-2.5">
+    <div role="status" className="mx-auto mb-2 flex w-full max-w-[var(--max-width-chat-frame)] items-center gap-2.5 rounded-xl border border-edge bg-surface-panel px-3.5 py-2.5">
       <span className="grid size-6 shrink-0 place-items-center rounded-full bg-success-soft text-success" aria-hidden><Check className="size-3.5" /></span>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-fg">{t.memoryCaptured}</p>
@@ -230,7 +230,7 @@ export function MemoryCandidatePrompt({ sessionKey, language }: { sessionKey: st
   return (
     <section
       aria-label={t.memoryCandidateAria}
-      className="xopc-memory-candidate mx-auto mb-2 w-full max-w-[var(--max-width-chat)] overflow-hidden rounded-2xl border border-accent/20 bg-surface-panel px-3.5 py-3 shadow-sm"
+      className="xopc-memory-candidate mx-auto mb-2 w-full max-w-[var(--max-width-chat-frame)] overflow-hidden rounded-2xl border border-accent/20 bg-surface-panel px-3.5 py-3 shadow-sm"
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent" aria-hidden>
