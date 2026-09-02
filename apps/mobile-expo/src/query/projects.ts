@@ -30,23 +30,6 @@ const ProjectSessionSchema = z.object({
   routing: z.object({ agentId: z.string().optional() }).passthrough().optional(),
 }).passthrough();
 
-const ProjectFileEntrySchema = z.object({
-  name: z.string(),
-  path: z.string(),
-  absolutePath: z.string().optional(),
-  type: z.enum(['directory', 'file']),
-  size: z.number().optional(),
-  updatedAt: z.string().optional(),
-});
-
-const ProjectFilesResponseSchema = z.object({
-  ok: z.literal(true),
-  root: z.string(),
-  path: z.string(),
-  parentPath: z.string().nullable(),
-  entries: z.array(ProjectFileEntrySchema),
-});
-
 const ProjectDetailsSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -68,8 +51,6 @@ const ProjectActivityEventSchema = z.object({
 
 export type Project = z.infer<typeof ProjectSchema>;
 export type ProjectSession = z.infer<typeof ProjectSessionSchema>;
-export type ProjectFileEntry = z.infer<typeof ProjectFileEntrySchema>;
-export type ProjectFilesResponse = z.infer<typeof ProjectFilesResponseSchema>;
 export type ProjectDetails = z.infer<typeof ProjectDetailsSchema>;
 export type ProjectActivityEvent = z.infer<typeof ProjectActivityEventSchema>;
 
@@ -95,40 +76,6 @@ export async function fetchProjectSessions(projectId: string): Promise<ProjectSe
   if (!response.ok) throw await readError(response);
   return z.object({ ok: z.literal(true), sessions: z.array(ProjectSessionSchema) })
     .parse(await response.json()).sessions;
-}
-
-export async function fetchProjectFiles(projectId: string, path = ''): Promise<ProjectFilesResponse> {
-  const params = new URLSearchParams();
-  if (path) params.set('path', path);
-  const query = params.toString();
-  const response = await apiFetch(
-    `/api/projects/${encodeURIComponent(projectId)}/files${query ? `?${query}` : ''}`,
-  );
-  if (!response.ok) throw await readError(response);
-  return ProjectFilesResponseSchema.parse(await response.json());
-}
-
-export async function uploadProjectFile(input: {
-  projectId: string;
-  path: string;
-  uri: string;
-  name: string;
-  mimeType?: string;
-}): Promise<ProjectFileEntry> {
-  const form = new FormData();
-  form.append('path', input.path);
-  form.append('file', {
-    uri: input.uri,
-    name: input.name,
-    type: input.mimeType || 'application/octet-stream',
-  } as unknown as Blob);
-  const response = await apiFetch(`/api/projects/${encodeURIComponent(input.projectId)}/files/upload`, {
-    method: 'POST',
-    body: form,
-    timeoutMs: 30_000,
-  });
-  if (!response.ok) throw await readError(response);
-  return ProjectFileEntrySchema.parse((await response.json() as { entry?: unknown }).entry);
 }
 
 export async function fetchProject(projectId: string): Promise<ProjectDetails> {

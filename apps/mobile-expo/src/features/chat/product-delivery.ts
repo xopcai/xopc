@@ -40,7 +40,7 @@ export function mobileProductRoute(reference: ProductReferenceLocator & { projec
     case 'session':
       return `/chat/${id}`;
     case 'file':
-      return '/files';
+      return `/files/open/${id}`;
     case 'settings':
       return '/settings';
     case 'workflow_run':

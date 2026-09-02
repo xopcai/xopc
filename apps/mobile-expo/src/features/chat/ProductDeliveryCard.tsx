@@ -3,14 +3,12 @@ import type {
   ProductReferenceKind,
 } from '@xopcai/gateway-contract';
 import { type Href, useRouter } from 'expo-router';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { Pressable, Share, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { radii, spacing, useTheme } from '../../theme';
 import { usePreferencesStore } from '../../stores/preferences-store';
-import type { ShareAutoRequest } from '../../api/share';
-import { ShareSheet } from '../share/ShareSheet';
 import { dispatchMobileComposerFill } from './mobile-composer-fill';
 import {
   MOBILE_NATIVE_PRODUCT_KINDS,
@@ -54,33 +52,20 @@ const OPERATION_LABELS = {
 
 export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   delivery,
-  sessionKey,
 }: {
   delivery: ProductDeliveryEnvelope;
-  sessionKey?: string | null;
 }) {
   const reference = delivery.primary;
   const router = useRouter();
   const language = usePreferencesStore((state) => state.language);
   const { colors } = useTheme();
-  const [shareRequest, setShareRequest] = useState<ShareAutoRequest | null>(null);
   if (!reference) return null;
 
   const hasNativeDestination = MOBILE_NATIVE_PRODUCT_KINDS.has(reference.kind);
   const destination = mobileProductRoute(reference);
   const canOpen = reference.capabilities.includes('open') && destination !== null;
   const canContinue = reference.capabilities.includes('continue_in_chat');
-  const canShare = reference.capabilities.includes('share');
-  const fileShareRequest: ShareAutoRequest | null = (
-    reference.kind === 'file' && canShare
-      ? {
-          path: reference.id,
-          sessionKey: sessionKey || undefined,
-          title: reference.title,
-          description: reference.summary,
-        }
-      : null
-  );
+  const canShare = reference.kind !== 'file' && reference.capabilities.includes('share');
   const statusText = [
     OPERATION_LABELS[delivery.operation][language],
     reference.status,
@@ -96,10 +81,6 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
     dispatchMobileComposerFill(text);
   };
   const share = () => {
-    if (fileShareRequest) {
-      setShareRequest(fileShareRequest);
-      return;
-    }
     void Share.share({
       title: reference.title,
       message: [reference.title, reference.summary].filter(Boolean).join('\n\n'),
@@ -198,11 +179,6 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
         </View>
       ) : null}
       </View>
-      <ShareSheet
-        visible={Boolean(shareRequest)}
-        request={shareRequest}
-        onClose={() => setShareRequest(null)}
-      />
     </>
   );
 });

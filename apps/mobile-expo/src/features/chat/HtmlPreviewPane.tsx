@@ -14,10 +14,7 @@ import {
 } from './html-preview-source';
 
 export type HtmlPreviewPaneProps = {
-  workspaceRelativePath?: string;
   htmlContent?: string | null;
-  sessionKey?: string | null;
-  agentId?: string | null;
   mutedColor: string;
 };
 
@@ -26,17 +23,12 @@ function previewUriFromSource(source: HtmlWebViewSource | null): string | undefi
 }
 
 export function HtmlPreviewPane({
-  workspaceRelativePath,
   htmlContent,
-  sessionKey,
-  agentId,
   mutedColor,
 }: HtmlPreviewPaneProps) {
   const { colors, isDark } = useTheme();
   const m = useMessages();
   const cm = m.chat;
-  const apiUrl = useGatewayStore((s) => s.apiUrl);
-  const token = useGatewayStore((s) => s.token);
   const gatewayBaseUrl = useGatewayStore((s) =>
     resolveEffectiveGatewayBaseUrl({
       activeBaseUrl: s.activeBaseUrl,
@@ -50,15 +42,10 @@ export function HtmlPreviewPane({
   const source = useMemo(
     () =>
       buildHtmlWebViewSource({
-        workspaceRelativePath,
         htmlContent,
-        sessionKey,
-        agentId,
-        apiUrl,
-        token,
         gatewayBaseUrl,
       }),
-    [agentId, apiUrl, gatewayBaseUrl, htmlContent, sessionKey, token, workspaceRelativePath],
+    [gatewayBaseUrl, htmlContent],
   );
 
   const previewUri = previewUriFromSource(source);

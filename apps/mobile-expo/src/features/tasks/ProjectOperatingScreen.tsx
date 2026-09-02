@@ -1,4 +1,4 @@
-import type { Automation, ProjectTaskCard, TaskRunReceipt } from '@xopcai/gateway-contract';
+import type { Automation, FileResource, ProjectTaskCard, TaskRunReceipt } from '@xopcai/gateway-contract';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
@@ -12,18 +12,17 @@ import { t, useMessages } from '../../i18n/messages';
 import { dismissOrHome, openChat, openNoteDetail } from '../../lib/navigation';
 import { fetchAutomations, runAutomationNow, setAutomationEnabled } from '../../query/automations';
 import { queryKeys } from '../../query/keys';
+import { fetchFileChildren, fetchFileSpaceForContext } from '../../query/files';
 import { captureNote, fetchNotes } from '../../query/notes';
 import {
   fetchProject,
   fetchProjectActivity,
-  fetchProjectFiles,
   fetchProjectOperatingView,
   fetchProjectSessions,
   pinProject,
   unpinProject,
   updateProjectStatus,
   type ProjectActivityEvent,
-  type ProjectFileEntry,
   type ProjectSession,
 } from '../../query/projects';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
@@ -42,8 +41,8 @@ function sessionTitle(session: ProjectSession, fallback: string): string {
   return session.name?.trim() || session.title?.trim() || session.displayName?.trim() || fallback;
 }
 
-function fileIcon(entry: ProjectFileEntry): string {
-  if (entry.type === 'directory') return 'folder-outline';
+function fileIcon(entry: FileResource): string {
+  if (entry.kind === 'directory') return 'folder-outline';
   if (/\.(png|jpe?g|gif|webp|svg)$/i.test(entry.name)) return 'image-outline';
   if (/\.(md|txt|json|tsx?|jsx?|css|html?|ya?ml)$/i.test(entry.name)) return 'file-code-outline';
   return 'file-outline';
@@ -77,10 +76,15 @@ export function ProjectOperatingScreen() {
     queryFn: () => fetchNotes({ projectId, limit: 8, sortBy: 'updatedAt', sortOrder: 'desc' }),
     enabled: configured && Boolean(projectId) && section === 'context',
   });
-  const files = useQuery({
-    queryKey: queryKeys.projectFiles(projectId),
-    queryFn: () => fetchProjectFiles(projectId),
+  const fileSpace = useQuery({
+    queryKey: queryKeys.fileSpaceContext('project', projectId),
+    queryFn: () => fetchFileSpaceForContext('project', projectId),
     enabled: configured && Boolean(projectId) && section === 'context',
+  });
+  const files = useQuery({
+    queryKey: queryKeys.fileChildren(fileSpace.data?.id ?? '', ''),
+    queryFn: () => fetchFileChildren(fileSpace.data!.id),
+    enabled: Boolean(fileSpace.data) && section === 'context',
   });
   const activity = useQuery({
     queryKey: queryKeys.projectActivity(projectId),
@@ -219,13 +223,13 @@ export function ProjectOperatingScreen() {
         {section === 'context' ? (
           <ProjectContext
             notes={notes.data?.items ?? []}
-            files={files.data?.entries ?? []}
-            loading={notes.isLoading || files.isLoading}
+            files={files.data ?? []}
+            loading={notes.isLoading || fileSpace.isLoading || files.isLoading}
             notesError={notes.isError}
             filesError={files.isError}
             onNotePress={(noteId) => openNoteDetail(router, noteId)}
             onCreateNote={() => createNote.mutate()}
-            onBrowseFiles={(dir = '') => router.push({ pathname: '/files', params: { projectId, dir } })}
+            onBrowseFiles={() => router.push(`/files/context/project/${encodeURIComponent(projectId)}` as never)}
           />
         ) : null}
       </ScrollView>
@@ -349,23 +353,23 @@ function ProjectWork({ tasks, sessions, sessionsLoading, sessionsError, onTaskPr
 
 function ProjectContext({ notes, files, loading, notesError, filesError, onNotePress, onCreateNote, onBrowseFiles }: {
   notes: Awaited<ReturnType<typeof fetchNotes>>['items'];
-  files: ProjectFileEntry[];
+  files: FileResource[];
   loading: boolean;
   notesError: boolean;
   filesError: boolean;
   onNotePress: (noteId: string) => void;
   onCreateNote: () => void;
-  onBrowseFiles: (dir?: string) => void;
+  onBrowseFiles: () => void;
 }) {
   const labels = useMessages().tasksPage;
-  const recentFiles = [...files].filter((entry) => entry.type === 'file').sort((a, b) => Date.parse(b.updatedAt ?? '') - Date.parse(a.updatedAt ?? '')).slice(0, 5);
+  const recentFiles = [...files].filter((entry) => entry.kind === 'file').sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, 5);
   if (loading) return <View style={styles.contextLoading}><ListSkeleton count={4} /></View>;
   return <>
     <ProjectCard title={labels.projectNotes} actionLabel={labels.createProjectNote} onAction={onCreateNote}>
       {notesError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectNotesLoadFailed} /> : notes.length ? notes.map((note) => <ProjectSimpleRow key={note.id} icon="note-text-outline" title={resolveNoteListTitle(note, labels.projectUntitledNote)} subtitle={note.snippet} onPress={() => onNotePress(note.id)} />) : <ProjectEmpty icon="note-text-outline" text={labels.projectNoNotes} />}
     </ProjectCard>
-    <ProjectCard title={labels.projectFiles} actionLabel={labels.projectBrowseFiles} onAction={() => onBrowseFiles('')}>
-      {filesError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectFilesLoadFailed} /> : recentFiles.length ? recentFiles.map((file) => <ProjectSimpleRow key={file.path} icon={fileIcon(file)} title={file.name} subtitle={file.path} onPress={() => onBrowseFiles(file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '')} />) : <ProjectEmpty icon="folder-open-outline" text={labels.projectNoFiles} />}
+    <ProjectCard title={labels.projectFiles} actionLabel={labels.projectBrowseFiles} onAction={onBrowseFiles}>
+      {filesError ? <ProjectEmpty icon="alert-circle-outline" text={labels.projectFilesLoadFailed} /> : recentFiles.length ? recentFiles.map((file) => <ProjectSimpleRow key={file.id} icon={fileIcon(file)} title={file.name} subtitle={file.relativePath} onPress={onBrowseFiles} />) : <ProjectEmpty icon="folder-open-outline" text={labels.projectNoFiles} />}
     </ProjectCard>
   </>;
 }

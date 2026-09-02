@@ -15,3 +15,4 @@ export * from './automations.js';
 export * from './user-message-display.js';
 export * from './new-session.js';
 export * from './notifications.js';
+export * from './files.js';

@@ -11,7 +11,6 @@ import {
 } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
-import { folderDisplayName } from '@/features/fs/directory-path-utils';
 import {
   downloadBinaryFile,
   downloadTextFile,
@@ -28,7 +27,6 @@ import { showComposerNotification } from '@/features/chat/composer/composer-noti
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
-import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
 import { writeWorkspaceFileDrag } from '@/features/workspace/workspace-file-drag';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -65,7 +63,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
-  const { tree, loading, error, workspaceRoot, loadRoot, loadChildren, reset } = useWorkspaceTree(
+  const { tree, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
     workspaceAgentId,
     chatSessionKey,
   );
@@ -82,7 +80,6 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     [chatSessionKey, workspaceAgentId],
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
-  const workspaceRootLabel = workspaceRoot ? folderDisplayName(workspaceRoot) : m.workspace.title;
   const electron = isElectron();
 
   const handleFileDragStart = useCallback(
@@ -368,14 +365,12 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
               {!electron ? (
                 <div
                   className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-fg"
-                  title={workspaceRoot ?? undefined}
                 >
                   <Folder className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                  <span className="truncate">{workspaceRootLabel}</span>
+                  <span className="truncate">{m.workspace.title}</span>
                 </div>
               ) : null}
               <div className="ml-auto flex shrink-0 items-center gap-1">
-                <WorkspaceOpenLocationMenu workspacePath={workspaceRoot ?? ''} />
                 <Button
                   type="button"
                   variant="ghost"

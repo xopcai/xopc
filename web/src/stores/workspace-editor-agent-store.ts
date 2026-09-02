@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
 /**
- * Chat-selected agent id for workspace editor API (`/api/workspace/editor/*?agentId=`).
- * Empty when not on chat — server uses default agent workspace.
+ * Chat-selected agent id for resolving the active managed file space.
+ * Empty when not on chat.
  */
 type WorkspaceEditorAgentState = {
   agentId: string;

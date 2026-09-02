@@ -1,716 +1,286 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { FileResource, FileSpace } from '@xopcai/gateway-contract';
 import * as DocumentPicker from 'expo-document-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  FlatList,
-  Linking,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
-import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Icon, Text } from 'react-native-paper';
 
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
-import { BottomSheetModal } from '../../components/BottomSheetModal';
-import { AppToast } from '../../components/AppToast';
-import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
-import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { useMessages } from '../../i18n/messages';
-import { queryKeys } from '../../query/keys';
-import { uploadProjectFile } from '../../query/projects';
 import {
-  fetchWorkspaceDir,
-  normalizeWorkspaceDir,
-  parentWorkspaceDir,
-  type WorkspaceEntry,
-  type WorkspaceScope,
-  workspaceScopeKey,
-} from '../../query/workspace-files';
-import { type ShareAutoRequest } from '../../api/share';
-import { useGatewayConfigured } from '../../query/sessions';
-import { useCreateShare } from '../../query/shares';
-import { floatingBottomPadding, radii, spacing, typography, useTheme } from '../../theme';
+  fetchFileChildren,
+  fetchFileSpaceForContext,
+  fetchFileSpaces,
+  fetchRecentFiles,
+  searchFiles,
+  uploadFileResource,
+  type FileContextKind,
+} from '../../query/files';
+import { queryKeys } from '../../query/keys';
+import { floatingBottomPadding, spacing, useTheme } from '../../theme';
 import { FilePreviewModal, type PreviewableFile } from '../chat/FilePreviewModal';
-import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
-import { mimeTypeFromFileName } from '../chat/tool-result-file-paths';
-import { ShareSheet } from '../share/ShareSheet';
 
-function firstParam(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+function toPreviewable(file: FileResource): PreviewableFile {
+  return { fileId: file.id, name: file.name, mimeType: file.mimeType, workspaceRelativePath: file.relativePath };
 }
 
-function fileName(pathOrName: string): string {
-  const parts = pathOrName.replace(/\\/g, '/').split('/').filter(Boolean);
-  return parts[parts.length - 1] ?? pathOrName;
-}
-
-function entryIcon(entry: WorkspaceEntry): string {
-  if (entry.isDirectory) return 'folder-outline';
-  const name = entry.name.toLowerCase();
-  if (/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) return 'image-outline';
-  if (/\.(md|markdown)$/.test(name)) return 'language-markdown-outline';
-  if (/\.(html?|css|tsx?|jsx?|json|ya?ml|txt|csv|xml|sh)$/.test(name)) return 'file-code-outline';
+function iconFor(file: FileResource): string {
+  if (file.kind === 'directory') return 'folder-outline';
+  if (file.mimeType.startsWith('image/')) return 'image-outline';
+  if (file.mimeType.startsWith('audio/')) return 'music-note-outline';
+  if (file.mimeType.startsWith('video/')) return 'video-outline';
+  if (file.mimeType.startsWith('text/')) return 'file-code-outline';
   return 'file-outline';
 }
 
-function extensionOf(name: string): string {
-  const i = name.lastIndexOf('.');
-  return i >= 0 ? name.slice(i + 1).toLowerCase() : '';
-}
-
-function isPreviewableEntry(entry: WorkspaceEntry): boolean {
-  if (entry.isDirectory) return true;
-  const name = entry.name || fileName(entry.path);
-  const mimeType = mimeTypeFromFileName(name);
-  const ext = extensionOf(name);
-  if (mimeType.startsWith('image/')) return true;
-  if (mimeType.startsWith('text/')) return true;
-  if (mimeType === 'text/markdown') return true;
-  return [
-    'bmp',
-    'cjs',
-    'css',
-    'csv',
-    'gif',
-    'htm',
-    'html',
-    'jpeg',
-    'jpg',
-    'js',
-    'json',
-    'jsx',
-    'mjs',
-    'md',
-    'markdown',
-    'png',
-    'sh',
-    'svg',
-    'ts',
-    'tsx',
-    'txt',
-    'webp',
-    'xml',
-    'yaml',
-    'yml',
-  ].includes(ext);
-}
-
-function entrySubtitle(entry: WorkspaceEntry, labels: ReturnType<typeof useMessages>['filesPage']): string {
-  if (entry.isDirectory) return labels.folder;
-  const ext = entry.name.includes('.') ? entry.name.split('.').pop()?.toUpperCase() : '';
-  return ext ? labels.fileType.replace('{{type}}', ext) : labels.file;
-}
-
-function entryToPreviewable(entry: WorkspaceEntry): PreviewableFile {
-  return {
-    name: entry.name || fileName(entry.path),
-    mimeType: mimeTypeFromFileName(entry.name || entry.path),
-    workspaceRelativePath: entry.path,
-    absolutePath: entry.absolutePath,
-  };
-}
-
-function buildShareRequest(entry: WorkspaceEntry, scope: WorkspaceScope): ShareAutoRequest {
-  return {
-    path: normalizeWorkspaceDir(entry.path),
-    audience: 'friend',
-    ...(scope.kind === 'session' ? { sessionKey: scope.sessionKey } : {}),
-    ...(scope.kind === 'agent' ? { agentId: scope.agentId } : {}),
-  };
-}
-
-export function FilesScreen() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const params = useLocalSearchParams();
-  const configured = useGatewayConfigured();
+function FileRow({ file, source, onPress }: { file: FileResource; source?: string; onPress: () => void }) {
   const { colors } = useTheme();
-  const m = useMessages();
-  const labels = m.filesPage;
-  const createShare = useCreateShare();
-  const sessionKey = firstParam(params.sessionKey).trim();
-  const agentId = firstParam(params.agentId).trim();
-  const projectId = firstParam(params.projectId).trim();
-  const initialDir = normalizeWorkspaceDir(firstParam(params.dir));
-  const [currentDir, setCurrentDir] = useState(initialDir);
-  const [activeFile, setActiveFile] = useState<PreviewableFile | null>(null);
-  const [actionTarget, setActionTarget] = useState<WorkspaceEntry | null>(null);
-  const [shareTarget, setShareTarget] = useState<ShareAutoRequest | null>(null);
-  const [confirmFolderShare, setConfirmFolderShare] = useState<ShareAutoRequest | null>(null);
-  const [toast, setToast] = useState('');
-
-  const scope = useMemo<WorkspaceScope>(() => {
-    if (projectId) return { kind: 'project', projectId };
-    if (sessionKey) return { kind: 'session', sessionKey };
-    if (agentId) return { kind: 'agent', agentId };
-    return { kind: 'default' };
-  }, [agentId, projectId, sessionKey]);
-  const scopeKey = workspaceScopeKey(scope);
-
-  const query = useQuery({
-    queryKey: queryKeys.workspaceDir(scopeKey, currentDir),
-    queryFn: () => fetchWorkspaceDir({ dir: currentDir, scope }),
-    enabled: configured,
-  });
-  const upload = useMutation({
-    mutationFn: uploadProjectFile,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.workspaceDir(scopeKey, currentDir) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectFiles(projectId) });
-      setToast(labels.uploadSucceeded);
-    },
-    onError: (error) => setToast(error instanceof Error ? error.message : labels.uploadFailed),
-  });
-
-  const breadcrumbs = useMemo(() => {
-    const parts = currentDir.split('/').filter(Boolean);
-    const crumbs = [{ label: labels.root, path: '' }];
-    let acc = '';
-    for (const part of parts) {
-      acc = acc ? `${acc}/${part}` : part;
-      crumbs.push({ label: part, path: acc });
-    }
-    return crumbs;
-  }, [currentDir, labels.root]);
-
-  const openEntry = (entry: WorkspaceEntry) => {
-    if (entry.isDirectory) {
-      setCurrentDir(normalizeWorkspaceDir(entry.path));
-      return;
-    }
-    if (!isPreviewableEntry(entry)) {
-      if (scope.kind === 'project') {
-        setActiveFile(entryToPreviewable(entry));
-        return;
-      }
-      void downloadEntry(entry);
-      return;
-    }
-    setActiveFile(entryToPreviewable(entry));
-  };
-
-  const downloadEntry = async (entry: WorkspaceEntry) => {
-    try {
-      const payload = await createShare.mutateAsync(buildShareRequest(entry, scope));
-      await Linking.openURL(payload.share.lanUrl ?? payload.share.shareUrl);
-    } catch {
-      setToast(labels.downloadFailed);
-    }
-  };
-
-  const copyEntryPath = async (entry: WorkspaceEntry) => {
-    await setAppClipboardStringAsync(entry.absolutePath ?? entry.path);
-    setToast(labels.pathCopied);
-  };
-
-  const shareEntry = (entry: WorkspaceEntry) => {
-    if (entry.isDirectory) {
-      requestFolderShare(entry);
-      return;
-    }
-    setShareTarget(buildShareRequest(entry, scope));
-  };
-
-  const handleActionCopy = () => {
-    if (!actionTarget) return;
-    const entry = actionTarget;
-    setActionTarget(null);
-    void copyEntryPath(entry);
-  };
-
-  const handleActionShare = () => {
-    if (!actionTarget) return;
-    const entry = actionTarget;
-    setActionTarget(null);
-    shareEntry(entry);
-  };
-
-  const currentFolderEntry = useMemo<WorkspaceEntry | null>(() => {
-    if (!currentDir) return null;
-    return {
-      name: fileName(currentDir),
-      path: currentDir,
-      isDirectory: true,
-    };
-  }, [currentDir]);
-
-  const requestFolderShare = (entry: WorkspaceEntry) => {
-    setConfirmFolderShare(buildShareRequest(entry, scope));
-  };
-
-  const confirmShareFolder = () => {
-    if (!confirmFolderShare) return;
-    setShareTarget(confirmFolderShare);
-    setConfirmFolderShare(null);
-  };
-
-  const goBack = () => {
-    if (currentDir) {
-      setCurrentDir(parentWorkspaceDir(currentDir));
-      return;
-    }
-    router.back();
-  };
-
-  const pickProjectFile = async () => {
-    if (scope.kind !== 'project' || upload.isPending) return;
-    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
-    const asset = result.canceled ? undefined : result.assets[0];
-    if (!asset?.uri) return;
-    const name = asset.name || `file-${Date.now()}`;
-    const path = currentDir ? `${currentDir}/${name}` : name;
-    upload.mutate({ projectId: scope.projectId, path, uri: asset.uri, name, mimeType: asset.mimeType });
-  };
-
-  const entries = query.data ?? [];
-  const refreshing = query.isFetching && !query.isLoading;
-  const listBottomPadding = floatingBottomPadding(0) + spacing.xxl;
-
-  if (!configured) {
-    return (
-      <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <NativeScreenHeader title={labels.title} onBack={() => router.back()} />
-        <View style={styles.center}>
-          <Icon source="cloud-off-outline" size={42} color={colors.text.tertiary} />
-          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.gatewayRequiredTitle}</Text>
-          <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{labels.gatewayRequiredHint}</Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader
-        title={labels.title}
-        onBack={goBack}
-        rightActions={scope.kind === 'project' ? [{
-          icon: upload.isPending ? 'progress-upload' : 'file-upload-outline',
-          onPress: () => void pickProjectFile(),
-          accessibilityLabel: labels.uploadFile,
-        }] : currentFolderEntry ? [{
-            icon: 'folder-upload-outline',
-            onPress: () => requestFolderShare(currentFolderEntry),
-            accessibilityLabel: labels.shareCurrentFolder,
-        }] : undefined}
-      />
-      <View style={styles.breadcrumbWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.breadcrumbContent}>
-          {breadcrumbs.map((crumb, index) => {
-            const active = crumb.path === currentDir;
-            return (
-              <View key={crumb.path || 'root'} style={styles.crumbGroup}>
-                {index > 0 ? <Icon source="chevron-right" size={14} color={colors.text.tertiary} /> : null}
-                <Pressable
-                  style={[styles.crumb, { backgroundColor: active ? colors.accent.selectionBg : colors.surface.input }]}
-                  onPress={() => setCurrentDir(crumb.path)}
-                  disabled={active}
-                >
-                  <Text numberOfLines={1} style={[styles.crumbText, { color: active ? colors.accent.primary : colors.text.secondary }]}>
-                    {crumb.label}
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {query.isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{m.common.loading}</Text>
-        </View>
-      ) : query.error ? (
-        <View style={styles.center}>
-          <Icon source="alert-circle-outline" size={42} color={colors.semantic.error} />
-          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.loadFailed}</Text>
-          <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>
-            {query.error instanceof Error ? query.error.message : String(query.error)}
-          </Text>
-          <Pressable
-            style={[styles.retryButton, { borderColor: colors.border.default, backgroundColor: colors.surface.panel }]}
-            onPress={() => void query.refetch()}
-          >
-            <Text style={[styles.retryText, { color: colors.text.primary }]}>{m.common.retry}</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={entries}
-          keyExtractor={(item) => item.path}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void query.refetch()} />}
-          contentContainerStyle={[styles.list, { paddingBottom: listBottomPadding }]}
-          ListEmptyComponent={(
-            <View style={styles.centerInline}>
-              <Icon source="folder-open-outline" size={40} color={colors.text.tertiary} />
-              <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.emptyTitle}</Text>
-              <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{labels.emptyHint}</Text>
-            </View>
-          )}
-          renderItem={({ item, index }) => (
-            <FileRow
-              entry={item}
-              subtitle={entrySubtitle(item, labels)}
-              isLast={index === entries.length - 1}
-              onPress={() => openEntry(item)}
-              onLongPress={() => scope.kind === 'project' ? void copyEntryPath(item) : setActionTarget(item)}
-            />
-          )}
-        />
-      )}
-
-      <FilePreviewModal
-        visible={Boolean(activeFile)}
-        file={activeFile}
-        sessionKey={scope.kind === 'session' ? scope.sessionKey : undefined}
-        agentId={scope.kind === 'agent' ? scope.agentId : undefined}
-        projectId={scope.kind === 'project' ? scope.projectId : undefined}
-        onClose={() => setActiveFile(null)}
-      />
-      <ShareSheet
-        visible={Boolean(shareTarget)}
-        request={shareTarget}
-        onClose={() => setShareTarget(null)}
-      />
-      <FileActionSheet
-        entry={actionTarget}
-        visible={Boolean(actionTarget)}
-        onDismiss={() => setActionTarget(null)}
-        onCopy={handleActionCopy}
-        onShare={handleActionShare}
-      />
-      <FolderShareConfirmSheet
-        visible={Boolean(confirmFolderShare)}
-        request={confirmFolderShare}
-        onDismiss={() => setConfirmFolderShare(null)}
-        onConfirm={confirmShareFolder}
-      />
-      <AppToast visible={Boolean(toast)} onDismiss={() => setToast('')} duration={TOAST_DURATION_SHORT}>
-        {toast}
-      </AppToast>
-    </View>
-  );
-}
-
-function FileRow({
-  entry,
-  subtitle,
-  isLast,
-  onPress,
-  onLongPress,
-}: {
-  entry: WorkspaceEntry;
-  subtitle: string;
-  isLast: boolean;
-  onPress: () => void;
-  onLongPress: () => void;
-}) {
-  const { colors } = useTheme();
-  const labels = useMessages().filesPage;
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.row,
-        !isLast && { borderBottomColor: colors.border.subtle, borderBottomWidth: StyleSheet.hairlineWidth },
-        pressed && { backgroundColor: colors.surface.pressed },
-      ]}
+      style={({ pressed }) => [styles.row, { borderBottomColor: colors.border.subtle }, pressed && { backgroundColor: colors.surface.pressed }]}
       onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={LIST_DELAY_LONG_PRESS}
       accessibilityRole="button"
-      accessibilityLabel={entry.isDirectory ? labels.openFolder : labels.openFile}
     >
-      <View style={[styles.iconTile, { backgroundColor: colors.surface.grouped }]}>
-        <Icon source={entryIcon(entry)} size={21} color={colors.text.secondary} />
+      <View style={[styles.icon, { backgroundColor: colors.surface.grouped }]}>
+        <Icon source={iconFor(file)} size={21} color={colors.text.secondary} />
       </View>
       <View style={styles.rowCopy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>
-          {entry.name}
-        </Text>
-        <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>
-          {subtitle}
+        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{file.name}</Text>
+        <Text numberOfLines={1} style={[styles.rowMeta, { color: colors.text.tertiary }]}>
+          {source ? `${source} · ${file.relativePath}` : file.relativePath}
         </Text>
       </View>
+      <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
     </Pressable>
   );
 }
 
-function FileActionSheet({
-  entry,
-  visible,
-  onDismiss,
-  onCopy,
-  onShare,
-}: {
-  entry: WorkspaceEntry | null;
-  visible: boolean;
-  onDismiss: () => void;
-  onCopy: () => void;
-  onShare: () => void;
-}) {
-  const { colors, isDark } = useTheme();
-  const labels = useMessages().filesPage;
-  const displayName = entry?.name || (entry ? fileName(entry.path) : '');
-  const actionTileBg = isDark ? colors.surface.input : colors.surface.hover;
-
+function ListSkeleton() {
+  const { colors } = useTheme();
   return (
-    <BottomSheetModal
-      visible={visible}
-      onDismiss={onDismiss}
-      title={displayName || labels.fileActions}
-      subtitle={entry?.path}
-      maxHeight="45%"
-    >
-      <View style={styles.actionSheetBody}>
-        <Pressable
-          style={({ pressed }) => [styles.sheetAction, pressed && styles.sheetActionPressed]}
-          onPress={onCopy}
-          accessibilityRole="button"
-          accessibilityLabel={labels.copyPath}
-        >
-          <View style={[styles.sheetActionIcon, { backgroundColor: actionTileBg }]}>
-            <Icon source="content-copy" size={22} color={colors.text.secondary} />
+    <View style={styles.list}>
+      {[0, 1, 2, 3, 4].map((item) => (
+        <View key={item} style={styles.row}>
+          <View style={[styles.skeletonIcon, { backgroundColor: colors.surface.grouped }]} />
+          <View style={styles.skeletonCopy}>
+            <View style={[styles.skeletonLine, { backgroundColor: colors.surface.grouped, width: '56%' }]} />
+            <View style={[styles.skeletonLine, { backgroundColor: colors.surface.grouped, width: '78%' }]} />
           </View>
-          <Text style={[styles.sheetActionText, { color: colors.text.primary }]}>{labels.copyPath}</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.sheetAction, pressed && styles.sheetActionPressed]}
-          onPress={onShare}
-          accessibilityRole="button"
-          accessibilityLabel={entry?.isDirectory ? labels.shareFolder : labels.share}
-        >
-          <View style={[styles.sheetActionIcon, { backgroundColor: actionTileBg }]}>
-            <Icon source="share-variant" size={22} color={colors.text.secondary} />
-          </View>
-          <Text style={[styles.sheetActionText, { color: colors.text.primary }]}>
-            {entry?.isDirectory ? labels.shareFolder : labels.share}
-          </Text>
-        </Pressable>
-      </View>
-    </BottomSheetModal>
+        </View>
+      ))}
+    </View>
   );
 }
 
-function FolderShareConfirmSheet({
-  visible,
-  request,
-  onDismiss,
-  onConfirm,
-}: {
-  visible: boolean;
-  request: ShareAutoRequest | null;
-  onDismiss: () => void;
-  onConfirm: () => void;
-}) {
+export function FilesHubScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
-  const m = useMessages();
-  const labels = m.filesPage;
-  const displayPath = request?.path ?? '';
-  const displayName = fileName(displayPath) || labels.root;
+  const labels = useMessages().filesPage;
+  const [view, setView] = useState<'recent' | 'locations'>('recent');
+  const [search, setSearch] = useState('');
+  const spaces = useQuery({ queryKey: queryKeys.fileSpaces, queryFn: fetchFileSpaces });
+  const recent = useQuery({ queryKey: queryKeys.recentFiles, queryFn: () => fetchRecentFiles(50) });
+  const results = useQuery({
+    queryKey: queryKeys.fileSearch(search),
+    queryFn: () => searchFiles(search),
+    enabled: search.trim().length >= 2,
+  });
+  const spaceNames = useMemo(() => new Map((spaces.data ?? []).map((space) => [space.id, space.title])), [spaces.data]);
+  const files = search.trim().length >= 2 ? results.data : recent.data;
+  const loading = spaces.isLoading || (search.trim().length >= 2 ? results.isLoading : recent.isLoading);
+  const [active, setActive] = useState<PreviewableFile | null>(null);
+
+  const openFile = (file: FileResource) => setActive(toPreviewable(file));
 
   return (
-    <BottomSheetModal
-      visible={visible}
-      onDismiss={onDismiss}
-      title={labels.shareFolderConfirmTitle}
-      subtitle={labels.shareFolderConfirmSubtitle}
-      maxHeight="55%"
-      footer={(
-        <View style={styles.confirmFooter}>
-          <Pressable
-            style={[styles.secondaryButton, { borderColor: colors.border.default }]}
-            onPress={onDismiss}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.secondaryButtonText, { color: colors.text.primary }]}>{m.common.cancel}</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.primaryButton, { backgroundColor: colors.accent.primary }]}
-            onPress={onConfirm}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.primaryButtonText, { color: colors.accent.onPrimary }]}>{labels.shareFolderConfirmAction}</Text>
-          </Pressable>
+    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
+      <NativeScreenHeader title={labels.title} onBack={() => router.back()} />
+      <View style={[styles.searchBox, { backgroundColor: colors.surface.input }]}>
+        <Icon source="magnify" size={20} color={colors.text.tertiary} />
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder={labels.searchPlaceholder}
+          placeholderTextColor={colors.text.tertiary}
+          style={[styles.searchInput, { color: colors.text.primary }]}
+        />
+      </View>
+      {!search.trim() ? (
+        <View style={[styles.segment, { backgroundColor: colors.surface.input }]}>
+          {(['recent', 'locations'] as const).map((item) => (
+            <Pressable
+              key={item}
+              style={[styles.segmentButton, view === item && { backgroundColor: colors.surface.panel }]}
+              onPress={() => setView(item)}
+            >
+              <Text style={{ color: view === item ? colors.text.primary : colors.text.secondary }}>
+                {item === 'recent' ? labels.recent : labels.locations}
+              </Text>
+            </Pressable>
+          ))}
         </View>
+      ) : null}
+
+      {loading ? <ListSkeleton /> : view === 'locations' && !search.trim() ? (
+        <FlatList
+          data={spaces.data ?? []}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <Pressable
+              style={({ pressed }) => [styles.locationRow, { borderBottomColor: colors.border.subtle }, pressed && { backgroundColor: colors.surface.pressed }]}
+              onPress={() => router.push(`/files/${encodeURIComponent(item.id)}` as never)}
+            >
+              <View style={[styles.icon, { backgroundColor: colors.surface.grouped }]}>
+                <Icon source="folder-multiple-outline" size={21} color={colors.text.secondary} />
+              </View>
+              <View style={styles.rowCopy}>
+                <Text style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+                <Text style={[styles.rowMeta, { color: colors.text.tertiary }]}>{item.bindings.map((binding) => binding.kind).join(' · ')}</Text>
+              </View>
+              <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+            </Pressable>
+          )}
+          ListEmptyComponent={<EmptyState title={labels.noLocations} hint={labels.noLocationsHint} />}
+        />
+      ) : (
+        <FlatList
+          data={files ?? []}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={recent.isFetching && !recent.isLoading} onRefresh={() => void recent.refetch()} />}
+          renderItem={({ item }) => <FileRow file={item} source={spaceNames.get(item.spaceId) ?? labels.unknownLocation} onPress={() => openFile(item)} />}
+          ListEmptyComponent={<EmptyState title={labels.emptyTitle} hint={labels.emptyHint} />}
+        />
       )}
-    >
-      <View style={styles.confirmBody}>
-        <View style={[styles.confirmIconTile, { backgroundColor: colors.accent.selectionBg }]}>
-          <Icon source="folder-outline" size={24} color={colors.accent.primary} />
-        </View>
-        <View style={styles.confirmCopy}>
-          <Text numberOfLines={1} style={[styles.confirmTitle, { color: colors.text.primary }]}>
-            {displayName}
-          </Text>
-          <Text numberOfLines={2} style={[styles.confirmPath, { color: colors.text.tertiary }]}>
-            {displayPath || labels.root}
-          </Text>
-        </View>
-      </View>
-      <View style={[styles.confirmNotice, { backgroundColor: colors.surface.input, borderColor: colors.border.subtle }]}>
-        <Text style={[styles.confirmNoticeText, { color: colors.text.secondary }]}>
-          {labels.shareFolderConfirmNotice}
-        </Text>
-        <Text style={[styles.confirmNoticeText, { color: colors.text.tertiary }]}>
-          {labels.shareFolderConfirmMode}
-        </Text>
-      </View>
-    </BottomSheetModal>
+      <FilePreviewModal visible={Boolean(active)} file={active} onClose={() => setActive(null)} />
+    </View>
+  );
+}
+
+function EmptyState({ title, hint }: { title: string; hint: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.empty}>
+      <Icon source="folder-open-outline" size={40} color={colors.text.tertiary} />
+      <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{title}</Text>
+      <Text style={[styles.emptyHint, { color: colors.text.tertiary }]}>{hint}</Text>
+    </View>
+  );
+}
+
+export function ContextFileBrowserScreen({ kind, id }: { kind: FileContextKind; id: string }) {
+  const context = useQuery({
+    queryKey: queryKeys.fileSpaceContext(kind, id),
+    queryFn: () => fetchFileSpaceForContext(kind, id),
+    enabled: Boolean(id),
+  });
+  if (context.isLoading) return <ListSkeleton />;
+  if (!context.data) return <EmptyState title="" hint={context.error instanceof Error ? context.error.message : ''} />;
+  return <FileSpaceBrowserScreen space={context.data} />;
+}
+
+export function FileSpaceBrowserRouteScreen({ spaceId }: { spaceId: string }) {
+  const labels = useMessages().filesPage;
+  const spaces = useQuery({ queryKey: queryKeys.fileSpaces, queryFn: fetchFileSpaces });
+  if (spaces.isLoading) return <ListSkeleton />;
+  const space = spaces.data?.find((item) => item.id === spaceId);
+  if (!space) return <EmptyState title="" hint={labels.locationUnavailable} />;
+  return <FileSpaceBrowserScreen space={space} />;
+}
+
+function FileSpaceBrowserScreen({ space }: { space: FileSpace }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { colors } = useTheme();
+  const labels = useMessages().filesPage;
+  const [directory, setDirectory] = useState('');
+  const [active, setActive] = useState<PreviewableFile | null>(null);
+  const files = useQuery({
+    queryKey: queryKeys.fileChildren(space.id, directory),
+    queryFn: () => fetchFileChildren(space.id, directory),
+  });
+  const upload = useMutation({
+    mutationFn: uploadFileResource,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.fileChildren(space.id, directory) }),
+  });
+  const breadcrumbs = useMemo(() => {
+    const output = [{ label: labels.root, path: '' }];
+    let path = '';
+    for (const part of directory.split('/').filter(Boolean)) {
+      path = path ? `${path}/${part}` : part;
+      output.push({ label: part, path });
+    }
+    return output;
+  }, [directory, labels.root]);
+
+  const pickFile = async () => {
+    const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+    const asset = picked.canceled ? undefined : picked.assets[0];
+    if (!asset) return;
+    upload.mutate({ spaceId: space.id, directory, uri: asset.uri, name: asset.name, mimeType: asset.mimeType });
+  };
+  const goBack = () => {
+    if (!directory) return router.back();
+    setDirectory(directory.split('/').slice(0, -1).join('/'));
+  };
+
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
+      <NativeScreenHeader
+        title={space.title}
+        onBack={goBack}
+        rightActions={space.writable ? [{ icon: upload.isPending ? 'progress-upload' : 'file-upload-outline', onPress: () => void pickFile(), accessibilityLabel: labels.uploadFile }] : undefined}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.breadcrumbs}>
+        {breadcrumbs.map((crumb, index) => (
+          <View key={crumb.path || 'root'} style={styles.crumbGroup}>
+            {index ? <Icon source="chevron-right" size={14} color={colors.text.tertiary} /> : null}
+            <Pressable onPress={() => setDirectory(crumb.path)} disabled={crumb.path === directory}>
+              <Text style={{ color: crumb.path === directory ? colors.accent.primary : colors.text.secondary }}>{crumb.label}</Text>
+            </Pressable>
+          </View>
+        ))}
+      </ScrollView>
+      {files.isLoading ? <ListSkeleton /> : (
+        <FlatList
+          data={files.data ?? []}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[styles.list, { paddingBottom: floatingBottomPadding(0) + spacing.xxl }]}
+          renderItem={({ item }) => (
+            <FileRow
+              file={item}
+              onPress={() => item.kind === 'directory' ? setDirectory(item.relativePath) : setActive(toPreviewable(item))}
+            />
+          )}
+          ListEmptyComponent={<EmptyState title={labels.emptyTitle} hint={labels.emptyHint} />}
+        />
+      )}
+      <FilePreviewModal visible={Boolean(active)} file={active} onClose={() => setActive(null)} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  breadcrumbWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  breadcrumbContent: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingRight: spacing.lg,
-  },
-  crumbGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  crumb: {
-    maxWidth: 160,
-    minHeight: 34,
-    justifyContent: 'center',
-    borderRadius: radii.full,
-    paddingHorizontal: spacing.md,
-  },
-  crumbText: { ...typography.caption, fontWeight: '600' },
-  list: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-  },
-  row: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  iconTile: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  rowTitle: { ...typography.ui, fontWeight: '600' },
-  rowSubtitle: { ...typography.caption },
-  actionSheetBody: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
-  },
-  sheetAction: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  sheetActionPressed: { opacity: 0.72 },
-  sheetActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetActionText: { ...typography.ui, fontWeight: '600' },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  centerInline: {
-    minHeight: 280,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyTitle: { ...typography.heading, textAlign: 'center' },
-  emptyText: { ...typography.label, textAlign: 'center' },
-  retryButton: {
-    minHeight: 44,
-    borderRadius: radii.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.sm,
-  },
-  retryText: { ...typography.ui, fontWeight: '600' },
-  confirmBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  confirmIconTile: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.xxs,
-  },
-  confirmTitle: { ...typography.ui, fontWeight: '600' },
-  confirmPath: { ...typography.caption },
-  confirmNotice: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  confirmNoticeText: { ...typography.label },
-  confirmFooter: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingBottom: spacing.xs,
-  },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: radii.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  primaryButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: radii.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  secondaryButtonText: { ...typography.ui, fontWeight: '600' },
-  primaryButtonText: { ...typography.ui, fontWeight: '600' },
+  searchBox: { marginHorizontal: 16, marginTop: 12, minHeight: 42, borderRadius: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  searchInput: { flex: 1, fontSize: 15, paddingVertical: 8 },
+  segment: { margin: 16, padding: 3, borderRadius: 10, flexDirection: 'row' },
+  segmentButton: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
+  list: { paddingHorizontal: 16 },
+  row: { minHeight: 64, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  locationRow: { minHeight: 68, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  icon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  rowCopy: { flex: 1, minWidth: 0 },
+  rowTitle: { fontSize: 14, fontWeight: '600' },
+  rowMeta: { fontSize: 12, marginTop: 3 },
+  skeletonIcon: { width: 38, height: 38, borderRadius: 10 },
+  skeletonCopy: { flex: 1, gap: 8 },
+  skeletonLine: { height: 10, borderRadius: 5 },
+  empty: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 80, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  emptyHint: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  breadcrumbs: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+  crumbGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
