@@ -82,4 +82,19 @@ describe('publish_artifacts', () => {
       }),
     ]);
   });
+
+  it('rejects sensitive external paths through the sandbox path policy', async () => {
+    const result = await createPublishArtifactsTool('/workspace').execute('publish-3', {
+      paths: [`${process.env.HOME}/.ssh/id_rsa`],
+    });
+
+    expect(readFileMock).not.toHaveBeenCalled();
+    expect(result.details.artifacts).toEqual([
+      expect.objectContaining({
+        title: 'id_rsa',
+        availability: 'failed',
+        location: 'external_host',
+      }),
+    ]);
+  });
 });

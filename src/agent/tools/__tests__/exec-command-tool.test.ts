@@ -78,6 +78,32 @@ describe('exec_command tool', () => {
     }
   });
 
+  it('persists declared command outputs in the same tool result', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
+    try {
+      const tool = createExecCommandTool(workspace);
+      const node = JSON.stringify(process.execPath);
+      const result = await tool.execute('tc-output', {
+        cmd: `${node} -e "require('node:fs').writeFileSync('report.csv', 'a,b\\n1,2')"`,
+        outputs: ['report.csv'],
+        timeoutMs: 10_000,
+      });
+
+      expect(result.details.status).toBe('success');
+      expect(result.details.artifacts).toEqual([
+        expect.objectContaining({
+          title: 'report.csv',
+          kind: 'spreadsheet',
+          availability: 'available',
+          location: 'artifact_store',
+        }),
+      ]);
+      expect((result.content[0] as { text: string }).text).toContain('Artifacts: 1 published.');
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   it('bounds captured output before constructing the result', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
     try {
