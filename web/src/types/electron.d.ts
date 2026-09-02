@@ -107,10 +107,13 @@ export type ElectronShellOpenResult =
       error: string;
       code?:
         | "CANCELED"
+        | "INVALID_FILE"
         | "INVALID_PATH"
         | "NOT_FOUND"
         | "NOT_FILE"
         | "INVALID_APP"
+        | "TOO_LARGE"
+        | "WRITE_FAILED"
         | "OPEN_FAILED"
         | string;
     };
@@ -132,6 +135,10 @@ export type ElectronRecommendedOpenWithApp = {
 export interface ElectronShellAPI {
   openExternalUrl(url: string): Promise<{ ok: true } | { ok: false; error: string }>;
   openPath(filePath: string): Promise<ElectronShellOpenResult>;
+  openTemporaryFile(input: {
+    fileName: string;
+    data: Uint8Array;
+  }): Promise<ElectronShellOpenResult>;
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
   chooseAppAndOpenPath(filePath: string): Promise<ElectronShellOpenResult>;
   openPathWithApp(

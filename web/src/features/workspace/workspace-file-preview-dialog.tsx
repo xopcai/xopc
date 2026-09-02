@@ -187,6 +187,17 @@ export function WorkspaceFilePreviewPanel({
     void createShareLink({ path: filePath, ...scope });
   }, [agentId, createShareLink, filePath, projectId, sessionKey]);
 
+  const handleOpenWithSystemApp = useCallback(async () => {
+    try {
+      const result = await state.onOpenWithSystemApp();
+      if (result && !result.ok) {
+        showComposerNotification('warning', m.chat.attachmentPreviewOpenLocalFailed);
+      }
+    } catch {
+      showComposerNotification('warning', m.chat.attachmentPreviewOpenLocalFailed);
+    }
+  }, [m.chat.attachmentPreviewOpenLocalFailed, state.onOpenWithSystemApp]);
+
   const handleClose = useCallback(() => {
     setExpanded(false);
     onClose();
@@ -227,7 +238,7 @@ export function WorkspaceFilePreviewPanel({
   const previewActions = {
     onDownload: () => void state.onDownload(),
     canDownload: state.canDownload,
-    onOpenWithSystemApp: () => void state.onOpenWithSystemApp(),
+    onOpenWithSystemApp: () => void handleOpenWithSystemApp(),
     canOpenWithSystemApp: state.canOpenWithSystemApp,
     onChooseOpenWithApp: () => void state.onChooseOpenWithApp(),
     canChooseOpenWithApp: state.canChooseOpenWithApp,
@@ -422,7 +433,7 @@ export function WorkspaceFilePreviewPanel({
                       label={m.workspace.openSystemApp}
                       onClick={() => {
                         setMoreMenuOpen(false);
-                        void state.onOpenWithSystemApp();
+                        void handleOpenWithSystemApp();
                       }}
                     />
                   ) : null}
