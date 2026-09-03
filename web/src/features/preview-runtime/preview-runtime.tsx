@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { messages } from '@/i18n/messages';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,38 +53,29 @@ export function usePreviewRuntimeController(descriptor: PreviewRuntimeRenderProp
 
 export function PreviewRuntimeToolbar({
   controller,
-  actions,
-  showDownload = true,
 }: {
   controller: PreviewRuntimeController;
-  actions: PreviewRuntimeRenderProps['actions'];
-  showDownload?: boolean;
 }) {
   return (
     <PreviewToolbar
       plugin={controller.plugin}
-      actions={actions}
       controls={controller.controls}
       onZoomIn={controller.onZoomIn}
       onZoomOut={controller.onZoomOut}
       onZoomReset={controller.onZoomReset}
       onRotate={controller.onRotate}
       onSearchChange={controller.onSearchChange}
-      showDownload={showDownload}
     />
   );
 }
 
 export function PreviewRuntimeView(
   props: PreviewRuntimeRenderProps & {
-    controller?: PreviewRuntimeController;
-    renderToolbar?: (toolbar: ReactNode) => ReactNode;
+    controller: PreviewRuntimeController;
   },
 ) {
   const m = messages(props.language);
-  const internalController = usePreviewRuntimeController(props.descriptor);
-  const controller = props.controller ?? internalController;
-  const toolbar = <PreviewRuntimeToolbar controller={controller} actions={props.actions} />;
+  const { controller } = props;
 
   if (props.loading) {
     return (
@@ -125,7 +116,6 @@ export function PreviewRuntimeView(
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {props.renderToolbar ? props.renderToolbar(toolbar) : toolbar}
       <PluginRender
         key={`${props.descriptor.id}:${controller.plugin.id}`}
         pluginRender={controller.plugin.render}

@@ -328,7 +328,7 @@ function ChatMarkdownView({
   const openFile = useCallback(
     (target: WorkspaceFileLinkTarget) => {
       if (target.kind === 'workspace-relative') {
-        setPreview(target.path, target.line, projectId);
+        setPreview(target.path, target.line, projectId, sessionKey);
         setResolution(null);
         return;
       }
@@ -348,7 +348,7 @@ function ChatMarkdownView({
             return;
           }
           if (ref.scope === 'workspace' && ref.workspaceRelativePath) {
-            setPreview(ref.workspaceRelativePath, target.line, projectId);
+            setPreview(ref.workspaceRelativePath, target.line, projectId, sessionKey);
             setResolution(null);
             return;
           }
@@ -560,7 +560,6 @@ export function ChunkedContent({
     fetchUrl: string;
     unknownTool: string;
     activityCompleted: string;
-    activityPartial: string;
     activityFailedCount: string;
     activityAnalysisComplete: string;
     toolFailedImpact: string;

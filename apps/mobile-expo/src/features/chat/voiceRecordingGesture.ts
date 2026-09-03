@@ -1,19 +1,14 @@
-import type { VoiceRecordingZone } from './VoiceRecordingCard';
+export type VoiceRecordingDestination = 'send' | 'cancel' | 'text';
 
-const ENTER_DISTANCE = 72;
-const EXIT_DISTANCE = 52;
-
-export function resolveVoiceRecordingZone(
+/** Require an upward diagonal; hysteresis prevents hints flickering at the boundary. */
+export function resolveVoiceRecordingDestination(
   dx: number,
   dy: number,
-  current: VoiceRecordingZone = 'center',
-): VoiceRecordingZone {
-  if (current === 'lock' && dy < -EXIT_DISTANCE) return 'lock';
-  if (current === 'cancel' && dx < -EXIT_DISTANCE) return 'cancel';
-  if (current === 'text' && dx > EXIT_DISTANCE) return 'text';
-
-  if (dy < -ENTER_DISTANCE && Math.abs(dy) >= Math.abs(dx)) return 'lock';
-  if (dx < -ENTER_DISTANCE) return 'cancel';
-  if (dx > ENTER_DISTANCE) return 'text';
-  return 'center';
+  current: VoiceRecordingDestination = 'send',
+): VoiceRecordingDestination {
+  if (current === 'cancel' && dy < -52 && dx < -24) return 'cancel';
+  if (current === 'text' && dy < -52 && dx > 24) return 'text';
+  if (dy < -72 && dx < -40) return 'cancel';
+  if (dy < -72 && dx > 40) return 'text';
+  return 'send';
 }

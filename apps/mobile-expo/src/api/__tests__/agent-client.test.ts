@@ -44,8 +44,6 @@ vi.mock('../../features/gateway/use-gateway-realtime', () => ({
   }),
 }));
 
-vi.mock('../../features/gateway/session-detail-cache', () => ({ readCachedSessionDetail: () => ({ sessionId: 'instance-a' }) }));
-vi.mock('../../features/gateway/outbox-attachments', () => ({ retainOutboxAttachments: (_id: string, attachments: unknown[]) => attachments, releaseOutboxAttachments: vi.fn() }));
 
 vi.mock('../../features/chat/attachment-file-io', () => ({
   readUriAsBase64: vi.fn(),
@@ -87,9 +85,26 @@ import {
   publishMobileEndpointTurnClaim,
 } from '../../features/endpoint-tools/turn-claim';
 
+import type { MessageSubmission } from '../../features/chat/message-submission';
+
+function submission(overrides: Partial<MessageSubmission> = {}): MessageSubmission {
+  return {
+    clientMessageId: 'message-a', gatewayId: 'computer-a', sessionKey: 'session-a',
+    expectedSessionId: 'instance-a', content: 'hello', attachments: [], ...overrides,
+  };
+}
+
+function accepted(runId?: string): Response {
+  return new Response(JSON.stringify({ payload: { state: {
+    activeRunId: runId, inputs: [{ id: 'input-a', clientMessageId: 'message-a' }],
+  } } }), { status: 202 });
+}
+
 describe('AgentMessageSender voice message', () => {
   beforeEach(() => {
     testState.memory.clear();
+    testState.gatewayId = 'computer-a';
+    testState.generation = 1;
     testState.apiFetch.mockReset();
     testState.apiUploadFile.mockReset();
     testState.language = 'zh';
@@ -99,35 +114,6 @@ describe('AgentMessageSender voice message', () => {
 
   afterEach(() => {
     clearMobileEndpointTurnClaim();
-  });
-
-  it('queues the native recording URI without materializing base64', async () => {
-    const sender = new AgentMessageSender();
-    const sendMessage = vi.spyOn(sender, 'sendMessage').mockResolvedValue(undefined);
-
-    await sender.sendVoiceMessage(
-      {
-        uri: 'file:///data/user/0/ai.xopc.xopc/cache/Audio/recording.m4a',
-        durationMillis: 1_250,
-        mimeType: 'audio/mp4',
-      },
-      'session-a',
-    );
-
-    expect(readUriAsBase64).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledWith(
-      '',
-      'session-a',
-      undefined,
-      [expect.objectContaining({
-        type: 'voice',
-        mimeType: 'audio/mp4',
-        name: 'voice.m4a',
-        localUri: 'file:///data/user/0/ai.xopc.xopc/cache/Audio/recording.m4a',
-        durationSeconds: 1.25,
-      })],
-      undefined,
-    );
   });
 
   it('uploads voice bytes once and submits only the media reference', async () => {
@@ -150,11 +136,10 @@ describe('AgentMessageSender voice message', () => {
     });
 
     try {
-      await new AgentMessageSender().sendVoiceMessage({
-        uri: 'file:///documents/voice.m4a',
-        durationMillis: 1_250,
-        mimeType: 'audio/mp4',
-      }, 'session-a');
+      await new AgentMessageSender().sendMessage(submission({ content: '', attachments: [{
+        type: 'voice', localUri: 'file:///documents/voice.m4a',
+        durationSeconds: 1.25, mimeType: 'audio/mp4',
+      }] }));
     } finally {
       clearMobileEndpointTurnClaim();
     }
@@ -243,6 +228,8 @@ describe('AgentMessageSender voice message', () => {
 describe('AgentMessageSender local detach', () => {
   beforeEach(() => {
     testState.memory.clear();
+    testState.gatewayId = 'computer-a';
+    testState.generation = 1;
     testState.apiFetch.mockReset();
     testState.reconnect.mockReset();
     testState.unsubscribe.mockReset();
@@ -257,20 +244,8 @@ describe('AgentMessageSender local detach', () => {
   });
 
   it('detaches from a run topic without server abort and keeps the pending run', async () => {
-    testState.apiFetch.mockImplementation(async (_path, init) => {
-      const body = JSON.parse(String(init?.body)) as { clientMessageId: string };
-      return new Response(JSON.stringify({
-        payload: {
-          state: {
-            activeRunId: 'run-123',
-            activeInputId: 'input-1',
-            inputs: [{ id: 'input-1', clientMessageId: body.clientMessageId }],
-          },
-        },
-      }), { status: 202, headers: { 'Content-Type': 'application/json' } });
-    });
     const sender = new AgentMessageSender();
-    const pending = sender.sendMessage('hello', 'session-a');
+    const pending = sender.resume('run-123', 'session-a');
 
     await vi.waitFor(() => {
       expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123', lastSeq: 0 }));
@@ -323,25 +298,21 @@ describe('AgentMessageSender local detach', () => {
 
   it('requests an immediate realtime reconnect while waiting for the endpoint claim', async () => {
     clearMobileEndpointTurnClaim();
-    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
-      payload: { state: { inputs: [] } },
-    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+    testState.apiFetch.mockResolvedValue(accepted());
 
     const sender = new AgentMessageSender();
-    const pending = sender.sendMessage('hello', 'session-a');
+    const pending = sender.sendMessage(submission());
 
     await vi.waitFor(() => expect(testState.reconnect).toHaveBeenCalledOnce());
     publishMobileEndpointTurnClaim('mobile-test', 'replacement-turn-token');
 
-    await expect(pending).resolves.toBeUndefined();
+    await expect(pending).resolves.toEqual({ runId: undefined });
   });
 
   it('submits task chat messages through the bound task endpoint', async () => {
-    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
-      payload: { state: { inputs: [] } },
-    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
+    testState.apiFetch.mockResolvedValue(accepted());
 
-    await new AgentMessageSender().sendMessage('hello', 'session-a', undefined, undefined, 'task/1');
+    await new AgentMessageSender().sendMessage(submission({ taskId: 'task/1' }));
 
     expect(testState.apiFetch).toHaveBeenCalledWith(
       '/api/tasks/task%2F1/inputs',
@@ -364,61 +335,103 @@ describe('AgentMessageSender local detach', () => {
     expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-stalled', lastSeq: 0 }));
   });
 
-  it('retries an ambiguous submission with the same client message id', async () => {
-    vi.useFakeTimers();
-    testState.apiFetch
-      .mockRejectedValueOnce(new Error('Network request failed'))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        payload: { state: { inputs: [] } },
-      }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
-    const sender = new AgentMessageSender();
-    const pending = sender.sendMessage('hello', 'session-a');
-
-    await vi.advanceTimersByTimeAsync(500);
-    await pending;
-
-    const first = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body)) as { clientMessageId: string };
-    const second = JSON.parse(String(testState.apiFetch.mock.calls[1]?.[1]?.body)) as { clientMessageId: string };
-    expect(second.clientMessageId).toBe(first.clientMessageId);
-    expect(testState.memory.has('session-input-outbox:v2:computer-a:session-a')).toBe(false);
+  it('returns on acceptance without subscribing to or waiting for the AI run', async () => {
+    testState.apiFetch.mockResolvedValue(accepted('run-a'));
+    await expect(new AgentMessageSender().sendMessage(submission())).resolves.toEqual({ runId: 'run-a' });
+    expect(testState.realtimeListener).toBeUndefined();
   });
 
-  it('keeps an input durable when a successful response body is truncated', async () => {
-    testState.apiFetch.mockResolvedValue(new Response('not-json', { status: 202 }));
-    const sender = new AgentMessageSender();
-
-    await expect(sender.sendMessage('hello', 'session-a')).rejects.toThrow('Network response was invalid');
-
-    expect(testState.memory.has('session-input-outbox:v2:computer-a:session-a')).toBe(true);
+  it('does not automatically retry network failures and preserves the id for manual retry', async () => {
+    const input = submission();
+    testState.apiFetch.mockRejectedValueOnce(new Error('Network request failed'));
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Network request failed');
+    expect(testState.apiFetch).toHaveBeenCalledTimes(1);
+    testState.apiFetch.mockResolvedValueOnce(accepted());
+    await new AgentMessageSender().sendMessage(input);
+    const bodies = testState.apiFetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)));
+    expect(bodies[0]).toEqual(bodies[1]);
+    expect(bodies[1].clientMessageId).toBe('message-a');
   });
 
-  it('keeps an ambiguous input across sender instances and reuses its id', async () => {
-    vi.useFakeTimers();
-    testState.apiFetch.mockRejectedValue(new Error('Network request failed'));
-    const firstSender = new AgentMessageSender();
-    const firstAttempt = firstSender.sendMessage('durable', 'session-a');
-    const firstRejected = expect(firstAttempt).rejects.toThrow('Network request failed');
-    await vi.advanceTimersByTimeAsync(2_000);
-    await firstRejected;
+  it('does not automatically retry a rejected HTTP request', async () => {
+    testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Busy' } }), { status: 503 }));
+    await expect(new AgentMessageSender().sendMessage(submission())).rejects.toThrow('Busy');
+    expect(testState.apiFetch).toHaveBeenCalledTimes(1);
+  });
 
-    const stored = JSON.parse(testState.memory.get('session-input-outbox:v2:computer-a:session-a')!) as {
-      clientMessageId: string;
-      content: string;
-    };
-    expect(stored.content).toBe('durable');
+  it('rejects a truncated or malformed acknowledgement', async () => {
+    testState.apiFetch.mockResolvedValueOnce(new Response('not-json', { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ payload: { state: {
+        inputs: null,
+      } } }), { status: 202 }));
+    const input = submission();
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Network response was invalid');
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Network response was invalid');
+    expect(input.clientMessageId).toBe('message-a');
+  });
 
-    testState.apiFetch.mockReset();
+  it('accepts a manual retry after the original run has already completed', async () => {
     testState.apiFetch.mockResolvedValue(new Response(JSON.stringify({
       payload: { state: { inputs: [] } },
-    }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
-    const secondSender = new AgentMessageSender();
-    await secondSender.retryPendingMessage('session-a');
+    }), { status: 202 }));
+    await expect(new AgentMessageSender().sendMessage(submission())).resolves.toEqual({ runId: undefined });
+    expect(testState.apiFetch).toHaveBeenCalledTimes(1);
+    expect(testState.realtimeListener).toBeUndefined();
+  });
 
-    const retried = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body)) as {
-      clientMessageId: string;
-    };
-    expect(retried.clientMessageId).toBe(stored.clientMessageId);
-    expect(testState.memory.has('session-input-outbox:v2:computer-a:session-a')).toBe(false);
+  it('keeps uploaded voice references for manual retry after an ambiguous submission', async () => {
+    testState.apiUploadFile.mockReset();
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({ ok: true, payload: {
+      uri: 'media://voice.m4a', name: 'voice.m4a', mimeType: 'audio/mp4', size: 100,
+    } }), { status: 201 }));
+    testState.apiFetch.mockRejectedValueOnce(new Error('Network request failed')).mockResolvedValueOnce(accepted());
+    const input = submission({ attachments: [{ type: 'voice', localUri: 'file:///voice.m4a', durationSeconds: 1.25 }] });
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Network request failed');
+    await new AgentMessageSender().sendMessage(input);
+    expect(testState.apiUploadFile).toHaveBeenCalledTimes(1);
+    const bodies = testState.apiFetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)));
+    expect(bodies[0]).toEqual(bodies[1]);
+    expect(bodies[1].attachments[0]).toMatchObject({ uri: 'media://voice.m4a', durationSeconds: 1.25 });
+  });
+
+  it('resolves missing session identity before sending and keeps it on the message', async () => {
+    testState.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      session: { key: 'session-a', sessionId: 'resolved-instance', messages: [] },
+    }), { status: 200 })).mockResolvedValueOnce(accepted());
+    const input = submission({ expectedSessionId: undefined });
+    await new AgentMessageSender().sendMessage(input);
+    expect(input.expectedSessionId).toBe('resolved-instance');
+    expect(JSON.parse(String(testState.apiFetch.mock.calls[1][1].body)).expectedSessionId).toBe('resolved-instance');
+  });
+
+  it('does not submit to another connection after uploading media', async () => {
+    testState.apiUploadFile.mockReset();
+    testState.apiUploadFile.mockImplementationOnce(async () => {
+      testState.generation++;
+      return new Response(JSON.stringify({ ok: true, payload: {
+        uri: 'media://voice.m4a', name: 'voice.m4a', mimeType: 'audio/mp4', size: 100,
+      } }), { status: 201 });
+    });
+    await expect(new AgentMessageSender().sendMessage(submission({ attachments: [
+      { type: 'voice', localUri: 'file:///voice.m4a' },
+    ] }))).rejects.toThrow('Active work computer changed');
+    expect(testState.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects submissions after switching computers', async () => {
+    const input = submission({ gatewayId: 'another-computer' });
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Active work computer changed');
+    expect(testState.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the original session identity on retry after a reset', async () => {
+    const input = submission();
+    testState.apiFetch.mockImplementation(async () => new Response(JSON.stringify({ error: { message: 'Session changed' } }), { status: 409 }));
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Session changed');
+    await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Session changed');
+    for (const [, init] of testState.apiFetch.mock.calls) {
+      expect(JSON.parse(String(init.body)).expectedSessionId).toBe('instance-a');
+    }
   });
 
   it('resumes from the last applied run sequence', async () => {

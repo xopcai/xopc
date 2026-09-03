@@ -1,16 +1,21 @@
-import { Download, ExternalLink } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { FilePreview } from '@/features/file-preview/file-preview';
+import { useFilePreviewExpanded } from '@/features/file-preview/use-file-preview-expanded';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
+import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { PPTX_PREVIEW_MAX_CHARS } from '@/features/chat/attachments/attachment-utils-core';
 import {
   BINARY_PREVIEW_MAX_BYTES,
   detectPreviewFileType,
   inferPreviewMimeType,
-  PreviewRuntimeView,
   readModeForPreviewType,
   TEXT_PREVIEW_MAX_BYTES,
   type PreviewFileDescriptor,
+  type PreviewRuntimeRenderProps,
 } from '@/features/preview-runtime';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -62,6 +67,37 @@ type SharePreviewLoad = {
 
 function emptyLoad(): SharePreviewLoad {
   return { textContent: null, binaryBuffer: null, extractedText: null, extractedTextTruncated: false };
+}
+
+function SharedFilePreview({ subtitle, openInlineUrl, landingUrl, ...source }: PreviewRuntimeRenderProps & {
+  subtitle: ReactNode;
+  openInlineUrl: string;
+  landingUrl: string;
+}) {
+  const { expanded, setExpanded } = useFilePreviewExpanded();
+  const m = messages(source.language);
+  const copyShareLink = async () => {
+    const copied = await copyTextToClipboard(window.location.href);
+    showComposerNotification(copied ? 'success' : 'warning', copied ? m.sharesSettings.copied : m.clipboard.copyFailed);
+  };
+  return (
+    <div className={cn(
+      'mx-auto flex h-full min-h-0 w-full max-w-[var(--max-width-app-main)] flex-col bg-surface-panel',
+      expanded && 'fixed inset-0 z-[65] h-[100dvh] max-w-none',
+    )}>
+      <FilePreview
+        {...source}
+        header={{
+          subtitle,
+          expanded,
+          onToggleExpanded: !source.loading && !source.loadError ? () => setExpanded((value) => !value) : undefined,
+          onClose: () => window.location.assign(landingUrl),
+          share: { onClick: () => void copyShareLink(), disabled: source.loading || Boolean(source.loadError) },
+          openInBrowser: { href: openInlineUrl },
+        }}
+      />
+    </div>
+  );
 }
 
 export function SharePreviewPage() {
@@ -189,6 +225,31 @@ export function SharePreviewPage() {
   const downloadUrl = token ? apiUrl(`/s/${encodeURIComponent(token)}?dl=1`) : '#';
   const openInlineUrl = token ? apiUrl(`/s/${encodeURIComponent(token)}?inline=1`) : '#';
 
+  if (descriptor && meta && token) {
+    return (
+      <SharedFilePreview
+        language={language}
+        descriptor={descriptor}
+        loading={loading}
+        loadError={error}
+        textContent={load.textContent}
+        binaryBuffer={load.binaryBuffer}
+        extractedText={load.extractedText}
+        extractedTextTruncated={load.extractedTextTruncated}
+        subtitle={<span className="truncate">
+          {formatBytes(meta.fileSize)} · {t.expiresAt}{' '}
+          {new Date(meta.expiresAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
+        </span>}
+        openInlineUrl={openInlineUrl}
+        landingUrl={apiUrl(`/s/${encodeURIComponent(token)}`)}
+        actions={{
+          onDownload: () => { window.location.href = downloadUrl; },
+          canDownload: !loading && !error,
+        }}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-base">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-edge px-4">
@@ -212,27 +273,6 @@ export function SharePreviewPage() {
             </div>
           ) : null}
         </div>
-        {meta && meta.kind === 'file' ? (
-          <>
-            <a
-              href={openInlineUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
-            >
-              <ExternalLink className="size-3.5" aria-hidden />
-              {t.openInline}
-            </a>
-            <a
-              href={downloadUrl}
-              className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
-              download={meta.fileName}
-            >
-              <Download className="size-3.5" aria-hidden />
-              {t.download}
-            </a>
-          </>
-        ) : null}
       </header>
 
       <main className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-6 sm:px-5 xl:px-6">
@@ -306,25 +346,6 @@ export function SharePreviewPage() {
             </div>
             <footer className="mx-auto mt-10 max-w-3xl border-t border-edge-subtle pt-4 text-center text-xs text-fg-subtle">{t.sharedVia}</footer>
           </article>
-        ) : descriptor ? (
-          <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
-            <PreviewRuntimeView
-              language={language}
-              descriptor={descriptor}
-              loading={false}
-              loadError={null}
-              textContent={load.textContent}
-              binaryBuffer={load.binaryBuffer}
-              extractedText={load.extractedText}
-              extractedTextTruncated={load.extractedTextTruncated}
-              actions={{
-                onDownload: () => {
-                  window.location.href = downloadUrl;
-                },
-                canDownload: true,
-              }}
-            />
-          </div>
         ) : null}
       </main>
     </div>
@@ -359,8 +380,6 @@ const PREVIEW_LABELS_ZH = {
   notFound: '链接不存在',
   invalidLink: '链接无效',
   expiresAt: '有效期至',
-  download: '下载',
-  openInline: '在新窗口打开',
   directoryHint: '目录分享请使用主页面浏览。',
   tooLarge: '文件过大，无法在线预览，请下载查看。',
   sharedAt: '分享于',
@@ -378,8 +397,6 @@ const PREVIEW_LABELS_EN = {
   notFound: 'Link not found',
   invalidLink: 'Invalid link',
   expiresAt: 'Expires',
-  download: 'Download',
-  openInline: 'Open raw',
   directoryHint: 'Directory shares are browsed from the main page.',
   tooLarge: 'This file is too large to preview here. Please download it instead.',
   sharedAt: 'Shared',
