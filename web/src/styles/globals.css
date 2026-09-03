@@ -1544,6 +1544,20 @@ html.dark[data-color-scheme="clay"] {
   background: var(--color-fg-subtle);
 }
 
+.chat-timeline-scroll {
+  max-height: min(32rem, calc(100dvh - 10rem));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+
+.chat-timeline-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .task-detail-scroll {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-edge-strong) 38%, transparent)

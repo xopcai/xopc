@@ -178,8 +178,8 @@ export function ChatTimelineRail({
         }
       }}
     >
-      <div className="relative z-[90] flex h-full max-h-[32rem] min-h-0 w-full justify-end overflow-visible">
-        <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="relative z-[90] flex h-full min-h-0 w-full flex-col justify-center overflow-visible">
+        <div className="chat-timeline-scroll flex min-h-0 w-full flex-col">
           <ol
             className="my-auto flex w-full shrink-0 flex-col items-end py-1"
             onMouseEnter={() => setPreviewTurnId((current) => current ?? activeTurnId ?? null)}
