@@ -14,6 +14,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { GatewayQrScannerModal, requestGatewayQrCameraAccess } from './GatewayQrScannerModal';
 import { pairWithGateway } from './pair-gateway';
 import type { ParsedGatewayQr } from './parse-gateway-qr';
+import { GatewayPairingInputActions } from './GatewayPairingInputActions';
+import { useGatewayPairingInput } from './use-gateway-pairing-input';
 
 export function GatewayEditScreen() {
   const router = useRouter();
@@ -50,6 +52,7 @@ export function GatewayEditScreen() {
   }, [cameraPermission, copy.cameraDenied, requestCameraPermission]);
 
   const connect = useCallback((pairing: ParsedGatewayQr) => {
+    setScannerOpen(false);
     setBusy(true);
     setError('');
     void pairWithGateway(pairing)
@@ -57,6 +60,7 @@ export function GatewayEditScreen() {
       .catch(() => setError(copy.connectFailed))
       .finally(() => setBusy(false));
   }, [copy.connectFailed, router]);
+  const input = useGatewayPairingInput(connect, isNew && !scannerOpen && !busy);
 
   const confirmDelete = useCallback(() => {
     if (!profile) return;
@@ -80,9 +84,10 @@ export function GatewayEditScreen() {
         {isNew ? (
           <>
             <Text variant="bodyMedium" style={{ color: colors.textMuted }}>{copy.subline}</Text>
-            <Button mode="contained" icon="qrcode-scan" loading={busy} disabled={busy} onPress={() => void openScanner()}>
+            <Button mode="contained" icon="qrcode-scan" loading={busy} disabled={busy || input.busy} onPress={() => void openScanner()}>
               {copy.scanQr}
             </Button>
+            <GatewayPairingInputActions input={input} disabled={busy} />
           </>
         ) : profile ? (
           <>
