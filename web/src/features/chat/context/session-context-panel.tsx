@@ -1,5 +1,4 @@
 import * as Popover from '@radix-ui/react-popover';
-import type { SessionContextSource } from '@xopcai/gateway-contract';
 import { FileText, FolderKanban, GitBranch, ListTodo, Monitor, RefreshCw, Target } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -11,6 +10,7 @@ import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { mergeContextSources } from './merge-context-sources';
 import { sessionContextCopy } from './session-context-copy';
 import { useSessionContext } from './use-session-context';
 
@@ -28,16 +28,6 @@ export interface SessionContextPanelProps {
 
 const rowClass = 'flex min-w-0 items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-fg transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 const actionClass = 'rounded-lg p-2 text-xs text-fg-muted transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
-
-export function mergeContextSources(sources: SessionContextSource[], drafts: ComposerContextRef[]) {
-  const result = sources.map((source) => ({ ...source, drafts: [] as ComposerContextRef[] }));
-  for (const draft of drafts) {
-    const found = result.find((source) => source.id === draft.sourceId);
-    if (found) found.drafts.push(draft);
-    else result.push({ kind: 'note', id: draft.sourceId, title: draft.title, origins: [], drafts: [draft] });
-  }
-  return result;
-}
 
 /** Mounted with the session key by the header, so another session never inherits an open panel. */
 export function SessionContextPanel({ sessionKey, draftRefs = [], project, ...props }: SessionContextPanelProps) {
