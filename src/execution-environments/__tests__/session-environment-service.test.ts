@@ -22,10 +22,7 @@ const SESSION_KEY = 'agent:main:webchat:default:direct:environment-test';
 const config = ConfigSchema.parse({
   agents: {
     default: 'main',
-    list: [{
-      id: 'main',
-      workspace: '/tmp/xopc-default-workspace',
-    }],
+    list: [{ id: 'main', workspace: '/tmp/xopc-default-workspace' }],
   },
 });
 
@@ -92,5 +89,26 @@ describe('SessionEnvironmentService', () => {
       project,
       mode: 'managed_worktree',
     })).rejects.toThrow(/release it before switching/);
+  });
+
+  it('keeps worktree changes after releasing the session when cleanup is unsafe', async () => {
+    const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
+    const environment = await service.attach({ sessionKey: SESSION_KEY, project });
+    writeFileSync(join(environment.rootPath, 'unfinished.txt'), 'Keep this work');
+
+    await expect(service.release(SESSION_KEY)).rejects.toThrow();
+
+    expect(service.get(SESSION_KEY)).toBeUndefined();
+    expect(existsSync(join(environment.rootPath, 'unfinished.txt'))).toBe(true);
+  });
+
+  it('can release a session while explicitly retaining its managed worktree', async () => {
+    const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
+    const environment = await service.attach({ sessionKey: SESSION_KEY, project });
+
+    await service.release(SESSION_KEY, false);
+
+    expect(service.get(SESSION_KEY)).toBeUndefined();
+    expect(existsSync(environment.rootPath)).toBe(true);
   });
 });

@@ -31,7 +31,6 @@ import { routeErrorMiddleware } from './middleware/route-errors.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
-import { registerPublicExecutionHostRoutes } from './routes/execution-hosts.js';
 import { registerPublicLocalAppPreviewRoutes } from './routes/local-apps.js';
 import { HTML_PREVIEW_PATH, registerPublicHtmlPreviewRoute } from './routes/html-preview.js';
 import { registerDeviceAuthPublicRoutes } from './routes/devices.js';
@@ -265,7 +264,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   registerPublicGatewayRoutes(app, service);
   registerPublicHtmlPreviewRoute(app);
   registerDeviceAuthPublicRoutes(app);
-  registerPublicExecutionHostRoutes(app, service);
 
   // Extension UI assets are served without auth: sandboxed iframes (no allow-same-origin)
   // have an opaque origin of `null` and cannot forward the ?token= from the parent HTML URL.

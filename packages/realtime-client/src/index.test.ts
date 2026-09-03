@@ -156,66 +156,6 @@ describe('RealtimeClient', () => {
     client.disconnect();
   });
 
-  it('attaches execution host identity and exchanges host messages', async () => {
-    const socket = new FakeSocket();
-    const onReady = vi.fn();
-    const onMessage = vi.fn();
-    const client = new RealtimeClient({
-      clientId: 'host-1',
-      clientKind: 'execution_host',
-      getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
-      createWebSocket: () => socket,
-      executionHost: {
-        createHello: async () => ({
-          protocolVersion: 1,
-          hostId: 'host-1',
-          platform: 'linux',
-          arch: 'x64',
-          appVersion: '1',
-          capabilities: { git: true, shell: true, search: true, patch: true, snapshots: false },
-          maxConcurrency: 1,
-          nonce: 'nonce-that-is-long-enough',
-          signedAt: Date.now(),
-          signature: 'signed-execution-host-payload'.repeat(2),
-        }),
-        onReady,
-        onMessage,
-      },
-    });
-    client.connect();
-    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
-    socket.open();
-    expect(JSON.parse(socket.sent[0]!)).toMatchObject({
-      kind: 'realtime.hello',
-      payload: { clientKind: 'execution_host', executionHost: { hostId: 'host-1' } },
-    });
-    socket.onmessage?.({ data: serverMessage('realtime.ready', {
-      ...readyPayload(),
-      executionHost: { hostId: 'host-1' },
-    }) });
-    expect(onReady).toHaveBeenCalledWith({ hostId: 'host-1' });
-
-    const command = {
-      type: 'execution.cancel' as const,
-      operationId: crypto.randomUUID(),
-      reason: 'cancelled',
-    };
-    socket.onmessage?.({ data: serverMessage('execution_host.message', command) });
-    expect(onMessage).toHaveBeenCalledWith(command);
-
-    client.sendExecutionHostMessage({
-      type: 'execution.result',
-      operationId: command.operationId,
-      result: { ok: true },
-    });
-    expect(JSON.parse(socket.sent.at(-1)!)).toMatchObject({
-      kind: 'execution_host.message',
-      payload: { type: 'execution.result', operationId: command.operationId },
-    });
-    client.disconnect();
-  });
-
   it('waits for a connecting socket to open before reconnecting with a new endpoint', async () => {
     const sockets: FakeSocket[] = [];
     const client = new RealtimeClient({

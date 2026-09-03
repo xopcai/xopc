@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import type { Hono } from 'hono';
 
+import { getSessionContextSummary } from '../../session-context-summary.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+
 import { buildSessionKey } from '../../../routing/session-key.js';
 import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
@@ -14,8 +17,6 @@ import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
-import { RemoteWorktreeManager } from '../../../execution-environments/remote-worktree-manager.js';
-import { ExecutionEnvironmentHandoffStore } from '../../../execution-environments/handoff-store.js';
 import type { ProjectExecutionMode } from '../../../projects/types.js';
 
 const log = createGatewayRouteLogger('Sessions');
@@ -86,13 +87,17 @@ function buildDirectSessionMetadata(params: {
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const handoffs = new ExecutionEnvironmentHandoffStore();
-  const environments = new SessionEnvironmentService({
-    remoteWorktrees: new RemoteWorktreeManager({ getRegistry: () => service.executionHosts.registry }),
-    handoffs,
-  });
+  const environments = new SessionEnvironmentService();
 
   // ========== Session REST API (/api/sessions) ==========
+
+  authenticated.get('/api/sessions/:key/context-summary', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) return blocked;
+    c.header('Cache-Control', 'no-store');
+    const summary = await getSessionContextSummary(service.currentConfig, c.req.param('key'), getGatewayPrincipal(c).scopes);
+    return summary ? c.json({ summary }) : c.json({ error: 'Session not found' }, 404);
+  });
 
   authenticated.get('/api/session-runs', (c) => {
     const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
@@ -859,8 +864,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key - Delete session (removes key from index)
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
-    if (handoffs.getActiveForSession(key)) {
-      return c.json({ ok: false, error: 'Session has an active execution environment handoff' }, 409);
+    if (environments.get(key) && service.getActiveWebchatRunId(key)) {
+      return c.json({ ok: false, error: 'Stop the active session run before deleting its environment' }, 409);
     }
     const result = await service.sessions.delete(key);
     if (result.deleted) {

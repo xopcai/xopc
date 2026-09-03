@@ -17,12 +17,14 @@ export function ChatWorkspaceControl({
   workspacePath,
   canChangeWorkspace,
   disabled,
+  available = true,
   onWorkspaceChange,
 }: {
   sessionKey: string;
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
   disabled: boolean;
+  available?: boolean;
   onWorkspaceChange: (path: string) => Promise<void>;
 }) {
   const language = useLocaleStore((state) => state.language);
@@ -57,10 +59,12 @@ export function ChatWorkspaceControl({
       <div className="flex min-w-0 items-center gap-0.5">
         <button
           type="button"
+          disabled={!available}
           className={cn(
             'inline-flex h-8 min-w-0 max-w-44 items-center gap-1.5 rounded-lg px-2 text-fg-muted transition-colors',
             'hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             workspacePanelOpen && 'bg-surface-hover text-fg',
+            !available && 'cursor-not-allowed opacity-50',
           )}
           title={normalizedPath || workspaceName}
           aria-label={`${m.workspace.openFiles}: ${workspaceName}`}
@@ -68,7 +72,7 @@ export function ChatWorkspaceControl({
           onClick={openProjectFiles}
         >
           <FolderOpen className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-          <span className="hidden min-w-0 truncate text-xs font-medium sm:inline">{workspaceName}</span>
+          <span className="min-w-0 truncate text-xs font-medium">{m.workspace.openFiles}</span>
         </button>
         {canChangeWorkspace ? (
           <button

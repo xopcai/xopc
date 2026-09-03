@@ -5,29 +5,16 @@ export const EXECUTION_ENVIRONMENT_STATUSES = [
   'requested',
   'provisioning',
   'ready',
-  'busy',
-  'snapshotting',
-  'handing_off',
   'degraded',
-  'stopped',
   'deleting',
   'deleted',
   'error',
 ] as const;
 export type ExecutionEnvironmentStatus = (typeof EXECUTION_ENVIRONMENT_STATUSES)[number];
 
-export const EXECUTION_ENVIRONMENT_SUBJECT_KINDS = [
-  'session',
-  'task_run',
-  'automation_run',
-  'workflow_run',
-] as const;
-export type ExecutionEnvironmentSubjectKind = (typeof EXECUTION_ENVIRONMENT_SUBJECT_KINDS)[number];
-
 export interface ExecutionEnvironment {
   id: string;
   projectId?: string;
-  hostId: string;
   kind: ExecutionEnvironmentKind;
   status: ExecutionEnvironmentStatus;
   rootPath: string;
@@ -36,8 +23,6 @@ export interface ExecutionEnvironment {
   baseRef?: string;
   baseSha?: string;
   branchRef?: string;
-  managed: boolean;
-  pinned: boolean;
   version: number;
   lastError?: string;
   createdAt: number;
@@ -48,10 +33,8 @@ export interface ExecutionEnvironment {
 
 export interface ExecutionEnvironmentBinding {
   id: string;
-  subjectKind: ExecutionEnvironmentSubjectKind;
-  subjectId: string;
+  sessionKey: string;
   environmentId: string;
-  epoch: number;
   createdAt: number;
   releasedAt?: number;
 }
@@ -69,7 +52,6 @@ export interface ExecutionEnvironmentEvent {
 export interface CreateExecutionEnvironmentInput {
   id?: string;
   projectId?: string;
-  hostId: string;
   kind: ExecutionEnvironmentKind;
   rootPath: string;
   repositoryRoot?: string;
@@ -77,30 +59,18 @@ export interface CreateExecutionEnvironmentInput {
   baseRef?: string;
   baseSha?: string;
   branchRef?: string;
-  pinned?: boolean;
 }
 
 export interface ExecutionEnvironmentListQuery {
   projectId?: string;
-  hostId?: string;
   status?: ExecutionEnvironmentStatus;
   includeDeleted?: boolean;
   limit?: number;
 }
 
 export interface BindExecutionEnvironmentInput {
-  subjectKind: ExecutionEnvironmentSubjectKind;
-  subjectId: string;
+  sessionKey: string;
   environmentId: string;
-}
-
-export interface ReplaceExecutionEnvironmentBindingInput {
-  subjectKind: ExecutionEnvironmentSubjectKind;
-  subjectId: string;
-  sourceBindingId: string;
-  sourceEnvironmentId: string;
-  sourceEpoch: number;
-  targetEnvironmentId: string;
 }
 
 export interface TransitionExecutionEnvironmentInput {
@@ -110,15 +80,6 @@ export interface TransitionExecutionEnvironmentInput {
   reason: string;
   error?: string;
   metadata?: Record<string, unknown>;
-}
-
-export interface UpdateExecutionEnvironmentLocationInput {
-  environmentId: string;
-  expectedVersion: number;
-  rootPath: string;
-  repositoryRoot: string;
-  gitCommonDir: string;
-  baseSha: string;
 }
 
 export class ExecutionEnvironmentConflictError extends Error {
@@ -138,12 +99,8 @@ export class ExecutionEnvironmentNotFoundError extends Error {
 const STATUS_TRANSITIONS: Record<ExecutionEnvironmentStatus, readonly ExecutionEnvironmentStatus[]> = {
   requested: ['provisioning', 'deleting', 'error'],
   provisioning: ['ready', 'degraded', 'deleting', 'error'],
-  ready: ['busy', 'snapshotting', 'handing_off', 'degraded', 'stopped', 'deleting', 'error'],
-  busy: ['ready', 'snapshotting', 'degraded', 'stopped', 'error'],
-  snapshotting: ['ready', 'busy', 'degraded', 'error'],
-  handing_off: ['ready', 'degraded', 'stopped', 'error'],
-  degraded: ['provisioning', 'stopped', 'deleting', 'error'],
-  stopped: ['provisioning', 'degraded', 'deleting'],
+  ready: ['degraded', 'deleting', 'error'],
+  degraded: ['provisioning', 'deleting', 'error'],
   deleting: ['deleted', 'error'],
   deleted: [],
   error: ['provisioning', 'deleting'],

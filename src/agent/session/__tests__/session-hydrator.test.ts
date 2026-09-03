@@ -45,7 +45,6 @@ describe('SessionHydrator execution environment safety', () => {
     const store = new ExecutionEnvironmentStore();
     const requested = store.create({
       id: 'missing-environment',
-      hostId: 'local',
       kind: 'managed_worktree',
       rootPath,
       repositoryRoot: `${stateDir}/repository`,
@@ -63,7 +62,7 @@ describe('SessionHydrator execution environment safety', () => {
       toStatus: 'ready',
       reason: 'test ready',
     });
-    store.bind({ subjectKind: 'session', subjectId: SESSION_KEY, environmentId: ready.id });
+    store.bind({ sessionKey: SESSION_KEY, environmentId: ready.id });
 
     const setSessionWorkspaceOverride = vi.fn();
     const hydrator = new SessionHydrator({
@@ -76,42 +75,5 @@ describe('SessionHydrator execution environment safety', () => {
     await expect(hydrator.workspace(SESSION_KEY)).rejects.toThrow(/root is unavailable/);
     expect(setSessionWorkspaceOverride).not.toHaveBeenCalled();
     expect(existsSync(rootPath)).toBe(false);
-  });
-
-  it('keeps remote environment paths opaque to the gateway filesystem', async () => {
-    const store = new ExecutionEnvironmentStore();
-    const requested = store.create({
-      id: 'remote-environment',
-      hostId: 'remote-host',
-      kind: 'managed_worktree',
-      rootPath: '/remote-only/worktree',
-      repositoryRoot: '/remote-only/repository.git',
-      gitCommonDir: '/remote-only/repository.git',
-    });
-    const provisioning = store.transition({
-      environmentId: requested.id,
-      expectedVersion: requested.version,
-      toStatus: 'provisioning',
-      reason: 'test provisioning',
-    });
-    const ready = store.transition({
-      environmentId: requested.id,
-      expectedVersion: provisioning.version,
-      toStatus: 'ready',
-      reason: 'test ready',
-    });
-    store.bind({ subjectKind: 'session', subjectId: SESSION_KEY, environmentId: ready.id });
-
-    const setSessionWorkspaceOverride = vi.fn();
-    const hydrator = new SessionHydrator({
-      sessionConfigStore: { get: vi.fn(async () => null) } as never,
-      agentManager: { setSessionWorkspaceOverride } as never,
-      modelManager: {} as never,
-      getConfig: () => config,
-    });
-
-    await expect(hydrator.workspace(SESSION_KEY)).resolves.toBeUndefined();
-    expect(setSessionWorkspaceOverride).toHaveBeenCalledWith(SESSION_KEY, null);
-    expect(existsSync('/remote-only/worktree')).toBe(false);
   });
 });

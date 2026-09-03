@@ -170,27 +170,6 @@
       "failed": "失败"
     }
   },
-  "executionHostsSettings": {
-    "title": "执行主机",
-    "subtitle": "在已登记的机器上运行受管代码工作区，无需共享 Gateway 令牌。",
-    "add": "登记主机",
-    "creating": "正在创建…",
-    "createError": "无法创建登记码，请重试。",
-    "codeTitle": "一次性登记码",
-    "codeHint": "在目标机器运行：xopc host enroll --gateway <gateway-url> --code <code>",
-    "expires": "过期时间",
-    "registered": "已登记主机",
-    "online": "在线主机",
-    "noHosts": "尚未登记执行主机。",
-    "lastSeen": "最近在线",
-    "never": "从未",
-    "revoke": "撤销",
-    "revokeTitle": "撤销执行主机？",
-    "revokeDescription": "撤销「{{name}}」并立即断开连接？再次连接需要新的登记码。",
-    "revokeError": "无法撤销执行主机，请重试。",
-    "loadError": "无法加载执行主机。",
-    "status": { "online": "在线", "offline": "离线", "revoked": "已撤销" }
-  },
   "capabilitiesSettings": {
     "subtitle": "配置 xopc 全局可用的模型、图片、语音与搜索服务。",
     "docsLink": "查看文档",

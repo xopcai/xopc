@@ -96,8 +96,6 @@ import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
-import { ExecutionHostRuntime } from '../execution-hosts/runtime.js';
-import { SessionWorkspaceExecutionBackend } from '../execution-environments/remote-workspace-execution-backend.js';
 import { reconcileDreamingAutomations as reconcileDreamingAutomationRecords } from './dreaming-automation-reconciler.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
@@ -167,8 +165,7 @@ export class GatewayService {
   private auth: ResolvedGatewayAuth;
 
   readonly endpointTools = new EndpointToolRuntime();
-  readonly executionHosts = new ExecutionHostRuntime();
-  readonly realtime = new RealtimeRuntime(this.endpointTools, this.executionHosts);
+  readonly realtime = new RealtimeRuntime(this.endpointTools);
 
   getConfig(): Config {
     return this.config;
@@ -520,10 +517,6 @@ export class GatewayService {
     this._agentService?.refreshUserProfileContext();
   }
 
-  evictSessionAgent(sessionKey: string): void {
-    this._agentService?.evictSessionAgent(sessionKey);
-  }
-
   private ensureAgentService(): AgentService {
     if (this._agentService) {
       return this._agentService;
@@ -549,11 +542,6 @@ export class GatewayService {
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       endpointTools: this.endpointTools,
-      getWorkspaceExecutionBackend: (sessionKey, localBackend) => new SessionWorkspaceExecutionBackend({
-        sessionKey,
-        registry: this.executionHosts.registry,
-        localBackend,
-      }),
       getAutomationService: () => this.automationService,
       getBrowserRecipeService: () => this.browserRecipes,
       getNotesService: () => this.notesService,

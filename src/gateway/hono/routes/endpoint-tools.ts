@@ -11,7 +11,7 @@ import {
   revokeEndpointPrincipal,
   listEndpointToolInvocationAudits,
 } from '../../../storage/sqlite/index.js';
-import { parseP256PublicKey } from '../../../crypto/p256.js';
+import { parseEndpointPublicKey } from '../../../endpoint-tools/auth.js';
 import {
   ENDPOINT_UPLOAD_MAX_BYTES,
   EndpointUploadError,
@@ -72,7 +72,7 @@ export function registerEndpointToolRoutes(
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint principal' } }, 400);
     }
     try {
-      parseP256PublicKey(parsed.data.publicKey);
+      parseEndpointPublicKey(parsed.data.publicKey);
     } catch {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint public key' } }, 400);
     }

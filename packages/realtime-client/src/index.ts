@@ -6,13 +6,10 @@ import type {
 import {
   REALTIME_PROTOCOL_VERSION,
   parseServerRealtimeMessage,
-  type ClientExecutionHostMessage,
   type ClientRealtimeMessage,
-  type ExecutionHostHelloPayload,
   type RealtimeClientKind,
   type RealtimeEventPayload,
   type RealtimeSubscription,
-  type ServerExecutionHostMessage,
 } from '@xopcai/realtime-protocol';
 
 export type RealtimeConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
@@ -40,20 +37,12 @@ export interface RealtimeClientOptions {
   onEvent?: (event: RealtimeEventPayload) => void;
   onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
   onEndpointMessage?: (message: ServerEndpointMessage) => void;
-  executionHost?: RealtimeExecutionHostBinding;
 }
 
 export interface RealtimeEndpointBinding {
   createHello: () => Promise<EndpointHelloPayload>;
   onReady: (endpoint: { endpointId: string; turnToken: string }) => void;
   onMessage: (message: ServerEndpointMessage) => void;
-  onDisconnected?: () => void;
-}
-
-export interface RealtimeExecutionHostBinding {
-  createHello: () => Promise<ExecutionHostHelloPayload>;
-  onReady: (executionHost: { hostId: string }) => void;
-  onMessage: (message: ServerExecutionHostMessage) => void;
   onDisconnected?: () => void;
 }
 
@@ -102,7 +91,6 @@ export class RealtimeClient {
     this.clearTimers();
     this.ready = false;
     this.endpointBinding?.onDisconnected?.();
-    this.options.executionHost?.onDisconnected?.();
     this.socket?.close(1000, 'Client disconnected');
     this.socket = undefined;
     this.options.onStateChange?.('disconnected');
@@ -114,7 +102,6 @@ export class RealtimeClient {
     this.clearTimers();
     this.ready = false;
     this.endpointBinding?.onDisconnected?.();
-    this.options.executionHost?.onDisconnected?.();
     this.socket?.close(1000, 'Client reconnecting');
     this.socket = undefined;
     this.reconnectAttempts = 0;
@@ -138,11 +125,6 @@ export class RealtimeClient {
   sendEndpointMessage(message: ClientEndpointMessage): void {
     if (!this.ready) throw new Error('Realtime connection is not ready');
     this.send(this.clientMessage('endpoint.message', message));
-  }
-
-  sendExecutionHostMessage(message: ClientExecutionHostMessage): void {
-    if (!this.ready) throw new Error('Realtime connection is not ready');
-    this.send(this.clientMessage('execution_host.message', message));
   }
 
   setEndpoint(binding: RealtimeEndpointBinding): void {
@@ -184,7 +166,6 @@ export class RealtimeClient {
       if (this.ticketAbort === ticketAbort) this.ticketAbort = undefined;
       this.ready = false;
       this.endpointBinding?.onDisconnected?.();
-      this.options.executionHost?.onDisconnected?.();
       this.clearHeartbeat();
       if (this.socket === socket) this.socket = undefined;
       if (socket) {
@@ -203,10 +184,9 @@ export class RealtimeClient {
     this.connectionTimer = setTimeout(() => failAttempt('Realtime connection timed out'), timeoutMs);
     this.options.onStateChange?.(reconnecting ? 'reconnecting' : 'connecting');
     try {
-      const [ticket, endpoint, executionHost] = await Promise.all([
+      const [ticket, endpoint] = await Promise.all([
         this.options.issueTicket(ticketAbort.signal),
         this.endpointBinding?.createHello(),
-        this.options.executionHost?.createHello(),
       ]);
       if (closed || !this.shouldReconnect || generation !== this.generation) return;
       socket = this.options.createWebSocket(this.options.getWebSocketUrl());
@@ -227,7 +207,6 @@ export class RealtimeClient {
           clientKind: this.options.clientKind,
           subscriptions,
           ...(endpoint ? { endpoint } : {}),
-          ...(executionHost ? { executionHost } : {}),
         }));
       };
       socket.onmessage = (event) => {
@@ -285,7 +264,6 @@ export class RealtimeClient {
       this.ticketAbort = undefined;
       this.options.onStateChange?.('connected');
       if (message.payload.endpoint) this.endpointBinding?.onReady(message.payload.endpoint);
-      if (message.payload.executionHost) this.options.executionHost?.onReady(message.payload.executionHost);
       this.clearHeartbeat();
       this.heartbeatTimer = setInterval(() => {
         if (!this.ready) return;
@@ -310,8 +288,6 @@ export class RealtimeClient {
     } else if (message.kind === 'endpoint.message') {
       this.endpointBinding?.onMessage(message.payload);
       this.options.onEndpointMessage?.(message.payload);
-    } else if (message.kind === 'execution_host.message') {
-      this.options.executionHost?.onMessage(message.payload);
     }
   }
 

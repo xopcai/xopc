@@ -15,7 +15,6 @@ export interface Project {
   workspaceMode?: 'followAgent' | 'fixed';
   effectiveWorkspaceRoot?: string;
   executionMode: ProjectExecutionMode;
-  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -79,7 +78,6 @@ export interface CreateProjectInput {
   createWorkspaceRoot?: boolean;
   projectKind?: string;
   executionMode?: ProjectExecutionMode;
-  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -99,7 +97,6 @@ export interface UpdateProjectInput {
   workspaceRoot?: string | null;
   createWorkspaceRoot?: boolean;
   executionMode?: ProjectExecutionMode;
-  executionHostId?: string | null;
   brief?: string | null;
   instructions?: string | null;
   pinnedAt?: number | null;

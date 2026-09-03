@@ -123,15 +123,6 @@ export {
 export { createToolManualTool } from './tool-manual-tool.js';
 export { createDesktopPetTool, type DesktopPetCreateDetails } from './desktop-pet-tool.js';
 export { createManagedJobTool } from './managed-job-tool.js';
-export {
-  WORKSPACE_EXECUTION_TOOL_NAMES,
-  LocalWorkspaceExecutionBackend,
-  bindWorkspaceExecutionTools,
-  isWorkspaceExecutionToolName,
-  type WorkspaceExecutionBackend,
-  type WorkspaceExecutionCall,
-  type WorkspaceExecutionToolName,
-} from './workspace-execution-backend.js';
 
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';

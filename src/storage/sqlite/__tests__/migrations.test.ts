@@ -404,11 +404,17 @@ describe('SQLite migrations', () => {
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()
         .map((row) => row.name);
       expect(tables).toEqual(expect.arrayContaining([
-        'execution_environments', 'execution_hosts', 'execution_environment_handoffs',
+        'execution_environments', 'execution_environment_bindings', 'execution_environment_events',
       ]));
-      const columns = db.prepare('PRAGMA table_info(execution_environment_handoffs)').all()
-        .map((row) => row.name);
-      expect(columns).toEqual(expect.arrayContaining(['artifact_id', 'artifact_size', 'artifact_sha256']));
+      expect(tables).not.toContain('execution_hosts');
+      expect(tables).not.toContain('execution_environment_handoffs');
+      const environmentColumns = db.prepare('PRAGMA table_info(execution_environments)').all().map((row) => row.name);
+      expect(environmentColumns).not.toContain('host_id');
+      expect(environmentColumns).not.toContain('managed');
+      const bindingColumns = db.prepare('PRAGMA table_info(execution_environment_bindings)').all().map((row) => row.name);
+      expect(bindingColumns).toContain('session_key');
+      expect(bindingColumns).not.toContain('subject_kind');
+      expect(bindingColumns).not.toContain('epoch');
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       db.close();

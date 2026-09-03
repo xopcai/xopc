@@ -25,7 +25,6 @@ export type ProjectRow = {
   default_agent_id: string | null;
   workspace_root: string | null;
   execution_mode: Project['executionMode'];
-  execution_host_id: string | null;
   brief: string | null;
   instructions: string | null;
   outcome: string | null;
@@ -64,7 +63,6 @@ function projectFromRow(row: ProjectRow): Project {
     defaultAgentId: row.default_agent_id ?? undefined,
     workspaceRoot: row.workspace_root ?? undefined,
     executionMode: row.execution_mode,
-    executionHostId: row.execution_host_id ?? undefined,
     brief: row.brief ?? undefined,
     instructions: row.instructions ?? undefined,
     outcome: row.outcome ?? undefined,
@@ -274,7 +272,6 @@ export class ProjectStore {
       defaultAgentId: trimOptional(input.defaultAgentId),
       workspaceRoot: trimOptional(input.workspaceRoot),
       executionMode: input.executionMode ?? 'local_checkout',
-      executionHostId: trimOptional(input.executionHostId),
       brief: trimOptional(input.brief),
       instructions: trimOptional(input.instructions),
       outcome: trimOptional(input.outcome),
@@ -294,11 +291,11 @@ export class ProjectStore {
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT INTO projects (
-          project_id, name, slug, description, status, default_agent_id, workspace_root, execution_mode, execution_host_id,
+          project_id, name, slug, description, status, default_agent_id, workspace_root, execution_mode,
           brief, instructions, outcome, success_criteria_json, scope_json, non_goals_json,
           health, owner_id, target_at, version,
           created_at, updated_at, last_active_at, pinned_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         project.id,
         project.name,
@@ -308,7 +305,6 @@ export class ProjectStore {
         project.defaultAgentId ?? null,
         project.workspaceRoot ?? null,
         project.executionMode,
-        project.executionHostId ?? null,
         project.brief ?? null,
         project.instructions ?? null,
         project.outcome ?? null,
@@ -440,7 +436,6 @@ export class ProjectStore {
       ...(input.defaultAgentId !== undefined ? { defaultAgentId: nullableText(input.defaultAgentId) ?? undefined } : {}),
       ...(input.workspaceRoot !== undefined ? { workspaceRoot: nullableText(input.workspaceRoot) ?? undefined } : {}),
       ...(input.executionMode !== undefined ? { executionMode: input.executionMode } : {}),
-      ...(input.executionHostId !== undefined ? { executionHostId: nullableText(input.executionHostId) ?? undefined } : {}),
       ...(input.brief !== undefined ? { brief: nullableText(input.brief) ?? undefined } : {}),
       ...(input.instructions !== undefined ? { instructions: nullableText(input.instructions) ?? undefined } : {}),
       ...(input.outcome !== undefined ? { outcome: nullableText(input.outcome) ?? undefined } : {}),
@@ -458,7 +453,7 @@ export class ProjectStore {
     runSqliteWriteTransaction((db) => {
       const updated = db.prepare(
         `UPDATE projects SET
-          name = ?, description = ?, status = ?, default_agent_id = ?, workspace_root = ?, execution_mode = ?, execution_host_id = ?, brief = ?, instructions = ?,
+          name = ?, description = ?, status = ?, default_agent_id = ?, workspace_root = ?, execution_mode = ?, brief = ?, instructions = ?,
           outcome = ?, success_criteria_json = ?, scope_json = ?, non_goals_json = ?, health = ?, owner_id = ?, target_at = ?,
           pinned_at = ?, updated_at = ?, version = ?
          WHERE project_id = ? AND version = ?`,
@@ -469,7 +464,6 @@ export class ProjectStore {
         next.defaultAgentId ?? null,
         next.workspaceRoot ?? null,
         next.executionMode,
-        next.executionHostId ?? null,
         next.brief ?? null,
         next.instructions ?? null,
         next.outcome ?? null,

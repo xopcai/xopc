@@ -19,8 +19,6 @@ import type { RawData, WebSocket } from 'ws';
 
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
-import type { ExecutionHostRuntime } from '../execution-hosts/runtime.js';
-import type { ExecutionHostTransport } from '../execution-hosts/registry.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
 import { hasGatewayScope, type GatewayScope } from '../gateway/security/gateway-scopes.js';
@@ -75,10 +73,7 @@ export class RealtimeRuntime {
   private readonly socketsByPrincipal = new Map<string, Set<WebSocket>>();
   private closed = false;
 
-  constructor(
-    private readonly endpointTools?: EndpointToolRuntime,
-    private readonly executionHosts?: ExecutionHostRuntime,
-  ) {
+  constructor(private readonly endpointTools?: EndpointToolRuntime) {
     this.wss.on('connection', (socket, request) => this.handleConnection(socket, request));
     this.wss.on('error', (err) => log.error({ err }, 'Realtime WebSocket server failed'));
   }
@@ -113,7 +108,6 @@ export class RealtimeRuntime {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    this.executionHosts?.registry.disconnectAll('gateway stopping');
     for (const client of this.wss.clients) client.close(1001, 'Gateway stopping');
     for (const timer of this.topicCleanupTimers.values()) clearTimeout(timer);
     this.topicCleanupTimers.clear();
@@ -146,7 +140,6 @@ export class RealtimeRuntime {
     let endpointId: string | undefined;
     let principalId: string | undefined;
     let grantedScopes: readonly GatewayScope[] = [];
-    let executionHostId: string | undefined;
     let budgetHeld = true;
 
     const releaseBudget = () => {
@@ -270,36 +263,6 @@ export class RealtimeRuntime {
             return;
           }
         }
-        let executionHostReady: { hostId: string } | undefined;
-        if (message.payload.executionHost) {
-          if (
-            !this.executionHosts
-            || message.payload.clientKind !== 'execution_host'
-            || message.payload.clientId !== message.payload.executionHost.hostId
-            || message.payload.endpoint
-          ) {
-            socket.close(4401, 'Realtime execution host identity is invalid');
-            return;
-          }
-          const transport: ExecutionHostTransport = {
-            send: (payload) => {
-              writer.enqueue(serverMessage('execution_host.message', payload), 'critical');
-            },
-            close: (code, reason) => socket.close(code, reason),
-          };
-          try {
-            this.executionHosts.connect(message.payload.executionHost, connectionId, transport);
-            executionHostId = message.payload.executionHost.hostId;
-            executionHostReady = { hostId: executionHostId };
-          } catch (error) {
-            log.warn({ err: error, hostId: message.payload.executionHost.hostId }, 'Realtime execution host authentication failed');
-            socket.close(4401, 'Realtime execution host authentication failed');
-            return;
-          }
-        } else if (message.payload.clientKind === 'execution_host') {
-          socket.close(4401, 'Realtime execution host identity is required');
-          return;
-        }
         clearTimeout(helloTimer);
         releaseBudget();
         writer.enqueue(serverMessage('realtime.ready', {
@@ -307,7 +270,6 @@ export class RealtimeRuntime {
           heartbeatIntervalMs: REALTIME_HEARTBEAT_INTERVAL_MS,
           heartbeatTimeoutMs: REALTIME_HEARTBEAT_TIMEOUT_MS,
           ...(endpointReady ? { endpoint: endpointReady } : {}),
-          ...(executionHostReady ? { executionHost: executionHostReady } : {}),
         }), 'critical');
         subscribe(message.payload.subscriptions);
         log.info({ connectionId, principalId, clientId: claim.clientId, clientKind: claim.clientKind }, 'Realtime client connected');
@@ -325,29 +287,15 @@ export class RealtimeRuntime {
         }
       } else if (message.kind === 'realtime.ping') {
         if (endpointId && connectionId) this.endpointTools?.touch(endpointId, connectionId);
-        if (executionHostId && connectionId) this.executionHosts?.registry.touch(executionHostId, connectionId);
         writer.enqueue(serverMessage('realtime.pong', {}), 'critical');
-      } else if (message.kind === 'endpoint.message') {
-        if (!endpointId || !connectionId || !this.endpointTools) {
-          sendError('ENDPOINT_NOT_REGISTERED', 'Endpoint messages require an endpoint identity');
-          return;
-        }
+      } else if (!endpointId || !connectionId || !this.endpointTools) {
+        sendError('ENDPOINT_NOT_REGISTERED', 'Endpoint messages require an endpoint identity');
+      } else {
         try {
           this.endpointTools.handleMessage(endpointId, connectionId, message.payload);
         } catch (error) {
           log.warn({ err: error, endpointId, connectionId }, 'Realtime endpoint message failed');
           socket.close(4400, 'Invalid endpoint message');
-        }
-      } else {
-        if (!executionHostId || !connectionId || !this.executionHosts) {
-          sendError('EXECUTION_HOST_NOT_REGISTERED', 'Execution host messages require a host identity');
-          return;
-        }
-        try {
-          this.executionHosts.handleMessage(executionHostId, connectionId, message.payload);
-        } catch (error) {
-          log.warn({ err: error, hostId: executionHostId, connectionId }, 'Realtime execution host message failed');
-          socket.close(4400, 'Invalid execution host message');
         }
       }
     });
@@ -364,9 +312,6 @@ export class RealtimeRuntime {
         const principalSockets = this.socketsByPrincipal.get(principalId);
         principalSockets?.delete(socket);
         if (principalSockets?.size === 0) this.socketsByPrincipal.delete(principalId);
-      }
-      if (executionHostId && connectionId) {
-        this.executionHosts?.registry.disconnect(executionHostId, connectionId, reasonBuffer.toString() || 'socket closed');
       }
       if (connectionId) {
         const reason = reasonBuffer.toString();

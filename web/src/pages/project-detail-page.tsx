@@ -20,7 +20,6 @@ import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
-import { fetchExecutionHosts, type ManagedExecutionHost } from '@/features/execution-hosts/management-api';
 import { NotesWorkbench } from '@/features/notes/notes-workbench';
 import {
   archiveProject,
@@ -99,7 +98,6 @@ type ProjectSettingsDraft = {
   status: ProjectStatus;
   defaultAgentId: string;
   executionMode: Project['executionMode'];
-  executionHostId: string;
   workspaceRoot: string;
   brief: string;
   instructions: string;
@@ -111,7 +109,6 @@ function projectSettingsDirty(draft: ProjectSettingsDraft, project: Project): bo
     || draft.status !== project.status
     || draft.defaultAgentId !== (project.defaultAgentId ?? '')
     || draft.executionMode !== project.executionMode
-    || draft.executionHostId !== (project.executionHostId ?? '')
     || draft.brief !== (project.brief ?? '')
     || draft.instructions !== (project.instructions ?? '');
 }
@@ -683,7 +680,6 @@ export function ProjectDetailPage() {
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
-  const [executionHosts, setExecutionHosts] = useState<ManagedExecutionHost[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -707,7 +703,6 @@ export function ProjectDetailPage() {
     status: 'active' as ProjectStatus,
     defaultAgentId: '',
     executionMode: 'local_checkout',
-    executionHostId: '',
     workspaceRoot: '',
     brief: '',
     instructions: '',
@@ -783,16 +778,14 @@ export function ProjectDetailPage() {
       fetchProjectOperatingView(projectId),
       fetchProjectSessions(projectId),
       fetchGatewayAgents().catch(() => null),
-      fetchExecutionHosts().catch(() => []),
     ])
-      .then(([projectResult, operatingViewResult, sessionResult, agentPayload, executionHostRows]) => {
+      .then(([projectResult, operatingViewResult, sessionResult, agentPayload]) => {
         if (cancelled) return;
         setProject(projectResult);
         setOperatingView(operatingViewResult);
         setSessions(sessionResult);
         const nextAgents = agentPayload?.agents ?? [];
         setAgents(nextAgents);
-        setExecutionHosts(executionHostRows);
         setSelectedAgentId(projectResult.defaultAgentId ?? '');
         const loadedDraft: ProjectSettingsDraft = {
           name: projectResult.name,
@@ -800,7 +793,6 @@ export function ProjectDetailPage() {
           status: projectResult.status,
           defaultAgentId: projectResult.defaultAgentId ?? '',
           executionMode: projectResult.executionMode,
-          executionHostId: projectResult.executionHostId ?? '',
           workspaceRoot: projectResult.workspaceRoot ?? '',
           brief: projectResult.brief ?? '',
           instructions: projectResult.instructions ?? '',
@@ -1218,7 +1210,6 @@ export function ProjectDetailPage() {
         description: snapshot.description,
         defaultAgentId: snapshot.defaultAgentId,
         executionMode: snapshot.executionMode,
-        executionHostId: snapshot.executionHostId || undefined,
         brief: snapshot.brief,
         instructions: snapshot.instructions,
       });
@@ -1231,7 +1222,6 @@ export function ProjectDetailPage() {
         status: currentDraft.status === snapshot.status ? updated.status : currentDraft.status,
         defaultAgentId: currentDraft.defaultAgentId === snapshot.defaultAgentId ? (updated.defaultAgentId ?? '') : currentDraft.defaultAgentId,
         executionMode: currentDraft.executionMode === snapshot.executionMode ? updated.executionMode : currentDraft.executionMode,
-        executionHostId: currentDraft.executionHostId === snapshot.executionHostId ? (updated.executionHostId ?? '') : currentDraft.executionHostId,
         brief: currentDraft.brief === snapshot.brief ? (updated.brief ?? '') : currentDraft.brief,
         instructions: currentDraft.instructions === snapshot.instructions ? (updated.instructions ?? '') : currentDraft.instructions,
       };
@@ -2261,35 +2251,10 @@ export function ProjectDetailPage() {
                     <Select
                       className={inputClass()}
                       value={draft.executionMode}
-                      onChange={(event) => {
-                        const executionMode = event.target.value as Project['executionMode'];
-                        updateProjectDraft({
-                          executionMode,
-                          ...(executionMode === 'local_checkout' ? { executionHostId: '' } : {}),
-                        }, true);
-                      }}
+                      onChange={(event) => updateProjectDraft({ executionMode: event.target.value as Project['executionMode'] }, true)}
                     >
                       <SelectOption value="managed_worktree">{pm.settings.executionModeWorktree}</SelectOption>
                       <SelectOption value="local_checkout">{pm.settings.executionModeLocal}</SelectOption>
-                    </Select>
-                  </Field>
-                  <Field label={pm.settings.executionHost} hint={pm.settings.executionHostHint}>
-                    <Select
-                      className={inputClass()}
-                      value={draft.executionHostId}
-                      onChange={(event) => updateProjectDraft({
-                        executionHostId: event.target.value,
-                        ...(event.target.value ? { executionMode: 'managed_worktree' } : {}),
-                      }, true)}
-                    >
-                      <SelectOption value="">{pm.settings.executionHostLocal}</SelectOption>
-                      {executionHosts
-                        .filter((host) => host.lifecycleStatus !== 'revoked' || host.id === draft.executionHostId)
-                        .map((host) => (
-                          <SelectOption key={host.id} value={host.id}>
-                            {host.displayName} · {host.online ? pm.settings.executionHostOnline : pm.settings.executionHostOffline}
-                          </SelectOption>
-                        ))}
                     </Select>
                   </Field>
                   <Field label={pm.settings.description} hint={pm.settings.descriptionHint}>

@@ -3,7 +3,6 @@ import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
-import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
 
@@ -135,19 +134,9 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
 
 export function buildExecutionScopeContextForPrompt(sessionKey: string): string | undefined {
   const scope = resolveExecutionScope(sessionKey);
-  const environment = getExecutionEnvironmentForSession(sessionKey);
-  const placement = environment?.hostId !== 'local'
-    ? [
-        '# Execution Placement',
-        '',
-        `Workspace tools run on remote host ${sanitizeForPromptLiteral(environment.hostId)} in environment ${sanitizeForPromptLiteral(environment.id)}.`,
-        'The local project checkout supplies prompt and skill context only. File, search, patch, and command results from workspace tools are authoritative for the remote worktree.',
-      ].join('\n')
-    : undefined;
   const sections = [
     buildActiveProjectContextForPrompt(sessionKey, { memoryQuery: scope.objective?.objective }),
     formatCurrentWorkForPrompt(scope),
-    placement,
   ].filter((section): section is string => Boolean(section?.trim()));
   return sections.join('\n\n') || undefined;
 }

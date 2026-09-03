@@ -36,8 +36,8 @@ export function projectWorkspacePath(
 }
 
 /**
- * Resolved local context workspace. Local execution environments take precedence;
- * remote environment paths stay opaque and their tools are routed separately.
+ * Resolved workspace for tools/shell: bound execution environment, project workspace,
+ * session override, or merged agent profile default.
  */
 export function effectiveWorkspacePathForSession(
   cfg: Config,
@@ -47,7 +47,7 @@ export function effectiveWorkspacePathForSession(
 ): string {
   const base = resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
   const environment = getExecutionEnvironmentForSession(sessionKey);
-  if (environment?.hostId === 'local') return environment.rootPath;
+  if (environment) return environment.rootPath;
   const projectWorkspace = projectWorkspacePath(project);
   if (projectWorkspace) {
     return projectWorkspace;

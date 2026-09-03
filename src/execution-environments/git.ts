@@ -75,14 +75,6 @@ export async function resolveGitCommit(repositoryRoot: string, ref: string): Pro
   return (await runGit(repositoryRoot, ['rev-parse', '--verify', `${normalized}^{commit}`])).trim();
 }
 
-export async function resolveGitRemoteUrl(repositoryRoot: string, remote = 'origin'): Promise<string> {
-  const name = remote.trim();
-  if (!name) throw new Error('Git remote name is required');
-  const url = (await runGit(repositoryRoot, ['remote', 'get-url', name])).trim();
-  if (!url) throw new Error(`Git remote has no URL: ${name}`);
-  return url;
-}
-
 export function parseGitWorktreeList(output: string): GitWorktreeEntry[] {
   const entries: GitWorktreeEntry[] = [];
   let current: GitWorktreeEntry | undefined;

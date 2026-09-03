@@ -13,15 +13,12 @@ import {
   type ExecutionEnvironmentEvent,
   type ExecutionEnvironmentListQuery,
   type ExecutionEnvironmentStatus,
-  type ReplaceExecutionEnvironmentBindingInput,
   type TransitionExecutionEnvironmentInput,
-  type UpdateExecutionEnvironmentLocationInput,
 } from './types.js';
 
 type EnvironmentRow = {
   environment_id: string;
   project_id: string | null;
-  host_id: string;
   kind: ExecutionEnvironment['kind'];
   status: ExecutionEnvironmentStatus;
   root_path: string;
@@ -30,8 +27,6 @@ type EnvironmentRow = {
   base_ref: string | null;
   base_sha: string | null;
   branch_ref: string | null;
-  managed: number;
-  pinned: number;
   version: number;
   last_error: string | null;
   created_at: number;
@@ -42,10 +37,8 @@ type EnvironmentRow = {
 
 type BindingRow = {
   binding_id: string;
-  subject_kind: ExecutionEnvironmentBinding['subjectKind'];
-  subject_id: string;
+  session_key: string;
   environment_id: string;
-  epoch: number;
   created_at: number;
   released_at: number | null;
 };
@@ -71,16 +64,10 @@ function requiredText(value: string, label: string): string {
   return normalized;
 }
 
-function environmentPath(hostId: string, value: string, label: string): string {
-  const path = requiredText(value, label);
-  return hostId === 'local' ? resolve(path) : path;
-}
-
 function environmentFromRow(row: EnvironmentRow): ExecutionEnvironment {
   return {
     id: row.environment_id,
     ...(row.project_id ? { projectId: row.project_id } : {}),
-    hostId: row.host_id,
     kind: row.kind,
     status: row.status,
     rootPath: row.root_path,
@@ -89,8 +76,6 @@ function environmentFromRow(row: EnvironmentRow): ExecutionEnvironment {
     ...(row.base_ref ? { baseRef: row.base_ref } : {}),
     ...(row.base_sha ? { baseSha: row.base_sha } : {}),
     ...(row.branch_ref ? { branchRef: row.branch_ref } : {}),
-    managed: row.managed === 1,
-    pinned: row.pinned === 1,
     version: row.version,
     ...(row.last_error ? { lastError: row.last_error } : {}),
     createdAt: row.created_at,
@@ -103,10 +88,8 @@ function environmentFromRow(row: EnvironmentRow): ExecutionEnvironment {
 function bindingFromRow(row: BindingRow): ExecutionEnvironmentBinding {
   return {
     id: row.binding_id,
-    subjectKind: row.subject_kind,
-    subjectId: row.subject_id,
+    sessionKey: row.session_key,
     environmentId: row.environment_id,
-    epoch: row.epoch,
     createdAt: row.created_at,
     ...(row.released_at == null ? {} : { releasedAt: row.released_at }),
   };
@@ -133,12 +116,11 @@ function getEnvironmentRow(environmentId: string): EnvironmentRow | undefined {
 export class ExecutionEnvironmentStore {
   create(input: CreateExecutionEnvironmentInput): ExecutionEnvironment {
     const id = input.id?.trim() || randomUUID();
-    const hostId = requiredText(input.hostId, 'hostId');
-    const rootPath = environmentPath(hostId, input.rootPath, 'rootPath');
+    const rootPath = resolve(requiredText(input.rootPath, 'rootPath'));
     const projectId = optionalText(input.projectId);
     const repositoryRoot = optionalText(input.repositoryRoot);
     const gitCommonDir = optionalText(input.gitCommonDir);
-    if (input.kind === 'managed_worktree' && hostId === 'local' && (!repositoryRoot || !gitCommonDir)) {
+    if (input.kind === 'managed_worktree' && (!repositoryRoot || !gitCommonDir)) {
       throw new Error('managed_worktree requires repositoryRoot and gitCommonDir');
     }
 
@@ -146,23 +128,20 @@ export class ExecutionEnvironmentStore {
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT INTO execution_environments (
-          environment_id, project_id, host_id, kind, status, root_path,
+          environment_id, project_id, kind, status, root_path,
           repository_root, git_common_dir, base_ref, base_sha, branch_ref,
-          managed, pinned, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          version, created_at, updated_at
+        ) VALUES (?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       ).run(
         id,
         projectId ?? null,
-        hostId,
         input.kind,
         rootPath,
-        repositoryRoot ? environmentPath(hostId, repositoryRoot, 'repositoryRoot') : null,
-        gitCommonDir ? environmentPath(hostId, gitCommonDir, 'gitCommonDir') : null,
+        repositoryRoot ? resolve(repositoryRoot) : null,
+        gitCommonDir ? resolve(gitCommonDir) : null,
         optionalText(input.baseRef) ?? null,
         optionalText(input.baseSha) ?? null,
         optionalText(input.branchRef) ?? null,
-        input.kind === 'managed_worktree' ? 1 : 0,
-        input.pinned ? 1 : 0,
         now,
         now,
       );
@@ -192,10 +171,6 @@ export class ExecutionEnvironmentStore {
     if (query.projectId) {
       clauses.push('project_id = ?');
       params.push(query.projectId);
-    }
-    if (query.hostId) {
-      clauses.push('host_id = ?');
-      params.push(query.hostId);
     }
     if (query.status) {
       clauses.push('status = ?');
@@ -265,52 +240,24 @@ export class ExecutionEnvironmentStore {
     return this.getRequired(input.environmentId);
   }
 
-  updateLocation(input: UpdateExecutionEnvironmentLocationInput): ExecutionEnvironment {
-    const current = this.getRequired(input.environmentId);
-    if (current.status !== 'provisioning') {
-      throw new ExecutionEnvironmentConflictError(
-        `Cannot update execution environment location while ${current.status}`,
-      );
-    }
-    const now = Date.now();
-    const updated = getSqliteDatabase().prepare(`
-      UPDATE execution_environments
-      SET root_path = ?, repository_root = ?, git_common_dir = ?, base_sha = ?,
-          version = version + 1, updated_at = ?
-      WHERE environment_id = ? AND version = ? AND status = 'provisioning'
-    `).run(
-      environmentPath(current.hostId, input.rootPath, 'rootPath'),
-      environmentPath(current.hostId, input.repositoryRoot, 'repositoryRoot'),
-      environmentPath(current.hostId, input.gitCommonDir, 'gitCommonDir'),
-      requiredText(input.baseSha, 'baseSha'),
-      now,
-      input.environmentId,
-      input.expectedVersion,
-    );
-    if (updated.changes !== 1) {
-      throw new ExecutionEnvironmentConflictError(`Execution environment ${input.environmentId} changed concurrently`);
-    }
-    return this.getRequired(input.environmentId);
-  }
-
   bind(input: BindExecutionEnvironmentInput): ExecutionEnvironmentBinding {
-    const subjectId = requiredText(input.subjectId, 'subjectId');
+    const sessionKey = requiredText(input.sessionKey, 'sessionKey');
     return runSqliteWriteTransaction((db) => {
       const environment = getEnvironmentRow(input.environmentId);
       if (!environment) throw new ExecutionEnvironmentNotFoundError(input.environmentId);
-      if (environment.status !== 'ready' && environment.status !== 'busy') {
+      if (environment.status !== 'ready') {
         throw new ExecutionEnvironmentConflictError(
           `Execution environment ${input.environmentId} is not bindable while ${environment.status}`,
         );
       }
       const active = db.prepare(
         `SELECT * FROM execution_environment_bindings
-         WHERE subject_kind = ? AND subject_id = ? AND released_at IS NULL`,
-      ).get(input.subjectKind, subjectId) as BindingRow | undefined;
+         WHERE session_key = ? AND released_at IS NULL`,
+      ).get(sessionKey) as BindingRow | undefined;
       if (active) {
         if (active.environment_id === input.environmentId) return bindingFromRow(active);
         throw new ExecutionEnvironmentConflictError(
-          `${input.subjectKind} ${subjectId} is already bound to ${active.environment_id}`,
+          `Session ${sessionKey} is already bound to ${active.environment_id}`,
         );
       }
       if (environment.kind === 'managed_worktree') {
@@ -320,32 +267,24 @@ export class ExecutionEnvironmentStore {
         ).get(input.environmentId) as BindingRow | undefined;
         if (owner) {
           throw new ExecutionEnvironmentConflictError(
-            `Managed worktree ${input.environmentId} is already bound to ${owner.subject_kind} ${owner.subject_id}`,
+            `Managed worktree ${input.environmentId} is already bound to session ${owner.session_key}`,
           );
         }
       }
-      const epochRow = db.prepare(
-        `SELECT COALESCE(MAX(epoch), 0) + 1 AS next_epoch
-         FROM execution_environment_bindings WHERE subject_kind = ? AND subject_id = ?`,
-      ).get(input.subjectKind, subjectId) as { next_epoch: number };
       const binding: ExecutionEnvironmentBinding = {
         id: randomUUID(),
-        subjectKind: input.subjectKind,
-        subjectId,
+        sessionKey,
         environmentId: input.environmentId,
-        epoch: epochRow.next_epoch,
         createdAt: Date.now(),
       };
       db.prepare(
         `INSERT INTO execution_environment_bindings (
-          binding_id, subject_kind, subject_id, environment_id, epoch, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
+          binding_id, session_key, environment_id, created_at
+        ) VALUES (?, ?, ?, ?)`,
       ).run(
         binding.id,
-        binding.subjectKind,
-        binding.subjectId,
+        binding.sessionKey,
         binding.environmentId,
-        binding.epoch,
         binding.createdAt,
       );
       db.prepare(
@@ -355,83 +294,13 @@ export class ExecutionEnvironmentStore {
     });
   }
 
-  replaceBinding(input: ReplaceExecutionEnvironmentBindingInput): ExecutionEnvironmentBinding {
-    const subjectId = requiredText(input.subjectId, 'subjectId');
-    return runSqliteWriteTransaction((db) => {
-      const active = db.prepare(
-        `SELECT * FROM execution_environment_bindings
-         WHERE subject_kind = ? AND subject_id = ? AND released_at IS NULL`,
-      ).get(input.subjectKind, subjectId) as BindingRow | undefined;
-      if (
-        !active
-        || active.binding_id !== input.sourceBindingId
-        || active.environment_id !== input.sourceEnvironmentId
-        || active.epoch !== input.sourceEpoch
-      ) {
-        throw new ExecutionEnvironmentConflictError(
-          `${input.subjectKind} ${subjectId} binding changed during handoff`,
-        );
-      }
-      const target = getEnvironmentRow(input.targetEnvironmentId);
-      if (!target) throw new ExecutionEnvironmentNotFoundError(input.targetEnvironmentId);
-      if (target.status !== 'ready') {
-        throw new ExecutionEnvironmentConflictError(
-          `Handoff target ${input.targetEnvironmentId} is not ready`,
-        );
-      }
-      const owner = db.prepare(
-        `SELECT * FROM execution_environment_bindings
-         WHERE environment_id = ? AND released_at IS NULL LIMIT 1`,
-      ).get(input.targetEnvironmentId) as BindingRow | undefined;
-      if (owner) {
-        throw new ExecutionEnvironmentConflictError(
-          `Handoff target ${input.targetEnvironmentId} is already bound`,
-        );
-      }
-
-      const now = Date.now();
-      const released = db.prepare(
-        `UPDATE execution_environment_bindings SET released_at = ?
-         WHERE binding_id = ? AND released_at IS NULL`,
-      ).run(now, active.binding_id);
-      if (released.changes !== 1) {
-        throw new ExecutionEnvironmentConflictError(`${input.subjectKind} ${subjectId} binding changed during handoff`);
-      }
-      const binding: ExecutionEnvironmentBinding = {
-        id: randomUUID(),
-        subjectKind: input.subjectKind,
-        subjectId,
-        environmentId: input.targetEnvironmentId,
-        epoch: active.epoch + 1,
-        createdAt: now,
-      };
-      db.prepare(
-        `INSERT INTO execution_environment_bindings (
-          binding_id, subject_kind, subject_id, environment_id, epoch, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(
-        binding.id,
-        binding.subjectKind,
-        binding.subjectId,
-        binding.environmentId,
-        binding.epoch,
-        binding.createdAt,
-      );
-      db.prepare(
-        `UPDATE execution_environments SET last_used_at = ?, updated_at = ? WHERE environment_id = ?`,
-      ).run(now, now, input.targetEnvironmentId);
-      return binding;
-    });
-  }
-
   resolveBinding(
-    subjectKind: ExecutionEnvironmentBinding['subjectKind'],
-    subjectId: string,
+    sessionKey: string,
   ): ExecutionEnvironmentBinding | undefined {
     const row = getSqliteDatabase().prepare(
       `SELECT * FROM execution_environment_bindings
-       WHERE subject_kind = ? AND subject_id = ? AND released_at IS NULL`,
-    ).get(subjectKind, subjectId) as BindingRow | undefined;
+       WHERE session_key = ? AND released_at IS NULL`,
+    ).get(sessionKey) as BindingRow | undefined;
     return row ? bindingFromRow(row) : undefined;
   }
 
@@ -445,19 +314,18 @@ export class ExecutionEnvironmentStore {
   }
 
   releaseBinding(
-    subjectKind: ExecutionEnvironmentBinding['subjectKind'],
-    subjectId: string,
+    sessionKey: string,
     expectedEnvironmentId?: string,
   ): ExecutionEnvironmentBinding | undefined {
     return runSqliteWriteTransaction((db) => {
       const active = db.prepare(
         `SELECT * FROM execution_environment_bindings
-         WHERE subject_kind = ? AND subject_id = ? AND released_at IS NULL`,
-      ).get(subjectKind, subjectId) as BindingRow | undefined;
+         WHERE session_key = ? AND released_at IS NULL`,
+      ).get(sessionKey) as BindingRow | undefined;
       if (!active) return undefined;
       if (expectedEnvironmentId && active.environment_id !== expectedEnvironmentId) {
         throw new ExecutionEnvironmentConflictError(
-          `${subjectKind} ${subjectId} is bound to ${active.environment_id}, not ${expectedEnvironmentId}`,
+          `Session ${sessionKey} is bound to ${active.environment_id}, not ${expectedEnvironmentId}`,
         );
       }
       const releasedAt = Date.now();

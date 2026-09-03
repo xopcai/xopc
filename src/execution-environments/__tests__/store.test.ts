@@ -38,7 +38,6 @@ describe('ExecutionEnvironmentStore', () => {
     const environment = store.create({
       id: 'env-local',
       projectId,
-      hostId: 'local',
       kind: 'local_checkout',
       rootPath,
     });
@@ -46,11 +45,9 @@ describe('ExecutionEnvironmentStore', () => {
     expect(environment).toMatchObject({
       id: 'env-local',
       projectId,
-      hostId: 'local',
       kind: 'local_checkout',
       status: 'requested',
       rootPath,
-      managed: false,
       version: 1,
     });
     expect(store.listEvents(environment.id)).toEqual([
@@ -62,7 +59,6 @@ describe('ExecutionEnvironmentStore', () => {
     const environment = store.create({
       id: 'env-transition',
       projectId,
-      hostId: 'local',
       kind: 'local_checkout',
       rootPath: join(stateDir, 'project'),
     });
@@ -83,7 +79,7 @@ describe('ExecutionEnvironmentStore', () => {
     expect(() => store.transition({
       environmentId: environment.id,
       expectedVersion: provisioning.version,
-      toStatus: 'busy',
+      toStatus: 'deleted',
       reason: 'invalid transition',
     })).toThrow(/Cannot transition/);
 
@@ -107,7 +103,6 @@ describe('ExecutionEnvironmentStore', () => {
     const environment = store.create({
       id: 'env-worktree',
       projectId,
-      hostId: 'local',
       kind: 'managed_worktree',
       rootPath: join(stateDir, 'worktrees', 'env-worktree'),
       repositoryRoot,
@@ -126,75 +121,24 @@ describe('ExecutionEnvironmentStore', () => {
       reason: 'test',
     });
 
-    const first = store.bind({ subjectKind: 'session', subjectId: 'session-a', environmentId: environment.id });
-    const repeated = store.bind({ subjectKind: 'session', subjectId: 'session-a', environmentId: environment.id });
+    const first = store.bind({ sessionKey: 'session-a', environmentId: environment.id });
+    const repeated = store.bind({ sessionKey: 'session-a', environmentId: environment.id });
     expect(repeated).toEqual(first);
     expect(() => store.bind({
-      subjectKind: 'session',
-      subjectId: 'session-b',
+      sessionKey: 'session-b',
       environmentId: environment.id,
     })).toThrow(/already bound/);
 
-    store.releaseBinding('session', 'session-a', environment.id);
-    const rebound = store.bind({ subjectKind: 'session', subjectId: 'session-a', environmentId: environment.id });
-    expect(rebound.epoch).toBe(2);
+    store.releaseBinding('session-a', environment.id);
+    const rebound = store.bind({ sessionKey: 'session-a', environmentId: environment.id });
+    expect(rebound.id).not.toBe(first.id);
+    expect(store.listBindings(environment.id, true)).toHaveLength(2);
   });
 
-  it('atomically replaces a binding and advances its fencing epoch', () => {
-    const repositoryRoot = join(stateDir, 'repository');
-    const ready = (id: string) => {
-      const requested = store.create({
-        id,
-        projectId,
-        hostId: 'local',
-        kind: 'managed_worktree',
-        rootPath: join(stateDir, 'worktrees', id),
-        repositoryRoot,
-        gitCommonDir: join(repositoryRoot, '.git'),
-      });
-      const provisioning = store.transition({
-        environmentId: id,
-        expectedVersion: requested.version,
-        toStatus: 'provisioning',
-        reason: 'test',
-      });
-      return store.transition({
-        environmentId: id,
-        expectedVersion: provisioning.version,
-        toStatus: 'ready',
-        reason: 'test',
-      });
-    };
-    const source = ready('replace-source');
-    const target = ready('replace-target');
-    const binding = store.bind({ subjectKind: 'session', subjectId: 'session-replace', environmentId: source.id });
-
-    const replacement = store.replaceBinding({
-      subjectKind: 'session',
-      subjectId: 'session-replace',
-      sourceBindingId: binding.id,
-      sourceEnvironmentId: source.id,
-      sourceEpoch: binding.epoch,
-      targetEnvironmentId: target.id,
-    });
-
-    expect(replacement).toMatchObject({ environmentId: target.id, epoch: binding.epoch + 1 });
-    expect(store.resolveBinding('session', 'session-replace')).toEqual(replacement);
-    expect(() => store.replaceBinding({
-      subjectKind: 'session',
-      subjectId: 'session-replace',
-      sourceBindingId: binding.id,
-      sourceEnvironmentId: source.id,
-      sourceEpoch: binding.epoch,
-      targetEnvironmentId: target.id,
-    })).toThrow(/binding changed/);
-  });
-
-  it('allows a local checkout to be shared by multiple subjects', () => {
+  it('allows a local checkout to be shared by multiple sessions', () => {
     const environment = store.create({
       id: 'env-shared-local',
       projectId,
-      hostId: 'local',
       kind: 'local_checkout',
       rootPath: join(stateDir, 'project'),
     });
@@ -211,15 +155,14 @@ describe('ExecutionEnvironmentStore', () => {
       reason: 'test',
     });
 
-    expect(store.bind({ subjectKind: 'session', subjectId: 'session-a', environmentId: environment.id })).toBeTruthy();
-    expect(store.bind({ subjectKind: 'session', subjectId: 'session-b', environmentId: environment.id })).toBeTruthy();
+    expect(store.bind({ sessionKey: 'session-a', environmentId: environment.id })).toBeTruthy();
+    expect(store.bind({ sessionKey: 'session-b', environmentId: environment.id })).toBeTruthy();
   });
 
   it('retains environments for cleanup after their project is deleted', () => {
     const environment = store.create({
       id: 'env-orphan-cleanup',
       projectId,
-      hostId: 'local',
       kind: 'local_checkout',
       rootPath: join(stateDir, 'project'),
     });

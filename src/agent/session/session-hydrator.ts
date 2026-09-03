@@ -60,18 +60,14 @@ export class SessionHydrator {
     const environment = getExecutionEnvironmentForSession(sessionKey);
     const projectWorkspace = projectWorkspacePath(project);
     if (environment) {
-      if (environment.status !== 'ready' && environment.status !== 'busy') {
+      if (environment.status !== 'ready') {
         throw new Error(`Execution environment ${environment.id} is ${environment.status}`);
       }
-      if (environment.hostId === 'local') {
-        const rootIsDirectory = await stat(environment.rootPath).then((value) => value.isDirectory()).catch(() => false);
-        if (!rootIsDirectory) {
-          throw new Error(`Execution environment root is unavailable: ${environment.rootPath}`);
-        }
-        this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, environment.rootPath);
-      } else {
-        this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, projectWorkspace);
+      const rootIsDirectory = await stat(environment.rootPath).then((value) => value.isDirectory()).catch(() => false);
+      if (!rootIsDirectory) {
+        throw new Error(`Execution environment root is unavailable: ${environment.rootPath}`);
       }
+      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, environment.rootPath);
     } else if (projectWorkspace) {
       this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, projectWorkspace);
     } else if (loaded?.workingDirectoryOverride?.trim()) {

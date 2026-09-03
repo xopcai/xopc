@@ -59,7 +59,6 @@ describe('LocalWorktreeManager', () => {
       projectId,
       kind: 'managed_worktree',
       status: 'ready',
-      managed: true,
       baseRef: 'HEAD',
     });
     expect(existsSync(join(environment.rootPath, 'README.md'))).toBe(true);
@@ -90,10 +89,10 @@ describe('LocalWorktreeManager', () => {
       repositoryPath: repositoryRoot,
       environmentId: 'environment-delete',
     });
-    store.bind({ subjectKind: 'session', subjectId: 'session-a', environmentId: environment.id });
+    store.bind({ sessionKey: 'session-a', environmentId: environment.id });
 
     await expect(manager.remove(environment.id)).rejects.toThrow(/active bindings/);
-    store.releaseBinding('session', 'session-a', environment.id);
+    store.releaseBinding('session-a', environment.id);
     const deleted = await manager.remove(environment.id);
 
     expect(deleted.status).toBe('deleted');
@@ -112,6 +111,57 @@ describe('LocalWorktreeManager', () => {
 
     expect(deleted.status).toBe('deleted');
     expect(existsSync(join(repositoryRoot, 'README.md'))).toBe(true);
+  });
+
+  it('preserves uncommitted work and restores the Git lock when cleanup is refused', async () => {
+    const environment = await manager.provisionManagedWorktree({ projectId, repositoryPath: repositoryRoot });
+    writeFileSync(join(environment.rootPath, 'README.md'), '# unfinished work\n');
+
+    await expect(manager.remove(environment.id)).rejects.toThrow();
+
+    expect(existsSync(join(environment.rootPath, 'README.md'))).toBe(true);
+    expect(await manager.inspect(environment.id)).toMatchObject({ dirty: true, locked: true });
+    expect(store.get(environment.id)?.status).toBe('error');
+  });
+
+  it('allows local commits and preserves detached commits until a branch retains them', async () => {
+    const environment = await manager.provisionManagedWorktree({ projectId, repositoryPath: repositoryRoot });
+    writeFileSync(join(environment.rootPath, 'README.md'), '# completed work\n');
+    git(environment.rootPath, ['add', 'README.md']);
+    git(environment.rootPath, ['commit', '-m', 'worktree change']);
+
+    expect((await manager.reconcile(environment.id)).status).toBe('ready');
+    await expect(manager.remove(environment.id)).rejects.toThrow(/Save detached commits on a branch/);
+    expect(existsSync(environment.rootPath)).toBe(true);
+
+    git(environment.rootPath, ['branch', 'saved-work']);
+    expect((await manager.remove(environment.id)).status).toBe('deleted');
+    expect((await manager.remove(environment.id)).status).toBe('deleted');
+    expect(git(repositoryRoot, ['show', 'saved-work:README.md'])).toBe('# completed work\n');
+  });
+
+  it('refuses to remove an unregistered replacement directory', async () => {
+    const environment = await manager.provisionManagedWorktree({ projectId, repositoryPath: repositoryRoot });
+    git(repositoryRoot, ['worktree', 'unlock', environment.rootPath]);
+    git(repositoryRoot, ['worktree', 'remove', environment.rootPath]);
+    mkdirSync(environment.rootPath);
+    writeFileSync(join(environment.rootPath, 'important.txt'), 'Keep this file');
+
+    await expect(manager.remove(environment.id)).rejects.toThrow(/no longer registered/);
+    expect(existsSync(join(environment.rootPath, 'important.txt'))).toBe(true);
+  });
+
+  it('resumes cleanup after an interruption in the deleting state', async () => {
+    const environment = await manager.provisionManagedWorktree({ projectId, repositoryPath: repositoryRoot });
+    store.transition({
+      environmentId: environment.id,
+      expectedVersion: environment.version,
+      toStatus: 'deleting',
+      reason: 'cleanup interrupted',
+    });
+
+    expect((await manager.remove(environment.id)).status).toBe('deleted');
+    expect(existsSync(environment.rootPath)).toBe(false);
   });
 
   it('marks a missing registered worktree as degraded during reconciliation', async () => {

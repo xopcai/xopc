@@ -92,8 +92,6 @@ describe('openXopcDatabase', () => {
         'execution_environments',
         'execution_environment_bindings',
         'execution_environment_events',
-        'execution_hosts',
-        'execution_host_events',
       ]),
     );
     expect(tables).not.toContain('work_understanding_threads');

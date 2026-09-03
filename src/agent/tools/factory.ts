@@ -98,11 +98,6 @@ import {
 } from '../../storage/sqlite/index.js';
 import { resolveStateDir } from '../../config/paths-state.js';
 import { buildRuntimeEnvironment } from '../../runtime-tools/environment.js';
-import {
-  bindWorkspaceExecutionTools,
-  LocalWorkspaceExecutionBackend,
-  type WorkspaceExecutionBackend,
-} from './workspace-execution-backend.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -171,12 +166,6 @@ export interface CreateCoreToolsOptions {
   agentId?: string;
   /** When set, registers local skill tools plus marketplace discovery for this workspace. */
   getSkillManager?: () => SkillManager;
-  /** Overrides where fixed workspace file/search/process tools execute. */
-  workspaceExecutionBackend?: WorkspaceExecutionBackend;
-  /** Builds a placement-aware backend around the current local workspace tools. */
-  createWorkspaceExecutionBackend?: (
-    localBackend: LocalWorkspaceExecutionBackend,
-  ) => WorkspaceExecutionBackend;
 }
 
 export class AgentToolsFactory {
@@ -329,36 +318,16 @@ export class AgentToolsFactory {
     });
     const optionalTools = [imageTool, imageGenerateTool].filter((t) => t != null) as any[];
 
-    const workspaceToolDefinitions: AgentTool<any, any>[] = [
-      createReadFileTool(workspace, {
-        profileMarkdownRoot: options?.profileMarkdownRoot,
-      }),
-      createWriteFileTool(workspace, {
-        profileMarkdownRoot: options?.profileMarkdownRoot,
-      }),
-      createApplyPatchTool(workspace),
-      createListDirTool(workspace),
-      createGrepTool(workspace),
-      createFindTool(workspace),
-      createExecCommandTool(workspace, {
-        getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
-        prepareEnv: this.prepareRuntimeEnv,
-      }),
-      createManagedJobTool(
-        workspace,
-        () => this.deps.getCurrentContext()?.sessionKey,
-        this.deps.getSkillPassthroughEnvVarNames,
-        this.prepareRuntimeEnv,
-      ),
-    ];
-    const localWorkspaceExecutionBackend = new LocalWorkspaceExecutionBackend(workspaceToolDefinitions);
-    const workspaceExecutionBackend = options?.workspaceExecutionBackend
-      ?? options?.createWorkspaceExecutionBackend?.(localWorkspaceExecutionBackend)
-      ?? localWorkspaceExecutionBackend;
-    const workspaceTools = bindWorkspaceExecutionTools(
-      workspaceToolDefinitions,
-      workspaceExecutionBackend,
-    );
+    const readTool = createReadFileTool(workspace, {
+      profileMarkdownRoot: options?.profileMarkdownRoot,
+    });
+    const writeTool = createWriteFileTool(workspace, {
+      profileMarkdownRoot: options?.profileMarkdownRoot,
+    });
+    const applyPatchTool = createApplyPatchTool(workspace);
+    const listDir = createListDirTool(workspace);
+    const grep = createGrepTool(workspace);
+    const find = createFindTool(workspace);
 
     const core: AgentTool<any, any>[] = [
       createSessionStatusTool(),
@@ -417,7 +386,22 @@ export class AgentToolsFactory {
             getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
           })]
         : []),
-      ...workspaceTools,
+      readTool,
+      writeTool,
+      applyPatchTool,
+      listDir,
+      grep,
+      find,
+      createExecCommandTool(workspace, {
+        getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
+        prepareEnv: this.prepareRuntimeEnv,
+      }),
+      createManagedJobTool(
+        workspace,
+        () => this.deps.getCurrentContext()?.sessionKey,
+        this.deps.getSkillPassthroughEnvVarNames,
+        this.prepareRuntimeEnv,
+      ),
       createWebSearchTool(() => this.deps.getConfig?.()),
       createWebFetchTool(() => this.deps.getConfig?.()),
       createWebExtractTool({ getConfig: () => this.deps.getConfig?.() }),

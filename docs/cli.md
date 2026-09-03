@@ -27,7 +27,6 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `resume` | Resume a previous TUI Session |
 | `tunnel` | Manage public tunnel access |
 | `gateway` | Run and manage the Gateway |
-| `host` | Enroll and run a remote execution host |
 | `history` | Export Session history for external tools such as ctx |
 | `session` | List and manage Sessions |
 | `project` | Manage long-running Projects |

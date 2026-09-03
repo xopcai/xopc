@@ -62,7 +62,6 @@ export type Project = {
   workspaceMode?: 'followAgent' | 'fixed';
   effectiveWorkspaceRoot?: string;
   executionMode: ProjectExecutionMode;
-  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -269,7 +268,6 @@ export async function createProject(input: {
   createWorkspaceRoot?: boolean;
   projectKind?: ProjectKindSelection;
   executionMode?: ProjectExecutionMode;
-  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -319,7 +317,7 @@ export async function inferProjectDefaults(input: {
 
 export async function updateProject(
   id: string,
-  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'executionMode' | 'executionHostId' | 'brief' | 'instructions' | 'outcome' | 'successCriteria' | 'scope' | 'nonGoals' | 'health' | 'ownerId' | 'targetAt'>> & {
+  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'executionMode' | 'brief' | 'instructions' | 'outcome' | 'successCriteria' | 'scope' | 'nonGoals' | 'health' | 'ownerId' | 'targetAt'>> & {
     createWorkspaceRoot?: boolean;
   },
 ): Promise<Project> {

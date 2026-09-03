@@ -6,7 +6,6 @@ import {
 } from '@xopcai/endpoint-tools-protocol';
 
 import type { EndpointPrincipal } from '../storage/sqlite/index.js';
-import { parseP256PublicKey } from '../crypto/p256.js';
 
 const MAX_CLOCK_SKEW_MS = 60_000;
 
@@ -18,6 +17,21 @@ export interface EndpointAuthenticatorDeps {
 }
 
 export class EndpointAuthenticationError extends Error {}
+
+export function parseEndpointPublicKey(encoded: string): crypto.KeyObject {
+  const key = crypto.createPublicKey({
+    key: Buffer.from(encoded, 'base64url'),
+    format: 'der',
+    type: 'spki',
+  });
+  if (
+    key.asymmetricKeyType !== 'ec'
+    || key.asymmetricKeyDetails?.namedCurve !== 'prime256v1'
+  ) {
+    throw new Error('Endpoint public key must be ECDSA P-256');
+  }
+  return key;
+}
 
 export class EndpointAuthenticator {
   private readonly usedNonces = new Map<string, number>();
@@ -53,7 +67,7 @@ export class EndpointAuthenticator {
 
     let publicKey: crypto.KeyObject;
     try {
-      publicKey = parseP256PublicKey(principal.publicKey);
+      publicKey = parseEndpointPublicKey(principal.publicKey);
     } catch (error) {
       throw new EndpointAuthenticationError('Endpoint principal public key is invalid', { cause: error });
     }

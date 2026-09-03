@@ -97,7 +97,6 @@ describe('project association routes', () => {
     const project = projects.create({ workspaceRoot });
     new ExecutionEnvironmentStore().create({
       projectId: project.id,
-      hostId: 'local',
       kind: 'local_checkout',
       rootPath: workspaceRoot,
     });
@@ -379,7 +378,6 @@ describe('project association routes', () => {
     const store = new ExecutionEnvironmentStore();
     const requested = store.create({
       projectId: oldProject.id,
-      hostId: 'local',
       kind: 'local_checkout',
       rootPath: oldRoot,
     });
@@ -395,7 +393,7 @@ describe('project association routes', () => {
       toStatus: 'ready',
       reason: 'test ready',
     });
-    store.bind({ subjectKind: 'session', subjectId: sessionKey, environmentId: ready.id });
+    store.bind({ sessionKey: sessionKey, environmentId: ready.id });
     const patch = vi.fn(async () => ({ ok: true as const }));
     const app = registerSessionRouteApp({
       sessions: {

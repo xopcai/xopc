@@ -10,7 +10,6 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { TaskApplicationService, TaskRepository } from '../../tasks/index.js';
-import { createExecutionHost, revokeExecutionHost } from '../../execution-hosts/repository.js';
 import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
 import { inferProjectKind } from '../project-kind.js';
 import { ProjectService } from '../project-service.js';
@@ -68,54 +67,6 @@ describe('ProjectService', () => {
     });
     expect(projects.update(project.id, { health: 'at_risk' }))
       .toMatchObject({ health: 'at_risk', version: 2 });
-  });
-
-  it('persists only active remote hosts with managed worktree mode', () => {
-    createExecutionHost({
-      hostId: 'host-1',
-      displayName: 'Build host',
-      platform: 'linux',
-      arch: 'x64',
-      appVersion: '1',
-      publicKey: 'x'.repeat(64),
-      capabilities: { git: true, shell: true, search: true, patch: true, snapshots: false },
-      maxConcurrency: 2,
-    });
-    const remoteWorkspace = join(stateDir, 'remote-project');
-    mkdirSync(remoteWorkspace);
-    const project = projects.create({
-      name: 'Remote project',
-      workspaceRoot: remoteWorkspace,
-      executionMode: 'managed_worktree',
-      executionHostId: 'host-1',
-    });
-    expect(project.executionHostId).toBe('host-1');
-    expect(() => projects.update(project.id, { executionMode: 'local_checkout' }))
-      .toThrow(/require managed worktree/);
-    expect(projects.update(project.id, {
-      executionMode: 'local_checkout',
-      executionHostId: null,
-    })).toMatchObject({ executionMode: 'local_checkout', executionHostId: undefined });
-
-    const assignedWorkspace = join(stateDir, 'assigned-project');
-    mkdirSync(assignedWorkspace);
-    const assigned = projects.create({
-      name: 'Assigned project',
-      workspaceRoot: assignedWorkspace,
-      executionMode: 'managed_worktree',
-      executionHostId: 'host-1',
-    });
-    revokeExecutionHost('host-1');
-    expect(projects.update(assigned.id, { description: 'Host can be replaced later' }))
-      .toMatchObject({ description: 'Host can be replaced later', executionHostId: 'host-1' });
-    const revokedWorkspace = join(stateDir, 'revoked-project');
-    mkdirSync(revokedWorkspace);
-    expect(() => projects.create({
-      name: 'Revoked host project',
-      workspaceRoot: revokedWorkspace,
-      executionMode: 'managed_worktree',
-      executionHostId: 'host-1',
-    })).toThrow(/Active execution host not found/);
   });
 
   it('stores milestones and immutable project updates in the project detail', () => {

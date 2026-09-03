@@ -245,9 +245,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (body.executionMode !== undefined && !executionMode) {
       return c.json({ ok: false, error: 'Invalid project execution mode' }, 400);
     }
-    if (body.executionHostId !== undefined && typeof body.executionHostId !== 'string') {
-      return c.json({ ok: false, error: 'Invalid project execution host' }, 400);
-    }
     const hasDefaultAgentPatch = Object.hasOwn(body, 'defaultAgentId');
     const explicitDefaultAgentId = normalizeProjectAgentId(textField(body, 'defaultAgentId'));
     const defaultAgentId = hasDefaultAgentPatch
@@ -271,7 +268,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         createWorkspaceRoot: body.createWorkspaceRoot === true,
         projectKind: textField(body, 'projectKind'),
         executionMode,
-        executionHostId: textField(body, 'executionHostId'),
         brief: textField(body, 'brief'),
         instructions: textField(body, 'instructions'),
         outcome: textField(body, 'outcome'),
@@ -592,27 +588,21 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (body.executionMode !== undefined && !executionMode) {
       return c.json({ ok: false, error: 'Invalid project execution mode' }, 400);
     }
-    if (body.executionHostId !== undefined && body.executionHostId !== null && typeof body.executionHostId !== 'string') {
-      return c.json({ ok: false, error: 'Invalid project execution host' }, 400);
-    }
     if (defaultAgentId && !isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
       return c.json({ ok: false, error: 'Default agent not found' }, 400);
     }
     const currentProject = service.projects.get(projectId);
     const requestedWorkspaceRoot = optionalTextField(body, 'workspaceRoot');
-    const requestedExecutionHostId = optionalTextField(body, 'executionHostId');
     if (
       currentProject
-      && (
-        (requestedWorkspaceRoot !== undefined && requestedWorkspaceRoot !== (currentProject.workspaceRoot ?? null))
-        || (requestedExecutionHostId !== undefined && requestedExecutionHostId !== (currentProject.executionHostId ?? null))
-      )
+      && requestedWorkspaceRoot !== undefined
+      && requestedWorkspaceRoot !== (currentProject.workspaceRoot ?? null)
       && environments.list({ projectId, limit: 1 }).length > 0
     ) {
       return c.json({
         ok: false,
         code: 'execution_environments_exist',
-        error: 'Delete the project execution environments before changing its workspace or execution host',
+        error: 'Delete the project execution environments before changing its workspace',
       }, 409);
     }
     try {
@@ -624,7 +614,6 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         ...(optionalTextField(body, 'workspaceRoot') !== undefined ? { workspaceRoot: optionalTextField(body, 'workspaceRoot') } : {}),
         createWorkspaceRoot: body.createWorkspaceRoot === true,
         ...(executionMode ? { executionMode } : {}),
-        ...(requestedExecutionHostId !== undefined ? { executionHostId: requestedExecutionHostId } : {}),
         ...(optionalTextField(body, 'brief') !== undefined ? { brief: optionalTextField(body, 'brief') } : {}),
         ...(optionalTextField(body, 'instructions') !== undefined ? { instructions: optionalTextField(body, 'instructions') } : {}),
         ...(optionalTextField(body, 'outcome') !== undefined ? { outcome: optionalTextField(body, 'outcome') } : {}),

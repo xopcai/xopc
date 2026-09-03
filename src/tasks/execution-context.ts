@@ -12,7 +12,6 @@ export interface ExecutionContext {
   channel: string;
   agentId?: string;
   executionEnvironmentId?: string;
-  executionHostId?: string;
   executionKind?: ExecutionEnvironmentKind;
   taskId?: string;
   projectId?: string;
@@ -66,7 +65,6 @@ export function resolveExecutionContext(input: {
     agentId: input.agentId,
     ...(environment ? {
       executionEnvironmentId: environment.id,
-      executionHostId: environment.hostId,
       executionKind: environment.kind,
     } : {}),
     projectId: input.metadata.projectId,

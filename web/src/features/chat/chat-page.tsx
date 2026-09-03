@@ -7,13 +7,13 @@ import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
-import { ChatProjectScopeBar } from '@/features/chat/scope/chat-project-scope-bar';
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatRealtimeStatus } from '@/features/chat/agent-selection/chat-realtime-status';
 import { ConversationPlanDock } from '@/features/chat/messages/conversation-plan-dock';
-import { TaskSessionBanner, TaskSessionScopeBar } from '@/features/chat/task/task-session-banner';
+import { TaskSessionBanner } from '@/features/chat/task/task-session-banner';
 import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
@@ -549,7 +549,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   ]);
 
   const sourceNoteId = sessionMetadata?.sourceNoteId ?? null;
-  const scopedProject = useChatProjectScope(chatSessionKey);
+  const scopedProject = useChatProjectScope(chatSessionKey, searchParams.get('projectId'));
+  const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
+  useLayoutEffect(() => { setComposerContextRefs([]); }, [chatSessionKey]);
   useEffect(() => {
     let cancelled = false;
     setSourceNoteLoadedTitle(null);
@@ -922,6 +924,15 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     stream,
   ]);
 
+  const headerContext = useMemo(() => ({
+    project: scopedProject,
+    draftRefs: composerContextRefs,
+    onLeaveProject: () => { void session.createNewSession({ forceNew: true, projectId: null }); },
+    leaveProjectLabel: m.chat.scopeRemoveProject,
+    onDraftSourceNote: sourceNoteId ? handleDraftSourceNoteDigest : undefined,
+    draftSourceNoteLabel: m.chat.sourceNoteDigestAction,
+  }), [scopedProject, composerContextRefs, session.createNewSession, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
+
   if (!auth.hasToken) {
     return (
       <div className="mx-auto w-full max-w-[var(--max-width-chat-frame)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
@@ -964,27 +975,15 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={isSessionTransitioning}
         sessionKey={session.sessionKey}
-        workspacePath={session.effectiveWorkspacePath}
         userContextMode={session.userContextMode}
         projectId={scopedProject?.id}
+        context={headerContext}
         canChangeWorkspace={canChangeWorkingDirectory}
         workspaceDisabled={isSessionTransitioning || stream.sending || stream.streaming}
         onWorkspaceChange={session.onSessionWorkingDirectoryChange}
       /> : null}
 
       <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat-frame)+8rem)]')}>
-        {!embedded && scopedProject ? (
-          <ChatProjectScopeBar
-            project={scopedProject}
-            workspace={session.effectiveWorkspacePath}
-            projectLabel={m.chat.scopeProject}
-            workspaceLabel={m.chat.scopeWorkspace}
-            returnTo={pathname}
-            removeLabel={m.chat.scopeRemoveProject}
-            onRemove={() => void session.createNewSession({ forceNew: true, projectId: null })}
-          />
-        ) : null}
-        {!embedded && taskId ? <TaskSessionScopeBar taskId={taskId} /> : null}
         {!embedded && sessionMetadata?.parentSessionKey ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted sm:px-5 xl:px-6">
             <Link
@@ -1011,7 +1010,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
             </Link>
           </div>
         ) : null}
-        {sourceNoteId ? (
+        {embedded && sourceNoteId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
               <span className="min-w-0 truncate">
@@ -1199,6 +1198,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 />
               ) : null}
               <ChatComposer
+                contextRefs={composerContextRefs}
+                setContextRefs={setComposerContextRefs}
                 disabled={
                   isSessionTransitioning ||
                   Boolean(clarify.clarifyPrompt)

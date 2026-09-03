@@ -20,15 +20,12 @@ import {
 } from './types.js';
 
 const log = createLogger('ExecutionEnvironment:LocalWorktree');
-const LOCAL_HOST_ID = 'local';
 
 export interface ProvisionManagedWorktreeInput {
   projectId: string;
   repositoryPath: string;
   baseRef?: string;
   environmentId?: string;
-  requireClean?: boolean;
-  pinned?: boolean;
 }
 
 export interface LocalWorktreeInspection {
@@ -45,7 +42,6 @@ export interface LocalWorktreeInspection {
 export interface LocalWorktreeManagerOptions {
   store?: ExecutionEnvironmentStore;
   stateDir?: string;
-  hostId?: string;
 }
 
 async function withRepositoryLock<T>(gitCommonDir: string, fn: () => Promise<T>): Promise<T> {
@@ -86,19 +82,16 @@ function assertManagedPath(rootPath: string, stateDir?: string): void {
 export class LocalWorktreeManager {
   private readonly store: ExecutionEnvironmentStore;
   private readonly stateDir?: string;
-  private readonly hostId: string;
 
   constructor(options: LocalWorktreeManagerOptions = {}) {
     this.store = options.store ?? new ExecutionEnvironmentStore();
     this.stateDir = options.stateDir;
-    this.hostId = options.hostId?.trim() || LOCAL_HOST_ID;
   }
 
   async registerLocalCheckout(input: {
     projectId?: string;
     workspacePath: string;
     environmentId?: string;
-    pinned?: boolean;
   }): Promise<ExecutionEnvironment> {
     if (!await isDirectory(input.workspacePath)) {
       throw new Error(`Local checkout does not exist: ${input.workspacePath}`);
@@ -107,7 +100,6 @@ export class LocalWorktreeManager {
     const environment = this.store.create({
       ...(input.environmentId ? { id: input.environmentId } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),
-      hostId: this.hostId,
       kind: 'local_checkout',
       rootPath: input.workspacePath,
       ...(repository ? {
@@ -117,7 +109,6 @@ export class LocalWorktreeManager {
         baseSha: repository.headSha,
         branchRef: repository.branchRef,
       } : {}),
-      pinned: input.pinned,
     });
     const provisioning = this.store.transition({
       environmentId: environment.id,
@@ -135,7 +126,7 @@ export class LocalWorktreeManager {
 
   async provisionManagedWorktree(input: ProvisionManagedWorktreeInput): Promise<ExecutionEnvironment> {
     const repository = await inspectGitRepository(input.repositoryPath);
-    if ((input.requireClean ?? true) && repository.dirty) {
+    if (repository.dirty) {
       throw new ExecutionEnvironmentConflictError(
         `Repository has uncommitted changes: ${repository.repositoryRoot}`,
       );
@@ -150,14 +141,12 @@ export class LocalWorktreeManager {
     const environment = this.store.create({
       id: environmentId,
       projectId: input.projectId,
-      hostId: this.hostId,
       kind: 'managed_worktree',
       rootPath,
       repositoryRoot: repository.repositoryRoot,
       gitCommonDir: repository.gitCommonDir,
       baseRef,
       baseSha,
-      pinned: input.pinned,
     });
     const provisioning = this.store.transition({
       environmentId: environment.id,
@@ -226,11 +215,6 @@ export class LocalWorktreeManager {
     const environment = this.store.getRequired(environmentId);
     const inspection = await this.inspect(environmentId);
     if (inspection.healthy) {
-      if (inspection.headSha && environment.baseSha && inspection.headSha !== environment.baseSha) {
-        throw new ExecutionEnvironmentConflictError(
-          `Managed worktree ${environmentId} is at ${inspection.headSha}, expected ${environment.baseSha}`,
-        );
-      }
       if (environment.status !== 'degraded' && environment.status !== 'provisioning') return environment;
       const provisioning = environment.status === 'provisioning'
         ? environment
@@ -248,7 +232,7 @@ export class LocalWorktreeManager {
       });
     }
     if (environment.status === 'degraded' || environment.status === 'error') return environment;
-    if (!['ready', 'busy', 'stopped'].includes(environment.status)) {
+    if (environment.status !== 'ready' && environment.status !== 'provisioning') {
       throw new ExecutionEnvironmentConflictError(
         `Cannot reconcile managed worktree ${environmentId} while ${environment.status}`,
       );
@@ -263,21 +247,14 @@ export class LocalWorktreeManager {
   }
 
   async remove(environmentId: string): Promise<ExecutionEnvironment> {
-    let environment = this.store.getRequired(environmentId);
+    const environment = this.store.getRequired(environmentId);
+    if (environment.status === 'deleted') return environment;
     if (environment.kind === 'local_checkout') {
       const bindings = this.store.listBindings(environmentId);
       if (bindings.length > 0) {
         throw new ExecutionEnvironmentConflictError(`Local checkout ${environmentId} still has active bindings`);
       }
-      if (environment.status === 'busy') {
-        environment = this.store.transition({
-          environmentId,
-          expectedVersion: environment.version,
-          toStatus: 'stopped',
-          reason: 'unbound local checkout stopped before retirement',
-        });
-      }
-      const deleting = this.store.transition({
+      const deleting = environment.status === 'deleting' ? environment : this.store.transition({
         environmentId,
         expectedVersion: environment.version,
         toStatus: 'deleting',
@@ -300,15 +277,7 @@ export class LocalWorktreeManager {
     if (bindings.length > 0) {
       throw new ExecutionEnvironmentConflictError(`Managed worktree ${environmentId} still has active bindings`);
     }
-    if (environment.status === 'busy') {
-      environment = this.store.transition({
-        environmentId,
-        expectedVersion: environment.version,
-        toStatus: 'stopped',
-        reason: 'unbound managed worktree stopped before deletion',
-      });
-    }
-    const deleting = this.store.transition({
+    const deleting = environment.status === 'deleting' ? environment : this.store.transition({
       environmentId,
       expectedVersion: environment.version,
       toStatus: 'deleting',
@@ -318,12 +287,26 @@ export class LocalWorktreeManager {
     try {
       await withRepositoryLock(environment.gitCommonDir, async () => {
         const registered = await findGitWorktree(environment.repositoryRoot!, environment.rootPath);
-        if (registered) {
-          await runGit(environment.repositoryRoot!, ['worktree', 'unlock', environment.rootPath]).catch(() => '');
-          await runGit(environment.repositoryRoot!, ['worktree', 'remove', '--force', environment.rootPath]);
+        if (!registered && existsSync(environment.rootPath)) {
+          throw new ExecutionEnvironmentConflictError('Refusing to delete a directory no longer registered as this worktree');
         }
-        await runGit(environment.repositoryRoot!, ['worktree', 'prune', '--expire', 'now']);
-        if (existsSync(environment.rootPath)) await rm(environment.rootPath, { recursive: true, force: true });
+        if (registered) {
+          if (registered.headSha && registered.headSha !== environment.baseSha) {
+            const refs = await runGit(environment.repositoryRoot!, [
+              'for-each-ref', `--contains=${registered.headSha}`, '--format=%(refname)', 'refs/heads', 'refs/remotes',
+            ]);
+            if (!refs.trim()) {
+              throw new ExecutionEnvironmentConflictError('Save detached commits on a branch before deleting this worktree');
+            }
+          }
+          if (registered.locked) await runGit(environment.repositoryRoot!, ['worktree', 'unlock', environment.rootPath]);
+          try {
+            await runGit(environment.repositoryRoot!, ['worktree', 'remove', environment.rootPath]);
+          } catch (error) {
+            if (registered.locked) await runGit(environment.repositoryRoot!, ['worktree', 'lock', environment.rootPath]).catch(() => '');
+            throw error;
+          }
+        }
       });
       const deleted = this.store.transition({
         environmentId,
@@ -353,7 +336,6 @@ export class LocalWorktreeManager {
         await runGit(repositoryRoot, ['worktree', 'remove', '--force', rootPath]).catch(() => '');
       }
       if (existsSync(rootPath)) await rm(rootPath, { recursive: true, force: true });
-      await runGit(repositoryRoot, ['worktree', 'prune', '--expire', 'now']).catch(() => '');
     }).catch(() => undefined);
   }
 }
