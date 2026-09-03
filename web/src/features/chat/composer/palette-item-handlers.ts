@@ -1,6 +1,7 @@
 import type { MutableRefObject } from 'react';
 
-import type { ComposerContextRef, ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, ComposerSendHandler, ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
+import { commitAcceptedSend } from './commit-accepted-send';
 import type {
   PaletteItem,
   PaletteItemKind,
@@ -44,7 +45,7 @@ export interface PaletteApplyContext {
     clear: () => void;
   };
   callbacks: {
-    onSend: (text: string, atts?: WireAttachment[], thinking?: string, contextRefs?: ComposerContextRef[]) => void;
+    onSend: ComposerSendHandler;
     onUserTextCommitted?: (text: string) => void;
     /** Agent switch handler — wired by chat-page (writes localStorage + navigates to /chat/new). */
     onChatAgentChange?: (agentId: string) => void;
@@ -136,16 +137,15 @@ const applyCommandItem: PaletteItemHandler = (item, ctx) => {
     return;
   }
 
-  // Idle: send immediately (unchanged from prior behavior).
-  if (ctx.contextRefs.current.length) {
-    ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel, ctx.contextRefs.current);
-  } else {
-    ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel);
-  }
-  ctx.callbacks.onUserTextCommitted?.(cmd);
-  ctx.attachments.clearAttachments();
-  ctx.contextRefs.clear();
-  ctx.editor.resetEditor();
+  const result = ctx.contextRefs.current.length
+    ? ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel, ctx.contextRefs.current)
+    : ctx.callbacks.onSend(cmd, undefined, ctx.thinkingLevel);
+  commitAcceptedSend(result, () => {
+    ctx.callbacks.onUserTextCommitted?.(cmd);
+    ctx.attachments.clearAttachments();
+    ctx.contextRefs.clear();
+    ctx.editor.resetEditor();
+  });
 };
 
 const applyAgentItem: PaletteItemHandler = (item, ctx) => {
