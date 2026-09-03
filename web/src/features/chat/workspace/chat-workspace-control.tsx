@@ -61,18 +61,17 @@ export function ChatWorkspaceControl({
           type="button"
           disabled={!available}
           className={cn(
-            'inline-flex h-8 min-w-0 max-w-44 items-center gap-1.5 rounded-lg px-2 text-fg-muted transition-colors',
+            'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors',
             'hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             workspacePanelOpen && 'bg-surface-hover text-fg',
             !available && 'cursor-not-allowed opacity-50',
           )}
-          title={normalizedPath || workspaceName}
+          title={`${m.workspace.openFiles}: ${normalizedPath || workspaceName}`}
           aria-label={`${m.workspace.openFiles}: ${workspaceName}`}
           aria-pressed={workspacePanelOpen}
           onClick={openProjectFiles}
         >
           <FolderOpen className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 truncate text-xs font-medium">{m.workspace.openFiles}</span>
         </button>
         {canChangeWorkspace ? (
           <button

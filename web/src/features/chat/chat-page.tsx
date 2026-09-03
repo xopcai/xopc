@@ -492,12 +492,6 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     }
     setWelcomeExplorationOffset((value) => value + 1);
   }, [agents.displayAgentId]);
-  const selectWelcomeProject = useCallback(
-    async (projectId: string) => {
-      await session.createNewSession({ projectId });
-    },
-    [session.createNewSession],
-  );
   const canChangeWorkingDirectory = Boolean(
     session.sessionKey &&
     !session.showSessionLoading &&
@@ -551,7 +545,17 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const sourceNoteId = sessionMetadata?.sourceNoteId ?? null;
   const scopedProject = useChatProjectScope(chatSessionKey, searchParams.get('projectId'));
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
-  useLayoutEffect(() => { setComposerContextRefs([]); }, [chatSessionKey]);
+  const contextSwitchSourceRef = useRef<string | null | undefined>(undefined);
+  const [updatingContext, setUpdatingContext] = useState(false);
+  useLayoutEffect(() => {
+    if (contextSwitchSourceRef.current !== undefined) {
+      if (chatSessionKey && chatSessionKey !== contextSwitchSourceRef.current) {
+        contextSwitchSourceRef.current = undefined;
+      }
+      return;
+    }
+    setComposerContextRefs([]);
+  }, [chatSessionKey]);
   useEffect(() => {
     let cancelled = false;
     setSourceNoteLoadedTitle(null);
@@ -924,14 +928,42 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     stream,
   ]);
 
+  const handleProjectChange = useCallback(async (projectId: string | null) => {
+    if (contextSwitchSourceRef.current !== undefined || updatingContext || stream.sending || stream.streaming || isSessionTransitioning) return;
+    contextSwitchSourceRef.current = chatSessionKey;
+    setUpdatingContext(true);
+    try {
+      await session.createNewSession({ forceNew: true, projectId, temporary: session.userContextMode === 'temporary' });
+    } catch (error) {
+      contextSwitchSourceRef.current = undefined;
+      showComposerNotification('error', m.chat.composerContext.changeFailed, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setUpdatingContext(false);
+    }
+  }, [chatSessionKey, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, session.createNewSession, session.userContextMode, stream.sending, stream.streaming]);
+
+  const handleRemoveProject = useCallback(() => handleProjectChange(null), [handleProjectChange]);
+  const selectWelcomeProject = useCallback((projectId: string) => handleProjectChange(projectId), [handleProjectChange]);
+  const handleComposerWorkspaceChange = useCallback(async (path: string) => {
+    if (updatingContext || isSessionTransitioning || stream.sending || stream.streaming || !canChangeWorkingDirectory) return;
+    setUpdatingContext(true);
+    try {
+      await session.onSessionWorkingDirectoryChange(path);
+    } finally {
+      setUpdatingContext(false);
+    }
+  }, [updatingContext, isSessionTransitioning, stream.sending, stream.streaming, canChangeWorkingDirectory, session.onSessionWorkingDirectoryChange]);
+
   const headerContext = useMemo(() => ({
     project: scopedProject,
     draftRefs: composerContextRefs,
-    onLeaveProject: () => { void session.createNewSession({ forceNew: true, projectId: null }); },
+    onLeaveProject: handleRemoveProject,
     leaveProjectLabel: m.chat.scopeRemoveProject,
     onDraftSourceNote: sourceNoteId ? handleDraftSourceNoteDigest : undefined,
     draftSourceNoteLabel: m.chat.sourceNoteDigestAction,
-  }), [scopedProject, composerContextRefs, session.createNewSession, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
+  }), [scopedProject, composerContextRefs, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
 
   if (!auth.hasToken) {
     return (
@@ -975,10 +1007,12 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={isSessionTransitioning}
         sessionKey={session.sessionKey}
+        hasMessages={!isSessionTransitioning && msgSlice.items.length > 0}
+        workspacePath={session.effectiveWorkspacePath}
         userContextMode={session.userContextMode}
         projectId={scopedProject?.id}
         context={headerContext}
-        canChangeWorkspace={canChangeWorkingDirectory}
+        canChangeWorkspace={false}
         workspaceDisabled={isSessionTransitioning || stream.sending || stream.streaming}
         onWorkspaceChange={session.onSessionWorkingDirectoryChange}
       /> : null}
@@ -1198,11 +1232,18 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 />
               ) : null}
               <ChatComposer
+                composerContext={!embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
+                  project: scopedProject,
+                  workspacePath: session.effectiveWorkspacePath,
+                  canChangeWorkspace: canChangeWorkingDirectory,
+                  onProjectChange: handleProjectChange,
+                  onWorkspaceChange: handleComposerWorkspaceChange,
+                } : undefined}
                 contextRefs={composerContextRefs}
                 setContextRefs={setComposerContextRefs}
                 disabled={
                   !session.modelConfigReady || session.modelConfigSaving ||
-                  isSessionTransitioning ||
+                  isSessionTransitioning || updatingContext ||
                   Boolean(clarify.clarifyPrompt)
                 }
                 sending={stream.sending}

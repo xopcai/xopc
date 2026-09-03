@@ -1,8 +1,14 @@
 # Session context summary
 
-The chat header owns one context entry point. Its anchored panel groups current work
-(project and active execution task), Note sources, and the local execution environment.
-The former project/task scope strips and standalone workspace header label are removed.
+The chat header keeps an icon-only file browser directly accessible alongside
+an icon-only context entry point. Its animated anchored panel groups the local execution
+environment, current work (project and active execution task), and Note sources.
+Before the first message, an inset context bar sits above the rounded composer.
+It offers searchable project selection/removal, branch information, and a folder
+picker for unscoped chats. Project-owned folders remain
+locked until the project is removed. Project changes retain the draft, attachments
+and pending Note references; context changes are disabled during saves, sends and
+session transitions. The former page-level project/task scope strips are removed.
 Task progress cards, historical message references, and embedded-chat affordances remain.
 
 `GET /api/sessions/:key/context-summary` is a read-only metadata query. It requires

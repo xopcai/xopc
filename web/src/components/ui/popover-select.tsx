@@ -3,6 +3,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { Children, Fragment, isValidElement, useId, useState, type ReactNode, type SelectHTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
+import { Skeleton } from '@/components/ui/skeleton';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
   useSettingsShellPopoverLayer,
@@ -60,6 +61,12 @@ export function PopoverSelect({
   side = 'bottom',
   align = 'start',
   onChange,
+  searchPlaceholder,
+  searchValue,
+  onSearchChange,
+  loading = false,
+  statusMessage,
+  selectedLabel,
 }: {
   value: string;
   options: PopoverSelectOption[];
@@ -78,13 +85,19 @@ export function PopoverSelect({
   side?: 'top' | 'bottom' | 'left' | 'right';
   align?: 'start' | 'center' | 'end';
   onChange: (value: string) => void;
+  searchPlaceholder?: string;
+  searchValue?: string;
+  onSearchChange?: (query: string) => void;
+  loading?: boolean;
+  statusMessage?: string;
+  selectedLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const settingsShellLayer = useSettingsShellPopoverLayer();
   const portalContainer = useSettingsShellPopoverPortalContainer();
   const popoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const selected = options.find((option) => option.value === value);
-  const label = selected?.label ?? (value ? `${value} · unavailable` : placeholder);
+  const label = selectedLabel ?? selected?.label ?? (value ? `${value} · unavailable` : placeholder);
   let lastGroup: string | undefined;
 
   return (
@@ -119,6 +132,16 @@ export function PopoverSelect({
             contentClassName,
           )}
         >
+          {searchPlaceholder ? (
+            <input
+              type="search"
+              aria-label={searchPlaceholder}
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(event) => onSearchChange?.(event.target.value)}
+              className="mb-1 w-full rounded-md bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            />
+          ) : null}
           <div className="max-h-64 overflow-y-auto">
             {allowEmpty ? (
               <button
@@ -139,7 +162,9 @@ export function PopoverSelect({
                 <span className="min-w-0 truncate text-fg-subtle">{emptyLabel}</span>
               </button>
             ) : null}
-            {options.map((option) => {
+            {loading ? <div className="space-y-2 p-2" aria-busy="true">{[0, 1, 2].map((n) => <Skeleton key={n} className="h-8 w-full" />)}</div> : null}
+            {statusMessage && !loading ? <p role="status" className="px-3 py-2 text-xs text-fg-muted">{statusMessage}</p> : null}
+            {(loading ? [] : options).map((option) => {
               const disabled =
                 option.disabled === true || (disabledValues?.has(option.value) === true && option.value !== value);
               const showGroup = option.group && option.group !== lastGroup;
