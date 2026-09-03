@@ -55,6 +55,7 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 | 全局底层 App Background | `bg-surface-base` / `--color-surface-base` | `#f7f8fa` | `#14171c` |
 | 侧栏 Rail | `bg-surface-rail` / `--color-surface-rail` | `#eef1f5` | `#111318` |
 | 主内容区 / 卡片面板 | `bg-surface-panel` / `--color-surface-panel` | `#ffffff` | `#1b1f26` |
+| 终端画布（不随彩色主题偏色） | `bg-surface-terminal` / `--color-surface-terminal` | `#ffffff` | `#181818` |
 | 悬浮 Hover | `bg-surface-hover` / `--color-surface-hover` | `#e8ecf1` | `#242933` |
 | 次级激活 Active | `bg-surface-active` / `--color-surface-active` | `#dfe5ec` | `#2e3440` |
 

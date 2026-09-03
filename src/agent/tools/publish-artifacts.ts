@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { basename, isAbsolute } from 'node:path';
+import { readFile, realpath } from 'node:fs/promises';
+import { basename, isAbsolute, relative, sep } from 'node:path';
 
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from '@sinclair/typebox';
@@ -9,6 +9,7 @@ import {
   type TurnOutcomeDeliverable,
 } from '@xopcai/gateway-contract';
 
+import { fileResourceId, fileSpaceId } from '../../files/file-service.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 import { persistToolMedia } from './tool-media.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
@@ -27,6 +28,7 @@ type PublishArtifactsDetails = { artifacts: TurnOutcomeDeliverable[] };
 export async function publishArtifactPaths(params: {
   paths: string[];
   baseDir: string;
+  workspaceRoot: string;
   toolCallId: string;
 }): Promise<TurnOutcomeDeliverable[]> {
   const paths = [...new Set(params.paths.map((value) => value.trim()).filter(Boolean))];
@@ -37,18 +39,31 @@ export async function publishArtifactPaths(params: {
     const resolved = resolvePathUnderWorkspace(inputPath, params.baseDir);
     if (publishedPaths.has(resolved)) continue;
     publishedPaths.add(resolved);
+    let sourceFileId: string | undefined;
     try {
       const policy = evaluateFilePolicy({
         operation: 'read',
         path: resolved,
-        workspaceRoot: params.baseDir,
+        workspaceRoot: params.workspaceRoot,
       });
       if (!policy.allowed) throw new Error(policy.reason);
-      const buffer = await readFile(policy.canonicalPath ?? resolved);
+      const [root, source] = await Promise.all([
+        realpath(params.workspaceRoot).catch(() => null),
+        realpath(policy.canonicalPath ?? resolved),
+      ]);
+      sourceFileId = `host-file:${fileSpaceId(source)}`;
+      if (root) {
+        const sourcePath = relative(root, source);
+        if (sourcePath !== '..' && !sourcePath.startsWith(`..${sep}`) && !isAbsolute(sourcePath)) {
+          sourceFileId = fileResourceId(fileSpaceId(root), sourcePath.split(sep).join('/'));
+        }
+      }
+      const buffer = await readFile(source);
       const media = await persistToolMedia({ buffer, filePath: resolved });
       const kind = turnOutcomeKindFromFileName(media.name);
       artifacts.push({
         artifactId: media.id,
+        sourceFileId,
         title: media.name,
         kind,
         mimeType: media.mimeType,
@@ -65,6 +80,7 @@ export async function publishArtifactPaths(params: {
       const mimeType = turnOutcomeMimeTypeFromFileName(title);
       artifacts.push({
         artifactId: `publish-failed:${params.toolCallId}:${index}`,
+        ...(sourceFileId ? { sourceFileId } : {}),
         title,
         kind: turnOutcomeKindFromFileName(title),
         ...(mimeType ? { mimeType } : {}),
@@ -96,7 +112,7 @@ export function createPublishArtifactsTool(workspace: string): AgentTool {
       const paths = [...new Set(params.paths.map((value) => value.trim()).filter(Boolean))];
       if (paths.length === 0) throw new Error('At least one artifact path is required');
 
-      const artifacts = await publishArtifactPaths({ paths, baseDir: workspace, toolCallId });
+      const artifacts = await publishArtifactPaths({ paths, baseDir: workspace, workspaceRoot: workspace, toolCallId });
 
       const publishedCount = artifacts.filter((item) => item.availability === 'available').length;
       const failedCount = artifacts.length - publishedCount;

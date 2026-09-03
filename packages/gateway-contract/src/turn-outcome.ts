@@ -42,6 +42,8 @@ export const TurnOutcomeArtifactCapabilitySchema = z.enum([
 
 export const TurnOutcomeDeliverableSchema = z.object({
   artifactId: z.string().min(1),
+  // Identifies the source file independently of a published snapshot's ID.
+  sourceFileId: z.string().min(1).optional(),
   title: z.string().min(1),
   kind: TurnOutcomeDeliverableKindSchema,
   mimeType: z.string().optional(),
@@ -170,7 +172,25 @@ export function turnOutcomeMimeTypeFromFileName(fileName: string): string | unde
   return mimeTypes[extension];
 }
 
+/** Merge file representations within one turn, preferring the latest available snapshot. */
+export function mergeTurnOutcomeDeliverables(items: readonly TurnOutcomeDeliverable[]): TurnOutcomeDeliverable[] {
+  const byId = new Map(items.map((item) => [item.artifactId, item]));
+  const bySource = new Map<string, TurnOutcomeDeliverable>();
+  const priority = (item: TurnOutcomeDeliverable): number => item.availability === 'available'
+    ? item.location === 'artifact_store' ? 2 : 1
+    : 0;
+  for (const item of byId.values()) {
+    const sourceFileId = item.sourceFileId ?? parseFileResourceArtifactUri(item.uri ?? '');
+    const key = sourceFileId ? `source:${sourceFileId}` : `artifact:${item.artifactId}`;
+    const previous = bySource.get(key);
+    if (!previous || priority(item) >= priority(previous)) bySource.set(key, item);
+  }
+  return [...bySource.values()];
+}
+
 export function parseTurnOutcome(value: unknown): TurnOutcome | null {
   const parsed = TurnOutcomeSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
+  return parsed.success
+    ? { ...parsed.data, deliverables: mergeTurnOutcomeDeliverables(parsed.data.deliverables) }
+    : null;
 }
