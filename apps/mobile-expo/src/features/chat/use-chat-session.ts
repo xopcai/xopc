@@ -524,6 +524,14 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         if (!payload.diff && payload.files.length === 0) return;
         touchStreamActivity();
       },
+      onTurnOutcome: (outcome) => {
+        if (!isCurrentSession()) return;
+        touchStreamActivity();
+        updateStreamingMessage((message) => {
+          message.turnId = outcome.turnId;
+          message.outcome = outcome;
+        }, true);
+      },
       onReview: ({ review }) => {
         if (!isCurrentSession()) return;
         touchStreamActivity();

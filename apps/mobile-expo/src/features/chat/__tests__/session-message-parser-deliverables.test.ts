@@ -134,4 +134,48 @@ describe('session message deliverable restoration', () => {
       'second.xlsx',
     ]);
   });
+
+  it('restores a persisted turn outcome onto its assistant turn', () => {
+    const [message] = parseSessionMessages([
+      {
+        role: 'assistant',
+        turnId: 'turn-1',
+        content: 'Done.',
+      },
+      {
+        role: 'assistant',
+        turnId: 'turn-1',
+        content: '',
+        metadata: {
+          turnOutcome: {
+            version: 1,
+            outcomeId: 'outcome-1',
+            runId: 'run-1',
+            turnId: 'turn-1',
+            status: 'succeeded',
+            deliverables: [{
+              artifactId: 'space-id.cmVwb3J0cy9maW5hbC54bHN4',
+              title: 'final.xlsx',
+              kind: 'spreadsheet',
+              availability: 'available',
+              location: 'workspace',
+              capabilities: ['preview', 'download'],
+              uri: 'xopc-file:space-id.cmVwb3J0cy9maW5hbC54bHN4',
+              workspaceRelativePath: 'reports/final.xlsx',
+            }],
+            evidence: [],
+            createdAt: '2026-09-03T00:00:00.000Z',
+          },
+        },
+      },
+    ]);
+
+    expect(message.turnId).toBe('turn-1');
+    expect(message.outcome?.deliverables).toEqual([
+      expect.objectContaining({
+        artifactId: 'space-id.cmVwb3J0cy9maW5hbC54bHN4',
+        title: 'final.xlsx',
+      }),
+    ]);
+  });
 });

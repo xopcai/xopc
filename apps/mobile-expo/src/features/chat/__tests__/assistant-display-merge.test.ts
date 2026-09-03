@@ -55,4 +55,31 @@ describe('mergeStreamingAssistantIntoMessages', () => {
       streaming,
     ]);
   });
+
+  it('keeps the canonical outcome while live content catches up', () => {
+    const persisted: Message = {
+      role: 'assistant',
+      turnId: 'turn-1',
+      content: [{ type: 'text', text: 'Done.' }],
+      outcome: {
+        version: 1,
+        outcomeId: 'outcome-1',
+        runId: 'run-1',
+        turnId: 'turn-1',
+        status: 'succeeded',
+        deliverables: [],
+        evidence: [],
+        createdAt: '2026-09-03T00:00:00.000Z',
+      },
+    };
+    const streaming: Message = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Done.' }],
+    };
+
+    const [merged] = mergeStreamingAssistantIntoMessages([persisted], streaming);
+
+    expect(merged.turnId).toBe('turn-1');
+    expect(merged.outcome?.outcomeId).toBe('outcome-1');
+  });
 });
