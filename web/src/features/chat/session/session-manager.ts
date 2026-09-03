@@ -23,6 +23,8 @@ export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat';
 
 export type SessionAgentConfig = {
   thinkingLevel: string;
+  configVersion?: number;
+  fixedModel?: boolean;
   model: string;
   reasoningLevel: string;
   activityDetail: {
@@ -69,6 +71,8 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
   }
   return {
     thinkingLevel: payload.thinkingLevel,
+    configVersion: typeof payload.configVersion === 'number' ? payload.configVersion : undefined,
+    fixedModel: payload.fixedModel === true,
     model: payload.model,
     reasoningLevel: payload.reasoningLevel,
     activityDetail: activity &&
@@ -219,11 +223,12 @@ export class SessionManager {
     sessionKey: string,
     patch: {
       thinkingLevel?: string;
+      configVersion?: number;
       model?: string | null;
       workingDirectory?: string;
       userContextMode?: 'enabled' | 'off' | 'temporary';
     },
-  ): Promise<void> {
+  ): Promise<SessionAgentConfig> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -233,18 +238,20 @@ export class SessionManager {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(j.error ?? `HTTP ${res.status}`);
     }
+    return parseSessionAgentConfigResponse(await res.json());
   }
 
-  async patchTaskConversationModel(taskId: string, model: string): Promise<void> {
+  async patchTaskConversationModel(taskId: string, model: string, thinkingLevel?: string, configVersion?: number): Promise<SessionAgentConfig> {
     const res = await apiFetch(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/conversation/config`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model }),
+      body: JSON.stringify({ model, thinkingLevel, configVersion }),
     });
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(json.error ?? `HTTP ${res.status}`);
     }
+    return parseSessionAgentConfigResponse(await res.json());
   }
 
   /** Gateway read-only active webchat run (`GET /api/sessions/:key/run`). */

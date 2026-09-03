@@ -1,6 +1,10 @@
+import type { ModelThinkingValue } from '@xopcai/gateway-contract';
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import type { Context } from 'hono';
 
+import { withModelConfigLock } from '../../../session/model-config-lock.js';
+import { getModelThinking } from '../../../providers/model-thinking.js';
+import { resolveModel } from '../../../providers/index.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
@@ -37,24 +41,40 @@ export async function submitSessionInput(
   if (body.expectedSessionId !== undefined && (typeof body.expectedSessionId !== 'string' || !body.expectedSessionId || body.expectedSessionId.length > 128)) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session identity' } }, 400);
   }
-  const result = await deps.service.submitSessionInput({
-    expectedSessionId: body.expectedSessionId as string | undefined,
-    sessionKey,
-    clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
-    delivery,
-    content,
-    attachments: attachments as UserTurnAttachment[] | undefined,
-    contextRefs,
-    thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
-    origin: { type: 'endpoint', endpointId: origin.data.endpointId },
+  return withModelConfigLock(sessionKey, async () => {
+    const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(sessionKey) : undefined;
+    if (selection) {
+      if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
+        return c.json({ ok: false, error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed. Refresh before sending.' } }, 409);
+      }
+      try {
+        const capabilities = getModelThinking(resolveModel(selection.model));
+        if (!capabilities.options.includes(selection.thinkingLevel as ModelThinkingValue)) {
+          return c.json({ ok: false, error: { code: 'INVALID_THINKING', message: 'Select a supported thinking level before sending.' } }, 409);
+        }
+      } catch {
+        return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
+      }
+    }
+    const result = await deps.service.submitSessionInput({
+      expectedSessionId: body.expectedSessionId as string | undefined,
+      sessionKey,
+      clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
+      delivery,
+      content,
+      attachments: attachments as UserTurnAttachment[] | undefined,
+      contextRefs,
+      thinking: selection?.thinkingLevel ?? (typeof body.thinking === 'string' ? body.thinking : undefined),
+      origin: { type: 'endpoint', endpointId: origin.data.endpointId },
+    });
+    if (result.ok === false) {
+      return c.json(
+        { ok: false, error: { code: result.code, message: result.code === 'CONTEXT_UNAVAILABLE' ? 'A referenced Note changed or is no longer available. Select it again.' : 'Input was not accepted' } },
+        result.code === 'SESSION_CHANGED' || result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
+      );
+    }
+    return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
   });
-  if (result.ok === false) {
-    return c.json(
-      { ok: false, error: { code: result.code, message: result.code === 'CONTEXT_UNAVAILABLE' ? 'A referenced Note changed or is no longer available. Select it again.' : 'Input was not accepted' } },
-      result.code === 'SESSION_CHANGED' || result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
-    );
-  }
-  return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
 }
 
 export async function replaceLatestSessionTurn(
@@ -83,29 +103,45 @@ export async function replaceLatestSessionTurn(
     return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
   }
 
-  const result = await deps.service.replaceLatestSessionTurn({
-    sessionKey,
-    targetTurnId,
-    clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
-    delivery: 'next',
-    content,
-    attachments: attachments as UserTurnAttachment[] | undefined,
-    contextRefs,
-    thinking: typeof body.thinking === 'string' ? body.thinking : undefined,
-    origin: { type: 'endpoint', endpointId: origin.data.endpointId },
+  return withModelConfigLock(sessionKey, async () => {
+    const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(sessionKey) : undefined;
+    if (selection) {
+      if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
+        return c.json({ ok: false, error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed. Refresh before sending.' } }, 409);
+      }
+      try {
+        const capabilities = getModelThinking(resolveModel(selection.model));
+        if (!capabilities.options.includes(selection.thinkingLevel as ModelThinkingValue)) {
+          return c.json({ ok: false, error: { code: 'INVALID_THINKING', message: 'Select a supported thinking level before sending.' } }, 409);
+        }
+      } catch {
+        return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
+      }
+    }
+    const result = await deps.service.replaceLatestSessionTurn({
+      sessionKey,
+      targetTurnId,
+      clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
+      delivery: 'next',
+      content,
+      attachments: attachments as UserTurnAttachment[] | undefined,
+      contextRefs,
+      thinking: selection?.thinkingLevel ?? (typeof body.thinking === 'string' ? body.thinking : undefined),
+      origin: { type: 'endpoint', endpointId: origin.data.endpointId },
+    });
+    if (result.ok === false) {
+      const status = result.code === 'TARGET_NOT_FOUND' ? 404 : result.code === 'BAD_REQUEST' ? 400 : 409;
+      const message = result.code === 'NOT_LATEST'
+        ? 'Only the latest user turn can be replaced'
+        : result.code === 'SESSION_BUSY'
+          ? 'Session has pending input'
+        : result.code === 'TARGET_NOT_FOUND'
+          ? 'User turn was not found'
+          : result.code === 'CONTEXT_UNAVAILABLE'
+            ? 'A referenced Note changed or is no longer available. Select it again.'
+            : 'Replacement input was not accepted';
+      return c.json({ ok: false, error: { code: result.code, message } }, status);
+    }
+    return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
   });
-  if (result.ok === false) {
-    const status = result.code === 'TARGET_NOT_FOUND' ? 404 : result.code === 'BAD_REQUEST' ? 400 : 409;
-    const message = result.code === 'NOT_LATEST'
-      ? 'Only the latest user turn can be replaced'
-      : result.code === 'SESSION_BUSY'
-        ? 'Session has pending input'
-      : result.code === 'TARGET_NOT_FOUND'
-        ? 'User turn was not found'
-        : result.code === 'CONTEXT_UNAVAILABLE'
-          ? 'A referenced Note changed or is no longer available. Select it again.'
-          : 'Replacement input was not accepted';
-    return c.json({ ok: false, error: { code: result.code, message } }, status);
-  }
-  return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
 }

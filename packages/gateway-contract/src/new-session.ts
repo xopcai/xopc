@@ -12,6 +12,7 @@ export type NewSessionProjectIntent =
 export type AgentModelPreference = {
   modelRef: string;
   thinkingLevel?: string;
+  thinkingByModel?: Record<string, string>;
 };
 
 export type NewSessionPreferences = {
@@ -99,6 +100,9 @@ function parseModelPreferences(value: unknown): Record<string, AgentModelPrefere
     result[agentId] = {
       modelRef,
       ...(thinkingLevel ? { thinkingLevel } : {}),
+      ...(record.thinkingByModel && typeof record.thinkingByModel === 'object' ? {
+        thinkingByModel: Object.fromEntries(Object.entries(record.thinkingByModel).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+      } : {}),
     };
   }
   return result;
@@ -142,9 +146,15 @@ export function withAgentModelPreference(
     delete modelByAgent[normalizedId];
   } else {
     const thinkingLevel = normalized(preference.thinkingLevel);
+    const thinkingByModel = {
+      ...modelByAgent[normalizedId]?.thinkingByModel,
+      ...(modelByAgent[normalizedId]?.thinkingLevel ? { [modelByAgent[normalizedId].modelRef]: modelByAgent[normalizedId].thinkingLevel! } : {}),
+      ...(thinkingLevel ? { [modelRef]: thinkingLevel } : {}),
+    };
     modelByAgent[normalizedId] = {
       modelRef,
       ...(thinkingLevel ? { thinkingLevel } : {}),
+      ...(Object.keys(thinkingByModel).length ? { thinkingByModel } : {}),
     };
   }
   return { ...preferences, modelByAgent };

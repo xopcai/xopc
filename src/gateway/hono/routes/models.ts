@@ -1,3 +1,4 @@
+import { getModelThinking } from '../../../providers/model-thinking.js';
 import type { Hono } from 'hono';
 
 import {
@@ -103,6 +104,7 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
     maxTokens: model.maxOutputTokens ?? 4096,
     reasoning: false,
     vision: model.supportsImages ?? false,
+    thinking: { mode: 'none' as const, options: ['off' as const], initialValue: 'off' as const, supportsAdaptive: false as const },
     cost: { input: model.pricing?.input ?? 0, output: model.pricing?.output ?? 0 },
     available,
     recommended: isRecommendedModel(providerId, model.id),
@@ -358,6 +360,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,
+      thinking: getModelThinking(m),
       vision: m.input?.includes('image') ?? false,
       recommended: isRecommendedModel(m.provider, m.id),
       cost: {
@@ -705,6 +708,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,
+      thinking: getModelThinking(m),
       vision: m.input?.includes('image') ?? false,
       recommended: isRecommendedModel(m.provider, m.id),
       cost: {

@@ -1,3 +1,4 @@
+import { withModelConfigLock } from '../../session/model-config-lock.js';
 /**
  * GatewaySessionsApi — session CRUD, search, compaction, tag/pin/archive,
  * stats, and chat-id grouping for the gateway REST surface.
@@ -171,6 +172,21 @@ export class GatewaySessionsApi {
     return this.opts.getAgentService().sessionInspector.agentConfig(sessionKey);
   }
 
+  async getFixedAgentConfig(sessionKey: string) {
+    return withModelConfigLock(sessionKey, async () => {
+      const config = await this.getAgentConfig(sessionKey);
+      if (!config.fixedModel && !this.getActiveRun(sessionKey).active) {
+        const result = await this.opts.getAgentService().sessionConfig.initializeModelSelection(sessionKey, config.model, config.thinkingLevel, config.configVersion);
+        if (result.ok) return this.getAgentConfig(sessionKey);
+      }
+      return config;
+    });
+  }
+
+  initializeChatModel(sessionKey: string, model: string, thinkingLevel?: string) {
+    return this.opts.getAgentService().sessionConfig.initializeModelSelection(sessionKey, model, thinkingLevel);
+  }
+
   /** Resolved markdown workspace for a session (after hydration / mkdir). */
   getEffectiveWorkspacePath(sessionKey: string): Promise<string> {
     return this.opts.getAgentService().getEffectiveWorkspacePathForSession(sessionKey);
@@ -180,6 +196,8 @@ export class GatewaySessionsApi {
     sessionKey: string,
     body: {
       thinkingLevel?: string;
+      fixedModel?: boolean;
+      configVersion?: number;
       model?: string | null;
       activityDetailLevel?: string | null;
       reasoningLevel?: string | null;

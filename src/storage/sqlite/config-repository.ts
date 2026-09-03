@@ -10,7 +10,7 @@ function readConfigRow(db: DatabaseSync, sessionKey: string): SessionConfigRow |
     .prepare(
       `SELECT session_key, thinking_level, reasoning_level, verbose_level, elevated_mode,
               model_override, provider_override, working_directory_override, response_language,
-              user_context_mode, updated_at
+              user_context_mode, fixed_model, updated_at
        FROM session_config WHERE session_key = ?`,
     )
     .get(sessionKey) as SessionConfigRow | undefined;
@@ -36,13 +36,13 @@ export function listSessionWorkspaceOverrides(): Array<{ sessionKey: string; wor
 export function setSessionConfig(sessionKey: string, config: SessionAgentConfig, cwd: string): SessionAgentConfig {
   return runSqliteWriteTransaction((db) => {
     ensureSessionInTransaction(db, sessionKey, cwd);
-    const updatedAt = Date.now();
+    const updatedAt = Math.max(Date.now(), (readConfigRow(db, sessionKey)?.updated_at ?? 0) + 1);
     const next = { ...config, updatedAt };
     db.prepare(
       `INSERT INTO session_config (
         session_key, thinking_level, reasoning_level, verbose_level, elevated_mode,
-        model_override, provider_override, working_directory_override, response_language, user_context_mode, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        model_override, provider_override, working_directory_override, response_language, user_context_mode, fixed_model, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(session_key) DO UPDATE SET
         thinking_level = excluded.thinking_level,
         reasoning_level = excluded.reasoning_level,
@@ -53,6 +53,7 @@ export function setSessionConfig(sessionKey: string, config: SessionAgentConfig,
         working_directory_override = excluded.working_directory_override,
         response_language = excluded.response_language,
         user_context_mode = excluded.user_context_mode,
+        fixed_model = excluded.fixed_model,
         updated_at = excluded.updated_at`,
     ).run(
       sessionKey,
@@ -65,6 +66,7 @@ export function setSessionConfig(sessionKey: string, config: SessionAgentConfig,
       next.workingDirectoryOverride ?? null,
       next.responseLanguage ?? null,
       next.userContextMode ?? null,
+      next.fixedModel ? 1 : 0,
       updatedAt,
     );
     return next;

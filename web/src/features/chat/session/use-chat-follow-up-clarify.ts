@@ -222,6 +222,7 @@ export function useChatFollowUpClarify(options: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          configVersion: useChatSessionStore.getState().sessions[key]?.configVersion,
           clientMessageId: crypto.randomUUID(), delivery: 'next', content: trimmed || content,
           attachments: attachments?.length ? attachments : undefined, thinking: effectiveThinking,
           contextRefs: contextRefs?.map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),

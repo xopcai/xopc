@@ -1,8 +1,10 @@
+import { fetchConfiguredModelsCached } from '../api/registry-api';
+import { patchSessionAgentConfigView } from './patch-session-agent-config-view';
 import { useCallback, useRef, type RefObject } from 'react';
 
 import type { SessionInfo } from '@/features/chat/chat.types';
-import { modelPreferenceForAgent } from '@xopcai/gateway-contract';
-import { type Message, coerceReasoningLevel } from '@/features/chat/messages/messages.types';
+import { chooseModelThinking, modelPreferenceForAgent } from '@xopcai/gateway-contract';
+import { type Message } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
@@ -76,7 +78,7 @@ export function useChatSessionLoad(deps: {
     return modelSupportsReasoning(modelId).then((supports) => {
       if (gen !== thinkingSupportGenRef.current) return;
       const focused = store().focusedSessionKey;
-      if (focused) store().patchSessionMeta(focused, { modelSupportsThinking: supports });
+      if (focused && store().sessions[focused]?.model === modelId) store().patchSessionMeta(focused, { modelSupportsThinking: supports });
     });
   }, [thinkingSupportGenRef]);
 
@@ -84,14 +86,7 @@ export function useChatSessionLoad(deps: {
     async (key: string) => {
       try {
         const cfg = await sessionMgrRef.current.loadSessionAgentConfig(key);
-        store().patchSessionMeta(key, {
-          model: cfg.model,
-          thinkingLevel: cfg.thinkingLevel,
-          reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
-          effectiveWorkspacePath: cfg.effectiveWorkspacePath,
-          workspaceSource: cfg.workspaceSource,
-          userContextMode: cfg.userContextMode,
-        });
+        patchSessionAgentConfigView(key, cfg);
         void refreshModelThinkingSupport(cfg.model);
       } catch {
         /* ignore */
@@ -202,14 +197,7 @@ export function useChatSessionLoad(deps: {
             historyBeforeCursorRef.current = nextBeforeCursor ?? null;
             const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
             if (!isStillViewingSession(k)) return loaded;
-            store().patchSessionMeta(k, {
-              model: cfg.model,
-              thinkingLevel: cfg.thinkingLevel,
-              reasoningLevel: coerceReasoningLevel(cfg.activityDetail.default),
-              effectiveWorkspacePath: cfg.effectiveWorkspacePath,
-              workspaceSource: cfg.workspaceSource,
-              userContextMode: cfg.userContextMode,
-            });
+            patchSessionAgentConfigView(k, cfg);
             void refreshModelThinkingSupport(cfg.model);
             return loaded;
           }
@@ -303,41 +291,44 @@ export function useChatSessionLoad(deps: {
     }
   }, [hasMore, loadSessionById, messagesLenRef]);
 
-  const onSessionModelChange = useCallback(
-    async (modelId: string) => {
-      if (!sessionKey) return;
-      try {
-        store().setShellError(null);
-        if (taskId) await sessionMgrRef.current.patchTaskConversationModel(taskId, modelId);
-        else await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { model: modelId });
-        store().patchSessionMeta(sessionKey, { model: modelId });
-        rememberAgentModel(sessionAgentId, {
-          modelRef: modelId,
-          thinkingLevel: store().sessions[sessionKey]?.thinkingLevel,
-        });
-        void refreshModelThinkingSupport(modelId);
-      } catch (e) {
-        store().setShellError(e instanceof Error ? e.message : 'Failed to switch model');
+  const updateModelConfig = useCallback(async (modelId: string, level?: string) => {
+    if (!sessionKey) throw new Error('No active session');
+    const current = store().sessions[sessionKey];
+    if (current?.modelConfigSaving) throw new Error('Model configuration is being saved');
+    store().patchSessionMeta(sessionKey, { modelConfigSaving: true });
+    try {
+      store().setShellError(null);
+      if (level === undefined) {
+        const model = (await fetchConfiguredModelsCached()).find((item) => item.id === modelId);
+        if (model?.thinking) {
+          const remembered = modelPreferenceForAgent(readNewSessionPreferences(), sessionAgentId)?.thinkingByModel?.[modelId];
+          level = chooseModelThinking(model.thinking, current?.thinkingLevel, remembered);
+        }
       }
-    },
-    [sessionAgentId, sessionKey, taskId, sessionMgrRef, refreshModelThinkingSupport],
-  );
+      const cfg = taskId
+        ? await sessionMgrRef.current.patchTaskConversationModel(taskId, modelId, level, current?.configVersion)
+        : await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, {
+            model: modelId, thinkingLevel: level, configVersion: current?.configVersion,
+          });
+      patchSessionAgentConfigView(sessionKey, cfg);
+      rememberAgentModel(sessionAgentId, { modelRef: cfg.model, thinkingLevel: cfg.thinkingLevel });
+      void refreshModelThinkingSupport(cfg.model);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update model configuration';
+      store().setShellError(message);
+      const cfg = await sessionMgrRef.current.loadSessionAgentConfig(sessionKey).catch(() => null);
+      if (cfg) patchSessionAgentConfigView(sessionKey, cfg);
+      throw error;
+    } finally {
+      store().patchSessionMeta(sessionKey, { modelConfigSaving: false });
+    }
+  }, [sessionKey, sessionAgentId, taskId, sessionMgrRef, refreshModelThinkingSupport]);
 
-  const onSessionThinkingLevelChange = useCallback(
-    async (level: string) => {
-      if (!sessionKey) return;
-      try {
-        store().setShellError(null);
-        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, { thinkingLevel: level });
-        store().patchSessionMeta(sessionKey, { thinkingLevel: level });
-        const modelRef = store().sessions[sessionKey]?.model;
-        if (modelRef) rememberAgentModel(sessionAgentId, { modelRef, thinkingLevel: level });
-      } catch (e) {
-        store().setShellError(e instanceof Error ? e.message : 'Failed to update thinking level');
-      }
-    },
-    [sessionAgentId, sessionKey, sessionMgrRef],
-  );
+  const onSessionModelChange = updateModelConfig;
+  const onSessionThinkingLevelChange = useCallback(async (level: string) => {
+    const model = sessionKey ? store().sessions[sessionKey]?.model : undefined;
+    if (model) await updateModelConfig(model, level);
+  }, [sessionKey, updateModelConfig]);
   const onSessionWorkingDirectoryChange = useCallback(
     async (path: string) => {
       const nextPath = path.trim();

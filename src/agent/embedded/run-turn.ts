@@ -377,6 +377,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         };
       }
 
+      runner.piSm.appendCustomEntry('xopc.model-selection', {
+        runId,
+        model: `${session.agent.state.model?.provider ?? resolvedModel.provider}/${session.agent.state.model?.id ?? resolvedModel.id}`,
+        thinkingLevel: session.agent.state.thinkingLevel,
+      });
       return { ok: true, lastAssistantText: lastAssistantPlainText(session) };
     } finally {
       runAbortSignal.removeEventListener('abort', abortListener);

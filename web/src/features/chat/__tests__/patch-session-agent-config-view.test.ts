@@ -40,4 +40,11 @@ describe('patchSessionAgentConfigView', () => {
     expect(useChatSessionStore.getState().sessions[sessionKey]?.model).toBe('anthropic/claude-sonnet-4-6');
     expect(useChatSessionStore.getState().sessions[sessionKey]?.model).not.toBe(defaultSessionMeta().model);
   });
+  it('ignores an older background response after a successful model change', () => {
+    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
+    patchSessionAgentConfigView(sessionKey, { model: 'test/new', thinkingLevel: 'high', configVersion: 20 });
+    patchSessionAgentConfigView(sessionKey, { model: 'test/old', thinkingLevel: 'low', configVersion: 19 });
+    expect(useChatSessionStore.getState().sessions[sessionKey]).toMatchObject({ model: 'test/new', thinkingLevel: 'high', configVersion: 20 });
+  });
+
 });

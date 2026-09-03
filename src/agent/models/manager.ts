@@ -26,6 +26,7 @@ export class ModelManager {
   private currentModelName: string;
   private currentProvider: string;
   private sessionModels: Map<string, string> = new Map();
+  private fixedSessionModels = new Set<string>();
   /** Baseline model from `agents.list` / defaults merge when the session agent is created. */
   private sessionProfileDefaults: Map<string, string> = new Map();
   private sessionProfileFallbacks: Map<string, string[]> = new Map();
@@ -109,9 +110,17 @@ export class ModelManager {
     }
   }
 
+  /** Restore persisted identity even if its provider is temporarily unavailable. */
+  restoreSessionModel(sessionKey: string, modelRef: string, fixed: boolean): void {
+    this.sessionModels.set(sessionKey, modelRef);
+    if (fixed) this.fixedSessionModels.add(sessionKey);
+    else this.fixedSessionModels.delete(sessionKey);
+  }
+
   /** Drop in-memory session override so the global default is used again. */
   clearSessionModelOverride(sessionKey: string): void {
     this.sessionModels.delete(sessionKey);
+    this.fixedSessionModels.delete(sessionKey);
   }
 
   /**
@@ -175,6 +184,7 @@ export class ModelManager {
     if (!parsed) {
       return [];
     }
+    if (this.fixedSessionModels.has(sessionKey)) return [parsed];
     return resolveFallbackCandidates({
       cfg: this.config,
       provider: parsed.provider,

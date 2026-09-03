@@ -36,7 +36,7 @@ function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
 
 function registerSessionRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
-  registerSessionsRoutes(app, { service: service as GatewayService });
+  registerSessionsRoutes(app, { service: { ...service, sessions: { initializeChatModel: vi.fn(async () => ({ ok: true })), getFixedAgentConfig: vi.fn(async () => ({ model: 'test/model', thinkingLevel: 'off', configVersion: 1, fixedModel: true })), ...service.sessions } } as GatewayService });
   return app;
 }
 
@@ -418,8 +418,6 @@ describe('project association routes', () => {
     expect(res.status).toBe(201);
     expect(patchAgentConfig).toHaveBeenCalledOnce();
     expect(patchAgentConfig).toHaveBeenCalledWith(expect.any(String), {
-      model: 'openai/gpt-test',
-      thinkingLevel: 'high',
       userContextMode: 'temporary',
     });
     expect(patchAgentConfig.mock.invocationCallOrder[0]).toBeLessThan(getSession.mock.invocationCallOrder[0]!);

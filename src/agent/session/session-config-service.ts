@@ -14,6 +14,9 @@
  * (e.g. new per-session overrides) only touch this file.
  */
 
+import { chooseModelThinking, type ModelThinkingValue } from '@xopcai/gateway-contract';
+import { getModelThinking } from '../../providers/model-thinking.js';
+
 import { mkdir } from 'node:fs/promises';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
@@ -44,6 +47,8 @@ export interface SessionConfigServiceOptions {
 
 export interface PatchSessionAgentConfigInput {
   thinkingLevel?: string;
+  fixedModel?: boolean;
+  configVersion?: number;
   model?: string | null;
   /** Preferred activity-detail field. `null` clears the session override. */
   activityDetailLevel?: string | null;
@@ -58,6 +63,7 @@ export interface PatchSessionAgentConfigInput {
 export interface PatchSessionAgentConfigResult {
   ok: boolean;
   error?: string;
+  code?: 'CONFIG_CHANGED' | 'INVALID_MODEL' | 'INVALID_THINKING';
 }
 
 export class SessionConfigService {
@@ -70,33 +76,47 @@ export class SessionConfigService {
   /**
    * Apply a partial patch (model / thinking / reasoning / working directory) to
    * a session's persisted config. Returns `{ ok: false, error }` on the first
-   * invalid field — earlier fields that succeeded are NOT rolled back, matching
-   * the previous behaviour.
+   * invalid field. Model and thinking are validated together and committed in one write.
    */
   async patch(
     sessionKey: string,
     partial: PatchSessionAgentConfigInput,
   ): Promise<PatchSessionAgentConfigResult> {
-    if (partial.model !== undefined) {
+    if (partial.model !== undefined || partial.thinkingLevel !== undefined || partial.fixedModel) {
+      const existing = await this.opts.sessionConfigStore.get(sessionKey);
+      if (partial.configVersion !== undefined && partial.configVersion !== (existing?.updatedAt ?? 0)) {
+        return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
+      }
       if (partial.model === null || partial.model === '') {
+        if (partial.fixedModel || existing?.fixedModel) {
+          return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
+        }
         await this.clearModelOverride(sessionKey);
       } else {
-        const ok = await this.opts.modelManager.switchModelForSession(sessionKey, partial.model);
-        if (!ok) {
-          return { ok: false, error: 'Invalid model' };
+        const ref = partial.model ?? existing?.modelOverride ?? this.opts.modelManager.getModelForSession(sessionKey);
+        const model = this.opts.modelManager.findByRef(ref);
+        if (!model) return { ok: false, code: 'INVALID_MODEL', error: `Model unavailable: ${ref}` };
+        const capabilities = getModelThinking(model);
+        const requested = partial.thinkingLevel === undefined ? undefined : normalizeThinkLevel(partial.thinkingLevel);
+        if (partial.thinkingLevel !== undefined && (!requested || !capabilities.options.includes(requested as ModelThinkingValue))) {
+          return { ok: false, code: 'INVALID_THINKING', error: 'This thinking level is not supported by the selected model' };
         }
-        await this.opts.sessionConfigStore.update(sessionKey, { modelOverride: partial.model });
-        this.opts.agentManager.setModelForSession(sessionKey, partial.model);
+        const thinkingLevel = requested ?? chooseModelThinking(capabilities, existing?.thinkingLevel);
+        const modelRef = `${model.provider}/${model.id}`;
+        const updated = await this.opts.sessionConfigStore.update(sessionKey, {
+          modelOverride: modelRef,
+          thinkingLevel,
+          fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
+        });
+        this.opts.modelManager.restoreSessionModel(sessionKey, modelRef, updated.fixedModel === true);
+        try {
+          this.opts.agentManager.setModelForSession(sessionKey, modelRef);
+          this.opts.agentManager.setThinkingLevel(sessionKey, thinkingLevel as ThinkingLevel);
+        } catch (err) {
+          this.opts.agentManager.removeAgent(sessionKey);
+          log.warn({ err, sessionKey, modelRef }, 'Saved model configuration; runtime will reload before the next turn');
+        }
       }
-    }
-
-    if (partial.thinkingLevel !== undefined) {
-      const normalized = normalizeThinkLevel(partial.thinkingLevel);
-      if (!normalized) {
-        return { ok: false, error: 'Invalid thinking level' };
-      }
-      await this.opts.sessionConfigStore.update(sessionKey, { thinkingLevel: normalized });
-      this.opts.agentManager.setThinkingLevel(sessionKey, normalized as ThinkingLevel);
     }
 
     const activityDetailLevel = partial.activityDetailLevel !== undefined
@@ -157,6 +177,29 @@ export class SessionConfigService {
       if (!result.ok) return result;
     }
 
+    return { ok: true };
+  }
+
+  /** Materialize a restored/new chat choice; unavailable identities stay visible for repair. */
+  async initializeModelSelection(sessionKey: string, modelRef: string, thinkingLevel?: string, configVersion?: number): Promise<PatchSessionAgentConfigResult> {
+    const existing = await this.opts.sessionConfigStore.get(sessionKey);
+    if (configVersion !== undefined && configVersion !== (existing?.updatedAt ?? 0)) {
+      return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
+    }
+    const model = this.opts.modelManager.findByRef(modelRef);
+    if (model) {
+      return this.patch(sessionKey, {
+        model: `${model.provider}/${model.id}`,
+        thinkingLevel: chooseModelThinking(getModelThinking(model), thinkingLevel ?? existing?.thinkingLevel),
+        fixedModel: true,
+        configVersion,
+      });
+    }
+    if (!modelRef.trim() || !modelRef.includes('/')) return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
+    await this.opts.sessionConfigStore.update(sessionKey, {
+      modelOverride: modelRef, fixedModel: true, thinkingLevel: normalizeThinkLevel(thinkingLevel) ?? existing?.thinkingLevel ?? 'off',
+    });
+    this.opts.modelManager.restoreSessionModel(sessionKey, modelRef, true);
     return { ok: true };
   }
 

@@ -1,6 +1,8 @@
+import { mutationOptions, type QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { apiFetch, formatApiHttpError } from '../api/client';
+import { queryKeys } from './keys';
 
 export type ChatModelOption = {
   id: string;
@@ -74,9 +76,8 @@ export function resolveEffectiveModelId(
   localOverride: string | null,
 ): string {
   const gatewayDefault = payload?.defaultId?.trim() || payload?.items[0]?.id || '';
-  const items = payload?.items ?? [];
   const override = localOverride?.trim();
-  if (override && items.some((m) => m.id === override)) return override;
+  if (override) return override;
   return gatewayDefault;
 }
 
@@ -118,8 +119,35 @@ export async function setSessionModelRef(
     body: JSON.stringify({ model: modelRef.trim() }),
   });
   if (res.ok) return true;
-  const errBody = (await res.json().catch(() => ({}))) as { error?: string };
-  throw new Error(errBody.error ?? formatApiHttpError(res.status, res.statusText));
+  const errBody = (await res.json().catch(() => ({}))) as { error?: string | { message?: string } };
+  const message = typeof errBody.error === 'string' ? errBody.error : errBody.error?.message;
+  throw new Error(message ?? formatApiHttpError(res.status, res.statusText));
+}
+
+export function sessionModelMutationOptions(
+  queryClient: QueryClient,
+  sessionKey: string,
+  taskId?: string,
+) {
+  return mutationOptions({
+    mutationKey: ['session-model', sessionKey, taskId],
+    scope: { id: `session-model:${taskId || sessionKey}` },
+    mutationFn: (modelRef: string) => setSessionModelRef(sessionKey, modelRef, taskId),
+    onSuccess: async (_result, modelRef) => {
+      const queryKey = queryKeys.sessionAgentConfig(sessionKey);
+      // Discard reads started before the save so they cannot restore the old model.
+      await queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData<Awaited<ReturnType<typeof fetchSessionAgentConfig>>>(
+        queryKey,
+        (config) => config ? { ...config, model: modelRef.trim() } : undefined,
+      );
+      // The gateway may also have adjusted the thinking level for this model.
+      await queryClient.invalidateQueries({ queryKey, exact: true });
+      if (taskId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
+      }
+    },
+  });
 }
 
 export async function setSessionInitialAgentConfig(

@@ -46,4 +46,13 @@ describe('ModelManager session initialization', () => {
       ),
     ).toBe('minimax-cn/MiniMax-M2.7');
   });
+  it('keeps a fixed unavailable identity and excludes every fallback candidate', () => {
+    const manager = new ModelManager({ defaultModel: 'openai/gpt-4o' });
+    manager.setSessionProfileDefault('chat', 'openai/gpt-4o', ['minimax-cn/MiniMax-M2.7']);
+    manager.restoreSessionModel('chat', 'xopc-cloud/deepseek-v4-flash', true);
+    expect(manager.getModelForSession('chat')).toBe('xopc-cloud/deepseek-v4-flash');
+    expect(manager.getFallbackCandidatesForSession('chat')).toEqual([{ provider: 'xopc-cloud', model: 'deepseek-v4-flash' }]);
+    expect(() => manager.getResolvedModelForSession('chat')).toThrow('Model not found');
+  });
+
 });

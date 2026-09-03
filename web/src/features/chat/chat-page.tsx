@@ -1197,6 +1197,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
               ) : null}
               <ChatComposer
                 disabled={
+                  !session.modelConfigReady || session.modelConfigSaving ||
                   isSessionTransitioning ||
                   Boolean(clarify.clarifyPrompt)
                 }
@@ -1231,7 +1232,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 showModelSelector
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
-                  isSessionTransitioning || stream.streaming
+                  isSessionTransitioning || stream.streaming || stream.sending || session.modelConfigSaving
                 }
                 onChatAgentChange={
                   !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined

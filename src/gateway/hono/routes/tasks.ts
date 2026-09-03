@@ -1,3 +1,4 @@
+import { patchChatModelConfig } from './chat-model-config.js';
 import type { Hono } from 'hono';
 import {
   ProjectMonitoringUpdateSchema,
@@ -201,13 +202,10 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.patch('/api/tasks/:id/conversation/config', taskRateLimit, async (c) => {
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-    const model = typeof body?.model === 'string' ? body.model.trim() : '';
-    if (!model) return c.json({ ok: false, error: 'Missing model' }, 400);
+    if (!body) return c.json({ ok: false, error: 'Invalid configuration' }, 400);
     const active = conversations.getActiveSession(c.req.param('id'));
     if (!active?.sessionKey) return c.json({ ok: false, error: 'Task has no active conversation' }, 404);
-    const result = await deps.service.sessions.patchAgentConfig(active.sessionKey, { model });
-    if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
-    return c.json({ ok: true, activeSessionKey: active.sessionKey });
+    return patchChatModelConfig(c, deps.service, active.sessionKey, body);
   });
 
   authenticated.get('/api/tasks/:id/conversation/history', async (c) => {

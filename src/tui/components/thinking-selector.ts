@@ -25,6 +25,7 @@ export const TUI_THINKING_LEVEL_DESCRIPTIONS: Record<ThinkLevel, string> = {
   medium: 'Moderate reasoning',
   high: 'Deep reasoning',
   xhigh: 'Maximum reasoning',
+  max: 'Maximum reasoning effort',
   adaptive: 'Adapt to task complexity',
 };
 

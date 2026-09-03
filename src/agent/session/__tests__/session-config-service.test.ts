@@ -142,4 +142,51 @@ describe('SessionConfigService project workspace', () => {
     expect(await service.patch(SESSION_KEY, { userContextMode: 'invalid' as never }))
       .toEqual({ ok: false, error: 'Invalid user context mode' });
   });
+  function modelFixture() {
+    const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
+    const runtime = { setModelForSession: vi.fn(), setThinkingLevel: vi.fn(), removeAgent: vi.fn() };
+    const modelManager = {
+      findByRef: vi.fn((ref: string) => ref === 'test/missing' ? undefined : ({
+        provider: 'test', id: ref.split('/')[1], reasoning: true,
+        thinkingLevelMap: { off: null, minimal: null, xhigh: null, max: 'max' },
+      })),
+      restoreSessionModel: vi.fn(),
+      getModelForSession: () => 'test/first',
+    };
+    const service = new SessionConfigService({ sessionStore: {} as never, sessionConfigStore,
+      modelManager: modelManager as never, agentManager: runtime as never, getConfig: () => minimalConfig });
+    return { service, sessionConfigStore, runtime, modelManager };
+  }
+
+  it('commits model and level together and rejects stale writers without runtime changes', async () => {
+    const { service, sessionConfigStore, runtime } = modelFixture();
+    expect(await service.patch(SESSION_KEY, { model: 'test/first', thinkingLevel: 'high', fixedModel: true, configVersion: 0 })).toEqual({ ok: true });
+    const saved = await sessionConfigStore.get(SESSION_KEY);
+    expect(saved).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high', fixedModel: true });
+    runtime.setModelForSession.mockClear();
+    expect(await service.patch(SESSION_KEY, { model: 'test/second', thinkingLevel: 'off', configVersion: saved!.updatedAt })).toMatchObject({ ok: false, code: 'INVALID_THINKING' });
+    expect(await sessionConfigStore.get(SESSION_KEY)).toEqual(saved);
+    expect(await service.patch(SESSION_KEY, { model: 'test/second', thinkingLevel: 'low', configVersion: 0 })).toMatchObject({ ok: false, code: 'CONFIG_CHANGED' });
+    expect(runtime.setModelForSession).not.toHaveBeenCalled();
+    expect(await service.patch(SESSION_KEY, { model: 'test/second', thinkingLevel: 'max', configVersion: saved!.updatedAt })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(SESSION_KEY))!.updatedAt).toBeGreaterThan(saved!.updatedAt!);
+  });
+
+  it('keeps persisted configuration authoritative if runtime synchronization fails', async () => {
+    const { service, sessionConfigStore, runtime } = modelFixture();
+    runtime.setModelForSession.mockImplementation(() => { throw new Error('Runtime unavailable'); });
+    expect(await service.patch(SESSION_KEY, { model: 'test/first', thinkingLevel: 'high', fixedModel: true })).toEqual({ ok: true });
+    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
+    expect(runtime.removeAgent).toHaveBeenCalledWith(SESSION_KEY);
+  });
+
+  it('restores unavailable models visibly and normalizes stale effort preferences for new chats', async () => {
+    const { service, sessionConfigStore, modelManager } = modelFixture();
+    await service.initializeModelSelection(SESSION_KEY, 'test/missing', 'high');
+    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/missing', fixedModel: true });
+    expect(modelManager.restoreSessionModel).toHaveBeenCalledWith(SESSION_KEY, 'test/missing', true);
+    await service.initializeModelSelection(SESSION_KEY, 'test/first', 'adaptive');
+    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'medium' });
+  });
+
 });

@@ -1,3 +1,4 @@
+import { useChatSessionStore } from '../session/chat-session-store';
 import {
   SESSION_INPUT_REQUEST_TIMEOUT_MS,
   SESSION_INPUT_RETRY_DELAYS_MS,
@@ -366,8 +367,11 @@ export class MessageSender {
         ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
         : attachments;
 
+    const selection = useChatSessionStore.getState().sessions[chatId];
+    if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
+    const configVersion = selection?.configVersion;
     const origin = await waitForEndpointTurnClaim(this._abort.signal);
-    const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs })}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
+    const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
     const clientMessageId = claimSubmissionId(chatId, fingerprint);
     const res = await postSessionInput(
       apiUrl(taskId
@@ -377,6 +381,7 @@ export class MessageSender {
           : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
       JSON.stringify({
         clientMessageId,
+        configVersion,
         delivery: 'next',
         content,
         attachments: capped,
@@ -389,7 +394,8 @@ export class MessageSender {
     );
 
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; code?: string } };
+      if (body.error?.code === 'CONFIG_CHANGED') window.dispatchEvent(new CustomEvent('session-model-config-stale', { detail: { sessionKey: chatId } }));
       throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
     }
 

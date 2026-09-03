@@ -32,6 +32,8 @@ export function shouldShowHistoryLoading(status: SessionHistoryStatus | undefine
 export type ChatSessionSlice = {
   name: string | null;
   model: string;
+  configVersion?: number;
+  modelConfigSaving?: boolean;
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
@@ -69,6 +71,8 @@ type ChatSessionStoreActions = {
         ChatSessionSlice,
         | 'name'
         | 'model'
+        | 'configVersion'
+        | 'modelConfigSaving'
         | 'thinkingLevel'
         | 'reasoningLevel'
         | 'modelSupportsThinking'
@@ -216,6 +220,8 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
   return {
     name: slice.name,
     model: slice.model,
+    configVersion: slice.configVersion,
+    modelConfigSaving: slice.modelConfigSaving,
     thinkingLevel: slice.thinkingLevel,
     reasoningLevel: slice.reasoningLevel,
     modelSupportsThinking: slice.modelSupportsThinking,
@@ -243,6 +249,8 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
   ChatSessionSlice,
   | 'name'
   | 'model'
+        | 'configVersion'
+        | 'modelConfigSaving'
   | 'thinkingLevel'
   | 'reasoningLevel'
   | 'modelSupportsThinking'
@@ -254,6 +262,8 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
   return {
     name: current.name,
     model: current.model,
+    configVersion: current.configVersion,
+    modelConfigSaving: current.modelConfigSaving,
     thinkingLevel: current.thinkingLevel,
     reasoningLevel: current.reasoningLevel,
     modelSupportsThinking: current.modelSupportsThinking,

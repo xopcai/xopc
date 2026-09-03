@@ -35,4 +35,12 @@ describe('web new-session preferences', () => {
       lastChatScope: { kind: 'none' },
     });
   });
+  it('remembers separate effort choices when moving between models', () => {
+    rememberAgentModel('coder', { modelRef: 'test/a', thinkingLevel: 'high' });
+    rememberAgentModel('coder', { modelRef: 'test/b', thinkingLevel: 'low' });
+    expect(readNewSessionPreferences().modelByAgent.coder).toMatchObject({
+      modelRef: 'test/b', thinkingByModel: { 'test/a': 'high', 'test/b': 'low' },
+    });
+  });
+
 });

@@ -18,3 +18,5 @@ export * from './notifications.js';
 export * from './files.js';
 export * from './mobile-privacy.js';
 export * from './device-pairing.js';
+
+export * from './model-selection.js';
