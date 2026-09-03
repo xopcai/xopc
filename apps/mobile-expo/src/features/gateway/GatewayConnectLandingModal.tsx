@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMessages } from '../../i18n/messages';
 import { useGatewayStore } from '../../stores/gateway-store';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { spacing, typography, useTheme } from '../../theme';
 import { PrivacyScreen } from '../privacy/PrivacyScreen';
 import { switchGatewayProfile } from './gateway-switch-service';
@@ -25,6 +26,8 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   const m = useMessages();
   const copy = m.gatewayConnect;
   const f = copy.flow;
+  const language = usePreferencesStore(s => s.language);
+  const setLanguage = usePreferencesStore(s => s.setLanguage);
   const unauthorized = useGatewayStore(s => s.unauthorized);
   const profiles = useGatewayStore(s => s.profiles);
   const activeGatewayId = useGatewayStore(s => s.activeGatewayId);
@@ -34,21 +37,21 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const [more, setMore] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<keyof typeof f | 'cameraDenied' | 'invalidPairingLink' | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState<ParsedGatewayQr | null>(null);
   const controller = useRef<AbortController | null>(null);
   const wasReauth = useRef(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const errorCopy = (reason: unknown) => {
+  const errorKey = (reason: unknown): keyof typeof f => {
     const code = reason instanceof Error ? reason.message : '';
-    if (code.includes('UPDATE_REQUIRED')) return f.update;
-    if (code.includes('EXPIRED')) return f.expired;
-    if (code.includes('REJECTED')) return f.rejected;
-    if (code.includes('CANCELLED')) return f.cancelled;
-    if (code.includes('IDENTITY')) return f.identity;
-    if (code.includes('ALREADY_PENDING') || code.includes('BUSY')) return f.pending;
-    return f.failed;
+    if (code.includes('UPDATE_REQUIRED')) return 'update';
+    if (code.includes('EXPIRED')) return 'expired';
+    if (code.includes('REJECTED')) return 'rejected';
+    if (code.includes('CANCELLED')) return 'cancelled';
+    if (code.includes('IDENTITY')) return 'identity';
+    if (code.includes('ALREADY_PENDING') || code.includes('BUSY')) return 'pending';
+    return 'failed';
   };
   const pairing = useMutation({
     mutationFn: (qr: ParsedGatewayQr) => {
@@ -63,7 +66,7 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
       onRequestClose();
     },
     onError: cause => {
-      if (!controller.current?.signal.aborted) setError(errorCopy(cause));
+      if (!controller.current?.signal.aborted) setError(errorKey(cause));
       setPending(readPendingDevicePairing());
     },
   });
@@ -82,23 +85,25 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   }, []);
 
   const openScanner = useCallback(async () => {
-    const granted = await requestGatewayQrCameraAccess(cameraPermission, requestCameraPermission, () => setError(copy.cameraDenied));
+    const granted = await requestGatewayQrCameraAccess(cameraPermission, requestCameraPermission, () => setError('cameraDenied'));
     if (granted) setScannerOpen(true);
-  }, [cameraPermission, copy.cameraDenied, requestCameraPermission]);
-  const connect = (qr: ParsedGatewayQr) => { setScannerOpen(false); setError(''); pairing.mutate(qr); };
+  }, [cameraPermission, requestCameraPermission]);
+  const connect = (qr: ParsedGatewayQr) => { setScannerOpen(false); setError(null); pairing.mutate(qr); };
   const cancel = async () => {
     controller.current?.abort();
-    try { await cancelPendingDevicePairing(); setPending(null); setError(''); }
-    catch (cause) { setError(errorCopy(cause)); setPending(readPendingDevicePairing()); }
+    try { await cancelPendingDevicePairing(); setPending(null); setError(null); }
+    catch (cause) { setError(errorKey(cause)); setPending(readPendingDevicePairing()); }
   };
   const paste = async () => {
     try {
       const qr = parseGatewayQrPayload(await Clipboard.getStringAsync());
-      if (qr) connect(qr); else setError(copy.invalidPairingLink);
-    } catch { setError(copy.invalidPairingLink); }
+      if (qr) connect(qr); else setError('invalidPairingLink');
+    } catch { setError('invalidPairingLink'); }
   };
   const busy = pairing.isPending || Boolean(progress);
-  const displayedError = error || (flowError ? errorCopy(new Error(flowError)) : '');
+  const displayedError = error === 'cameraDenied' || error === 'invalidPairingLink'
+    ? copy[error]
+    : error ? f[error] : flowError ? f[errorKey(new Error(flowError))] : '';
   const waiting = progress?.stage === 'approval';
   const title = help ? f.installTitle : progress ? (waiting ? f.waiting : progress.stage === 'completing' ? f.completing : f.connecting) : f.title;
 
@@ -107,7 +112,19 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
       <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: colors.surface.base }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.lg }}>
           {help ? <IconButton icon="arrow-left" onPress={() => setHelp(false)} accessibilityLabel={f.back} /> : <Text style={typography.title}>xopc</Text>}
-          {profiles.length > 0 && !busy ? <IconButton icon="close" onPress={onRequestClose} accessibilityLabel={copy.close} /> : <View />}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Button
+              mode="text"
+              icon="translate"
+              textColor={colors.text.secondary}
+              contentStyle={{ minHeight: spacing.xxxl }}
+              accessibilityLabel={`${m.settings.language}: ${language === 'en' ? m.settings.languageZh : m.settings.languageEn}`}
+              onPress={() => setLanguage(language === 'en' ? 'zh' : 'en')}
+            >
+              {language === 'en' ? m.settings.languageZh : m.settings.languageEn}
+            </Button>
+            {profiles.length > 0 && !busy ? <IconButton icon="close" onPress={onRequestClose} accessibilityLabel={copy.close} /> : null}
+          </View>
         </View>
         <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.lg }}>
           <Text accessibilityRole="header" style={[typography.largeTitle, { marginBottom: spacing.md }]}>{title}</Text>
@@ -132,19 +149,19 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
               {(progress || pending) && progress?.stage !== 'completing' ? <Button onPress={() => void cancel()}>{f.cancel}</Button> : null}
               {!progress && !pending ? <Button onPress={() => setHelp(true)}>{f.install}</Button> : null}
               {!progress ? <Button onPress={() => setMore(v => !v)}>{f.more}</Button> : null}
-              {error === copy.cameraDenied ? <Button onPress={() => void Linking.openSettings()}>{f.settings}</Button> : null}
+              {error === 'cameraDenied' ? <Button onPress={() => void Linking.openSettings()}>{f.settings}</Button> : null}
               {more ? <>
                 <Button disabled={busy} onPress={() => void paste()}>{copy.pastePairingLink}</Button>
                 <Button onPress={() => setPrivacyOpen(true)}>{m.privacy.title}</Button>
                 {profiles.filter(p => p.gatewayId !== activeGatewayId).map(p => <Button key={p.gatewayId} disabled={busy} onPress={() => {
-                  void switchGatewayProfile(p.gatewayId).then(r => { if (r.status === 'failed') setError(f.failed); else onRequestClose(); });
+                  void switchGatewayProfile(p.gatewayId).then(r => { if (r.status === 'failed') setError('failed'); else onRequestClose(); });
                 }}>{p.name}</Button>)}
               </> : null}
             </>}
           </View>
         </ScrollView>
         {!progress && !help ? <Text style={[typography.caption, { textAlign: 'center', padding: spacing.lg, color: colors.text.secondary }]}>{f.requirement}</Text> : null}
-        <GatewayQrScannerModal embedded visible={scannerOpen} onRequestClose={() => setScannerOpen(false)} onScanned={connect} onCameraDenied={() => setError(copy.cameraDenied)} />
+        <GatewayQrScannerModal embedded visible={scannerOpen} onRequestClose={() => setScannerOpen(false)} onScanned={connect} onCameraDenied={() => setError('cameraDenied')} />
         <Modal visible={privacyOpen} animationType="slide" onRequestClose={() => setPrivacyOpen(false)}><PrivacyScreen onClose={() => setPrivacyOpen(false)} /></Modal>
       </View>
     </Modal>
