@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   startLiveActivity: vi.fn(),
   updateLiveActivity: vi.fn(),
   endLiveActivity: vi.fn(),
-  memory: new Map<string, string>(),
   playerSources: [] as unknown[],
   playerOptions: [] as unknown[],
   mediaControlsError: null as Error | null,
@@ -47,14 +46,6 @@ vi.mock('expo-audio', () => ({
   }),
 }));
 
-vi.mock('../../../storage/mmkv', () => ({
-  KEYS: { readAloudConsent: 'voice.readAloudConsent' },
-  storage: {
-    getString: (key: string) => mocks.memory.get(key),
-    set: (key: string, value: string) => mocks.memory.set(key, value),
-  },
-}));
-
 vi.mock('../read-aloud-api', () => ({ generateSpeechChunk: mocks.generateSpeechChunk }));
 vi.mock('../read-aloud-live-activity', () => ({
   startReadAloudLiveActivity: mocks.startLiveActivity,
@@ -83,7 +74,6 @@ const input: ReadAloudInput = {
 describe('read aloud store', () => {
   beforeEach(() => {
     useReadAloudStore.getState().stop();
-    mocks.memory.clear();
     mocks.players.length = 0;
     mocks.playerSources.length = 0;
     mocks.playerOptions.length = 0;
@@ -98,24 +88,15 @@ describe('read aloud store', () => {
     });
   });
 
-  it('requires one-time consent before sending text to the speech provider', () => {
-    useReadAloudStore.getState().requestStart(input);
-
-    expect(useReadAloudStore.getState().consentRequired).toBe(true);
-    expect(mocks.generateSpeechChunk).not.toHaveBeenCalled();
-  });
-
   it('keeps the store idle when an app background event pauses without an active source', () => {
     useReadAloudStore.getState().pause();
     expect(useReadAloudStore.getState().status).toBe('idle');
   });
 
-  it('starts playback after consent and reuses the saved decision', async () => {
+  it('starts playback through the consent-protected speech API', async () => {
     useReadAloudStore.getState().requestStart(input);
-    useReadAloudStore.getState().acceptConsent();
 
     await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
-    expect(mocks.memory.get('voice.readAloudConsent')).toBe('accepted');
     expect(mocks.generateSpeechChunk).toHaveBeenCalledWith(expect.objectContaining({
       text: input.text,
       language: 'en-US',
@@ -135,7 +116,6 @@ describe('read aloud store', () => {
   });
 
   it('keeps core playback working when system media controls are unavailable', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     mocks.mediaControlsError = new Error('Native media controls failed');
 
     useReadAloudStore.getState().requestStart(input);
@@ -147,7 +127,6 @@ describe('read aloud store', () => {
   });
 
   it('waits for playable audio before activating system media controls', () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     mocks.generateSpeechChunk.mockImplementation(() => new Promise(() => {}));
 
     useReadAloudStore.getState().requestStart(input);
@@ -164,7 +143,6 @@ describe('read aloud store', () => {
   });
 
   it('uses the native playback-rate method when changing speed', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     useReadAloudStore.getState().requestStart(input);
 
     await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
@@ -174,7 +152,6 @@ describe('read aloud store', () => {
   });
 
   it('pauses native playback before releasing it when stopped', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     useReadAloudStore.getState().requestStart(input);
 
     await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
@@ -188,7 +165,6 @@ describe('read aloud store', () => {
   });
 
   it('reflects lock-screen pause and resume events in the global player', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     useReadAloudStore.getState().requestStart(input);
 
     await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
@@ -208,7 +184,6 @@ describe('read aloud store', () => {
   });
 
   it('reuses one media session across speech chunks', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     useReadAloudStore.getState().requestStart({
       ...input,
       text: 'A'.repeat(421),
@@ -239,7 +214,6 @@ describe('read aloud store', () => {
   });
 
   it('ends the media session and returns to idle when playback completes', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     useReadAloudStore.getState().requestStart(input);
 
     await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
@@ -264,7 +238,6 @@ describe('read aloud store', () => {
   });
 
   it('cancels preparation when the active message is tapped again', async () => {
-    mocks.memory.set('voice.readAloudConsent', 'accepted');
     let resolveSpeech: ((value: { bytes: Uint8Array; mimeType: string }) => void) | undefined;
     mocks.generateSpeechChunk.mockImplementation(() => new Promise((resolve) => {
       resolveSpeech = resolve;

@@ -30,6 +30,11 @@ export function AboutScreen() {
 
       <SettingsSection>
         <SettingsRow
+          icon="shield-account-outline"
+          label={m.privacy.title}
+          onPress={() => router.push('/settings/privacy')}
+        />
+        <SettingsRow
           icon="book-open-variant"
           iconColor={colors.accent}
           label={s.helpDocs}

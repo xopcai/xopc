@@ -36,6 +36,8 @@ import { GlobalReadAloudPlayer } from '@/features/voice/GlobalReadAloudPlayer';
 import { clearStaleReadAloudCache } from '@/features/voice/read-aloud-cache';
 import { clearStaleReadAloudLiveActivities } from '@/features/voice/read-aloud-live-activity';
 
+import { DataSharingConsentDialog } from '@/features/privacy/DataSharingConsentDialog';
+
 export default function RootLayout() {
   const router = useRouter();
   const prefsHydrated = usePreferencesStore((s) => s.hydrated);
@@ -193,6 +195,7 @@ export default function RootLayout() {
                 />
               </Stack>
               <GlobalReadAloudPlayer />
+              <DataSharingConsentDialog />
               <GatewayConnectLandingModal
                 visible={connectLandingVisible}
                 onRequestClose={onConnectLandingClose}

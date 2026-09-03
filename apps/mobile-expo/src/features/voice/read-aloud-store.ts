@@ -1,7 +1,6 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import { create } from 'zustand';
 
-import { KEYS, storage } from '../../storage/mmkv';
 import {
   recordInteractionPerformanceEvent,
   recordUsageEvent,
@@ -38,15 +37,12 @@ type ReadAloudState = {
   source: ReadAloudInput['source'] | null;
   status: ReadAloudStatus;
   error: ReadAloudError;
-  consentRequired: boolean;
   currentChunkIndex: number;
   chunkCount: number;
   currentTime: number;
   duration: number;
   rate: number;
   requestStart: (input: ReadAloudInput) => void;
-  acceptConsent: () => void;
-  declineConsent: () => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -58,7 +54,6 @@ const initialPlaybackState = {
   source: null,
   status: 'idle' as const,
   error: null,
-  consentRequired: false,
   currentChunkIndex: 0,
   chunkCount: 0,
   currentTime: 0,
@@ -67,7 +62,6 @@ const initialPlaybackState = {
 
 let activeInput: ReadAloudInput | null = null;
 let lastInput: ReadAloudInput | null = null;
-let pendingInput: ReadAloudInput | null = null;
 let chunks: string[] = [];
 let chunkFiles: Array<string | undefined> = [];
 let chunkDurations: number[] = [];
@@ -339,7 +333,6 @@ function startPlayback(input: ReadAloudInput): void {
     source: input.source,
     status: 'preparing',
     error: null,
-    consentRequired: false,
     currentChunkIndex: 0,
     chunkCount: chunks.length,
     currentTime: 0,
@@ -360,25 +353,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     if (sameSource && state.status === 'playing') return get().pause();
     if (sameSource && state.status === 'paused') return get().resume();
     if (sameSource && state.status === 'preparing') return get().stop();
-    if (storage.getString(KEYS.readAloudConsent) !== 'accepted') {
-      pendingInput = input;
-      set({ consentRequired: true });
-      return;
-    }
     startPlayback(input);
-  },
-
-  acceptConsent: () => {
-    storage.set(KEYS.readAloudConsent, 'accepted');
-    const input = pendingInput;
-    pendingInput = null;
-    set({ consentRequired: false });
-    if (input) startPlayback(input);
-  },
-
-  declineConsent: () => {
-    pendingInput = null;
-    set({ consentRequired: false });
   },
 
   pause: () => {

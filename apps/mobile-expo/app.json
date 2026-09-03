@@ -131,6 +131,7 @@
           "contactsPermission": "Allow $(PRODUCT_NAME) to find contacts you explicitly ask your assistant to use."
         }
       ],
+      "./plugins/with-ios-release-signing",
       "./plugins/with-ios-widget-version",
       [
         "expo-widgets",

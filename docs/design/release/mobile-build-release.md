@@ -16,6 +16,8 @@
 
 ## 发布前检查
 
+iOS 首次上架还需完成 [App Store 准备清单](./ios-app-store-readiness.md)：隐私政策、审核网关、商店素材及真机验证。TestFlight 上传成功不代表已满足正式上架条件。发布脚本会检查最终 IPA 的签名权限和隐私清单，并将报告保存为 `dist/ios/verification.json`。
+
 1. 确认要发布的代码已经提交，当前分支与远端同步。
 2. 确认工作区干净：
 
