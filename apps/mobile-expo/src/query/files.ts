@@ -75,6 +75,12 @@ export async function fetchFileResource(fileId: string): Promise<FileResource> {
   return FileResourceSchema.parse((await response.json() as { resource?: unknown }).resource);
 }
 
+export async function fetchFileHostPath(fileId: string): Promise<string> {
+  const response = await apiFetch(`/api/files/${encodeURIComponent(fileId)}/host-path`);
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { absolutePath: string }).absolutePath;
+}
+
 export async function resolveContextFileResources(
   kind: FileContextKind,
   id: string,

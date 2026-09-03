@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import { HtmlPreviewFrame } from '@/features/preview-runtime/html-preview-frame';
 import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 
 const loadMarkdownSplit = () => import('@/components/markdown/markdown-split');
@@ -122,12 +123,7 @@ function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdo
     }
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1 sm:px-4">
-        <iframe
-          title={props.descriptor.fileName}
-          className="min-h-0 w-full flex-1 rounded-lg border border-edge-subtle bg-white dark:border-edge dark:bg-[#1e1e1e]"
-          srcDoc={text}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads allow-forms allow-modals"
-        />
+        <HtmlPreviewFrame html={text} title={props.descriptor.fileName} />
       </div>
     );
   }

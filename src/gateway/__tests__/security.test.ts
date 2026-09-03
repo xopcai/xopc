@@ -123,6 +123,35 @@ describe('Gateway Security Fixes', () => {
   });
 
   describe('FIX-1: HTTP Security Headers', () => {
+    it('serves the HTML preview shell without credentials and preserves its isolated CSP', async () => {
+      const app = createHonoApp({ service: createMockService() });
+      const res = await app.request('/api/preview/html');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toContain('text/html');
+      expect(res.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      const csp = res.headers.get('Content-Security-Policy');
+      expect(csp).toContain("script-src 'unsafe-inline' https: blob:");
+      expect(csp).toContain('sandbox allow-scripts');
+      expect(csp).not.toContain('allow-same-origin');
+      expect(csp).toContain("frame-ancestors 'self'");
+      expect(await res.text()).not.toContain('test-token');
+    });
+
+    it('keeps adjacent routes and writes behind gateway auth and the console CSP', async () => {
+      const app = createHonoApp({ service: createMockService() });
+      for (const [path, method] of [
+        ['/api/preview/html', 'POST'],
+        ['/api/preview/html/other', 'GET'],
+        ['/api/config', 'GET'],
+      ] as const) {
+        const res = await app.request(path, { method });
+        expect(res.status).toBe(401);
+        expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+        expect(res.headers.get('Content-Security-Policy')).toContain("script-src 'self';");
+      }
+    });
+
     it('should include X-Frame-Options: DENY', async () => {
       const service = createMockService();
       const app = createHonoApp({ service, token: 'test' });
@@ -176,7 +205,8 @@ describe('Gateway Security Fixes', () => {
       expect(csp).not.toContain("script-src 'self' blob:");
       expect(csp).toContain("media-src 'self' blob: data:");
       expect(csp).toContain("frame-ancestors 'none'");
-      expect(csp).toContain("frame-src 'none'");
+      expect(csp).toContain("frame-src 'self'");
+      expect(csp?.match(/(?:^|; )script-src ([^;]+)/)?.[1]).toBe("'self'");
       expect(csp).toContain("form-action 'self'");
     });
   });
