@@ -1,5 +1,21 @@
 {
   "chat": {
+    "contentLinks": {
+      "open": "在 xopc 中打开",
+      "unavailable": "链接不可用",
+      "failed": "无法打开这个链接，请重试。",
+      "destinations": {
+        "chat": "打开会话",
+        "notes": "打开笔记",
+        "tasks": "打开任务",
+        "projects": "打开项目",
+        "workflows": "打开工作流",
+        "automations": "打开自动化",
+        "open": "打开应用",
+        "local-apps": "打开应用",
+        "settings": "打开设置"
+      }
+    },
     "typeMessage": "输入消息…",
     "sendMessage": "发送",
     "abort": "停止",

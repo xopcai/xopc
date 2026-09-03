@@ -88,11 +88,46 @@ export function resolveAppLink(raw: string, currentHref = window.location.href):
   }
 }
 
-export function decorateAppLinks(root: HTMLElement): void {
-  for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+export type AppLinkLabels = {
+  open: string;
+  unavailable: string;
+  destinations: Record<string, string>;
+};
+
+export function decorateAppLinks(
+  root: HTMLElement,
+  labels?: AppLinkLabels,
+  isWorkspaceLink?: (anchor: HTMLAnchorElement) => boolean,
+): void {
+  for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a')) {
+    if (isWorkspaceLink?.(anchor)) continue;
     const intent = resolveAppLink(anchor.getAttribute('href') ?? '');
     anchor.dataset.xopcLinkKind = intent.kind;
-    if (intent.kind !== 'external-http') continue;
+    if (intent.kind === 'blocked') {
+      anchor.removeAttribute('href');
+      anchor.removeAttribute('target');
+      anchor.setAttribute('aria-disabled', 'true');
+      if (labels) {
+        anchor.title = labels.unavailable;
+        anchor.dataset.xopcLinkHint = labels.unavailable;
+      }
+      continue;
+    }
+    if (intent.kind === 'internal-route') {
+      anchor.setAttribute('href', `#${intent.route}`);
+      anchor.removeAttribute('target');
+      if (labels) {
+        const root = intent.route.slice(1).split(/[/?#]/, 1)[0] ?? '';
+        const label = labels.destinations[root] ?? labels.open;
+        const original = anchor.dataset.xopcLinkLabel ?? anchor.textContent?.trim() ?? '';
+        anchor.dataset.xopcLinkLabel = original;
+        if (/^(?:xopc:\/\/|#\/)/i.test(original) || /^(?:Open(?: in xopc)?|打开)$/i.test(original)) {
+          anchor.textContent = label;
+        }
+        if (!anchor.title) anchor.title = label;
+      }
+      continue;
+    }
     anchor.target = '_blank';
     const rel = new Set(anchor.rel.split(/\s+/).filter(Boolean));
     rel.add('noopener');
@@ -116,19 +151,4 @@ export async function openExternalHttpLink(url: string): Promise<OpenExternalHtt
 
   window.open(intent.url, '_blank', 'noopener,noreferrer');
   return { ok: true };
-}
-
-export function rewriteSupportedAppLinksInMarkdown(markdown: string): string {
-  const xopcUrlPattern = String.raw`xopc:\/\/(?:settings|open\?)[^\s[\]()<>"']*`;
-  const markdownLinkPattern = new RegExp(String.raw`\[([^\]\n]*)\]\((${xopcUrlPattern})\)`, 'gi');
-  const bareUrlPattern = new RegExp(xopcUrlPattern, 'gi');
-  const rewrite = (raw: string): string => {
-    const intent = resolveAppLink(raw);
-    return intent.kind === 'internal-route' ? `#${intent.route}` : raw;
-  };
-  const rewrittenLinks = markdown.replace(markdownLinkPattern, (_match, label: string, raw: string) => {
-    const normalizedLabel = /^xopc:\/\//i.test(label.trim()) ? 'Open in xopc' : label;
-    return `[${normalizedLabel}](${rewrite(raw)})`;
-  });
-  return rewrittenLinks.replace(bareUrlPattern, rewrite);
 }

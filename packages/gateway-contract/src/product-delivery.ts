@@ -149,7 +149,9 @@ export function parseProductReferenceDeepLink(value: string): ProductReferenceLo
     const url = new URL(value);
     if (url.protocol !== 'xopc:' || url.hostname !== 'open') return null;
     const kind = ProductReferenceKindSchema.safeParse(url.searchParams.get('kind'));
-    const id = url.searchParams.get('id')?.trim();
+    // Older/model-authored session links use the session key as `key`.
+    const id = url.searchParams.get('id')?.trim()
+      || (kind.success && kind.data === 'session' ? url.searchParams.get('key')?.trim() : undefined);
     return kind.success && id ? { kind: kind.data, id } : null;
   } catch {
     return null;

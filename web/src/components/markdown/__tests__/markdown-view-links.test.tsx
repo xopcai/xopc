@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const mounted: Array<{ container: HTMLDivElement; unmount: () => void }> = [];
 
@@ -16,6 +17,7 @@ afterEach(() => {
     entry.container.remove();
   }
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
+  useLocaleStore.setState({ language: 'en' });
 });
 
 function LocationProbe() {
@@ -43,6 +45,66 @@ function renderMarkdown(
 }
 
 describe('MarkdownView links', () => {
+  const key = 'agent:coder:webchat:default:direct:chat_801605448ec548c9b90d1c4eb5024727';
+  const url = `xopc://open?kind=session&key=${key}`;
+
+  it.each([
+    `[Open in xopc](${url})`,
+    `[${url}](${url})`,
+    url,
+    `<${url}>`,
+    `[新会话](<${url}> "会话详情")`,
+    `[新会话][session]\n\n[session]: ${url}`,
+    `[${url.replace('_', '\\_')}]\\(${url.replace('_', '\\_')}\\)`,
+    `**新会话链接：**\n\n${url}。`,
+  ])('opens the reported session link: %s', (markdown) => {
+    const container = renderMarkdown(markdown);
+    const anchor = container.querySelector('a');
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+    expect(anchor?.getAttribute('href')).toBe(`#/chat/${encodeURIComponent(key)}`);
+    act(() => anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(container.querySelector('[data-location]')?.textContent).toBe(`/chat/${encodeURIComponent(key)}`);
+  });
+
+  it('localizes generic labels while preserving descriptive titles', () => {
+    useLocaleStore.setState({ language: 'zh' });
+    const container = renderMarkdown(`[Open in xopc](${url}) [需求讨论](${url})`);
+    const anchors = container.querySelectorAll('a');
+    expect(anchors[0]?.textContent).toBe('打开会话');
+    expect(anchors[1]?.textContent).toBe('需求讨论');
+    expect(anchors[1]?.title).toBe('打开会话');
+  });
+
+  it('shows unavailable targets without a clickable affordance', () => {
+    useLocaleStore.setState({ language: 'zh' });
+    const container = renderMarkdown('[无效](xopc://open?kind=session) [危险](javascript:alert%281%29)');
+    expect(container.querySelectorAll('a[href]')).toHaveLength(0);
+    for (const anchor of container.querySelectorAll('a')) {
+      expect(anchor.getAttribute('aria-disabled')).toBe('true');
+      expect(anchor.dataset.xopcLinkHint).toBe('链接不可用');
+    }
+  });
+
+  it('preserves native modified-click navigation', () => {
+    const container = renderMarkdown(`[新会话](${url})`);
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true });
+    act(() => container.querySelector('a')?.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(false);
+    expect(container.querySelector('[data-location]')?.textContent).toBe('/');
+  });
+
+  it('reports external opening failures', async () => {
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { shell: { openExternalUrl: vi.fn(async () => ({ ok: false, error: 'Failed' })) } },
+    });
+    const container = renderMarkdown();
+    await act(async () => {
+      container.querySelector('a')?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Unable to open this link');
+  });
+
   it('opens external links separately by default', () => {
     const anchor = renderMarkdown().querySelector('a');
 

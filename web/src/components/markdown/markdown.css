@@ -246,13 +246,31 @@ html.dark .markdown-code-copy-btn:hover {
   border-radius: 0;
 }
 
-.markdown-body a {
+.markdown-body a[href] {
   color: var(--color-accent-fg);
   text-decoration: none;
 }
 
-.markdown-body a:hover {
+.markdown-body a[href]:hover {
   text-decoration: underline;
+}
+
+.markdown-body a[href]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.markdown-body a[aria-disabled="true"] {
+  color: var(--color-fg-muted);
+  cursor: default;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body a[data-xopc-link-hint]::after {
+  content: ' · ' attr(data-xopc-link-hint);
+  color: var(--color-fg-subtle);
+  font-size: 0.85em;
 }
 
 .markdown-body hr {

@@ -6,7 +6,6 @@ import {
   decorateAppLinks,
   openExternalHttpLink,
   resolveAppLink,
-  rewriteSupportedAppLinksInMarkdown,
 } from '../app-link';
 
 afterEach(() => {
@@ -42,15 +41,6 @@ describe('app links', () => {
     expect(resolveAppLink('file:///tmp/private')).toEqual({ kind: 'blocked' });
     expect(resolveAppLink('https://user:password@example.com')).toEqual({ kind: 'blocked' });
     expect(resolveAppLink('/api/config')).toEqual({ kind: 'blocked' });
-  });
-
-  it('rewrites supported xopc links before Markdown sanitization', () => {
-    expect(rewriteSupportedAppLinksInMarkdown(
-      'Open [note](xopc://open?kind=note&id=note%2Fone) and [settings](xopc://settings/gateway).',
-    )).toBe('Open [note](#/notes/note%2Fone) and [settings](#/settings/gateway).');
-    expect(rewriteSupportedAppLinksInMarkdown(
-      '[xopc://open?kind=note&id=note-1](xopc://open?kind=note&id=note-1)',
-    )).toBe('[Open in xopc](#/notes/note-1)');
   });
 
   it('decorates only external links with safe new-tab attributes', () => {

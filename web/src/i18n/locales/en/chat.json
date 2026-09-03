@@ -1,5 +1,21 @@
 {
   "chat": {
+    "contentLinks": {
+      "open": "Open in xopc",
+      "unavailable": "Link unavailable",
+      "failed": "Unable to open this link. Please try again.",
+      "destinations": {
+        "chat": "Open session",
+        "notes": "Open note",
+        "tasks": "Open task",
+        "projects": "Open project",
+        "workflows": "Open workflow",
+        "automations": "Open automation",
+        "open": "Open app",
+        "local-apps": "Open app",
+        "settings": "Open settings"
+      }
+    },
     "typeMessage": "Type a message…",
     "sendMessage": "Send",
     "abort": "Abort",
