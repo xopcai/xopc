@@ -8,6 +8,11 @@ import type { Message } from '@/features/chat/messages/messages.types';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useChatSessionLoad } from '@/features/chat/session/use-chat-session-load';
+import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
+
+vi.mock('@/features/chat/session/new-chat-handoff', () => ({
+  openNewChatHandoff: vi.fn(async () => 'new-session'),
+}));
 
 const sessionKey = 'agent:main:webchat:default:direct:chat_auth_error';
 
@@ -22,6 +27,41 @@ describe('useChatSessionLoad', () => {
       shellError: null,
       sessions: {},
     });
+  });
+
+  it('explicitly drops an inherited project when creating an unscoped chat', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    let createNewSession!: ReturnType<typeof useChatSessionLoad>['createNewSession'];
+    function Harness() {
+      ({ createNewSession } = useChatSessionLoad({
+        sessionMgrRef: { current: {} as SessionManager },
+        routeSessionKeyRef: { current: sessionKey },
+        sendingRef: { current: false },
+        streamingRef: { current: false },
+        loadingSessionRef: { current: false },
+        messagesLenRef: { current: 0 },
+        thinkingSupportGenRef: { current: 0 },
+        navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main',
+        dismissClarifyOnSessionLoad: vi.fn(),
+        detachForNewConversation: vi.fn(),
+        sessionKey,
+        sessionAgentId: 'main',
+        currentProjectId: 'inherited-project',
+        hasMore: false,
+      }));
+      return null;
+    }
+    try {
+      await act(async () => root.render(<Harness />));
+      await act(async () => createNewSession({ forceNew: true, projectId: null }));
+      expect(openNewChatHandoff).toHaveBeenLastCalledWith(expect.objectContaining({ projectId: null, forceNew: true }));
+      await act(async () => createNewSession({ forceNew: true }));
+      expect(openNewChatHandoff).toHaveBeenLastCalledWith(expect.objectContaining({ projectId: 'inherited-project' }));
+    } finally {
+      act(() => root.unmount());
+    }
   });
 
   it('preserves a run error during a background transcript refresh', async () => {
