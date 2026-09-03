@@ -4,7 +4,7 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 
 // ── Thinking level ──────────────────────────────────────────────────
 
-export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'adaptive';
 
 // ── Wire attachment (API payload shape) ─────────────────────────────
 

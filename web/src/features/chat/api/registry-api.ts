@@ -1,3 +1,4 @@
+import type { ModelThinkingCapabilities } from '@xopcai/gateway-contract';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 
@@ -8,6 +9,7 @@ export type ConfiguredModel = {
   contextWindow?: number;
   maxTokens?: number;
   reasoning?: boolean;
+  thinking?: ModelThinkingCapabilities;
   vision?: boolean;
   recommended?: boolean;
 };

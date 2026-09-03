@@ -88,6 +88,7 @@ const thinkCommand: CommandDefinition = {
       medium: 'Medium thinking effort',
       high: 'High thinking effort',
       xhigh: 'Extra high thinking effort',
+      max: 'Maximum thinking effort',
       adaptive: 'Auto-adjust based on task complexity',
     };
     

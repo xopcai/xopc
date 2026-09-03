@@ -16,6 +16,7 @@ export interface SessionAgentConfig {
   verboseLevel?: VerboseLevel;
   elevatedMode?: ElevatedMode;
   modelOverride?: string;
+  fixedModel?: boolean;
   providerOverride?: string;
   workingDirectoryOverride?: string;
   responseLanguage?: ResponseLanguage;

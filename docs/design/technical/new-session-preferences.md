@@ -21,3 +21,15 @@ Web stores the versioned preference in `localStorage`. Mobile stores it in MMKV,
 Project removal is explicit: clients create a new session with no `projectId`; metadata patching uses `projectId: null` when detaching an existing empty shell.
 
 Empty-shell reuse and in-flight request coalescing are client concerns. Cache identity includes gateway, agent, and project scope; forced and temporary creation are not coalesced with reusable creation.
+
+## Concrete chat model selection
+
+The chat composer always shows a concrete provider/model and its supported thinking level. There is no default or automatic-model entry. On chat creation (or first idle access to an older chat), the gateway resolves the selection and persists it with `fixed_model = 1`. A remembered model that is no longer available stays selected and visible so the user can replace it explicitly.
+
+`GET /api/models` exposes `thinking` capabilities derived from the runtime model metadata. Custom models can declare `thinkingLevelMap` in `models.json`. The composer renders explicit levels, a binary control, or no control as appropriate. The current runtime has no supported adaptive effort value, so the picker does not offer one.
+
+Clients remember effort choices per model within each agent's preference. Changing models restores that model's remembered supported effort, otherwise retains the current supported effort, otherwise uses the provider capability's concrete initial value. Only successful writes update preferences.
+
+Chat configuration PATCH requests return the resolved configuration and `configVersion`. The version is the session configuration's monotonically increasing SQLite `updated_at`. Model and effort are validated before a single configuration write. Chat configuration writes and input acceptance share a session lock; stale versions are rejected, and a conversation with active or queued input cannot change model configuration. Input requests carry the displayed version. Failed runtime synchronization evicts the agent so the committed configuration is hydrated before the next turn.
+
+Fixed chat models do not use cross-model fallback. Provider errors keep the selected identity intact. Successful embedded turns append an `xopc.model-selection` audit entry containing the run ID and actual model/effort through the guarded transcript manager. Background sessions without a fixed chat selection retain their configured fallback behavior.

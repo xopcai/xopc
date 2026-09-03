@@ -1,3 +1,4 @@
+import { patchChatModelConfig } from './chat-model-config.js';
 import { randomUUID } from 'node:crypto';
 
 import type { Hono } from 'hono';
@@ -207,6 +208,12 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       ...(thinkingLevel ? { thinkingLevel } : {}),
       ...(body.temporary === true ? { userContextMode: 'temporary' as const } : {}),
     };
+    if (channel === 'webchat' && model) {
+      const result = await service.sessions.initializeChatModel(sessionKey, model, thinkingLevel);
+      if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
+      delete initialAgentConfig.model;
+      delete initialAgentConfig.thinkingLevel;
+    }
     if (Object.keys(initialAgentConfig).length > 0) {
       const result = await service.sessions.patchAgentConfig(sessionKey, initialAgentConfig);
       if (!result.ok) {
@@ -214,7 +221,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       }
     }
     const session = await service.sessions.getSession(sessionKey);
-    return c.json({ session }, 201);
+    const agentConfig = channel === 'webchat' ? await service.sessions.getFixedAgentConfig(sessionKey) : undefined;
+    return c.json({ session, agentConfig }, 201);
   });
 
   // GET /api/sessions - List sessions
@@ -301,18 +309,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // GET /api/sessions/:key/agent-config — resolved session agent settings (thinking, etc.)
   authenticated.get('/api/sessions/:key/agent-config', async (c) => {
     const key = c.req.param('key');
-    const payload = await service.sessions.getAgentConfig(key);
+    const payload = await service.sessions.getFixedAgentConfig(key);
     return c.json({ ok: true, payload });
   });
 
   authenticated.patch('/api/sessions/:key/agent-config', async (c) => {
     const key = c.req.param('key');
     const body = await c.req.json().catch(() => ({}));
-    const result = await service.sessions.patchAgentConfig(key, body);
-    if (!result.ok) {
-      return c.json({ ok: false, error: result.error }, 400);
-    }
-    return c.json({ ok: true });
+    return patchChatModelConfig(c, service, key, body);
   });
 
   // GET /api/sessions/:key/messages — flattened transcript for TUI / clients
