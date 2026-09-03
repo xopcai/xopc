@@ -1,3 +1,4 @@
+import type { MessageSubmission } from './message-submission';
 /**
  * Canonical chat message model for the mobile UI.
  * Ported from web/src/features/chat/messages.types.ts — kept in sync.
@@ -120,7 +121,8 @@ export interface Message {
   };
   timestamp?: number;
   /** Local delivery state; server transcript messages never carry this field. */
-  deliveryState?: 'queued' | 'failed';
+  deliveryState?: 'sending' | 'sent' | 'failed';
+  submission?: MessageSubmission;
 }
 
 export interface ProgressState {

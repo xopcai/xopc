@@ -51,10 +51,6 @@ export type VoiceTranscriptionFailureKind =
  */
 export const MAX_VOICE_RECORDING_MS = 8 * 60 * 1000;
 
-export function isVoiceInputAvailable(permission: MicrophonePermissionResult): boolean {
-  return permission.granted || permission.canAskAgain;
-}
-
 export function classifyVoiceTranscriptionFailure(error: unknown): VoiceTranscriptionFailureKind {
   const message = error instanceof Error ? error.message : String(error);
   if (/ffmpeg|audio decoder|unsupported[_ ]audio[_ ]codec/i.test(message)) return 'decoder_unavailable';

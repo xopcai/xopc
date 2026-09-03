@@ -17,10 +17,8 @@ type UseAgentStreamRecoveryOptions = {
   sessionKey: string;
   activeSessionKeyRef: RefObject<string>;
   tryResume: TryAgentStreamResume;
-  tryPendingInput: () => Promise<boolean>;
   onParked: () => void;
   onReconcile: () => void | Promise<void>;
-  onSubmissionFailed: (error: unknown) => void;
 };
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {
@@ -47,21 +45,15 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
     sessionKey,
     activeSessionKeyRef,
     tryResume,
-    tryPendingInput,
     onParked,
     onReconcile,
-    onSubmissionFailed,
   } = options;
   const tryResumeRef = useRef(tryResume);
-  const tryPendingInputRef = useRef(tryPendingInput);
   const onParkedRef = useRef(onParked);
   const onReconcileRef = useRef(onReconcile);
-  const onSubmissionFailedRef = useRef(onSubmissionFailed);
   tryResumeRef.current = tryResume;
-  tryPendingInputRef.current = tryPendingInput;
   onParkedRef.current = onParked;
   onReconcileRef.current = onReconcile;
-  onSubmissionFailedRef.current = onSubmissionFailed;
 
   const abortRef = useRef<AbortController | null>(null);
   const parkedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,25 +103,13 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
           generation !== generationRef.current ||
           activeSessionKeyRef.current !== sessionKey
         ) return;
-        try {
-          if (await tryPendingInputRef.current()) return;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (!isTransientNetworkError(message)) {
-            onSubmissionFailedRef.current(error);
-            return;
-          }
-          transportBlocked = true;
-        }
-        if (controller.signal.aborted || generation !== generationRef.current) return;
-
         let runId: string | null;
         try {
           runId = await resolveResumeRunId(sessionKey);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (!isTransientNetworkError(message)) {
-            onSubmissionFailedRef.current(error);
+            await onReconcileRef.current();
             return;
           }
           transportBlocked = true;

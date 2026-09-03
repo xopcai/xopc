@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Check,
-  CircleAlert,
   CircleX,
   ExternalLink,
   FileText,
@@ -41,10 +40,12 @@ export function TurnOutcomeResult({
   outcome,
   authToken,
   sessionKey,
+  projectId,
 }: {
   outcome: TurnOutcome;
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
 }) {
   const language = useLocaleStore((state) => state.language);
   const t = messages(language).chat.turnOutcome;
@@ -68,12 +69,10 @@ export function TurnOutcomeResult({
     ? t.statusSucceeded
     : outcome.status === 'failed'
       ? t.statusFailed
-      : t.statusPartial;
+      : null;
   const StatusIcon = outcome.status === 'succeeded'
     ? Check
-    : outcome.status === 'failed'
-      ? CircleX
-      : CircleAlert;
+    : CircleX;
   const visibleDeliverables = showAllDeliverables
     ? outcome.deliverables
     : outcome.deliverables.slice(0, 3);
@@ -96,19 +95,19 @@ export function TurnOutcomeResult({
     >
       <div className="flex flex-wrap items-start justify-between gap-3 px-3.5 py-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-medium text-fg">
-            <span
-              className={outcome.status === 'succeeded'
-                ? 'grid size-5 place-items-center rounded-full bg-success/10 text-success'
-                : outcome.status === 'failed'
-                  ? 'grid size-5 place-items-center rounded-full bg-danger/10 text-danger'
-                  : 'grid size-5 place-items-center rounded-full bg-warning/10 text-warning'}
-            >
-              <StatusIcon className="size-3.5" strokeWidth={2} aria-hidden />
-            </span>
-            <span>{statusLabel}</span>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-fg-muted">
+          {statusLabel ? (
+            <div className="flex items-center gap-2 text-sm font-medium text-fg">
+              <span
+                className={outcome.status === 'succeeded'
+                  ? 'grid size-5 place-items-center rounded-full bg-success/10 text-success'
+                  : 'grid size-5 place-items-center rounded-full bg-danger/10 text-danger'}
+              >
+                <StatusIcon className="size-3.5" strokeWidth={2} aria-hidden />
+              </span>
+              <span>{statusLabel}</span>
+            </div>
+          ) : null}
+          <p className={`${statusLabel ? 'mt-1 ' : ''}text-xs leading-5 text-fg-muted`}>
             {[
               outcome.deliverables.length > 0
                 ? t.deliverableCount.replace('{{count}}', String(outcome.deliverables.length))
@@ -150,6 +149,7 @@ export function TurnOutcomeResult({
                 attachments={attachments}
                 authToken={authToken}
                 sessionKey={sessionKey}
+                projectId={projectId}
                 layout="assistant"
               />
             ) : null}

@@ -18,7 +18,6 @@ import { GatewayConnectLandingModal } from '@/features/gateway/GatewayConnectLan
 import { useDevicePairingFlow } from '@/features/gateway/pair-gateway';
 import { useGatewayConnectionWatch } from '@/features/gateway/use-gateway-connection-watch';
 import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
-import { useSessionInputOutboxFlush } from '@/features/gateway/use-session-input-outbox-flush';
 import { refreshNetworkSnapshotWithDeadline } from '@/features/gateway/network-info';
 import { queryClient } from '@/query/query-client';
 import { useGatewayConfigured } from '@/query/sessions';
@@ -54,7 +53,6 @@ export default function RootLayout() {
   const [secondaryServicesReady, setSecondaryServicesReady] = useState(false);
 
   useGatewayRealtime();
-  useSessionInputOutboxFlush();
   useGatewayConnectionWatch(configured);
   useWorkspaceSyncFlush(configured);
   useMobileNotifications(router, secondaryServicesReady);

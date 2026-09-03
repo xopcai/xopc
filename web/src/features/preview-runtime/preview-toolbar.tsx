@@ -1,39 +1,33 @@
-import { Download, Minus, MoreHorizontal, Plus, RotateCw, Search, StepBack, StepForward } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Minus, Plus, RotateCw, Search, StepBack, StepForward } from 'lucide-react';
+import { type ReactNode } from 'react';
 
-import type { PreviewActions, PreviewPlugin, PreviewRuntimeControls } from '@/features/preview-runtime/preview-types';
+import type { PreviewPlugin, PreviewRuntimeControls } from '@/features/preview-runtime/preview-types';
 import { cn } from '@/lib/cn';
 
 type PreviewToolbarProps = {
   plugin: PreviewPlugin;
-  actions: PreviewActions;
   controls: PreviewRuntimeControls;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
   onRotate: () => void;
   onSearchChange: (value: string) => void;
-  showDownload?: boolean;
 };
 
 export function PreviewToolbar({
   plugin,
-  actions,
   controls,
   onZoomIn,
   onZoomOut,
   onZoomReset,
   onRotate,
   onSearchChange,
-  showDownload = true,
 }: PreviewToolbarProps) {
-  const [moreOpen, setMoreOpen] = useState(false);
   const canZoom = plugin.capabilities.includes('zoom');
   const canSearch = plugin.capabilities.includes('search');
   const canRotate = plugin.capabilities.includes('rotate');
   const canPage = plugin.capabilities.includes('pageNavigation') && controls.pageCount != null && controls.pageCount > 1;
-  const canDownload = showDownload && actions.canDownload;
-  const show = canZoom || canSearch || canRotate || canPage || canDownload;
+  const show = canZoom || canSearch || canRotate || canPage;
   if (!show) return null;
 
   const units: ReactNode[] = [];
@@ -82,7 +76,7 @@ export function PreviewToolbar({
   }
   if (canRotate) {
     units.push(
-        <ToolbarButton label="Rotate" onClick={onRotate}>
+        <ToolbarButton key="rotate" label="Rotate" onClick={onRotate}>
           <RotateCw className="size-3.5" />
         </ToolbarButton>,
     );
@@ -100,54 +94,7 @@ export function PreviewToolbar({
       </label>,
     );
   }
-  if (canDownload) {
-    units.push(
-      <ToolbarButton key="download" label="Download" onClick={() => void actions.onDownload()}>
-          <Download className="size-3.5" />
-      </ToolbarButton>,
-    );
-  }
-
-  const collapse = units.length > 4;
-  const visibleUnits = collapse ? units.slice(0, 3) : units;
-  const overflowUnits = collapse ? units.slice(3) : [];
-
-  return (
-    <div className="relative flex shrink-0 items-center gap-1">
-      {visibleUnits}
-      {overflowUnits.length > 0 ? (
-        <>
-          {moreOpen ? (
-            <button
-              type="button"
-              className="fixed inset-0 z-40 cursor-default bg-transparent"
-              aria-hidden
-              tabIndex={-1}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                setMoreOpen(false);
-              }}
-            />
-          ) : null}
-          <ToolbarButton label="More actions" onClick={() => setMoreOpen((v) => !v)}>
-            <MoreHorizontal className="size-3.5" />
-          </ToolbarButton>
-          {moreOpen ? (
-            <div
-              role="menu"
-              className="absolute right-0 top-full z-50 mt-1 flex min-w-52 flex-col gap-1 rounded-md border border-edge bg-surface-panel p-1 shadow-popover"
-            >
-              {overflowUnits.map((unit, index) => (
-                <div key={index} className="flex min-w-0 items-center justify-end">
-                  {unit}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </>
-      ) : null}
-    </div>
-  );
+  return <div className="flex shrink-0 items-center gap-1">{units}</div>;
 }
 
 function ToolbarButton({

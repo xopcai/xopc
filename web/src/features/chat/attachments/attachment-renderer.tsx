@@ -5,6 +5,7 @@ import { AttachmentTile } from '@/features/chat/attachments/attachment-tile';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { VoiceMessageBar } from '@/features/chat/composer/voice-message-bar';
 import { cn } from '@/lib/cn';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 function isAudioAttachment(att: MessageAttachment): boolean {
   return (
@@ -68,12 +69,14 @@ export function AttachmentRenderer({
   attachments,
   authToken,
   sessionKey,
+  projectId,
   layout = 'assistant',
   centerUserVoiceRow = false,
 }: {
   attachments: MessageAttachment[];
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
   /** User bubbles align voice pills to the right (WeChat-style). */
   layout?: 'user' | 'assistant';
   /** When text is empty (attachment-only bubble), center audio so horizontal padding reads even. */
@@ -81,6 +84,16 @@ export function AttachmentRenderer({
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<MessageAttachment | null>(null);
+
+  const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
+  const openAttachment = (attachment: MessageAttachment) => {
+    if (layout === 'assistant' && attachment.workspaceRelativePath?.trim() && (projectId?.trim() || sessionKey?.trim())) {
+      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, sessionKey);
+      return;
+    }
+    setActive(attachment);
+    setOpen(true);
+  };
 
   if (!attachments?.length) return null;
 
@@ -116,10 +129,7 @@ export function AttachmentRenderer({
                     sessionKey={sessionKey}
                     imageSize={grid.tileSize}
                     compact={layout === 'user'}
-                    onOpen={(att) => {
-                      setActive(att);
-                      setOpen(true);
-                    }}
+                    onOpen={openAttachment}
                   />
                 ))}
                 {grid.overflowCount != null ? (
@@ -134,10 +144,7 @@ export function AttachmentRenderer({
                     imageSize="grid-cell"
                     compact={layout === 'user'}
                     overflowLabel={`+${grid.overflowCount}`}
-                    onOpen={(att) => {
-                      setActive(att);
-                      setOpen(true);
-                    }}
+                    onOpen={openAttachment}
                   />
                 ) : null}
               </div>
@@ -177,10 +184,7 @@ export function AttachmentRenderer({
                 attachment={doc}
                 authToken={authToken}
                 sessionKey={sessionKey}
-                onOpen={(att) => {
-                  setActive(att);
-                  setOpen(true);
-                }}
+                onOpen={openAttachment}
               />
             ))}
           </div>

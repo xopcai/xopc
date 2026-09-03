@@ -324,6 +324,13 @@ export const MessageBubble = memo(function MessageBubble({
     [isUser, contentBlocks],
   );
 
+  const userAttachments = useMemo(() => {
+    const attachments = message.attachments ?? [];
+    if (!userAudio.length) return attachments;
+    return attachments.filter(attachment => attachment.type !== 'voice'
+      && attachment.type !== 'audio' && !attachment.mimeType?.startsWith('audio/'));
+  }, [message.attachments, userAudio.length]);
+
   const displayContent = useMemo(
     () => (isAssistant
       ? (assistantTurnView?.displayContent ?? contentBlocks).filter((b) => b.type !== 'image')
@@ -529,7 +536,7 @@ export const MessageBubble = memo(function MessageBubble({
               {formatTime(message.timestamp)}
             </Text>
           ) : null}
-          {message.deliveryState ? (
+          {message.deliveryState && message.deliveryState !== 'sent' ? (
             <Text
               variant="labelSmall"
               style={[
@@ -537,7 +544,7 @@ export const MessageBubble = memo(function MessageBubble({
                 message.deliveryState === 'failed' && { color: colors.semantic.errorBold },
               ]}
             >
-              {message.deliveryState === 'failed' ? m.chat.sendFailed : m.chat.waitingToSend}
+              {message.deliveryState === 'failed' ? m.chat.sendFailed : m.chat.sendingMessage}
             </Text>
           ) : null}
           {progressForMeta?.message || showProgressDetail || showMetaFallbackThinking ? (
@@ -634,8 +641,8 @@ export const MessageBubble = memo(function MessageBubble({
                 {userText}
               </Text>
             ) : null}
-            {message.attachments?.length ? (
-              <AttachmentRenderer attachments={message.attachments} sessionKey={sessionKey} compact />
+            {userAttachments.length ? (
+              <AttachmentRenderer attachments={userAttachments} sessionKey={sessionKey} compact />
             ) : null}
           </View>
           <MessageActionsBar actions={userActions} align="right" />

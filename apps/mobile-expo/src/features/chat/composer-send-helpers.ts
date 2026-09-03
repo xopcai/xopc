@@ -24,6 +24,7 @@ function userMessageMediaCount(message: Message): number {
 
 function serverMessageReplacesOptimistic(server: Message, optimistic: Message): boolean {
   if (!isUserMessage(server) || !isUserMessage(optimistic)) return false;
+  if (optimistic.deliveryState === 'failed' || optimistic.deliveryState === 'sending') return false;
 
   const serverTimestamp = server.timestamp;
   const optimisticTimestamp = optimistic.timestamp;
@@ -64,9 +65,12 @@ export function mergeOptimisticUserMessages(
 
   const merged = [...sessionMessages];
   for (const optimistic of optimisticMessages) {
-    const serverTail = merged[merged.length - 1];
+    const serverTail = sessionMessages[sessionMessages.length - 1];
     if (serverTail && serverMessageReplacesOptimistic(serverTail, optimistic)) continue;
-    merged.push(optimistic);
+    const nextMessage = optimistic.timestamp == null ? -1 : merged.findIndex(message =>
+      message.timestamp != null && message.timestamp > optimistic.timestamp!);
+    if (nextMessage < 0) merged.push(optimistic);
+    else merged.splice(nextMessage, 0, optimistic);
   }
   return merged;
 }
@@ -136,6 +140,8 @@ export function wireAttachmentsToMessageAttachments(wire: WireAttachment[]): Mes
     data: w.data,
     uri: w.uri,
     localUri: w.localUri,
+    workspaceRelativePath: w.workspaceRelativePath,
+    durationSeconds: w.durationSeconds,
     preview: w.type === 'image' || w.mimeType?.startsWith('image/') ? w.data : undefined,
   }));
 }
@@ -147,6 +153,12 @@ export function buildUserMessageContent(text: string, wire?: WireAttachment[]): 
     blocks.push({ type: 'text', text: trimmed });
   }
   for (const att of wire ?? []) {
+    if (att.type === 'voice' || att.mimeType?.startsWith('audio/')) {
+      blocks.push({ type: 'audio', uri: att.localUri ?? att.uri,
+        workspaceRelativePath: att.workspaceRelativePath, mimeType: att.mimeType,
+        name: att.name, durationSeconds: att.durationSeconds });
+      continue;
+    }
     const isImage = att.type === 'image' || att.mimeType?.startsWith('image/') === true;
     if (!isImage || !att.data) continue;
     const mime = att.mimeType || 'image/png';

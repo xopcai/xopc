@@ -1,5 +1,6 @@
 {
   "workspace": {
+    "openInBrowser": "在浏览器中打开",
     "title": "项目文件",
     "currentWorkspace": "当前工作区",
     "openFiles": "项目文件",

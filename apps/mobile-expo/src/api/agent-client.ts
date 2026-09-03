@@ -4,10 +4,8 @@ import {
   type AgentStreamDispatchOptions,
 } from '@xopcai/agent-stream-client';
 import {
-  SESSION_INPUT_RETRY_DELAYS_MS,
   buildSessionDetailPath,
   parseSessionResponse,
-  shouldRetrySessionInputStatus,
 } from '@xopcai/gateway-contract';
 
 import {
@@ -16,7 +14,6 @@ import {
   formatApiHttpError,
 } from './client';
 import { readUriAsBase64 } from '../features/chat/attachment-file-io';
-import { capAttachments } from '../features/chat/chat-limits';
 import type { WireAttachment } from '../features/chat/composer.types';
 import {
   advancePendingAgentRunCursor,
@@ -35,38 +32,9 @@ import {
   requestMobileRealtimeReconnect,
   subscribeMobileRealtimeTopic,
 } from '../features/gateway/use-gateway-realtime';
-import {
-  completeSessionInput,
-  enqueueSessionInput,
-  markSessionInputAttempt,
-  updatePendingSessionInput,
-  readPendingSessionInput,
-  type PendingSessionInput,
-} from '../features/gateway/session-input-outbox';
 import { useGatewayStore } from '../stores/gateway-store';
-import { readCachedSessionDetail } from '../features/gateway/session-detail-cache';
-import { retainOutboxAttachments, releaseOutboxAttachments } from '../features/gateway/outbox-attachments';
+import type { MessageSubmission } from '../features/chat/message-submission';
 import { usePreferencesStore } from '../stores/preferences-store';
-import { DataSharingConsentError } from '../features/privacy/consent-controller';
-
-async function postSessionInput(path: string, body: string, headers?: Record<string, string>, assertCurrent: () => void = () => {}): Promise<Response> {
-  let lastError: unknown;
-  for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
-    if (delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-    assertCurrent();
-    try {
-      const response = await apiFetch(path, { method: 'POST', body, ...(headers ? { headers } : {}) });
-      assertCurrent();
-      if (!shouldRetrySessionInputStatus(response.status)) return response;
-      lastError = new Error(`Session input temporarily unavailable (${response.status})`);
-    } catch (error) {
-      assertCurrent();
-      if (error instanceof DataSharingConsentError) throw error;
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error('Session input request failed');
-}
 
 export type MessagingCallbacks = AgentStreamCallbacks;
 
@@ -132,13 +100,6 @@ async function uploadMediaFile(input: {
     size: payload.size,
   };
 }
-
-export type VoiceMessagePayload = {
-  uri: string;
-  durationMillis: number;
-  mimeType?: string;
-  name?: string;
-};
 
 export interface VoiceTranscribeResult {
   text: string;
@@ -279,7 +240,7 @@ function streamDispatchOptions(sessionKey: string, sender: AgentMessageSender): 
 }
 
 /**
- * Submits a durable session input and attaches to its active run, matching the web console.
+ * Submits messages and manages an independently attached run stream.
  */
 export class AgentMessageSender {
   private _gatewayId: string | null | undefined;
@@ -290,10 +251,6 @@ export class AgentMessageSender {
   /** Abort controllers detached locally without cancelling their server runs. */
   private readonly _localDetaches = new WeakSet<AbortController>();
   private _streamCleanup?: () => void;
-
-  get isSending() {
-    return !!this._abort;
-  }
 
   isStreamingFor(sessionKey: string): boolean {
     return !!this._abort && this._sessionKey === sessionKey;
@@ -380,152 +337,58 @@ export class AgentMessageSender {
     this._trackedRunId = undefined;
   }
 
-  async sendMessage(
-    message: string,
-    sessionKey: string,
-    callbacks?: MessagingCallbacks,
-    attachments?: WireAttachment[],
-    taskId?: string,
-  ): Promise<void> {
-    const capped = capAttachments(attachments);
-    let entry = enqueueSessionInput(sessionKey, message, capped ?? [], taskId);
-    try {
-      entry = updatePendingSessionInput(entry, { attachments: retainOutboxAttachments(entry.clientMessageId, entry.attachments), ...(entry.needsReview ? { needsReview: false, createdAt: Date.now() } : {}) });
-    } catch (error) {
-      updatePendingSessionInput(entry, { needsReview: true });
-      throw error;
-    }
-    await this._submitPendingInput(entry, callbacks, true, true);
-  }
-
-  async retryPendingMessage(sessionKey: string, callbacks?: MessagingCallbacks): Promise<boolean> {
-    const entry = readPendingSessionInput(sessionKey);
-    if (!entry || entry.needsReview) return false;
-    await this._submitPendingInput(entry, callbacks, true);
-    return true;
-  }
-
-  async flushPendingMessage(sessionKey: string): Promise<boolean> {
-    const entry = readPendingSessionInput(sessionKey);
-    if (!entry || entry.needsReview) return false;
-    await this._submitPendingInput(entry, undefined, false);
-    return true;
-  }
-
-  private async _submitPendingInput(
-    queuedEntry: PendingSessionInput,
-    callbacks?: MessagingCallbacks,
-    attachRun = true,
-    resolveIdentity = false,
-  ): Promise<void> {
+  /** Resolves when the gateway accepts the message; run streaming is separate. */
+  async sendMessage(input: MessageSubmission): Promise<{ runId?: string }> {
     const generation = useGatewayStore.getState().connectionGeneration;
     const assertCurrent = () => {
       const state = useGatewayStore.getState();
-      if (state.activeGatewayId !== queuedEntry.gatewayId || state.connectionGeneration !== generation) throw new Error('Active work computer changed');
-      if (readPendingSessionInput(queuedEntry.sessionKey, queuedEntry.gatewayId)?.clientMessageId !== queuedEntry.clientMessageId) throw new Error('Pending input was removed');
-    };
-    assertCurrent();
-    if (queuedEntry.needsReview) throw new Error('Message needs review');
-    const cachedId = readCachedSessionDetail(queuedEntry.gatewayId, queuedEntry.sessionKey)?.sessionId;
-    if ((queuedEntry.expectedSessionId && cachedId && cachedId !== queuedEntry.expectedSessionId)
-      || (!queuedEntry.expectedSessionId && (!resolveIdentity || queuedEntry.attemptCount > 0))) {
-      updatePendingSessionInput(queuedEntry, { needsReview: true });
-      throw new Error('Message needs review');
-    }
-    if (!queuedEntry.expectedSessionId) {
-      const response = await apiFetch(buildSessionDetailPath(queuedEntry.sessionKey)).catch(error => {
-        updatePendingSessionInput(queuedEntry, { needsReview: true });
-        throw error;
-      });
-      assertCurrent();
-      const identity = response.ok ? parseSessionResponse(await response.json()).session?.sessionId : undefined;
-      if (!identity) {
-        updatePendingSessionInput(queuedEntry, { needsReview: true });
-        throw new Error('Message needs review');
+      if (state.activeGatewayId !== input.gatewayId || state.connectionGeneration !== generation) {
+        throw new Error('Active work computer changed');
       }
-      queuedEntry = updatePendingSessionInput(queuedEntry, { expectedSessionId: identity });
-    }
-    const entry = markSessionInputAttempt(queuedEntry);
-    let attachments: WireAttachment[];
-    try {
-      attachments = await materializeAttachments(entry.attachments);
-    } catch (error) {
-      if (error instanceof DataSharingConsentError || !isTransientNetworkError(error instanceof Error ? error.message : String(error))) updatePendingSessionInput(entry, { needsReview: true });
-      throw error;
-    }
-    assertCurrent();
-    const origin = await waitForMobileEndpointTurnClaim(
-      undefined,
-      requestMobileRealtimeReconnect,
-    );
-    assertCurrent();
-    const res = await postSessionInput(
-      entry.taskId
-        ? `/api/tasks/${encodeURIComponent(entry.taskId)}/inputs`
-        : `/api/sessions/${encodeURIComponent(entry.sessionKey)}/inputs`,
-      JSON.stringify({
-        clientMessageId: entry.clientMessageId,
-        delivery: 'next',
-        ...(entry.expectedSessionId ? { expectedSessionId: entry.expectedSessionId } : {}),
-        content: entry.content,
-        origin,
-        ...(attachments.length ? { attachments } : {}),
-      }),
-      entry.taskId ? { 'X-Xopc-Expected-Session-Key': entry.sessionKey } : undefined,
-      assertCurrent,
-    ).catch((error: unknown) => {
-      if (error instanceof DataSharingConsentError) updatePendingSessionInput(entry, { needsReview: true });
-      throw error;
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
-      updatePendingSessionInput(entry, { needsReview: true });
-      throw new Error(formatApiHttpError(res.status, res.statusText, body?.error?.message));
-    }
-    const json = await res.json().catch(() => {
-      throw new Error('Network response was invalid');
-    }) as { payload?: { state?: {
-      activeRunId?: string; activeInputId?: string;
-      inputs?: Array<{ id: string; clientMessageId: string }>;
-    } } };
-    // Keep the durable outbox entry until the acknowledgement body is usable.
-    // A truncated 202 response is ambiguous: the gateway may already be
-    // running the input, and retrying the same clientMessageId is idempotent.
-    if (!json.payload?.state || !Array.isArray(json.payload.state.inputs)) throw new Error('Network response was invalid');
-    assertCurrent();
-    completeSessionInput(entry.sessionKey, entry.clientMessageId, entry.gatewayId);
-    releaseOutboxAttachments(entry.clientMessageId);
-    const state = json.payload?.state;
-    const own = state?.inputs?.find((input) => input.clientMessageId === entry.clientMessageId);
-    if (attachRun && state?.activeRunId && own?.id === state.activeInputId) {
-      return this.resume(
-        state.activeRunId,
-        entry.sessionKey,
-        callbacks,
-        { replayFromStart: true },
-      );
-    }
-  }
-
-  async sendVoiceMessage(
-    payload: VoiceMessagePayload,
-    sessionKey: string,
-    callbacks?: MessagingCallbacks,
-    taskId?: string,
-  ): Promise<void> {
-    const mimeType = payload.mimeType || 'audio/mp4';
-    const name = payload.name || (mimeType.includes('mpeg') ? 'voice.mp3' : 'voice.m4a');
-    const secs = payload.durationMillis / 1000;
-    const durationSeconds =
-      Number.isFinite(secs) && secs >= 0.05 ? Math.round(secs * 1000) / 1000 : undefined;
-    const wire: WireAttachment = {
-      type: 'voice',
-      mimeType,
-      localUri: payload.uri,
-      name,
-      ...(durationSeconds != null ? { durationSeconds } : {}),
     };
-    return this.sendMessage('', sessionKey, callbacks, [wire], taskId);
+    assertCurrent();
+    if (!input.expectedSessionId) {
+      const response = await apiFetch(buildSessionDetailPath(input.sessionKey));
+      assertCurrent();
+      if (!response.ok) throw new Error(formatApiHttpError(response.status, response.statusText));
+      const identity = parseSessionResponse(await response.json()).session?.sessionId;
+      if (!identity) throw new Error('Session identity is unavailable');
+      input.expectedSessionId = identity;
+    }
+    // Keep uploaded references on the same submission so manual retries use identical media.
+    input.attachments = await materializeAttachments(input.attachments);
+    assertCurrent();
+    const origin = await waitForMobileEndpointTurnClaim(undefined, requestMobileRealtimeReconnect);
+    assertCurrent();
+    const response = await apiFetch(input.taskId
+      ? `/api/tasks/${encodeURIComponent(input.taskId)}/inputs`
+      : `/api/sessions/${encodeURIComponent(input.sessionKey)}/inputs`, {
+      method: 'POST',
+      ...(input.taskId ? { headers: { 'X-Xopc-Expected-Session-Key': input.sessionKey } } : {}),
+      body: JSON.stringify({
+        clientMessageId: input.clientMessageId,
+        expectedSessionId: input.expectedSessionId,
+        delivery: 'next',
+        content: input.content,
+        origin,
+        ...(input.attachments.length ? { attachments: input.attachments } : {}),
+      }),
+    });
+    assertCurrent();
+    const json = await response.json().catch(() => null) as {
+      error?: { message?: string };
+      payload?: { state?: { activeRunId?: string; inputs?: Array<{ clientMessageId: string }> } };
+    } | null;
+    if (!response.ok) {
+      throw new Error(formatApiHttpError(response.status, response.statusText, json?.error?.message));
+    }
+    assertCurrent();
+    const state = json?.payload?.state;
+    // Completed idempotent retries have no row in the active input list.
+    if (!state || !Array.isArray(state.inputs)) {
+      throw new Error('Network response was invalid');
+    }
+    return { runId: state.activeRunId };
   }
 
   async resume(

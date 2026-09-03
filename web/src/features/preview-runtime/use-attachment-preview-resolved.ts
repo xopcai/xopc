@@ -3,7 +3,6 @@ import { useMemo, useRef, useState } from 'react';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import {
   base64ToArrayBuffer,
-  extractTextForPreview,
   getAttachmentBinaryPayload,
   PPTX_PREVIEW_MAX_CHARS,
 } from '@/features/chat/attachments/attachment-utils-core';
@@ -23,6 +22,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useAsyncResource } from '@/lib/use-async-resource';
 
 export type AttachmentPreviewResolved = PreviewLoadedSource & {
+  downloadBuffer: ArrayBuffer | null;
   preview: MessageAttachment | null;
   fileType: PreviewFileType;
   fileName: string;
@@ -62,7 +62,7 @@ export function useAttachmentPreviewResolved({
   sessionKey?: string | null;
   language: StoredLanguage;
 }): AttachmentPreviewResolved {
-  const [previewBase, setPreviewBase] = useState<MessageAttachment | null>(null);
+  const [previewBase, setPreviewBase] = useState<MessageAttachment | null>(open ? attachment : null);
   const [showExtractedText, setShowExtractedText] = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
 
@@ -113,8 +113,7 @@ export function useAttachmentPreviewResolved({
     { enabled: fetchEnabled, initial: null as ArrayBuffer | null, errorData: null },
   );
 
-  const binaryBuffer = useMemo(() => {
-    if (readMode !== 'binary') return null;
+  const downloadBuffer = useMemo(() => {
     if (inlinePayload) {
       try {
         return base64ToArrayBuffer(inlinePayload);
@@ -124,13 +123,15 @@ export function useAttachmentPreviewResolved({
     }
     if (fetchEnabled && gatewayFetch.loading) return null;
     return gatewayFetch.data ?? null;
-  }, [fetchEnabled, gatewayFetch.data, gatewayFetch.loading, inlinePayload, readMode]);
+  }, [fetchEnabled, gatewayFetch.data, gatewayFetch.loading, inlinePayload]);
 
-  const extractedTextRaw = preview ? (extractTextForPreview(preview) ?? '') : '';
+  const binaryBuffer = readMode === 'binary' ? downloadBuffer : null;
+
+  const extractedTextRaw = preview?.extractedText ?? '';
   const textContent = readMode === 'text'
     ? extractedTextRaw
-      || (gatewayFetch.data
-        ? new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(gatewayFetch.data))
+      || (downloadBuffer
+        ? new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(downloadBuffer))
         : messages(language).chat.attachmentPreviewNoText)
     : null;
   const hasExtractedText = Boolean(preview?.extractedText);
@@ -157,6 +158,7 @@ export function useAttachmentPreviewResolved({
     clearLoadError: () => setErrorDismissed(true),
     textContent,
     binaryBuffer,
+    downloadBuffer,
     hasExtractedText,
     extractedText: extractedTextRaw || null,
     extractedTextTruncated,

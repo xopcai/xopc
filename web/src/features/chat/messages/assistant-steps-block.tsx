@@ -174,7 +174,6 @@ export function AssistantStepsBlock({
     fetchUrl: string;
     unknownTool: string;
     activityCompleted: string;
-    activityPartial: string;
     activityFailedCount: string;
     activityAnalysisComplete: string;
     toolFailedImpact: string;
@@ -214,10 +213,10 @@ export function AssistantStepsBlock({
       viewStepsLabel(stepCount, stepLabels),
     );
     if (failedCount > 0) {
-      return `${stepLabels.activityPartial} · ${stepLabels.activityFailedCount.replace(
+      return stepLabels.activityFailedCount.replace(
         /\{\{count\}\}/g,
         String(failedCount),
-      )}`;
+      );
     }
     return activity.hasTool ? detail : stepLabels.activityAnalysisComplete;
   }, [

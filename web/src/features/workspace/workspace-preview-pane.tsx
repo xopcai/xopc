@@ -23,7 +23,8 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
   const { pathname } = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
   const workspaceSessionKey = useWorkspacePanelStore((s) => s.sessionKeyOverride);
-  const chatSessionKey = sessionKeyOverride ?? workspaceSessionKey ?? (
+  const previewSessionKey = useWorkspacePreviewStore((s) => s.sessionKey);
+  const chatSessionKey = previewSessionKey ?? sessionKeyOverride ?? workspaceSessionKey ?? (
     pathname.startsWith('/chat') && sessionKeyParam
       ? decodeURIComponent(sessionKeyParam)
       : undefined
@@ -45,12 +46,12 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
   useEffect(() => {
     if (!path) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
       setPath(null);
       e.stopPropagation();
     };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [path, setPath]);
 
   if (!path) {
