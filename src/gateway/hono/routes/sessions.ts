@@ -187,6 +187,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (body.executionMode !== undefined && !requestedExecutionMode) {
       return c.json({ ok: false, error: 'Invalid execution mode' }, 400);
     }
+    if (requestedExecutionMode && !project) {
+      return c.json({ ok: false, error: 'An execution mode requires a project' }, 400);
+    }
     const agentId = resolveProjectAgentId({
       config: routingCfg,
       projects: service.projects,

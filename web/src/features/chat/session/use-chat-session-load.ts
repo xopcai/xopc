@@ -3,7 +3,7 @@ import { patchSessionAgentConfigView } from './patch-session-agent-config-view';
 import { useCallback, useRef, type RefObject } from 'react';
 
 import type { SessionInfo } from '@/features/chat/chat.types';
-import { chooseModelThinking, modelPreferenceForAgent } from '@xopcai/gateway-contract';
+import { chooseModelThinking, modelPreferenceForAgent, type SessionCreateRequest } from '@xopcai/gateway-contract';
 import { type Message } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
@@ -347,10 +347,7 @@ export function useChatSessionLoad(deps: {
     [applySessionAgentConfig, sessionKey, sessionMgrRef],
   );
   const createNewSession = useCallback(
-    async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean }) => {
-      dismissClarifyOnSessionLoad();
-      detachForNewConversation();
-      historyBeforeCursorRef.current = null;
+    async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean; executionMode?: SessionCreateRequest['executionMode'] }) => {
       store().setShellError(null);
       const aid = resolveAgentIdForPost();
       const modelPreference = modelPreferenceForAgent(
@@ -364,6 +361,7 @@ export function useChatSessionLoad(deps: {
         routeSessionKey: sessionKey,
         forceNew: opts?.forceNew,
         temporary: opts?.temporary,
+        executionMode: opts?.executionMode,
         projectId: opts?.projectId === undefined ? currentProjectId : opts.projectId,
         initialAgentConfig: modelPreference
           ? {
@@ -375,6 +373,9 @@ export function useChatSessionLoad(deps: {
           : undefined,
         navigateToSession,
         onOpened: (key) => {
+          dismissClarifyOnSessionLoad();
+          detachForNewConversation();
+          historyBeforeCursorRef.current = null;
           store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
           void applySessionAgentConfig(key);
         },

@@ -365,6 +365,7 @@ export class SessionManager {
     projectId?: string | null;
     temporary?: boolean;
     initialAgentConfig?: SessionInitialAgentConfig;
+    executionMode?: SessionCreateRequest['executionMode'];
   }): Promise<SessionInfo> {
     const body: SessionCreateRequest = { channel: 'webchat' };
     const raw = options?.agentId?.trim();
@@ -373,11 +374,12 @@ export class SessionManager {
     if (projectId) body.projectId = projectId;
     if (options?.temporary === true) body.temporary = true;
     if (options?.initialAgentConfig) body.initialAgentConfig = options.initialAgentConfig;
+    if (options?.executionMode) body.executionMode = options.executionMode;
     const res = await apiFetch(apiUrl('/api/sessions'), {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(await readErrorMessage(res));
     const data = (await res.json()) as { session: SessionInfo };
     return data.session;
   }
