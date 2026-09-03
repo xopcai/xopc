@@ -1,5 +1,5 @@
 import { Wrench } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type WheelEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SessionTimelineItem } from '@/features/chat/session/session-manager';
 import { formatChatMessageTime } from '@/features/chat/messages/message-time';
@@ -123,13 +123,11 @@ export function ChatTimelineRail({
   const turns = useMemo(() => buildTimeline(items, labels), [items, labels]);
   const [previewTurnId, setPreviewTurnId] = useState<string | null>(null);
   const railRef = useRef<HTMLElement | null>(null);
-  const wheelDeltaRef = useRef(0);
 
   useEffect(() => {
     if (!previewTurnId) return undefined;
 
     const close = () => {
-      wheelDeltaRef.current = 0;
       setPreviewTurnId(null);
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -165,49 +163,26 @@ export function ChatTimelineRail({
     turns.findIndex((turn) => turn.id === selectedTurnId),
   );
 
-  const scrubToTurn = (index: number) => {
-    const next = turns[Math.min(turns.length - 1, Math.max(0, index))];
-    if (!next) return;
-    setPreviewTurnId(next.id);
-    onSelectMessage(next.messageIndex);
-  };
-
-  const handleRailWheel = (event: WheelEvent<HTMLElement>) => {
-    if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    wheelDeltaRef.current += event.deltaY;
-    if (Math.abs(wheelDeltaRef.current) < 48) return;
-
-    const direction = wheelDeltaRef.current > 0 ? 1 : -1;
-    wheelDeltaRef.current = 0;
-    scrubToTurn(selectedTurnIndex + direction);
-  };
-
   return (
     <aside
       ref={railRef}
-      className="hidden h-full w-12 shrink-0 overflow-visible py-4 xl:block"
+      className="hidden h-full min-h-0 max-h-full w-12 shrink-0 items-center overflow-visible py-4 xl:flex"
       aria-label={labels.title}
       onMouseLeave={() => {
-        wheelDeltaRef.current = 0;
         setPreviewTurnId(null);
       }}
       onBlur={(event) => {
         const next = event.relatedTarget;
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) {
-          wheelDeltaRef.current = 0;
           setPreviewTurnId(null);
         }
       }}
     >
-      <div className="relative z-[90] flex h-full min-h-0 justify-end overflow-visible">
-        <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto overflow-x-hidden">
+      <div className="relative z-[90] flex h-full max-h-[32rem] min-h-0 w-full justify-end overflow-visible">
+        <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <ol
-            className="my-auto flex w-full flex-col items-end py-1"
+            className="my-auto flex w-full shrink-0 flex-col items-end py-1"
             onMouseEnter={() => setPreviewTurnId((current) => current ?? activeTurnId ?? null)}
-            onWheel={handleRailWheel}
           >
             {turns.map((turn, index) => {
               const active = turn.id === selectedTurnId;
@@ -215,7 +190,7 @@ export function ChatTimelineRail({
               return (
                 <li
                   key={turn.id}
-                  className="group relative flex h-3.5 w-full items-center justify-end"
+                  className="group relative flex h-3.5 w-full shrink-0 items-center justify-end"
                   onMouseEnter={() => setPreviewTurnId(turn.id)}
                   onFocus={() => setPreviewTurnId(turn.id)}
                 >

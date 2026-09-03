@@ -1287,12 +1287,12 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
             </div>
           </div>
         </div>
-        {!embedded && chatSessionKey && window.electronAPI?.terminal ? (
-          <Suspense fallback={null}>
-            <ChatTerminalDock key={chatSessionKey} sessionKey={chatSessionKey} />
-          </Suspense>
-        ) : null}
       </div>
+      {!embedded && chatSessionKey && window.electronAPI?.terminal ? (
+        <Suspense fallback={null}>
+          <ChatTerminalDock key={chatSessionKey} sessionKey={chatSessionKey} />
+        </Suspense>
+      ) : null}
 
       <Dialog.Root
         open={sourceNoteSaveDraft !== null}
