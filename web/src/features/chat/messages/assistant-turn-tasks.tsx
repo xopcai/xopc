@@ -9,11 +9,13 @@ export function AssistantTurnTasks({
   view,
   authToken,
   sessionKey,
+  projectId,
   sourcesLabel,
 }: {
   view: AssistantTurnViewModel;
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
   sourcesLabel: string;
 }) {
   return (
@@ -23,6 +25,7 @@ export function AssistantTurnTasks({
           outcome={view.outcome}
           authToken={authToken}
           sessionKey={sessionKey}
+          projectId={projectId}
         />
       ) : null}
 
@@ -42,10 +45,12 @@ export function AssistantAttachmentList({
   attachments,
   authToken,
   sessionKey,
+  projectId,
 }: {
   attachments?: MessageAttachment[];
   authToken?: string;
   sessionKey?: string | null;
+  projectId?: string | null;
 }) {
   if (!attachments?.length) return null;
   return (
@@ -53,6 +58,7 @@ export function AssistantAttachmentList({
       attachments={attachments}
       authToken={authToken}
       sessionKey={sessionKey}
+      projectId={projectId}
       layout="assistant"
     />
   );

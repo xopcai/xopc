@@ -1,23 +1,34 @@
 import { describe, expect, it } from 'vitest';
+import { resolveVoiceRecordingDestination } from '../voiceRecordingGesture';
 
-import { resolveVoiceRecordingZone } from '../voiceRecordingGesture';
-
-describe('resolveVoiceRecordingZone', () => {
-  it('maps dominant gestures to cancel, text, and lock', () => {
-    expect(resolveVoiceRecordingZone(-80, 0)).toBe('cancel');
-    expect(resolveVoiceRecordingZone(80, 0)).toBe('text');
-    expect(resolveVoiceRecordingZone(10, -80)).toBe('lock');
+describe('hold-to-record destinations', () => {
+  it('sends from the original position, cancels up-left, and transcribes up-right', () => {
+    expect(resolveVoiceRecordingDestination(0, 0)).toBe('send');
+    expect(resolveVoiceRecordingDestination(-80, -90)).toBe('cancel');
+    expect(resolveVoiceRecordingDestination(80, -90)).toBe('text');
   });
 
-  it('keeps the current zone until the gesture crosses the smaller exit threshold', () => {
-    expect(resolveVoiceRecordingZone(-60, 0, 'cancel')).toBe('cancel');
-    expect(resolveVoiceRecordingZone(60, 0, 'text')).toBe('text');
-    expect(resolveVoiceRecordingZone(0, -60, 'lock')).toBe('lock');
-    expect(resolveVoiceRecordingZone(-40, 0, 'cancel')).toBe('center');
+  it('requires an upward diagonal instead of a horizontal or straight upward slide', () => {
+    expect(resolveVoiceRecordingDestination(-100, 0)).toBe('send');
+    expect(resolveVoiceRecordingDestination(100, 0)).toBe('send');
+    expect(resolveVoiceRecordingDestination(0, -100)).toBe('send');
+    expect(resolveVoiceRecordingDestination(80, 90)).toBe('send');
+    expect(resolveVoiceRecordingDestination(-80, -40)).toBe('send');
   });
 
-  it('prefers horizontal actions when horizontal movement dominates', () => {
-    expect(resolveVoiceRecordingZone(-90, -80)).toBe('cancel');
-    expect(resolveVoiceRecordingZone(90, -80)).toBe('text');
+  it('keeps both corner hints stable near their entry boundaries', () => {
+    expect(resolveVoiceRecordingDestination(-35, -60)).toBe('send');
+    expect(resolveVoiceRecordingDestination(-35, -60, 'cancel')).toBe('cancel');
+    expect(resolveVoiceRecordingDestination(35, -60)).toBe('send');
+    expect(resolveVoiceRecordingDestination(35, -60, 'text')).toBe('text');
+  });
+
+  it('returns to send when moving back and lets the finger switch corners', () => {
+    expect(resolveVoiceRecordingDestination(0, 0, 'cancel')).toBe('send');
+    expect(resolveVoiceRecordingDestination(0, 0, 'text')).toBe('send');
+    expect(resolveVoiceRecordingDestination(-80, -40, 'cancel')).toBe('send');
+    expect(resolveVoiceRecordingDestination(80, -40, 'text')).toBe('send');
+    expect(resolveVoiceRecordingDestination(80, -90, 'cancel')).toBe('text');
+    expect(resolveVoiceRecordingDestination(-80, -90, 'text')).toBe('cancel');
   });
 });

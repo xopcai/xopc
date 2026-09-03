@@ -25,10 +25,6 @@ export function hapticVoiceZoneChange(): void {
   void Haptics.selectionAsync();
 }
 
-export function hapticVoiceLock(): void {
-  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-}
-
 export function hapticVoiceSend(): void {
   void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 }

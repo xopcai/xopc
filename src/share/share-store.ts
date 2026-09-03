@@ -176,8 +176,9 @@ export class ShareStore {
       }
     }
 
-    const fileName = relPath.split('/').pop() || relPath;
-    const mimeType = resolveMimeType(fileName);
+    const sourceName = relPath.split('/').pop() || relPath;
+    const fileName = params.fileName || sourceName;
+    const mimeType = resolveMimeType(sourceName);
     const record = this.buildRecord({
       kind: 'file',
       absolutePath,

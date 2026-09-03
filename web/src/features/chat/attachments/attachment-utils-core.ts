@@ -66,47 +66,6 @@ export const TEXT_FILE_EXTENSIONS = [
   '.yaml',
 ] as const;
 
-function isLikelyTextLikeFile(att: { name?: string; mimeType?: string }): boolean {
-  const mime = att.mimeType?.toLowerCase() ?? '';
-  if (mime.startsWith('text/')) return true;
-  if (
-    mime === 'application/json' ||
-    mime === 'application/xml' ||
-    mime === 'application/javascript' ||
-    mime === 'application/typescript'
-  ) {
-    return true;
-  }
-  const lower = att.name?.toLowerCase() ?? '';
-  return TEXT_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
-
-/**
- * Text for overlay preview: prefers `extractedText`, otherwise decodes UTF-8 from base64
- * when the attachment is a text-like file (e.g. .md). Webchat only sends `data`, not
- * `extractedText`, so previews would otherwise show empty.
- */
-export function extractTextForPreview(att: {
-  name?: string;
-  mimeType?: string;
-  content?: string;
-  data?: string;
-  extractedText?: string;
-}): string | undefined {
-  if (att.extractedText != null && att.extractedText !== '') {
-    return att.extractedText;
-  }
-  if (!isLikelyTextLikeFile(att)) return undefined;
-  const payload = getAttachmentBinaryPayload(att);
-  if (!payload) return undefined;
-  try {
-    const buf = base64ToArrayBuffer(payload);
-    return new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(buf));
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Build a valid `data:` URL for `<img src>` / preview.
  * If payload is already a data URL, returns it unchanged.

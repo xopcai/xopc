@@ -3,7 +3,9 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { basename, dirname } from 'node:path';
 
+import { resolveScopedMediaReference } from '../../media-access.js';
 import { extractToken } from '../../auth.js';
 import { FileServiceError } from '../../../files/file-service.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
@@ -870,15 +872,34 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
 
-    const path = typeof body.path === 'string' ? body.path.trim() : '';
-    if (!path) return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
-
+    let path = typeof body.path === 'string' ? body.path.trim() : '';
+    const fileId = typeof body.fileId === 'string' ? body.fileId.trim() : '';
+    const uri = typeof body.uri === 'string' ? body.uri.trim() : '';
+    if ([path, fileId, uri].filter(Boolean).length !== 1) {
+      return c.json({ ok: false, error: { message: 'Provide exactly one of path, fileId or uri' } }, 400);
+    }
     const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
+    const taskId = typeof body.taskId === 'string' ? body.taskId.trim() : undefined;
+    const fileName = typeof body.fileName === 'string' ? basename(body.fileName.trim().replace(/\\/g, '/')) : undefined;
 
-    const workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
-    if (!workspaceRoot) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    let workspaceRoot: string;
+    try {
+      if (fileId) {
+        const target = await getGatewayFileSpaceService(service).resource(fileId);
+        workspaceRoot = target.space.root;
+        path = target.resource.relativePath || '.';
+      } else if (uri) {
+        const media = await resolveScopedMediaReference(service, uri, { sessionKey, taskId });
+        workspaceRoot = dirname(media.path);
+        path = basename(media.path);
+      } else {
+        workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
+      }
+      if (!workspaceRoot) throw new Error('Workspace not configured');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, err instanceof FileServiceError ? err.status : 400);
     }
 
     const ttlMs = typeof body.ttlMs === 'number' ? body.ttlMs : undefined;
@@ -895,6 +916,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       store.updateConfig(resolveShareConfig(service));
       const record = await store.create({
         path,
+        fileName,
         ttlMs,
         maxViews,
         description,

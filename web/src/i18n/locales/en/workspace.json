@@ -1,5 +1,6 @@
 {
   "workspace": {
+    "openInBrowser": "Open in browser",
     "title": "Project Files",
     "currentWorkspace": "Current Workspace",
     "openFiles": "Project Files",

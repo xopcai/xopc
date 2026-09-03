@@ -7,7 +7,10 @@ const { messagesReferenceMediaUri, readMediaReference, saveMediaBuffer } = vi.ho
   saveMediaBuffer: vi.fn(),
 }));
 
-vi.mock('../../../../media/media-reference.js', () => ({ readMediaReference }));
+vi.mock('../../../../media/media-reference.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../../media/media-reference.js')>(),
+  readMediaReference,
+}));
 
 vi.mock('../../../../media/session-references.js', () => ({ messagesReferenceMediaUri }));
 

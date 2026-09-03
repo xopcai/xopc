@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { saveMediaBuffer } from '../../../../media/store.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { fileResourceId } from '../../../../files/file-service.js';
 import { getShareStore, resetShareStoreForTests } from '../../../../share/share-store.js';
@@ -18,9 +19,11 @@ describe('managed file sharing', () => {
   let stateDir: string;
   let previousStateDir: string | undefined;
   let app: Hono;
+  let referencedUri: string | null;
   let roots: Record<'agent' | 'project' | 'session', string>;
 
   beforeEach(() => {
+    referencedUri = null;
     previousStateDir = process.env.XOPC_STATE_DIR;
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-managed-share-'));
     process.env.XOPC_STATE_DIR = stateDir;
@@ -43,6 +46,11 @@ describe('managed file sharing', () => {
         get: (id: string) => id === project.id ? project : null,
       },
       sessions: { getEffectiveWorkspacePath: async () => roots.session },
+      sessionIndexInstance: {
+        loadMessages: async (key: string) => key === 'session-1' && referencedUri
+          ? [{ role: 'assistant', content: [], attachments: [{ uri: referencedUri }] }]
+          : [],
+      },
     } as unknown as GatewayService;
     app = new Hono();
     registerFilesRoutes(app, { service } as never);
@@ -79,6 +87,49 @@ describe('managed file sharing', () => {
       body: JSON.stringify({ audience: 'friend', thumbnail: false, ...body }),
     });
   }
+
+  function createFileShare(body: Record<string, unknown>) {
+    return app.request('/api/shares', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer test-token' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('shares a project file through the common file-share endpoint', async () => {
+    const resource = await resolveFile('project');
+    const response = await createFileShare({ fileId: resource.id, fileName: 'brief.txt' });
+    expect(response.status).toBe(201);
+    const { payload } = await response.json() as { payload: { id: string } };
+    expect(getShareStore().getById(payload.id)).toMatchObject({
+      workspaceRoot: realpathSync(roots.project), workspaceRelativePath: 'brief.txt',
+    });
+  });
+
+  it('shares the scoped HTML artifact and preserves its display name', async () => {
+    const html = '<html><body>Delivered report</body></html>';
+    const media = await saveMediaBuffer(Buffer.from(html), {
+      bucket: 'outbound', contentType: 'text/html', originalFilename: 'index.html',
+    });
+    referencedUri = media.uri;
+    const response = await createFileShare({ uri: media.uri, sessionKey: 'session-1', fileName: 'index.html' });
+    expect(response.status).toBe(201);
+    const { payload } = await response.json() as { payload: { id: string; fileName: string } };
+    expect(payload.fileName).toBe('index.html');
+    const record = getShareStore().getById(payload.id);
+    expect(record).toMatchObject({ kind: 'file', mimeType: 'text/html', absolutePath: media.path });
+    if (record?.kind !== 'file') throw new Error('Expected file share');
+    expect(readFileSync(record.absolutePath, 'utf8')).toBe(html);
+  });
+
+  it('rejects media outside the supplied session and ambiguous share targets', async () => {
+    const media = await saveMediaBuffer(Buffer.from('private'), { bucket: 'outbound', contentType: 'text/plain' });
+    referencedUri = media.uri;
+    expect((await createFileShare({ uri: media.uri })).status).toBe(400);
+    expect((await createFileShare({ uri: media.uri, sessionKey: 'another-session' })).status).toBe(404);
+    expect((await createFileShare({ uri: media.uri, path: 'brief.txt', sessionKey: 'session-1' })).status).toBe(400);
+    expect(getShareStore().getAllShares()).toHaveLength(0);
+  });
 
   it.each(['agent', 'project', 'session'] as const)('shares the selected %s file without falling back to the default workspace', async (kind) => {
     const resource = await resolveFile(kind);

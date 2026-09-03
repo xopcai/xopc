@@ -1,13 +1,9 @@
 import type { Hono } from 'hono';
 
-import { pendingTranscriptReferencesMediaUri } from '../../../agent/inbound/attachment-pipeline.js';
+import { resolveScopedMediaReference } from '../../media-access.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
 import { readMediaReference } from '../../../media/media-reference.js';
-import { messagesReferenceMediaUri } from '../../../media/session-references.js';
-import { parseMediaUri } from '../../../media/uri.js';
 import { mimeTypeFromMediaPath, saveMediaBuffer } from '../../../media/store.js';
-import { TaskRepository } from '../../../tasks/task-repository.js';
-import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -39,8 +35,6 @@ function parseByteRange(header: string | undefined, size: number): ByteRange | n
 }
 
 export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const tasks = new TaskRepository();
-
   authenticated.post('/api/media', deps.strictRateLimitMiddleware, async (c) => {
     const form = await c.req.formData().catch(() => null);
     const file = form?.get('file');
@@ -84,20 +78,7 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { message: 'Missing media scope' } }, 400);
     }
     try {
-      const parsed = parseMediaUri(uriRaw.trim());
-      const sessionReferencesUri = sessionKey
-        ? messagesReferenceMediaUri(
-          await deps.service.sessionIndexInstance.loadMessages(sessionKey),
-          parsed.uri,
-        ) || pendingTranscriptReferencesMediaUri(sessionKey, parsed.uri)
-        : false;
-      const taskReferencesUri = taskId && tasks.get(taskId)
-        ? new TaskContextRepository().list(taskId)
-          .some((edge) => edge.targetKind === 'file' && edge.targetId === parsed.uri)
-        : false;
-      if (!sessionReferencesUri && !taskReferencesUri) {
-        return c.json({ ok: false, error: { message: 'Not found' } }, 404);
-      }
+      const parsed = await resolveScopedMediaReference(deps.service, uriRaw.trim(), { sessionKey, taskId });
       const { buffer, path } = await readMediaReference(parsed.uri);
       const contentType = mimeTypeFromMediaPath(path);
       const range = parseByteRange(c.req.header('Range'), buffer.byteLength);
