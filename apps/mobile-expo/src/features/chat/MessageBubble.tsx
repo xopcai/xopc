@@ -334,8 +334,7 @@ export const MessageBubble = memo(function MessageBubble({
   const showAssistantDeliverables = Boolean(
     assistantTurnView && (
       assistantTurnView.deliverables.awaiting
-      || assistantTurnView.deliverables.workspacePaths.length > 0
-      || assistantTurnView.deliverables.attachments.length > 0
+      || assistantTurnView.deliverables.artifacts.length > 0
       || assistantTurnView.deliverables.productDeliveries.length > 0
     ),
   );
