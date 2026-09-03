@@ -10,7 +10,7 @@ export type DefaultSessionMeta = {
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
   effectiveWorkspacePath: string;
-  workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  workspaceSource: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
   userContextMode: 'enabled' | 'off' | 'temporary';
 };
 

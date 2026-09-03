@@ -2,6 +2,35 @@ import { z } from 'zod';
 
 export type SessionStatus = 'active' | 'idle' | 'archived' | 'pinned';
 
+/** Current associations, not a record of what a model has read. */
+export interface SessionContextSource {
+  kind: 'note';
+  id: string;
+  title?: string;
+  unavailable?: boolean;
+  origins: Array<{ kind: 'session' | 'task'; version?: string }>;
+}
+
+export interface SessionContextSummary {
+  sessionKey: string;
+  observedAt: string;
+  work: {
+    project?: { id: string; title: string };
+    task?: { id: string; title: string; phase: string };
+  };
+  sources: SessionContextSource[];
+  sourcesHasMore: boolean;
+  environment?: {
+    kind: 'local_checkout' | 'managed_worktree';
+    rootPath: string;
+    available: boolean;
+    branch?: string;
+    headSha?: string;
+    detached?: boolean;
+  };
+  unavailableSections: Array<'work' | 'sources' | 'environment'>;
+}
+
 export interface SessionRoutingMeta {
   agentId?: string;
   source?: string;
@@ -135,6 +164,8 @@ export interface SessionCreateRequest {
   channel?: string;
   agentId?: string;
   projectId?: string;
+  executionMode?: 'local_checkout' | 'managed_worktree';
+  baseRef?: string;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
 }

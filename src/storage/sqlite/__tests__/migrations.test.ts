@@ -13,6 +13,7 @@ import {
   applyPendingMigrations,
   inspectSchemaMigrationStatus,
   resolveMigrationsDir,
+  XOPC_DB_BASELINE_SCHEMA_VERSION,
   XOPC_DB_SCHEMA_VERSION,
 } from '../migrations/runner.js';
 import {
@@ -385,6 +386,41 @@ describe('SQLite migrations', () => {
         uri: 'media://outbound/media-1.xlsx',
       }),
     ]);
+  });
+
+  it.each([142, 143])('upgrades the main v%s schema with execution environments without losing device access', (version) => {
+    const db = openEmptyDb();
+    try {
+      ensureSchemaMetaTable(db);
+      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: version });
+      db.exec(`INSERT INTO devices (device_id, display_name, platform, public_key_jwk, scopes_json, created_at)
+        VALUES ('device-1', 'Phone', 'ios', '{}', '["sessions.read"]', 1)`);
+
+      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(db.prepare('SELECT display_name, scopes_json FROM devices WHERE device_id = ?').get('device-1'))
+        .toEqual({ display_name: 'Phone', scopes_json: '["sessions.read"]' });
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()
+        .map((row) => row.name);
+      expect(tables).toEqual(expect.arrayContaining([
+        'execution_environments', 'execution_environment_bindings', 'execution_environment_events',
+      ]));
+      expect(tables).not.toContain('execution_hosts');
+      expect(tables).not.toContain('execution_environment_handoffs');
+      const environmentColumns = db.prepare('PRAGMA table_info(execution_environments)').all().map((row) => row.name);
+      expect(environmentColumns).not.toContain('host_id');
+      expect(environmentColumns).not.toContain('managed');
+      const bindingColumns = db.prepare('PRAGMA table_info(execution_environment_bindings)').all().map((row) => row.name);
+      expect(bindingColumns).toContain('session_key');
+      expect(bindingColumns).not.toContain('subject_kind');
+      expect(bindingColumns).not.toContain('epoch');
+      const configColumns = db.prepare('PRAGMA table_info(session_config)').all().map((row) => row.name);
+      expect(configColumns).toContain('fixed_model');
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      db.close();
+    }
   });
 
   it('ensureXopcDatabaseSchema applies baseline then leaves version at release target', () => {

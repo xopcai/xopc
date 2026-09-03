@@ -7,6 +7,7 @@ import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.
 import { resolveUserPath } from '../agent/agent-scope.js';
 import { normalizeWorkspaceDir } from '../config/workspace-path.js';
 import type { Project } from '../projects/types.js';
+import { getExecutionEnvironmentForSession } from '../execution-environments/subject.js';
 import type { SessionAgentConfig } from './config-types.js';
 
 /**
@@ -35,7 +36,8 @@ export function projectWorkspacePath(
 }
 
 /**
- * Resolved markdown workspace for tools/shell: project workspace, session override, or merged agent profile default.
+ * Resolved workspace for tools/shell: bound execution environment, project workspace,
+ * session override, or merged agent profile default.
  */
 export function effectiveWorkspacePathForSession(
   cfg: Config,
@@ -44,6 +46,8 @@ export function effectiveWorkspacePathForSession(
   project?: Pick<Project, 'workspaceRoot'> | null,
 ): string {
   const base = resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+  const environment = getExecutionEnvironmentForSession(sessionKey);
+  if (environment) return environment.rootPath;
   const projectWorkspace = projectWorkspacePath(project);
   if (projectWorkspace) {
     return projectWorkspace;

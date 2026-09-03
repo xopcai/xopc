@@ -1,5 +1,7 @@
 import type { SessionMetadata } from '../session/types.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
+import { getExecutionEnvironmentForSession } from '../execution-environments/subject.js';
+import type { ExecutionEnvironmentKind } from '../execution-environments/types.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 export type ExecutionOrigin = 'chat' | 'task' | 'workflow' | 'automation' | 'browser' | 'proactive';
 export type ExecutionTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | 'retry';
@@ -9,7 +11,8 @@ export interface ExecutionContext {
   sessionKey: string;
   channel: string;
   agentId?: string;
-  strategy?: string;
+  executionEnvironmentId?: string;
+  executionKind?: ExecutionEnvironmentKind;
   taskId?: string;
   projectId?: string;
   origin: ExecutionOrigin;
@@ -54,17 +57,21 @@ export function resolveExecutionContext(input: {
   const taskId = isXopcDatabaseOpen()
     ? new TaskConversationRepository().resolveActiveExecutionSession(input.sessionKey)?.taskId
     : undefined;
+  const environment = getExecutionEnvironmentForSession(input.sessionKey);
   return {
     runId: input.runId,
     sessionKey: input.sessionKey,
     channel: input.channel,
     agentId: input.agentId,
+    ...(environment ? {
+      executionEnvironmentId: environment.id,
+      executionKind: environment.kind,
+    } : {}),
     projectId: input.metadata.projectId,
     taskId,
     origin: metadataOrigin(input.metadata, taskId),
     triggerKind: metadataTrigger(input.metadata),
     parentRunId: optionalString(input.metadata.customData?.parentRunId),
     contextTraceId: optionalString(input.metadata.customData?.contextTraceId),
-    strategy: optionalString(input.metadata.customData?.strategy),
   };
 }

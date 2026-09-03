@@ -31,6 +31,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `session` | List and manage Sessions |
 | `project` | Manage long-running Projects |
 | `doctor` | Diagnose installation, data, and security issues |
+| `support` | Create a redacted diagnostic report for an xopc problem |
 | `runtime` | Manage Node.js and Python tool runtimes |
 | `update` | Check for and install updates |
 | `logs` | Query and follow logs |

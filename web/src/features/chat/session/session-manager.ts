@@ -35,7 +35,7 @@ export type SessionAgentConfig = {
   };
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
-  workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  workspaceSource: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
   userContextMode: 'enabled' | 'off' | 'temporary';
 };
 
@@ -62,7 +62,8 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
     typeof payload.effectiveWorkspacePath !== 'string' ||
     typeof payload.workingDirectoryLocked !== 'boolean' ||
     (payload.userContextMode !== 'enabled' && payload.userContextMode !== 'off' && payload.userContextMode !== 'temporary') ||
-    (workspaceSource !== 'project' &&
+    (workspaceSource !== 'execution_environment' &&
+      workspaceSource !== 'project' &&
       workspaceSource !== 'session_override' &&
       workspaceSource !== 'agent_default_root' &&
       workspaceSource !== 'agent_workspace')

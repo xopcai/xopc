@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 
 import type { Hono } from 'hono';
 
+import { getSessionContextSummary } from '../../session-context-summary.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+
 import { buildSessionKey } from '../../../routing/session-key.js';
 import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
@@ -14,6 +17,8 @@ import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-refere
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
+import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
+import type { ProjectExecutionMode } from '../../../projects/types.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -24,6 +29,10 @@ const DEFAULT_SIDEBAR_STALE_DAYS = 60;
 
 function isSessionType(value: string): value is SessionType {
   return SESSION_TYPES.has(value as SessionType);
+}
+
+function parseExecutionMode(value: unknown): ProjectExecutionMode | undefined {
+  return value === 'local_checkout' || value === 'managed_worktree' ? value : undefined;
 }
 
 function ensureGatewayReadyForSessions(
@@ -79,8 +88,17 @@ function buildDirectSessionMetadata(params: {
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
+  const environments = new SessionEnvironmentService();
 
   // ========== Session REST API (/api/sessions) ==========
+
+  authenticated.get('/api/sessions/:key/context-summary', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) return blocked;
+    c.header('Cache-Control', 'no-store');
+    const summary = await getSessionContextSummary(service.currentConfig, c.req.param('key'), getGatewayPrincipal(c).scopes);
+    return summary ? c.json({ summary }) : c.json({ error: 'Session not found' }, 404);
+  });
 
   authenticated.get('/api/session-runs', (c) => {
     const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
@@ -161,8 +179,13 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const channel = typeof body.channel === 'string' && body.channel.trim() ? body.channel.trim() : 'webchat';
     const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
     const routingCfg = service.currentConfig;
-    if (projectId && !service.projects.get(projectId)) {
+    const project = projectId ? service.projects.get(projectId) : null;
+    if (projectId && !project) {
       return c.json({ ok: false, error: 'Project not found' }, 404);
+    }
+    const requestedExecutionMode = parseExecutionMode(body.executionMode);
+    if (body.executionMode !== undefined && !requestedExecutionMode) {
+      return c.json({ ok: false, error: 'Invalid execution mode' }, 400);
     }
     const agentId = resolveProjectAgentId({
       config: routingCfg,
@@ -182,17 +205,41 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       peerId: chatId,
     });
 
-    await service.sessionIndexInstance.saveMessages(sessionKey, [], {
-      metadata: buildDirectSessionMetadata({
-        agentId,
-        source: channel,
-        accountId: 'default',
-        peerId: chatId,
-      }),
-    });
+    let environment;
+    if (project && (project.workspaceRoot?.trim() || requestedExecutionMode)) {
+      try {
+        environment = await environments.attach({
+          sessionKey,
+          project,
+          mode: requestedExecutionMode,
+          baseRef: typeof body.baseRef === 'string' ? body.baseRef : undefined,
+        });
+      } catch (error) {
+        return c.json({
+          ok: false,
+          code: 'execution_environment_unavailable',
+          error: error instanceof Error ? error.message : String(error),
+        }, 409);
+      }
+    }
 
-    if (projectId) {
-      service.projects.attachSession(sessionKey, projectId);
+    try {
+      await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+        metadata: buildDirectSessionMetadata({
+          agentId,
+          source: channel,
+          accountId: 'default',
+          peerId: chatId,
+        }),
+      });
+
+      if (projectId) {
+        service.projects.attachSession(sessionKey, projectId);
+      }
+    } catch (error) {
+      await service.sessions.delete(sessionKey).catch(() => undefined);
+      await environments.release(sessionKey).catch(() => undefined);
+      throw error;
     }
     const rawInitialConfig = body.initialAgentConfig && typeof body.initialAgentConfig === 'object'
       ? body.initialAgentConfig as Record<string, unknown>
@@ -210,19 +257,29 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     };
     if (channel === 'webchat' && model) {
       const result = await service.sessions.initializeChatModel(sessionKey, model, thinkingLevel);
-      if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
+      if (!result.ok) {
+        await service.sessions.delete(sessionKey).catch(() => undefined);
+        await environments.release(sessionKey).catch((error) => {
+          log.warn({ err: error, sessionKey }, 'Invalid new session model and execution environment cleanup failed');
+        });
+        return c.json({ ok: false, error: result.error }, 400);
+      }
       delete initialAgentConfig.model;
       delete initialAgentConfig.thinkingLevel;
     }
     if (Object.keys(initialAgentConfig).length > 0) {
       const result = await service.sessions.patchAgentConfig(sessionKey, initialAgentConfig);
       if (!result.ok) {
+        await service.sessions.delete(sessionKey).catch(() => undefined);
+        await environments.release(sessionKey).catch((error) => {
+          log.warn({ err: error, sessionKey }, 'Invalid new session config and execution environment cleanup failed');
+        });
         return c.json({ ok: false, error: result.error }, 400);
       }
     }
     const session = await service.sessions.getSession(sessionKey);
     const agentConfig = channel === 'webchat' ? await service.sessions.getFixedAgentConfig(sessionKey) : undefined;
-    return c.json({ session, agentConfig }, 201);
+    return c.json({ session, agentConfig, ...(environment ? { environment } : {}) }, 201);
   });
 
   // GET /api/sessions - List sessions
@@ -651,6 +708,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       if (requestedProjectId && !service.projects.get(requestedProjectId)) {
         return c.json({ ok: false, error: 'Project not found' }, 404);
       }
+      const currentProjectId = (await service.sessions.getSession(key))?.projectId ?? null;
+      if (requestedProjectId !== currentProjectId && environments.get(key)) {
+        return c.json({
+          ok: false,
+          code: 'execution_environment_active',
+          error: 'Release the session execution environment before changing its project',
+        }, 409);
+      }
     }
     const result = await service.sessions.patch(key, patch);
     if (result.ok === false) {
@@ -809,7 +874,15 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key - Delete session (removes key from index)
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
+    if (environments.get(key) && service.getActiveWebchatRunId(key)) {
+      return c.json({ ok: false, error: 'Stop the active session run before deleting its environment' }, 409);
+    }
     const result = await service.sessions.delete(key);
+    if (result.deleted) {
+      await environments.release(key).catch((error) => {
+        log.warn({ err: error, sessionKey: key }, 'Session deleted but execution environment cleanup failed');
+      });
+    }
     return c.json(result);
   });
 
