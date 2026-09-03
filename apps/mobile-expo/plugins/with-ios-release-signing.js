@@ -21,6 +21,7 @@ function configureReleaseSigning(project, teamId, profiles) {
 }
 
 function withIosReleaseSigning(config) {
+  // Xcode mods run in reverse registration order; register before target creators.
   if (process.env.SIGNING_STYLE !== 'manual') return config;
   const teamId = process.env.DEVELOPMENT_TEAM || process.env.APPLE_TEAM_ID;
   if (!teamId) throw new Error('Manual iOS signing requires DEVELOPMENT_TEAM or APPLE_TEAM_ID');

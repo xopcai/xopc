@@ -70,6 +70,7 @@
       "./plugins/with-android-release-signing",
       "./plugins/with-android-share-intake",
       "./plugins/with-ios-cocoapods-mirror",
+      "./plugins/with-ios-release-signing",
       "./plugins/with-ios-share-intake",
       [
         "expo-build-properties",
@@ -131,7 +132,6 @@
           "contactsPermission": "Allow $(PRODUCT_NAME) to find contacts you explicitly ask your assistant to use."
         }
       ],
-      "./plugins/with-ios-release-signing",
       "./plugins/with-ios-widget-version",
       [
         "expo-widgets",
