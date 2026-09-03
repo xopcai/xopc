@@ -32,7 +32,7 @@ export interface ProjectSessionPreparation {
   project: Project;
   agentId: string;
   temporary: boolean;
-  create: (mode: NonNullable<SessionCreateRequest['executionMode']>) => Promise<void>;
+  create: (mode: NonNullable<SessionCreateRequest['executionMode']>) => Promise<string>;
 }
 
 export function useChatSessionInit(opts: {
@@ -197,7 +197,7 @@ export function useChatSessionInit(opts: {
           runtime.adoptEmptySession(key, null);
           applyResolvedSessionConfig(key);
         },
-      }).then(() => undefined);
+      });
       if (project?.workspaceRoot?.trim()) {
         setPreparation({
           requestKey, token, baseUrl, project, agentId: spec.agentId, temporary: spec.temporary,
@@ -208,7 +208,7 @@ export function useChatSessionInit(opts: {
         });
         return;
       }
-      return open();
+      await open();
     };
 
     const resumeSessionRun = (key: string, seed: Message[]): Promise<void> => {

@@ -38,7 +38,7 @@ type ChatPageHeaderRegistrationProps = {
   workspaceDisabled?: boolean;
   onWorkspaceChange?: (path: string) => Promise<void>;
   projectId?: string | null;
-  context?: Pick<SessionContextPanelProps, 'preparation' | 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
+  context?: Pick<SessionContextPanelProps, 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
 };
 
 /**
@@ -184,7 +184,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             </button>
           ) : null}
           <SessionContextPanel
-            key={`context:${activeSessionKey ?? context?.preparation?.project.id ?? 'new'}`}
+            key={`context:${activeSessionKey ?? context?.project?.id ?? 'new'}`}
             {...context}
             agentId={chatAgentId}
             temporary={userContextMode === 'temporary'}

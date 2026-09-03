@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 
-import type { ComposerContextRef, ComposerDraft, WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, ComposerDraft, ComposerSendHandler, WireAttachment } from '@/features/chat/composer/composer.types';
+import { commitAcceptedSend } from './commit-accepted-send';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow-up.types';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
@@ -47,7 +48,7 @@ export interface UseComposerActionsOptions {
   getContextRefs: () => ComposerContextRef[];
   getThinkingLevel: () => string;
 
-  onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void;
+  onSend: ComposerSendHandler;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
   onCommitEditFollowUp: (
@@ -116,16 +117,18 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     });
     if (!draft) return;
 
-    onSend(
+    const result = onSend(
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
       getThinkingLevel(),
       draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
     );
-    onUserTextCommitted?.(draft.text);
-    resetEditor();
-    clearAttachments();
-    clearContextRefs();
+    commitAcceptedSend(result, () => {
+      onUserTextCommitted?.(draft.text);
+      resetEditor();
+      clearAttachments();
+      clearContextRefs();
+    });
   }, [
     runBusy,
     voiceActive,

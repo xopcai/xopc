@@ -7,20 +7,17 @@ import { Link, useLocation } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
-import type { ProjectSessionPreparation } from '@/features/chat/session/use-chat-session-init';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { sessionContextCopy } from './session-context-copy';
 import { useSessionContext } from './use-session-context';
-import { ProjectEnvironmentPicker } from './project-environment-picker';
 
 export interface SessionContextPanelProps {
   sessionKey: string | null;
   draftRefs?: ComposerContextRef[];
   project?: { id: string; name: string; workspaceRoot?: string } | null;
-  preparation?: ProjectSessionPreparation | null;
   agentId?: string;
   temporary?: boolean;
   onLeaveProject?: () => void;
@@ -43,9 +40,8 @@ export function mergeContextSources(sources: SessionContextSource[], drafts: Com
 }
 
 /** Mounted with the session key by the header, so another session never inherits an open panel. */
-export function SessionContextPanel({ sessionKey, draftRefs = [], project, preparation, ...props }: SessionContextPanelProps) {
-  const [open, setOpen] = useState(Boolean(preparation));
-  const [creating, setCreating] = useState(false);
+export function SessionContextPanel({ sessionKey, draftRefs = [], project, ...props }: SessionContextPanelProps) {
+  const [open, setOpen] = useState(false);
   const language = useLocaleStore((state) => state.language);
   const copy = sessionContextCopy(language);
   const location = useLocation();
@@ -62,12 +58,11 @@ export function SessionContextPanel({ sessionKey, draftRefs = [], project, prepa
   const sourceNoteAvailable = sources.some((source) => !source.unavailable && source.origins.some((origin) => origin.kind === 'session'));
 
   return (
-    <Popover.Root open={open} onOpenChange={(next) => { if (!creating) setOpen(next); }}>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button type="button" aria-label={copy.title} title={preparation ? (language === 'zh' ? '选择新会话环境' : 'Choose a new session environment') : summary}
-          className={`group inline-flex h-8 ${preparation ? 'gap-2 px-2' : 'w-8'} shrink-0 items-center justify-center rounded-lg text-fg-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-hover hover:text-fg active:scale-95 data-[state=open]:bg-surface-hover data-[state=open]:text-fg motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}>
+        <button type="button" aria-label={copy.title} title={summary}
+          className="group inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-[background-color,color,transform] duration-150 hover:bg-surface-hover hover:text-fg active:scale-95 data-[state=open]:bg-surface-hover data-[state=open]:text-fg motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <ListTodo className="size-4 transition-transform duration-200 group-data-[state=open]:scale-110 motion-reduce:transform-none motion-reduce:transition-none" strokeWidth={1.75} aria-hidden />
-          {preparation ? <span className="hidden text-xs sm:inline">{language === 'zh' ? '选择环境' : 'Choose environment'}</span> : null}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -85,7 +80,7 @@ export function SessionContextPanel({ sessionKey, draftRefs = [], project, prepa
                       <RefreshCw className={`size-3.5 ${isValidating ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden />
                     </button> : null}
                   </div>
-                  {preparation ? <ProjectEnvironmentPicker key={preparation.project.id} preparation={preparation} onBusyChange={setCreating} /> : environment ? <>
+                  {environment ? <>
                     <div className="flex min-w-0 items-start gap-3 px-2 py-2.5">
                       <Monitor className="mt-0.5 size-4 shrink-0 text-fg" strokeWidth={1.75} aria-hidden />
                       <div className="min-w-0">
@@ -112,7 +107,7 @@ export function SessionContextPanel({ sessionKey, draftRefs = [], project, prepa
                     <Target className="size-4 shrink-0" aria-hidden /><span className="truncate" title={task.title}>{task.title}</span><span className="ml-auto shrink-0 text-xs text-fg-muted">{task.phase}</span>
                   </Link> : null}
                   {!currentProject && !task ? <p className="px-2 py-2 text-xs text-fg-muted">{error || data?.unavailableSections.includes('work') ? copy.unavailable : copy.emptyWork}</p> : null}
-                  {currentProject && props.onLeaveProject ? <button type="button" disabled={creating} className={actionClass} onClick={() => { close(); props.onLeaveProject?.(); }}>{props.leaveProjectLabel}</button> : null}
+                  {currentProject && props.onLeaveProject ? <button type="button" className={actionClass} onClick={() => { close(); props.onLeaveProject?.(); }}>{props.leaveProjectLabel}</button> : null}
                 </section>
                 <section className="border-t border-edge-subtle pt-3">
                   <h3 className="mb-1 px-2 text-sm text-fg-subtle">{copy.sources} {sources.length || ''}</h3>
