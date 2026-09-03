@@ -50,6 +50,13 @@ function mockSessionMgr(sessions: SessionInfo[]): SessionManager {
 }
 
 describe('resolveNewChatTarget', () => {
+  it.each(['local_checkout', 'managed_worktree'] as const)('creates an explicitly selected %s without reusing an empty shell', async (executionMode) => {
+    const mgr = mockSessionMgr([{ ...emptyA, projectId: 'project-a' }]);
+    const result = await resolveNewChatTarget({ sessionMgr: mgr, agentId: 'main', projectId: 'project-a', currentSessionKey: emptyA.key, executionMode });
+    expect(result.kind).toBe('create');
+    expect(mgr.loadSessions).not.toHaveBeenCalled();
+    expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main', projectId: 'project-a', executionMode });
+  });
   beforeEach(() => {
     resetWebchatEmptyShellCacheForTests();
     invalidateWebchatEmptyShellCache();
