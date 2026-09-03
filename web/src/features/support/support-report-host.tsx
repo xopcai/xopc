@@ -2,12 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { SupportReportDialog, type SupportReportSeed } from './support-report-dialog';
-
-export const OPEN_SUPPORT_REPORT_EVENT = 'open-support-report';
-
-export function openSupportReport(seed: SupportReportSeed = {}): void {
-  window.dispatchEvent(new CustomEvent<SupportReportSeed>(OPEN_SUPPORT_REPORT_EVENT, { detail: seed }));
-}
+import { OPEN_SUPPORT_REPORT_EVENT } from './support-report-events';
 
 function sessionKeyFromPath(pathname: string): string | undefined {
   if (!pathname.startsWith('/chat/') || pathname.startsWith('/chat/task/')) return undefined;
