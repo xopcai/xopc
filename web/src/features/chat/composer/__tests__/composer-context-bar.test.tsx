@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchProjects } from '@/features/projects/api';
 import { ComposerContextBar, type ComposerContextBarProps } from '../composer-context-bar';
+import { ProjectEnvironmentPicker } from '../project-environment-picker';
 
 const { refreshContext } = vi.hoisted(() => ({ refreshContext: vi.fn() }));
 vi.mock('@/features/chat/context/use-session-context', () => ({
@@ -62,6 +63,8 @@ describe('ComposerContextBar', () => {
   it('removes the project, respects project folder locks, and disables actions while busy', async () => {
     const props = { project: { id: 'p1', name: 'xopc' }, canChangeWorkspace: false };
     await render(props);
+    expect(container.textContent).toContain('Local');
+    expect(container.querySelector('[aria-label="New session environment"]')).toBeNull();
     const remove = container.querySelector<HTMLButtonElement>('[aria-label="Remove project from new chat"]')!;
     expect(container.querySelector('[aria-label="Choose folder"]')).toBeNull();
     await act(async () => remove.click());
@@ -78,5 +81,20 @@ describe('ComposerContextBar', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toBe('Directory unavailable');
     expect(container.querySelector('[aria-label="Choose folder"]')?.textContent).toBe('workspace');
     expect(refreshContext).not.toHaveBeenCalled();
+  });
+
+  it('places environment selection beside the project selector in the same context bar', async () => {
+    await render({
+      sessionKey: null, project: { id: 'code', name: 'xopc' }, canChangeWorkspace: false,
+      environmentPicker: <ProjectEnvironmentPicker selection={{ mode: 'managed_worktree', options: { localAvailable: true }, allowed: true, busy: false, checkFailed: false, checking: false, failure: null, changeMode: vi.fn(), retry: vi.fn(), send: vi.fn() }} />,
+    });
+    const projectSelector = container.querySelector<HTMLButtonElement>('[aria-label="Change the project for this chat"]')!;
+    const environmentSelector = container.querySelector<HTMLButtonElement>('[aria-label="New session environment"]')!;
+    expect(environmentSelector.parentElement).toBe(projectSelector.parentElement!.parentElement);
+    expect(projectSelector.disabled).toBe(false);
+    expect(environmentSelector.disabled).toBe(false);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).not.toContain('Create session');
+    expect(environmentSelector.querySelector('svg')).not.toBeNull();
   });
 });

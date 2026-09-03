@@ -30,12 +30,14 @@ import {
   interpolate,
   MAX_COMPOSER_CONTEXT_REFS,
   type ComposerContextRef,
+  type ComposerSendHandler,
   type WireAttachment,
 } from '@/features/chat/composer/composer.types';
 import type { FillChatComposerDetail } from '@/features/chat/composer/fill-composer-dispatch';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
 import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome-suggestions';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
+import { commitAcceptedSend } from '@/features/chat/composer/commit-accepted-send';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
 import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
@@ -121,7 +123,7 @@ export const ChatComposer = memo(function ChatComposer({
   sending: boolean;
   streaming: boolean;
   sessionKey: string | null;
-  composerContext?: Omit<ComposerContextBarProps, 'sessionKey' | 'disabled'>;
+  composerContext?: Omit<ComposerContextBarProps, 'sessionKey' | 'disabled'> & { disabled?: boolean };
   contextRefs: ComposerContextRef[];
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   welcomeDraftSeed?: { id: number; text: string } | null;
@@ -134,7 +136,7 @@ export const ChatComposer = memo(function ChatComposer({
   thinkingLevel: string;
   modelSupportsThinking: boolean;
   onThinkingChange: (level: string) => void | Promise<void>;
-  onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void;
+  onSend: ComposerSendHandler;
   onAbort: () => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
   onSteeringInterrupt?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void;
@@ -271,7 +273,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
   useEffect(() => {
-    if (!sessionKey || !attachmentHandoffId) return;
+    if (!attachmentHandoffId) return;
     const file = takeComposerAttachmentHandoff(attachmentHandoffId);
     setSearchParams(
       (current) => {
@@ -304,9 +306,10 @@ export const ChatComposer = memo(function ChatComposer({
 
   const sendReviewCommand = useCallback(
     (command: string) => {
-      onSendRef.current(command, undefined, thinkingLevelRef.current, contextRefs);
-      onUserTextCommitted?.(command);
-      setContextRefs([]);
+      commitAcceptedSend(onSendRef.current(command, undefined, thinkingLevelRef.current, contextRefs), () => {
+        onUserTextCommitted?.(command);
+        setContextRefs([]);
+      });
     },
     [contextRefs, onUserTextCommitted, setContextRefs],
   );
@@ -547,7 +550,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <div className="relative flex min-h-0 w-full flex-col">
-      {composerContext ? <ComposerContextBar {...composerContext} sessionKey={sessionKey} disabled={disabled || sending || streaming} /> : null}
+      {composerContext ? <ComposerContextBar {...composerContext} sessionKey={sessionKey} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
     <div
       className={cn(
         'relative flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
