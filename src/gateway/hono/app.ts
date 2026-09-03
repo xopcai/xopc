@@ -141,11 +141,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     c.header('X-Frame-Options', 'DENY');
     c.header('X-Content-Type-Options', 'nosniff');
-    c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (!c.res.headers.has('Referrer-Policy')) {
+      c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    }
     c.header('X-XSS-Protection', '1; mode=block');
     // microphone=(self): allow same-origin chat voice (composer). microphone=() breaks packaged Electron loading the gateway SPA.
     c.header('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
-    c.header('Content-Security-Policy', gatewayConsoleCsp);
+    // Share documents and attachments own their script and sandbox policies.
+    if (!c.res.headers.has('Content-Security-Policy')) {
+      c.header('Content-Security-Policy', gatewayConsoleCsp);
+    }
   }));
 
   // Browser Origin check middleware for API routes (CSRF protection).

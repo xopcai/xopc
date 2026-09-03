@@ -6,6 +6,8 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
+import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
+import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
@@ -215,16 +217,23 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
   useEffect(() => {
     if (!auth.hasToken) return;
-    if (!skillQuery && !slashQuery && !draftQuery) return;
-    if (autoSendQuery) return;
+    if (!skillQuery && !slashQuery && !draftQuery && !(session.projectPreparation && attachmentsHandoffId)) return;
+    if (autoSendQuery && !session.projectPreparation) return;
     if (session.showSessionLoading || session.sessionRoutePending) return;
-    if (!session.sessionKey) return;
+    if (!session.sessionKey && !session.projectPreparation) return;
+
+    const preparedAttachments = session.projectPreparation && attachmentsHandoffId
+      ? takeComposerPayloadHandoff(attachmentsHandoffId) ?? undefined : undefined;
 
     const stripRouteComposerParams = () => {
       const next = new URLSearchParams(searchParams);
       next.delete('skill');
       next.delete('slash');
       next.delete('draft');
+      if (session.projectPreparation) {
+        next.delete('autoSend');
+        next.delete('attachmentsHandoff');
+      }
       const qs = next.toString();
       navigate({ pathname, search: qs ? `?${qs}` : '' }, { replace: true });
     };
@@ -234,16 +243,20 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       if (routeComposerSeedMarkerRef.current === marker) return;
       routeComposerSeedMarkerRef.current = marker;
       queueMicrotask(() => {
-        welcomeDraftSeq.current += 1;
-        setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text });
+        if (preparedAttachments?.length) {
+          dispatchFillChatComposer(text, preparedAttachments);
+        } else {
+          welcomeDraftSeq.current += 1;
+          setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text });
+        }
         stripRouteComposerParams();
       });
     };
 
     const composerDraftSeed = buildComposerDraftSeed(skillQuery, draftQuery);
-    if (composerDraftSeed) {
+    if (composerDraftSeed || preparedAttachments?.length) {
       const marker = `${session.sessionKey}:draft:${composerDraftSeed}`;
-      applyWireSeed(composerDraftSeed, marker);
+      applyWireSeed(composerDraftSeed ?? '', marker);
       return;
     }
 
@@ -286,6 +299,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     slashQuery,
     draftQuery,
     autoSendQuery,
+    attachmentsHandoffId,
+    session.projectPreparation,
     searchParams,
     session.showSessionLoading,
     session.sessionRoutePending,
@@ -696,6 +711,13 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     [agents.displayAgentId, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage],
   );
 
+  const projectComposer = useProjectSessionComposer({
+    preparation: session.projectPreparation,
+    sessionKey: chatSessionKey,
+    ready: session.modelConfigReady && !isSessionTransitioning,
+    onSend: handleComposerSend,
+  });
+
   const handleEditUserMessage = useCallback((message: Message) => {
     if (!message.turnId) return;
     setEditingUserTurn({ turnId: message.turnId });
@@ -930,12 +952,13 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   ]);
 
   const handleProjectChange = useCallback(async (projectId: string | null) => {
+    if (updatingContext || projectComposer.busy) return;
     if (session.projectPreparation) {
       contextSwitchSourceRef.current = null;
       navigate(newChatHrefForProject(projectId), { state: { forceNewChat: true, agentId: agents.displayAgentId, temporary: session.userContextMode === 'temporary' } });
       return;
     }
-    if (contextSwitchSourceRef.current !== undefined || updatingContext || stream.sending || stream.streaming || isSessionTransitioning) return;
+    if (contextSwitchSourceRef.current !== undefined || stream.sending || stream.streaming || isSessionTransitioning) return;
     contextSwitchSourceRef.current = chatSessionKey;
     setUpdatingContext(true);
     try {
@@ -952,7 +975,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     } finally {
       setUpdatingContext(false);
     }
-  }, [chatSessionKey, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, session.createNewSession, session.projectPreparation, session.userContextMode, stream.sending, stream.streaming, navigate, agents.displayAgentId]);
+  }, [chatSessionKey, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, projectComposer.busy, session.createNewSession, session.projectPreparation, session.userContextMode, stream.sending, stream.streaming, navigate, agents.displayAgentId]);
 
   const handleRemoveProject = useCallback(() => handleProjectChange(null), [handleProjectChange]);
   const selectWelcomeProject = useCallback((projectId: string) => handleProjectChange(projectId), [handleProjectChange]);
@@ -967,14 +990,13 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   }, [updatingContext, isSessionTransitioning, stream.sending, stream.streaming, canChangeWorkingDirectory, session.onSessionWorkingDirectoryChange]);
 
   const headerContext = useMemo(() => ({
-    preparation: session.projectPreparation,
     project: scopedProject,
     draftRefs: composerContextRefs,
-    onLeaveProject: handleRemoveProject,
+    onLeaveProject: updatingContext || projectComposer.busy ? undefined : handleRemoveProject,
     leaveProjectLabel: m.chat.scopeRemoveProject,
     onDraftSourceNote: sourceNoteId ? handleDraftSourceNoteDigest : undefined,
     draftSourceNoteLabel: m.chat.sourceNoteDigestAction,
-  }), [session.projectPreparation, scopedProject, composerContextRefs, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
+  }), [updatingContext, projectComposer.busy, scopedProject, composerContextRefs, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
 
   if (!auth.hasToken) {
     return (
@@ -1245,6 +1267,10 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
               <ChatComposer
                 composerContext={!embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
                   project: scopedProject,
+                  disabled: updatingContext || projectComposer.busy || (isSessionTransitioning && !session.projectPreparation),
+                  environmentPicker: session.projectPreparation ? (
+                    <ProjectEnvironmentPicker selection={projectComposer} />
+                  ) : undefined,
                   workspacePath: session.effectiveWorkspacePath,
                   canChangeWorkspace: canChangeWorkingDirectory,
                   onProjectChange: handleProjectChange,
@@ -1253,8 +1279,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 contextRefs={composerContextRefs}
                 setContextRefs={setComposerContextRefs}
                 disabled={
-                  !session.modelConfigReady || session.modelConfigSaving ||
-                  isSessionTransitioning || updatingContext ||
+                  (!session.projectPreparation && (!session.modelConfigReady || isSessionTransitioning)) ||
+                  Boolean(session.projectPreparation && !projectComposer.allowed) ||
+                  session.modelConfigSaving || projectComposer.busy || updatingContext ||
                   Boolean(clarify.clarifyPrompt)
                 }
                 sending={stream.sending}
@@ -1266,7 +1293,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 thinkingLevel={session.thinkingLevel}
                 modelSupportsThinking={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
-                onSend={handleComposerSend}
+                onSend={projectComposer.send}
                 editingUserTurnId={editingUserTurn?.turnId}
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={stream.abort}
