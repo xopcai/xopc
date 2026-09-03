@@ -13,6 +13,7 @@ import {
 export type PopoverSelectOption = {
   value: string;
   label: string;
+  icon?: ReactNode;
   disabled?: boolean;
   group?: string;
 };
@@ -57,6 +58,7 @@ export function PopoverSelect({
   ariaLabelledBy,
   title,
   triggerClassName,
+  triggerIcon,
   contentClassName,
   side = 'bottom',
   align = 'start',
@@ -81,6 +83,7 @@ export function PopoverSelect({
   ariaLabelledBy?: string;
   title?: string;
   triggerClassName?: string;
+  triggerIcon?: ReactNode;
   contentClassName?: string;
   side?: 'top' | 'bottom' | 'left' | 'right';
   align?: 'start' | 'center' | 'end';
@@ -117,6 +120,7 @@ export function PopoverSelect({
             triggerClassName,
           )}
         >
+          {triggerIcon}
           <span className={cn('min-w-0 truncate', !value && 'text-fg-subtle')}>{label}</span>
           <ChevronsUpDown className="size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
         </button>
@@ -190,11 +194,12 @@ export function PopoverSelect({
                       setOpen(false);
                     }}
                   >
-                    <Check
+                    {option.icon ?? <Check
                       className={cn('size-4 shrink-0', option.value !== value && 'invisible')}
                       aria-hidden="true"
-                    />
+                    />}
                     <span className="min-w-0 truncate">{option.label}</span>
+                    {option.icon ? <Check className={cn('ml-auto size-4 shrink-0', option.value !== value && 'invisible')} aria-hidden /> : null}
                   </button>
                 </Fragment>
               );

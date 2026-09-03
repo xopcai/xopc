@@ -1,5 +1,22 @@
 import { createHash } from 'node:crypto';
 
+/** Shared HTML runs with an opaque origin, without access to console storage. */
+export const SHARED_HTML_CSP = [
+  "default-src 'none'",
+  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads allow-forms allow-modals',
+  "script-src 'unsafe-inline' https:",
+  "style-src 'unsafe-inline' https:",
+  'img-src https: data: blob:',
+  'media-src https: data: blob:',
+  'font-src https: data:',
+  'connect-src https:',
+  "frame-src 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  'form-action https:',
+].join('; ');
+
 /**
  * Compute SHA-256 CSP hashes for inline `<script>` blocks in an HTML string.
  * Only scripts without a `src` attribute are considered inline.

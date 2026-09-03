@@ -1,5 +1,5 @@
-import { FolderOpen, GitBranch, RefreshCw, X } from 'lucide-react';
-import { useState } from 'react';
+import { FolderOpen, GitBranch, Laptop, RefreshCw, Shuffle, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { useDebounce } from 'use-debounce';
 
@@ -21,13 +21,14 @@ export interface ComposerContextBarProps {
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
   disabled: boolean;
+  environmentPicker?: ReactNode;
   onProjectChange: (projectId: string | null) => void;
   onWorkspaceChange: (path: string) => Promise<void>;
 }
 
 const controlClass = 'inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-sm text-fg transition-[background-color,transform] hover:bg-surface-hover active:scale-95 disabled:pointer-events-none disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-export function ComposerContextBar({ sessionKey, project, workspacePath, canChangeWorkspace, disabled, onProjectChange, onWorkspaceChange }: ComposerContextBarProps) {
+export function ComposerContextBar({ sessionKey, project, workspacePath, canChangeWorkspace, disabled, environmentPicker, onProjectChange, onWorkspaceChange }: ComposerContextBarProps) {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const copy = m.chat.composerContext;
@@ -79,10 +80,15 @@ export function ComposerContextBar({ sessionKey, project, workspacePath, canChan
             loading={projects.isLoading}
             statusMessage={projects.error ? copy.projectsFailed : projects.data?.items.length === 0 ? copy.noProjects : undefined}
             triggerClassName={cn(controlClass, 'h-8 w-auto max-w-44 gap-1 border-0 bg-transparent pr-2.5 text-sm [&>svg]:hidden [&>span]:text-fg', project && 'pl-1')}
-            contentClassName="xopc-composer-config-popover w-[min(20rem,calc(100vw-1.5rem))] min-w-0"
+            contentClassName="xopc-composer-config-popover w-max min-w-[min(12rem,calc(100vw-1.5rem))] max-w-[min(20rem,calc(100vw-1.5rem))] [&>input]:w-0 [&>input]:min-w-full"
             onChange={(id) => { if (id !== (project?.id ?? '')) onProjectChange(id || null); }}
           />
         </div>
+        {environmentPicker}
+        {!environmentPicker && project && environment ? <span className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-surface-hover px-2.5 text-sm text-fg" title={environment.rootPath}>
+          {environment.kind === 'managed_worktree' ? <Shuffle className="size-4 shrink-0" strokeWidth={1.75} aria-hidden /> : <Laptop className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />}
+          {environment.kind === 'managed_worktree' ? 'Worktree' : 'Local'}
+        </span> : null}
         {projects.error ? <button type="button" className={cn(controlClass, 'size-7 px-0')} aria-label={copy.retryProjects} onClick={() => void projects.mutate()}><RefreshCw className="size-3.5" aria-hidden /></button> : null}
         {!project ? <button type="button" className={cn(controlClass, 'max-w-52')} disabled={disabled || !canChangeWorkspace || picker.picking} title={workspaceTitle} aria-label={copy.chooseFolder} onClick={picker.pick}>
           <FolderOpen className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />

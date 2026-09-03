@@ -8,6 +8,7 @@ import { extractToken } from '../../auth.js';
 import { FileServiceError } from '../../../files/file-service.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import { getClientIpFromHeaders } from '../../security/loopback.js';
+import { SHARED_HTML_CSP } from '../../security/csp.js';
 import { getShareStore, shareResponseContentType } from '../../../share/share-store.js';
 import { getSiteShareStore } from '../../../share/site-share-store.js';
 import { resolveSiteShareConfig } from '../../../share/site-share-config.js';
@@ -1419,6 +1420,7 @@ async function handleDirectoryFile(
       status: 200,
       headers: {
         'Content-Type': shareResponseContentType(mime),
+        ...(useInline && mime === 'text/html' ? { 'Content-Security-Policy': SHARED_HTML_CSP } : {}),
         'Content-Disposition': disposition,
         'Content-Length': String(fileStat.size),
         'Cache-Control': 'private, no-store',
@@ -1646,6 +1648,7 @@ async function handleFileDownload(
       status: 200,
       headers: {
         'Content-Type': shareResponseContentType(record.mimeType),
+        ...(inline && record.mimeType === 'text/html' ? { 'Content-Security-Policy': SHARED_HTML_CSP } : {}),
         'Content-Disposition': disposition,
         'Content-Length': String(fileStat.size),
         'Cache-Control': 'private, no-store',

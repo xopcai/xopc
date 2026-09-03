@@ -31,6 +31,9 @@ export interface ComposerContextRef {
 
 export type WireContextRef = Pick<ComposerContextRef, 'kind' | 'sourceId' | 'expectedVersion'>;
 
+/** False rejects a submission without consuming the current composer draft. */
+export type ComposerSendHandler = (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void | boolean | Promise<void | boolean>;
+
 export const MAX_COMPOSER_CONTEXT_REFS = 5;
 
 // ── Draft harvest result (shared by send / flush / interrupt) ───────

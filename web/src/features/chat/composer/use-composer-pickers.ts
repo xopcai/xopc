@@ -6,7 +6,7 @@ import {
   type PaletteApplyContext,
 } from '@/features/chat/composer/palette-item-handlers';
 import type { PickerKeyAdapter } from '@/features/chat/composer/picker-key-adapter';
-import type { ComposerContextRef, ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
+import type { ComposerContextRef, ComposerSendHandler, ResetEditorOptions, WireAttachment } from '@/features/chat/composer/composer.types';
 import { useDismissOnOutsideClick } from '@/features/chat/composer/use-dismiss-on-outside-click';
 import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
 import { recordRecentAtPath } from '@/features/chat/palette/at-mention-recent';
@@ -33,7 +33,7 @@ export interface UseComposerPickersOptions {
   resetEditor: (opts?: ResetEditorOptions) => void;
   clearAttachments: () => void;
 
-  onSend: (text: string, atts?: WireAttachment[], thinking?: string, contextRefs?: ComposerContextRef[]) => void;
+  onSend: ComposerSendHandler;
   onUserTextCommitted?: (text: string) => void;
   /** Optional: when set, palette can offer agent rows that switch the active session agent. */
   onChatAgentChange?: (agentId: string) => void;
