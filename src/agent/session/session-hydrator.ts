@@ -14,6 +14,8 @@
  *                       per-session override > agent default) and apply
  */
 
+import { getModelThinking } from '../../providers/model-thinking.js';
+
 import { mkdir } from 'node:fs/promises';
 
 import type { Config } from '../../config/schema.js';
@@ -79,7 +81,7 @@ export class SessionHydrator {
   async model(sessionKey: string): Promise<void> {
     const cfg = await this.opts.sessionConfigStore.get(sessionKey);
     if (cfg?.modelOverride) {
-      await this.opts.modelManager.switchModelForSession(sessionKey, cfg.modelOverride);
+      this.opts.modelManager.restoreSessionModel(sessionKey, cfg.modelOverride, cfg.fixedModel === true);
     }
   }
 
@@ -94,6 +96,13 @@ export class SessionHydrator {
       requestOverride,
       undefined,
     );
+    const stored = await this.opts.sessionConfigStore.get(sessionKey);
+    if (stored?.fixedModel) {
+      const model = this.opts.modelManager.getResolvedModelForSession(sessionKey);
+      if (!getModelThinking(model).options.includes(level)) {
+        throw new Error(`Thinking level ${level} is not supported by ${model.provider}/${model.id}`);
+      }
+    }
     this.opts.agentManager.setThinkingLevel(sessionKey, level);
   }
 }

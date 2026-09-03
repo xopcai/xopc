@@ -1,3 +1,5 @@
+import useSWR from 'swr';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '../api/registry-api';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -85,12 +87,30 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
   const hasMore = sessionSlice?.hasMore ?? false;
   const sessionName = sessionSlice?.name ?? null;
   const sessionModel = sessionSlice?.model ?? '';
+  const modelRegistry = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, { revalidateOnFocus: false });
+  const modelConfigReady = sessionSlice?.configVersion !== undefined && Boolean(modelRegistry.data?.some((item) => item.id === sessionModel));
+  const modelConfigSaving = sessionSlice?.modelConfigSaving ?? false;
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
   const reasoningLevel = sessionSlice?.reasoningLevel ?? 'on';
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workspaceSource = sessionSlice?.workspaceSource ?? 'agent_default_root';
   const userContextMode = sessionSlice?.userContextMode ?? 'enabled';
+
+  useEffect(() => {
+    if (!visibleSessionKey || sending || streaming) return;
+    void sessionMgrRef.current.loadSessionAgentConfig(visibleSessionKey)
+      .then((cfg) => patchSessionAgentConfigView(visibleSessionKey, cfg)).catch(() => undefined);
+  }, [visibleSessionKey, sending, streaming]);
+
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const key = (event as CustomEvent<{ sessionKey: string }>).detail.sessionKey;
+      void sessionMgrRef.current.loadSessionAgentConfig(key).then((cfg) => patchSessionAgentConfigView(key, cfg)).catch(() => undefined);
+    };
+    window.addEventListener('session-model-config-stale', refresh);
+    return () => window.removeEventListener('session-model-config-stale', refresh);
+  }, []);
 
   useEffect(() => {
     messagesLenRef.current = sessionSlice?.messages.length ?? 0;
@@ -402,6 +422,8 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       conversationPhase,
       loading: initLoading,
       sessionModel,
+      modelConfigReady,
+      modelConfigSaving,
       thinkingLevel,
       onSessionThinkingLevelChange,
       onSessionWorkingDirectoryChange,
