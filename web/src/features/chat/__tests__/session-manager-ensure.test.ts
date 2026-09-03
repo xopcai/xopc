@@ -108,6 +108,22 @@ describe('SessionManager.ensureSessionExists', () => {
   });
 });
 
+describe('SessionManager.createSession environment', () => {
+  beforeEach(() => mockedApiFetch.mockReset());
+  it('sends the explicit mode together with initial model and project', async () => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ session: { key: 'created' } }, 201));
+    await new SessionManager().createSession({ projectId: 'project-a', executionMode: 'managed_worktree', initialAgentConfig: { model: 'test/model' } });
+    expect(JSON.parse(String(mockedApiFetch.mock.calls[0]?.[1]?.body))).toEqual({
+      channel: 'webchat', projectId: 'project-a', executionMode: 'managed_worktree', initialAgentConfig: { model: 'test/model' },
+    });
+  });
+  it('surfaces the server reason instead of silently retrying in Local', async () => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ error: 'Repository has uncommitted changes' }, 409));
+    await expect(new SessionManager().createSession({ projectId: 'project-a', executionMode: 'managed_worktree' })).rejects.toThrow('uncommitted changes');
+    expect(mockedApiFetch).toHaveBeenCalledOnce();
+  });
+});
+
 describe('SessionManager.loadSession', () => {
   beforeEach(() => {
     mockedApiFetchWithStartupRetry.mockReset();

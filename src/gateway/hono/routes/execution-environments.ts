@@ -1,5 +1,9 @@
+import { stat } from 'node:fs/promises';
+
+import type { ProjectEnvironmentOptions } from '@xopcai/gateway-contract';
 import type { Hono } from 'hono';
 
+import { inspectGitRepository } from '../../../execution-environments/git.js';
 import { LocalWorktreeManager } from '../../../execution-environments/local-worktree-manager.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
 import { ExecutionEnvironmentStore } from '../../../execution-environments/store.js';
@@ -21,6 +25,27 @@ export function registerExecutionEnvironmentRoutes(
   const store = new ExecutionEnvironmentStore();
   const worktrees = new LocalWorktreeManager({ store });
   const sessions = new SessionEnvironmentService({ store, worktrees });
+
+  authenticated.get('/api/projects/:projectId/environment-options', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    const project = deps.service.projects.get(c.req.param('projectId'));
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const root = project.workspaceRoot?.trim();
+    const options: ProjectEnvironmentOptions = {
+      localAvailable: Boolean(root && await stat(root).then((entry) => entry.isDirectory()).catch(() => false)),
+    };
+    if (!options.localAvailable) {
+      options.worktreeUnavailableReason = 'workspace_unavailable';
+    } else {
+      try {
+        const repository = await inspectGitRepository(root!);
+        if (repository.dirty) options.worktreeUnavailableReason = 'uncommitted_changes';
+      } catch {
+        options.worktreeUnavailableReason = 'git_commit_required';
+      }
+    }
+    return c.json({ ok: true, options });
+  });
 
   authenticated.get('/api/projects/:projectId/environments', (c) => {
     const projectId = c.req.param('projectId');

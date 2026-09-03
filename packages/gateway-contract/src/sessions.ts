@@ -170,6 +170,12 @@ export interface SessionCreateRequest {
   initialAgentConfig?: SessionInitialAgentConfig;
 }
 
+/** Read-only availability; session creation validates the workspace again. */
+export interface ProjectEnvironmentOptions {
+  localAvailable: boolean;
+  worktreeUnavailableReason?: 'workspace_unavailable' | 'git_commit_required' | 'uncommitted_changes';
+}
+
 export interface SessionForkAtTurnRequest {
   lastTurnId: string;
 }

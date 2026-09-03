@@ -1,7 +1,8 @@
 import { resolveNewChatTarget } from '@/features/chat/session/resolve-new-chat-target';
-import { newSessionCacheKey, type SessionInitialAgentConfig } from '@xopcai/gateway-contract';
+import { newSessionCacheKey, type SessionCreateRequest, type SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { addWebchatEmptyShellToCache } from '@/features/chat/session/webchat-empty-shell-cache';
+import { useGatewayStore } from '@/stores/gateway-store';
 
 export type NewChatHandoffNavigate = (
   key: string,
@@ -19,6 +20,7 @@ export type NewChatHandoffOpts = {
   forceNew?: boolean;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
+  executionMode?: SessionCreateRequest['executionMode'];
   navigateToSession: NewChatHandoffNavigate;
   onOpened: (sessionKey: string) => void;
   replaceNavigate?: boolean;
@@ -30,11 +32,12 @@ let latestHandoffGeneration = 0;
 
 /** Resolve reuse / noop / create; navigate when the target key changes. */
 export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
-  const scopeKey = newSessionCacheKey('web', {
+  const gateway = useGatewayStore.getState();
+  const scopeKey = newSessionCacheKey(gateway.baseUrl, {
     agentId: opts.agentId?.trim() || 'main',
     projectId: opts.projectId ?? null,
   });
-  const cacheKey = `${scopeKey}:${opts.forceNew === true}:${opts.temporary === true}:${opts.search ?? ''}`;
+  const cacheKey = JSON.stringify([scopeKey, gateway.token, opts.forceNew === true, opts.temporary === true, opts.executionMode, opts.search]);
   const existing = inflightByScope.get(cacheKey);
   if (existing) return existing;
   const generation = ++latestHandoffGeneration;
@@ -57,6 +60,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       forceNew: opts.forceNew,
       temporary: opts.temporary,
       initialAgentConfig: opts.initialAgentConfig,
+      executionMode: opts.executionMode,
     });
 
     if (resolution.kind !== 'create' && opts.initialAgentConfig) {
@@ -77,7 +81,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     }
 
     const { sessionKey, session } = resolution;
-    addWebchatEmptyShellToCache({
+    if (!opts.executionMode) addWebchatEmptyShellToCache({
       key: sessionKey,
       sessionId: session.sessionId,
       name: session.name,

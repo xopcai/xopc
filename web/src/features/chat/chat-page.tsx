@@ -28,7 +28,7 @@ import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-bu
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
 import { useChatSessionMetadata } from '@/features/chat/session/use-chat-session-metadata';
-import { buildComposerDraftSeed } from '@/features/chat/session/composer-handoff-params';
+import { buildComposerDraftSeed, newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { ChatTimelinePanel } from '@/features/chat/timeline/chat-timeline-panel';
 import { ChatTimelineRail } from '@/features/chat/timeline/chat-timeline-rail';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
@@ -543,7 +543,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   ]);
 
   const sourceNoteId = sessionMetadata?.sourceNoteId ?? null;
-  const scopedProject = useChatProjectScope(chatSessionKey, searchParams.get('projectId'));
+  const loadedProject = useChatProjectScope(chatSessionKey, searchParams.get('projectId'));
+  const scopedProject = session.projectPreparation?.project ?? loadedProject;
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
   const contextSwitchSourceRef = useRef<string | null | undefined>(undefined);
   const [updatingContext, setUpdatingContext] = useState(false);
@@ -929,11 +930,20 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   ]);
 
   const handleProjectChange = useCallback(async (projectId: string | null) => {
+    if (session.projectPreparation) {
+      contextSwitchSourceRef.current = null;
+      navigate(newChatHrefForProject(projectId), { state: { forceNewChat: true, agentId: agents.displayAgentId, temporary: session.userContextMode === 'temporary' } });
+      return;
+    }
     if (contextSwitchSourceRef.current !== undefined || updatingContext || stream.sending || stream.streaming || isSessionTransitioning) return;
     contextSwitchSourceRef.current = chatSessionKey;
     setUpdatingContext(true);
     try {
-      await session.createNewSession({ forceNew: true, projectId, temporary: session.userContextMode === 'temporary' });
+      if (projectId) {
+        navigate(newChatHrefForProject(projectId), { state: { forceNewChat: true, agentId: agents.displayAgentId, temporary: session.userContextMode === 'temporary' } });
+      } else {
+        await session.createNewSession({ forceNew: true, projectId, temporary: session.userContextMode === 'temporary' });
+      }
     } catch (error) {
       contextSwitchSourceRef.current = undefined;
       showComposerNotification('error', m.chat.composerContext.changeFailed, {
@@ -942,7 +952,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     } finally {
       setUpdatingContext(false);
     }
-  }, [chatSessionKey, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, session.createNewSession, session.userContextMode, stream.sending, stream.streaming]);
+  }, [chatSessionKey, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, session.createNewSession, session.projectPreparation, session.userContextMode, stream.sending, stream.streaming, navigate, agents.displayAgentId]);
 
   const handleRemoveProject = useCallback(() => handleProjectChange(null), [handleProjectChange]);
   const selectWelcomeProject = useCallback((projectId: string) => handleProjectChange(projectId), [handleProjectChange]);
@@ -957,13 +967,14 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   }, [updatingContext, isSessionTransitioning, stream.sending, stream.streaming, canChangeWorkingDirectory, session.onSessionWorkingDirectoryChange]);
 
   const headerContext = useMemo(() => ({
+    preparation: session.projectPreparation,
     project: scopedProject,
     draftRefs: composerContextRefs,
     onLeaveProject: handleRemoveProject,
     leaveProjectLabel: m.chat.scopeRemoveProject,
     onDraftSourceNote: sourceNoteId ? handleDraftSourceNoteDigest : undefined,
     draftSourceNoteLabel: m.chat.sourceNoteDigestAction,
-  }), [scopedProject, composerContextRefs, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
+  }), [session.projectPreparation, scopedProject, composerContextRefs, handleRemoveProject, m.chat.scopeRemoveProject, sourceNoteId, handleDraftSourceNoteDigest, m.chat.sourceNoteDigestAction]);
 
   if (!auth.hasToken) {
     return (
@@ -1005,7 +1016,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         showChatAgentSelector={agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
-        chatAgentDisabled={isSessionTransitioning}
+        chatAgentDisabled={isSessionTransitioning || Boolean(session.projectPreparation)}
         sessionKey={session.sessionKey}
         hasMessages={!isSessionTransitioning && msgSlice.items.length > 0}
         workspacePath={session.effectiveWorkspacePath}

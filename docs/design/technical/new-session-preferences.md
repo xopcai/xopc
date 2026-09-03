@@ -22,6 +22,16 @@ Project removal is explicit: clients create a new session with no `projectId`; m
 
 Empty-shell reuse and in-flight request coalescing are client concerns. Cache identity includes gateway, agent, and project scope; forced and temporary creation are not coalesced with reusable creation.
 
+## Local environment selection
+
+Web project-page, sidebar, and chat project entries use `/chat/new` rather than creating a session before navigation. For a project with a configured workspace, this route waits for confirmation in the existing header context panel. Its two choices are Local directory and New local worktree; the project's execution mode is the initial selection, not a setting changed by this action. Projects without a fixed workspace retain ordinary chat creation.
+
+`GET /api/projects/:projectId/environment-options` is a read-only, workspace-read-scoped preflight. It checks directory availability, accessible Git history, and uncommitted changes without allocating any environment. An unavailable project default remains selected but cannot be submitted; selecting Local is explicit. Local means the machine running the Gateway, not necessarily the browser's machine.
+
+Confirmation passes `executionMode` through the existing `POST /api/sessions` flow, which validates again and binds the environment before returning. Explicit mode requests never reuse an empty shell; request coalescing includes gateway credentials and mode. Worktrees start at current HEAD, remain detached, and do not copy uncommitted changes. Creation failure preserves the choice and pending composer handoff, surfaces the server reason, and never retries in a different mode.
+
+Existing sessions display their actual environment and link to a new conversation in another environment. They are not relocated, rebound, or deleted by this UI. Navigation or credential changes invalidate stale preparation callbacks. No environment schema, remote execution, branch picker, auto-stash, or Git write actions are added.
+
 ## Concrete chat model selection
 
 The chat composer always shows a concrete provider/model and its supported thinking level. There is no default or automatic-model entry. On chat creation (or first idle access to an older chat), the gateway resolves the selection and persists it with `fixed_model = 1`. A remembered model that is no longer available stays selected and visible so the user can replace it explicitly.
