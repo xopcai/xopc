@@ -105,7 +105,7 @@ function MobilePairingWizardContent({ onClose, onPaired }: { onClose: () => void
           !readiness.data ? <div className="mt-8 space-y-4"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-40 w-full" /></div> :
           completed ? <>
             {background.data ? <label className="mt-8 flex items-center justify-between gap-4 border-y border-edge-subtle py-5 text-sm text-fg">
-              {f.background}<input type="checkbox" role="switch" disabled={!background.data.backgroundSupported} checked={background.data.runInBackground ?? false} className="size-5 accent-accent"
+              {f.background}<input type="checkbox" role="switch" aria-checked={background.data.runInBackground ?? false} disabled={!background.data.backgroundSupported} checked={background.data.runInBackground ?? false} className="size-5 accent-accent"
                 onChange={e => { void window.electronAPI!.system!.setBehavior({ runInBackground: e.target.checked }).then(result => background.mutate(result.behavior)).catch(() => setError(true)); }} />
             </label> : null}
             <p className="mt-4 text-xs text-fg-muted">{f.sleep}</p>
