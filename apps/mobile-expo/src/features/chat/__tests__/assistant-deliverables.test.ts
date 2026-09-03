@@ -1,148 +1,66 @@
 import {
   appendProductDeliveryText,
+  fileResourceArtifactUri,
   type ProductDeliveryEnvelope,
+  type TurnOutcome,
+  type TurnOutcomeDeliverable,
 } from '@xopcai/gateway-contract';
 import { describe, expect, it } from 'vitest';
 
 import { collectAssistantDeliverables } from '../assistant-deliverables';
+import { artifactFileId } from '../artifact-uri';
 import type { Message, ToolUseContent } from '../messages.types';
-import { parseSessionMessages } from '../session-message-parser';
+
+function outcome(deliverables: TurnOutcomeDeliverable[]): TurnOutcome {
+  return {
+    version: 1,
+    outcomeId: 'outcome-1',
+    runId: 'run-1',
+    turnId: 'turn-1',
+    status: 'succeeded',
+    deliverables,
+    evidence: [],
+    createdAt: '2026-09-03T00:00:00.000Z',
+  };
+}
 
 function messageWithTools(tools: ToolUseContent[]): Message {
   return { role: 'assistant', content: tools };
 }
 
-function completedTool(
-  name: string,
-  details: Record<string, unknown>,
-  input: unknown = {},
-): ToolUseContent {
-  return {
-    type: 'tool_use',
-    id: `tool-${name}`,
-    name,
-    input,
-    status: 'done',
-    result: { content: [{ type: 'text', text: 'done' }], details },
-  };
-}
-
 describe('assistant deliverables', () => {
-  it('collects structured files without an extension allowlist', () => {
-    const message = messageWithTools([
-      completedTool('write_file', { path: '/tmp/workspace/report.csv' }),
-      completedTool('apply_patch', { files: ['config/settings.yaml', 'releases/archive.zip'] }),
-      completedTool('create_share', {}, { filePath: 'src/main.py' }),
-    ]);
-
-    expect(collectAssistantDeliverables(message, false).workspacePaths.map((path) => (
-      path.workspaceRelativePath ?? path.absolutePath
-    ))).toEqual([
-      '/tmp/workspace/report.csv',
-      'config/settings.yaml',
-      'releases/archive.zip',
-      'src/main.py',
-    ]);
-  });
-
-  it('falls back to apply_patch changes when the semantic live event has no files array', () => {
-    const message = messageWithTools([
-      completedTool('apply_patch', {
-        files: [],
-        changes: [{ path: 'src/new-file.go' }, { moveTo: 'src/renamed.rs' }],
-      }),
-    ]);
-
-    expect(collectAssistantDeliverables(message, false).workspacePaths.map((path) => (
-      path.workspaceRelativePath
-    ))).toEqual(['src/new-file.go', 'src/renamed.rs']);
-  });
-
-  it('collects generated and sent media from structured tool details', () => {
-    const imageMedia = {
-      id: 'image-1',
-      name: 'cover.png',
-      type: 'photo',
-      mimeType: 'image/png',
-      uri: 'media://outbound/cover.png',
+  it('uses canonical turn outcome artifacts and dedupes by artifact id', () => {
+    const artifact: TurnOutcomeDeliverable = {
+      artifactId: 'space-id.cmVwb3J0cy9maW5hbC54bHN4',
+      title: 'final.xlsx',
+      kind: 'spreadsheet',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      availability: 'available',
+      location: 'workspace',
+      capabilities: ['preview', 'download'],
+      uri: fileResourceArtifactUri('space-id.cmVwb3J0cy9maW5hbC54bHN4'),
+      workspaceRelativePath: 'reports/final.xlsx',
     };
-    const documentMedia = {
-      id: 'document-1',
-      name: 'report.pdf',
-      type: 'document',
-      mimeType: 'application/pdf',
-      uri: 'media://outbound/report.pdf',
-    };
-    const message = messageWithTools([
-      completedTool('image_generate', {
-        workspaceRelativePaths: ['media/generated/cover.png'],
-        media: [imageMedia],
-      }),
-      completedTool('send_media', { media: [documentMedia] }),
-    ]);
-
-    const deliverables = collectAssistantDeliverables(message, false);
-    expect(deliverables.workspacePaths).toEqual([]);
-    expect(deliverables.attachments).toEqual([
-      expect.objectContaining({ name: 'cover.png', type: 'image', uri: imageMedia.uri }),
-      expect.objectContaining({ name: 'report.pdf', type: 'document', uri: documentMedia.uri }),
-    ]);
-  });
-
-  it('does not duplicate TTS media that is already projected inline', () => {
-    const uri = 'media://tts/assist.mp3';
-    const tool = completedTool('text_to_speech', {
-      media: [{
-        id: 'voice-1',
-        name: 'assist.mp3',
-        type: 'voice',
-        mimeType: 'audio/mpeg',
-        uri,
-      }],
-    });
     const message: Message = {
       role: 'assistant',
-      content: [tool, {
-        type: 'audio',
-        uri,
-        mimeType: 'audio/mpeg',
-        name: 'assist.mp3',
-      }],
+      content: [],
+      outcome: outcome([artifact, { ...artifact, title: 'duplicate.xlsx' }]),
     };
 
-    expect(collectAssistantDeliverables(message, false).attachments).toEqual([]);
-  });
-
-  it('restores TTS media from persisted tool details', () => {
-    const [message] = parseSessionMessages([{
-      role: 'assistant',
-      content: '',
-      toolCalls: [{
-        id: 'tts-1',
-        name: 'text_to_speech',
-        args: { text: 'hello' },
-        result: 'Attached voice message.',
-        details: {
-          media: [{
-            id: 'voice-1',
-            name: 'assist.mp3',
-            type: 'voice',
-            mimeType: 'audio/mpeg',
-            uri: 'media://tts/assist.mp3',
-          }],
-        },
-      }],
+    expect(collectAssistantDeliverables(message, false).artifacts).toEqual([{
+      ...artifact,
+      title: 'duplicate.xlsx',
     }]);
-
-    expect(collectAssistantDeliverables(message, false).attachments).toEqual([
-      expect.objectContaining({
-        type: 'audio',
-        uri: 'media://tts/assist.mp3',
-      }),
-    ]);
   });
 
-  it('collects non-file product deliveries separately', () => {
+  it('decodes an encoded file resource id without treating it as a path', () => {
+    const fileId = 'space-id.cmVwb3J0cy9maW5hbC54bHN4';
+
+    expect(artifactFileId(fileResourceArtifactUri(fileId))).toBe(fileId);
+    expect(artifactFileId('reports/final.xlsx')).toBeNull();
+  });
+
+  it('keeps non-file product deliveries separate from turn artifacts', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,
       operation: 'created',
@@ -165,138 +83,61 @@ describe('assistant deliverables', () => {
       .toEqual([delivery]);
   });
 
-  it('does not present stale delivery metadata from a failed tool', () => {
-    const delivery: ProductDeliveryEnvelope = {
-      version: 1,
-      operation: 'created',
-      primary: {
-        kind: 'task',
-        id: 'task-failed',
-        title: 'Failed task',
-        capabilities: ['open'],
-      },
+  it('does not repeat audio already rendered in the assistant message', () => {
+    const uri = 'media://tts/assist.mp3';
+    const artifact: TurnOutcomeDeliverable = {
+      artifactId: 'voice-1',
+      title: 'assist.mp3',
+      kind: 'audio',
+      availability: 'available',
+      location: 'artifact_store',
+      capabilities: ['preview', 'download'],
+      uri,
     };
-    const tool: ToolUseContent = {
-      type: 'tool_use',
-      id: 'failed-tool',
-      name: 'xopc_use',
-      status: 'error',
-      details: { delivery },
-      result: 'Failed.',
-    };
-
-    expect(collectAssistantDeliverables(messageWithTools([tool]), false).productDeliveries)
-      .toEqual([]);
-  });
-
-  it('restores the same deliverables from persisted gateway history', () => {
-    const [message] = parseSessionMessages([{
+    const message: Message = {
       role: 'assistant',
-      content: '',
-      rawContent: [{
-        type: 'toolCall',
-        id: 'call-image',
-        name: 'image_generate',
-        arguments: { prompt: 'a lake' },
-      }],
-      toolCalls: [{
-        id: 'call-image',
-        name: 'image_generate',
-        args: { prompt: 'a lake' },
-        result: 'Generated and attached 1 image.',
-        details: {
-          workspaceRelativePaths: ['media/generated/lake.png'],
-          media: [{
-            id: 'lake-1',
-            name: 'lake.png',
-            type: 'photo',
-            mimeType: 'image/png',
-            uri: 'media://outbound/lake.png',
-          }],
-        },
-      }],
-    }]);
+      content: [{ type: 'audio', uri, name: 'assist.mp3' }],
+      outcome: outcome([artifact]),
+    };
 
-    expect(collectAssistantDeliverables(message, false).attachments).toEqual([
-      expect.objectContaining({ name: 'lake.png', uri: 'media://outbound/lake.png' }),
-    ]);
+    expect(collectAssistantDeliverables(message, false).artifacts).toEqual([]);
   });
 
-  it('projects live and persisted tool results to the same deliverables', () => {
-    const details = {
-      path: '/tmp/workspace/data/results.parquet',
-      media: [{
-        id: 'preview-1',
-        name: 'preview.webp',
-        type: 'photo',
-        mimeType: 'image/webp',
-        uri: 'media://outbound/preview.webp',
-      }],
-    };
-    const live = messageWithTools([completedTool('write_file', details)]);
-    const [persisted] = parseSessionMessages([{
-      role: 'assistant',
-      content: '',
-      toolCalls: [{
-        id: 'tool-write_file',
-        name: 'write_file',
-        args: {},
-        result: 'done',
-        details,
-      }],
-    }]);
-
-    const project = (message: Message) => {
-      const value = collectAssistantDeliverables(message, false);
-      return {
-        paths: value.workspacePaths.map((path) => path.workspaceRelativePath ?? path.absolutePath),
-        attachments: value.attachments.map((attachment) => attachment.uri),
-      };
-    };
-    expect(project(persisted)).toEqual(project(live));
-  });
-
-  it('dedupes a file delivery against the same message attachment', () => {
+  it('does not infer file artifacts from product delivery ids', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,
       operation: 'created',
       primary: {
         kind: 'file',
-        id: 'reports/final.pdf',
-        title: 'final.pdf',
+        id: 'space-id.cmVwb3J0cy9maW5hbC54bHN4',
+        title: 'final.xlsx',
         capabilities: ['preview'],
       },
     };
-    const message: Message = {
-      role: 'assistant',
-      content: [{
-        type: 'tool_use',
-        id: 'file-delivery',
-        name: 'write_file',
-        status: 'done',
-        result: appendProductDeliveryText('Done.', delivery),
-      }],
-      attachments: [{
-        name: 'final.pdf',
-        type: 'document',
-        mimeType: 'application/pdf',
-        workspaceRelativePath: 'reports/final.pdf',
-      }],
+    const tool: ToolUseContent = {
+      type: 'tool_use',
+      id: 'file-tool',
+      name: 'write_file',
+      status: 'done',
+      result: appendProductDeliveryText('Created file.', delivery),
     };
 
-    const deliverables = collectAssistantDeliverables(message, false);
-    expect(deliverables.workspacePaths).toHaveLength(1);
-    expect(deliverables.attachments).toEqual([]);
-    expect(deliverables.productDeliveries).toEqual([]);
+    expect(collectAssistantDeliverables(messageWithTools([tool]), false)).toMatchObject({
+      artifacts: [],
+      productDeliveries: [],
+    });
   });
 
-  it('marks only active deliverable-producing tools as awaiting', () => {
+  it('marks active artifact-producing tools as awaiting an outcome', () => {
     const running = (name: string): ToolUseContent => ({
       type: 'tool_use', id: name, name, status: 'running',
     });
 
-    expect(collectAssistantDeliverables(messageWithTools([running('write_file')]), true).awaiting).toBe(true);
-    expect(collectAssistantDeliverables(messageWithTools([running('web_search')]), true).awaiting).toBe(false);
-    expect(collectAssistantDeliverables(messageWithTools([running('write_file')]), false).awaiting).toBe(false);
+    expect(collectAssistantDeliverables(messageWithTools([running('publish_artifacts')]), true).awaiting)
+      .toBe(true);
+    expect(collectAssistantDeliverables(messageWithTools([running('exec_command')]), true).awaiting)
+      .toBe(true);
+    expect(collectAssistantDeliverables(messageWithTools([running('web_search')]), true).awaiting)
+      .toBe(false);
   });
 });

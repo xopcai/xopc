@@ -8,6 +8,8 @@
  * Ported from web/src/features/chat/agent-messages.ts
  */
 import type { InfiniteData } from '@tanstack/react-query';
+import { parseTurnOutcome } from '@xopcai/gateway-contract';
+
 import type { Message, MessageAttachment, MessageContent } from './messages.types';
 import { dedupeAttachments, mergeWireAttachments } from './wire-attachments';
 import {
@@ -50,6 +52,7 @@ export type WireContentBlock = {
 export type WireMessage = {
   id?: string;
   messageId?: string;
+  turnId?: string;
   role?: string;
   content?: unknown;
   rawContent?: unknown;
@@ -126,6 +129,10 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
     }];
   });
   return refs.length ? refs : undefined;
+}
+
+function normalizeTurnOutcome(metadata: unknown): Message['outcome'] {
+  return parseTurnOutcome(asRecord(metadata)?.turnOutcome) ?? undefined;
 }
 
 export function wireMessageStableKey(raw: Record<string, unknown>, index: number): string {
@@ -621,8 +628,10 @@ export function mergeStreamingAssistantIntoMessages(
       ...last,
       ...streamingMessage,
       id: streamingMessage.id ?? last.id,
+      turnId: streamingMessage.turnId ?? last.turnId,
       content: mergeAssistantContentFragments(last.content, streamingMessage.content),
       attachments: streamingMessage.attachments ?? last.attachments,
+      outcome: streamingMessage.outcome ?? last.outcome,
       usage: streamingMessage.usage ?? last.usage,
       timestamp: streamingMessage.timestamp ?? last.timestamp,
     },
@@ -638,6 +647,8 @@ function mergeConsecutiveAssistantMessages(messages: Message[]): Message[] {
     const prev = out[out.length - 1];
     if (prev?.role === 'assistant') {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
+      if (m.turnId) prev.turnId = m.turnId;
+      if (m.outcome) prev.outcome = m.outcome;
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       const mergedUsage = normalizeWireUsage(m.usage);
       if (mergedUsage) prev.usage = mergedUsage;
@@ -776,11 +787,15 @@ export function parseSessionMessages(raw: Array<Record<string, unknown>>): Messa
     if (role === 'assistant') {
       const attachments = mergeWireAttachments(m.attachments, m.media);
       const content = appendAudioAttachments(buildAssistantContent(m), attachments);
+      const outcome = normalizeTurnOutcome(m.metadata);
+      const turnId = typeof m.turnId === 'string' && m.turnId.trim() ? m.turnId.trim() : undefined;
       out.push({
         id: wireMessageId(m),
+        turnId,
         role: 'assistant',
         content,
         attachments: stripAudioAttachments(attachments),
+        outcome,
         usage: normalizeWireUsage(m.usage),
         timestamp: parseTimestamp(m.timestamp),
       });

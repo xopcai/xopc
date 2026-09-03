@@ -35,6 +35,8 @@ export type PreviewableFile = {
   workspaceRelativePath?: string;
   /** Remote HTTP(S) URI to load on demand (e.g. gateway inbound file). */
   remoteUri?: string;
+  /** Gateway media reads require the configured bearer token. */
+  remoteRequiresAuth?: boolean;
   /** Optional extracted text fallback for documents. */
   extractedText?: string;
 };
@@ -123,22 +125,28 @@ async function loadPreview(
     return { kind: 'binary', mimeType, text: null, base64: null };
   }
 
-  if (kind === 'image') {
-    const direct = normalizeBase64Payload(file.contentBase64);
-    if (direct) return { kind, mimeType, text: null, base64: direct };
-    if (file.remoteUri) {
-      const token = useGatewayStore.getState().accessToken;
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const res = await fetch(file.remoteUri, headers ? { headers } : undefined);
-      if (!res.ok) throw new Error(`Failed to load image (${res.status})`);
-      const buffer = await res.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
+  if (file.remoteUri) {
+    const token = file.remoteRequiresAuth ? useGatewayStore.getState().accessToken : undefined;
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+    const response = await fetch(file.remoteUri, headers ? { headers } : undefined);
+    if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
+    if (kind === 'image') {
+      const bytes = new Uint8Array(await response.arrayBuffer());
       let binary = '';
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]!);
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
       }
       return { kind, mimeType, text: null, base64: globalThis.btoa(binary) };
     }
+    if (kind === 'markdown' || kind === 'html' || kind === 'text') {
+      return { kind, mimeType, text: await response.text(), base64: null };
+    }
+    return { kind: 'binary', mimeType, text: null, base64: null };
+  }
+
+  if (kind === 'image') {
+    const direct = normalizeBase64Payload(file.contentBase64);
+    if (direct) return { kind, mimeType, text: null, base64: direct };
     return { kind, mimeType, text: null, base64: null };
   }
 
@@ -235,9 +243,17 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
     setDownloadError('');
     setDownloadPending(true);
     try {
-      if (file.fileId) {
+      if (file.fileId || (file.remoteUri && file.remoteRequiresAuth)) {
         if (!(await Sharing.isAvailableAsync())) throw new Error(cm.filePreviewShareUnavailable);
-        const response = await fetchFileContent(file.fileId);
+        const accessToken = useGatewayStore.getState().accessToken;
+        const response = file.fileId
+          ? await fetchFileContent(file.fileId)
+          : await fetch(file.remoteUri!, {
+              headers: accessToken
+                ? { Authorization: `Bearer ${accessToken}` }
+                : undefined,
+            });
+        if (!response.ok) throw new Error(`Failed to download file (${response.status})`);
         const directory = new Directory(Paths.cache, 'file-share', `${Date.now()}`);
         directory.create({ intermediates: true });
         try {
