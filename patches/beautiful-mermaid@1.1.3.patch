@@ -1,0 +1,26 @@
+diff --git a/dist/index.js b/dist/index.js
+index e7e087bcb6f29d0d8f36cd558e0183bc0f162fcb..50293f822195f821a222294c7a04aad1b769b2a6 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -595,7 +595,7 @@ function parseStyleProps(propsStr) {
+   return props;
+ }
+ var ARROW_REGEX = /^(<)?(-->|-.->|==>|---|-\.-|===)(?:\|([^|]*)\|)?/;
+-var TEXT_ARROW_REGEX = /^(<)?(--|-\.|==)\s+(.+?)\s+(-->|---|\.\->|-\.\-|==>|===)/;
++var TEXT_ARROW_REGEX = /^(<)?(--|-\.|==)\s*(.+?)\s*(-->|---|\.\->|-\.\-|==>|===)/;
+ var NODE_PATTERNS = [
+   // Triple delimiters (must be first)
+   { regex: /^([\w-]+)\(\(\((.+?)\)\)\)/, shape: "doublecircle" },
+diff --git a/src/parser.ts b/src/parser.ts
+index 685835e3f1a9a480370ec8e1ff40b7356a3ed3c1..2bdef430a699a74b813982a943ec284f3faf072c 100644
+--- a/src/parser.ts
++++ b/src/parser.ts
+@@ -404,7 +404,7 @@ const ARROW_REGEX = /^(<)?(-->|-.->|==>|---|-\.-|===)(?:\|([^|]*)\|)?/
+  *
+  * Based on PR #36 by @liuxiaopai-ai (https://github.com/lukilabs/beautiful-mermaid/pull/36)
+  */
+-const TEXT_ARROW_REGEX = /^(<)?(--|-\.|==)\s+(.+?)\s+(-->|---|\.\->|-\.\-|==>|===)/
++const TEXT_ARROW_REGEX = /^(<)?(--|-\.|==)\s*(.+?)\s*(-->|---|\.\->|-\.\-|==>|===)/
+ 
+ /**
+  * Node shape patterns — ordered from most specific delimiters to least.
