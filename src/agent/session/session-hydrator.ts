@@ -7,18 +7,16 @@
  * {@link SessionConfigService} — the latter writes user choices into the
  * config store, this hydrator reads them back out before a turn runs.
  *
- *   - `workspace()`  — apply persisted `workingDirectoryOverride` to AgentManager
- *                       and ensure the directory exists on disk
+ *   - `workspace()`  — resolve the execution workspace and apply it to AgentManager
  *   - `model()`      — apply persisted `modelOverride` via ModelManager
  *   - `thinking()`   — resolve effective thinking level (request override >
  *                       per-session override > agent default) and apply
  */
 
-import { getModelThinking } from '../../providers/model-thinking.js';
-
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 
 import type { Config } from '../../config/schema.js';
+import { getModelThinking } from '../../providers/model-thinking.js';
 import {
   effectiveWorkspacePathForSession,
   normalizeWorkingDirectoryInput,
@@ -27,6 +25,7 @@ import {
   type SessionConfigStore,
 } from '../../session/index.js';
 import { getProjectForSession } from '../../projects/workspace.js';
+import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -49,8 +48,8 @@ export class SessionHydrator {
   }
 
   /**
-   * Load persisted workingDirectory override into AgentManager and `mkdir -p`
-   * the effective workspace path. Safe to call before `getOrCreateAgent`.
+   * Load the effective workspace into AgentManager. Managed environment roots
+   * must already exist; ordinary project and agent workspaces may be created.
    */
   async workspace(sessionKey: string): Promise<void> {
     const cfg = this.opts.getConfig();
@@ -59,8 +58,18 @@ export class SessionHydrator {
     }
     const loaded = await this.opts.sessionConfigStore.get(sessionKey);
     const project = getProjectForSession(sessionKey);
+    const environment = getExecutionEnvironmentForSession(sessionKey);
     const projectWorkspace = projectWorkspacePath(project);
-    if (projectWorkspace) {
+    if (environment) {
+      if (environment.status !== 'ready') {
+        throw new Error(`Execution environment ${environment.id} is ${environment.status}`);
+      }
+      const rootIsDirectory = await stat(environment.rootPath).then((value) => value.isDirectory()).catch(() => false);
+      if (!rootIsDirectory) {
+        throw new Error(`Execution environment root is unavailable: ${environment.rootPath}`);
+      }
+      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, environment.rootPath);
+    } else if (projectWorkspace) {
       this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, projectWorkspace);
     } else if (loaded?.workingDirectoryOverride?.trim()) {
       const wdStored = normalizeWorkingDirectoryInput(loaded.workingDirectoryOverride);
@@ -74,7 +83,7 @@ export class SessionHydrator {
       this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, null);
     }
     const effective = effectiveWorkspacePathForSession(cfg, sessionKey, loaded, project);
-    await mkdir(effective, { recursive: true });
+    if (!environment) await mkdir(effective, { recursive: true });
   }
 
   /** Apply persisted `modelOverride` to ModelManager (no-op when none stored). */
