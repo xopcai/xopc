@@ -102,6 +102,7 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 
 	if (override.name !== undefined) result.name = override.name;
 	if (override.reasoning !== undefined) result.reasoning = override.reasoning;
+	if (override.thinkingLevelMap !== undefined) result.thinkingLevelMap = override.thinkingLevelMap;
 	if (override.input !== undefined) result.input = override.input as ('text' | 'image')[];
 	if (override.contextWindow !== undefined) result.contextWindow = override.contextWindow;
 	if (override.maxTokens !== undefined) result.maxTokens = override.maxTokens;
@@ -521,6 +522,7 @@ export class ModelRegistry {
 					provider: providerName,
 					baseUrl: providerConfig.baseUrl!,
 					reasoning: modelDef.reasoning ?? false,
+					thinkingLevelMap: modelDef.thinkingLevelMap,
 					input: (modelDef.input ?? defaults.input) as ('text' | 'image')[],
 					cost: modelDef.cost ?? defaults.cost,
 					contextWindow: modelDef.contextWindow ?? defaults.contextWindow,

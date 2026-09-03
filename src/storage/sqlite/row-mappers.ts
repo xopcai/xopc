@@ -61,6 +61,7 @@ export type SessionConfigRow = {
   verbose_level: string | null;
   elevated_mode: string | null;
   model_override: string | null;
+  fixed_model?: number;
   provider_override: string | null;
   working_directory_override: string | null;
   response_language: string | null;
@@ -219,6 +220,7 @@ export function sessionConfigRowToConfig(row: SessionConfigRow): SessionAgentCon
     ...(row.working_directory_override ? { workingDirectoryOverride: row.working_directory_override } : {}),
     ...(row.response_language ? { responseLanguage: row.response_language as SessionAgentConfig['responseLanguage'] } : {}),
     ...(row.user_context_mode ? { userContextMode: row.user_context_mode as SessionAgentConfig['userContextMode'] } : {}),
+    ...(row.fixed_model === 1 ? { fixedModel: true } : {}),
     updatedAt: row.updated_at,
   };
 }

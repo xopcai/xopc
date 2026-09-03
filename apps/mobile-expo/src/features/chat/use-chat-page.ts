@@ -6,7 +6,7 @@
  *
  * The page component (`app/chat/[k].tsx`) remains a thin render shell.
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -25,7 +25,7 @@ import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
 import { useKeyboardVisible } from '../../hooks/use-keyboard-visible';
 import { useMessages, t } from '../../i18n/messages';
 import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId } from '../../query/agents';
-import { fetchChatModels, resolveEffectiveModelId, setSessionModelRef, fetchSessionAgentConfig } from '../../query/models';
+import { fetchChatModels, resolveEffectiveModelId, sessionModelMutationOptions, fetchSessionAgentConfig } from '../../query/models';
 import { queryKeys } from '../../query/keys';
 import { fetchTask, handoffTaskConversation } from '../../query/tasks';
 import { fetchProject, fetchProjectOperatingView } from '../../query/projects';
@@ -191,6 +191,9 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     queryFn: () => fetchSessionAgentConfig(sessionKey),
     enabled: Boolean(sessionKey),
   });
+  const modelMutation = useMutation(
+    sessionModelMutationOptions(queryClient, sessionKey, sessionContext.taskId),
+  );
 
   // Overlay: reset UI when a new Ask AI session key arrives from the transition.
   const prevOverlayKeyRef = useRef('');
@@ -312,6 +315,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const isEmptyChat = displayMessages.length === 0 && !chatSession.streaming && !sessionHistoryQuery.isLoading;
 
   const composerDisabled =
+    modelMutation.isPending ||
     Boolean(chatSession.clarifyPrompt) ||
     chatSession.inputQueued ||
     (!sessionKey && Boolean(bootstrap.bootstrapError));
@@ -320,10 +324,10 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const flushPendingSend = useCallback(() => {
     const pending = pendingSendRef.current;
-    if (!pending || !sessionKey || chatSession.streaming || chatSession.clarifyPrompt) return;
+    if (!pending || !sessionKey || modelMutation.isPending || chatSession.streaming || chatSession.clarifyPrompt) return;
     pendingSendRef.current = null;
     void chatSession.send(pending.text, pending.attachments);
-  }, [sessionKey, chatSession]);
+  }, [sessionKey, chatSession, modelMutation.isPending]);
 
   useEffect(() => {
     flushPendingSend();
@@ -339,6 +343,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleComposerSend = useCallback(
     async (text: string, attachments?: WireAttachment[]) => {
+      if (modelMutation.isPending) return false;
       if (bootstrap.bootstrapError && !sessionKey) return false;
       const trimmed = text.trim();
       const hasContent = Boolean(trimmed) || Boolean(attachments?.length);
@@ -350,7 +355,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       }
       return chatSession.send(text, attachments);
     },
-    [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, sessionKey],
+    [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, sessionKey, modelMutation.isPending],
   );
 
   // ── Handlers ─────────────────────────────────────────────
@@ -365,21 +370,29 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const handleModelSelect = useCallback(
     (modelId: string) => {
       const agentId = currentSessionAgentId || defaultAgentId;
-      if (activeGatewayId && agentId) {
-        rememberAgentModel(activeGatewayId, agentId, {
-          modelRef: modelId,
-          thinkingLevel: sessionAgentConfigQuery.data?.thinkingLevel || undefined,
-        });
-      }
-      if (sessionKey) void setSessionModelRef(sessionKey, modelId, routeTaskId || undefined).catch(() => {});
+      void (async () => {
+        if (sessionKey) await modelMutation.mutateAsync(modelId);
+        const config = queryClient.getQueryData<Awaited<ReturnType<typeof fetchSessionAgentConfig>>>(
+          queryKeys.sessionAgentConfig(sessionKey),
+        );
+        if (activeGatewayId && agentId) {
+          rememberAgentModel(activeGatewayId, agentId, {
+            modelRef: modelId,
+            thinkingLevel: config?.thinkingLevel || undefined,
+          });
+        }
+      })().catch((err) => {
+        chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
+      });
     },
     [
       activeGatewayId,
       currentSessionAgentId,
       defaultAgentId,
       rememberAgentModel,
-      routeTaskId,
-      sessionAgentConfigQuery.data?.thinkingLevel,
+      chatSession,
+      modelMutation,
+      queryClient,
       sessionKey,
     ],
   );
