@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { parseMarkdown } from '@/components/markdown/parse-markdown';
 
 describe('parseMarkdown', () => {
+  it('keeps xopc URLs verbatim in code samples', () => {
+    const url = 'xopc://open?kind=session&key=chat_123';
+    const html = parseMarkdown('`' + url + '`\n\n```text\n[Open](' + url + ')\n```');
+    expect(html).not.toContain('<a');
+    expect(html).not.toContain('#/chat/');
+    expect(html).toContain('xopc://open?kind=session&amp;key=chat_123');
+  });
+
+  it('escapes HTML in recovered link labels', () => {
+    const html = parseMarkdown('[<img src=x onerror=alert(1)>]\\(xopc://open?kind=session&key=chat_123\\)');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img');
+  });
+
   it('renders raw HTML as text instead of executable markup', () => {
     const html = parseMarkdown(
       '<body><div id="root" class="fixed inset-0" style="position:fixed">content</div></body>',
