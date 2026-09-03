@@ -171,43 +171,12 @@ jobs:
           # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
           # macOS: build architectures sequentially to avoid DMG temp file conflicts
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            build_macos_arch() {
-              local arch="$1"
-              local attempt=1
-              local max_attempts=3
-              local log_file
-
-              while (( attempt <= max_attempts )); do
-                log_file="$(mktemp)"
-                if node scripts/electron-builder.mjs --mac "--${arch}" 2>&1 | tee "$log_file"; then
-                  rm -f "$log_file"
-                  return 0
-                fi
-
-                if ! grep -Eqi '503 Slow Down|code: serviceUnavailable' "$log_file"; then
-                  rm -f "$log_file"
-                  return 1
-                fi
-                rm -f "$log_file"
-
-                if (( attempt == max_attempts )); then
-                  echo "❌ Apple notarization remained rate-limited after ${max_attempts} attempts"
-                  return 1
-                fi
-
-                local delay_seconds=$((attempt * 30))
-                echo "⚠️ Apple notarization upload was rate-limited; retrying ${arch} build in ${delay_seconds}s (attempt ${attempt}/${max_attempts})"
-                sleep "$delay_seconds"
-                ((attempt += 1))
-              done
-            }
-
             echo "Building macOS x64..."
-            build_macos_arch x64
+            bash scripts/build-electron-with-retry.sh --mac --x64
             echo "Building macOS arm64..."
-            build_macos_arch arm64
+            bash scripts/build-electron-with-retry.sh --mac --arm64
           else
-            node scripts/electron-builder.mjs ${{ matrix.electron_builder_args }}
+            bash scripts/build-electron-with-retry.sh ${{ matrix.electron_builder_args }}
           fi
 
       - name: Verify artifacts
