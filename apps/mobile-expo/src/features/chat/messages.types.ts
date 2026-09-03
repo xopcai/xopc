@@ -2,6 +2,7 @@
  * Canonical chat message model for the mobile UI.
  * Ported from web/src/features/chat/messages.types.ts — kept in sync.
  */
+import type { TurnOutcome } from '@xopcai/gateway-contract';
 
 export type TextContent = {
   type: 'text';
@@ -105,10 +106,12 @@ export interface MessageContextRef {
 
 export interface Message {
   id?: string;
+  turnId?: string;
   role: 'user' | 'assistant' | 'user-with-attachments';
   content: MessageContent[];
   attachments?: MessageAttachment[];
   contextRefs?: MessageContextRef[];
+  outcome?: TurnOutcome;
   usage?: {
     inputTokens?: number;
     outputTokens?: number;

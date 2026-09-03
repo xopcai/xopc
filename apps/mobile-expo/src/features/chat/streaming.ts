@@ -8,6 +8,7 @@ import type { Message, MessageContent, ReviewContent, ToolUseContent } from './m
 /** True if the assistant bubble has something worth keeping (text, thinking, or tools). */
 export function hasRenderableAssistantContent(msg: Message): boolean {
   if (msg.role !== 'assistant') return false;
+  if (msg.outcome) return true;
   for (const b of msg.content) {
     if (b.type === 'text' && (b.text || '').trim().length > 0) return true;
     if (b.type === 'thinking' && (b.text || '').trim().length > 0) return true;

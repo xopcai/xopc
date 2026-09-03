@@ -49,24 +49,36 @@ describe('buildAssistantTurnViewModel', () => {
     expect(normal.activity.expandedByDefault).toBe(false);
   });
 
-  it('includes message attachments in the assistant deliverables projection', () => {
+  it('includes turn outcome artifacts in the assistant deliverables projection', () => {
     const view = buildAssistantTurnViewModel({
       message: {
         role: 'assistant',
         content: [{ type: 'text', text: 'Attached.', presentation: 'answer' }],
-        attachments: [{
-          name: 'analysis.csv',
-          type: 'document',
-          mimeType: 'text/csv',
-          uri: 'media://outbound/analysis.csv',
-        }],
+        outcome: {
+          version: 1,
+          outcomeId: 'outcome-1',
+          runId: 'run-1',
+          turnId: 'turn-1',
+          status: 'succeeded',
+          deliverables: [{
+            artifactId: 'analysis',
+            title: 'analysis.csv',
+            kind: 'spreadsheet',
+            availability: 'available',
+            location: 'artifact_store',
+            capabilities: ['preview'],
+            uri: 'media://outbound/analysis.csv',
+          }],
+          evidence: [],
+          createdAt: '2026-09-03T00:00:00.000Z',
+        },
       },
       isStreaming: false,
       reasoningLevel: 'on',
     });
 
-    expect(view.deliverables.attachments).toEqual([
-      expect.objectContaining({ name: 'analysis.csv' }),
+    expect(view.deliverables.artifacts).toEqual([
+      expect.objectContaining({ title: 'analysis.csv' }),
     ]);
   });
 });

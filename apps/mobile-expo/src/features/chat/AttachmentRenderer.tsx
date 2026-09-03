@@ -9,6 +9,7 @@ import { fileContentPath, resolveContextFileResources } from '../../query/files'
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import { AudioMessageBlock } from './AudioMessageBlock';
+import { artifactFileId } from './artifact-uri';
 import { FilePreviewModal, type PreviewableFile } from './FilePreviewModal';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 import type { AudioContent, MessageAttachment } from './messages.types';
@@ -30,6 +31,13 @@ function attachmentPayload(att: MessageAttachment): string | undefined {
   return att.preview || att.content || att.data;
 }
 
+function attachmentRemoteUri(att: MessageAttachment, sessionKey?: string | null): string | undefined {
+  if (isMediaUri(att.uri)) {
+    return useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey));
+  }
+  return /^https?:\/\//i.test(att.uri ?? '') ? att.uri : undefined;
+}
+
 function attachmentToPreviewable(
   att: MessageAttachment,
   index: number,
@@ -37,13 +45,15 @@ function attachmentToPreviewable(
   sessionKey?: string | null,
 ): PreviewableFile {
   const name = attachmentName(att, index);
+  const fileId = artifactFileId(att.uri);
   return {
     name,
-    fileId: resource?.id,
+    fileId: fileId ?? resource?.id,
     mimeType: resource?.mimeType || att.mimeType || mimeTypeFromFileName(name),
     contentBase64: attachmentPayload(att),
     workspaceRelativePath: att.workspaceRelativePath,
-    remoteUri: isMediaUri(att.uri) ? useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)) : undefined,
+    remoteUri: attachmentRemoteUri(att, sessionKey),
+    remoteRequiresAuth: isMediaUri(att.uri),
     extractedText: att.extractedText,
   };
 }
@@ -57,6 +67,7 @@ function imageSource(
 ): { uri: string; headers?: Record<string, string> } | null {
   const payload = attachmentPayload(att)?.trim();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const fileId = artifactFileId(att.uri);
   if (payload) {
     if (payload.startsWith('data:')) return { uri: payload };
     const mime = att.mimeType || 'image/png';
@@ -64,6 +75,12 @@ function imageSource(
   }
   if (isMediaUri(att.uri)) {
     return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)), headers };
+  }
+  if (fileId) {
+    return { uri: apiUrl(fileContentPath(fileId)), headers };
+  }
+  if (/^https?:\/\//i.test(att.uri ?? '')) {
+    return { uri: att.uri! };
   }
   if (resource) {
     return { uri: apiUrl(fileContentPath(resource.id)), headers };
@@ -78,10 +95,11 @@ function attachmentToAudioContent(
 ): AudioContent {
   const payload = attachmentPayload(att)?.trim();
   const mimeType = att.mimeType || 'audio/mpeg';
+  const fileId = artifactFileId(att.uri);
   return {
     type: 'audio',
     workspaceRelativePath: att.workspaceRelativePath,
-    uri: resource ? apiUrl(fileContentPath(resource.id)) : att.uri ?? (
+    uri: fileId ? att.uri : resource ? apiUrl(fileContentPath(resource.id)) : att.uri ?? (
       payload && !att.workspaceRelativePath
         ? payload.startsWith('data:') || payload.startsWith('file:')
           ? payload
@@ -109,7 +127,10 @@ export function AttachmentRenderer({
   const token = useGatewayStore((s) => s.accessToken);
   const [active, setActive] = useState<PreviewableFile | null>(null);
   const items = useMemo(() => attachments?.filter(Boolean) ?? [], [attachments]);
-  const workspacePaths = useMemo(() => items.map((item) => item.workspaceRelativePath), [items]);
+  const workspacePaths = useMemo(
+    () => items.map((item) => artifactFileId(item.uri) ? undefined : item.workspaceRelativePath),
+    [items],
+  );
   const resourcesQuery = useQuery({
     queryKey: ['files', 'message-attachments', sessionKey ?? '', workspacePaths],
     queryFn: () => resolveContextFileResources('session', sessionKey!, workspacePaths),

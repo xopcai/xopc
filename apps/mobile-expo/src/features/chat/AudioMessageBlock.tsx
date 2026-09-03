@@ -9,6 +9,7 @@ import { useMessages } from '../../i18n/messages';
 import { fileContentPath, resolveContextFileResources } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
+import { artifactFileId } from './artifact-uri';
 import type { AudioContent } from './messages.types';
 import { audioNameFromPath, resolveAudioPlaybackUrl } from './audio-url';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
@@ -53,15 +54,21 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
     enabled: Boolean(sessionKey && audio.workspaceRelativePath && !audio.uri),
     staleTime: 30_000,
   });
+  const directFileId = artifactFileId(audio.uri);
   const uri = useMemo(
-    () => managedFile.data ? apiUrl(fileContentPath(managedFile.data.id)) : resolveAudioPlaybackUrl(audio, sessionKey),
-    [apiUrl, audio, managedFile.data, sessionKey],
+    () => directFileId
+      ? apiUrl(fileContentPath(directFileId))
+      : managedFile.data
+        ? apiUrl(fileContentPath(managedFile.data.id))
+        : resolveAudioPlaybackUrl(audio, sessionKey),
+    [apiUrl, audio, directFileId, managedFile.data, sessionKey],
   );
   const gatewayPath = useMemo(() => {
+    if (directFileId) return fileContentPath(directFileId);
     if (managedFile.data) return fileContentPath(managedFile.data.id);
     const audioUri = audio.uri?.trim();
     return audioUri && isMediaUri(audioUri) ? buildGatewayMediaReadPath(audioUri, sessionKey) : null;
-  }, [audio.uri, managedFile.data, sessionKey]);
+  }, [audio.uri, directFileId, managedFile.data, sessionKey]);
 
   const title = audio.name?.trim() || audioNameFromPath(audio.workspaceRelativePath ?? audio.uri, 'voice.mp3');
 
