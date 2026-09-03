@@ -98,6 +98,37 @@ describe('ChatPageHeaderRegistration', () => {
     expect(states).toEqual([false]);
   });
 
+  it('keeps one context and files control through repeated session switches', () => {
+    for (const sessionKey of ['session-1', 'session-2', 'session-3', 'session-1']) {
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <ChatPageHeaderRegistration
+              chatHeadline={sessionKey}
+              chatAgents={[]}
+              showChatAgentSelector={false}
+              chatAgentId="main"
+              onChatAgentChange={() => {}}
+              chatAgentDisabled={false}
+              sessionKey={sessionKey}
+              workspacePath="/Users/example/projects/xopc"
+              onWorkspaceChange={async () => {}}
+            />
+            <HeaderEnd />
+          </MemoryRouter>,
+        );
+      });
+
+      expect(container.querySelectorAll('[aria-label="Session context"]')).toHaveLength(1);
+      expect(container.querySelectorAll('[aria-label="Project Files: xopc"]')).toHaveLength(1);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Project Files: xopc"]')!.click());
+      expect(useWorkspacePanelStore.getState().sessionKeyOverride).toBe(sessionKey);
+      act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')!.click());
+      expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    }
+  });
+
   it('opens project files directly and keeps directory selection separate for a new conversation', () => {
     act(() => {
       root.render(
@@ -115,6 +146,7 @@ describe('ChatPageHeaderRegistration', () => {
                     onChatAgentChange={() => {}}
                     chatAgentDisabled={false}
                     sessionKey="session-1"
+                    workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace
                     onWorkspaceChange={async () => {}}
                   />
@@ -127,8 +159,8 @@ describe('ChatPageHeaderRegistration', () => {
       );
     });
 
-    expect(container.querySelector('[aria-label="Project Files: xopc"]')).toBeNull();
-    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')?.click());
+    expect(container.querySelector('[aria-label="Project Files: xopc"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     const projectFilesButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="Project Files: xopc"]',
     );
@@ -163,6 +195,7 @@ describe('ChatPageHeaderRegistration', () => {
                     onChatAgentChange={() => {}}
                     chatAgentDisabled={false}
                     sessionKey="session-1"
+                    workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace={false}
                     workspaceDisabled
                     onWorkspaceChange={async () => {}}
@@ -176,7 +209,6 @@ describe('ChatPageHeaderRegistration', () => {
       );
     });
 
-    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')?.click());
     const projectFilesButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="Project Files: xopc"]',
     );

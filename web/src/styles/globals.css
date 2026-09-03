@@ -1786,7 +1786,8 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/* Composer model/effort menus: short, directional motion similar to Codex. */
+/* Header context and composer menus share short, directional motion. */
+.xopc-session-context-popover,
 .xopc-composer-config-popover {
   --xopc-composer-popover-x: 0px;
   --xopc-composer-popover-y: 0px;
@@ -1794,18 +1795,22 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   will-change: opacity, transform;
 }
 
+.xopc-session-context-popover[data-side="top"],
 .xopc-composer-config-popover[data-side="top"] {
   --xopc-composer-popover-y: 4px;
 }
 
+.xopc-session-context-popover[data-side="bottom"],
 .xopc-composer-config-popover[data-side="bottom"] {
   --xopc-composer-popover-y: -4px;
 }
 
+.xopc-session-context-popover[data-side="left"],
 .xopc-composer-config-popover[data-side="left"] {
   --xopc-composer-popover-x: 4px;
 }
 
+.xopc-session-context-popover[data-side="right"],
 .xopc-composer-config-popover[data-side="right"] {
   --xopc-composer-popover-x: -4px;
 }
@@ -1840,15 +1845,18 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
+.xopc-session-context-popover[data-state="open"],
 .xopc-composer-config-popover[data-state="open"] {
   animation: xopc-composer-popover-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.xopc-session-context-popover[data-state="closed"],
 .xopc-composer-config-popover[data-state="closed"] {
   animation: xopc-composer-popover-out 110ms ease-in both;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .xopc-session-context-popover,
   .xopc-composer-config-popover {
     animation: none !important;
   }
