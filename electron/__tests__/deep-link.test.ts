@@ -8,6 +8,8 @@ describe('xopcDeepLinkToRoute', () => {
       '/open?kind=local_app&id=app%2Freading+list',
     );
     expect(xopcDeepLinkToRoute('xopc://open?kind=note&id=note-1')).toBe('/notes/note-1');
+    expect(xopcDeepLinkToRoute('xopc://open?kind=session&key=agent:coder:chat_123'))
+      .toBe('/chat/agent%3Acoder%3Achat_123');
     expect(xopcDeepLinkToRoute('xopc://settings/appearance?tab=theme')).toBe(
       '/settings/appearance?tab=theme',
     );

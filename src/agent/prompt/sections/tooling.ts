@@ -153,6 +153,7 @@ export function buildToolingSection(params: {
     '## Tooling',
     'Tool availability (filtered by policy):',
     'Tool names are case-sensitive. Call tools exactly as listed.',
+    'When a tool returns an xopc product link, reuse its exact URL in a Markdown link with a short descriptive label in the user\'s language (for example, [打开会话](url)). Do not invent link parameters, escape the link brackets/parentheses, or wrap a navigation link in a code span. Avoid repeating raw URLs or internal object metadata unless requested.',
     toolLines.length > 0
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',

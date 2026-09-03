@@ -409,7 +409,7 @@ export class ProjectStore {
       .get(...params) as { total: number }).total;
     const rows = db
       .prepare(
-        `SELECT p.*, MAX(s.updated_at) AS latest_session_at
+        `SELECT p.*
          FROM projects p
          JOIN sessions s ON s.project_id = p.project_id
          ${where}
@@ -417,8 +417,8 @@ export class ProjectStore {
          ORDER BY
            CASE WHEN p.pinned_at IS NULL THEN 1 ELSE 0 END ASC,
            p.pinned_at DESC,
-           latest_session_at DESC,
-           p.updated_at DESC
+           p.created_at DESC,
+           p.project_id ASC
          LIMIT ? OFFSET ?`,
       )
       .all(...params, limit, offset) as ProjectRow[];
