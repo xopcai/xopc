@@ -279,6 +279,7 @@ export class AgentService {
       config: config.config,
       extensionRegistry: config.extensionRegistry,
       endpointTools: config.endpointTools,
+      getWorkspaceExecutionBackend: config.getWorkspaceExecutionBackend,
       hookRunner: this.hookRunner,
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),

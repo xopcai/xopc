@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto';
 import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { getExecutionHost } from '../execution-hosts/repository.js';
 import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
+import { inferProjectExecutionMode } from './project-kind.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectHealth, ProjectListQuery, ProjectListResult, ProjectMilestone, ProjectUpdate, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
@@ -62,7 +64,17 @@ export class ProjectService {
     }
     const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
     const slug = input.slug?.trim() || this.store.generateSlug(name);
-    const project = this.store.create({ ...input, name, slug, workspaceRoot });
+    const executionMode = input.executionMode ?? inferProjectExecutionMode({
+      name,
+      description: input.description,
+      workspaceRoot,
+      projectKind: input.projectKind,
+    });
+    if (input.executionHostId?.trim() && !workspaceRoot) {
+      throw new Error('Remote execution hosts require a fixed project workspace');
+    }
+    this.validateExecutionPlacement(executionMode, input.executionHostId, true);
+    const project = this.store.create({ ...input, name, slug, workspaceRoot, executionMode });
     emitActivity({
       type: 'project.created',
       primaryObject: { kind: 'project', id: project.id, title: project.name },
@@ -162,6 +174,22 @@ export class ProjectService {
       }
       patch.workspaceRoot = workspaceRoot;
     }
+    const current = this.store.get(id);
+    if (!current) throw new Error(`Project not found: ${id}`);
+    const nextExecutionHostId = input.executionHostId === undefined
+      ? current.executionHostId
+      : input.executionHostId ?? undefined;
+    const nextWorkspaceRoot = input.workspaceRoot === undefined
+      ? current.workspaceRoot
+      : patch.workspaceRoot ?? undefined;
+    if (nextExecutionHostId?.trim() && !nextWorkspaceRoot) {
+      throw new Error('Remote execution hosts require a fixed project workspace');
+    }
+    this.validateExecutionPlacement(
+      input.executionMode ?? current.executionMode,
+      nextExecutionHostId,
+      input.executionHostId !== undefined && nextExecutionHostId !== current.executionHostId,
+    );
     return runSqliteWriteTransaction(() => {
       const before = this.store.get(id);
       const project = this.store.update(id, patch);
@@ -189,6 +217,24 @@ export class ProjectService {
       });
       return project;
     });
+  }
+
+  private validateExecutionPlacement(
+    executionMode: Project['executionMode'],
+    executionHostId: string | undefined,
+    requireActiveHost: boolean,
+  ): void {
+    const hostId = executionHostId?.trim();
+    if (!hostId) return;
+    if (executionMode !== 'managed_worktree') {
+      throw new Error('Remote execution hosts require managed worktree mode');
+    }
+    if (requireActiveHost) {
+      const host = getExecutionHost(hostId);
+      if (!host || host.lifecycleStatus === 'revoked') {
+        throw new Error(`Active execution host not found: ${hostId}`);
+      }
+    }
   }
 
   pin(id: string): Project {

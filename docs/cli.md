@@ -27,10 +27,12 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `resume` | Resume a previous TUI Session |
 | `tunnel` | Manage public tunnel access |
 | `gateway` | Run and manage the Gateway |
+| `host` | Enroll and run a remote execution host |
 | `history` | Export Session history for external tools such as ctx |
 | `session` | List and manage Sessions |
 | `project` | Manage long-running Projects |
 | `doctor` | Diagnose installation, data, and security issues |
+| `support` | Create a redacted diagnostic report for an xopc problem |
 | `runtime` | Manage Node.js and Python tool runtimes |
 | `update` | Check for and install updates |
 | `logs` | Query and follow logs |

@@ -10,6 +10,7 @@ export type ExecOptions = {
   maxBuffer?: number;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
 };
 
 function execFileAsync(
@@ -27,6 +28,7 @@ function execFileAsync(
         cwd: opts.cwd,
         env: opts.env,
         timeout: opts.timeoutMs,
+        signal: opts.signal,
       },
       (err, stdout, stderr) => {
         if (err) {

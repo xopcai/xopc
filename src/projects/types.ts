@@ -2,6 +2,7 @@ import type { PaginatedResult } from '../session/types.js';
 
 export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed' | 'cancelled' | 'archived';
 export type ProjectHealth = 'unknown' | 'on_track' | 'at_risk' | 'off_track';
+export type ProjectExecutionMode = 'local_checkout' | 'managed_worktree';
 
 export interface Project {
   id: string;
@@ -13,6 +14,8 @@ export interface Project {
   workspaceRoot?: string;
   workspaceMode?: 'followAgent' | 'fixed';
   effectiveWorkspaceRoot?: string;
+  executionMode: ProjectExecutionMode;
+  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -75,6 +78,8 @@ export interface CreateProjectInput {
   workspaceRoot?: string;
   createWorkspaceRoot?: boolean;
   projectKind?: string;
+  executionMode?: ProjectExecutionMode;
+  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -93,6 +98,8 @@ export interface UpdateProjectInput {
   status?: ProjectStatus;
   workspaceRoot?: string | null;
   createWorkspaceRoot?: boolean;
+  executionMode?: ProjectExecutionMode;
+  executionHostId?: string | null;
   brief?: string | null;
   instructions?: string | null;
   pinnedAt?: number | null;

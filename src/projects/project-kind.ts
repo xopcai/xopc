@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { canonicalWorkspacePath } from './workspace-project.js';
+import type { ProjectExecutionMode } from './types.js';
 
 export type ProjectKind = 'coding' | 'general' | 'unknown';
 export type ProjectKindOverride = 'auto' | 'coding' | 'general';
@@ -137,4 +138,15 @@ export function inferProjectKind(input: {
   if (score >= 3) return { kind: 'coding', confidence: 0.75, reasons };
   if (workspaceRoot) return { kind: 'general', confidence: 0.55, reasons };
   return { kind: 'unknown', confidence: 0.25, reasons };
+}
+
+export function inferProjectExecutionMode(input: {
+  name?: string | null;
+  description?: string | null;
+  workspaceRoot?: string | null;
+  projectKind?: string | null;
+}): ProjectExecutionMode {
+  const workspaceRoot = canonicalWorkspacePath(input.workspaceRoot);
+  if (!workspaceRoot || !existsSync(join(workspaceRoot, '.git'))) return 'local_checkout';
+  return inferProjectKind(input).kind === 'coding' ? 'managed_worktree' : 'local_checkout';
 }

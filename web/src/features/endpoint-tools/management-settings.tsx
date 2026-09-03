@@ -1,9 +1,16 @@
-import { RefreshCw, ShieldOff } from 'lucide-react';
+import { Copy, Plus, RefreshCw, Server, ShieldOff } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  createExecutionHostEnrollmentCode,
+  executionHostsKey,
+  fetchExecutionHosts,
+  revokeExecutionHost,
+  type ManagedExecutionHost,
+} from '@/features/execution-hosts/management-api';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -35,28 +42,69 @@ function StatusBadge({ status, label }: { status: Parameters<typeof statusClass>
 export function EndpointToolsManagementSettings() {
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).endpointToolsSettings;
+  const hostCopy = messages(language).executionHostsSettings;
   const principals = useSWR(endpointPrincipalsKey(), fetchEndpointPrincipals, {
     refreshInterval: REFRESH_INTERVAL_MS,
   });
   const invocations = useSWR(endpointInvocationsKey(), fetchEndpointInvocations, {
     refreshInterval: REFRESH_INTERVAL_MS,
   });
+  const hosts = useSWR(executionHostsKey(), fetchExecutionHosts, {
+    refreshInterval: REFRESH_INTERVAL_MS,
+  });
   const [revokeCandidate, setRevokeCandidate] = useState<ManagedEndpointPrincipal>();
   const [revoking, setRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState(false);
+  const [hostRevokeCandidate, setHostRevokeCandidate] = useState<ManagedExecutionHost>();
+  const [hostRevoking, setHostRevoking] = useState(false);
+  const [hostRevokeError, setHostRevokeError] = useState(false);
+  const [creatingEnrollment, setCreatingEnrollment] = useState(false);
+  const [enrollmentError, setEnrollmentError] = useState(false);
+  const [enrollment, setEnrollment] = useState<{ code: string; expiresAt: number }>();
   const formatter = useMemo(
     () => new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', { dateStyle: 'medium', timeStyle: 'short' }),
     [language],
   );
 
-  if ((principals.isLoading && !principals.data) || (invocations.isLoading && !invocations.data)) {
+  if (
+    (principals.isLoading && !principals.data)
+    || (invocations.isLoading && !invocations.data)
+    || (hosts.isLoading && !hosts.data)
+  ) {
     return <SettingsPageFrame><SettingsPageSkeleton sections={2} /></SettingsPageFrame>;
   }
 
   const principalRows = principals.data ?? [];
   const invocationRows = invocations.data ?? [];
+  const hostRows = hosts.data ?? [];
   const onlineCount = principalRows.reduce((count, principal) => count + principal.endpoints.length, 0);
-  const refresh = () => void Promise.all([principals.mutate(), invocations.mutate()]);
+  const refresh = () => void Promise.all([principals.mutate(), invocations.mutate(), hosts.mutate()]);
+  const createEnrollment = async () => {
+    if (creatingEnrollment) return;
+    setCreatingEnrollment(true);
+    setEnrollmentError(false);
+    try {
+      setEnrollment(await createExecutionHostEnrollmentCode());
+    } catch {
+      setEnrollmentError(true);
+    } finally {
+      setCreatingEnrollment(false);
+    }
+  };
+  const confirmHostRevoke = async () => {
+    if (!hostRevokeCandidate || hostRevoking) return;
+    setHostRevoking(true);
+    setHostRevokeError(false);
+    try {
+      await revokeExecutionHost(hostRevokeCandidate.id);
+      setHostRevokeCandidate(undefined);
+      await hosts.mutate();
+    } catch {
+      setHostRevokeError(true);
+    } finally {
+      setHostRevoking(false);
+    }
+  };
   const confirmRevoke = async () => {
     if (!revokeCandidate || revoking) return;
     setRevoking(true);
@@ -92,6 +140,67 @@ export function EndpointToolsManagementSettings() {
       ) : null}
 
       <MobileDeviceAccessSection />
+      {hosts.error ? (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {hostCopy.loadError}
+        </div>
+      ) : null}
+
+      <section className="rounded-2xl border border-edge bg-surface-base p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Server className="size-4 text-accent-fg" aria-hidden />
+              <h2 className="text-sm font-semibold text-fg">{hostCopy.title}</h2>
+            </div>
+            <p className="mt-1 text-sm text-fg-muted">{hostCopy.subtitle}</p>
+          </div>
+          <Button variant="secondary" disabled={creatingEnrollment} onClick={() => void createEnrollment()}>
+            <Plus className="size-4" aria-hidden />
+            {creatingEnrollment ? hostCopy.creating : hostCopy.add}
+          </Button>
+        </div>
+        {enrollment ? (
+          <div className="mt-4 rounded-xl border border-accent/30 bg-accent-soft p-3">
+            <p className="text-xs font-medium text-accent-fg">{hostCopy.codeTitle}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 break-all rounded-lg bg-surface-base px-3 py-2 text-sm text-fg">{enrollment.code}</code>
+              <Button variant="secondary" className="size-9 shrink-0 p-0" onClick={() => void navigator.clipboard.writeText(enrollment.code)} aria-label="Copy enrollment code">
+                <Copy className="size-4" aria-hidden />
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-fg-muted">{hostCopy.codeHint}</p>
+            <p className="mt-1 text-xs text-fg-subtle">{hostCopy.expires}: {formatter.format(enrollment.expiresAt)}</p>
+          </div>
+        ) : null}
+        {enrollmentError ? (
+          <p className="mt-3 text-sm text-danger">{hostCopy.createError}</p>
+        ) : null}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl bg-surface-panel px-4 py-3"><p className="text-xs text-fg-muted">{hostCopy.registered}</p><p className="mt-1 text-2xl font-semibold text-fg">{hostRows.length}</p></div>
+          <div className="rounded-xl bg-surface-panel px-4 py-3"><p className="text-xs text-fg-muted">{hostCopy.online}</p><p className="mt-1 text-2xl font-semibold text-fg">{hostRows.filter((host) => host.online).length}</p></div>
+        </div>
+        <div className="mt-4 space-y-3">
+          {hostRows.length === 0 ? <p className="text-sm text-fg-muted">{hostCopy.noHosts}</p> : null}
+          {hostRows.map((host) => {
+            const status = host.lifecycleStatus === 'revoked' ? 'revoked' : host.online ? 'online' : 'offline';
+            return (
+              <article key={host.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2"><h3 className="font-medium text-fg">{host.displayName}</h3><StatusBadge status={status} label={hostCopy.status[status]} /></div>
+                    <p className="mt-1 break-all text-xs text-fg-muted">{host.platform}/{host.arch} · v{host.appVersion} · {host.id}</p>
+                    <p className="mt-1 text-xs text-fg-subtle">{hostCopy.lastSeen}: {host.lastSeenAt ? formatter.format(host.lastSeenAt) : hostCopy.never}</p>
+                  </div>
+                  {host.lifecycleStatus !== 'revoked' ? (
+                    <Button variant="secondary" className="text-danger" onClick={() => { setHostRevokeError(false); setHostRevokeCandidate(host); }}><ShieldOff className="size-4" aria-hidden />{hostCopy.revoke}</Button>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="grid gap-3 sm:grid-cols-3">
         {[
@@ -199,6 +308,16 @@ export function EndpointToolsManagementSettings() {
         destructive
         onConfirm={() => void confirmRevoke()}
         onCancel={() => { if (!revoking) setRevokeCandidate(undefined); }}
+      />
+      <ConfirmDialog
+        open={Boolean(hostRevokeCandidate)}
+        title={hostCopy.revokeTitle}
+        description={`${hostCopy.revokeDescription.replace('{{name}}', hostRevokeCandidate?.displayName ?? '')}${hostRevokeError ? `\n\n${hostCopy.revokeError}` : ''}`}
+        confirmLabel={hostRevoking ? copy.revoking : hostCopy.revoke}
+        cancelLabel={copy.cancel}
+        destructive
+        onConfirm={() => void confirmHostRevoke()}
+        onCancel={() => { if (!hostRevoking) setHostRevokeCandidate(undefined); }}
       />
     </SettingsPageFrame>
   );

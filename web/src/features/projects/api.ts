@@ -15,6 +15,7 @@ import { apiUrl } from '@/lib/url';
 
 export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed' | 'cancelled' | 'archived';
 export type ProjectHealth = 'unknown' | 'on_track' | 'at_risk' | 'off_track';
+export type ProjectExecutionMode = 'local_checkout' | 'managed_worktree';
 
 export async function updateProjectMonitoring(projectId: string, update: ProjectMonitoringUpdate): Promise<ProjectMonitoringPolicy> {
   const response = await fetchJson<{ ok: true; policy: unknown }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/monitoring`), {
@@ -60,6 +61,8 @@ export type Project = {
   workspaceRoot?: string;
   workspaceMode?: 'followAgent' | 'fixed';
   effectiveWorkspaceRoot?: string;
+  executionMode: ProjectExecutionMode;
+  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -265,6 +268,8 @@ export async function createProject(input: {
   workspaceRoot?: string;
   createWorkspaceRoot?: boolean;
   projectKind?: ProjectKindSelection;
+  executionMode?: ProjectExecutionMode;
+  executionHostId?: string;
   brief?: string;
   instructions?: string;
   outcome?: string;
@@ -294,6 +299,7 @@ export async function inferProjectDefaults(input: {
     reasons: string[];
   };
   defaultAgentId?: string;
+  executionMode: ProjectExecutionMode;
 }> {
   const res = await fetchJson<{
     ok: true;
@@ -303,16 +309,17 @@ export async function inferProjectDefaults(input: {
       reasons: string[];
     };
     defaultAgentId?: string;
+    executionMode: ProjectExecutionMode;
   }>(apiUrl('/api/projects/infer-defaults'), {
     method: 'POST',
     body: JSON.stringify(input),
   });
-  return { inference: res.inference, defaultAgentId: res.defaultAgentId };
+  return { inference: res.inference, defaultAgentId: res.defaultAgentId, executionMode: res.executionMode };
 }
 
 export async function updateProject(
   id: string,
-  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'brief' | 'instructions' | 'outcome' | 'successCriteria' | 'scope' | 'nonGoals' | 'health' | 'ownerId' | 'targetAt'>> & {
+  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'executionMode' | 'executionHostId' | 'brief' | 'instructions' | 'outcome' | 'successCriteria' | 'scope' | 'nonGoals' | 'health' | 'ownerId' | 'targetAt'>> & {
     createWorkspaceRoot?: boolean;
   },
 ): Promise<Project> {

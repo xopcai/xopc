@@ -30,6 +30,7 @@ import {
   type SessionConfigStore,
 } from '../../session/index.js';
 import { getProjectForSession } from '../../projects/workspace.js';
+import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
 import type { SessionStore } from '../../session/store.js';
 import type { CompactionResult } from '../memory/compaction.js';
 import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
@@ -78,7 +79,7 @@ export interface SessionAgentConfigView {
   verboseLevel: VerboseLevel;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
-  workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
+  workspaceSource: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
   userContextMode: 'enabled' | 'off' | 'temporary';
 }
 
@@ -241,6 +242,7 @@ export class SessionInspector {
     const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, sessionKey, defVerbose);
     const model = this.opts.modelManager.getModelForSession(sessionKey);
     const project = getProjectForSession(sessionKey);
+    const environment = getExecutionEnvironmentForSession(sessionKey);
     const projectWorkspace = projectWorkspacePath(project);
     const hasSessionWorkspaceOverride = Boolean(sc?.workingDirectoryOverride?.trim());
     const effectiveWorkspacePath = effectiveWorkspacePathForSession(cfg, sessionKey, sc, project);
@@ -257,10 +259,12 @@ export class SessionInspector {
       },
       verboseLevel,
       effectiveWorkspacePath,
-      workingDirectoryLocked: Boolean(projectWorkspace || hasSessionWorkspaceOverride),
+      workingDirectoryLocked: Boolean(environment || projectWorkspace || hasSessionWorkspaceOverride),
       userContextMode: sc?.userContextMode ?? 'enabled',
-      workspaceSource: projectWorkspace
-        ? 'project'
+      workspaceSource: environment
+        ? 'execution_environment'
+        : projectWorkspace
+          ? 'project'
         : hasSessionWorkspaceOverride
           ? 'session_override'
           : isDefaultWorkspaceRoot

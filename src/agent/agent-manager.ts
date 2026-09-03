@@ -36,6 +36,7 @@ import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { AgentToolsFactory } from './tools/factory.js';
+import type { WorkspaceExecutionBackend } from './tools/workspace-execution-backend.js';
 import type {
   SkillInstallToolOptions,
   SkillInstallToolResult,
@@ -165,6 +166,10 @@ export interface AgentManagerConfig {
   config?: Config;
   extensionRegistry?: ExtensionRegistry;
   endpointTools?: import('../endpoint-tools/index.js').EndpointToolRuntime;
+  getWorkspaceExecutionBackend?: (
+    sessionKey: string,
+    localBackend: WorkspaceExecutionBackend,
+  ) => WorkspaceExecutionBackend;
   hookRunner?: import('../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
   getCurrentContext: () => SessionContext | null;
@@ -1377,6 +1382,9 @@ export class AgentManager implements AgentInstanceGateway {
       getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
+      createWorkspaceExecutionBackend: this.config.getWorkspaceExecutionBackend
+        ? (localBackend) => this.config.getWorkspaceExecutionBackend!(sessionKey, localBackend)
+        : undefined,
     });
     const registeredToolNames = tools.map((t) => t.name);
 

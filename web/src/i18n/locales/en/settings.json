@@ -170,6 +170,27 @@
       "failed": "Failed"
     }
   },
+  "executionHostsSettings": {
+    "title": "Execution hosts",
+    "subtitle": "Run managed code workspaces on enrolled machines without sharing the gateway token.",
+    "add": "Enroll host",
+    "creating": "Creating…",
+    "createError": "Could not create an enrollment code. Try again.",
+    "codeTitle": "One-time enrollment code",
+    "codeHint": "On the target machine, run: xopc host enroll --gateway <gateway-url> --code <code>",
+    "expires": "Expires",
+    "registered": "Registered hosts",
+    "online": "Online hosts",
+    "noHosts": "No execution hosts are enrolled yet.",
+    "lastSeen": "Last seen",
+    "never": "Never",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke execution host?",
+    "revokeDescription": "Revoke {{name}} and disconnect it immediately? A new enrollment code will be required to reconnect.",
+    "revokeError": "Could not revoke this execution host. Try again.",
+    "loadError": "Could not load execution hosts.",
+    "status": { "online": "Online", "offline": "Offline", "revoked": "Revoked" }
+  },
   "capabilitiesSettings": {
     "subtitle": "Configure the model, image, voice, and search services available across xopc.",
     "docsLink": "Read the docs",

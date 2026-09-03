@@ -4,6 +4,13 @@ import {
   serverEndpointMessageSchema,
 } from '@xopcai/endpoint-tools-protocol';
 import { z } from 'zod';
+import {
+  clientExecutionHostMessageSchema,
+  executionHostHelloPayloadSchema,
+  serverExecutionHostMessageSchema,
+} from './execution-host.js';
+
+export * from './execution-host.js';
 
 export const REALTIME_PROTOCOL_VERSION = 1 as const;
 export const REALTIME_MAX_CLIENT_FRAME_BYTES = 256 * 1024;
@@ -11,7 +18,7 @@ export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
 
-export const realtimeClientKindSchema = z.enum(['web', 'desktop', 'mobile', 'tui', 'mcp']);
+export const realtimeClientKindSchema = z.enum(['web', 'desktop', 'mobile', 'tui', 'mcp', 'execution_host']);
 export const realtimeTopicSchema = z.string().min(1).max(512);
 export const realtimeEventNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]*$/).max(160);
 
@@ -42,6 +49,7 @@ export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [
     clientKind: realtimeClientKindSchema,
     subscriptions: z.array(realtimeSubscriptionSchema).max(100).default([]),
     endpoint: endpointHelloPayloadSchema.optional(),
+    executionHost: executionHostHelloPayloadSchema.optional(),
   })),
   envelope('realtime.subscribe', z.strictObject({
     subscriptions: z.array(realtimeSubscriptionSchema).min(1).max(100),
@@ -51,6 +59,7 @@ export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [
   })),
   envelope('realtime.ping', z.strictObject({})),
   envelope('endpoint.message', clientEndpointMessageSchema),
+  envelope('execution_host.message', clientExecutionHostMessageSchema),
 ]);
 
 export const realtimeEventPayloadSchema = z.strictObject({
@@ -69,6 +78,7 @@ export const serverRealtimeMessageSchema = z.discriminatedUnion('kind', [
       endpointId: z.string().min(1).max(160),
       turnToken: z.string().min(32).max(160),
     }).optional(),
+    executionHost: z.strictObject({ hostId: z.string().min(1).max(160) }).optional(),
   })),
   envelope('realtime.event', realtimeEventPayloadSchema),
   envelope('realtime.subscribed', z.strictObject({
@@ -87,6 +97,7 @@ export const serverRealtimeMessageSchema = z.discriminatedUnion('kind', [
     message: z.string().min(1).max(500),
   })),
   envelope('endpoint.message', serverEndpointMessageSchema),
+  envelope('execution_host.message', serverExecutionHostMessageSchema),
 ]);
 
 export type RealtimeClientKind = z.infer<typeof realtimeClientKindSchema>;

@@ -135,6 +135,8 @@ export interface SessionCreateRequest {
   channel?: string;
   agentId?: string;
   projectId?: string;
+  executionMode?: 'local_checkout' | 'managed_worktree';
+  baseRef?: string;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
 }

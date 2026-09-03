@@ -4,6 +4,8 @@ import { registerActivityRoutes } from './activity.js';
 import { registerAgentStreamRoutes } from './agent-stream.js';
 import { registerDiscussionRoutes } from './discussions.js';
 import { registerSessionsRoutes } from './sessions.js';
+import { registerExecutionEnvironmentRoutes } from './execution-environments.js';
+import { registerExecutionHostRoutes } from './execution-hosts.js';
 import { registerSideChatRoutes } from './side-chats.js';
 import { registerStatusRoutes } from './status.js';
 import { registerProjectsRoutes } from './projects.js';
@@ -36,6 +38,8 @@ export function registerCoreAuthenticatedRoutes(
   registerMobilePrivacyRoutes(authenticated, deps);
   registerAgentStreamRoutes(authenticated, deps);
   registerSessionsRoutes(authenticated, deps);
+  registerExecutionEnvironmentRoutes(authenticated, deps);
+  registerExecutionHostRoutes(authenticated, deps);
   registerSideChatRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
   registerDiscussionRoutes(authenticated, deps);
