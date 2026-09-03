@@ -26,6 +26,7 @@ import { DEFAULT_MOBILE_SCOPES } from '../../security/gateway-scopes.js';
 import { resolveSecureDeviceRoutes } from '../../device-routes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { registerPairingApprovalAdminRoutes, registerPairingApprovalPublicRoutes } from './device-pairing-approval.js';
 
 const refreshRequestSchema = z.strictObject({
   refreshToken: z.string().min(1).max(256),
@@ -55,6 +56,7 @@ const pairingProbeSchema = z.strictObject({
 });
 
 function pairingLinkPayload(input: {
+  version: 2 | 3;
   pairingToken: string;
   gatewayId: string;
   gatewayName: string;
@@ -62,10 +64,11 @@ function pairingLinkPayload(input: {
   routes: ReturnType<typeof resolveSecureDeviceRoutes>;
   expiresAt: number;
 }): string {
-  return Buffer.from(JSON.stringify({ version: 2, ...input })).toString('base64url');
+  return Buffer.from(JSON.stringify(input)).toString('base64url');
 }
 
 export function registerDeviceAuthPublicRoutes(app: Hono): void {
+  registerPairingApprovalPublicRoutes(app);
   app.post('/api/device-auth/refresh', async (c) => {
     const parsed = refreshRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
@@ -148,12 +151,17 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
 }
 
 export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  registerPairingApprovalAdminRoutes(authenticated);
   authenticated.get('/api/device-pairing/readiness', (c) => {
     const routes = resolveSecureDeviceRoutes(deps.service.currentConfig);
-    return c.json({ ok: true, ready: routes.length > 0, routes });
+    return c.json({ ok: true, ready: routes.length > 0, routes, protocolVersions: [2, 3],
+      routeState: routes.length > 0 ? 'configured' : 'missing',
+      nextAction: routes.length > 0 ? 'scan' : 'configure-route', serverTime: Date.now() });
   });
 
-  authenticated.post('/api/device-pairing/setups', (c) => {
+  authenticated.post('/api/device-pairing/setups', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { protocolVersion?: unknown };
+    const version = body.protocolVersion === 3 ? 3 : 2;
     const routes = resolveSecureDeviceRoutes(deps.service.currentConfig);
     if (routes.length === 0) {
       return c.json({
@@ -164,9 +172,10 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
         },
       }, 409);
     }
-    const setup = createDevicePairingSetup(routes);
+    const setup = createDevicePairingSetup(routes, Date.now(), version);
     const identity = getOrCreateGatewayIdentity();
     const encoded = pairingLinkPayload({
+      version,
       pairingToken: setup.token,
       gatewayId: identity.id,
       gatewayName: os.hostname(),
@@ -181,6 +190,7 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
         universalLink: `https://link.xopc.ai/connect#p=${encoded}`,
         expiresAt: setup.expiresAt,
         routes,
+        protocolVersion: version,
       },
     }, 201);
   });

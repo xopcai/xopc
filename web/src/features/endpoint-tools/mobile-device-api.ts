@@ -1,5 +1,6 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { DevicePairingStatus } from '@xopcai/gateway-contract';
 
 export type MobileDevice = {
   id: string;
@@ -27,6 +28,7 @@ export type MobilePairingCreation =
   | { kind: 'needs-secure-route' };
 
 export type MobilePairingReadiness = {
+  protocolVersions?: number[];
   ready: boolean;
   routes: MobilePairingSetup['routes'];
 };
@@ -40,14 +42,14 @@ export async function fetchMobilePairingReadiness(): Promise<MobilePairingReadin
   const response = await fetchJson<{ ok: true } & MobilePairingReadiness>(
     apiUrl('/api/device-pairing/readiness'),
   );
-  return { ready: response.ready, routes: response.routes };
+  return { ready: response.ready, routes: response.routes, protocolVersions: response.protocolVersions };
 }
 
 export async function createMobilePairingSetup(): Promise<MobilePairingCreation> {
   try {
     const response = await fetchJson<{ ok: true; setup: MobilePairingSetup }>(
       apiUrl('/api/device-pairing/setups'),
-      { method: 'POST', body: JSON.stringify({}) },
+      { method: 'POST', body: JSON.stringify({ protocolVersion: 3 }) },
     );
     return { kind: 'ready', setup: response.setup };
   } catch (error) {
@@ -55,6 +57,20 @@ export async function createMobilePairingSetup(): Promise<MobilePairingCreation>
     if (code === 'NO_SECURE_ROUTE') return { kind: 'needs-secure-route' };
     throw error;
   }
+}
+
+export async function fetchMobilePairingSetup(id: string): Promise<{ request: DevicePairingStatus | null; serverTime: number }> {
+  return fetchJson(apiUrl(`/api/device-pairing/setups/${encodeURIComponent(id)}`));
+}
+
+export async function cancelMobilePairingSetup(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/device-pairing/setups/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export async function decideMobilePairing(request: DevicePairingStatus, decision: 'approve' | 'reject'): Promise<void> {
+  await fetchJson(apiUrl(`/api/device-pairing/requests/${encodeURIComponent(request.requestId)}/decision`), {
+    method: 'POST', body: JSON.stringify({ decision, expectedRevision: request.revision }),
+  });
 }
 
 export async function revokeMobileDevice(deviceId: string): Promise<void> {

@@ -487,6 +487,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   system: {
     getBehavior: () => ipcRenderer.invoke("system-settings:get-behavior"),
     setBehavior: (patch: {
+      runInBackground?: boolean;
       openAtLogin?: boolean;
       openAsHidden?: boolean;
       keepAwakePreferred?: boolean;

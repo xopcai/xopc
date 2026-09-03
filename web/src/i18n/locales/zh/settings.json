@@ -52,7 +52,11 @@
     "repair": "修复",
     "working": "处理中…",
     "unknown": "状态不可用",
-    "runtimeNames": { "node": "Node.js", "python": "Python", "uv": "uv" },
+    "runtimeNames": {
+      "node": "Node.js",
+      "python": "Python",
+      "uv": "uv"
+    },
     "preferences": {
       "managedFirst": "受管环境优先",
       "systemFirst": "系统环境优先",
@@ -89,6 +93,44 @@
     "callsHint": "审计记录只保存参数哈希，不在这里保存原始参数。",
     "noCalls": "尚无端点工具调用。",
     "mobileAccess": {
+      "flow": {
+        "title": "连接手机",
+        "intro": "离开电脑，也能继续工作。",
+        "enable": "开启连接",
+        "enableHint": "开启后，手机可通过互联网连接这台电脑。",
+        "existing": "已有连接方式",
+        "scan": "用手机扫描",
+        "scanHint": "在手机 xopc 中点击「扫描二维码」。",
+        "valid": "10 分钟内有效",
+        "expired": "二维码已过期",
+        "refresh": "刷新二维码",
+        "fallback": "无法扫码？",
+        "allowTitle": "允许这部手机连接？",
+        "scope": "可继续对话、查看和操作工作。",
+        "compare": "确认两端数字一致。",
+        "allow": "允许连接",
+        "waiting": "正在完成连接",
+        "success": "手机已连接",
+        "successHint": "现在可以从手机继续工作。",
+        "done": "完成",
+        "cancel": "取消",
+        "retry": "重试",
+        "preparing": "正在准备连接",
+        "preparingHint": "首次开启可能需要几分钟。",
+        "failed": "连接未完成，请重试。",
+        "declined": "本次连接已取消",
+        "back": "返回",
+        "autoStart": "启动 xopc 时恢复连接",
+        "authorize": "授权连接",
+        "authorizing": "请在打开的页面完成授权",
+        "details": "连接说明",
+        "background": "关闭窗口后继续运行",
+        "sleep": "电脑休眠或退出 xopc 后，手机会断开。",
+        "update": "请更新电脑版后重试。",
+        "access": "访问范围",
+        "accessHint": "对话、任务、工作区与已授权的助手能力。重要操作仍遵循原有确认规则。",
+        "openAuthorization": "打开授权页面"
+      },
       "title": "移动端接入",
       "hint": "通过已验证的 HTTPS 入口配对原生应用，每台手机使用独立且可撤销的凭证。",
       "add": "添加手机",
@@ -500,28 +542,60 @@
     "idleTipBody": "如果继续开工，我会帮你看住后台进度。",
     "personaPhrases": {
       "calm": {
-        "greeting": ["我在。"],
-        "success": ["处理好了。"],
-        "waiting": ["到你决定了，我先停在这里。"],
-        "error": ["这一步没走通，前面的内容还在。"]
+        "greeting": [
+          "我在。"
+        ],
+        "success": [
+          "处理好了。"
+        ],
+        "waiting": [
+          "到你决定了，我先停在这里。"
+        ],
+        "error": [
+          "这一步没走通，前面的内容还在。"
+        ]
       },
       "warm": {
-        "greeting": ["我在边上陪你。"],
-        "success": ["处理好了，可以松口气了。"],
-        "waiting": ["到你确认了，我在这里等。"],
-        "error": ["这里卡了一下，已经完成的内容还在。"]
+        "greeting": [
+          "我在边上陪你。"
+        ],
+        "success": [
+          "处理好了，可以松口气了。"
+        ],
+        "waiting": [
+          "到你确认了，我在这里等。"
+        ],
+        "error": [
+          "这里卡了一下，已经完成的内容还在。"
+        ]
       },
       "playful": {
-        "greeting": ["我在，随时可以出发。"],
-        "success": ["稳稳拿下。"],
-        "waiting": ["轮到你拍板了。"],
-        "error": ["碰到一个路障，我们去看看。"]
+        "greeting": [
+          "我在，随时可以出发。"
+        ],
+        "success": [
+          "稳稳拿下。"
+        ],
+        "waiting": [
+          "轮到你拍板了。"
+        ],
+        "error": [
+          "碰到一个路障，我们去看看。"
+        ]
       },
       "focused": {
-        "greeting": ["我在，状态正常。"],
-        "success": ["任务完成。"],
-        "waiting": ["需要你的决定，我已暂停。"],
-        "error": ["这一步未完成，现有结果已保留。"]
+        "greeting": [
+          "我在，状态正常。"
+        ],
+        "success": [
+          "任务完成。"
+        ],
+        "waiting": [
+          "需要你的决定，我已暂停。"
+        ],
+        "error": [
+          "这一步未完成，现有结果已保留。"
+        ]
       }
     },
     "taskInProgress": "任务进行中",

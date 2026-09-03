@@ -1,3 +1,5 @@
+import { useMutation } from '@tanstack/react-query';
+import { testWorkComputer } from './test-work-computer';
 import { useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -25,6 +27,8 @@ export function GatewayEditScreen() {
   const renameProfile = useGatewayStore((state) => state.renameProfile);
   const removeProfile = useGatewayStore((state) => state.removeProfile);
   const selectRoute = useGatewayStore((state) => state.selectRoute);
+  const [details, setDetails] = useState(false);
+  const test = useMutation({ mutationFn: () => testWorkComputer(id) });
   const [name, setName] = useState(profile?.name ?? '');
   const [scannerOpen, setScannerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,7 +54,7 @@ export function GatewayEditScreen() {
     setError('');
     void pairWithGateway(pairing)
       .then(() => router.replace('/'))
-      .catch((cause) => setError(cause instanceof Error ? cause.message : copy.connectFailed))
+      .catch(() => setError(copy.connectFailed))
       .finally(() => setBusy(false));
   }, [copy.connectFailed, router]);
 
@@ -86,12 +90,17 @@ export function GatewayEditScreen() {
             <Button mode="contained" disabled={!name.trim()} onPress={() => renameProfile(profile.gatewayId, name)}>
               {s.save}
             </Button>
+            <Button mode="outlined" loading={test.isPending} disabled={test.isPending} onPress={() => test.mutate()}>{copy.flow.test}</Button>
+            <Text style={{ color: colors.textMuted }}>{test.isSuccess ? test.data === 'cellular' ? copy.flow.testCellular : copy.flow.testCurrent : test.isError ? test.error.message === 'SWITCH_COMPUTER' ? copy.flow.testSwitch : copy.flow.testFailed : copy.flow.testHint}</Text>
+            <Button onPress={() => setDetails(v => !v)}>{copy.flow.details}</Button>
+            {details ? <>
             <Text variant="titleSmall">{s.secureRoutes}</Text>
             <RadioButton.Group value={profile.activeRouteId} onValueChange={(routeId) => selectRoute(profile.gatewayId, routeId)}>
               {profile.routes.map((route) => (
                 <RadioButton.Item key={route.id} value={route.id} label={`${route.kind} · ${route.url}`} />
               ))}
             </RadioButton.Group>
+            </> : null}
             <Button mode="outlined" textColor={colors.error} onPress={confirmDelete}>{s.deleteGateway}</Button>
           </>
         ) : null}

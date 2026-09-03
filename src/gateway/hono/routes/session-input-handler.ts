@@ -34,7 +34,11 @@ export async function submitSessionInput(
   if (!deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token)) {
     return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
   }
+  if (body.expectedSessionId !== undefined && (typeof body.expectedSessionId !== 'string' || !body.expectedSessionId || body.expectedSessionId.length > 128)) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session identity' } }, 400);
+  }
   const result = await deps.service.submitSessionInput({
+    expectedSessionId: body.expectedSessionId as string | undefined,
     sessionKey,
     clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
     delivery,
@@ -47,7 +51,7 @@ export async function submitSessionInput(
   if (result.ok === false) {
     return c.json(
       { ok: false, error: { code: result.code, message: result.code === 'CONTEXT_UNAVAILABLE' ? 'A referenced Note changed or is no longer available. Select it again.' : 'Input was not accepted' } },
-      result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
+      result.code === 'SESSION_CHANGED' || result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
     );
   }
   return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);

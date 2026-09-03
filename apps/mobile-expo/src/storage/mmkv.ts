@@ -79,5 +79,6 @@ export const storage: KeyValueStorage = {
 };
 
 export function pendingRunStorageKey(sessionKey: string): string {
-  return `${KEYS.pendingRunPrefix}${sessionKey}`;
+  const gatewayId = storage.getString(KEYS.activeId) ?? 'unassigned';
+  return `${KEYS.pendingRunPrefix}v2:${encodeURIComponent(gatewayId)}:${encodeURIComponent(sessionKey)}`;
 }

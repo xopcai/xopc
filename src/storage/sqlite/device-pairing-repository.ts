@@ -26,6 +26,7 @@ type PairingRow = {
   expires_at: number;
   attempts_remaining: number;
   consumed_at: number | null;
+  protocol_version: number;
 };
 
 export type PairingConsumeResult =
@@ -50,19 +51,22 @@ function tokenId(token: string): string | undefined {
 export function createDevicePairingSetup(
   routes: readonly DeviceRoute[],
   now = Date.now(),
+  protocolVersion: 2 | 3 = 2,
 ): DevicePairingSetup {
   if (routes.length === 0) throw new Error('No secure mobile route is available');
   const id = crypto.randomUUID();
   const token = `${PAIRING_TOKEN_PREFIX}${id}_${crypto.randomBytes(32).toString('base64url')}`;
   const expiresAt = now + PAIRING_TTL_MS;
   runSqliteWriteTransaction((db) => {
-    db.prepare('DELETE FROM device_pairing_sessions WHERE expires_at <= ? OR consumed_at IS NOT NULL')
-      .run(now);
+    db.prepare(`DELETE FROM device_pairing_sessions WHERE
+      (protocol_version = 2 AND (expires_at <= ? OR consumed_at IS NOT NULL)) OR
+      (protocol_version = 3 AND expires_at < ?)`).run(now, now - 24 * 60 * 60_000);
     db.prepare(`
       INSERT INTO device_pairing_sessions (
         pairing_id, secret_hash, routes_json, expires_at, attempts_remaining, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING_ATTEMPTS, now);
+        , protocol_version
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING_ATTEMPTS, now, protocolVersion);
   });
   return { id, token, routes: [...routes], expiresAt };
 }
@@ -74,6 +78,7 @@ export function consumeDevicePairingToken(token: string, now = Date.now()): Pair
     const row = db.prepare('SELECT * FROM device_pairing_sessions WHERE pairing_id = ?')
       .get(id) as PairingRow | undefined;
     if (!row || row.attempts_remaining <= 0) return { ok: false, reason: 'invalid' };
+    if (row.protocol_version !== 2) return { ok: false, reason: 'invalid' };
     if (row.consumed_at !== null) return { ok: false, reason: 'consumed' };
     if (row.expires_at <= now) return { ok: false, reason: 'expired' };
     if (!hashesMatch(row.secret_hash, hashToken(token))) {

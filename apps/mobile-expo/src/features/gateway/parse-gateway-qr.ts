@@ -2,7 +2,7 @@ import { decodeBase64UrlJson } from './device-crypto';
 import { normalizeSecureGatewayUrl, type GatewayRoute } from '../../stores/gateway-types';
 
 export type ParsedGatewayQr = {
-  version: 2;
+  version: 2 | 3;
   pairingToken: string;
   gatewayId: string;
   gatewayName: string;
@@ -19,7 +19,7 @@ export function parseGatewayQrPayload(raw: string): ParsedGatewayQr | null {
     if (!encoded) return null;
     const value = decodeBase64UrlJson<Record<string, unknown>>(encoded);
     if (
-      value.version !== 2 || typeof value.pairingToken !== 'string' || !value.pairingToken.startsWith('xopc_pair_') ||
+      (value.version !== 2 && value.version !== 3) || typeof value.pairingToken !== 'string' || !value.pairingToken.startsWith('xopc_pair_') ||
       typeof value.gatewayId !== 'string' || !value.gatewayId || typeof value.gatewayName !== 'string' ||
       typeof value.gatewayPublicKey !== 'string' || !value.gatewayPublicKey ||
       !Array.isArray(value.routes) || value.routes.length === 0 ||
@@ -35,7 +35,7 @@ export function parseGatewayQrPayload(raw: string): ParsedGatewayQr | null {
       return { id: route.id, kind: route.kind, url: normalizeSecureGatewayUrl(route.url) } as GatewayRoute;
     });
     return {
-      version: 2,
+      version: value.version,
       pairingToken: value.pairingToken,
       gatewayId: value.gatewayId,
       gatewayName: value.gatewayName,

@@ -24,9 +24,12 @@ function loadSecureStore(): SecureStoreModule | null {
 
 function read(key: string): string | null {
   try {
-    return loadSecureStore()?.getItem(key, { keychainService: KEYCHAIN_SERVICE }) ?? memory.get(key) ?? null;
+    const store = loadSecureStore();
+    if (!store && process.env.NODE_ENV !== 'test') throw new Error('Secure storage unavailable');
+    return store?.getItem(key, { keychainService: KEYCHAIN_SERVICE }) || memory.get(key) || null;
   } catch {
-    return memory.get(key) ?? null;
+    if (process.env.NODE_ENV === 'test') return memory.get(key) ?? null;
+    throw new Error('Secure storage unavailable');
   }
 }
 
@@ -37,16 +40,16 @@ function write(key: string, value: string): void {
       store.setItem(key, value, { keychainService: KEYCHAIN_SERVICE });
       return;
     }
-  } catch {
-    // Tests and Expo Go use the in-memory fallback.
-  }
+  } catch { if (process.env.NODE_ENV !== 'test') throw new Error('Secure storage unavailable'); }
+  if (process.env.NODE_ENV !== 'test') throw new Error('Secure storage unavailable');
   memory.set(key, value);
 }
 
 function remove(key: string): void {
   memory.delete(key);
+  // Synchronous tombstone avoids deleting a newer credential after an async removal.
   const store = loadSecureStore();
-  if (store?.deleteItemAsync) void store.deleteItemAsync(key, { keychainService: KEYCHAIN_SERVICE });
+  if (store?.setItem) store.setItem(key, '', { keychainService: KEYCHAIN_SERVICE });
 }
 
 export function getOrCreateDevicePrivateKey(): Uint8Array {
@@ -71,6 +74,20 @@ export function writeDeviceRefreshToken(gatewayId: string, token: string): void 
 
 export function deleteDeviceRefreshToken(gatewayId: string): void {
   remove(refreshKey(gatewayId));
+}
+
+export function readDeviceAuthJournal<T>(id: string): T | null {
+  const raw = read(`xopc.device.journal.${id.replace(/[^\w.-]/g, '_')}`);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as T; } catch { return null; }
+}
+
+export function writeDeviceAuthJournal(id: string, value: unknown): void {
+  write(`xopc.device.journal.${id.replace(/[^\w.-]/g, '_')}`, JSON.stringify(value));
+}
+
+export function clearDeviceAuthJournal(id: string): void {
+  remove(`xopc.device.journal.${id.replace(/[^\w.-]/g, '_')}`);
 }
 
 /** @internal */

@@ -6,6 +6,8 @@ const testState = vi.hoisted(() => ({
   apiFetch: vi.fn(),
   apiUploadFile: vi.fn(),
   language: 'zh' as 'en' | 'zh',
+  gatewayId: 'computer-a',
+  generation: 1,
   reconnect: vi.fn(),
   unsubscribe: vi.fn(),
   realtimeAfterSeq: undefined as number | undefined,
@@ -42,6 +44,9 @@ vi.mock('../../features/gateway/use-gateway-realtime', () => ({
   }),
 }));
 
+vi.mock('../../features/gateway/session-detail-cache', () => ({ readCachedSessionDetail: () => ({ sessionId: 'instance-a' }) }));
+vi.mock('../../features/gateway/outbox-attachments', () => ({ retainOutboxAttachments: (_id: string, attachments: unknown[]) => attachments, releaseOutboxAttachments: vi.fn() }));
+
 vi.mock('../../features/chat/attachment-file-io', () => ({
   readUriAsBase64: vi.fn(),
 }));
@@ -49,6 +54,8 @@ vi.mock('../../features/chat/attachment-file-io', () => ({
 vi.mock('../../stores/gateway-store', () => ({
   useGatewayStore: {
     getState: vi.fn(() => ({
+      activeGatewayId: testState.gatewayId,
+      connectionGeneration: testState.generation,
       apiUrl: (path: string) => `https://gateway.test${path}`,
     })),
   },
@@ -373,7 +380,7 @@ describe('AgentMessageSender local detach', () => {
     const first = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body)) as { clientMessageId: string };
     const second = JSON.parse(String(testState.apiFetch.mock.calls[1]?.[1]?.body)) as { clientMessageId: string };
     expect(second.clientMessageId).toBe(first.clientMessageId);
-    expect(testState.memory.has('session-input-outbox:session-a')).toBe(false);
+    expect(testState.memory.has('session-input-outbox:v2:computer-a:session-a')).toBe(false);
   });
 
   it('keeps an input durable when a successful response body is truncated', async () => {
@@ -382,7 +389,7 @@ describe('AgentMessageSender local detach', () => {
 
     await expect(sender.sendMessage('hello', 'session-a')).rejects.toThrow('Network response was invalid');
 
-    expect(testState.memory.has('session-input-outbox:session-a')).toBe(true);
+    expect(testState.memory.has('session-input-outbox:v2:computer-a:session-a')).toBe(true);
   });
 
   it('keeps an ambiguous input across sender instances and reuses its id', async () => {
@@ -394,7 +401,7 @@ describe('AgentMessageSender local detach', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     await firstRejected;
 
-    const stored = JSON.parse(testState.memory.get('session-input-outbox:session-a')!) as {
+    const stored = JSON.parse(testState.memory.get('session-input-outbox:v2:computer-a:session-a')!) as {
       clientMessageId: string;
       content: string;
     };
@@ -411,7 +418,7 @@ describe('AgentMessageSender local detach', () => {
       clientMessageId: string;
     };
     expect(retried.clientMessageId).toBe(stored.clientMessageId);
-    expect(testState.memory.has('session-input-outbox:session-a')).toBe(false);
+    expect(testState.memory.has('session-input-outbox:v2:computer-a:session-a')).toBe(false);
   });
 
   it('resumes from the last applied run sequence', async () => {
