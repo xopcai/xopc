@@ -25,6 +25,14 @@ export function getSessionConfig(sessionKey: string): SessionAgentConfig | null 
   return sessionConfigRowToConfig(row);
 }
 
+/** Persisted file locations must be discoverable before a session runs again. */
+export function listSessionWorkspaceOverrides(): Array<{ sessionKey: string; workingDirectoryOverride: string }> {
+  return getSqliteDatabase().prepare(`
+    SELECT session_key AS sessionKey, working_directory_override AS workingDirectoryOverride
+    FROM session_config WHERE length(trim(working_directory_override)) > 0
+  `).all() as Array<{ sessionKey: string; workingDirectoryOverride: string }>;
+}
+
 export function setSessionConfig(sessionKey: string, config: SessionAgentConfig, cwd: string): SessionAgentConfig {
   return runSqliteWriteTransaction((db) => {
     ensureSessionInTransaction(db, sessionKey, cwd);

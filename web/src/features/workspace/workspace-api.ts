@@ -2,7 +2,6 @@ import {
   FileResourceSchema,
   FileResourcesResponseSchema,
   FileSpaceSchema,
-  FileSpacesResponseSchema,
   type FileResource,
   type FileSpace,
 } from '@xopcai/gateway-contract';
@@ -28,9 +27,9 @@ export type WorkspaceEditorRequestOptions = {
   agentId?: string;
 };
 
-export type FileReferenceScope = 'workspace' | 'missing' | 'invalid';
-export type FileReferenceLocationKind = 'workspace';
-export type FileReferenceCapability = 'preview' | 'edit';
+export type FileReferenceScope = 'workspace' | 'external' | 'agent-profile' | 'missing' | 'invalid';
+export type FileReferenceLocationKind = 'workspace' | 'agent-profile' | 'xopc-skills' | 'xopc-config' | 'xopc-agents' | 'host';
+export type FileReferenceCapability = 'preview' | 'edit' | 'openExternal' | 'revealInFolder' | 'copyPath';
 export type WorkspaceFileReference = {
   inputPath: string;
   displayName: string;
@@ -42,6 +41,9 @@ export type WorkspaceFileReference = {
   capabilities: FileReferenceCapability[];
   mtimeMs?: number;
   fileId?: string;
+  fileRefId?: string;
+  absolutePath?: string;
+  manageRoute?: string;
 };
 
 async function readApiError(response: Response): Promise<Error> {
@@ -67,10 +69,8 @@ async function resolveSpace(options?: WorkspaceEditorRequestOptions): Promise<Fi
     const body = await requestJson(`/api/files/contexts/${context.kind}/${encodeURIComponent(context.id)}`) as { space?: unknown };
     return FileSpaceSchema.parse(body.space);
   }
-  const body = FileSpacesResponseSchema.parse(await requestJson('/api/files/spaces'));
-  const space = body.spaces.find((item) => item.bindings.some((binding) => binding.kind === 'agent')) ?? body.spaces[0];
-  if (!space) throw new Error('No file location is available');
-  return space;
+  const body = await requestJson('/api/files/default-space') as { space?: unknown };
+  return FileSpaceSchema.parse(body.space);
 }
 
 function toEntry(resource: FileResource): WorkspaceEntry {
@@ -150,8 +150,13 @@ export async function resolveWorkspaceFileReference(
   path: string,
   options?: WorkspaceEditorRequestOptions,
 ): Promise<WorkspaceFileReference | null> {
+  let space: FileSpace;
+  try { space = await resolveSpace(options); } catch { return null; }
   try {
-    const resource = await resolveResource(path, options);
+    const body = await requestJson('/api/files/resolve', {
+      method: 'POST', body: JSON.stringify({ spaceId: space.id, path }),
+    }) as { resource?: unknown };
+    const resource = FileResourceSchema.parse(body.resource);
     return {
       fileId: resource.id,
       inputPath: path,
@@ -165,8 +170,23 @@ export async function resolveWorkspaceFileReference(
       mtimeMs: resource.modifiedAt,
     };
   } catch {
-    return null;
+    try {
+      const body = await requestJson('/api/files/resolve-reference', {
+        method: 'POST', body: JSON.stringify({ spaceId: space.id, path, sessionKey: options?.sessionKey }),
+      }) as { reference: WorkspaceFileReference };
+      return body.reference;
+    } catch { return null; }
   }
+}
+
+export async function resolveFileReferenceAction(
+  fileRefId: string,
+  action: 'openExternal' | 'revealInFolder',
+  options?: WorkspaceEditorRequestOptions,
+): Promise<{ absolutePath: string; isDirectory: boolean }> {
+  return await requestJson(`/api/files/references/${encodeURIComponent(fileRefId)}/action`, {
+    method: 'POST', body: JSON.stringify({ action, sessionKey: options?.sessionKey }),
+  }) as { absolutePath: string; isDirectory: boolean };
 }
 
 export async function fetchWorkspaceFileBlob(path: string, options?: WorkspaceEditorRequestOptions): Promise<Blob> {
