@@ -83,6 +83,7 @@ export function NoteMarkdownView({ content, noteId, ...rest }: NoteMarkdownViewP
     <div ref={hostRef}>
       <MarkdownView
         content={noteMarkdownForRender(content)}
+        mermaidActions
         {...rest}
         className={['markdown-note', rest.className].filter(Boolean).join(' ')}
       />
