@@ -11,6 +11,8 @@ import { useMessages } from '../../i18n/messages';
 
 import { ensureGatewayQrCameraPermission } from './gateway-qr-camera-permission';
 import { hasPairableGatewayQr, type ParsedGatewayQr, parseGatewayQrPayload } from './parse-gateway-qr';
+import { GatewayPairingInputActions } from './GatewayPairingInputActions';
+import { useGatewayPairingInput } from './use-gateway-pairing-input';
 
 export type GatewayQrScannerModalProps = {
   visible: boolean;
@@ -34,6 +36,10 @@ export function GatewayQrScannerModal({
   const l = m.gatewayConnect;
   const [cameraReady, setCameraReady] = useState(false);
   const scanCooldown = useRef(0);
+  const input = useGatewayPairingInput((pairing) => {
+    onScanned(pairing);
+    onRequestClose();
+  }, visible);
 
   useEffect(() => {
     if (!visible) {
@@ -58,7 +64,7 @@ export function GatewayQrScannerModal({
 
   const onBarcodeScanned = useCallback(
     (ev: { data: string }) => {
-      if (!visible) return;
+      if (!visible || input.busy) return;
       if (Date.now() - scanCooldown.current < 1200) return;
       scanCooldown.current = Date.now();
       const parsed = parseGatewayQrPayload(ev.data);
@@ -66,7 +72,7 @@ export function GatewayQrScannerModal({
       onScanned(parsed);
       onRequestClose();
     },
-    [onRequestClose, onScanned, visible],
+    [input.busy, onRequestClose, onScanned, visible],
   );
 
   const content = (
@@ -79,7 +85,7 @@ export function GatewayQrScannerModal({
         <View style={{ width: 48 }} />
       </View>
       <View style={styles.cameraWrap}>
-        {visible && cameraReady ? (
+        {visible && cameraReady && !input.busy ? (
           <CameraView
             style={styles.camera}
             facing="back"
@@ -91,6 +97,7 @@ export function GatewayQrScannerModal({
       </View>
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Text style={styles.hint}>{l.scannerHint}</Text>
+        <GatewayPairingInputActions input={input} overCamera />
       </View>
     </View>
   );

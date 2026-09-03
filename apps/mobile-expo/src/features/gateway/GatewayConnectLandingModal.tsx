@@ -15,7 +15,9 @@ import { PrivacyScreen } from '../privacy/PrivacyScreen';
 import { switchGatewayProfile } from './gateway-switch-service';
 import { GatewayQrScannerModal, requestGatewayQrCameraAccess } from './GatewayQrScannerModal';
 import { pairWithGateway, readPendingDevicePairing, cancelPendingDevicePairing, pauseDevicePairing, useDevicePairingFlow } from './pair-gateway';
-import { parseGatewayQrPayload, type ParsedGatewayQr } from './parse-gateway-qr';
+import type { ParsedGatewayQr } from './parse-gateway-qr';
+import { GatewayPairingInputActions } from './GatewayPairingInputActions';
+import { useGatewayPairingInput } from './use-gateway-pairing-input';
 
 export type GatewayConnectLandingModalProps = { visible: boolean; onRequestClose: () => void };
 
@@ -37,7 +39,7 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const [more, setMore] = useState(false);
-  const [error, setError] = useState<keyof typeof f | 'cameraDenied' | 'invalidPairingLink' | null>(null);
+  const [error, setError] = useState<keyof typeof f | 'cameraDenied' | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState<ParsedGatewayQr | null>(null);
   const controller = useRef<AbortController | null>(null);
@@ -89,19 +91,14 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
     if (granted) setScannerOpen(true);
   }, [cameraPermission, requestCameraPermission]);
   const connect = (qr: ParsedGatewayQr) => { setScannerOpen(false); setError(null); pairing.mutate(qr); };
+  const input = useGatewayPairingInput(connect, visible && !scannerOpen && !help && !pairing.isPending && !progress && !pending);
   const cancel = async () => {
     controller.current?.abort();
     try { await cancelPendingDevicePairing(); setPending(null); setError(null); }
     catch (cause) { setError(errorKey(cause)); setPending(readPendingDevicePairing()); }
   };
-  const paste = async () => {
-    try {
-      const qr = parseGatewayQrPayload(await Clipboard.getStringAsync());
-      if (qr) connect(qr); else setError('invalidPairingLink');
-    } catch { setError('invalidPairingLink'); }
-  };
-  const busy = pairing.isPending || Boolean(progress);
-  const displayedError = error === 'cameraDenied' || error === 'invalidPairingLink'
+  const busy = pairing.isPending || Boolean(progress) || input.busy;
+  const displayedError = error === 'cameraDenied'
     ? copy[error]
     : error ? f[error] : flowError ? f[errorKey(new Error(flowError))] : '';
   const waiting = progress?.stage === 'approval';
@@ -144,14 +141,16 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
               <Button mode="contained" onPress={() => { void Clipboard.setStringAsync('https://xopc.ai').then(() => setCopied(true)); }}>{copied ? f.copied : f.copyDownload}</Button>
               <Button onPress={() => setHelp(false)}>{f.back}</Button>
             </> : <>
-              {!progress && !pending ? <Button mode="contained" icon="qrcode-scan" onPress={() => void openScanner()}>{copy.scanQr}</Button> : null}
+              {!progress && !pending ? <>
+                <Button mode="contained" icon="qrcode-scan" disabled={busy} onPress={() => void openScanner()}>{copy.scanQr}</Button>
+                <GatewayPairingInputActions input={input} disabled={busy} />
+              </> : null}
               {pending && !busy ? <Button mode="contained" onPress={() => connect(pending)}>{f.resume}</Button> : null}
               {(progress || pending) && progress?.stage !== 'completing' ? <Button onPress={() => void cancel()}>{f.cancel}</Button> : null}
-              {!progress && !pending ? <Button onPress={() => setHelp(true)}>{f.install}</Button> : null}
+              {!progress && !pending ? <Button disabled={busy} onPress={() => setHelp(true)}>{f.install}</Button> : null}
               {!progress ? <Button onPress={() => setMore(v => !v)}>{f.more}</Button> : null}
               {error === 'cameraDenied' ? <Button onPress={() => void Linking.openSettings()}>{f.settings}</Button> : null}
               {more ? <>
-                <Button disabled={busy} onPress={() => void paste()}>{copy.pastePairingLink}</Button>
                 <Button onPress={() => setPrivacyOpen(true)}>{m.privacy.title}</Button>
                 {profiles.filter(p => p.gatewayId !== activeGatewayId).map(p => <Button key={p.gatewayId} disabled={busy} onPress={() => {
                   void switchGatewayProfile(p.gatewayId).then(r => { if (r.status === 'failed') setError('failed'); else onRequestClose(); });
