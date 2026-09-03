@@ -21,8 +21,7 @@ export type ShareKind = 'file' | 'site' | 'zip';
 export type ShareReachability = 'public' | 'lan' | 'local-only';
 export type ThumbnailStatus = 'ready' | 'pending' | 'unavailable';
 
-export type ShareAutoRequest = {
-  path: string;
+export type ShareAutoRequest = ({ fileId: string; path?: never } | { path: string; fileId?: never }) & {
   sessionKey?: string;
   agentId?: string;
   mode?: ShareAutoMode;

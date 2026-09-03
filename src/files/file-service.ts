@@ -5,17 +5,17 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path
 
 import type { FileCapability, FileResource, FileSpace, FileSpaceBinding } from '@xopcai/gateway-contract';
 
-import { listAgentEntries, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
+import { listAgentEntries, resolveAgentWorkspaceDir, resolveDefaultAgentId } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
 import { resolveProjectAgentId, type ProjectService } from '../projects/index.js';
 
 const SKIPPED_NAMES = new Set(['.DS_Store', '.git', 'node_modules']);
 const TEXT_EXTENSIONS = new Set([
-  'css', 'csv', 'html', 'htm', 'js', 'json', 'jsx', 'md', 'mjs', 'cjs', 'svg', 'ts', 'tsx', 'tsv', 'txt', 'xml', 'yaml', 'yml',
+  'css', 'csv', 'html', 'htm', 'js', 'json', 'jsx', 'md', 'markdown', 'mjs', 'cjs', 'svg', 'ts', 'tsx', 'tsv', 'txt', 'xml', 'yaml', 'yml',
 ]);
 const MIME_TYPES: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
-  md: 'text/markdown', txt: 'text/plain', json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css',
+  md: 'text/markdown', markdown: 'text/markdown', txt: 'text/plain', json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css',
   js: 'text/javascript', mjs: 'text/javascript', cjs: 'text/javascript', ts: 'text/typescript', tsx: 'text/typescript',
   csv: 'text/csv', tsv: 'text/tab-separated-values', xml: 'application/xml', yaml: 'application/yaml', yml: 'application/yaml',
   pdf: 'application/pdf', doc: 'application/msword',
@@ -48,7 +48,7 @@ function mimeType(name: string, directory: boolean): string {
 }
 
 function capabilities(name: string, directory: boolean, writable: boolean): FileCapability[] {
-  if (directory) return writable ? ['upload'] : [];
+  if (directory) return writable ? ['share', 'upload'] : ['share'];
   const extension = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
   const result: FileCapability[] = ['download', 'share'];
   if (MIME_TYPES[extension] || TEXT_EXTENSIONS.has(extension)) result.unshift('preview');
@@ -102,12 +102,13 @@ export class FileServiceError extends Error {
 export async function fileResourceFromPath(
   space: ResolvedFileSpace,
   absolutePath: string,
+  displayPath = absolutePath,
 ): Promise<FileResource> {
   const info = await stat(absolutePath);
   const revisionInfo = await stat(absolutePath, { bigint: true });
   const canonicalRoot = await realpath(space.root);
-  const relativePath = relative(canonicalRoot, absolutePath).split(sep).join('/');
-  const name = basename(absolutePath);
+  const relativePath = relative(canonicalRoot, displayPath).split(sep).join('/');
+  const name = basename(displayPath);
   const directory = info.isDirectory();
   return {
     id: fileResourceId(space.id, relativePath),
@@ -131,7 +132,8 @@ export class FileSpaceService {
   constructor(
     private readonly getConfig: () => Config,
     private readonly projects: ProjectService,
-    private readonly resolveSessionWorkspace: (sessionKey: string) => string,
+    private readonly resolveSessionWorkspace: (sessionKey: string) => string | Promise<string>,
+    private readonly listSessionWorkspaces: () => Array<{ sessionKey: string; root: string }> | Promise<Array<{ sessionKey: string; root: string }>> = () => [],
   ) {}
 
   private async createSpace(
@@ -171,6 +173,10 @@ export class FileSpaceService {
       offset += page.items.length;
     }
     const merged = new Map<string, ResolvedFileSpace>();
+    for (const { sessionKey, root } of await this.listSessionWorkspaces()) {
+      const space = await this.createSpace(root, sessionKey, [{ kind: 'session', id: sessionKey }]);
+      if (space) spaces.push(space);
+    }
     for (const space of [...spaces, ...this.dynamicSpaces.values()]) {
       const existing = merged.get(space.id);
       if (existing) existing.bindings = [...existing.bindings, ...space.bindings.filter((binding) => !existing.bindings.some((item) => item.kind === binding.kind && item.id === binding.id))];
@@ -194,7 +200,7 @@ export class FileSpaceService {
       }
       title = project?.name ?? id;
     }
-    if (kind === 'session') root = this.resolveSessionWorkspace(id);
+    if (kind === 'session') root = await this.resolveSessionWorkspace(id);
     if (!root) throw new FileServiceError(404, 'File space not found');
     const space = await this.createSpace(root, title, [{ kind, id }]);
     if (!space) throw new FileServiceError(404, 'File space is unavailable');
@@ -203,8 +209,17 @@ export class FileSpaceService {
     return space;
   }
 
+  defaultSpace(): Promise<ResolvedFileSpace> {
+    return this.forContext('agent', resolveDefaultAgentId(this.getConfig()));
+  }
+
   async get(id: string): Promise<ResolvedFileSpace> {
-    const space = (await this.list()).find((item) => item.id === id);
+    const hadCache = this.cache !== null;
+    let space = (await this.list()).find((item) => item.id === id);
+    if (!space && hadCache) {
+      this.cache = null;
+      space = (await this.list()).find((item) => item.id === id);
+    }
     if (!space) throw new FileServiceError(404, 'File space not found');
     return space;
   }
@@ -213,7 +228,7 @@ export class FileSpaceService {
     const locator = parseFileResourceId(id);
     const space = await this.get(locator.spaceId);
     const absolutePath = await resolveFilePath(space.root, locator.relativePath);
-    return { space, resource: await fileResourceFromPath(space, absolutePath), absolutePath };
+    return { space, resource: await fileResourceFromPath(space, absolutePath, resolve(space.root, locator.relativePath)), absolutePath };
   }
 
   async children(spaceId: string, path = ''): Promise<FileResource[]> {
@@ -226,8 +241,12 @@ export class FileSpaceService {
       if (SKIPPED_NAMES.has(entry.name)) continue;
       const target = resolve(directory, entry.name);
       const linkInfo = await lstat(target).catch(() => null);
-      if (!linkInfo || linkInfo.isSymbolicLink()) continue;
-      entries.push(await fileResourceFromPath(space, target));
+      if (!linkInfo) continue;
+      const canonicalTarget = await resolveFilePath(space.root, target).catch(() => null);
+      if (!canonicalTarget) continue;
+      const info = await stat(canonicalTarget).catch(() => null);
+      if (!info || (!info.isFile() && !info.isDirectory())) continue;
+      entries.push(await fileResourceFromPath(space, canonicalTarget, resolve(space.root, path, entry.name)));
     }
     return entries.sort((a, b) => a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1);
   }

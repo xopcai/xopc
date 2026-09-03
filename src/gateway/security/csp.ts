@@ -39,7 +39,7 @@ function hasSrcAttribute(openTag: string): boolean {
  * - `style-src 'self' 'unsafe-inline'` (Tailwind + runtime style injection)
  * - `media-src 'self' blob:` (chat voice previews / recorded clips use blob URLs)
  * - `frame-ancestors 'none'` (prevent clickjacking)
- * - `frame-src 'none'` (the console never embeds frames)
+ * - `frame-src 'self'` (sandboxed previews and extension UI)
  * - `form-action 'self'` (prevent form submissions to untrusted origins)
  * - `base-uri 'none'` (prevent base tag hijacking)
  * - `object-src 'none'` (prevent plugin execution)
@@ -59,7 +59,7 @@ export function buildGatewayConsoleCspHeader(options?: {
     "base-uri 'none'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    "frame-src 'none'",
+    "frame-src 'self'",
     "form-action 'self'",
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",

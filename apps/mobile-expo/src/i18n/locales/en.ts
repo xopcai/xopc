@@ -1328,6 +1328,7 @@ export const en = {
     fileActions: 'File actions',
     copyPath: 'Copy path',
     pathCopied: 'Path copied',
+    copyFailed: 'Could not copy path',
     downloadFailed: 'Could not open download',
     uploadFile: 'Upload file',
     uploadSucceeded: 'File uploaded',

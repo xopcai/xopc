@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { extractToken } from '../../auth.js';
+import { FileServiceError } from '../../../files/file-service.js';
+import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { getShareStore, shareResponseContentType } from '../../../share/share-store.js';
 import { getSiteShareStore } from '../../../share/site-share-store.js';
@@ -952,8 +954,9 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
 
-    const path = typeof body.path === 'string' ? body.path.trim() : '';
-    if (!path) return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    const fileId = typeof body.fileId === 'string' ? body.fileId.trim() : '';
+    let path = typeof body.path === 'string' ? body.path.trim() : '';
+    if (!fileId && !path) return c.json({ ok: false, error: { message: 'Missing path or fileId' } }, 400);
     const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
     const mode = (typeof body.mode === 'string' && ['auto', 'force-file', 'force-site', 'force-zip'].includes(body.mode))
@@ -970,17 +973,23 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined;
     const wantThumbnail = body.thumbnail !== false;
 
-    const workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
-    if (!workspaceRoot) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
-    }
-
+    let workspaceRoot: string;
     let probe;
     try {
+      if (fileId) {
+        const target = await getGatewayFileSpaceService(service).resource(fileId);
+        workspaceRoot = target.space.root;
+        path = target.resource.relativePath || '.';
+      } else {
+        workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
+      }
+      if (!workspaceRoot) {
+        return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+      }
       probe = await probeShareTarget(workspaceRoot, path);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return c.json({ ok: false, error: { message } }, 400);
+      return c.json({ ok: false, error: { message } }, err instanceof FileServiceError ? err.status : 400);
     }
 
     let decision;
@@ -1556,7 +1565,7 @@ async function createFileShareResponse(args: {
 
 function relPathFromAbs(workspaceRoot: string, abs: string): string {
   const root = workspaceRoot.replace(/[\\/]+$/, '');
-  if (abs === root) return '';
+  if (abs === root) return '.';
   if (abs.startsWith(`${root}/`)) return abs.slice(root.length + 1);
   if (abs.startsWith(`${root}\\`)) return abs.slice(root.length + 1).replace(/\\/g, '/');
   // Fall back to basename — store.create will resolve again under workspace.
