@@ -71,3 +71,7 @@ auditConfig:
     # Metro is pinned to image-size 1.x; the advisory's patched 2.0.3 release is not published yet.
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
+
+patchedDependencies:
+  # Preserve compact Mermaid edge labels such as -.标签.->.
+  beautiful-mermaid@1.1.3: patches/beautiful-mermaid@1.1.3.patch
