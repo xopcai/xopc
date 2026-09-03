@@ -23,6 +23,16 @@ const delivery: ProductDeliveryEnvelope = {
 };
 
 describe('product delivery contract', () => {
+  it('accepts session keys without changing canonical id links or other kinds', () => {
+    const key = 'agent:coder:webchat:default:direct:chat_801605448ec548c9b90d1c4eb5024727';
+    expect(parseProductReferenceDeepLink(`xopc://open?kind=session&key=${key}`))
+      .toEqual({ kind: 'session', id: key });
+    expect(parseProductReferenceDeepLink(`xopc://open?kind=session&id=canonical&key=${key}`))
+      .toEqual({ kind: 'session', id: 'canonical' });
+    expect(parseProductReferenceDeepLink('xopc://open?kind=session&key=%20')).toBeNull();
+    expect(parseProductReferenceDeepLink('xopc://open?kind=note&key=note-1')).toBeNull();
+  });
+
   it('validates and round-trips a delivery embedded in tool text', () => {
     const text = appendProductDeliveryText('Created note.', delivery);
 

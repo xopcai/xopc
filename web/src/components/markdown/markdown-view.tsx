@@ -1,10 +1,7 @@
 import DOMPurify from 'dompurify';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  decorateAppLinks,
-  rewriteSupportedAppLinksInMarkdown,
-} from '@/lib/app-link';
+import { decorateAppLinks } from '@/lib/app-link';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useAppLinkOpener } from '@/lib/use-app-link-opener';
 import { messages } from '@/i18n/messages';
@@ -349,6 +346,7 @@ function MarkdownViewImpl({
     return {
       copy: m.codeBlockCopy,
       copied: m.messageCopied,
+      links: m.contentLinks,
       mermaidRenderError: m.mermaidRenderError,
       mermaidInline: {
         preview: m.mermaidPreview,
@@ -372,7 +370,7 @@ function MarkdownViewImpl({
     if (!content.trim()) return '';
     const startedAt = streamingMetricsKey ? performance.now() : 0;
     const normalized = rewriteWorkspaceFileLinksInMarkdown(
-      rewriteSupportedAppLinksInMarkdown(content),
+      content,
       Boolean(onWorkspaceFileOpen),
     );
     const raw = parseMarkdown(normalized, breaks ? { breaks: true } : undefined);
@@ -385,12 +383,14 @@ function MarkdownViewImpl({
 
   const hostRef = useRef<HTMLDivElement>(null);
   const [mermaidPreview, setMermaidPreview] = useState<MermaidPreviewState | null>(null);
+  const [linkError, setLinkError] = useState(false);
   const openMermaidPreview = useCallback((preview: MermaidPreviewState) => {
     setMermaidPreview(preview);
   }, []);
 
   useEffect(() => {
     setMermaidPreview(null);
+    setLinkError(false);
   }, [safeHtml]);
 
   useLayoutEffect(() => {
@@ -409,8 +409,11 @@ function MarkdownViewImpl({
 
   useLayoutEffect(() => {
     const el = hostRef.current;
-    if (el) decorateAppLinks(el);
-  }, [safeHtml]);
+    if (el) decorateAppLinks(el, labels.links, (anchor) => Boolean(
+      onWorkspaceFileOpen && (anchor.dataset.xopcFilePath
+        || parseWorkspaceFileLinkTarget(anchor.getAttribute('href') ?? '')),
+    ));
+  }, [safeHtml, labels.links, onWorkspaceFileOpen]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -489,8 +492,13 @@ function MarkdownViewImpl({
         return;
       }
 
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      void openAppLink(href);
+      setLinkError(false);
+      void openAppLink(href)
+        .then((result) => setLinkError(!result.ok))
+        .catch(() => setLinkError(true));
     };
 
     el.addEventListener('click', onClick);
@@ -506,6 +514,7 @@ function MarkdownViewImpl({
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />
       </div>
+      {linkError ? <p role="alert" className="mt-2 text-sm text-danger">{labels.links.failed}</p> : null}
       {mermaidActions ? (
         <MermaidPreviewDialog
           preview={mermaidPreview}

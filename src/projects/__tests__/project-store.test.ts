@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeXopcDatabase,
   ensureSessionRecord,
   openXopcDatabase,
+  patchSessionMetadata,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { TaskApplicationService, TaskRepository } from '../../tasks/index.js';
@@ -29,6 +30,7 @@ describe('ProjectService', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
@@ -323,9 +325,41 @@ describe('ProjectService', () => {
     expect(projects.get(project.id)?.defaultAgentId).toBeUndefined();
   });
 
+  it('keeps sidebar project pages stable when conversations are created or updated', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+    const older = projects.create({ name: 'Older Project' });
+    const olderKey = `${SESSION_KEY}-older`;
+    ensureSessionRecord(olderKey, process.cwd(), { projectId: older.id });
+
+    vi.setSystemTime(new Date('2026-09-02T00:00:00Z'));
+    const newer = projects.create({ name: 'Newer Project' });
+    ensureSessionRecord(`${SESSION_KEY}-newer`, process.cwd(), { projectId: newer.id });
+
+    const readPages = () => [0, 1].map((offset) => {
+      const page = projects.listWithSidebarSessions({ status: 'active', limit: 1, offset });
+      expect(page.total).toBe(2);
+      expect(page.hasMore).toBe(offset === 0);
+      return page.items[0].id;
+    });
+    expect(readPages()).toEqual([newer.id, older.id]);
+
+    vi.setSystemTime(new Date('2026-09-03T00:00:00Z'));
+    ensureSessionRecord(`${SESSION_KEY}-new-conversation`, process.cwd(), { projectId: older.id });
+    expect(readPages()).toEqual([newer.id, older.id]);
+
+    vi.setSystemTime(new Date('2026-09-04T00:00:00Z'));
+    patchSessionMetadata(olderKey, { updatedAt: new Date().toISOString() });
+    projects.update(older.id, { name: 'Renamed Project' });
+    expect(readPages()).toEqual([newer.id, older.id]);
+  });
+
   it('pins projects ahead of more recent sidebar projects', () => {
-    const recent = projects.create({ name: 'Recent Sidebar Project' });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
     const pinned = projects.create({ name: 'Pinned Sidebar Project' });
+    vi.setSystemTime(new Date('2026-09-02T00:00:00Z'));
+    const recent = projects.create({ name: 'Recent Sidebar Project' });
     ensureSessionRecord('agent:main:webchat:default:direct:recent-sidebar-project', process.cwd(), {
       projectId: recent.id,
     });
@@ -340,6 +374,7 @@ describe('ProjectService', () => {
 
     projects.unpin(pinned.id);
     expect(projects.get(pinned.id)?.pinnedAt).toBeUndefined();
+    expect(projects.listWithSidebarSessions().items.map((project) => project.id)).toEqual([recent.id, pinned.id]);
   });
 
   it('binds sessions and tasks without deleting them when project is deleted', () => {

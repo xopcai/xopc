@@ -10,6 +10,8 @@ import plaintext from 'highlight.js/lib/languages/plaintext';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 
+import { appLinksExtension } from './app-links';
+
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('css', css);
 hljs.registerLanguage('html', xml);
@@ -25,6 +27,7 @@ hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
 hljs.registerAliases(['sh', 'shell', 'zsh'], { languageName: 'bash' });
 
 const markdownParser = new Marked(
+  appLinksExtension,
   markedHighlight({
     emptyLangClass: 'hljs',
     langPrefix: 'hljs language-',
