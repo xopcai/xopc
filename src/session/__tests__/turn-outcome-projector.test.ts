@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { fileResourceArtifactUri, type TurnOutcome, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 
 import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import { backfillStructuredTurnOutcomes, projectTurnOutcome } from '../turn-outcome-projector.js';
@@ -15,7 +16,105 @@ function toolResult(turnId: string, details: Record<string, unknown>): Transcrip
   } as TranscriptStoredRow;
 }
 
+const sourceFileId = 'space.cmVwb3J0Lmh0bWw';
+
+function published(artifactId: string, source = sourceFileId): TurnOutcomeDeliverable {
+  return {
+    artifactId, sourceFileId: source, title: 'report.html', kind: 'site',
+    availability: 'available', location: 'artifact_store', capabilities: ['preview', 'download'],
+    uri: `media://outbound/${artifactId}.html`,
+  };
+}
+
+function written(source = sourceFileId): TranscriptStoredRow {
+  return toolResult('turn-1', {
+    delivery: {
+      version: 1, operation: 'updated',
+      primary: { kind: 'file', id: source, title: 'report.html', capabilities: ['preview'] },
+    },
+  });
+}
+
 describe('turn outcome projector', () => {
+  it.each([false, true])('prefers the published file regardless of row order (reversed: %s)', (reversed) => {
+    const artifact = published('snapshot');
+    const rows = [written(), toolResult('turn-1', { artifacts: [artifact] })];
+    const outcome = projectTurnOutcome({ turnId: 'turn-1', rows: reversed ? rows.reverse() : rows });
+    expect(outcome.deliverables).toEqual([artifact]);
+  });
+
+  it('keeps the latest successful publication without duplicating the workspace file', () => {
+    const latest = published('latest');
+    const failure = { ...published('failed'), availability: 'failed', uri: undefined };
+    const outcome = projectTurnOutcome({
+      turnId: 'turn-1',
+      rows: [written(), toolResult('turn-1', { artifacts: [published('first'), latest, failure] })],
+    });
+    expect(outcome.deliverables).toEqual([latest]);
+  });
+
+  it('retains the workspace file when publishing fails and keeps unrelated failures visible', () => {
+    const failure = { ...published('failed'), availability: 'failed', uri: undefined };
+    const unrelated = { ...failure, artifactId: 'other-failed', sourceFileId: 'another-file' };
+    const outcome = projectTurnOutcome({
+      turnId: 'turn-1', rows: [written(), toolResult('turn-1', { artifacts: [failure, unrelated] })],
+    });
+    expect(outcome.deliverables).toHaveLength(2);
+    expect(outcome.deliverables[0]).toMatchObject({ location: 'workspace', availability: 'available' });
+    expect(outcome.deliverables[1]).toEqual(unrelated);
+    expect(outcome.status).toBe('partial');
+  });
+
+  it('does not turn a publication failure into success when its duplicate is hidden', () => {
+    const rows = [written(), toolResult('turn-1', {
+      artifacts: [{ ...published('failed'), availability: 'failed', uri: undefined }],
+    })];
+    const outcome = projectTurnOutcome({ turnId: 'turn-1', rows });
+    expect(outcome.deliverables).toHaveLength(1);
+    expect(outcome.status).toBe('partial');
+    const imported = backfillStructuredTurnOutcomes([
+      ...rows, { type: 'custom', customType: 'turn_outcome', data: { ...outcome, status: 'succeeded' } },
+    ] as TranscriptStoredRow[]);
+    expect(imported.at(-1)).toMatchObject({ data: { status: 'partial' } });
+  });
+
+  it('does not merge same-named files from different directories, spaces, or unknown sources', () => {
+    const artifacts = [
+      published('one'), published('two', 'space.ZG9jcy9yZXBvcnQuaHRtbA'),
+      published('three', 'other.cmVwb3J0Lmh0bWw'),
+      { ...published('unidentified'), sourceFileId: undefined },
+    ];
+    const outcome = projectTurnOutcome({ turnId: 'turn-1', rows: [toolResult('turn-1', { artifacts })] });
+    expect(outcome.deliverables).toEqual(artifacts);
+  });
+
+  it('deduplicates within a turn only', () => {
+    const rows = [
+      toolResult('turn-1', { artifacts: [published('first')] }),
+      toolResult('turn-2', { artifacts: [published('second')] }),
+    ];
+    expect(projectTurnOutcome({ turnId: 'turn-1', rows }).deliverables).toEqual([published('first')]);
+    expect(projectTurnOutcome({ turnId: 'turn-2', rows }).deliverables).toEqual([published('second')]);
+  });
+
+  it.each([false, true])('normalizes saved outcomes without bringing duplicates back (tool rows: %s)', (includeTools) => {
+    const latest = published('latest');
+    const saved: TurnOutcome = {
+      ...projectTurnOutcome({ turnId: 'turn-1', rows: [] }),
+      deliverables: [
+        { ...latest, artifactId: sourceFileId, sourceFileId: undefined, location: 'workspace', uri: fileResourceArtifactUri(sourceFileId) },
+        published('first'), latest,
+      ],
+    };
+    const rows = [
+      ...(includeTools ? [written(), toolResult('turn-1', { artifacts: [published('first'), latest] })] : []),
+      { type: 'custom', customType: 'turn_outcome', data: saved },
+    ] as TranscriptStoredRow[];
+    const normalized = backfillStructuredTurnOutcomes(rows);
+    expect(parseOutcome(normalized.at(-1)!).deliverables).toEqual([latest]);
+    expect(backfillStructuredTurnOutcomes(normalized)).toEqual(normalized);
+  });
+
   it('projects only structured artifact details', () => {
     const outcome = projectTurnOutcome({
       turnId: 'turn-1',

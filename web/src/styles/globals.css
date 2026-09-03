@@ -22,6 +22,8 @@
   --color-surface-base: #f7f8fa;
   --color-surface-rail: #eef1f5;
   --color-surface-panel: #ffffff;
+  /* Terminal canvas stays neutral across application color schemes. */
+  --color-surface-terminal: #ffffff;
   --color-surface-hover: #e8ecf1;
   --color-surface-active: #dfe5ec;
 
@@ -98,6 +100,7 @@ html.dark {
   --color-surface-base: #14171c;
   --color-surface-rail: #111318;
   --color-surface-panel: #1b1f26;
+  --color-surface-terminal: #181818;
   --color-surface-hover: #242933;
   --color-surface-active: #2e3440;
 

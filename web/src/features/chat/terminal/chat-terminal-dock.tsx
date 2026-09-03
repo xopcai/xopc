@@ -5,6 +5,7 @@ import { Plus, SquareTerminal, X } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { resolveSession } from '@/features/sessions/session-api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -28,10 +29,11 @@ function terminalTheme() {
   const styles = getComputedStyle(document.documentElement);
   const color = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
   return {
-    background: color('--color-surface-base', '#0f172a'),
-    foreground: color('--color-fg', '#e2e8f0'),
-    cursor: color('--color-accent', '#60a5fa'),
-    selectionBackground: 'rgba(96, 165, 250, 0.28)',
+    background: color('--color-surface-terminal', '#ffffff'),
+    foreground: color('--color-fg', '#111111'),
+    cursor: color('--color-fg', '#111111'),
+    cursorAccent: color('--color-surface-terminal', '#ffffff'),
+    selectionBackground: 'rgba(128, 128, 128, 0.24)',
   };
 }
 
@@ -48,6 +50,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const closeTerminal = useTerminalPanelStore((state) => state.closeTerminal);
   const setActiveTerminal = useTerminalPanelStore((state) => state.setActiveTerminal);
   const setHeight = useTerminalPanelStore((state) => state.setHeight);
+  const tabListRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalIdRef = useRef<string | null>(null);
   const resizeDragRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -74,6 +77,20 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     }, 200);
     return () => window.clearTimeout(timer);
   }, [open, rendered]);
+
+  useEffect(() => {
+    const tabList = tabListRef.current;
+    if (!rendered || !tabList) return;
+    const revealActiveTab = () => {
+      tabList.querySelector<HTMLElement>('[aria-selected="true"]')?.parentElement?.scrollIntoView({
+        block: 'nearest', inline: 'nearest',
+      });
+    };
+    revealActiveTab();
+    const observer = new ResizeObserver(revealActiveTab);
+    observer.observe(tabList);
+    return () => observer.disconnect();
+  }, [rendered, terminalKey]);
 
   useEffect(() => {
     if (!rendered || !api) {
@@ -104,15 +121,25 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     setError(null);
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: 'bar',
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 13,
-      lineHeight: 1.15,
+      lineHeight: 1.25,
+      minimumContrastRatio: 4.5,
       scrollback: 5_000,
       theme: terminalTheme(),
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(containerRef.current);
+
+    const themeObserver = new MutationObserver(() => {
+      terminal.options.theme = terminalTheme();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-theme', 'data-color-scheme', 'style'],
+    });
 
     let disposed = false;
     let creating = false;
@@ -185,6 +212,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     return () => {
       disposed = true;
       terminalIdRef.current = null;
+      themeObserver.disconnect();
       resizeObserver.disconnect();
       inputDisposable.dispose();
       removeData();
@@ -206,7 +234,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
 
   return (
     <section
-      className={`relative flex shrink-0 flex-col overflow-hidden border-t border-edge bg-surface-base ${closing ? 'terminal-dock-exit pointer-events-none' : entering ? 'terminal-dock-enter' : ''}`}
+      className={`relative flex min-w-0 w-full shrink-0 flex-col overflow-hidden border-t border-edge bg-surface-terminal ${closing ? 'terminal-dock-exit pointer-events-none' : entering ? 'terminal-dock-enter' : ''}`}
       style={{
         height,
         '--terminal-dock-height': `${height}px`,
@@ -233,22 +261,22 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
           resizeDragRef.current = null;
         }}
       />
-      <header className="flex h-10 shrink-0 items-center gap-1 border-b border-edge-subtle px-2">
-        <div className="flex min-w-0 max-w-[45%] items-center gap-1 overflow-x-auto" role="tablist" aria-label={m.title}>
+      <header className="flex h-11 shrink-0 items-center gap-1 px-3">
+        <div ref={tabListRef} className="flex min-w-0 items-center gap-1 overflow-x-auto" role="tablist" aria-label={m.title}>
           {tabs.map((tab, index) => {
             const active = tab.key === terminalKey;
             return (
               <div
                 key={tab.key}
                 className={active
-                  ? 'flex h-7 shrink-0 items-center rounded-md bg-surface-hover text-fg'
-                  : 'flex h-7 shrink-0 items-center rounded-md text-fg-muted hover:bg-surface-hover/60 hover:text-fg'}
+                  ? 'flex h-8 shrink-0 items-center rounded-lg bg-fg/5 text-fg'
+                  : 'flex h-8 shrink-0 items-center rounded-lg text-fg-muted hover:bg-fg/5 hover:text-fg'}
               >
                 <button
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  className="flex h-full min-w-0 items-center gap-1.5 pl-2 text-xs"
+                  className="flex h-full min-w-0 items-center gap-2 pl-2 text-xs"
                   onClick={() => setActiveTerminal(sessionKey, tab.key)}
                 >
                   <SquareTerminal className="size-3.5 shrink-0" />
@@ -256,7 +284,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
                 </button>
                 <button
                   type="button"
-                  className="mr-1 rounded p-1 text-fg-muted hover:bg-surface-panel hover:text-fg"
+                  className="mx-1 rounded p-1 text-fg-muted hover:bg-fg/10 hover:text-fg"
                   title={m.closeTab}
                   aria-label={`${m.closeTab} ${index + 1}`}
                   onClick={() => closeTerminalTab(tab.key)}
@@ -269,7 +297,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
         </div>
         <button
           type="button"
-          className="rounded p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+          className="shrink-0 rounded p-1.5 text-fg-muted hover:bg-fg/5 hover:text-fg disabled:opacity-40"
           title={m.newTerminal}
           aria-label={m.newTerminal}
           disabled={tabs.length >= TERMINALS_PER_SESSION_MAX}
@@ -278,7 +306,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
           <Plus className="size-4" />
         </button>
         <span className="flex-1" />
-        <button type="button" className="rounded p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg" title={m.hide} onClick={() => closePanel(sessionKey)}><X className="size-3.5" /></button>
+        <button type="button" className="shrink-0 rounded p-1.5 text-fg-muted hover:bg-fg/5 hover:text-fg" title={m.hide} onClick={() => closePanel(sessionKey)}><X className="size-3.5" /></button>
       </header>
       {!terminalKey ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-fg-muted">
@@ -289,9 +317,12 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
           </Button>
         </div>
       ) : !sessionId && resolvingSession ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">{m.preparing}</div>
+        <div className="min-h-0 flex-1 space-y-3 px-4 pt-1" aria-busy="true" aria-label={m.preparing}>
+          <Skeleton className="h-3 w-52 max-w-full bg-fg/5" />
+          <Skeleton className="h-3 w-32 max-w-full bg-fg/5" />
+        </div>
       ) : (
-        <div className="relative min-h-0 flex-1 p-2">
+        <div className="relative min-h-0 flex-1 px-4 pt-1 pb-3">
           <div ref={containerRef} className="h-full w-full overflow-hidden" />
           {error ? (
             <div className="absolute inset-x-3 bottom-3 rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{error}</div>

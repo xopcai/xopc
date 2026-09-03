@@ -6,9 +6,29 @@ import {
   parseTurnOutcome,
   turnOutcomeKindFromFileName,
   turnOutcomeMimeTypeFromFileName,
+  type TurnOutcomeDeliverable,
 } from './turn-outcome.js';
 
 describe('turn outcome contract', () => {
+  it('normalizes sourced duplicates when reading saved or streamed outcomes', () => {
+    const sourceFileId = 'space.cmVwb3J0Lmh0bWw';
+    const artifact: TurnOutcomeDeliverable = {
+      artifactId: 'published', sourceFileId, title: 'report.html', kind: 'site',
+      availability: 'available', location: 'artifact_store', capabilities: ['preview'],
+      uri: 'media://outbound/published.html',
+    };
+    const outcome = parseTurnOutcome({
+      version: 1, outcomeId: 'run:outcome', runId: 'run', turnId: 'run', status: 'succeeded',
+      deliverables: [
+        { ...artifact, artifactId: sourceFileId, sourceFileId: undefined, location: 'workspace', uri: fileResourceArtifactUri(sourceFileId) },
+        artifact,
+      ],
+      evidence: [], createdAt: '2026-09-03T00:00:00.000Z',
+    });
+    expect(outcome?.deliverables).toEqual([artifact]);
+    expect(parseTurnOutcome(outcome)).toEqual(outcome);
+  });
+
   it('accepts the versioned result model and rejects invalid payloads', () => {
     const outcome = parseTurnOutcome({
       version: 1,
