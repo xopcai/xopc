@@ -21,6 +21,7 @@ import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import { registerUnderstandingSourceRoutes } from './understanding-sources.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerProactiveRoutes } from './proactive.js';
+import { registerMobilePrivacyRoutes } from './mobile-privacy.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   mountAppLazyRoutePrefixes,
@@ -32,6 +33,7 @@ export function registerCoreAuthenticatedRoutes(
   deps: AuthenticatedRouteDeps,
 ): void {
   registerStatusRoutes(authenticated, deps);
+  registerMobilePrivacyRoutes(authenticated, deps);
   registerAgentStreamRoutes(authenticated, deps);
   registerSessionsRoutes(authenticated, deps);
   registerSideChatRoutes(authenticated, deps);

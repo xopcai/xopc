@@ -80,6 +80,14 @@ run_step "Build signed iOS IPA" env \
   CLEAN_PREBUILD="${CLEAN_PREBUILD:-1}" \
   pnpm -C "$APP_DIR" run build:ios
 
+BUILT_IPA="${IPA_PATH:-dist/xopc.ipa}"
+if [[ "$BUILT_IPA" != /* ]]; then BUILT_IPA="$APP_DIR/$BUILT_IPA"; fi
+run_step "Check release metadata, entitlements and privacy manifests" python3 \
+  "$ROOT/scripts/apps/mobile-expo/verify-ios-ipa.py" \
+  "$BUILT_IPA" \
+  --version "${IOS_MARKETING_VERSION:-$(node -p "require('$APP_DIR/app.json').expo.version")}" \
+  --report "$APP_DIR/dist/ios/verification.json"
+
 if [[ "$UPLOAD_TO_TESTFLIGHT" == "1" ]]; then
   run_step "Validate and upload IPA to TestFlight" env \
     APP_STORE_CONNECT_PRIVATE_KEY_PATH="$PRIVATE_KEY_PATH" \

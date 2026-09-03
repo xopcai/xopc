@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Dialog, Icon, Portal, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, Portal, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
@@ -24,7 +24,6 @@ export function GlobalReadAloudPlayer() {
   const source = useReadAloudStore((state) => state.source);
   const status = useReadAloudStore((state) => state.status);
   const error = useReadAloudStore((state) => state.error);
-  const consentRequired = useReadAloudStore((state) => state.consentRequired);
   const currentTime = useReadAloudStore((state) => state.currentTime);
   const duration = useReadAloudStore((state) => state.duration);
   const rate = useReadAloudStore((state) => state.rate);
@@ -33,8 +32,6 @@ export function GlobalReadAloudPlayer() {
   const stop = useReadAloudStore((state) => state.stop);
   const retry = useReadAloudStore((state) => state.retry);
   const cycleRate = useReadAloudStore((state) => state.cycleRate);
-  const acceptConsent = useReadAloudStore((state) => state.acceptConsent);
-  const declineConsent = useReadAloudStore((state) => state.declineConsent);
   const visible = Boolean(source) && status !== 'idle';
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
   const errorMessage = error === 'empty'
@@ -159,16 +156,6 @@ export function GlobalReadAloudPlayer() {
           </View>
         ) : null}
 
-        <Dialog visible={consentRequired} onDismiss={declineConsent}>
-          <Dialog.Title>{m.messageReadAloudConsentTitle}</Dialog.Title>
-          <Dialog.Content>
-            <Text variant="bodyMedium">{m.messageReadAloudConsentDescription}</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={declineConsent}>{m.messageReadAloudConsentCancel}</Button>
-            <Button onPress={acceptConsent}>{m.messageReadAloudConsentConfirm}</Button>
-          </Dialog.Actions>
-        </Dialog>
       </Portal>
 
       <BottomSheetModal
