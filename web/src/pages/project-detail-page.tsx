@@ -14,6 +14,7 @@ import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AutomationsWorkspace } from '@/features/automations/automations-workspace';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { commandTask, createTask, ensureTaskConversation, fetchTask, updateTaskBoardPosition, updateTaskDependencies } from '@/features/tasks/home-api';
 import { taskDetailModalHref } from '@/features/tasks/task-detail-route';
@@ -24,7 +25,6 @@ import { NotesWorkbench } from '@/features/notes/notes-workbench';
 import {
   archiveProject,
   createProjectBlocker,
-  createProjectSession,
   createProject,
   deleteProject,
   fetchProjectActivity,
@@ -690,7 +690,6 @@ export function ProjectDetailPage() {
   const [workspaceMigrationRoot, setWorkspaceMigrationRoot] = useState('');
   const [projectActionBusy, setProjectActionBusy] = useState<'pin' | 'archive' | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
-  const [startingChat, setStartingChat] = useState(false);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
   const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
   const taskBoardRef = useRef<ProjectTaskBoardHandle>(null);
@@ -746,11 +745,6 @@ export function ProjectDetailPage() {
     if (!projectId) return;
     navigate(projectTabHref(nextTab), { replace: true });
   }, [navigate, projectId, projectTabHref]);
-
-  const navigateFromProjectTab = useCallback((nextTab: TabId, target: string) => {
-    replaceProjectHistoryTab(nextTab);
-    navigate(target);
-  }, [navigate, replaceProjectHistoryTab]);
 
   const onProjectTabLinkClick = useCallback((nextTab: TabId) => (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -1101,20 +1095,6 @@ export function ProjectDetailPage() {
     };
   }, [normalizedProjectFileSearchQuery, project, projectFileSearchOpen, tab]);
 
-  const startChat = useCallback(async () => {
-    if (!project) return;
-    setStartingChat(true);
-    setError(null);
-    try {
-      const session = await createProjectSession(project.id);
-      navigateFromProjectTab('sessions', `/chat/${encodeURIComponent(session.key)}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStartingChat(false);
-    }
-  }, [navigateFromProjectTab, project]);
-
   const refreshProjectState = useCallback(async () => {
     if (!project) return;
     const [nextProject, nextOperatingView] = await Promise.all([
@@ -1166,13 +1146,15 @@ export function ProjectDetailPage() {
           <Plus className="size-4" aria-hidden />
           {pm.board.create}
         </Button>
-        <Button variant="primary" className="h-9 rounded-lg" onClick={() => void startChat()} disabled={startingChat}>
-          <MessageSquarePlus className="size-4" aria-hidden />
-          {pm.common.newChat}
+        <Button asChild variant="primary" className="h-9 rounded-lg">
+          <Link to={newChatHrefForProject(project.id)} state={{ forceNewChat: true, agentId: project.defaultAgentId }} onClick={onProjectTabLinkClick('sessions')}>
+            <MessageSquarePlus className="size-4" aria-hidden />
+            {pm.common.newChat}
+          </Link>
         </Button>
       </>
     ) : null,
-    [openTaskCreate, pm.board.create, pm.common.newChat, pm.common.runWorkflow, project, startChat, startingChat],
+    [openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, pm.common.runWorkflow, project],
   );
 
   useLayoutEffect(() => {

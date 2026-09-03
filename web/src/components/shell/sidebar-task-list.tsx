@@ -24,6 +24,7 @@ import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/side
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
@@ -31,7 +32,6 @@ import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-pic
 import {
   archiveProject,
   createProject,
-  createProjectSession,
   deleteProject,
   pinProject,
   renameProject,
@@ -1228,16 +1228,12 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     })();
   }, [activeSessionKey, firstInbox?.items, inboxHasMore, inboxItems.length, loadingInboxMore, sidebarUpdatedAfter]);
 
-  const createProjectChat = useCallback(async (project: Project) => {
-    try {
-      const session = await createProjectSession(project.id, project.defaultAgentId ?? defaultAgentId);
-      refreshSidebar();
-      navigate(`/chat/${encodeURIComponent(session.key)}`);
-      onNavigate?.();
-    } catch {
-      // Preserve the current sidebar state when the action fails.
-    }
-  }, [defaultAgentId, navigate, onNavigate, refreshSidebar]);
+  const createProjectChat = useCallback((project: Project) => {
+    navigate(newChatHrefForProject(project.id), {
+      state: { forceNewChat: true, agentId: project.defaultAgentId ?? defaultAgentId },
+    });
+    onNavigate?.();
+  }, [defaultAgentId, navigate, onNavigate]);
 
   const submitCreateProject = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
