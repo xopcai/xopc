@@ -5,7 +5,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LayoutChangeEvent,
   DeviceEventEmitter,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,29 +17,15 @@ import Animated, {
   Extrapolation,
   interpolate,
   useAnimatedStyle,
-  useSharedValue,
-  withTiming,
 } from 'react-native-reanimated';
 import { Icon } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
 import { motion } from '../../motion';
-import {
-  hapticVoiceCancel,
-  hapticVoiceLock,
-  hapticVoiceSend,
-  hapticVoiceStart,
-  hapticVoiceZoneChange,
-} from '../../motion/haptics';
-import { refineVoiceTranscript, transcribeVoice } from '../../api/agent-client';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
-import { ChatPendingFollowUpStack } from './ChatPendingFollowUpStack';
 import { canSendComposerDraft } from './composer-send-helpers';
 import type { ComposerAttachment, WireAttachment } from './composer.types';
-import type { PendingFollowUp } from './pending-follow-up.types';
-import { wireFollowUpAttachmentsToComposer } from './follow-up-utils';
-import { useComposerActions } from './use-composer-actions';
 import { AttachmentSourceSheet } from './attachment-source-sheet';
 import { ComposerAttachmentStrip } from './composer-attachment-strip';
 import { CommandPaletteBar } from './CommandPaletteBar';
@@ -59,48 +44,16 @@ import {
 } from './composer-draft-storage';
 import { useComposerAttachments } from './use-composer-attachments';
 import { MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
-import {
-  VoiceRecordingCard,
-  type VoiceRecordingStage,
-  type VoiceRecordingZone,
-} from './VoiceRecordingCard';
-import {
-  beginRecording,
-  classifyVoiceTranscriptionFailure,
-  deleteRecordingFile,
-  discardRecording,
-  finishRecording,
-  getMicPermissionStatus,
-  inferRecordingMimeType,
-  isVoiceInputAvailable,
-  MAX_VOICE_RECORDING_MS,
-  meteringToLevel,
-  requestMicPermission,
-  type ExpoRecording,
-} from './voiceRecording';
-import { resolveVoiceRecordingZone } from './voiceRecordingGesture';
-
-const MIN_VOICE_MS = 380;
-
-function reportVoiceFailure(phase: string, error: unknown): void {
-  console.warn(`[VoiceRecording] ${phase} failed`, error);
-}
+import { VoiceRecordingCard } from './VoiceRecordingCard';
+import { useChatVoiceRecording } from './use-chat-voice-recording';
 
 type InputMode = 'text' | 'voice';
-
-type PendingVoiceRecording = {
-  uri: string;
-  durationMillis: number;
-  mimeType: string;
-  meterSamples: number[];
-};
 
 export const ChatComposer = memo(function ChatComposer({
   sessionKey,
   disabled,
   streaming,
   onSend,
-  onSendVoice,
   onAbort,
   placeholder,
   suggestionDraft,
@@ -108,24 +61,12 @@ export const ChatComposer = memo(function ChatComposer({
   prefillAttachments,
   onConsumePrefillAttachments,
   keyboardVisible = false,
-  onAddPendingFollowUp,
-  pendingFollowUps = [],
-  editingFollowUpId = null,
-  onBeginEditFollowUp,
-  onCancelEditFollowUp,
-  onCommitEditFollowUp,
-  onPendingFollowUpRemove,
-  onPendingFollowUpMove,
-  onPendingFollowUpSteer,
-  steeringFollowUpId = null,
-  onQueueFull,
   overlayShell = false,
 }: {
   sessionKey: string;
   disabled: boolean;
   streaming: boolean;
   onSend: (text: string, attachments?: WireAttachment[]) => Promise<boolean>;
-  onSendVoice?: (payload: { uri: string; durationMillis: number; mimeType?: string }) => void | Promise<void>;
   onAbort: () => void;
   placeholder?: string;
   suggestionDraft?: string;
@@ -133,21 +74,6 @@ export const ChatComposer = memo(function ChatComposer({
   prefillAttachments?: ComposerAttachment[];
   onConsumePrefillAttachments?: () => void;
   keyboardVisible?: boolean;
-  onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[]) => void | Promise<void>;
-  pendingFollowUps?: PendingFollowUp[];
-  editingFollowUpId?: string | null;
-  onBeginEditFollowUp?: (id: string) => void;
-  onCancelEditFollowUp?: () => void;
-  onCommitEditFollowUp?: (
-    id: string,
-    text: string,
-    attachments?: PendingFollowUp['attachments'],
-  ) => void;
-  onPendingFollowUpRemove?: (id: string) => void;
-  onPendingFollowUpMove?: (id: string, dir: 'up' | 'down') => void;
-  onPendingFollowUpSteer?: (id: string) => void;
-  steeringFollowUpId?: string | null;
-  onQueueFull?: () => void;
   overlayShell?: boolean;
 }) {
   const m = useMessages();
@@ -157,7 +83,6 @@ export const ChatComposer = memo(function ChatComposer({
   const shellRef = useRef<RNView>(null);
 
   const [mode, setMode] = useState<InputMode>('text');
-  const [voiceInputAvailable, setVoiceInputAvailable] = useState(false);
   const [draft, setDraft] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_COMPOSER_INPUT_HEIGHT);
   const [inputWidth, setInputWidth] = useState(0);
@@ -221,110 +146,46 @@ export const ChatComposer = memo(function ChatComposer({
 
   const palette = useCommandPalette(draft, cursorPos);
 
-  const [recordingActive, setRecordingActive] = useState(false);
-  const [voiceZone, setVoiceZone] = useState<VoiceRecordingZone>('center');
-  const [meterSamples, setMeterSamples] = useState<number[]>([]);
-  const [voiceDurationMillis, setVoiceDurationMillis] = useState(0);
   const [snack, setSnack] = useState('');
-  const [transcribing, setTranscribing] = useState(false);
-  const [voiceStarting, setVoiceStarting] = useState(false);
-  const [recordingLocked, setRecordingLocked] = useState(false);
-  const [pendingVoice, setPendingVoice] = useState<PendingVoiceRecording | null>(null);
-  const [sendingVoice, setSendingVoice] = useState(false);
-
-  const recordingRef = useRef<ExpoRecording | null>(null);
-  const readyRef = useRef(false);
-  const abortStartRef = useRef(false);
-  const cancelZoneRef = useRef(false);
-  const releaseZoneRef = useRef<VoiceRecordingZone>('center');
-  const grantInFlightRef = useRef(false);
-  const maxDurationReachedRef = useRef(false);
-  const finalizeRef = useRef<(destination?: 'gesture' | 'preview') => void>(() => {});
-  const mountedRef = useRef(true);
-  const preferredModeRef = useRef<InputMode>('voice');
-  const defaultVoiceAppliedRef = useRef(false);
-  const restoreVoiceAfterStreamingRef = useRef(false);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-  const meterSamplesRef = useRef<number[]>([]);
-  const pendingVoiceRef = useRef<PendingVoiceRecording | null>(pendingVoice);
-  pendingVoiceRef.current = pendingVoice;
-  const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const lastLoadedPrefillAttachmentsRef = useRef<ComposerAttachment[] | null>(null);
   const restoredDraftSessionKeyRef = useRef<string | null>(null);
   const skipDraftPersistSessionKeyRef = useRef<string | null>(null);
-  const voiceDragX = useSharedValue(0);
-  const voiceDragY = useSharedValue(0);
-
-  useEffect(() => () => {
-    mountedRef.current = false;
-    abortStartRef.current = true;
-    const recording = recordingRef.current;
-    recordingRef.current = null;
-    if (recording) void discardRecording(recording);
-    const voiceDraft = pendingVoiceRef.current;
-    pendingVoiceRef.current = null;
-    if (voiceDraft) deleteRecordingFile(voiceDraft.uri);
-  }, []);
-
   const runBusy = streaming || disabled;
-  const voiceSendingAvailable = Boolean(onSendVoice);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!voiceSendingAvailable) {
-      setVoiceInputAvailable(false);
-      setMode('text');
-      return;
-    }
-
-    void getMicPermissionStatus()
-      .then((permission) => {
-        if (cancelled || !mountedRef.current) return;
-        setVoiceInputAvailable(isVoiceInputAvailable(permission));
-      })
-      .catch((error) => {
-        if (cancelled || !mountedRef.current) return;
-        reportVoiceFailure('permission status', error);
-        setVoiceInputAvailable(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [voiceSendingAvailable]);
-
-  const ensureMicAccess = useCallback(async (): Promise<boolean> => {
-    try {
-      const permission = await requestMicPermission();
-      if (permission.granted) {
-        setVoiceInputAvailable(true);
-        return true;
-      }
-      if (mountedRef.current) {
-        setVoiceInputAvailable(permission.canAskAgain);
-        if (!permission.canAskAgain) {
-          preferredModeRef.current = 'text';
-          setMode('text');
-        }
-        setSnack(permission.canAskAgain ? cm.voicePermissionDenied : cm.voicePermissionSettings);
-      }
-      return false;
-    } catch (error) {
-      reportVoiceFailure('permission', error);
-      if (mountedRef.current) {
-        setVoiceInputAvailable(false);
-        setSnack(cm.voicePermissionCheckFailed);
-      }
-      return false;
-    }
-  }, [cm]);
   const hasDraft = canSendComposerDraft(draft, att.attachments.length);
+  /** Programmatic draft updates (palette, suggestions, restore) set cursor explicitly. */
+  const updateDraft = useCallback(
+    (nextDraft: string, nextCursor = nextDraft.length) => {
+      setDraft(nextDraft);
+      setCursorPos(nextCursor);
+      setInputHeight(estimateComposerInputHeight(nextDraft, inputWidth || undefined));
+    },
+    [inputWidth],
+  );
 
-  const clearEditFollowUpRef = useCallback(() => {
-    lastLoadedEditFollowUpIdRef.current = null;
-  }, []);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const onRecordingDraft = useCallback((attachment: WireAttachment) => {
+    att.setAttachments(previous => [...previous, {
+      id: attachment.localUri!, type: 'audio', name: attachment.name!,
+      mimeType: attachment.mimeType!, size: 0, content: '',
+      localUri: attachment.localUri, durationSeconds: attachment.durationSeconds,
+    }]);
+    setMode('text');
+  }, [att.setAttachments]);
+  const onRecorded = useCallback(async (attachment: WireAttachment) => {
+    if (!await onSend('', [attachment])) onRecordingDraft(attachment);
+  }, [onRecordingDraft, onSend]);
+  const onTranscribed = useCallback((text: string) => {
+    const current = draftRef.current.trim();
+    updateDraft(current ? `${current} ${text}` : text);
+    setMode('text');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [updateDraft]);
+  const voice = useChatVoiceRecording({
+    sessionKey, disabled: mode !== 'voice' || runBusy,
+    onRecorded, onTranscribed, onRecordingDraft, onError: setSnack,
+  });
+  const voiceInteractionActive = voice.stage !== 'idle';
 
   const resetEditor = useCallback(() => {
     setDraft('');
@@ -366,29 +227,6 @@ export const ChatComposer = memo(function ChatComposer({
     writeComposerDraftSnapshot(normalizedSessionKey, { text: draft, cursorPos });
   }, [cursorPos, draft, sessionKey]);
 
-  const actions = useComposerActions({
-    chat: cm,
-    runBusy,
-    voiceRecording: recordingActive || transcribing,
-    stopVoiceRecording: () => {
-      abortStartRef.current = true;
-    },
-    editingFollowUpId,
-    getTextValue: () => draftRef.current,
-    getAttachmentCount: () => att.attachments.length,
-    wireAttachmentsPayload: att.toWirePayload,
-    onSend: (text, attachments) => {
-      void onSend(text, attachments);
-    },
-    onAddPendingFollowUp,
-    onCommitEditFollowUp: onCommitEditFollowUp ?? (() => {}),
-    onQueueFull,
-    pendingFollowUpsCount: pendingFollowUps.length,
-    resetEditor,
-    clearAttachments: att.clearAttachments,
-    clearEditFollowUpRef,
-  });
-
   const isExpanded = useMemo(
     () =>
       isFocused ||
@@ -400,42 +238,8 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   useEffect(() => {
-    if (defaultVoiceAppliedRef.current || !voiceInputAvailable) return;
-    if (streaming || transcribing) return;
-
-    defaultVoiceAppliedRef.current = true;
-    if (
-      preferredModeRef.current === 'voice'
-      && draft.trim().length === 0
-      && att.attachments.length === 0
-      && !editingFollowUpId
-    ) {
-      setMode('voice');
-    }
-  }, [att.attachments.length, draft, editingFollowUpId, streaming, transcribing, voiceInputAvailable]);
-
-  useEffect(() => {
-    if (streaming) {
-      if (mode === 'voice') {
-        restoreVoiceAfterStreamingRef.current = preferredModeRef.current === 'voice';
-        setMode('text');
-      }
-      return;
-    }
-
-    if (!restoreVoiceAfterStreamingRef.current) return;
-    restoreVoiceAfterStreamingRef.current = false;
-    if (
-      voiceInputAvailable
-      && preferredModeRef.current === 'voice'
-      && draft.trim().length === 0
-      && att.attachments.length === 0
-      && !editingFollowUpId
-      && !transcribing
-    ) {
-      setMode('voice');
-    }
-  }, [att.attachments.length, draft, editingFollowUpId, mode, streaming, transcribing, voiceInputAvailable]);
+    if (streaming) setMode('text');
+  }, [streaming]);
 
   useEffect(() => {
     if (!isFocused || draft.length > 0) return;
@@ -445,19 +249,7 @@ export const ChatComposer = memo(function ChatComposer({
   /** Typing updates draft only; cursor comes from TextInput selection events. */
   const onDraftInputChange = useCallback(
     (nextDraft: string) => {
-      draftRef.current = nextDraft;
       setDraft(nextDraft);
-      setInputHeight(estimateComposerInputHeight(nextDraft, inputWidth || undefined));
-    },
-    [inputWidth],
-  );
-
-  /** Programmatic draft updates (palette, suggestions, restore) set cursor explicitly. */
-  const updateDraft = useCallback(
-    (nextDraft: string, nextCursor = nextDraft.length) => {
-      draftRef.current = nextDraft;
-      setDraft(nextDraft);
-      setCursorPos(nextCursor);
       setInputHeight(estimateComposerInputHeight(nextDraft, inputWidth || undefined));
     },
     [inputWidth],
@@ -480,375 +272,7 @@ export const ChatComposer = memo(function ChatComposer({
     onConsumePrefillAttachments?.();
   }, [att, onConsumePrefillAttachments, prefillAttachments]);
 
-  useEffect(() => {
-    if (!editingFollowUpId) {
-      if (lastLoadedEditFollowUpIdRef.current) {
-        att.clearAttachments();
-        resetEditor();
-        lastLoadedEditFollowUpIdRef.current = null;
-      }
-      return;
-    }
-    if (editingFollowUpId === lastLoadedEditFollowUpIdRef.current) return;
-    const row = pendingFollowUps.find((r) => r.id === editingFollowUpId);
-    if (!row) {
-      onCancelEditFollowUp?.();
-      return;
-    }
-    lastLoadedEditFollowUpIdRef.current = editingFollowUpId;
-    att.setAttachments(wireFollowUpAttachmentsToComposer(row.attachments ?? []));
-    updateDraft(row.text);
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [
-    att,
-    editingFollowUpId,
-    onCancelEditFollowUp,
-    pendingFollowUps,
-    resetEditor,
-    updateDraft,
-  ]);
-
-  const canSendIdle = hasDraft && !disabled && !runBusy;
-  const canQueueWhileBusy = runBusy && hasDraft;
-
-  const setPendingVoiceRecording = useCallback((recording: PendingVoiceRecording) => {
-    pendingVoiceRef.current = recording;
-    setPendingVoice(recording);
-    meterSamplesRef.current = recording.meterSamples;
-    setMeterSamples(recording.meterSamples);
-    setVoiceDurationMillis(recording.durationMillis);
-  }, []);
-
-  const clearPendingVoiceRecording = useCallback(() => {
-    const recording = pendingVoiceRef.current;
-    pendingVoiceRef.current = null;
-    setPendingVoice(null);
-    if (recording) deleteRecordingFile(recording.uri);
-    meterSamplesRef.current = [];
-    setMeterSamples([]);
-    setVoiceDurationMillis(0);
-  }, []);
-
-  const resetActiveRecording = useCallback((clearMeter = true) => {
-    recordingRef.current = null;
-    readyRef.current = false;
-    abortStartRef.current = false;
-    grantInFlightRef.current = false;
-    cancelZoneRef.current = false;
-    releaseZoneRef.current = 'center';
-    setVoiceStarting(false);
-    setRecordingActive(false);
-    setRecordingLocked(false);
-    setVoiceZone('center');
-    if (clearMeter) {
-      meterSamplesRef.current = [];
-      setMeterSamples([]);
-      setVoiceDurationMillis(0);
-    }
-    voiceDragX.value = withTiming(0, { duration: 140 });
-    voiceDragY.value = withTiming(0, { duration: 140 });
-  }, [voiceDragX, voiceDragY]);
-
-  const transcribePendingRecording = useCallback(async (recording: PendingVoiceRecording) => {
-    try {
-      const result = await transcribeVoice(recording.uri, recording.mimeType);
-      if (!mountedRef.current) return false;
-      const text = result.text.trim();
-      if (!text) {
-        setSnack(cm.voiceNoSpeechDetected);
-        return false;
-      }
-
-      const currentDraft = draftRef.current;
-      const nextDraft = currentDraft.trim() ? `${currentDraft.trim()} ${text}` : text;
-      updateDraft(nextDraft);
-      setMode('text');
-      requestAnimationFrame(() => inputRef.current?.focus());
-      if (result.refinementAvailable) {
-        void refineVoiceTranscript(text).then((refined) => {
-          const trimmed = refined.trim();
-          if (!mountedRef.current || !trimmed || trimmed === text) return;
-          if (draftRef.current !== nextDraft) return;
-          updateDraft(currentDraft.trim() ? `${currentDraft.trim()} ${trimmed}` : trimmed);
-        }).catch(() => undefined);
-      }
-      return true;
-    } catch (error) {
-      reportVoiceFailure('transcribe', error);
-      if (!mountedRef.current) return false;
-      const failure = classifyVoiceTranscriptionFailure(error);
-      setSnack(
-        failure === 'decoder_unavailable'
-          ? cm.voiceDecoderUnavailable
-          : failure === 'not_configured'
-            ? cm.voiceSttNotConfigured
-          : failure === 'runtime_unavailable'
-            ? cm.voiceRuntimeUnavailable
-            : cm.voiceTranscribeFailed,
-      );
-      return false;
-    }
-  }, [cm, updateDraft]);
-
-  const finalizeRecordingInteraction = useCallback(async (
-    destination: 'gesture' | 'preview' = 'gesture',
-  ) => {
-    const rec = recordingRef.current;
-    const shouldDiscard = cancelZoneRef.current;
-    const releaseZone = releaseZoneRef.current;
-    const recordedSamples = meterSamplesRef.current;
-
-    resetActiveRecording(false);
-
-    if (!rec) return;
-
-    if (shouldDiscard) {
-      await discardRecording(rec);
-      resetActiveRecording();
-      hapticVoiceCancel();
-      return;
-    }
-
-    let uri: string | null;
-    let durationMillis: number;
-    try {
-      ({ uri, durationMillis } = await finishRecording(rec));
-    } catch (error) {
-      reportVoiceFailure('stop', error);
-      resetActiveRecording();
-      setSnack(cm.voiceRecordingFailed);
-      return;
-    }
-    if (durationMillis < MIN_VOICE_MS) {
-      deleteRecordingFile(uri);
-      resetActiveRecording();
-      setSnack(cm.voiceTooShort);
-      return;
-    }
-    if (!uri) {
-      resetActiveRecording();
-      setSnack(cm.voiceRecordingFailed);
-      return;
-    }
-
-    const mimeType = inferRecordingMimeType(uri);
-    const recording: PendingVoiceRecording = {
-      uri,
-      durationMillis,
-      mimeType,
-      meterSamples: recordedSamples,
-    };
-
-    if (destination === 'preview') {
-      setPendingVoiceRecording(recording);
-      return;
-    }
-
-    if (releaseZone === 'text') {
-      setPendingVoiceRecording(recording);
-      setTranscribing(true);
-      const converted = await transcribePendingRecording(recording);
-      if (converted) clearPendingVoiceRecording();
-      if (mountedRef.current) {
-        setTranscribing(false);
-      }
-      return;
-    }
-
-    if (!onSendVoice) {
-      setPendingVoiceRecording(recording);
-      setSnack(cm.voiceSendUnavailable);
-      return;
-    }
-
-    setPendingVoiceRecording(recording);
-    setSendingVoice(true);
-    try {
-      await onSendVoice({ uri, durationMillis, mimeType });
-      if (!mountedRef.current) return;
-      clearPendingVoiceRecording();
-      hapticVoiceSend();
-    } catch (error) {
-      reportVoiceFailure('send', error);
-      if (mountedRef.current) setSnack(cm.voiceSendFailed);
-    } finally {
-      if (mountedRef.current) setSendingVoice(false);
-    }
-  }, [
-    clearPendingVoiceRecording,
-    cm,
-    onSendVoice,
-    resetActiveRecording,
-    setPendingVoiceRecording,
-    transcribePendingRecording,
-  ]);
-  finalizeRef.current = (destination) => void finalizeRecordingInteraction(destination);
-
-  const cancelVoiceRecording = useCallback(() => {
-    const rec = recordingRef.current;
-    resetActiveRecording();
-    if (rec) void discardRecording(rec);
-    hapticVoiceCancel();
-  }, [resetActiveRecording]);
-
-  const sendPendingVoice = useCallback(async () => {
-    const recording = pendingVoiceRef.current;
-    if (!recording || !onSendVoice || sendingVoice || transcribing) return;
-    setSendingVoice(true);
-    try {
-      await onSendVoice(recording);
-      if (!mountedRef.current) return;
-      clearPendingVoiceRecording();
-      hapticVoiceSend();
-    } catch (error) {
-      reportVoiceFailure('send preview', error);
-      if (mountedRef.current) setSnack(cm.voiceSendFailed);
-    } finally {
-      if (mountedRef.current) setSendingVoice(false);
-    }
-  }, [clearPendingVoiceRecording, cm.voiceSendFailed, onSendVoice, sendingVoice, transcribing]);
-
-  const convertPendingVoiceToText = useCallback(async () => {
-    const recording = pendingVoiceRef.current;
-    if (!recording || sendingVoice || transcribing) return;
-    setTranscribing(true);
-    const converted = await transcribePendingRecording(recording);
-    if (converted) clearPendingVoiceRecording();
-    if (mountedRef.current) setTranscribing(false);
-  }, [clearPendingVoiceRecording, sendingVoice, transcribePendingRecording, transcribing]);
-
-  const startGrantFlow = useCallback(() => {
-    if (
-      disabled
-      || streaming
-      || transcribing
-      || sendingVoice
-      || recordingLocked
-      || pendingVoiceRef.current
-      || grantInFlightRef.current
-    ) return;
-    abortStartRef.current = false;
-    readyRef.current = false;
-    recordingRef.current = null;
-    cancelZoneRef.current = false;
-    releaseZoneRef.current = 'center';
-    setVoiceZone('center');
-    setVoiceStarting(true);
-    meterSamplesRef.current = [];
-    setMeterSamples([]);
-    setVoiceDurationMillis(0);
-    maxDurationReachedRef.current = false;
-    grantInFlightRef.current = true;
-
-    void (async () => {
-      const ok = await ensureMicAccess();
-      if (!ok) {
-        grantInFlightRef.current = false;
-        if (mountedRef.current) setVoiceStarting(false);
-        return;
-      }
-      try {
-        const rec = await beginRecording((metering, durationMillis) => {
-          if (!mountedRef.current) return;
-          const nextSamples = [...meterSamplesRef.current.slice(-27), meteringToLevel(metering)];
-          meterSamplesRef.current = nextSamples;
-          setMeterSamples(nextSamples);
-          setVoiceDurationMillis(durationMillis);
-          if (
-            durationMillis >= MAX_VOICE_RECORDING_MS
-            && !maxDurationReachedRef.current
-            && recordingRef.current
-          ) {
-            maxDurationReachedRef.current = true;
-            setSnack(cm.voiceMaxDurationReached);
-            finalizeRef.current('preview');
-          }
-        });
-        if (!mountedRef.current || abortStartRef.current) {
-          await discardRecording(rec);
-          if (!mountedRef.current) return;
-          resetActiveRecording();
-          return;
-        }
-        recordingRef.current = rec;
-        readyRef.current = true;
-        grantInFlightRef.current = false;
-        setVoiceStarting(false);
-        setRecordingActive(true);
-        hapticVoiceStart();
-      } catch (error) {
-        if (!mountedRef.current) return;
-        reportVoiceFailure('start', error);
-        grantInFlightRef.current = false;
-        setVoiceStarting(false);
-        setSnack(cm.voiceRecordingStartFailed);
-      }
-    })();
-  }, [cm, disabled, ensureMicAccess, recordingLocked, resetActiveRecording, sendingVoice, streaming, transcribing]);
-
-  const canCaptureVoice = mode === 'voice'
-    && !disabled
-    && !streaming
-    && !transcribing
-    && !sendingVoice
-    && !voiceStarting
-    && !recordingLocked
-    && !pendingVoice;
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => canCaptureVoice,
-        onMoveShouldSetPanResponder: () => canCaptureVoice,
-        onPanResponderGrant: () => {
-          cancelZoneRef.current = false;
-          releaseZoneRef.current = 'center';
-          setVoiceZone('center');
-          startGrantFlow();
-        },
-        onPanResponderMove: (_, g) => {
-          voiceDragX.value = g.dx;
-          voiceDragY.value = g.dy;
-          const zone = resolveVoiceRecordingZone(g.dx, g.dy, releaseZoneRef.current);
-          if (releaseZoneRef.current === zone) return;
-          if (zone === 'lock') hapticVoiceLock();
-          else hapticVoiceZoneChange();
-          cancelZoneRef.current = zone === 'cancel';
-          releaseZoneRef.current = zone;
-          setVoiceZone(zone);
-        },
-        onPanResponderRelease: () => {
-          voiceDragX.value = withTiming(0, { duration: 140 });
-          voiceDragY.value = withTiming(0, { duration: 140 });
-          if (!readyRef.current) {
-            abortStartRef.current = true;
-            return;
-          }
-          if (releaseZoneRef.current === 'lock') {
-            releaseZoneRef.current = 'center';
-            cancelZoneRef.current = false;
-            setVoiceZone('center');
-            setRecordingLocked(true);
-            return;
-          }
-          void finalizeRecordingInteraction();
-        },
-        onPanResponderTerminate: () => {
-          voiceDragX.value = withTiming(0, { duration: 140 });
-          voiceDragY.value = withTiming(0, { duration: 140 });
-          if (!readyRef.current) {
-            abortStartRef.current = true;
-            return;
-          }
-          cancelZoneRef.current = true;
-          releaseZoneRef.current = 'center';
-          setVoiceZone('cancel');
-          void finalizeRecordingInteraction();
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [canCaptureVoice, finalizeRecordingInteraction, startGrantFlow, voiceDragX, voiceDragY],
-  );
+  const canSendIdle = hasDraft && !runBusy && !voiceInteractionActive;
 
   const handlePaletteSelect = useCallback(
     (item: import('./command-palette.types').PaletteItem) => {
@@ -859,10 +283,6 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   const handleSend = useCallback(() => {
-    if (canQueueWhileBusy) {
-      void actions.flushSteeringDraft();
-      return;
-    }
     if (!canSendIdle || runBusy) return;
 
     const previousDraft = draft;
@@ -888,7 +308,7 @@ export const ChatComposer = memo(function ChatComposer({
         att.restoreAttachments(previousAttachments);
         requestAnimationFrame(() => inputRef.current?.focus());
       });
-  }, [actions, att, canQueueWhileBusy, canSendIdle, draft, onSend, resetEditor, runBusy, sessionKey, updateDraft]);
+  }, [att, canSendIdle, draft, onSend, resetEditor, runBusy, sessionKey, updateDraft]);
 
   const handleAbort = useCallback(() => {
     onAbort();
@@ -921,31 +341,10 @@ export const ChatComposer = memo(function ChatComposer({
   const border = colors.border.default;
   const accent = colors.accent.primary;
   const shellBorder = isExpanded || mode === 'voice' ? colors.border.strong : border;
-  const voiceInteractionActive = voiceStarting
-    || recordingActive
-    || recordingLocked
-    || Boolean(pendingVoice)
-    || transcribing
-    || sendingVoice;
-
   const toggleMode = useCallback(() => {
     if (disabled || streaming || voiceInteractionActive) return;
-    if (mode === 'voice') {
-      preferredModeRef.current = 'text';
-      restoreVoiceAfterStreamingRef.current = false;
-      setMode('text');
-      return;
-    }
-    if (grantInFlightRef.current) return;
-    grantInFlightRef.current = true;
-    void ensureMicAccess().then((ok) => {
-      grantInFlightRef.current = false;
-      if (ok) {
-        preferredModeRef.current = 'voice';
-        setMode('voice');
-      }
-    });
-  }, [disabled, ensureMicAccess, mode, streaming, voiceInteractionActive]);
+    setMode(current => current === 'voice' ? 'text' : 'voice');
+  }, [disabled, streaming, voiceInteractionActive]);
 
   const openAttachmentSheet = useCallback(() => {
     if (disabled || voiceInteractionActive) return;
@@ -1036,7 +435,7 @@ export const ChatComposer = memo(function ChatComposer({
       disabled={disabled || streaming || voiceInteractionActive}
       hitSlop={4}
       accessibilityRole="button"
-      accessibilityLabel={mode === 'text' ? 'Switch to voice input' : 'Switch to keyboard'}
+      accessibilityLabel={mode === 'text' ? cm.switchToVoice : cm.switchToKeyboard}
     >
       <Icon
         source={mode === 'text' ? 'microphone-outline' : 'keyboard-outline'}
@@ -1080,21 +479,9 @@ export const ChatComposer = memo(function ChatComposer({
     </Pressable>
   );
 
-  const renderQueueSendButton = () => (
-    <Pressable
-      style={[styles.sendCircle, { backgroundColor: accent }]}
-      onPress={handleSend}
-      hitSlop={8}
-      accessibilityLabel={cm.send}
-    >
-      <Icon source="arrow-up" size={20} color={colors.text.inverse} />
-    </Pressable>
-  );
-
   const renderStreamingRightActions = () => (
     <View style={styles.streamingActions}>
       {renderAttachButton()}
-      {canQueueWhileBusy && isExpanded ? renderQueueSendButton() : null}
       {renderAbortButton()}
     </View>
   );
@@ -1103,11 +490,7 @@ export const ChatComposer = memo(function ChatComposer({
     isExpanded && (draft.includes('\n') || inputHeight > MIN_COMPOSER_INPUT_HEIGHT);
   const singleLineExpanded = isExpanded && !needsMultiline;
 
-  const composerPlaceholder = streaming
-    ? editingFollowUpId
-      ? cm.inputPlaceholderSteeringEdit
-      : cm.inputPlaceholderSteering
-    : (placeholder ?? cm.inputPlaceholder);
+  const composerPlaceholder = placeholder ?? cm.inputPlaceholder;
 
   const renderSendOrStop = () => {
     if (streaming) return renderStreamingRightActions();
@@ -1148,17 +531,6 @@ export const ChatComposer = memo(function ChatComposer({
   };
 
   const contextNotice = att.snack || snack;
-  const voiceCardStage: VoiceRecordingStage = transcribing
-    ? 'transcribing'
-    : sendingVoice
-      ? 'sending'
-      : pendingVoice
-        ? 'review'
-        : recordingLocked
-          ? 'locked'
-          : voiceStarting
-            ? 'starting'
-            : 'recording';
   const dismissContextNotice = () => {
     if (att.snack) att.dismissSnack();
     if (snack) setSnack('');
@@ -1166,47 +538,17 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <View style={[styles.wrap, { borderTopColor: 'transparent' }]}>
-      {pendingFollowUps.length > 0 ? (
-        <ChatPendingFollowUpStack
-          items={pendingFollowUps}
-          disabled={disabled}
-          editingFollowUpId={editingFollowUpId}
-          onEditInComposer={(id) => onBeginEditFollowUp?.(id)}
-          onRemove={(id) => onPendingFollowUpRemove?.(id)}
-          onMove={(id, dir) => onPendingFollowUpMove?.(id, dir)}
-          onSteer={(id) => onPendingFollowUpSteer?.(id)}
-          steeringBusyId={steeringFollowUpId}
-        />
-      ) : null}
       <VoiceRecordingCard
         visible={voiceInteractionActive}
-        stage={voiceCardStage}
-        zone={voiceZone}
-        meterSamples={meterSamples}
-        durationMillis={voiceDurationMillis}
-        centerHint={cm.voiceReleaseCenterHint}
-        textHint={cm.voiceReleaseTextHint}
-        cancelHint={cm.voiceReleaseCancelHint}
-        lockHint={cm.voiceReleaseLockHint}
-        startingLabel={cm.voiceStarting}
-        lockedLabel={cm.voiceLocked}
-        reviewLabel={cm.voiceReview}
-        transcribingLabel={cm.voiceTranscribing}
-        sendingLabel={cm.voiceSending}
-        deleteLabel={cm.voiceDelete}
-        stopLabel={cm.voiceStop}
-        convertTextLabel={cm.voiceConvertToText}
-        sendLabel={cm.send}
-        playLabel={cm.audioPlay}
-        pauseLabel={cm.audioPause}
-        previewUri={pendingVoice?.uri}
-        dragX={voiceDragX}
-        dragY={voiceDragY}
-        onDelete={recordingLocked ? cancelVoiceRecording : pendingVoice ? clearPendingVoiceRecording : undefined}
-        onStop={recordingLocked ? () => void finalizeRecordingInteraction('preview') : undefined}
-        onConvertText={pendingVoice ? () => void convertPendingVoiceToText() : undefined}
-        onSend={pendingVoice && onSendVoice ? () => void sendPendingVoice() : undefined}
-        onPlaybackError={() => setSnack(cm.audioPlaybackFailed)}
+        processing={voice.stage === 'starting' || voice.stage === 'stopping' || voice.stage === 'transcribing'}
+        cancelled={voice.destination === 'cancel'}
+        meterSamples={voice.samples}
+        durationMillis={voice.durationMillis}
+        hint={voice.stage === 'starting' ? cm.voiceStarting
+          : voice.stage === 'stopping' ? cm.voiceSending
+          : voice.stage === 'transcribing' ? cm.voiceTranscribing
+          : voice.destination === 'cancel' ? cm.voiceReleaseCancelHint
+          : voice.destination === 'text' ? cm.voiceReleaseTextHint : cm.voiceReleaseCenterHint}
       />
 
       {palette.open ? (
@@ -1324,7 +666,7 @@ export const ChatComposer = memo(function ChatComposer({
                   borderColor: colors.border.subtle,
                 },
               ]}
-              {...panResponder.panHandlers}
+              {...voice.panHandlers}
             >
               <Text style={[styles.holdLabel, { color: colors.text.secondary }]}>
                 {cm.holdToSpeak}
@@ -1355,7 +697,7 @@ export const ChatComposer = memo(function ChatComposer({
                   borderColor: colors.border.subtle,
                 },
               ]}
-              {...panResponder.panHandlers}
+              {...voice.panHandlers}
             >
               <Text style={[styles.holdLabel, { color: colors.text.secondary }]}>
                 {cm.holdToSpeak}

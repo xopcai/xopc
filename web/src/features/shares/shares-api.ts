@@ -44,8 +44,13 @@ export type ShareListResponse = {
   payload: { shares: ShareItem[] };
 };
 
-export type CreateShareParams = {
-  path: string;
+export type CreateShareParams = (
+  | { path: string; fileId?: never; uri?: never }
+  | { fileId: string; path?: never; uri?: never }
+  | { uri: string; path?: never; fileId?: never }
+) & {
+  fileName?: string;
+  taskId?: string;
   ttlMs?: number;
   maxViews?: number | null;
   description?: string;

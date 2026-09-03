@@ -4,7 +4,7 @@ export type WireAttachment = {
   mimeType?: string;
   data?: string;
   uri?: string;
-  /** Local source used only by the durable mobile outbox; never sent to the gateway. */
+  /** Local source for uploading and manual retry; never sent to the gateway. */
   localUri?: string;
   name?: string;
   size?: number;

@@ -35,7 +35,6 @@ const stepLabels = {
   fetchUrl: '',
   unknownTool: '',
   activityCompleted: '',
-  activityPartial: '',
   activityFailedCount: '',
   activityAnalysisComplete: '',
   toolFailedImpact: '',

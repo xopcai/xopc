@@ -16,10 +16,8 @@ import { Banner, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
-import { PendingInputBanner } from '../gateway/PendingInputBanner';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
-import { t } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
@@ -31,7 +29,6 @@ import { ChatHeader } from './ChatHeader';
 import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ClarifyPrompt } from './ClarifyPrompt';
 import { MessageList } from './MessageList';
-import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
 import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
 import { useAutoReadAloud } from './use-auto-read-aloud';
@@ -157,7 +154,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         onReconnect={openReconnectLanding}
       />
 
-      {sessionKey ? <PendingInputBanner sessionKey={sessionKey} /> : null}
 
       <ChatContextBanner
         projectId={sessionContext.projectId}
@@ -264,24 +260,12 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             streaming={chat.streaming}
             onSend={handleComposerSend}
             keyboardVisible={keyboardVisible}
-            onSendVoice={(payload) => chat.sendVoice(payload)}
             onAbort={chat.abort}
             placeholder={m.chat.inputPlaceholder}
             suggestionDraft={composerSuggestion}
             onConsumeSuggestionDraft={() => setComposerSuggestion(undefined)}
             prefillAttachments={composerPrefillAttachments}
             onConsumePrefillAttachments={() => setComposerPrefillAttachments(undefined)}
-            onAddPendingFollowUp={(text, atts) => chat.followUp.addPendingFollowUp(text, atts)}
-            pendingFollowUps={chat.followUp.pendingFollowUps}
-            editingFollowUpId={chat.followUp.editingFollowUpId}
-            onBeginEditFollowUp={chat.followUp.beginEditFollowUp}
-            onCancelEditFollowUp={chat.followUp.cancelEditFollowUp}
-            onCommitEditFollowUp={chat.followUp.commitEditFollowUp}
-            onPendingFollowUpRemove={chat.followUp.removePendingFollowUp}
-            onPendingFollowUpMove={chat.followUp.movePendingFollowUp}
-            onPendingFollowUpSteer={(id) => void chat.followUp.steerPendingFollowUp(id)}
-            steeringFollowUpId={chat.followUp.steeringFollowUpId}
-            onQueueFull={() => chat.setSnackMsg(t(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }))}
             overlayShell={overlay}
           />
         </KeyboardStickyView>

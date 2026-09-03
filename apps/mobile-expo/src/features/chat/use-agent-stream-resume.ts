@@ -15,12 +15,13 @@ export function useAgentStreamResume(opts: {
   activeSessionKeyRef: RefObject<string>;
   wakeRecovery: () => void;
   streaming: boolean;
+  sending: boolean;
 }): void {
-  const { sessionKey, senderRef, activeSessionKeyRef, wakeRecovery, streaming } = opts;
+  const { sessionKey, senderRef, activeSessionKeyRef, wakeRecovery, streaming, sending } = opts;
   const wakeRecoveryRef = useRef(wakeRecovery);
-  const streamingRef = useRef(streaming);
+  const sendingRef = useRef(sending);
   wakeRecoveryRef.current = wakeRecovery;
-  streamingRef.current = streaming;
+  sendingRef.current = sending;
 
   useEffect(() => {
     return subscribeGatewayEvent('run-started', (detail) => {
@@ -29,12 +30,12 @@ export function useAgentStreamResume(opts: {
 
       setPendingAgentRun(event.sessionKey, event.runId);
 
-      if (activeSessionKeyRef.current !== event.sessionKey) return;
+      if (activeSessionKeyRef.current !== event.sessionKey || sendingRef.current) return;
       const sender = senderRef.current;
       if (sender.isStreamingFor(event.sessionKey)) return;
 
       queueMicrotask(() => {
-        if (activeSessionKeyRef.current !== event.sessionKey) return;
+        if (activeSessionKeyRef.current !== event.sessionKey || sendingRef.current) return;
         if (senderRef.current.isStreamingFor(event.sessionKey)) return;
         wakeRecoveryRef.current();
       });
@@ -43,7 +44,7 @@ export function useAgentStreamResume(opts: {
 
   const streamBusyRef = useRef(false);
   useEffect(() => {
-    const busy = streaming || senderRef.current.isSending;
+    const busy = streaming || sending;
     const wasBusy = streamBusyRef.current;
     streamBusyRef.current = busy;
     if (!wasBusy || busy || !sessionKey) return;
@@ -54,5 +55,5 @@ export function useAgentStreamResume(opts: {
       if (!hasPendingAgentRunForSession(sessionKey)) return;
       wakeRecoveryRef.current();
     });
-  }, [streaming, sessionKey, activeSessionKeyRef, senderRef]);
+  }, [streaming, sending, sessionKey, activeSessionKeyRef, senderRef]);
 }

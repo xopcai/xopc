@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildOptimisticUserMessage,
   extractUserMessageText,
   mergeOptimisticUserMessages,
 } from '../composer-send-helpers';
@@ -74,5 +75,31 @@ describe('mergeOptimisticUserMessages', () => {
     const repeated = textMessage('optimistic-1', 'try again', 200_001);
 
     expect(mergeOptimisticUserMessages([previous], [repeated])).toEqual([previous, repeated]);
+  });
+});
+
+
+describe('message delivery presentation', () => {
+  it('keeps a failed message visible when history contains an identical older prompt', () => {
+    const failed = { ...buildOptimisticUserMessage('try again'), deliveryState: 'failed' as const };
+    const previous: Message = { ...failed, id: 'server-row', deliveryState: undefined };
+    expect(mergeOptimisticUserMessages([previous], [failed])).toEqual([previous, failed]);
+  });
+
+  it('keeps an earlier failed message before a later accepted message without duplicating the latter', () => {
+    const failed: Message = { ...buildOptimisticUserMessage('first'), timestamp: 100, deliveryState: 'failed' };
+    const sent: Message = { ...buildOptimisticUserMessage('second'), timestamp: 200, deliveryState: 'sent' };
+    const server: Message = { ...sent, id: 'server-second', deliveryState: undefined, timestamp: 201 };
+    expect(mergeOptimisticUserMessages([server], [failed, sent])).toEqual([failed, server]);
+  });
+
+  it('renders a failed voice message from its retained native file', () => {
+    const attachment = { type: 'voice', localUri: 'file:///recording.m4a',
+      mimeType: 'audio/mp4', name: 'voice.m4a', durationSeconds: 1.25 };
+    const message = buildOptimisticUserMessage('', [attachment]);
+    expect(message.content).toEqual([{ type: 'audio', uri: attachment.localUri,
+      mimeType: 'audio/mp4', name: 'voice.m4a', durationSeconds: 1.25,
+      workspaceRelativePath: undefined }]);
+    expect(message.attachments?.[0]).toMatchObject(attachment);
   });
 });

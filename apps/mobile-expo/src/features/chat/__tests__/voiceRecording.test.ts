@@ -67,8 +67,6 @@ import {
   beginRecording,
   classifyVoiceTranscriptionFailure,
   finishRecording,
-  getMicPermissionStatus,
-  isVoiceInputAvailable,
   nativeRecordingOptionsForPlatform,
   readRecordingDurationMillis,
   requestMicPermission,
@@ -221,21 +219,6 @@ describe('requestMicPermission', () => {
     expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
   });
 
-  it('checks whether voice can be offered without opening the permission prompt', async () => {
-    vi.mocked(getRecordingPermissionsAsync).mockResolvedValue({
-      status: 'denied',
-      granted: false,
-      canAskAgain: true,
-      expires: 'never',
-    } as never);
-
-    const permission = await getMicPermissionStatus();
-
-    expect(permission).toEqual({ granted: false, canAskAgain: true, requested: false });
-    expect(isVoiceInputAvailable(permission)).toBe(true);
-    expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
-  });
-
   it('preserves canAskAgain when Android has permanently denied access', async () => {
     vi.mocked(getRecordingPermissionsAsync).mockResolvedValue({
       status: 'denied',
@@ -250,7 +233,6 @@ describe('requestMicPermission', () => {
       requested: false,
     });
     expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
-    expect(isVoiceInputAvailable({ granted: false, canAskAgain: false, requested: false })).toBe(false);
   });
 
   it('wraps native permission failures with their stage', async () => {

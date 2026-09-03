@@ -108,6 +108,8 @@ export type WorkspaceShareRecord = FileShareRecord | DirectoryShareRecord;
 export type ShareRecord = WorkspaceShareRecord | NoteShareRecord | SessionShareRecord;
 
 export interface CreateShareParams {
+  /** Display filename for a stored media attachment. */
+  fileName?: string;
   /** Workspace-relative file path. */
   path: string;
   /** Time-to-live in milliseconds (default: 24h). */
