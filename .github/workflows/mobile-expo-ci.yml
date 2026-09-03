@@ -61,3 +61,14 @@ jobs:
 
       - name: Test agent stream client
         run: pnpm run mobile:test:stream
+
+      - name: Validate iOS manual signing prebuild
+        env:
+          SIGNING_STYLE: manual
+          APPLE_TEAM_ID: TESTTEAM
+          IOS_PROVISIONING_PROFILE_MAIN: main-profile
+          IOS_PROVISIONING_PROFILE_SHARE: share-profile
+          IOS_PROVISIONING_PROFILE_WIDGET: widget-profile
+          EXPO_NO_TELEMETRY: "1"
+          XOPC_IOS_USE_COCOAPODS_MIRROR: "0"
+        run: pnpm -C apps/mobile-expo exec expo prebuild --platform ios --no-install --clean
