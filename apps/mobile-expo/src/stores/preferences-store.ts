@@ -109,7 +109,7 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   resolvedTheme: resolveTheme('system'),
   defaultAgentId: null,
   newSessionPreferencesByGateway: {},
-  clipboardIntakeEnabled: true,
+  clipboardIntakeEnabled: false,
   notificationsEnabled: false,
   autoReadAloudEnabled: false,
 
@@ -190,7 +190,7 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
     const autoReadAloudRaw = storage.getString(KEYS.autoReadAloudEnabled);
     const language = isValidLanguage(langRaw) ? langRaw : 'en';
     const themePreference = isValidThemePref(themeRaw) ? themeRaw : 'system';
-    const clipboardIntakeEnabled = clipboardRaw === undefined ? true : clipboardRaw !== 'false';
+    const clipboardIntakeEnabled = clipboardRaw === 'true';
     const defaultAgentId = agentRaw?.trim().toLowerCase() || null;
     const newSessionPreferencesByGateway = readPreferencesByGateway(preferencesByGatewayRaw);
     const notificationsEnabled = notificationsRaw === 'true';
