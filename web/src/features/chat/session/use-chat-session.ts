@@ -351,10 +351,13 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     applyAgentConfig,
   });
 
-  useChatSessionInit({
+  const projectPreparation = useChatSessionInit({
     token,
     isNewRoute,
     forceNewChat,
+    temporary: (locationState as { temporary?: boolean } | null)?.temporary === true,
+    requestedAgentId: typeof (locationState as { agentId?: unknown } | null)?.agentId === 'string'
+      ? (locationState as { agentId: string }).agentId : undefined,
     decodedKey,
     locationKey,
     locationSearch,
@@ -413,6 +416,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       hasToken: Boolean(token),
     },
     session: {
+      projectPreparation,
       sessionKey: focusedSessionKey,
       sessionName,
       decodedKey,
@@ -431,7 +435,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       modelSupportsThinking,
       effectiveWorkspacePath,
       workspaceSource,
-      userContextMode,
+      userContextMode: projectPreparation?.temporary ? 'temporary' as const : userContextMode,
       hasMore,
       loadingMore,
       loadMoreMessages,
@@ -481,7 +485,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     },
     agents: {
       chatAgents: chatAgentsData,
-      displayAgentId,
+      displayAgentId: projectPreparation?.agentId ?? displayAgentId,
       showChatAgentSelector,
       onChatAgentChange,
     },

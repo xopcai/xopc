@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchJson } from '@/lib/fetch';
 import { useGatewayStore } from '@/stores/gateway-store';
+import type { Project } from '@/features/projects/api';
 
 import { mergeContextSources, SessionContextPanel, type SessionContextPanelProps } from '../session-context-panel';
 
@@ -117,5 +118,58 @@ describe('session context panel', () => {
     expect(document.body.textContent).not.toContain('Project one');
     expect(document.body.textContent).not.toContain('Source note');
     expect(document.body.textContent).toContain('Some details are unavailable');
+  });
+
+  it('opens preparation in the header and creates only after confirmation, once', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true } });
+    let finish!: () => void;
+    const create = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const project = { id: 'code', name: 'Code', workspaceRoot: '/repo', executionMode: 'managed_worktree' } as Project;
+    await render({ sessionKey: null, project, preparation: { project, create, agentId: 'main', temporary: false } });
+    expect(document.body.textContent).toContain('New local worktree');
+    expect(create).not.toHaveBeenCalled();
+    const submit = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Create session')!;
+    await act(async () => { submit.click(); submit.click(); });
+    expect(create).toHaveBeenCalledExactlyOnceWith('managed_worktree');
+    expect(submit.disabled).toBe(true);
+    await toggle();
+    expect(document.body.textContent).toContain('Create session');
+    await act(async () => finish());
+  });
+
+  it('keeps the selected mode and draft notes after failure without falling back to Local', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true } });
+    const create = vi.fn().mockRejectedValue(new Error('Repository has uncommitted changes'));
+    const project = { id: 'code', name: 'Code', workspaceRoot: '/repo', executionMode: 'managed_worktree' } as Project;
+    await render({ sessionKey: null, project, preparation: { project, create, agentId: 'main', temporary: false }, draftRefs: [{ kind: 'note', sourceId: 'draft', title: 'Keep this note', expectedVersion: 'v2' }] });
+    const submit = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Create session')!;
+    await act(async () => submit.click());
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('uncommitted changes');
+    expect(document.body.textContent).toContain('Keep this note');
+    expect(document.body.textContent).toContain('New local worktree');
+    expect(create).toHaveBeenCalledExactlyOnceWith('managed_worktree');
+  });
+
+  it('disables unavailable Worktree but allows explicitly selecting Local', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'git_commit_required' } });
+    const create = vi.fn(async () => {});
+    const project = { id: 'code', name: 'Code', workspaceRoot: '/repo', executionMode: 'managed_worktree' } as Project;
+    await render({ sessionKey: null, project, preparation: { project, create, agentId: 'main', temporary: false } });
+    const submit = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Create session')!;
+    expect(submit.disabled).toBe(true);
+    expect(document.body.textContent).toContain('at least one commit');
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="New session environment"]')!.click());
+    const options = [...document.querySelectorAll<HTMLButtonElement>('button')].filter((button) => !button.hasAttribute('aria-label'));
+    expect(options.find((option) => option.textContent === 'New local worktree')?.disabled).toBe(true);
+    await act(async () => options.find((option) => option.textContent?.includes('Local directory'))!.click());
+    await act(async () => submit.click());
+    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
+  });
+
+  it('offers a new-session link for an existing environment, never an in-place switch', async () => {
+    await render({ project: { id: 'one', name: 'Code', workspaceRoot: '/repo' } });
+    await toggle();
+    expect(document.querySelector('a[href="/chat/new?projectId=one"]')?.textContent).toContain('another environment');
+    expect(document.querySelector('[aria-label="New session environment"]')).toBeNull();
   });
 });

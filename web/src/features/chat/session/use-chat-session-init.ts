@@ -1,16 +1,19 @@
 // Initial chat-session bootstrap. Product contract: docs/design/technical/new-session-preferences.md
-//   1. `/chat/new` — resolve reusable empty shell, else create a server-owned session.
+//   1. `/chat/new` — prepare workspace-project environments; otherwise resolve an empty shell or create.
 //   2. `/chat/:key` route — load that session and try to resume any in-flight agent run for it.
 //   3. No key in URL — pick the most-recent populated session (or fall back to creating one).
 //
-// Cancellation: each render bumps `initGenRef` so a stale async chain won't apply its results.
+// Cancellation: each route initialization bumps `initGenRef` so stale async work cannot replace the view.
 
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import {
   modelPreferenceForAgent,
   resolveNewSessionSpec,
+  type SessionCreateRequest,
 } from '@xopcai/gateway-contract';
 
+import { fetchProject, type Project } from '@/features/projects/api';
+import { useGatewayStore } from '@/stores/gateway-store';
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
   getChatSessionSnapshot,
@@ -25,10 +28,19 @@ import { readNewSessionPreferences } from '@/features/chat/session/new-session-p
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
 
+export interface ProjectSessionPreparation {
+  project: Project;
+  agentId: string;
+  temporary: boolean;
+  create: (mode: NonNullable<SessionCreateRequest['executionMode']>) => Promise<void>;
+}
+
 export function useChatSessionInit(opts: {
   token: string | undefined;
   isNewRoute: boolean;
   forceNewChat: boolean;
+  temporary?: boolean;
+  requestedAgentId?: string;
   decodedKey: string | undefined;
   locationKey: string;
   locationSearch: string;
@@ -55,11 +67,13 @@ export function useChatSessionInit(opts: {
     },
   ) => void;
   patchInitUi: (patch: { loading?: boolean; error?: string | null }) => void;
-}): void {
+}): ProjectSessionPreparation | null {
   const {
     token,
     isNewRoute,
     forceNewChat,
+    temporary = false,
+    requestedAgentId,
     decodedKey,
     locationKey,
     locationSearch,
@@ -75,6 +89,8 @@ export function useChatSessionInit(opts: {
   } = opts;
 
   const initGenRef = useRef(0);
+  const baseUrl = useGatewayStore((state) => state.baseUrl);
+  const [preparation, setPreparation] = useState<(ProjectSessionPreparation & { requestKey: string; token: string; baseUrl: string }) | null>(null);
   const newRouteLocationSearch = isNewRoute ? locationSearch : '';
   const requestKey = isNewRoute
     ? `new:${locationKey}`
@@ -84,8 +100,8 @@ export function useChatSessionInit(opts: {
 
   // Session initialization is a route operation. Runtime callbacks may change
   // as Agent/config data arrives, but that must not restart history hydration.
-  const requestRef = useRef({ isNewRoute, forceNewChat, decodedKey, newRouteLocationSearch });
-  requestRef.current = { isNewRoute, forceNewChat, decodedKey, newRouteLocationSearch };
+  const requestRef = useRef({ isNewRoute, forceNewChat, temporary, requestedAgentId, decodedKey, newRouteLocationSearch });
+  requestRef.current = { isNewRoute, forceNewChat, temporary, requestedAgentId, decodedKey, newRouteLocationSearch };
   const runtimeRef = useRef({
     sessionMgrRef,
     resolveAgentIdForPost,
@@ -134,7 +150,7 @@ export function useChatSessionInit(opts: {
         });
     };
 
-    const createNewRouteSession = (): Promise<void> => {
+    const createNewRouteSession = async (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
       const preferences = readNewSessionPreferences();
       const aid = runtime.resolveAgentIdForPost();
@@ -142,8 +158,9 @@ export function useChatSessionInit(opts: {
         {
           origin: 'web-route',
           project: projectIntentForNewChatHandoff(request.newRouteLocationSearch),
-          agentId: aid,
+          agentId: request.requestedAgentId ?? aid,
           forceNew: request.forceNewChat,
+          temporary: request.temporary,
         },
         {
           defaultAgentId: aid ?? 'main',
@@ -151,14 +168,19 @@ export function useChatSessionInit(opts: {
           lastChatScope: preferences.lastChatScope,
         },
       );
+      const project = spec.projectId ? await fetchProject(spec.projectId) : null;
+      if (!isLive()) return;
+      if (!request.requestedAgentId && project?.defaultAgentId) spec.agentId = project.defaultAgentId;
       const modelPreference = modelPreferenceForAgent(preferences, spec.agentId);
-      return openNewChatHandoff({
+      const open = (executionMode?: SessionCreateRequest['executionMode']) => openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,
         agentId: spec.agentId,
         currentSessionKey: lastNonNewSessionKeyRef.current,
         routeSessionKey: null,
         forceNew: spec.forceNew,
+        temporary: spec.temporary,
         projectId: spec.projectId,
+        executionMode,
         initialAgentConfig: modelPreference
           ? {
               model: modelPreference.modelRef,
@@ -167,14 +189,26 @@ export function useChatSessionInit(opts: {
                 : {}),
             }
           : undefined,
-        navigateToSession: runtime.navigateToSession,
+        navigateToSession: (...args) => { if (isLive()) runtime.navigateToSession(...args); },
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(request.newRouteLocationSearch),
         onOpened: (key) => {
+          if (!isLive()) return;
           runtime.adoptEmptySession(key, null);
           applyResolvedSessionConfig(key);
         },
       }).then(() => undefined);
+      if (project?.workspaceRoot?.trim()) {
+        setPreparation({
+          requestKey, token, baseUrl, project, agentId: spec.agentId, temporary: spec.temporary,
+          create: (mode) => {
+            if (!isLive()) return Promise.reject(new Error('New chat request changed'));
+            return open(mode);
+          },
+        });
+        return;
+      }
+      return open();
     };
 
     const resumeSessionRun = (key: string, seed: Message[]): Promise<void> => {
@@ -262,6 +296,9 @@ export function useChatSessionInit(opts: {
     };
   }, [
     token,
+    baseUrl,
     requestKey,
   ]);
+  return isNewRoute && preparation?.requestKey === requestKey && preparation.token === token && preparation.baseUrl === baseUrl
+    ? preparation : null;
 }

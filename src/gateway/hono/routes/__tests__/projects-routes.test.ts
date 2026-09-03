@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -68,6 +69,39 @@ describe('project association routes', () => {
       process.env.XOPC_STATE_DIR = previousStateDir;
     }
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it.each(['local_checkout', 'managed_worktree'] as const)('binds an explicit %s before returning the new session', async (executionMode) => {
+    const repo = join(stateDir, 'repo');
+    mkdirSync(repo);
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
+    git('init');
+    writeFileSync(join(repo, 'code.ts'), 'original');
+    git('add', 'code.ts');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Initial');
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Code', workspaceRoot: repo, executionMode: 'local_checkout' });
+    const app = registerSessionRouteApp({
+      currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }), projects,
+      sessions: { getSession: vi.fn(async (key: string) => ({ key, projectId: project.id })) } as unknown as GatewayService['sessions'],
+      sessionIndexInstance: { saveMessages: vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir); }) } as unknown as GatewayService['sessionIndexInstance'],
+    });
+    const response = await app.request('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: project.id, executionMode }) });
+    expect(response.status).toBe(201);
+    const { session, environment } = await response.json();
+    expect(environment.kind).toBe(executionMode);
+    expect(environment.status).toBe('ready');
+    expect(new ExecutionEnvironmentStore().resolveBinding(session.key)?.environmentId).toBe(environment.id);
+    expect(projects.get(project.id)?.executionMode).toBe('local_checkout');
+    writeFileSync(join(environment.rootPath, 'code.ts'), 'edited');
+    expect(readFileSync(join(repo, 'code.ts'), 'utf8')).toBe(executionMode === 'local_checkout' ? 'edited' : 'original');
+  });
+
+  it('rejects explicit execution modes without a project instead of ignoring them', async () => {
+    const app = registerSessionRouteApp({ currentConfig: ConfigSchema.parse({}), projects: new ProjectService() });
+    const response = await app.request('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ executionMode: 'managed_worktree' }) });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'An execution mode requires a project' });
   });
 
   it.each([true, false])('creates a workspace session with fixed-model initialization success=%s', async (success) => {
