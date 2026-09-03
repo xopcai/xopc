@@ -4,6 +4,7 @@
  * Mirrors web/src/stores/locale-store.ts + theme-store.ts combined,
  * adapted for React Native (no DOM, no View Transitions).
  */
+import { getLocales } from 'expo-localization';
 import { Appearance } from 'react-native';
 import { create } from 'zustand';
 import {
@@ -74,6 +75,15 @@ function isValidLanguage(v: unknown): v is Language {
   return v === 'en' || v === 'zh';
 }
 
+function resolveInitialLanguage(saved: unknown): Language {
+  if (isValidLanguage(saved)) return saved;
+  try {
+    return getLocales()[0]?.languageCode === 'zh' ? 'zh' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
 function isValidThemePref(v: unknown): v is ThemePreference {
   return v === 'light' || v === 'dark' || v === 'system';
 }
@@ -104,7 +114,7 @@ function writePreferencesByGateway(
 
 export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   hydrated: false,
-  language: 'en',
+  language: resolveInitialLanguage(storage.getString(KEYS.language)),
   themePreference: 'system',
   resolvedTheme: resolveTheme('system'),
   defaultAgentId: null,
@@ -188,7 +198,8 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
     const preferencesByGatewayRaw = storage.getString(KEYS.newSessionPreferencesByGateway);
     const notificationsRaw = storage.getString(KEYS.notificationsEnabled);
     const autoReadAloudRaw = storage.getString(KEYS.autoReadAloudEnabled);
-    const language = isValidLanguage(langRaw) ? langRaw : 'en';
+    const language = resolveInitialLanguage(langRaw);
+    if (!isValidLanguage(langRaw)) storage.set(KEYS.language, language);
     const themePreference = isValidThemePref(themeRaw) ? themeRaw : 'system';
     const clipboardIntakeEnabled = clipboardRaw === 'true';
     const defaultAgentId = agentRaw?.trim().toLowerCase() || null;
