@@ -2,12 +2,17 @@ import { sessionInputFingerprint } from '@xopcai/gateway-contract';
 import { randomUUID } from 'expo-crypto';
 
 import type { WireAttachment } from '../chat/composer.types';
-
 import { storage } from '../../storage/mmkv';
+import { useGatewayStore } from '../../stores/gateway-store';
+import { readCachedSessionDetail } from './session-detail-cache';
+import { emitGatewayEvent } from './gateway-event-bus';
 
 export type PendingSessionInput = {
-  version: 1;
+  version: 2;
+  gatewayId: string;
   sessionKey: string;
+  expectedSessionId?: string;
+  needsReview?: boolean;
   taskId?: string;
   clientMessageId: string;
   fingerprint: string;
@@ -16,127 +21,75 @@ export type PendingSessionInput = {
   createdAt: number;
   attemptCount: number;
 };
-
 const MAX_OUTBOX_AGE_MS = 24 * 60 * 60_000;
-const OUTBOX_INDEX_KEY = 'session-input-outbox:index';
-
-function key(sessionKey: string): string {
-  return `session-input-outbox:${sessionKey}`;
+const INDEX = 'session-input-outbox:v2:index';
+export const OUTBOX_CHANGED = 'session-input-outbox-changed';
+const host = () => useGatewayStore.getState().activeGatewayId ?? '';
+const key = (session: string, gatewayId: string) => `session-input-outbox:v2:${encodeURIComponent(gatewayId)}:${encodeURIComponent(session)}`;
+function index(): string[] {
+  try { const value: unknown = JSON.parse(storage.getString(INDEX) ?? '[]'); return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []; }
+  catch { return []; }
 }
-
-function readIndex(): string[] {
-  try {
-    const value = JSON.parse(storage.getString(OUTBOX_INDEX_KEY) ?? '[]') as unknown;
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function updateIndex(sessionKey: string, present: boolean): void {
-  const keys = new Set(readIndex());
-  if (present) keys.add(sessionKey);
-  else keys.delete(sessionKey);
-  if (keys.size > 0) storage.set(OUTBOX_INDEX_KEY, JSON.stringify([...keys]));
-  else storage.delete(OUTBOX_INDEX_KEY);
-}
-
-function persistentAttachment(attachment: WireAttachment): WireAttachment {
-  const persisted: WireAttachment = {
-    type: attachment.type,
-    mimeType: attachment.mimeType,
-    uri: attachment.uri,
-    localUri: attachment.localUri,
-    name: attachment.name,
-    size: attachment.size,
-    workspaceRelativePath: attachment.workspaceRelativePath,
-    durationSeconds: attachment.durationSeconds,
-  };
-  if (!persisted.uri && !persisted.localUri && !persisted.workspaceRelativePath) {
-    throw new Error(`Attachment is not available for reliable delivery: ${attachment.name ?? 'unnamed'}`);
-  }
-  return persisted;
-}
-
-export function readPendingSessionInput(sessionKey: string): PendingSessionInput | null {
-  try {
-    const raw = storage.getString(key(sessionKey));
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as Partial<PendingSessionInput>;
-    if (
-      entry.version !== 1 ||
-      entry.sessionKey !== sessionKey ||
-      typeof entry.clientMessageId !== 'string' ||
-      typeof entry.fingerprint !== 'string' ||
-      typeof entry.content !== 'string' ||
-      !Array.isArray(entry.attachments) ||
-      typeof entry.createdAt !== 'number' ||
-      typeof entry.attemptCount !== 'number'
-    ) {
-      storage.delete(key(sessionKey));
-      updateIndex(sessionKey, false);
-      return null;
-    }
-    if (Date.now() - entry.createdAt > MAX_OUTBOX_AGE_MS) {
-      storage.delete(key(sessionKey));
-      updateIndex(sessionKey, false);
-      return null;
-    }
-    updateIndex(sessionKey, true);
-    return entry as PendingSessionInput;
-  } catch {
-    storage.delete(key(sessionKey));
-    updateIndex(sessionKey, false);
-    return null;
-  }
-}
-
-export function enqueueSessionInput(
-  sessionKey: string,
-  content: string,
-  attachments: WireAttachment[] = [],
-  taskId?: string,
-): PendingSessionInput {
-  const persistedAttachments = attachments.map(persistentAttachment);
-  const fingerprint = sessionInputFingerprint({ content, attachments: persistedAttachments });
-  const existing = readPendingSessionInput(sessionKey);
-  if (existing?.fingerprint === fingerprint) return existing;
-  if (existing) throw new Error('A message is already waiting to be sent');
-
-  const entry: PendingSessionInput = {
-    version: 1,
-    sessionKey,
-    ...(taskId?.trim() ? { taskId: taskId.trim() } : {}),
-    clientMessageId: randomUUID(),
-    fingerprint,
-    content,
-    attachments: persistedAttachments,
-    createdAt: Date.now(),
-    attemptCount: 0,
-  };
-  storage.set(key(sessionKey), JSON.stringify(entry));
-  updateIndex(sessionKey, true);
+function save(entry: PendingSessionInput): PendingSessionInput {
+  const id = key(entry.sessionKey, entry.gatewayId);
+  storage.set(id, JSON.stringify(entry));
+  storage.set(INDEX, JSON.stringify([...new Set([...index(), id])]));
+  emitGatewayEvent(OUTBOX_CHANGED, { gatewayId: entry.gatewayId, sessionKey: entry.sessionKey });
   return entry;
 }
-
+export function readPendingSessionInput(sessionKey: string, gatewayId = host()): PendingSessionInput | null {
+  try {
+    const value = JSON.parse(storage.getString(key(sessionKey, gatewayId)) ?? 'null') as PendingSessionInput | null;
+    if (!value || value.version !== 2 || value.gatewayId !== gatewayId || value.sessionKey !== sessionKey
+      || typeof value.clientMessageId !== 'string' || typeof value.content !== 'string' || !Array.isArray(value.attachments)) return null;
+    // Retain expired content for explicit review; never silently discard work.
+    return Date.now() - value.createdAt > MAX_OUTBOX_AGE_MS ? { ...value, needsReview: true } : value;
+  } catch { return null; }
+}
+export function enqueueSessionInput(sessionKey: string, content: string, attachments: WireAttachment[] = [], taskId?: string): PendingSessionInput {
+  const gatewayId = host();
+  if (!gatewayId) throw new Error('No work computer selected');
+  const fingerprint = sessionInputFingerprint({ content, attachments });
+  const existing = readPendingSessionInput(sessionKey, gatewayId);
+  if (existing?.fingerprint === fingerprint) return existing;
+  if (existing) throw new Error('A message is already waiting to be sent');
+  const persistent = attachments.map(({ data: _data, ...attachment }) => {
+    if (!attachment.uri && !attachment.localUri && !attachment.workspaceRelativePath) throw new Error('Attachment is unavailable');
+    return attachment;
+  });
+  return save({ version: 2, gatewayId, sessionKey, expectedSessionId: readCachedSessionDetail(gatewayId, sessionKey)?.sessionId,
+    ...(taskId?.trim() ? { taskId: taskId.trim() } : {}), clientMessageId: randomUUID(), fingerprint,
+    content, attachments: persistent, createdAt: Date.now(), attemptCount: 0 });
+}
 export function markSessionInputAttempt(entry: PendingSessionInput): PendingSessionInput {
-  const current = readPendingSessionInput(entry.sessionKey);
+  const current = readPendingSessionInput(entry.sessionKey, entry.gatewayId);
   if (!current || current.clientMessageId !== entry.clientMessageId) return entry;
-  const updated = { ...current, attemptCount: current.attemptCount + 1 };
-  storage.set(key(entry.sessionKey), JSON.stringify(updated));
-  return updated;
+  return save({ ...current, attemptCount: current.attemptCount + 1 });
 }
-
-export function completeSessionInput(sessionKey: string, clientMessageId: string): void {
-  const entry = readPendingSessionInput(sessionKey);
-  if (entry?.clientMessageId === clientMessageId) {
-    storage.delete(key(sessionKey));
-    updateIndex(sessionKey, false);
-  }
+export function updatePendingSessionInput(entry: PendingSessionInput, patch: Partial<Pick<PendingSessionInput, 'attachments' | 'expectedSessionId' | 'needsReview' | 'createdAt'>>): PendingSessionInput {
+  const current = readPendingSessionInput(entry.sessionKey, entry.gatewayId);
+  return current?.clientMessageId === entry.clientMessageId ? save({ ...current, ...patch }) : entry;
 }
-
+export function completeSessionInput(sessionKey: string, clientMessageId: string, gatewayId = host()): void {
+  const entry = readPendingSessionInput(sessionKey, gatewayId);
+  if (entry?.clientMessageId !== clientMessageId) return;
+  const id = key(sessionKey, gatewayId);
+  storage.delete(id);
+  storage.set(INDEX, JSON.stringify(index().filter(k => k !== id)));
+  emitGatewayEvent(OUTBOX_CHANGED, { gatewayId, sessionKey });
+}
 export function listPendingSessionInputKeys(): string[] {
-  return readIndex().filter((sessionKey) => readPendingSessionInput(sessionKey) !== null);
+  return index().flatMap(id => {
+    try {
+      const entry = JSON.parse(storage.getString(id) ?? 'null') as PendingSessionInput | null;
+      return entry?.gatewayId === host() && readPendingSessionInput(entry.sessionKey) ? [entry.sessionKey] : [];
+    } catch { return []; }
+  });
+}
+/** Legacy records have no reliable computer identity. They are recoverable drafts only. */
+export function readLegacySessionInput(sessionKey: string): { content: string; attachments: WireAttachment[] } | null {
+  try {
+    const entry = JSON.parse(storage.getString(`session-input-outbox:${sessionKey}`) ?? 'null');
+    return entry?.version === 1 && typeof entry.content === 'string' && Array.isArray(entry.attachments) ? entry : null;
+  } catch { return null; }
 }

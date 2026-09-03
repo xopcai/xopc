@@ -5,6 +5,7 @@ import { KEYS, storage } from '../storage/mmkv';
 import { activeGatewayRoute, parseGatewayProfile, type GatewayProfile } from './gateway-types';
 
 export type GatewayState = {
+  connectionGeneration: number;
   profiles: GatewayProfile[];
   activeGatewayId: string | null;
   accessToken: string | null;
@@ -51,6 +52,7 @@ function readProfiles(): GatewayProfile[] {
 }
 
 export const useGatewayStore = create<GatewayState>((set, get) => ({
+  connectionGeneration: 0,
   profiles: [],
   activeGatewayId: null,
   accessToken: null,
@@ -63,7 +65,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
     const activeGatewayId = profiles.some((profile) => profile.gatewayId === storedId)
       ? storedId
       : profiles[0]?.gatewayId ?? null;
-    set({ profiles, activeGatewayId, accessToken: null, accessTokenExpiresAt: 0, unauthorized: false });
+    set({ profiles, activeGatewayId, accessToken: null, accessTokenExpiresAt: 0, unauthorized: false, connectionGeneration: get().connectionGeneration + 1 });
     persistProfiles(profiles, activeGatewayId);
   },
 
@@ -82,7 +84,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
 
   savePairedProfile: (profile, accessToken, accessTokenExpiresAt) => {
     const profiles = [profile, ...get().profiles.filter((item) => item.gatewayId !== profile.gatewayId)];
-    set({ profiles, activeGatewayId: profile.gatewayId, accessToken, accessTokenExpiresAt, unauthorized: false });
+    set({ profiles, activeGatewayId: profile.gatewayId, accessToken, accessTokenExpiresAt, unauthorized: false, connectionGeneration: get().connectionGeneration + 1 });
     persistProfiles(profiles, profile.gatewayId);
   },
 
@@ -104,6 +106,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
     set({
       profiles,
       activeGatewayId,
+      connectionGeneration: get().connectionGeneration + (wasActive ? 1 : 0),
       ...(wasActive ? { accessToken: null, accessTokenExpiresAt: 0, unauthorized: false } : {}),
     });
     persistProfiles(profiles, activeGatewayId);
@@ -111,7 +114,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
 
   activateProfile: (gatewayId) => {
     if (!get().profiles.some((profile) => profile.gatewayId === gatewayId)) return;
-    set({ activeGatewayId: gatewayId, accessToken: null, accessTokenExpiresAt: 0, unauthorized: false });
+    set({ activeGatewayId: gatewayId, accessToken: null, accessTokenExpiresAt: 0, unauthorized: false, connectionGeneration: get().connectionGeneration + 1 });
     persistProfiles(get().profiles, gatewayId);
   },
 

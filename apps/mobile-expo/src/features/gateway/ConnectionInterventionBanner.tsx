@@ -5,6 +5,7 @@ import { Icon, Text } from 'react-native-paper';
 import { useMessages } from '../../i18n/messages';
 import { useTheme } from '../../theme';
 
+import { requestMobileRealtimeReconnect } from './use-gateway-realtime';
 import { copyForConnectionState, useConnectionState } from './connection-state';
 
 export type ConnectionInterventionBannerProps = {
@@ -20,11 +21,13 @@ export const ConnectionInterventionBanner = memo(function ConnectionIntervention
   const m = useMessages();
   const { colors } = useTheme();
   const state = useConnectionState();
-  const visible = state.kind === 'token-invalid' || state.kind === 'unconfigured';
+  const visible = state.kind !== 'ok-direct';
+  const color = state.kind === 'token-invalid' ? colors.semantic.errorBold : colors.text.secondary;
 
   const onPress = useCallback(() => {
     if (state.kind === 'token-invalid') onReconnect?.();
     else if (state.kind === 'unconfigured') onOpenSettings?.();
+    else requestMobileRealtimeReconnect();
   }, [onOpenSettings, onReconnect, state.kind]);
 
   if (!visible) return null;
@@ -38,28 +41,28 @@ export const ConnectionInterventionBanner = memo(function ConnectionIntervention
         styles.banner,
         {
           backgroundColor: colors.surface.input,
-          borderBottomColor: colors.semantic.errorBold,
+          borderBottomColor: color,
         },
       ]}
     >
       <Icon
         source={state.kind === 'token-invalid' ? 'lock-alert' : 'link-variant-off'}
         size={16}
-        color={colors.semantic.errorBold}
+        color={color}
       />
       <View style={styles.copy}>
-        <Text style={[styles.message, { color: colors.semantic.errorBold }]} numberOfLines={2}>
+        <Text style={[styles.message, { color }]} numberOfLines={2}>
           {copy.long}
         </Text>
       </View>
-      <Text style={[styles.action, { color: colors.semantic.errorBold }]}>{copy.actionLabel}</Text>
+      <Text style={[styles.action, { color }]}>{copy.actionLabel}</Text>
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
   banner: {
-    minHeight: 42,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,

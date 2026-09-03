@@ -15,6 +15,7 @@ import { themedStackScreenOptions } from '@/lib/stack-screen-theme';
 import { createPaperTheme, getColors } from '@/theme';
 import { GatewayConnectLandingContext } from '@/features/gateway/gateway-connect-context';
 import { GatewayConnectLandingModal } from '@/features/gateway/GatewayConnectLandingModal';
+import { useDevicePairingFlow } from '@/features/gateway/pair-gateway';
 import { useGatewayConnectionWatch } from '@/features/gateway/use-gateway-connection-watch';
 import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
 import { useSessionInputOutboxFlush } from '@/features/gateway/use-session-input-outbox-flush';
@@ -35,7 +36,6 @@ import { mobileAppJsStartedAt, recordPerformanceEvent } from '@/product/usage-me
 import { GlobalReadAloudPlayer } from '@/features/voice/GlobalReadAloudPlayer';
 import { clearStaleReadAloudCache } from '@/features/voice/read-aloud-cache';
 import { clearStaleReadAloudLiveActivities } from '@/features/voice/read-aloud-live-activity';
-
 import { DataSharingConsentDialog } from '@/features/privacy/DataSharingConsentDialog';
 
 export default function RootLayout() {
@@ -49,6 +49,8 @@ export default function RootLayout() {
   const configured = useGatewayConfigured();
   const unauthorized = useGatewayStore((s) => s.unauthorized);
   const [userDismissedConnect, setUserDismissedConnect] = useState(false);
+  const [manualConnectOpen, setManualConnectOpen] = useState(false);
+  const pairingActive = useDevicePairingFlow(s => s.progress !== null || s.error !== null);
   const [secondaryServicesReady, setSecondaryServicesReady] = useState(false);
 
   useGatewayRealtime();
@@ -89,7 +91,7 @@ export default function RootLayout() {
     if (configured) setUserDismissedConnect(false);
   }, [configured]);
 
-  /** 401 — force gateway landing until credentials are fixed. */
+  /** Offer repair once; cached work remains available when dismissed. */
   useEffect(() => {
     if (unauthorized) setUserDismissedConnect(false);
   }, [unauthorized]);
@@ -116,17 +118,18 @@ export default function RootLayout() {
   }, [router]);
 
   const connectLandingVisible =
-    (!configured && !userDismissedConnect) || unauthorized;
+    !configured || pairingActive || manualConnectOpen || (unauthorized && !userDismissedConnect);
 
   const openGatewayConnectLanding = useCallback(() => {
+    setManualConnectOpen(true);
     setUserDismissedConnect(false);
   }, []);
 
   const onConnectLandingClose = useCallback(() => {
-    if (useGatewayStore.getState().unauthorized) return;
+    setManualConnectOpen(false);
+    useDevicePairingFlow.setState({ error: null });
     setUserDismissedConnect(true);
-    router.replace('/');
-  }, [router]);
+  }, []);
   const gatewayConnectCtx = useMemo(
     () => ({ openGatewayConnectLanding }),
     [openGatewayConnectLanding],

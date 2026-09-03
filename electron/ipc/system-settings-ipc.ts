@@ -20,6 +20,7 @@ import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, 
 import { rawMediaAccessStatus, tccToTriState } from './shell-permission-gates.js';
 import { openMacosPrivacyPane, openWinPrivacyPane } from './privacy-deep-links.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
+import { hasSystemTray } from '../tray.js';
 import { normalizeElectronUiLanguage, type ElectronUiLanguage } from '../i18n.js';
 
 const execFileAsync = promisify(execFile);
@@ -30,6 +31,7 @@ const MICROPHONE_PERMISSION_PROMPT_TIMEOUT_MS = 15_000;
 const LINUX_HELP_URL = 'https://xopcai.github.io/xopc/';
 
 type ElectronShellPreferences = {
+  runInBackground: boolean;
   keepAwakePreferred: boolean;
   notifyEnabled: boolean;
   notifySoundEnabled: boolean;
@@ -42,6 +44,7 @@ type EndpointNotificationInput = { title: string; body: string };
 type ProductNotificationInput = EndpointNotificationInput & { id: string; target: NotificationTarget };
 
 const defaultPrefs: ElectronShellPreferences = {
+  runInBackground: process.platform === 'darwin',
   keepAwakePreferred: false,
   notifyEnabled: true,
   notifySoundEnabled: true,
@@ -67,6 +70,7 @@ async function readPrefsFile(): Promise<ElectronShellPreferences> {
     const raw = await readFile(path, 'utf-8');
     const j = JSON.parse(raw) as Partial<ElectronShellPreferences>;
     return {
+      runInBackground: typeof j.runInBackground === 'boolean' ? j.runInBackground : defaultPrefs.runInBackground,
       keepAwakePreferred: typeof j.keepAwakePreferred === 'boolean' ? j.keepAwakePreferred : defaultPrefs.keepAwakePreferred,
       notifyEnabled: typeof j.notifyEnabled === 'boolean' ? j.notifyEnabled : defaultPrefs.notifyEnabled,
       notifySoundEnabled: typeof j.notifySoundEnabled === 'boolean' ? j.notifySoundEnabled : defaultPrefs.notifySoundEnabled,
@@ -589,6 +593,8 @@ function getBehaviorState(): SystemSettingsBehavior {
   return {
     platform: process.platform as 'darwin' | 'win32' | 'linux',
     packaged: app.isPackaged,
+    runInBackground: prefs.runInBackground,
+    backgroundSupported: hasSystemTray(),
     openAtLogin: login.openAtLogin,
     openAsHidden: login.openAsHidden ?? false,
     keepAwakeEnabled: powerBlockerId != null,
@@ -634,6 +640,7 @@ export function registerSystemSettingsIpc(
     async (
       _e: IpcMainInvokeEvent,
       patch: Partial<{
+        runInBackground: boolean;
         openAtLogin: boolean;
         openAsHidden: boolean;
         keepAwakePreferred: boolean;
@@ -648,6 +655,11 @@ export function registerSystemSettingsIpc(
           openAtLogin: typeof patch.openAtLogin === 'boolean' ? patch.openAtLogin : cur.openAtLogin,
           openAsHidden: typeof patch.openAsHidden === 'boolean' ? patch.openAsHidden : (cur.openAsHidden ?? false),
         });
+      }
+      if (typeof patch.runInBackground === 'boolean') {
+        if (patch.runInBackground && !hasSystemTray()) throw new Error('Background mode requires a system tray');
+        prefs = { ...prefs, runInBackground: patch.runInBackground };
+        await writePrefsFile(prefs);
       }
       if (typeof patch.keepAwakePreferred === 'boolean') {
         prefs = { ...prefs, keepAwakePreferred: patch.keepAwakePreferred };
@@ -823,3 +835,5 @@ export function registerSystemSettingsIpc(
     },
   );
 }
+
+export function shouldKeepAppInBackground(): boolean { return prefs.runInBackground && hasSystemTray(); }

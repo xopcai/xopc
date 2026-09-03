@@ -314,6 +314,7 @@ export function SystemSettingsPanel() {
 
   const patchBehavior = async (patch: {
     openAtLogin?: boolean;
+    runInBackground?: boolean;
     keepAwakePreferred?: boolean;
     notifyEnabled?: boolean;
     notifySoundEnabled?: boolean;
@@ -500,6 +501,14 @@ export function SystemSettingsPanel() {
           {t.behaviorGroup}
         </div>
         <div className="space-y-2">
+          <label className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5">
+            <div>
+              <div className="text-sm font-medium text-fg">{m.endpointToolsSettings.mobileAccess.flow.background}</div>
+              <p className="text-xs text-fg-muted">{m.endpointToolsSettings.mobileAccess.flow.sleep}</p>
+            </div>
+            <input type="checkbox" className="ui-checkbox" disabled={!behavior?.backgroundSupported}
+              checked={Boolean(behavior?.runInBackground)} onChange={e => void patchBehavior({ runInBackground: e.target.checked })} />
+          </label>
           <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
             <div>
               <div className="text-sm font-medium text-fg">{t.toggles.openAtLogin}</div>

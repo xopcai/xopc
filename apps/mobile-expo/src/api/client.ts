@@ -72,15 +72,16 @@ export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promis
   const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, recoverRouteOnNetworkError, ...requestInit } = init;
   const method = (requestInit.method ?? 'GET').toUpperCase();
   const gatewayId = useGatewayStore.getState().activeGatewayId;
+  const generation = useGatewayStore.getState().connectionGeneration;
   await authorizeMobileRequest(path, method, requestInit.signal);
   const canFailOver = recoverRouteOnNetworkError === true || method === 'GET' || method === 'HEAD';
   let token = await getDeviceAccessToken();
-  if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+  if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
   let refreshedAfterUnauthorized = false;
   let lastError: unknown;
 
   for (const route of routeCandidates(canFailOver)) {
-    if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+    if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
     const headers = new Headers(requestInit.headers);
     if (!headers.has('Content-Type') && typeof requestInit.body === 'string') headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${token}`);
@@ -89,14 +90,14 @@ export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promis
     try {
       let response = await fetchRoute(url, { ...requestInit, headers }, timeoutMs);
       if (response.status === 401 && !refreshedAfterUnauthorized) {
-        if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+        if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
         token = await refreshDeviceAccessToken();
-        if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+        if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
         refreshedAfterUnauthorized = true;
         headers.set('Authorization', `Bearer ${token}`);
         response = await fetchRoute(url, { ...requestInit, headers }, timeoutMs);
       }
-      if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+      if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
       recordConnectionEvent({
         kind: 'apiFetch', ok: response.ok, url, latencyMs: Date.now() - startedAt,
         network: getNetworkSnapshot().key, reason: response.ok ? undefined : `http_${response.status}`,
@@ -110,7 +111,7 @@ export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promis
     } catch (error) {
       if (requestInit.signal?.aborted) throw error;
       lastError = error;
-      if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+      if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
       recordConnectionEvent({
         kind: 'apiFetch', ok: false, url, reason: classifyFetchError(error),
         message: error instanceof Error ? error.message : String(error), network: getNetworkSnapshot().key,
@@ -137,12 +138,13 @@ export async function apiUploadFile(path: string, options: ApiFileUploadOptions)
   if ((file.size ?? 0) <= 0) throw new Error('Recording file is empty');
 
   const gatewayId = useGatewayStore.getState().activeGatewayId;
+  const generation = useGatewayStore.getState().connectionGeneration;
   await authorizeMobileRequest(path, 'POST', options.signal);
   const token = await getDeviceAccessToken();
-  if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+  if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
   let lastError: unknown;
   for (const route of routeCandidates(options.recoverRouteOnNetworkError === true)) {
-    if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+    if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     new Headers(options.headers).forEach((value, key) => { headers[key] = value; });
     const url = `${route.url}${path.startsWith('/') ? path : `/${path}`}`;
@@ -158,7 +160,7 @@ export async function apiUploadFile(path: string, options: ApiFileUploadOptions)
         httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: options.fieldName,
         mimeType: options.mimeType, parameters: options.parameters, headers, signal: controller.signal,
       });
-      if (useGatewayStore.getState().activeGatewayId !== gatewayId) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+      if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
       const response = new Response(result.body, { status: result.status, headers: result.headers });
       if (response.status === 401) useGatewayStore.getState().onUnauthorized();
       if (response.ok && route.id !== useGatewayStore.getState().getActiveProfile()?.activeRouteId) {

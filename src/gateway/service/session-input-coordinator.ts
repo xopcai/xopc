@@ -1,3 +1,4 @@
+import { SessionInstanceChangedError } from '../../storage/sqlite/session-input-repository.js';
 import crypto from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
@@ -44,6 +45,7 @@ function contextRefsMatchFrozenSnapshot(
 }
 
 export type SubmitSessionInput = {
+  expectedSessionId?: string;
   sessionKey: string;
   clientMessageId: string;
   delivery: SessionInputDelivery;
@@ -109,10 +111,15 @@ export class SessionInputCoordinator {
 
   async submit(input: SubmitSessionInput): Promise<
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' }
+    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
     const sessionKey = input.sessionKey.trim();
-    return this.runSubmissionExclusive(sessionKey, () => this.submitLocked({ ...input, sessionKey }));
+    try {
+      return await this.runSubmissionExclusive(sessionKey, () => this.submitLocked({ ...input, sessionKey }));
+    } catch (error) {
+      if (error instanceof SessionInstanceChangedError) return { ok: false, code: 'SESSION_CHANGED' };
+      throw error;
+    }
   }
 
   async replaceLatestTurn(
@@ -181,7 +188,7 @@ export class SessionInputCoordinator {
 
   private async submitLocked(input: SubmitSessionInput): Promise<
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
-    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' }
+    | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
     const sessionKey = input.sessionKey;
     const clientMessageId = input.clientMessageId.trim();
@@ -215,6 +222,7 @@ export class SessionInputCoordinator {
       && !sourceContexts?.length;
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
     const row = insertSessionInput({
+      expectedSessionId: input.expectedSessionId,
       id: crypto.randomUUID(),
       sessionKey,
       clientMessageId,
