@@ -188,7 +188,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: xopc-ios-production
-          path: apps/mobile-expo/dist/xopc.ipa
+          path: |
+            apps/mobile-expo/dist/xopc.ipa
+            apps/mobile-expo/dist/ios/verification.json
           if-no-files-found: error
           retention-days: 30
 

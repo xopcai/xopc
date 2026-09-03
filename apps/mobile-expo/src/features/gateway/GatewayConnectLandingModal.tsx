@@ -1,4 +1,5 @@
 import { useCameraPermissions } from 'expo-camera';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { BackHandler, Modal, StyleSheet, View } from 'react-native';
@@ -12,7 +13,8 @@ import { switchGatewayProfile } from './gateway-switch-service';
 import { GatewayQrScannerModal, requestGatewayQrCameraAccess } from './GatewayQrScannerModal';
 import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import { pairWithGateway } from './pair-gateway';
-import type { ParsedGatewayQr } from './parse-gateway-qr';
+import { parseGatewayQrPayload, type ParsedGatewayQr } from './parse-gateway-qr';
+import { PrivacyScreen } from '../privacy/PrivacyScreen';
 
 export type GatewayConnectLandingModalProps = { visible: boolean; onRequestClose: () => void };
 
@@ -26,6 +28,7 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   const profiles = useGatewayStore((state) => state.profiles);
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -53,6 +56,14 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
       .catch((cause) => setError(cause instanceof Error ? cause.message : copy.connectFailed))
       .finally(() => setBusy(false));
   }, [copy.connectFailed, router.replace]);
+
+  const pastePairingLink = async () => {
+    try {
+      const pairing = parseGatewayQrPayload(await Clipboard.getStringAsync());
+      if (pairing) connect(pairing);
+      else setError(copy.invalidPairingLink);
+    } catch { setError(copy.invalidPairingLink); }
+  };
 
   const switchProfile = useCallback((gatewayId: string) => {
     setBusy(true);
@@ -85,6 +96,8 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
           <Button mode="contained" icon="qrcode-scan" loading={busy} disabled={busy} onPress={() => void openScanner()}>
             {copy.scanQr}
           </Button>
+          <Button disabled={busy} onPress={() => void pastePairingLink()}>{copy.pastePairingLink}</Button>
+          <Button onPress={() => setPrivacyOpen(true)}>{m.privacy.title}</Button>
           {error ? <Text style={{ color: colors.semantic.errorBold }}>{error}</Text> : null}
           {profiles.filter((profile) => profile.gatewayId !== activeGatewayId).map((profile) => (
             <Button key={profile.gatewayId} mode="outlined" disabled={busy} onPress={() => switchProfile(profile.gatewayId)}>
@@ -92,6 +105,9 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
             </Button>
           ))}
         </View>
+        <Modal visible={privacyOpen} animationType="slide" onRequestClose={() => setPrivacyOpen(false)}>
+          <PrivacyScreen onClose={() => setPrivacyOpen(false)} />
+        </Modal>
         <GatewayQrScannerModal
           embedded
           visible={scannerOpen}

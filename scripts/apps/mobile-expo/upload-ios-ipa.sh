@@ -102,6 +102,10 @@ EOF
   echo "  $IPA_PATH"
 fi
 
+python3 "$SCRIPT_DIR/verify-ios-ipa.py" "$IPA_PATH" \
+  --version "${IOS_MARKETING_VERSION:-$(node -p "require('./app.json').expo.version")}" \
+  --report "$DIST_DIR/ios/verification.json"
+
 if [[ "${SKIP_VALIDATE:-}" != "1" ]]; then
   echo "Validating IPA with altool..."
   xcrun altool --validate-app -f "$IPA_PATH" -t ios \
