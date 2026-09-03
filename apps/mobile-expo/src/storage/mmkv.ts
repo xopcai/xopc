@@ -18,7 +18,6 @@ export const KEYS = {
   noteTags: 'prefs.noteTags',
   usageEvents: 'product.usageEvents',
   homePinnedFocusId: 'home.pinnedFocusId',
-  readAloudConsent: 'voice.readAloudConsent',
 } as const;
 
 export type KeyValueStorage = {

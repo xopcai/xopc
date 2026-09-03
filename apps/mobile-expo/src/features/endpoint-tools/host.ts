@@ -19,6 +19,7 @@ import * as Device from 'expo-device';
 import { Alert, AppState, Platform } from 'react-native';
 
 import { apiFetch } from '@/api/client';
+import { dataSharingConsent } from '../privacy/data-sharing-consent';
 import {
   attachMobileRealtimeEndpoint,
   sendMobileEndpointMessage,
@@ -50,7 +51,8 @@ function formatArguments(args: Record<string, unknown>): string {
     : `${json.slice(0, ARGUMENT_PREVIEW_LIMIT)}\n…`;
 }
 
-function confirm(request: EndpointToolApprovalRequest): Promise<boolean> {
+async function confirm(request: EndpointToolApprovalRequest): Promise<boolean> {
+  try { await dataSharingConsent.ensure(); } catch { return false; }
   const { invocationId, descriptor, arguments: args, deadlineAt, signal } = request;
   if (deadlineAt <= Date.now()) return Promise.resolve(false);
   if (signal.aborted) return Promise.resolve(false);

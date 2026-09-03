@@ -41,6 +41,7 @@ import {
   type PendingSessionInput,
 } from '../features/gateway/session-input-outbox';
 import { usePreferencesStore } from '../stores/preferences-store';
+import { DataSharingConsentError } from '../features/privacy/consent-controller';
 
 async function postSessionInput(path: string, body: string, headers?: Record<string, string>): Promise<Response> {
   let lastError: unknown;
@@ -51,6 +52,7 @@ async function postSessionInput(path: string, body: string, headers?: Record<str
       if (!shouldRetrySessionInputStatus(response.status)) return response;
       lastError = new Error(`Session input temporarily unavailable (${response.status})`);
     } catch (error) {
+      if (error instanceof DataSharingConsentError) throw error;
       lastError = error;
     }
   }
@@ -421,7 +423,10 @@ export class AgentMessageSender {
         ...(attachments.length ? { attachments } : {}),
       }),
       entry.taskId ? { 'X-Xopc-Expected-Session-Key': entry.sessionKey } : undefined,
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof DataSharingConsentError) completeSessionInput(entry.sessionKey, entry.clientMessageId);
+      throw error;
+    });
     if (!res.ok) {
       const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
       completeSessionInput(entry.sessionKey, entry.clientMessageId);

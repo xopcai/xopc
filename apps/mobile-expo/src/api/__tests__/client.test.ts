@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const consent = vi.hoisted(() => ({ authorize: vi.fn(async () => {}) }));
+vi.mock('../../features/privacy/data-sharing-consent', () => ({ authorizeMobileRequest: consent.authorize }));
+
 const gateway = vi.hoisted(() => ({
+  activeGatewayId: 'gateway-1',
   activeRouteId: 'secure-link',
   selectRoute: vi.fn((_: string, routeId: string) => { gateway.activeRouteId = routeId; }),
   profile: {
@@ -41,7 +45,7 @@ vi.mock('../../features/gateway/network-info', () => ({
 vi.mock('../../stores/gateway-store', () => ({
   useGatewayStore: {
     getState: () => ({
-      activeGatewayId: 'gateway-1',
+      activeGatewayId: gateway.activeGatewayId,
       getActiveProfile: () => ({ ...gateway.profile, activeRouteId: gateway.activeRouteId }),
       selectRoute: gateway.selectRoute,
       onUnauthorized: vi.fn(),
@@ -53,6 +57,8 @@ import { apiFetch, apiUploadFile } from '../client';
 
 describe('mobile gateway client', () => {
   beforeEach(() => {
+    gateway.activeGatewayId = 'gateway-1';
+    consent.authorize.mockReset().mockResolvedValue(undefined);
     gateway.activeRouteId = 'secure-link';
     gateway.selectRoute.mockClear();
     nativeFile.exists = true;
@@ -60,6 +66,26 @@ describe('mobile gateway client', () => {
     nativeFile.uris.length = 0;
     nativeFile.upload.mockReset();
     vi.restoreAllMocks();
+  });
+
+  it('does not send content when authorization is denied', async () => {
+    consent.authorize.mockRejectedValue(new Error('Permission declined'));
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    await expect(apiFetch('/api/notes', { method: 'POST', body: '{"title":"private"}' })).rejects.toThrow('Permission declined');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not upload audio when authorization is denied', async () => {
+    consent.authorize.mockRejectedValue(new Error('Permission declined'));
+    await expect(apiUploadFile('/api/voice/transcriptions', { uri: 'file:///voice.m4a', fieldName: 'audio', mimeType: 'audio/mp4' })).rejects.toThrow('Permission declined');
+    expect(nativeFile.upload).not.toHaveBeenCalled();
+  });
+
+  it('does not send a queued payload to a gateway selected during authorization', async () => {
+    consent.authorize.mockImplementation(async () => { gateway.activeGatewayId = 'gateway-2'; });
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    await expect(apiFetch('/api/notes', { method: 'POST', body: '{}' })).rejects.toThrow('Active gateway changed');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('tries secure routes sequentially for a replay-safe write', async () => {

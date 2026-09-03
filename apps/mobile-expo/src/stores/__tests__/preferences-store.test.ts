@@ -65,13 +65,13 @@ describe('usePreferencesStore', () => {
     resetStore();
   });
 
-  it('enables clipboard intake by default', () => {
+  it('leaves clipboard intake off until the user opts in', () => {
     expect(usePreferencesStore.getState().hydrated).toBe(false);
 
     usePreferencesStore.getState().hydrate();
 
     expect(usePreferencesStore.getState().hydrated).toBe(true);
-    expect(usePreferencesStore.getState().clipboardIntakeEnabled).toBe(true);
+    expect(usePreferencesStore.getState().clipboardIntakeEnabled).toBe(false);
   });
 
   it('persists clipboard intake opt-out', () => {
