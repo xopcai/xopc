@@ -1,5 +1,6 @@
 import {
   fileResourceArtifactUri,
+  mergeTurnOutcomeDeliverables,
   parseProductDeliveryEnvelope,
   parseTurnOutcome,
   TurnOutcomeDeliverableSchema,
@@ -53,6 +54,7 @@ function fileDeliverable(
   const available = !failed && managedFile;
   return {
     artifactId: reference.id,
+    ...(managedFile ? { sourceFileId: reference.id } : {}),
     title: reference.title,
     kind: turnOutcomeKindFromFileName(reference.title),
     ...(mimeType ? { mimeType } : {}),
@@ -178,10 +180,11 @@ export function projectTurnOutcome(params: {
   }
 
   const evidenceItems = [...evidence.values()];
-  const artifactItems = [...deliverables.values()];
+  const collectedArtifacts = [...deliverables.values()];
+  const artifactItems = mergeTurnOutcomeDeliverables(collectedArtifacts);
   const partial = failedToolCount > 0
     || evidenceItems.some((item) => item.status === 'failed')
-    || artifactItems.some((item) => item.availability !== 'available');
+    || collectedArtifacts.some((item) => item.availability !== 'available');
   const diff = diffs.join('\n');
   const diffTruncated = diff.length > MAX_OUTCOME_DIFF_CHARS;
   const createdAt = new Date(createdAtMs || Date.now()).toISOString();
@@ -232,7 +235,7 @@ export function backfillStructuredTurnOutcomes(
     const outcome = projectTurnOutcome({ rows, turnId });
     if (outcome.deliverables.length > 0) projected.set(turnId, outcome);
   }
-  if (projected.size === 0) return [...rows];
+  if (projected.size === 0 && existing.size === 0) return [...rows];
 
   const result: TranscriptStoredRow[] = [];
   for (const [index, source] of rows.entries()) {
@@ -240,10 +243,8 @@ export function backfillStructuredTurnOutcomes(
     if (row.type === 'custom' && row.customType === 'turn_outcome') {
       const outcome = parseTurnOutcome(row.data);
       const candidate = outcome ? projected.get(outcome.turnId) : undefined;
-      if (outcome && candidate) {
-        const merged = new Map(outcome.deliverables.map((item) => [item.artifactId, item]));
-        for (const item of candidate.deliverables) merged.set(item.artifactId, item);
-        const deliverables = [...merged.values()];
+      if (outcome) {
+        const deliverables = mergeTurnOutcomeDeliverables([...outcome.deliverables, ...(candidate?.deliverables ?? [])]);
         result.push({
           ...row,
           data: {
@@ -251,7 +252,7 @@ export function backfillStructuredTurnOutcomes(
             deliverables,
             status: outcome.status === 'failed'
               ? 'failed'
-              : deliverables.some((item) => item.availability !== 'available')
+              : candidate?.status === 'partial' || deliverables.some((item) => item.availability !== 'available')
                 ? 'partial'
                 : outcome.status,
           },

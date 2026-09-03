@@ -371,6 +371,7 @@ export function createExecCommandTool(
             details.artifacts = await publishArtifactPaths({
               paths: params.outputs,
               baseDir: policy.effectiveCwd,
+              workspaceRoot: workspaceCwd,
               toolCallId,
             });
             const published = details.artifacts.filter((item) => item.availability === 'available').length;
