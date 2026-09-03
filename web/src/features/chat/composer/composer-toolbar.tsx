@@ -76,13 +76,13 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle',
+        'flex flex-wrap items-center gap-2 px-4 py-2.5',
       )}
     >
       <button
         type="button"
         className={cn(
-          'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+          'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
           interaction.transition,
           interaction.press,
           interaction.focusRingPanel,

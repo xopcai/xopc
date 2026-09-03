@@ -7,6 +7,8 @@ import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/sh
 import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-selector';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { SessionContextPanel, type SessionContextPanelProps } from '@/features/chat/context/session-context-panel';
+import { useSessionContext } from '@/features/chat/context/use-session-context';
+import { ChatWorkspaceControl } from '@/features/chat/workspace/chat-workspace-control';
 import { matchesTerminalShortcut, terminalShortcutLabel } from '@/features/chat/terminal/terminal-shortcut';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -29,6 +31,8 @@ type ChatPageHeaderRegistrationProps = {
   onChatAgentChange: (agentId: string) => void;
   chatAgentDisabled: boolean;
   sessionKey?: string | null;
+  hasMessages?: boolean;
+  workspacePath?: string | null;
   userContextMode?: 'enabled' | 'off' | 'temporary';
   canChangeWorkspace?: boolean;
   workspaceDisabled?: boolean;
@@ -48,6 +52,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   onChatAgentChange,
   chatAgentDisabled,
   sessionKey,
+  hasMessages = false,
+  workspacePath,
   userContextMode = 'enabled',
   canChangeWorkspace = false,
   workspaceDisabled = false,
@@ -61,6 +67,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     ? decodeURIComponent(routeSessionKey)
     : null;
   const activeSessionKey = sessionKey?.trim() || routedSessionKey;
+  const { data: contextSummary, error: contextError, mutate: refreshContext } = useSessionContext(activeSessionKey ?? null, false);
+  const workspaceAvailable = !contextError && (!contextSummary || Boolean(contextSummary.environment?.available));
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const terminalPanelOpen = useTerminalPanelStore((s) => activeSessionKey ? Boolean(s.openBySessionKey[activeSessionKey]) : false);
@@ -159,7 +167,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               {m.chat.temporarySession}
             </span>
           ) : null}
-          {activeSessionKey ? <SessionShareButton sessionKey={activeSessionKey} /> : null}
+          {activeSessionKey && hasMessages ? <SessionShareButton key={`share:${activeSessionKey}`} sessionKey={activeSessionKey} /> : null}
           {activeSessionKey && window.electronAPI?.terminal ? (
             <button
               type="button"
@@ -176,13 +184,24 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             </button>
           ) : null}
           <SessionContextPanel
-            key={activeSessionKey ?? 'new'}
+            key={`context:${activeSessionKey ?? 'new'}`}
             {...context}
             sessionKey={activeSessionKey ?? null}
-            canChangeWorkspace={canChangeWorkspace}
-            workspaceDisabled={workspaceDisabled}
-            onWorkspaceChange={onWorkspaceChange}
           />
+          {activeSessionKey && onWorkspaceChange ? (
+            <ChatWorkspaceControl
+              key={`workspace:${activeSessionKey}`}
+              sessionKey={activeSessionKey}
+              workspacePath={workspacePath}
+              available={workspaceAvailable}
+              canChangeWorkspace={canChangeWorkspace}
+              disabled={workspaceDisabled}
+              onWorkspaceChange={async (path) => {
+                await onWorkspaceChange(path);
+                await refreshContext();
+              }}
+            />
+          ) : null}
         </div>
       ),
     });
@@ -206,6 +225,10 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     context,
     terminalPanelOpen,
     activeSessionKey,
+    hasMessages,
+    workspacePath,
+    workspaceAvailable,
+    refreshContext,
     userContextMode,
     canChangeWorkspace,
     workspaceDisabled,

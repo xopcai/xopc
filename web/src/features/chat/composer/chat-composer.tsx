@@ -11,6 +11,7 @@ import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/compos
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerContextChips } from '@/features/chat/composer/composer-context-chips';
+import { ComposerContextBar, type ComposerContextBarProps } from '@/features/chat/composer/composer-context-bar';
 import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
 import { wireFollowUpAttachmentsToComposer } from '@/features/chat/composer/follow-up-attachments-wire';
@@ -84,6 +85,7 @@ export const ChatComposer = memo(function ChatComposer({
   sending,
   streaming,
   sessionKey,
+  composerContext,
   contextRefs,
   setContextRefs,
   thinkingLevel,
@@ -119,6 +121,7 @@ export const ChatComposer = memo(function ChatComposer({
   sending: boolean;
   streaming: boolean;
   sessionKey: string | null;
+  composerContext?: Omit<ComposerContextBarProps, 'sessionKey' | 'disabled'>;
   contextRefs: ComposerContextRef[];
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   welcomeDraftSeed?: { id: number; text: string } | null;
@@ -543,9 +546,11 @@ export const ChatComposer = memo(function ChatComposer({
       : null;
 
   return (
+    <div className="relative flex min-h-0 w-full flex-col">
+      {composerContext ? <ComposerContextBar {...composerContext} sessionKey={sessionKey} disabled={disabled || sending || streaming} /> : null}
     <div
       className={cn(
-        'relative flex min-h-0 w-full flex-col overflow-hidden rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
+        'relative flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
         att.isDragging && 'ring-2 ring-accent ring-inset',
       )}
       onDragOver={(e) => {
@@ -806,6 +811,7 @@ export const ChatComposer = memo(function ChatComposer({
           setWorkspaceTrustDismissedFor(sessionKey);
         }}
       />
+    </div>
     </div>
   );
 });
