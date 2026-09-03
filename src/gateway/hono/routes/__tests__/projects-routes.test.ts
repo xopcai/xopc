@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityService } from '../../../../activity/index.js';
 import { ConfigSchema } from '../../../../config/schema.js';
+import { ExecutionEnvironmentStore } from '../../../../execution-environments/store.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
@@ -69,6 +70,39 @@ describe('project association routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  it.each([true, false])('creates a workspace session with fixed-model initialization success=%s', async (success) => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Model workspace', workspaceRoot: stateDir });
+    const saveMessages = vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir); });
+    const deleteSession = vi.fn(async () => ({ ok: true }));
+    const app = registerSessionRouteApp({
+      currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }),
+      projects,
+      sessions: {
+        initializeChatModel: vi.fn(async () => success ? { ok: true } : { ok: false, error: 'Invalid model' }),
+        getSession: vi.fn(async (key: string) => ({ key })),
+        delete: deleteSession,
+      } as unknown as GatewayService['sessions'],
+      sessionIndexInstance: { saveMessages } as unknown as GatewayService['sessionIndexInstance'],
+    });
+    const response = await app.request('/api/sessions', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: project.id, initialAgentConfig: { model: 'test/model' } }),
+    });
+    const key = saveMessages.mock.calls[0]![0];
+    if (success) {
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        session: { key }, agentConfig: { fixedModel: true }, environment: { kind: 'local_checkout', rootPath: realpathSync(stateDir) },
+      });
+      expect(new ExecutionEnvironmentStore().resolveBinding(key)).toBeDefined();
+    } else {
+      expect(response.status).toBe(400);
+      expect(deleteSession).toHaveBeenCalledWith(key);
+      expect(new ExecutionEnvironmentStore().resolveBinding(key)).toBeUndefined();
+    }
+  });
+
   it('returns a structured conflict when creating with a missing workspace root', async () => {
     const projects = new ProjectService();
     const workspaceRoot = join(stateDir, 'missing-workspace');
@@ -87,6 +121,25 @@ describe('project association routes', () => {
       error: `Workspace root does not exist: ${workspaceRoot}`,
       workspaceRoot,
     });
+  });
+
+  it('does not delete a project while it still owns an execution environment', async () => {
+    const projects = new ProjectService();
+    const workspaceRoot = join(stateDir, 'protected-project');
+    mkdirSync(workspaceRoot, { recursive: true });
+    const project = projects.create({ workspaceRoot });
+    new ExecutionEnvironmentStore().create({
+      projectId: project.id,
+      kind: 'local_checkout',
+      rootPath: workspaceRoot,
+    });
+    const app = registerProjectRouteApp({ projects });
+
+    const res = await app.request(`/api/projects/${project.id}`, { method: 'DELETE' });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'execution_environments_exist' });
+    expect(projects.get(project.id)).not.toBeNull();
   });
 
   it('does not expose the removed direct project delegation endpoint', async () => {
@@ -344,6 +397,54 @@ describe('project association routes', () => {
     expect(patch).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1', {});
     expect(detachSession).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1');
     expect(getSession).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1');
+  });
+
+  it('requires releasing the execution environment before moving a session', async () => {
+    const sessionKey = 'agent:main:webchat:default:direct:bound-session';
+    const projects = new ProjectService();
+    const oldRoot = join(stateDir, 'old-project');
+    const newRoot = join(stateDir, 'new-project');
+    mkdirSync(oldRoot, { recursive: true });
+    mkdirSync(newRoot, { recursive: true });
+    const oldProject = projects.create({ name: 'Old project', workspaceRoot: oldRoot });
+    const newProject = projects.create({ name: 'New project', workspaceRoot: newRoot });
+    const store = new ExecutionEnvironmentStore();
+    const requested = store.create({
+      projectId: oldProject.id,
+      kind: 'local_checkout',
+      rootPath: oldRoot,
+    });
+    const provisioning = store.transition({
+      environmentId: requested.id,
+      expectedVersion: requested.version,
+      toStatus: 'provisioning',
+      reason: 'test provisioning',
+    });
+    const ready = store.transition({
+      environmentId: requested.id,
+      expectedVersion: provisioning.version,
+      toStatus: 'ready',
+      reason: 'test ready',
+    });
+    store.bind({ sessionKey: sessionKey, environmentId: ready.id });
+    const patch = vi.fn(async () => ({ ok: true as const }));
+    const app = registerSessionRouteApp({
+      sessions: {
+        patch,
+        getSession: vi.fn(async () => ({ key: sessionKey, projectId: oldProject.id })),
+      } as unknown as GatewayService['sessions'],
+      projects,
+    });
+
+    const res = await app.request(`/api/sessions/${sessionKey}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: newProject.id }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'execution_environment_active' });
+    expect(patch).not.toHaveBeenCalled();
   });
 
   it('creates project sessions with the project default agent when no agent is explicit', async () => {

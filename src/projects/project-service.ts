@@ -5,6 +5,7 @@ import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
+import { inferProjectExecutionMode } from './project-kind.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectHealth, ProjectListQuery, ProjectListResult, ProjectMilestone, ProjectUpdate, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
@@ -62,7 +63,13 @@ export class ProjectService {
     }
     const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
     const slug = input.slug?.trim() || this.store.generateSlug(name);
-    const project = this.store.create({ ...input, name, slug, workspaceRoot });
+    const executionMode = input.executionMode ?? inferProjectExecutionMode({
+      name,
+      description: input.description,
+      workspaceRoot,
+      projectKind: input.projectKind,
+    });
+    const project = this.store.create({ ...input, name, slug, workspaceRoot, executionMode });
     emitActivity({
       type: 'project.created',
       primaryObject: { kind: 'project', id: project.id, title: project.name },

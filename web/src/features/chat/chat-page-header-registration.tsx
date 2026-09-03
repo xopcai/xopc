@@ -6,7 +6,7 @@ import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-selector';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
-import { ChatWorkspaceControl } from '@/features/chat/workspace/chat-workspace-control';
+import { SessionContextPanel, type SessionContextPanelProps } from '@/features/chat/context/session-context-panel';
 import { matchesTerminalShortcut, terminalShortcutLabel } from '@/features/chat/terminal/terminal-shortcut';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -29,12 +29,12 @@ type ChatPageHeaderRegistrationProps = {
   onChatAgentChange: (agentId: string) => void;
   chatAgentDisabled: boolean;
   sessionKey?: string | null;
-  workspacePath?: string | null;
   userContextMode?: 'enabled' | 'off' | 'temporary';
   canChangeWorkspace?: boolean;
   workspaceDisabled?: boolean;
   onWorkspaceChange?: (path: string) => Promise<void>;
   projectId?: string | null;
+  context?: Pick<SessionContextPanelProps, 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
 };
 
 /**
@@ -48,12 +48,12 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   onChatAgentChange,
   chatAgentDisabled,
   sessionKey,
-  workspacePath,
   userContextMode = 'enabled',
   canChangeWorkspace = false,
   workspaceDisabled = false,
   onWorkspaceChange,
   projectId,
+  context,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
   const { sessionKey: routeSessionKey } = useParams();
@@ -175,15 +175,14 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               <SquareTerminal className="size-4" />
             </button>
           ) : null}
-          {activeSessionKey && onWorkspaceChange ? (
-            <ChatWorkspaceControl
-              sessionKey={activeSessionKey}
-              workspacePath={workspacePath}
-              canChangeWorkspace={canChangeWorkspace}
-              disabled={workspaceDisabled}
-              onWorkspaceChange={onWorkspaceChange}
-            />
-          ) : null}
+          <SessionContextPanel
+            key={activeSessionKey ?? 'new'}
+            {...context}
+            sessionKey={activeSessionKey ?? null}
+            canChangeWorkspace={canChangeWorkspace}
+            workspaceDisabled={workspaceDisabled}
+            onWorkspaceChange={onWorkspaceChange}
+          />
         </div>
       ),
     });
@@ -204,9 +203,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalShortcut,
     m.sidebar.newTask,
     projectId,
+    context,
     terminalPanelOpen,
     activeSessionKey,
-    workspacePath,
     userContextMode,
     canChangeWorkspace,
     workspaceDisabled,

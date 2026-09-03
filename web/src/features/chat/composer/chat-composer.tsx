@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
@@ -84,6 +84,8 @@ export const ChatComposer = memo(function ChatComposer({
   sending,
   streaming,
   sessionKey,
+  contextRefs,
+  setContextRefs,
   thinkingLevel,
   modelSupportsThinking,
   onThinkingChange,
@@ -117,6 +119,8 @@ export const ChatComposer = memo(function ChatComposer({
   sending: boolean;
   streaming: boolean;
   sessionKey: string | null;
+  contextRefs: ComposerContextRef[];
+  setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   welcomeDraftSeed?: { id: number; text: string } | null;
   welcomeSuggestion?: WelcomeSuggestionSelection | null;
   onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
@@ -166,7 +170,6 @@ export const ChatComposer = memo(function ChatComposer({
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [contextRefs, setContextRefs] = useState<ComposerContextRef[]>([]);
   const [workspaceTrustPrompt, setWorkspaceTrustPrompt] = useState<WorkspaceTrustState | null>(null);
   const [workspaceTrustDismissedFor, setWorkspaceTrustDismissedFor] = useState<string | null>(null);
   const [workspaceTrustSaving, setWorkspaceTrustSaving] = useState(false);
@@ -219,11 +222,7 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
     att.clearAttachments();
-  }, [att.clearAttachments, att.setAttachments]);
-
-  useEffect(() => {
-    setContextRefs([]);
-  }, [sessionKey]);
+  }, [att.clearAttachments, att.setAttachments, setContextRefs]);
 
   const addContextRef = useCallback((ref: ComposerContextRef) => {
     setContextRefs((current) => {
@@ -236,7 +235,7 @@ export const ChatComposer = memo(function ChatComposer({
       }
       return [...current, ref];
     });
-  }, [m.chat.commandPalette.contextLimitReached]);
+  }, [m.chat.commandPalette.contextLimitReached, setContextRefs]);
 
   const onUnavailableSkill = useCallback(
     (item: import('@/features/chat/palette/command-palette.types').PaletteItem) => {
@@ -306,7 +305,7 @@ export const ChatComposer = memo(function ChatComposer({
       onUserTextCommitted?.(command);
       setContextRefs([]);
     },
-    [contextRefs, onUserTextCommitted],
+    [contextRefs, onUserTextCommitted, setContextRefs],
   );
 
   const pickers = useComposerPickers({
@@ -498,6 +497,7 @@ export const ChatComposer = memo(function ChatComposer({
     onThinkingChange,
     pendingFollowUps,
     modelSupportsThinking,
+    setContextRefs,
   ]);
 
   const openFollowUpInComposer = useCallback(

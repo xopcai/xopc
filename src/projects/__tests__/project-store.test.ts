@@ -219,6 +219,22 @@ describe('ProjectService', () => {
     expect(inference.confidence).toBeGreaterThan(0.7);
   });
 
+  it('defaults coding Git projects to managed worktrees', () => {
+    const workspaceRoot = join(stateDir, 'coding-repository');
+    mkdirSync(join(workspaceRoot, '.git'), { recursive: true });
+    writeFileSync(join(workspaceRoot, 'package.json'), '{"name":"coding-repository"}');
+
+    expect(projects.create({ workspaceRoot }).executionMode).toBe('managed_worktree');
+  });
+
+  it('defaults non-Git projects to the local checkout', () => {
+    const workspaceRoot = join(stateDir, 'local-project');
+    mkdirSync(workspaceRoot, { recursive: true });
+    writeFileSync(join(workspaceRoot, 'package.json'), '{"name":"local-project"}');
+
+    expect(projects.create({ workspaceRoot }).executionMode).toBe('local_checkout');
+  });
+
   it('does not treat version control metadata alone as a coding project', () => {
     const workspaceRoot = join(stateDir, 'notes-repository');
     mkdirSync(join(workspaceRoot, '.git'), { recursive: true });

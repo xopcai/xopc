@@ -79,35 +79,3 @@ export const TaskSessionBanner = memo(function TaskSessionBanner({
     </section>
   );
 });
-
-/** Mobile task context uses the same single-line treatment as project context. */
-export const TaskSessionScopeBar = memo(function TaskSessionScopeBar({
-  taskId,
-}: {
-  taskId: string;
-}) {
-  const location = useLocation();
-  const language = useLocaleStore((state) => state.language);
-  const copy = taskCopy(language);
-  const { data } = useTaskDetail(taskId);
-
-  if (!data) return null;
-
-  return (
-    <div
-      className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 md:hidden"
-      aria-label={copy.taskProgress.title}
-      aria-live="polite"
-    >
-      <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-        <Target className="size-3.5 shrink-0 text-accent-fg" strokeWidth={1.75} aria-hidden />
-        <Link
-          to={taskDetailModalHref(`${location.pathname}${location.search}`, data.task.id)}
-          className="min-w-0 truncate font-medium text-fg transition-colors hover:text-accent-fg"
-        >
-          {copy.taskProgress.title}: {data.task.title}
-        </Link>
-      </div>
-    </div>
-  );
-});

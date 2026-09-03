@@ -14,6 +14,6 @@ This directory contains long-lived architectural decisions for xopc. ADRs descri
 | ADR | Status | Decision |
 |---|---|---|
 | [0002](./0002-local-app-platform.md) | Proposed | Model user-created Local Apps as Projects with immutable releases and capability-scoped runtimes |
+| [0003](./0003-execution-environments.md) | Accepted | Use durable execution environments and exclusive bindings for local checkouts and managed Git worktrees |
 
 ADR number 0001 was used by a historical AgentService decomposition record that is no longer part of the active documentation set. Its number is not reused.
-

@@ -3,11 +3,18 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
+
+vi.mock('@/features/chat/context/use-session-context', () => ({
+  useSessionContext: (sessionKey: string) => ({
+    data: { sessionKey, work: {}, sources: [], unavailableSections: [], environment: { kind: 'local_checkout', rootPath: '/Users/example/projects/xopc', available: true } },
+    mutate: vi.fn(),
+  }),
+}));
 
 const emptyHeader = {
   startExtra: null,
@@ -108,7 +115,6 @@ describe('ChatPageHeaderRegistration', () => {
                     onChatAgentChange={() => {}}
                     chatAgentDisabled={false}
                     sessionKey="session-1"
-                    workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace
                     onWorkspaceChange={async () => {}}
                   />
@@ -121,10 +127,12 @@ describe('ChatPageHeaderRegistration', () => {
       );
     });
 
-    const projectFilesButton = container.querySelector<HTMLButtonElement>(
+    expect(container.querySelector('[aria-label="Project Files: xopc"]')).toBeNull();
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')?.click());
+    const projectFilesButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="Project Files: xopc"]',
     );
-    const chooseFolderButton = container.querySelector<HTMLButtonElement>(
+    const chooseFolderButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="Choose folder…"]',
     );
     expect(projectFilesButton).not.toBeNull();
@@ -155,7 +163,6 @@ describe('ChatPageHeaderRegistration', () => {
                     onChatAgentChange={() => {}}
                     chatAgentDisabled={false}
                     sessionKey="session-1"
-                    workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace={false}
                     workspaceDisabled
                     onWorkspaceChange={async () => {}}
@@ -169,12 +176,13 @@ describe('ChatPageHeaderRegistration', () => {
       );
     });
 
-    const projectFilesButton = container.querySelector<HTMLButtonElement>(
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')?.click());
+    const projectFilesButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="Project Files: xopc"]',
     );
     expect(projectFilesButton).not.toBeNull();
     expect(projectFilesButton?.disabled).toBe(false);
-    expect(container.querySelector('[aria-label="Choose folder…"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Choose folder…"]')).toBeNull();
 
     act(() => projectFilesButton?.click());
     expect(useWorkspacePanelStore.getState()).toMatchObject({
