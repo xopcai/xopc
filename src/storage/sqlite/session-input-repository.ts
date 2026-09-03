@@ -1,3 +1,4 @@
+import { readCurrentSessionId } from './session-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -12,6 +13,7 @@ export type SessionInput = {
   id: string;
   sessionKey: string;
   clientMessageId: string;
+  expectedSessionId?: string;
   requestedDelivery: SessionInputDelivery;
   effectiveDelivery: SessionInputDelivery;
   status: SessionInputStatus;
@@ -39,7 +41,7 @@ export type SessionInputState = {
 };
 
 type InputRow = {
-  id: string; session_key: string; client_message_id: string;
+  id: string; session_key: string; client_message_id: string; expected_session_id: string | null;
   requested_delivery: SessionInputDelivery; effective_delivery: SessionInputDelivery;
   status: SessionInputStatus; content: string; attachments_json: string | null;
   context_refs_json: string | null; context_snapshots_json: string | null;
@@ -51,6 +53,7 @@ type InputRow = {
 function mapInput(row: InputRow): SessionInput {
   return {
     id: row.id, sessionKey: row.session_key, clientMessageId: row.client_message_id,
+    expectedSessionId: row.expected_session_id ?? undefined,
     requestedDelivery: row.requested_delivery, effectiveDelivery: row.effective_delivery,
     status: row.status, content: row.content,
     attachments: row.attachments_json ? JSON.parse(row.attachments_json) as unknown[] : undefined,
@@ -64,7 +67,7 @@ function mapInput(row: InputRow): SessionInput {
   };
 }
 
-const SELECT_INPUTS = `SELECT id, session_key, client_message_id, requested_delivery,
+const SELECT_INPUTS = `SELECT id, session_key, client_message_id, expected_session_id, requested_delivery,
   effective_delivery, status, content, attachments_json, context_refs_json, context_snapshots_json,
   thinking, origin_json, position,
   target_run_id, run_id, version, error, created_at_ms, updated_at_ms
@@ -125,8 +128,12 @@ export function getSessionInputById(sessionKey: string, id: string): SessionInpu
   return row ? mapInput(row) : undefined;
 }
 
+export class SessionInstanceChangedError extends Error {
+  constructor() { super('Session instance changed'); }
+}
+
 export function insertSessionInput(input: {
-  id: string; sessionKey: string; clientMessageId: string;
+  id: string; sessionKey: string; clientMessageId: string; expectedSessionId?: string;
   requestedDelivery: SessionInputDelivery; effectiveDelivery: SessionInputDelivery;
   status: 'queued' | 'injecting'; content: string; attachments?: unknown[];
   contextRefs?: SourceContextRefSummary[]; contextSnapshots?: AgentSourceContext[];
@@ -136,16 +143,17 @@ export function insertSessionInput(input: {
     const existing = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND client_message_id = ?`)
       .get(input.sessionKey, input.clientMessageId) as InputRow | undefined;
     if (existing) return mapInput(existing);
+    if (input.expectedSessionId && readCurrentSessionId(db, input.sessionKey) !== input.expectedSessionId) throw new SessionInstanceChangedError();
     const now = Date.now();
     const max = db.prepare(`SELECT COALESCE(MAX(position), 0) AS value FROM session_inputs
       WHERE session_key = ? AND status IN ('queued','running','injecting','interrupted')`)
       .get(input.sessionKey) as { value: number };
-    db.prepare(`INSERT INTO session_inputs(id, session_key, client_message_id,
+    db.prepare(`INSERT INTO session_inputs(id, session_key, client_message_id, expected_session_id,
       requested_delivery, effective_delivery, status, content, attachments_json,
       context_refs_json, context_snapshots_json, thinking, origin_json, position,
       target_run_id, version, created_at_ms, updated_at_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
-      .run(input.id, input.sessionKey, input.clientMessageId, input.requestedDelivery,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+      .run(input.id, input.sessionKey, input.clientMessageId, input.expectedSessionId ?? null, input.requestedDelivery,
         input.effectiveDelivery, input.status, input.content,
         input.attachments ? JSON.stringify(input.attachments) : null,
         input.contextRefs ? JSON.stringify(input.contextRefs) : null,
@@ -163,6 +171,11 @@ export function claimNextSessionInput(sessionKey: string, runId: string): Sessio
     const runtime = db.prepare(`SELECT active_run_id FROM session_input_runtime WHERE session_key = ?`)
       .get(sessionKey) as { active_run_id: string | null };
     if (runtime.active_run_id) return undefined;
+    const changed = db.prepare(`UPDATE session_inputs SET status = 'interrupted', error = 'Session changed before delivery',
+      version = version + 1, updated_at_ms = ? WHERE session_key = ? AND status = 'queued'
+      AND expected_session_id IS NOT NULL AND expected_session_id IS NOT ?`)
+      .run(Date.now(), sessionKey, readCurrentSessionId(db, sessionKey)).changes;
+    if (changed) bumpRevision(db, sessionKey);
     const row = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND effective_delivery = 'next'
       AND status = 'queued' ORDER BY position, created_at_ms, id LIMIT 1`).get(sessionKey) as InputRow | undefined;
     if (!row) return undefined;

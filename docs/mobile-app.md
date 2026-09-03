@@ -1,41 +1,41 @@
 # Mobile app
 
-The mobile app connects to a Gateway that continues running on your computer or server. It is useful for chatting, capturing notes, and checking ongoing work away from the host machine.
+Run xopc on your own computer and continue the same work from your phone. The computer owns the workspace and conversations; the phone lets you review progress and send instructions.
 
-## Before connecting
+## Connect your work computer
 
-1. Confirm the Gateway and local Chat work.
-2. Choose a protected remote-access method, preferably Tailscale.
-3. Generate or retrieve the Gateway token.
-4. Keep the host awake and the Gateway service running.
+1. Open xopc on the computer and choose **Connect phone** in the sidebar.
+2. Follow the connection wizard if remote access is not enabled. Existing HTTPS or Tailscale connections can be reused.
+3. Choose **Scan QR code** on the phone.
+4. Compare the numbers on both devices and choose **Allow connection** on the computer.
+5. The phone opens your work automatically.
 
-## Connect
+The QR code lasts 10 minutes. Desktop approval expires 2 minutes after scanning; refresh the QR code if needed. A QR code does not replace desktop approval or contain a long-lived credential. The wizard also provides a temporary pairing link.
 
-<!-- Screenshot placeholder: /screenshots/mobile-connect.png -->
+## Working away from your computer
 
-1. Open **Settings → Remote access** in the desktop or web console.
-2. Prepare the protected Gateway URL and token, or use the available pairing flow.
-3. In the mobile app, add the Gateway.
-4. Verify the health/status screen.
-5. Open a known Session before starting a new chat.
+Keep the computer running and connected. In the desktop app, enable **Keep running when the window closes** to return through the tray. Quitting xopc or putting the computer to sleep disconnects the phone. This preference does not guarantee connectivity with the laptop lid closed.
 
-The app should show the same Agents and Sessions as the host. If it does not, it is probably connected to another Gateway or profile.
+Choose **Test connection** in the phone's computer settings. Turn off Wi-Fi first to test the mobile connection. If network type cannot be detected, the result says only that the current connection is ready. The test checks authorized HTTP and the realtime work connection; it does not guarantee future availability.
 
-## Security
+## Connection loss and pending work
 
-- Do not use an unencrypted public HTTP URL.
-- Do not send the Gateway token through chat or email.
-- Use device lock and revoke access if the phone is lost.
-- Prefer private networking over a public tunnel.
-- Rotate the token after accidental disclosure.
+- Disconnection preserves the current screen. Pending messages retry when the connection returns.
+- Pending work is isolated by computer, with attachments retained in the app's persistent directory. Uninstalling the app or clearing its data removes local content.
+- Messages older than a day, reset conversations, missing attachments, or rejected requests require review. You can retry, copy the text, or remove the local queue entry.
+- Legacy entries without a computer identity are available for review and copying, never automatic delivery.
+- Removing an entry stops future local retries. Work already submitted may continue.
+
+Revoke a phone from **Devices** on the computer. The phone must scan again and receive approval to reconnect. Work remains on the computer.
 
 ## Troubleshooting
 
-| Problem | Check |
+| Message | Action |
 | --- | --- |
-| Cannot reach Gateway | Host is online, service is running, and private network/tunnel is connected |
-| Unauthorized | URL and token belong to the same Gateway |
-| Sessions are different | The mobile app is connected to the intended host and profile |
-| Messages stay pending | Model works on the host and the realtime connection is not blocked |
+| Computer unreachable | Check that the computer is awake, xopc is running, and remote access is connected |
+| Update the desktop app | Update xopc, then create a new QR code |
+| Confirm on your computer | Compare the numbers and allow the phone; refresh expired QR codes |
+| A message needs review | Inspect the content; after a conversation reset, copy it into the intended conversation |
+| Cannot verify computer identity | Generate a new code on the intended computer; do not bypass certificate checks |
 
-Follow [Remote access](./remote-access.md) for network diagnosis.
+See [Remote access](./remote-access.md) for advanced configuration.

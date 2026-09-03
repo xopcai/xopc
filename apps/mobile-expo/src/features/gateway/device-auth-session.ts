@@ -1,75 +1,89 @@
 import { randomUUID } from 'expo-crypto';
 
-import { readDeviceRefreshToken, getOrCreateDevicePrivateKey, writeDeviceRefreshToken } from '../../storage/device-credentials';
+import {
+  readDeviceRefreshToken, getOrCreateDevicePrivateKey, writeDeviceRefreshToken,
+  readDeviceAuthJournal, writeDeviceAuthJournal, clearDeviceAuthJournal,
+} from '../../storage/device-credentials';
 import { useGatewayStore } from '../../stores/gateway-store';
+import type { GatewayProfile } from '../../stores/gateway-types';
 import { randomNonce, signDevicePayload } from './device-crypto';
 
 const ACCESS_EXPIRY_MARGIN_MS = 30_000;
-let refreshTask: Promise<string> | null = null;
+const refreshTasks = new Map<string, Promise<DeviceTokens>>();
+type RefreshAttempt = { refreshToken: string; nextRefreshToken: string; requestId: string };
+export type DeviceTokens = { accessToken: string; accessTokenExpiresAt: number; refreshToken: string; refreshTokenExpiresAt: number };
 
-function refreshCredentialId(refreshToken: string): string {
-  if (!refreshToken.startsWith('xopc_rt_')) throw new Error('Invalid refresh credential');
-  const value = refreshToken.slice('xopc_rt_'.length);
-  const separator = value.indexOf('_');
-  if (separator < 1) throw new Error('Invalid refresh credential');
-  return value.slice(0, separator);
+export function createDeviceRefreshToken(): string {
+  return `xopc_rt_${randomUUID()}_${randomNonce(32)}`;
 }
 
-export async function refreshDeviceAccessToken(): Promise<string> {
-  if (refreshTask) return refreshTask;
-  refreshTask = (async () => {
-    const store = useGatewayStore.getState();
-    const profile = store.getActiveProfile();
-    if (!profile) throw new Error('No paired gateway is active');
-    const refreshToken = readDeviceRefreshToken(profile.gatewayId);
-    if (!refreshToken) throw new Error('Device credentials are unavailable; pair this phone again');
+/** Recovery journal is written before the first network attempt, including after app restart. */
+export async function refreshCredentialsForProfile(profile: GatewayProfile): Promise<DeviceTokens> {
+  const key = profile.gatewayId;
+  const refreshToken = readDeviceRefreshToken(key);
+  if (!refreshToken) throw new Error('DEVICE_CREDENTIALS_MISSING');
+  const taskKey = `${key}:${refreshToken}`;
+  const existing = refreshTasks.get(taskKey);
+  if (existing) return existing;
+  const task = (async () => {
+    const journalKey = `refresh.${key}`;
+    let attempt = readDeviceAuthJournal<RefreshAttempt>(journalKey);
+    if (!attempt || attempt.refreshToken !== refreshToken) {
+      attempt = { refreshToken, nextRefreshToken: createDeviceRefreshToken(), requestId: randomUUID() };
+      writeDeviceAuthJournal(journalKey, attempt);
+    }
     const timestamp = Date.now();
     const nonce = randomNonce();
-    const requestId = randomUUID();
-    const nextRefreshToken = `xopc_rt_${randomUUID()}_${randomNonce(32)}`;
-    const message = `xopc-device-refresh-v2\n${refreshCredentialId(refreshToken)}\n${timestamp}\n${nonce}\n${requestId}\n${nextRefreshToken}`;
-    const signature = signDevicePayload(getOrCreateDevicePrivateKey(), message);
-    const routes = [
-      ...profile.routes.filter((route) => route.id === profile.activeRouteId),
-      ...profile.routes.filter((route) => route.id !== profile.activeRouteId),
-    ];
+    const credentialId = refreshToken.slice('xopc_rt_'.length).split('_')[0];
+    const signature = signDevicePayload(getOrCreateDevicePrivateKey(),
+      `xopc-device-refresh-v2\n${credentialId}\n${timestamp}\n${nonce}\n${attempt.requestId}\n${attempt.nextRefreshToken}`);
+    const routes = [...profile.routes.filter(r => r.id === profile.activeRouteId), ...profile.routes.filter(r => r.id !== profile.activeRouteId)];
     let lastError: unknown;
     for (const route of routes) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8_000);
       try {
         const response = await fetch(`${route.url}/api/device-auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken, timestamp, nonce, requestId, nextRefreshToken, signature }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+          body: JSON.stringify({ ...attempt, timestamp, nonce, signature }),
         });
-        const body = await response.json().catch(() => ({})) as {
-          payload?: { accessToken?: string; accessTokenExpiresAt?: number; refreshToken?: string };
-          error?: { message?: string };
-        };
-        if (response.status === 401 || response.status === 403) {
-          store.onUnauthorized();
-          throw new Error(body.error?.message ?? 'Device authorization failed');
+        if (response.status === 401 || response.status === 403) throw new Error('DEVICE_AUTH_DENIED');
+        const body = await response.json() as { payload?: DeviceTokens };
+        if (!response.ok || !body.payload?.accessToken || body.payload.refreshToken !== attempt.nextRefreshToken
+          || !(body.payload.accessTokenExpiresAt > Date.now()) || !(body.payload.refreshTokenExpiresAt > Date.now())) {
+          throw new Error('DEVICE_REFRESH_FAILED');
         }
-        if (!response.ok) {
-          throw new Error(body.error?.message ?? `Gateway request failed (${response.status})`);
-        }
-        if (!body.payload?.accessToken || !body.payload.refreshToken || !body.payload.accessTokenExpiresAt) {
-          throw new Error('Gateway returned invalid device credentials');
-        }
-        writeDeviceRefreshToken(profile.gatewayId, body.payload.refreshToken);
-        store.setAccessToken(body.payload.accessToken, body.payload.accessTokenExpiresAt);
-        if (route.id !== profile.activeRouteId) store.selectRoute(profile.gatewayId, route.id);
-        return body.payload.accessToken;
+        if (readDeviceRefreshToken(key) !== refreshToken) throw new Error('DEVICE_AUTH_SUPERSEDED');
+        writeDeviceRefreshToken(key, body.payload.refreshToken);
+        clearDeviceAuthJournal(journalKey);
+        return body.payload;
       } catch (error) {
-        if (useGatewayStore.getState().unauthorized) throw error;
+        if (error instanceof Error && ['DEVICE_AUTH_DENIED', 'DEVICE_AUTH_SUPERSEDED'].includes(error.message)) throw error;
         lastError = error;
-      }
+      } finally { clearTimeout(timer); }
     }
     throw new Error('No secure gateway route is reachable', { cause: lastError });
   })();
+  refreshTasks.set(taskKey, task);
+  try { return await task; } finally { refreshTasks.delete(taskKey); }
+}
+
+export async function refreshDeviceAccessToken(): Promise<string> {
+  const before = useGatewayStore.getState();
+  const profile = before.getActiveProfile();
+  if (!profile) throw new Error('No paired gateway is active');
+  const generation = before.connectionGeneration;
   try {
-    return await refreshTask;
-  } finally {
-    refreshTask = null;
+    const tokens = await refreshCredentialsForProfile(profile);
+    const current = useGatewayStore.getState();
+    if (current.activeGatewayId !== profile.gatewayId || current.connectionGeneration !== generation) throw new Error('DEVICE_AUTH_SUPERSEDED');
+    current.setAccessToken(tokens.accessToken, tokens.accessTokenExpiresAt);
+    return tokens.accessToken;
+  } catch (error) {
+    const current = useGatewayStore.getState();
+    if (current.activeGatewayId === profile.gatewayId && current.connectionGeneration === generation
+      && error instanceof Error && ['DEVICE_AUTH_DENIED', 'DEVICE_CREDENTIALS_MISSING'].includes(error.message)) current.onUnauthorized();
+    throw error;
   }
 }
 
@@ -80,6 +94,4 @@ export async function getDeviceAccessToken(): Promise<string> {
 }
 
 /** @internal */
-export function resetDeviceAuthSessionForTests(): void {
-  refreshTask = null;
-}
+export function resetDeviceAuthSessionForTests(): void { refreshTasks.clear(); }

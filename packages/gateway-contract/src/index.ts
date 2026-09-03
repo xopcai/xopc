@@ -17,3 +17,4 @@ export * from './new-session.js';
 export * from './notifications.js';
 export * from './files.js';
 export * from './mobile-privacy.js';
+export * from './device-pairing.js';

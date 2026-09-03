@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { initialDeviceRefreshTokenSchema } from '@xopcai/gateway-contract';
+
 import type { GatewayScope } from '../../gateway/security/gateway-scopes.js';
 import { parseGatewayScopes } from '../../gateway/security/gateway-scopes.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
@@ -158,6 +160,17 @@ export function issueDeviceTokenPair(deviceId: string, now = Date.now()): Device
   return { ...access, refreshToken, refreshTokenExpiresAt };
 }
 
+/** Registers a phone-generated bootstrap credential without persisting its secret. */
+export function registerInitialDeviceRefreshToken(deviceId: string, token: string, now = Date.now()): number {
+  initialDeviceRefreshTokenSchema.parse(token);
+  const parsed = parseToken(token, REFRESH_TOKEN_PREFIX)!;
+  const expiresAt = now + REFRESH_TOKEN_TTL_MS;
+  getSqliteDatabase().prepare(`INSERT INTO device_refresh_credentials
+    (credential_id, device_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .run(parsed.id, deviceId, tokenHash(token), expiresAt, now);
+  return expiresAt;
+}
+
 export function authenticateDeviceAccessToken(
   token: string,
   now = Date.now(),
@@ -272,7 +285,9 @@ export function rotateDeviceRefreshToken(input: {
                rotation_request_id, revoked_at
         FROM device_refresh_credentials WHERE credential_id = ?
       `).get(nextParsed.id) as RefreshCredentialRow | undefined;
-      if (nextCredential?.token_hash === tokenHash(input.nextRefreshToken)) {
+      if (nextCredential?.token_hash === tokenHash(input.nextRefreshToken)
+        && nextCredential.revoked_at === null && nextCredential.replaced_by === null
+        && nextCredential.expires_at > now) {
         const access = issueAccessToken(credential.device_id, now);
         return {
           ...access,

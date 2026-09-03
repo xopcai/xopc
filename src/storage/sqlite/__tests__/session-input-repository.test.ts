@@ -1,3 +1,4 @@
+import { resetSessionRecord } from '../session-repository.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -154,4 +155,22 @@ describe('session input repository', () => {
     expect(updated?.contextRefs).toEqual([]);
     expect(updated?.contextSnapshots).toEqual([]);
   });
+  it('refuses queued work bound to a different session instance', () => {
+    ensureSessionRecord(sessionKey, dir);
+    expect(() => insertSessionInput({
+      id: 'stale-input', sessionKey, clientMessageId: 'stale-client', expectedSessionId: 'old-session-instance',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'stale work', origin,
+    })).toThrow('Session instance changed');
+    expect(findSessionInput(sessionKey, 'stale-client')).toBeUndefined();
+  });
+
+  it('parks an accepted input if the session resets before execution', () => {
+    const session = ensureSessionRecord(sessionKey, dir);
+    insertSessionInput({ id: 'queued-old', sessionKey, clientMessageId: 'queued-client', expectedSessionId: session.sessionId,
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'retained work', origin });
+    resetSessionRecord(sessionKey, dir);
+    expect(claimNextSessionInput(sessionKey, 'new-run')).toBeUndefined();
+    expect(findSessionInput(sessionKey, 'queued-client')).toMatchObject({ status: 'interrupted', content: 'retained work' });
+  });
+
 });
