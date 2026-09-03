@@ -46,6 +46,7 @@ import {
   isShellNotificationGranted,
   registerSystemSettingsIpc,
   stopAllPowerSaveBlockers,
+  shouldKeepAppInBackground,
 } from './ipc/system-settings-ipc.js';
 import {
   isShellChromiumPermissionGranted,
@@ -875,22 +876,18 @@ function createWindow(): void {
     appendWindowLifecycleLog(win, 'did-finish-load');
   });
 
-  // On Windows/Linux closing the main window exits the app, so route it through `before-quit` while the
-  // window is still available as the native confirmation owner. On macOS a normal red-light close only
-  // closes the window; a pending Squirrel update is the exception because it installs on app quit.
+  // Keep the gateway alive only when background operation has a visible tray owner.
   win.on('close', (e) => {
     if (appIsQuitting) {
       return;
     }
-    if (process.platform !== 'darwin') {
+    if (shouldKeepAppInBackground() && !(app.isPackaged && hasPendingInstall())) {
       e.preventDefault();
-      app.quit();
+      win.hide();
       return;
     }
-    if (app.isPackaged && hasPendingInstall()) {
-      e.preventDefault();
-      app.quit();
-    }
+    e.preventDefault();
+    app.quit();
   });
 
   win.on('closed', () => {
@@ -1307,7 +1304,7 @@ app.on('before-quit', (event) => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (!shouldKeepAppInBackground()) app.quit();
 });
 
 app.on('activate', () => {

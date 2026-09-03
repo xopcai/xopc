@@ -1,6 +1,6 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Settings } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Settings, Smartphone } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { AboutDialog } from '@/components/shell/about-dialog';
@@ -11,6 +11,8 @@ import { UserAvatarDisplay } from '@/features/user-context/user-avatar-display';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
+
+const MobilePairingWizard = lazy(() => import('@/features/endpoint-tools/mobile-pairing-wizard').then(m => ({ default: m.MobilePairingWizard })));
 
 export function SidebarFooter({
   collapsed = false,
@@ -23,6 +25,7 @@ export function SidebarFooter({
   const m = messages(language);
   const [open, setOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [pairingOpen, setPairingOpen] = useState(false);
 
   useEffect(() => {
     void import('@/pages/settings-page');
@@ -40,6 +43,13 @@ export function SidebarFooter({
         collapsed ? 'items-center px-1 py-2' : 'p-3',
       )}
     >
+      <button type="button" onClick={() => setPairingOpen(true)}
+        className={cn('mb-2 flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg', collapsed && 'justify-center px-2')}
+        aria-label={m.endpointToolsSettings.mobileAccess.flow.title}>
+        <Smartphone className="size-4 shrink-0" />
+        {!collapsed ? m.endpointToolsSettings.mobileAccess.flow.title : null}
+      </button>
+      {pairingOpen ? <Suspense fallback={null}><MobilePairingWizard open onOpenChange={setPairingOpen} /></Suspense> : null}
       <Popover.Root open={open} onOpenChange={setOpen}>
         {collapsed ? (
           <div className="flex flex-col items-center gap-1.5">

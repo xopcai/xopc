@@ -193,6 +193,8 @@ export type SystemSettingsBehavior = {
   platform: "darwin" | "win32" | "linux";
   /** False when running unpackaged (e.g. electron:dev); macOS privacy lists may show "Electron". */
   packaged: boolean;
+  runInBackground: boolean;
+  backgroundSupported: boolean;
   openAtLogin: boolean;
   openAsHidden: boolean;
   keepAwakeEnabled: boolean;
@@ -519,6 +521,7 @@ export interface ElectronDesktopPetAPI {
 export interface ElectronSystemSettingsAPI {
   getBehavior(): Promise<SystemSettingsBehavior>;
   setBehavior(patch: {
+    runInBackground?: boolean;
     openAtLogin?: boolean;
     openAsHidden?: boolean;
     keepAwakePreferred?: boolean;

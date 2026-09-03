@@ -1,5 +1,6 @@
 import type { ImperativeRouter } from 'expo-router';
 
+import { useGatewayStore } from '../../stores/gateway-store';
 import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import { pairGatewayLink } from './pair-gateway';
 import { parseGatewayQrPayload } from './parse-gateway-qr';
@@ -15,11 +16,13 @@ export async function tryConsumeGatewayDeeplink(
   if (existing) return existing;
   const task = (async () => {
     try {
+      const repairing = useGatewayStore.getState().unauthorized;
       await pairGatewayLink(rawUrl);
+      if (repairing) return true;
       return (await navigateHomeAfterGatewayConnect(router.replace)).ok;
     } catch (error) {
       if (__DEV__) console.warn('[gateway-pairing] pairing failed', error);
-      return false;
+      return true;
     }
   })();
   inflight.set(rawUrl, task);

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { useGatewayStore } from '../../stores/gateway-store';
 import { AgentMessageSender } from '../../api/agent-client';
 
 import { subscribeGatewayEvent } from './gateway-event-bus';
@@ -11,8 +12,10 @@ let flushing = false;
 async function flushPendingInputs(): Promise<void> {
   if (flushing) return;
   flushing = true;
+  const gatewayId = useGatewayStore.getState().activeGatewayId;
   try {
     for (const sessionKey of listPendingSessionInputKeys()) {
+      if (useGatewayStore.getState().activeGatewayId !== gatewayId) break;
       try {
         await sender.flushPendingMessage(sessionKey);
       } catch {
@@ -21,6 +24,7 @@ async function flushPendingInputs(): Promise<void> {
     }
   } finally {
     flushing = false;
+    if (useGatewayStore.getState().activeGatewayId !== gatewayId) void flushPendingInputs();
   }
 }
 

@@ -5,6 +5,8 @@ import {
 } from '@xopcai/agent-stream-client';
 import {
   SESSION_INPUT_RETRY_DELAYS_MS,
+  buildSessionDetailPath,
+  parseSessionResponse,
   shouldRetrySessionInputStatus,
 } from '@xopcai/gateway-contract';
 
@@ -37,21 +39,28 @@ import {
   completeSessionInput,
   enqueueSessionInput,
   markSessionInputAttempt,
+  updatePendingSessionInput,
   readPendingSessionInput,
   type PendingSessionInput,
 } from '../features/gateway/session-input-outbox';
+import { useGatewayStore } from '../stores/gateway-store';
+import { readCachedSessionDetail } from '../features/gateway/session-detail-cache';
+import { retainOutboxAttachments, releaseOutboxAttachments } from '../features/gateway/outbox-attachments';
 import { usePreferencesStore } from '../stores/preferences-store';
 import { DataSharingConsentError } from '../features/privacy/consent-controller';
 
-async function postSessionInput(path: string, body: string, headers?: Record<string, string>): Promise<Response> {
+async function postSessionInput(path: string, body: string, headers?: Record<string, string>, assertCurrent: () => void = () => {}): Promise<Response> {
   let lastError: unknown;
   for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
     if (delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    assertCurrent();
     try {
       const response = await apiFetch(path, { method: 'POST', body, ...(headers ? { headers } : {}) });
+      assertCurrent();
       if (!shouldRetrySessionInputStatus(response.status)) return response;
       lastError = new Error(`Session input temporarily unavailable (${response.status})`);
     } catch (error) {
+      assertCurrent();
       if (error instanceof DataSharingConsentError) throw error;
       lastError = error;
     }
@@ -273,6 +282,7 @@ function streamDispatchOptions(sessionKey: string, sender: AgentMessageSender): 
  * Submits a durable session input and attaches to its active run, matching the web console.
  */
 export class AgentMessageSender {
+  private _gatewayId: string | null | undefined;
   private _abort?: AbortController;
   private _sessionKey = '';
   /** `runId` from the `run_start` event for this POST/resume; do not clear a newer pending run. */
@@ -320,6 +330,7 @@ export class AgentMessageSender {
   }
 
   private _notifyServerAbort(): void {
+    if (this._gatewayId !== useGatewayStore.getState().activeGatewayId) return;
     if (!this._sessionKey) return;
     try {
       const raw = storage.getString(pendingRunStorageKey(this._sessionKey));
@@ -337,6 +348,7 @@ export class AgentMessageSender {
   }
 
   private _forceClearPendingRun(): void {
+    if (this._gatewayId !== useGatewayStore.getState().activeGatewayId) return;
     const sessionKey = this._sessionKey;
     if (!sessionKey) return;
     try {
@@ -376,20 +388,26 @@ export class AgentMessageSender {
     taskId?: string,
   ): Promise<void> {
     const capped = capAttachments(attachments);
-    const entry = enqueueSessionInput(sessionKey, message, capped ?? [], taskId);
-    await this._submitPendingInput(entry, callbacks);
+    let entry = enqueueSessionInput(sessionKey, message, capped ?? [], taskId);
+    try {
+      entry = updatePendingSessionInput(entry, { attachments: retainOutboxAttachments(entry.clientMessageId, entry.attachments), ...(entry.needsReview ? { needsReview: false, createdAt: Date.now() } : {}) });
+    } catch (error) {
+      updatePendingSessionInput(entry, { needsReview: true });
+      throw error;
+    }
+    await this._submitPendingInput(entry, callbacks, true, true);
   }
 
   async retryPendingMessage(sessionKey: string, callbacks?: MessagingCallbacks): Promise<boolean> {
     const entry = readPendingSessionInput(sessionKey);
-    if (!entry) return false;
+    if (!entry || entry.needsReview) return false;
     await this._submitPendingInput(entry, callbacks, true);
     return true;
   }
 
   async flushPendingMessage(sessionKey: string): Promise<boolean> {
     const entry = readPendingSessionInput(sessionKey);
-    if (!entry) return false;
+    if (!entry || entry.needsReview) return false;
     await this._submitPendingInput(entry, undefined, false);
     return true;
   }
@@ -398,19 +416,49 @@ export class AgentMessageSender {
     queuedEntry: PendingSessionInput,
     callbacks?: MessagingCallbacks,
     attachRun = true,
+    resolveIdentity = false,
   ): Promise<void> {
+    const generation = useGatewayStore.getState().connectionGeneration;
+    const assertCurrent = () => {
+      const state = useGatewayStore.getState();
+      if (state.activeGatewayId !== queuedEntry.gatewayId || state.connectionGeneration !== generation) throw new Error('Active work computer changed');
+      if (readPendingSessionInput(queuedEntry.sessionKey, queuedEntry.gatewayId)?.clientMessageId !== queuedEntry.clientMessageId) throw new Error('Pending input was removed');
+    };
+    assertCurrent();
+    if (queuedEntry.needsReview) throw new Error('Message needs review');
+    const cachedId = readCachedSessionDetail(queuedEntry.gatewayId, queuedEntry.sessionKey)?.sessionId;
+    if ((queuedEntry.expectedSessionId && cachedId && cachedId !== queuedEntry.expectedSessionId)
+      || (!queuedEntry.expectedSessionId && (!resolveIdentity || queuedEntry.attemptCount > 0))) {
+      updatePendingSessionInput(queuedEntry, { needsReview: true });
+      throw new Error('Message needs review');
+    }
+    if (!queuedEntry.expectedSessionId) {
+      const response = await apiFetch(buildSessionDetailPath(queuedEntry.sessionKey)).catch(error => {
+        updatePendingSessionInput(queuedEntry, { needsReview: true });
+        throw error;
+      });
+      assertCurrent();
+      const identity = response.ok ? parseSessionResponse(await response.json()).session?.sessionId : undefined;
+      if (!identity) {
+        updatePendingSessionInput(queuedEntry, { needsReview: true });
+        throw new Error('Message needs review');
+      }
+      queuedEntry = updatePendingSessionInput(queuedEntry, { expectedSessionId: identity });
+    }
     const entry = markSessionInputAttempt(queuedEntry);
     let attachments: WireAttachment[];
     try {
       attachments = await materializeAttachments(entry.attachments);
     } catch (error) {
-      completeSessionInput(entry.sessionKey, entry.clientMessageId);
+      if (error instanceof DataSharingConsentError || !isTransientNetworkError(error instanceof Error ? error.message : String(error))) updatePendingSessionInput(entry, { needsReview: true });
       throw error;
     }
+    assertCurrent();
     const origin = await waitForMobileEndpointTurnClaim(
       undefined,
       requestMobileRealtimeReconnect,
     );
+    assertCurrent();
     const res = await postSessionInput(
       entry.taskId
         ? `/api/tasks/${encodeURIComponent(entry.taskId)}/inputs`
@@ -418,18 +466,20 @@ export class AgentMessageSender {
       JSON.stringify({
         clientMessageId: entry.clientMessageId,
         delivery: 'next',
+        ...(entry.expectedSessionId ? { expectedSessionId: entry.expectedSessionId } : {}),
         content: entry.content,
         origin,
         ...(attachments.length ? { attachments } : {}),
       }),
       entry.taskId ? { 'X-Xopc-Expected-Session-Key': entry.sessionKey } : undefined,
+      assertCurrent,
     ).catch((error: unknown) => {
-      if (error instanceof DataSharingConsentError) completeSessionInput(entry.sessionKey, entry.clientMessageId);
+      if (error instanceof DataSharingConsentError) updatePendingSessionInput(entry, { needsReview: true });
       throw error;
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
-      completeSessionInput(entry.sessionKey, entry.clientMessageId);
+      updatePendingSessionInput(entry, { needsReview: true });
       throw new Error(formatApiHttpError(res.status, res.statusText, body?.error?.message));
     }
     const json = await res.json().catch(() => {
@@ -441,7 +491,10 @@ export class AgentMessageSender {
     // Keep the durable outbox entry until the acknowledgement body is usable.
     // A truncated 202 response is ambiguous: the gateway may already be
     // running the input, and retrying the same clientMessageId is idempotent.
-    completeSessionInput(entry.sessionKey, entry.clientMessageId);
+    if (!json.payload?.state || !Array.isArray(json.payload.state.inputs)) throw new Error('Network response was invalid');
+    assertCurrent();
+    completeSessionInput(entry.sessionKey, entry.clientMessageId, entry.gatewayId);
+    releaseOutboxAttachments(entry.clientMessageId);
     const state = json.payload?.state;
     const own = state?.inputs?.find((input) => input.clientMessageId === entry.clientMessageId);
     if (attachRun && state?.activeRunId && own?.id === state.activeInputId) {
@@ -488,6 +541,10 @@ export class AgentMessageSender {
     this._abort = new AbortController();
     const abortController = this._abort;
     this._sessionKey = sessionKey;
+    const gatewayId = useGatewayStore.getState().activeGatewayId;
+    const generation = useGatewayStore.getState().connectionGeneration;
+    this._gatewayId = gatewayId;
+    const isCurrentConnection = () => useGatewayStore.getState().activeGatewayId === gatewayId && useGatewayStore.getState().connectionGeneration === generation;
     this.trackPendingRunId(runId);
     setPendingAgentRun(sessionKey, runId);
     const terminal = wrapTerminalCallbacks(callbacks);
@@ -524,6 +581,7 @@ export class AgentMessageSender {
           : readPendingAgentRunCursor(sessionKey, runId);
         unsubscribe = subscribeMobileRealtimeTopic(`run:${runId}`, {
           onEvent: (message) => {
+            if (!isCurrentConnection()) { finish(); return; }
             if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
             const event = message.data && typeof message.data === 'object'
               ? { ...(message.data as Record<string, unknown>), seq: message.seq }
@@ -533,6 +591,7 @@ export class AgentMessageSender {
             if (message.event === 'run_end' || message.event === 'error') finish();
           },
           onGap: (gap) => {
+            if (!isCurrentConnection()) { finish(); return; }
             if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
             finish(new AgentStreamReplayExpiredError());
           },
@@ -551,7 +610,9 @@ export class AgentMessageSender {
       const localDetach = this._localDetaches.has(abortController);
       this._localDetaches.delete(abortController);
       cleanupStream();
-      if (localDetach || preservePending) {
+      if (!isCurrentConnection()) {
+        // The previous computer keeps its cursor; never mutate the new connection.
+      } else if (localDetach || preservePending) {
         this._rePersistPendingRunAfterDetach(sessionKey, runId);
       } else {
         this._clearPendingRun(sessionKey, runId);

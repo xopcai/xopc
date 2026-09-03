@@ -67,7 +67,7 @@ import {
 } from './session-message-parser';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { requestMobileRealtimeReconnect } from '../gateway/use-gateway-realtime';
-import { readPendingSessionInput } from '../gateway/session-input-outbox';
+import { OUTBOX_CHANGED, readPendingSessionInput } from '../gateway/session-input-outbox';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
@@ -675,7 +675,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         clearQueuedDisplayTimer();
         const pendingInput = readPendingSessionInput(sessionKey);
         setInputQueued(Boolean(pendingInput));
-        setOptimisticDeliveryState(pendingInput ? 'queued' : 'failed');
+        setOptimisticDeliveryState(pendingInput && !pendingInput.needsReview ? 'queued' : 'failed');
         setStreaming(false);
         streamingRef.current = false;
         sendingRef.current = false;
@@ -755,7 +755,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         clearQueuedDisplayTimer();
         const pendingInput = readPendingSessionInput(sessionKey);
         setInputQueued(Boolean(pendingInput));
-        setOptimisticDeliveryState(pendingInput ? 'queued' : 'failed');
+        setOptimisticDeliveryState(pendingInput && !pendingInput.needsReview ? 'queued' : 'failed');
         setStreaming(false);
         streamingRef.current = false;
         setProgress(null);
@@ -912,7 +912,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       setInputQueued(Boolean(pendingInput));
       setStreaming(false);
       streamingRef.current = false;
-      setOptimisticDeliveryState(pendingInput ? 'queued' : 'failed');
+      setOptimisticDeliveryState(pendingInput && !pendingInput.needsReview ? 'queued' : 'failed');
     },
   });
   streamRecoveryRef.current = streamRecovery;
@@ -965,6 +965,15 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     return () => subscription.remove();
   }, [sessionKey, wakeStreamRecovery, refreshSessionHeadByKey, invalidateSessionByKey]);
 
+  useEffect(() => subscribeGatewayEvent(OUTBOX_CHANGED, () => {
+    const pending = readPendingSessionInput(sessionKey);
+    if (pending?.needsReview) setOptimisticDeliveryState('failed');
+    if (pending || sendingRef.current || senderRef.current.isStreamingFor(sessionKey)) return;
+    setInputQueued(false);
+    runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
+    setOptimisticMessages(current => current.filter(message => !message.deliveryState));
+  }), [sessionKey, awaitingSessionRefresh, setOptimisticDeliveryState]);
+
   // Resolve server-side active runs on session entry. Local pending run storage is
   // only a cache; the gateway is the source of truth when the screen remounts.
   useEffect(() => {
@@ -974,7 +983,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     if (pendingInput) {
       setOptimisticMessages([{
         ...buildOptimisticUserMessage(pendingInput.content, pendingInput.attachments),
-        deliveryState: 'queued',
+        deliveryState: pendingInput.needsReview ? 'failed' : 'queued',
       }]);
       setInputQueued(true);
       streamRecoveryRef.current.wake();

@@ -52,7 +52,11 @@
     "repair": "Repair",
     "working": "Working…",
     "unknown": "Status unavailable",
-    "runtimeNames": { "node": "Node.js", "python": "Python", "uv": "uv" },
+    "runtimeNames": {
+      "node": "Node.js",
+      "python": "Python",
+      "uv": "uv"
+    },
     "preferences": {
       "managedFirst": "Managed first",
       "systemFirst": "System first",
@@ -89,6 +93,44 @@
     "callsHint": "Arguments are represented by hashes in the audit log; raw values are not stored here.",
     "noCalls": "No endpoint tool calls yet.",
     "mobileAccess": {
+      "flow": {
+        "title": "Connect phone",
+        "intro": "Keep work moving away from your desk.",
+        "enable": "Enable connection",
+        "enableHint": "Your phone can connect to this computer over the internet.",
+        "existing": "Use an existing connection",
+        "scan": "Scan with your phone",
+        "scanHint": "Open xopc on your phone and choose “Scan QR code”.",
+        "valid": "Valid for 10 minutes",
+        "expired": "QR code expired",
+        "refresh": "Refresh QR code",
+        "fallback": "Can’t scan?",
+        "allowTitle": "Allow this phone to connect?",
+        "scope": "Continue conversations, view and manage work.",
+        "compare": "Check that both numbers match.",
+        "allow": "Allow connection",
+        "waiting": "Finishing connection",
+        "success": "Phone connected",
+        "successHint": "You can now continue work from your phone.",
+        "done": "Done",
+        "cancel": "Cancel",
+        "retry": "Retry",
+        "preparing": "Preparing connection",
+        "preparingHint": "The first connection may take a few minutes.",
+        "failed": "Connection didn’t finish. Try again.",
+        "declined": "This connection was cancelled",
+        "back": "Back",
+        "autoStart": "Restore connection when xopc starts",
+        "authorize": "Authorize connection",
+        "authorizing": "Finish authorization in the page that opened",
+        "details": "Connection details",
+        "background": "Keep running when the window closes",
+        "sleep": "Sleep or quitting xopc disconnects your phone.",
+        "update": "Update xopc on your computer and try again.",
+        "access": "Access details",
+        "accessHint": "Conversations, tasks, workspace and authorized assistant capabilities. Existing approval rules still apply.",
+        "openAuthorization": "Open authorization"
+      },
       "title": "Mobile access",
       "hint": "Pair the native app through a verified HTTPS route. Each phone receives its own revocable credentials.",
       "add": "Add phone",
@@ -500,28 +542,60 @@
     "idleTipBody": "When you start again, I will watch the background progress.",
     "personaPhrases": {
       "calm": {
-        "greeting": ["I am here."],
-        "success": ["It is taken care of."],
-        "waiting": ["I have paused here for your decision."],
-        "error": ["This step did not work, but the earlier work is safe."]
+        "greeting": [
+          "I am here."
+        ],
+        "success": [
+          "It is taken care of."
+        ],
+        "waiting": [
+          "I have paused here for your decision."
+        ],
+        "error": [
+          "This step did not work, but the earlier work is safe."
+        ]
       },
       "warm": {
-        "greeting": ["I am right here with you."],
-        "success": ["It is done. You can breathe a little easier."],
-        "waiting": ["I will wait here for your confirmation."],
-        "error": ["We hit a snag here. The completed work is still safe."]
+        "greeting": [
+          "I am right here with you."
+        ],
+        "success": [
+          "It is done. You can breathe a little easier."
+        ],
+        "waiting": [
+          "I will wait here for your confirmation."
+        ],
+        "error": [
+          "We hit a snag here. The completed work is still safe."
+        ]
       },
       "playful": {
-        "greeting": ["Ready when you are."],
-        "success": ["Nicely handled."],
-        "waiting": ["Your call from here."],
-        "error": ["There is a roadblock here. Let us take a look."]
+        "greeting": [
+          "Ready when you are."
+        ],
+        "success": [
+          "Nicely handled."
+        ],
+        "waiting": [
+          "Your call from here."
+        ],
+        "error": [
+          "There is a roadblock here. Let us take a look."
+        ]
       },
       "focused": {
-        "greeting": ["I am here. Everything is steady."],
-        "success": ["Task complete."],
-        "waiting": ["Your decision is needed. I have paused."],
-        "error": ["This step is incomplete. Existing results are preserved."]
+        "greeting": [
+          "I am here. Everything is steady."
+        ],
+        "success": [
+          "Task complete."
+        ],
+        "waiting": [
+          "Your decision is needed. I have paused."
+        ],
+        "error": [
+          "This step is incomplete. Existing results are preserved."
+        ]
       }
     },
     "taskInProgress": "Task in progress",

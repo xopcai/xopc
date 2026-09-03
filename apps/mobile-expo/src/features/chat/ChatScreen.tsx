@@ -16,6 +16,7 @@ import { Banner, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
+import { PendingInputBanner } from '../gateway/PendingInputBanner';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { t } from '../../i18n/messages';
@@ -155,6 +156,8 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         onOpenSettings={handleGatewayManageSettings}
         onReconnect={openReconnectLanding}
       />
+
+      {sessionKey ? <PendingInputBanner sessionKey={sessionKey} /> : null}
 
       <ChatContextBanner
         projectId={sessionContext.projectId}

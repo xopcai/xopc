@@ -171,3 +171,5 @@ export function destroyTray(): void {
   currentMessages = null;
   currentTunnelStatus = 'disconnected';
 }
+
+export function hasSystemTray(): boolean { return tray !== null && !tray.isDestroyed(); }
