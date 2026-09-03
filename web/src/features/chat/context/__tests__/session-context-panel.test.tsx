@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchJson } from '@/lib/fetch';
 import { useGatewayStore } from '@/stores/gateway-store';
 
-import { mergeContextSources, SessionContextPanel, type SessionContextPanelProps } from '../session-context-panel';
+import { mergeContextSources } from '../merge-context-sources';
+import { SessionContextPanel, type SessionContextPanelProps } from '../session-context-panel';
 
 vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
 

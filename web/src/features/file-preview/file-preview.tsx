@@ -62,8 +62,8 @@ export function FilePreview({ header, chat, ...source }: FilePreviewProps) {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
       <FilePreviewHeader
-        {...header}
         key={source.descriptor.id}
+        {...header}
         name={source.descriptor.fileName}
         controller={controller}
         actions={source.actions}
