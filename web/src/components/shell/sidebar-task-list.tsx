@@ -66,7 +66,6 @@ type ProjectSidebarGroup = {
   sessionTotal: number;
   sessionHasMore: boolean;
   sessionLoading?: boolean;
-  latestAt: number;
 };
 
 type ProjectSessionOverride = {
@@ -94,16 +93,6 @@ function interpolate(template: string, params: Record<string, string | number>):
 
 function sessionUpdatedAtMs(session: SessionMetadata): number {
   const timestamp = new Date(session.updatedAt).getTime();
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function projectUpdatedAtMs(project: Project): number {
-  const timestamp = new Date(project.lastActiveAt ?? project.updatedAt).getTime();
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function projectPinnedAtMs(project: Project): number {
-  const timestamp = project.pinnedAt ?? 0;
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
@@ -931,15 +920,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           sessionTotal: override?.sessionTotal ?? entry.sessionTotal,
           sessionHasMore: override?.hasMore ?? entry.sessionHasMore,
           sessionLoading: loadingProjectIds.has(entry.project.id),
-          latestAt: Math.max(projectUpdatedAtMs(entry.project), ...sessions.map(sessionUpdatedAtMs)),
         });
       }
     }
-    groups.sort((a, b) => {
-      const pinnedDelta = projectPinnedAtMs(b.project) - projectPinnedAtMs(a.project);
-      if (pinnedDelta !== 0) return pinnedDelta;
-      return b.latestAt - a.latestAt;
-    });
+    // Preserve the API's stable project order across pages and session updates.
     return groups;
   }, [data, loadingProjectIds, projectSessionOverrides]);
 
