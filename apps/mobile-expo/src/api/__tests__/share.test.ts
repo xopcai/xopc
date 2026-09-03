@@ -74,6 +74,15 @@ describe('createAutoShare', () => {
     expect(result).toEqual(payload);
   });
 
+  it('shares a managed file by ID without a workspace path or agent context', async () => {
+    const payload = { share: { id: 'managed-share', shareUrl: 'https://x/s/managed' } };
+    mockedApiFetch.mockResolvedValue(okJson({ ok: true, payload }));
+
+    expect(await createAutoShare({ fileId: 'space.file', audience: 'friend' })).toEqual(payload);
+    const [, init] = mockedApiFetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual({ fileId: 'space.file', audience: 'friend' });
+  });
+
   it('surfaces server error messages', async () => {
     mockedApiFetch.mockResolvedValue(
       errJson(400, { error: { message: 'workspace not configured' } }),

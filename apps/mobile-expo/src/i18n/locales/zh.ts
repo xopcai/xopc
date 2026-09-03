@@ -1330,6 +1330,7 @@ export const zh: MessageBundle = {
     fileActions: '文件操作',
     copyPath: '复制路径',
     pathCopied: '路径已复制',
+    copyFailed: '复制路径失败',
     downloadFailed: '无法打开下载',
     uploadFile: '上传文件',
     uploadSucceeded: '文件已上传',

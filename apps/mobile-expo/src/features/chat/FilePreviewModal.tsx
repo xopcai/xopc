@@ -13,11 +13,13 @@ import {
 import { ActivityIndicator, IconButton, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import type { ShareAutoRequest } from '../../api/share';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { fetchFileContent } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
-import { useTheme } from '../../theme';
+import { spacing, useTheme } from '../../theme';
+import { ShareSheet } from '../share/ShareSheet';
 import { HtmlPreviewPane } from './HtmlPreviewPane';
 import { isHtmlFile } from './html-preview-source';
 import { MarkdownView } from './MarkdownView';
@@ -204,6 +206,7 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<LoadedPreview | null>(null);
+  const [shareTarget, setShareTarget] = useState<ShareAutoRequest | null>(null);
   const [downloadPending, setDownloadPending] = useState(false);
   const [downloadError, setDownloadError] = useState('');
 
@@ -211,6 +214,7 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
 
   useEffect(() => {
     let cancelled = false;
+    setShareTarget(null);
     setError(null);
     setDownloadError('');
     setLoaded(null);
@@ -300,6 +304,16 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
               disabled={downloadPending}
             />
           ) : null}
+          {file?.fileId ? (
+            <IconButton
+              icon="share-variant"
+              size={spacing.content}
+              iconColor={textColor}
+              onPress={() => setShareTarget({ fileId: file.fileId!, audience: 'friend' })}
+              accessibilityLabel={cm.shareFile}
+              style={styles.shareButton}
+            />
+          ) : null}
           <IconButton icon="close" size={22} iconColor={textColor} onPress={onClose} accessibilityLabel={cm.filePreviewClose} />
         </View>
 
@@ -369,6 +383,11 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
           )}
         </View>
       </View>
+      <ShareSheet
+        visible={visible && Boolean(shareTarget)}
+        request={shareTarget}
+        onClose={() => setShareTarget(null)}
+      />
     </Modal>
   );
 }
@@ -387,6 +406,10 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontWeight: '600',
+  },
+  shareButton: {
+    minWidth: spacing.xxxl,
+    minHeight: spacing.xxxl,
   },
   body: {
     flex: 1,

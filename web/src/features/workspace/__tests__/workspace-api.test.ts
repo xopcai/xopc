@@ -32,6 +32,28 @@ describe('resolveWorkspaceFileReference', () => {
     });
   });
 
+  it('resolves an unscoped path using the configured default space', async () => {
+    apiFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({ space })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ resource })));
+    await expect(resolveWorkspaceFileReference('nested/file.html')).resolves.toMatchObject({ fileId: 'file-1' });
+    expect(apiFetch).toHaveBeenNthCalledWith(1, '/api/files/default-space', undefined);
+  });
+
+  it('keeps outside-workspace desktop actions when managed resolution rejects the path', async () => {
+    const reference = {
+      inputPath: '/tmp/report.pdf', displayName: 'report.pdf', absolutePath: '/tmp/report.pdf',
+      scope: 'external', exists: true, fileRefId: 'ref-one', capabilities: ['openExternal', 'revealInFolder', 'copyPath'],
+    };
+    apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ space })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'Outside workspace' } }), { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ reference })));
+    await expect(resolveWorkspaceFileReference('/tmp/report.pdf', { sessionKey: 'session' })).resolves.toEqual(reference);
+    expect(apiFetch).toHaveBeenNthCalledWith(3, '/api/files/resolve-reference', {
+      method: 'POST', body: JSON.stringify({ spaceId: space.id, path: '/tmp/report.pdf', sessionKey: 'session' }),
+    });
+  });
+
   it('returns no managed reference when the path is unavailable', async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Not found' } }), { status: 404 }));
     await expect(resolveWorkspaceFileReference('missing.html', { sessionKey: 'session' })).resolves.toBeNull();

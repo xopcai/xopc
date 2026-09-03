@@ -1,5 +1,5 @@
 /**
- * ShareSheet — bottom-sheet modal that takes a workspace file path, calls
+ * ShareSheet — bottom-sheet modal that takes a managed file ID or workspace path, calls
  * `POST /api/shares/auto`, and surfaces:
  *
  *  - The generated link's auto-rendered thumbnail (with live readiness poll).

@@ -4,8 +4,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { Icon, Text } from 'react-native-paper';
+import { Button, Icon, Text } from 'react-native-paper';
 
+import { AppToast } from '../../components/AppToast';
+import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
+import { SwipeableRow } from '../../components/SwipeableRow';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import {
@@ -21,6 +24,8 @@ import { queryKeys } from '../../query/keys';
 import { floatingBottomPadding, spacing, useTheme } from '../../theme';
 import { FilePreviewModal, type PreviewableFile } from '../chat/FilePreviewModal';
 
+import { useFileActions } from './file-actions';
+
 function toPreviewable(file: FileResource): PreviewableFile {
   return { fileId: file.id, name: file.name, mimeType: file.mimeType, workspaceRelativePath: file.relativePath };
 }
@@ -34,29 +39,38 @@ function iconFor(file: FileResource): string {
   return 'file-outline';
 }
 
-function FileRow({ file, source, onPress }: { file: FileResource; source?: string; onPress: () => void }) {
+function FileRow({ file, source, onPress, actions }: { file: FileResource; source?: string; onPress: () => void; actions: ReturnType<typeof useFileActions> }) {
   const { colors } = useTheme();
+  const labels = useMessages().filesPage;
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, { borderBottomColor: colors.border.subtle }, pressed && { backgroundColor: colors.surface.pressed }]}
-      onPress={onPress}
-      accessibilityRole="button"
-    >
-      <View style={[styles.icon, { backgroundColor: colors.surface.grouped }]}>
-        <Icon source={iconFor(file)} size={21} color={colors.text.secondary} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{file.name}</Text>
-        <Text numberOfLines={1} style={[styles.rowMeta, { color: colors.text.tertiary }]}>
-          {source ? `${source} · ${file.relativePath}` : file.relativePath}
-        </Text>
-      </View>
-      <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-    </Pressable>
+    <SwipeableRow enabled={!actions.selectionMode} actions={[
+      { key: 'copy', icon: 'content-copy', color: 'blue', label: labels.copyPath },
+      { key: 'share', icon: 'share-variant-outline', color: 'green', label: labels.share },
+    ]} onActionPress={(action) => action.key === 'copy' ? actions.copyPath(file) : actions.share(file)}>
+      <Pressable
+        style={({ pressed }) => [styles.row, { borderBottomColor: colors.border.subtle }, pressed && { backgroundColor: colors.surface.pressed }]}
+        onPress={() => actions.selectionMode ? actions.toggleSelected(file.id) : onPress()}
+        onLongPress={() => { if (!actions.selectionMode) { actions.startSelection(); actions.toggleSelected(file.id); } }}
+        accessibilityState={{ selected: actions.selectedIds.has(file.id) }}
+        accessibilityRole="button"
+      >
+        {actions.selectionMode ? <ListSelectionCheckbox selected={actions.selectedIds.has(file.id)} /> : null}
+        <View style={[styles.icon, { backgroundColor: colors.surface.grouped }]}>
+          <Icon source={iconFor(file)} size={21} color={colors.text.secondary} />
+        </View>
+        <View style={styles.rowCopy}>
+          <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{file.name}</Text>
+          <Text numberOfLines={1} style={[styles.rowMeta, { color: colors.text.tertiary }]}>
+            {source ? `${source} · ${file.relativePath}` : file.relativePath}
+          </Text>
+        </View>
+        <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+      </Pressable>
+    </SwipeableRow>
   );
 }
 
-function ListSkeleton() {
+export function FileListSkeleton() {
   const { colors } = useTheme();
   return (
     <View style={styles.list}>
@@ -84,11 +98,13 @@ export function FilesHubScreen() {
   const results = useQuery({
     queryKey: queryKeys.fileSearch(search),
     queryFn: () => searchFiles(search),
-    enabled: search.trim().length >= 2,
+    enabled: search.trim().length > 0,
   });
   const spaceNames = useMemo(() => new Map((spaces.data ?? []).map((space) => [space.id, space.title])), [spaces.data]);
-  const files = search.trim().length >= 2 ? results.data : recent.data;
-  const loading = spaces.isLoading || (search.trim().length >= 2 ? results.isLoading : recent.isLoading);
+  const files = search.trim().length > 0 ? results.data : recent.data;
+  const current = search.trim() ? results : view === 'locations' ? spaces : recent;
+  const loading = current.isLoading;
+  const actions = useFileActions(files ?? []);
   const [active, setActive] = useState<PreviewableFile | null>(null);
 
   const openFile = (file: FileResource) => setActive(toPreviewable(file));
@@ -100,7 +116,7 @@ export function FilesHubScreen() {
         <Icon source="magnify" size={20} color={colors.text.tertiary} />
         <TextInput
           value={search}
-          onChangeText={setSearch}
+          onChangeText={(value) => { actions.exitSelectionMode(); setSearch(value); }}
           placeholder={labels.searchPlaceholder}
           placeholderTextColor={colors.text.tertiary}
           style={[styles.searchInput, { color: colors.text.primary }]}
@@ -112,7 +128,7 @@ export function FilesHubScreen() {
             <Pressable
               key={item}
               style={[styles.segmentButton, view === item && { backgroundColor: colors.surface.panel }]}
-              onPress={() => setView(item)}
+              onPress={() => { actions.exitSelectionMode(); setView(item); }}
             >
               <Text style={{ color: view === item ? colors.text.primary : colors.text.secondary }}>
                 {item === 'recent' ? labels.recent : labels.locations}
@@ -122,8 +138,9 @@ export function FilesHubScreen() {
         </View>
       ) : null}
 
-      {loading ? <ListSkeleton /> : view === 'locations' && !search.trim() ? (
+      {loading ? <FileListSkeleton /> : current.isError ? <FileLoadError error={current.error} onRetry={() => void current.refetch()} /> : view === 'locations' && !search.trim() ? (
         <FlatList
+          refreshControl={<RefreshControl refreshing={spaces.isRefetching} onRefresh={() => void spaces.refetch()} />}
           data={spaces.data ?? []}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
@@ -149,11 +166,12 @@ export function FilesHubScreen() {
           data={files ?? []}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={recent.isFetching && !recent.isLoading} onRefresh={() => void recent.refetch()} />}
-          renderItem={({ item }) => <FileRow file={item} source={spaceNames.get(item.spaceId) ?? labels.unknownLocation} onPress={() => openFile(item)} />}
+          refreshControl={<RefreshControl refreshing={current.isRefetching} onRefresh={() => void current.refetch()} />}
+          renderItem={({ item }) => <FileRow file={item} actions={actions} source={spaceNames.get(item.spaceId) ?? labels.unknownLocation} onPress={() => openFile(item)} />}
           ListEmptyComponent={<EmptyState title={labels.emptyTitle} hint={labels.emptyHint} />}
         />
       )}
+      {actions.overlays}
       <FilePreviewModal visible={Boolean(active)} file={active} onClose={() => setActive(null)} />
     </View>
   );
@@ -170,24 +188,41 @@ function EmptyState({ title, hint }: { title: string; hint: string }) {
   );
 }
 
+export function FileLoadError({ error, onRetry }: { error?: unknown; onRetry: () => void }) {
+  const m = useMessages();
+  return <View style={styles.empty}>
+    <Text>{m.filesPage.loadFailed}</Text>
+    {error instanceof Error ? <Text style={styles.emptyHint}>{error.message}</Text> : null}
+    <Button onPress={onRetry}>{m.common.retry}</Button>
+  </View>;
+}
+
+function BrowserLoadingState({ loading, error, onRetry }: { loading: boolean; error?: unknown; onRetry: () => void }) {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const labels = useMessages().filesPage;
+  return <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
+    <NativeScreenHeader title={labels.title} onBack={() => router.back()} />
+    {loading ? <FileListSkeleton /> : <FileLoadError error={error} onRetry={onRetry} />}
+  </View>;
+}
+
 export function ContextFileBrowserScreen({ kind, id }: { kind: FileContextKind; id: string }) {
   const context = useQuery({
     queryKey: queryKeys.fileSpaceContext(kind, id),
     queryFn: () => fetchFileSpaceForContext(kind, id),
     enabled: Boolean(id),
   });
-  if (context.isLoading) return <ListSkeleton />;
-  if (!context.data) return <EmptyState title="" hint={context.error instanceof Error ? context.error.message : ''} />;
-  return <FileSpaceBrowserScreen space={context.data} />;
+  if (!context.data) return <BrowserLoadingState loading={context.isLoading} error={context.error} onRetry={() => void context.refetch()} />;
+  return <FileSpaceBrowserScreen key={context.data.id} space={context.data} />;
 }
 
 export function FileSpaceBrowserRouteScreen({ spaceId }: { spaceId: string }) {
   const labels = useMessages().filesPage;
   const spaces = useQuery({ queryKey: queryKeys.fileSpaces, queryFn: fetchFileSpaces });
-  if (spaces.isLoading) return <ListSkeleton />;
   const space = spaces.data?.find((item) => item.id === spaceId);
-  if (!space) return <EmptyState title="" hint={labels.locationUnavailable} />;
-  return <FileSpaceBrowserScreen space={space} />;
+  if (!space) return <BrowserLoadingState loading={spaces.isLoading} error={spaces.error ?? new Error(labels.locationUnavailable)} onRetry={() => void spaces.refetch()} />;
+  return <FileSpaceBrowserScreen key={space.id} space={space} />;
 }
 
 function FileSpaceBrowserScreen({ space }: { space: FileSpace }) {
@@ -201,9 +236,16 @@ function FileSpaceBrowserScreen({ space }: { space: FileSpace }) {
     queryKey: queryKeys.fileChildren(space.id, directory),
     queryFn: () => fetchFileChildren(space.id, directory),
   });
+  const actions = useFileActions(files.data ?? []);
+  const [toast, setToast] = useState('');
+  const navigateDirectory = (path: string) => { actions.exitSelectionMode(); setDirectory(path); };
   const upload = useMutation({
     mutationFn: uploadFileResource,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.fileChildren(space.id, directory) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['files'] });
+      setToast(labels.uploadSucceeded);
+    },
+    onError: () => setToast(labels.uploadFailed),
   });
   const breadcrumbs = useMemo(() => {
     const output = [{ label: labels.root, path: '' }];
@@ -216,14 +258,17 @@ function FileSpaceBrowserScreen({ space }: { space: FileSpace }) {
   }, [directory, labels.root]);
 
   const pickFile = async () => {
-    const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
-    const asset = picked.canceled ? undefined : picked.assets[0];
-    if (!asset) return;
-    upload.mutate({ spaceId: space.id, directory, uri: asset.uri, name: asset.name, mimeType: asset.mimeType });
+    if (upload.isPending) return;
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+      const asset = picked.canceled ? undefined : picked.assets[0];
+      if (!asset) return;
+      upload.mutate({ spaceId: space.id, directory, uri: asset.uri, name: asset.name, mimeType: asset.mimeType });
+    } catch { setToast(labels.uploadFailed); }
   };
   const goBack = () => {
     if (!directory) return router.back();
-    setDirectory(directory.split('/').slice(0, -1).join('/'));
+    navigateDirectory(directory.split('/').slice(0, -1).join('/'));
   };
 
   return (
@@ -231,32 +276,39 @@ function FileSpaceBrowserScreen({ space }: { space: FileSpace }) {
       <NativeScreenHeader
         title={space.title}
         onBack={goBack}
-        rightActions={space.writable ? [{ icon: upload.isPending ? 'progress-upload' : 'file-upload-outline', onPress: () => void pickFile(), accessibilityLabel: labels.uploadFile }] : undefined}
+        rightActions={[
+          { icon: 'share-variant-outline', onPress: () => actions.shareDirectory(space.id, directory), accessibilityLabel: labels.shareCurrentFolder },
+          ...(space.writable ? [{ icon: upload.isPending ? 'progress-upload' : 'file-upload-outline', onPress: () => void pickFile(), accessibilityLabel: labels.uploadFile }] : []),
+        ]}
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.breadcrumbs}>
+      <ScrollView style={styles.breadcrumbScroll} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.breadcrumbs}>
         {breadcrumbs.map((crumb, index) => (
           <View key={crumb.path || 'root'} style={styles.crumbGroup}>
             {index ? <Icon source="chevron-right" size={14} color={colors.text.tertiary} /> : null}
-            <Pressable onPress={() => setDirectory(crumb.path)} disabled={crumb.path === directory}>
+            <Pressable style={styles.crumbButton} onPress={() => navigateDirectory(crumb.path)} disabled={crumb.path === directory}>
               <Text style={{ color: crumb.path === directory ? colors.accent.primary : colors.text.secondary }}>{crumb.label}</Text>
             </Pressable>
           </View>
         ))}
       </ScrollView>
-      {files.isLoading ? <ListSkeleton /> : (
+      {files.isLoading ? <FileListSkeleton /> : files.isError ? <FileLoadError error={files.error} onRetry={() => void files.refetch()} /> : (
         <FlatList
+          refreshControl={<RefreshControl refreshing={files.isRefetching} onRefresh={() => void files.refetch()} />}
           data={files.data ?? []}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.list, { paddingBottom: floatingBottomPadding(0) + spacing.xxl }]}
           renderItem={({ item }) => (
             <FileRow
               file={item}
-              onPress={() => item.kind === 'directory' ? setDirectory(item.relativePath) : setActive(toPreviewable(item))}
+              actions={actions}
+              onPress={() => item.kind === 'directory' ? navigateDirectory(item.relativePath) : setActive(toPreviewable(item))}
             />
           )}
           ListEmptyComponent={<EmptyState title={labels.emptyTitle} hint={labels.emptyHint} />}
         />
       )}
+      <AppToast visible={Boolean(toast)} onDismiss={() => setToast('')}>{toast}</AppToast>
+      {actions.overlays}
       <FilePreviewModal visible={Boolean(active)} file={active} onClose={() => setActive(null)} />
     </View>
   );
@@ -268,7 +320,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, paddingVertical: 8 },
   segment: { margin: 16, padding: 3, borderRadius: 10, flexDirection: 'row' },
   segmentButton: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
-  list: { paddingHorizontal: 16 },
+  list: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: floatingBottomPadding(0) + spacing.xxl },
   row: { minHeight: 64, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
   locationRow: { minHeight: 68, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
   icon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -281,6 +333,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 80, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
   emptyHint: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  breadcrumbScroll: { flexGrow: 0 },
+  crumbButton: { minHeight: spacing.xxxl, minWidth: spacing.xxxl, justifyContent: 'center' },
   breadcrumbs: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   crumbGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

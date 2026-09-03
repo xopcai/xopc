@@ -32,6 +32,7 @@ import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-exten
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
 import { registerPublicLocalAppPreviewRoutes } from './routes/local-apps.js';
+import { HTML_PREVIEW_PATH, registerPublicHtmlPreviewRoute } from './routes/html-preview.js';
 import { registerDeviceAuthPublicRoutes } from './routes/devices.js';
 import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
@@ -134,7 +135,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Security headers middleware
   app.use(createMiddleware(async (c, next) => {
     await next();
-    if (isExtensionGatewayUiAssetPath(c.req.path)) {
+    if (isExtensionGatewayUiAssetPath(c.req.path)
+      || (c.req.path === HTML_PREVIEW_PATH && (c.req.method === 'GET' || c.req.method === 'HEAD'))) {
       return;
     }
     c.header('X-Frame-Options', 'DENY');
@@ -260,6 +262,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   registerPublicGatewayRoutes(app, service);
+  registerPublicHtmlPreviewRoute(app);
   registerDeviceAuthPublicRoutes(app);
 
   // Extension UI assets are served without auth: sandboxed iframes (no allow-same-origin)

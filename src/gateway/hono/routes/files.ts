@@ -4,10 +4,12 @@ import { basename, join } from 'node:path';
 import type { FileResource, FileSpace } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
 
-import { FileServiceError, FileSpaceService, fileResourceFromPath, resolveFilePath } from '../../../files/file-service.js';
+import { FileServiceError, type FileSpaceService, fileResourceFromPath, resolveFilePath } from '../../../files/file-service.js';
+import { getGatewayFileSpaceService } from '../../file-space-service.js';
+import { fuzzySubsequenceScore, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { registerFileReferenceRoutes } from './file-references.js';
 
-const services = new WeakMap<object, FileSpaceService>();
 const mutationLocks = new Map<string, Promise<void>>();
 
 async function withMutationLock<T>(key: string, action: () => Promise<T>): Promise<T> {
@@ -23,18 +25,6 @@ async function withMutationLock<T>(key: string, action: () => Promise<T>): Promi
     release();
     if (mutationLocks.get(key) === tail) mutationLocks.delete(key);
   }
-}
-
-function getFiles(deps: AuthenticatedRouteDeps): FileSpaceService {
-  const existing = services.get(deps.service);
-  if (existing) return existing;
-  const created = new FileSpaceService(
-    () => deps.service.currentConfig,
-    deps.service.projects,
-    (sessionKey) => deps.service.agentService.getResolvedWorkspaceForSession(sessionKey),
-  );
-  services.set(deps.service, created);
-  return created;
 }
 
 function publicSpace(space: Awaited<ReturnType<FileSpaceService['get']>>): FileSpace {
@@ -58,15 +48,20 @@ function contentDisposition(disposition: 'inline' | 'attachment', fileName: stri
   return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
 }
 
-async function collectFiles(files: FileSpaceService, spaceId: string, query: string, max: number): Promise<FileResource[]> {
+async function collectFiles(files: FileSpaceService, spaceId: string, max: number): Promise<FileResource[]> {
   const output: FileResource[] = [];
   const directories = [''];
+  const visited = new Set<string>();
+  const space = await files.get(spaceId);
   while (directories.length && output.length < max) {
     const directory = directories.shift()!;
+    const canonical = await resolveFilePath(space.root, directory).catch(() => null);
+    if (!canonical || visited.has(canonical)) continue;
+    visited.add(canonical);
     const children = await files.children(spaceId, directory);
     for (const child of children) {
       if (child.kind === 'directory') directories.push(child.relativePath);
-      else if (!query || child.name.toLocaleLowerCase().includes(query)) output.push(child);
+      else output.push(child);
       if (output.length >= max) break;
     }
   }
@@ -74,11 +69,18 @@ async function collectFiles(files: FileSpaceService, spaceId: string, query: str
 }
 
 export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const files = getFiles(deps);
+  const files = getGatewayFileSpaceService(deps.service);
+  registerFileReferenceRoutes(authenticated, deps);
 
   authenticated.get('/api/files/spaces', async (c) => {
     try {
       return c.json({ spaces: (await files.list()).map(publicSpace) });
+    } catch (error) { return errorResponse(c, error); }
+  });
+
+  authenticated.get('/api/files/default-space', async (c) => {
+    try {
+      return c.json({ space: publicSpace(await files.defaultSpace()) });
     } catch (error) { return errorResponse(c, error); }
   });
 
@@ -100,7 +102,7 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
     try {
       const limit = Math.min(100, Math.max(1, Number(c.req.query('limit')) || 50));
       const spaces = await files.list();
-      const items = (await Promise.all(spaces.map((space) => collectFiles(files, space.id, '', 5_000))))
+      const items = (await Promise.all(spaces.map((space) => collectFiles(files, space.id, 5_000))))
         .flat()
         .sort((a, b) => b.modifiedAt - a.modifiedAt)
         .slice(0, limit);
@@ -111,14 +113,30 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.get('/api/files/search', async (c) => {
     try {
       const query = (c.req.query('q') ?? '').trim().toLocaleLowerCase();
-      if (!query) return c.json({ items: [] });
       const limit = Math.min(100, Math.max(1, Number(c.req.query('limit')) || 50));
       const requestedSpaceId = c.req.query('spaceId');
       const spaces = requestedSpaceId ? [await files.get(requestedSpaceId)] : await files.list();
-      const items = (await Promise.all(spaces.map((space) => collectFiles(files, space.id, query, 5_000))))
-        .flat()
-        .sort((a, b) => b.modifiedAt - a.modifiedAt)
-        .slice(0, limit);
+      const matches = await Promise.all(spaces.map(async (space) => {
+        const candidates = await fuzzySearchWorkspaceFiles(space.root, query, limit);
+        return Promise.all(candidates.map(async (candidate) => {
+          try {
+            const absolutePath = await resolveFilePath(space.root, candidate.path);
+            return await fileResourceFromPath(space, absolutePath);
+          } catch (error) {
+            if (error instanceof FileServiceError) return null;
+            throw error;
+          }
+        }));
+      }));
+      const items = matches.flat()
+        .filter((file): file is FileResource => file !== null)
+        .map((file) => ({ file, score: Math.max(
+          fuzzySubsequenceScore(query, file.relativePath) ?? -Infinity,
+          fuzzySubsequenceScore(query, file.name) ?? -Infinity,
+        ) }))
+        .sort((a, b) => b.score - a.score || a.file.relativePath.localeCompare(b.file.relativePath))
+        .slice(0, limit)
+        .map((row) => row.file);
       return c.json({ items });
     } catch (error) { return errorResponse(c, error); }
   });
@@ -162,12 +180,14 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
       const body = await c.req.json<{ content?: string; revision?: string }>();
       if (typeof body.content !== 'string' || !body.revision) throw new FileServiceError(400, 'content and revision are required');
       const id = c.req.param('id');
-      const resource = await withMutationLock(id, async () => {
+      const initial = await files.resource(id);
+      const resource = await withMutationLock(initial.absolutePath, async () => {
         const current = await files.resource(id);
+        if (current.absolutePath !== initial.absolutePath) throw new FileServiceError(409, 'File has changed');
         if (!current.resource.capabilities.includes('edit')) throw new FileServiceError(403, 'File is not editable');
         if (body.revision !== current.resource.revision) throw new FileServiceError(409, 'File has changed');
         await writeFile(current.absolutePath, body.content, 'utf8');
-        return fileResourceFromPath(current.space, current.absolutePath);
+        return (await files.resource(id)).resource;
       });
       return c.json({ resource });
     } catch (error) { return errorResponse(c, error); }
