@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { AboutDialog } from '@/components/shell/about-dialog';
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { SidebarAppMenu } from '@/components/shell/sidebar-app-menu';
-import { openSupportReport } from '@/features/support/support-report-host';
+import { openSupportReport } from '@/features/support/support-report-events';
 import { UserAvatarDisplay } from '@/features/user-context/user-avatar-display';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
