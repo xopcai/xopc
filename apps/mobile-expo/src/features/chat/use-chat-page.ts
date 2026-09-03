@@ -41,8 +41,6 @@ import {
 } from './composer-send-helpers';
 import type { ComposerAttachment, WireAttachment } from './composer.types';
 import { coerceReasoningLevel, type Message } from './messages.types';
-import { MAX_PENDING_FOLLOW_UPS } from './pending-follow-up.types';
-import { sendOrQueueMessage } from './send-or-queue';
 import {
   parseSessionMessages,
   dedupeWireMessages,
@@ -269,11 +267,10 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     sessionHistoryQuery.dataUpdatedAt > chatSession.sessionDataUpdatedAtRef.current;
 
   const displayMessages = useMemo<Message[]>(() => {
-    if (sessionRefreshComplete) return sessionMessages;
     const base = mergeOptimisticUserMessages(sessionMessages, chatSession.optimisticMessages);
     if (!chatSession.streamingMsg) return base;
     return mergeStreamingAssistantIntoMessages(base, chatSession.streamingMsg);
-  }, [sessionRefreshComplete, sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);
+  }, [sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);
 
   useEffect(() => {
     chatSession.displayMessagesRef.current = displayMessages;
@@ -317,29 +314,21 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const composerDisabled =
     modelMutation.isPending ||
     Boolean(chatSession.clarifyPrompt) ||
-    chatSession.inputQueued ||
-    (!sessionKey && Boolean(bootstrap.bootstrapError));
-
-  const pendingSendRef = useRef<{ text: string; attachments?: WireAttachment[] } | null>(null);
-
-  const flushPendingSend = useCallback(() => {
-    const pending = pendingSendRef.current;
-    if (!pending || !sessionKey || modelMutation.isPending || chatSession.streaming || chatSession.clarifyPrompt) return;
-    pendingSendRef.current = null;
-    void chatSession.send(pending.text, pending.attachments);
-  }, [sessionKey, chatSession, modelMutation.isPending]);
+    chatSession.sending ||
+    !sessionKey || bootstrap.creatingInitialSession;
 
   useEffect(() => {
-    flushPendingSend();
-  }, [flushPendingSend]);
-
-  useEffect(() => {
-    if (!sessionKey || chatSession.streaming || chatSession.clarifyPrompt) return;
+    if (!sessionKey) return;
     const intake = consumeContentChatIntake(sessionKey);
     if (!intake) return;
-    pendingSendRef.current = { text: intake.prompt };
-    flushPendingSend();
-  }, [chatSession.clarifyPrompt, chatSession.streaming, flushPendingSend, sessionKey]);
+    if (modelMutation.isPending || chatSession.runningRef.current || chatSession.clarifyPrompt) {
+      setComposerSuggestion(intake.prompt);
+      return;
+    }
+    void chatSession.send(intake.prompt).then(consumed => {
+      if (!consumed) setComposerSuggestion(intake.prompt);
+    });
+  }, [chatSession, modelMutation.isPending, sessionKey]);
 
   const handleComposerSend = useCallback(
     async (text: string, attachments?: WireAttachment[]) => {
@@ -349,10 +338,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       const hasContent = Boolean(trimmed) || Boolean(attachments?.length);
       if (!hasContent) return false;
 
-      if (!sessionKey || bootstrap.creatingInitialSession) {
-        pendingSendRef.current = { text: trimmed, attachments };
-        return true;
-      }
+      if (!sessionKey || bootstrap.creatingInitialSession) return false;
       return chatSession.send(text, attachments);
     },
     [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, sessionKey, modelMutation.isPending],
@@ -492,31 +478,13 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     });
   }, [activeGatewayId, bootstrap, chatSession, currentSessionAgentId, defaultAgentId, embedded, newSessionPreferences, rememberLastChatScope, router]);
 
-  const queueFollowUpOrSend = useCallback(
-    (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-
-      if (!sessionKey || bootstrap.creatingInitialSession) {
-        pendingSendRef.current = { text: trimmed };
-        return;
-      }
-
-      sendOrQueueMessage({
-        text: trimmed,
-        runBusy: chatSession.runningRef.current,
-        pendingCount: chatSession.followUp.pendingFollowUps.length,
-        send: chatSession.send,
-        addPendingFollowUp: (msg) => chatSession.followUp.addPendingFollowUp(msg),
-        onQueueFull: () => {
-          chatSession.setSnackMsg(t(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }));
-        },
-      });
-    },
-    [bootstrap.creatingInitialSession, chatSession, m.chat.followUpQueueMaxReached, sessionKey],
-  );
-
-  const handleStarterSend = useCallback((text: string) => queueFollowUpOrSend(text), [queueFollowUpOrSend]);
+  const handleStarterSend = useCallback((text: string) => {
+    if (!sessionKey || chatSession.runningRef.current) {
+      setComposerSuggestion(text);
+      return;
+    }
+    void handleComposerSend(text);
+  }, [chatSession.runningRef, handleComposerSend, sessionKey]);
   const handleStarterPrefill = useCallback((text: string) => {
     const trimmed = text.trim();
     if (trimmed) setComposerSuggestion(trimmed);
@@ -546,7 +514,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const { registerFinalizeHandler } = useWorkspaceNavigation();
 
   const prepareAskAiFromHome = useCallback(() => {
-    pendingSendRef.current = null;
     chatSession.cancelRecovery();
     chatSession.clearAllState();
   }, [chatSession]);
@@ -575,9 +542,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   );
 
   const handleUserMessageRetry = useCallback((message: Message) => {
-    const payload = buildUserResendPayload(message);
-    if (!payload) return;
-    void chatSession.send(payload.text, payload.attachments);
+    void chatSession.retryMessage(message);
   }, [chatSession]);
 
   const handleAssistantCopy = useCallback(

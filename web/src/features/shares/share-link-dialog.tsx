@@ -206,7 +206,7 @@ function ShareLinkConfirmation({
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <div className="rounded-lg border border-edge-subtle bg-surface-muted/45 px-3 py-2.5">
-          <p className="truncate text-sm font-medium text-fg" title={params.path}>{params.path}</p>
+          <p className="truncate text-sm font-medium text-fg" title={params.fileName ?? params.path ?? params.fileId ?? params.uri}>{params.fileName ?? params.path ?? params.fileId ?? params.uri}</p>
           <p className="mt-1 text-xs leading-5 text-fg-muted">{t.shareConfirmHint}</p>
         </div>
 
@@ -291,10 +291,10 @@ export function ShareLinkDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className="fixed inset-0 z-[180] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[71] flex h-[min(31rem,calc(100dvh-2rem))] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
+            'fixed left-1/2 top-1/2 z-[181] flex h-[min(31rem,calc(100dvh-2rem))] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
             'overflow-hidden rounded-lg border border-edge bg-surface-panel shadow-popover outline-none',
           )}
         >
@@ -324,7 +324,7 @@ export function ShareLinkDialog({
             </div>
           ) : pendingParams && onConfirm ? (
             <ShareLinkConfirmation
-              key={`${pendingParams.path}:${pendingParams.sessionKey ?? pendingParams.agentId ?? ''}`}
+              key={`${pendingParams.fileId ?? pendingParams.uri ?? pendingParams.path}:${pendingParams.sessionKey ?? pendingParams.agentId ?? ''}`}
               params={pendingParams}
               loading={Boolean(loading)}
               error={error}

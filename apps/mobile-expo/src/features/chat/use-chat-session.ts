@@ -14,10 +14,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { InfiniteData } from '@tanstack/react-query';
 import { AppState } from 'react-native';
+import { randomUUID } from 'expo-crypto';
 
 import {
   AgentMessageSender,
-  AgentStreamReplayExpiredError,
   submitClarifyResponse,
   type MessagingCallbacks,
 } from '../../api/agent-client';
@@ -28,8 +28,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { useAgentStreamResume } from './use-agent-stream-resume';
 import { useAgentStreamRecovery } from './use-agent-stream-recovery';
 import { isTransientNetworkError, STREAM_STALL_MS } from './network-errors';
-import { useChatFollowUp } from './use-chat-follow-up';
-import { useMessages, t } from '../../i18n/messages';
+import { useMessages } from '../../i18n/messages';
 import {
   canSendComposerDraft,
   buildOptimisticUserMessage,
@@ -67,14 +66,15 @@ import {
 } from './session-message-parser';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { requestMobileRealtimeReconnect } from '../gateway/use-gateway-realtime';
-import { OUTBOX_CHANGED, readPendingSessionInput } from '../gateway/session-input-outbox';
+import { readCachedSessionDetail } from '../gateway/session-detail-cache';
+import { capAttachments } from './chat-limits';
+import { localMessageScope, readLocalMessages, useLocalMessagesStore } from './local-messages-store';
+import type { MessageSubmission } from './message-submission';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
 
 const STREAMING_RENDER_THROTTLE_MS = 100;
-const QUEUED_MESSAGE_DISPLAY_DELAY_MS = 20_000;
-const MAX_PENDING_FOLLOW_UPS = 5;
 
 export interface UseChatSessionOptions {
   sessionKey: string;
@@ -92,21 +92,18 @@ export interface UseChatSessionReturn {
   clarifySubmitting: boolean;
   clarifySubmitError: string | null;
   optimisticMessages: Message[];
-  inputQueued: boolean;
+  sending: boolean;
   awaitingSessionRefresh: boolean;
   sessionDataUpdatedAtRef: React.MutableRefObject<number>;
 
   // Actions
   send: (text: string, attachments?: WireAttachment[]) => Promise<boolean>;
-  sendVoice: (payload: { uri: string; durationMillis: number; mimeType?: string }) => Promise<void>;
+  retryMessage: (message: Message) => Promise<void>;
   abort: () => void;
   cancelRecovery: () => void;
   submitClarifyAnswer: (answer: string) => Promise<void>;
   skipClarifyAnswer: () => Promise<void>;
   clearAllState: () => void;
-
-  // Follow-up
-  followUp: ReturnType<typeof useChatFollowUp>;
 
   // Refs (needed by parent)
   activeSessionKeyRef: React.MutableRefObject<string>;
@@ -129,13 +126,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const lastStreamActivityAtRef = useRef(0);
   const streamingRef = useRef(false);
   const sendingRef = useRef(false);
+  const mountedRef = useRef(true);
   const runBusyRef = useRef(false);
-  const streamActiveRef = useRef(false);
-  const clarifyActiveRef = useRef(false);
   const resumeInFlightRef = useRef(false);
   const streamingMsgRef = useRef<Message | null>(null);
   const streamingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const queuedDisplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const displayMessagesRef = useRef<Message[]>([]);
   const messageListAtBottomRef = useRef(true);
   const sessionDataUpdatedAtRef = useRef(0);
@@ -149,10 +144,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     cancelRecovery: () => {},
   });
 
-  const sendRef = useRef<(text: string, attachments?: WireAttachment[]) => Promise<boolean>>(
-    async () => false,
-  );
-
   // ── Streaming state ──────────────────────────────────────
   const [streamingMsg, setStreamingMsg] = useState<Message | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -161,8 +152,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifySubmitError, setClarifySubmitError] = useState<string | null>(null);
-  const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
-  const [inputQueued, setInputQueued] = useState(false);
+  const scope = localMessageScope(activeGatewayId, sessionKey);
+  const optimisticMessages = useLocalMessagesStore(state => state.sessions[scope] ?? readLocalMessages(scope));
+  const setOptimisticMessages = useCallback((update: (messages: Message[]) => Message[]) => {
+    useLocalMessagesStore.getState().update(scope, update);
+  }, [scope]);
+  const activeMessageIdRef = useRef<string | null>(null);
+  const sending = optimisticMessages.some(message => message.deliveryState === 'sending');
   const [awaitingSessionRefresh, setAwaitingSessionRefresh] = useState(false);
   const [pendingRunTick, setPendingRunTick] = useState(0);
 
@@ -219,39 +215,18 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     setStreamingMsg(null);
   }, [clearStreamingFlushTimer]);
 
-  const clearQueuedDisplayTimer = useCallback(() => {
-    if (queuedDisplayTimerRef.current) clearTimeout(queuedDisplayTimerRef.current);
-    queuedDisplayTimerRef.current = null;
-  }, []);
-
-  const setOptimisticDeliveryState = useCallback((deliveryState?: Message['deliveryState']) => {
-    setOptimisticMessages((messages) => messages.map((message, index) => (
-      index === 0 ? { ...message, deliveryState } : message
-    )));
-  }, []);
-
-  const scheduleQueuedDeliveryState = useCallback((createdAt = Date.now()) => {
-    clearQueuedDisplayTimer();
-    const delayMs = Math.max(0, createdAt + QUEUED_MESSAGE_DISPLAY_DELAY_MS - Date.now());
-    queuedDisplayTimerRef.current = setTimeout(() => {
-      queuedDisplayTimerRef.current = null;
-      setOptimisticDeliveryState('queued');
-    }, delayMs);
-  }, [clearQueuedDisplayTimer, setOptimisticDeliveryState]);
-
   const clearAllState = useCallback(() => {
     clearStreamingMessage();
-    clearQueuedDisplayTimer();
     setStreaming(false);
     streamingRef.current = false;
     setProgress(null);
     setClarifyPrompt(null);
     setClarifySubmitError(null);
     setClarifySubmitting(false);
-    setOptimisticMessages([]);
-    setInputQueued(false);
+    setOptimisticMessages(messages => messages.filter(message =>
+      message.deliveryState === 'failed' || message.deliveryState === 'sending'));
     setAwaitingSessionRefresh(false);
-  }, [clearQueuedDisplayTimer, clearStreamingMessage]);
+  }, [clearStreamingMessage, setOptimisticMessages]);
 
 
   // ── Session invalidation ─────────────────────────────────
@@ -301,7 +276,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     });
     if (activeSessionKeyRef.current !== targetSessionKey) return;
     sendingRef.current = false;
-    streamActiveRef.current = false;
     runBusyRef.current = false;
     clearAllState();
   }, [clearAllState, invalidateSessionByKey, refreshSessionHeadByKey, sessionKey]);
@@ -310,29 +284,16 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   useEffect(() => {
     senderRef.current.detachLocalStream();
     activeSessionKeyRef.current = sessionKey;
+    sendingRef.current = false;
+    runBusyRef.current = false;
     clearAllState();
   }, [sessionKey, clearAllState]);
 
-  // ── Clarify active tracking ──────────────────────────────
-  useEffect(() => {
-    clarifyActiveRef.current = Boolean(clarifyPrompt);
-  }, [clarifyPrompt]);
-
   // ── Run busy tracking ────────────────────────────────────
   useEffect(() => {
-    streamActiveRef.current = streaming || sendingRef.current;
-    runBusyRef.current = streaming || awaitingSessionRefresh || sendingRef.current;
-  }, [streaming, awaitingSessionRefresh]);
-
-  // ── Follow-up ────────────────────────────────────────────
-  const followUp = useChatFollowUp({
-    sessionKey,
-    sessionKeyRef: activeSessionKeyRef,
-    taskId,
-    onQueueFull: () => {
-      setSnackMsg(t(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }));
-    },
-  });
+    runBusyRef.current = streaming || awaitingSessionRefresh || sending;
+    sendingRef.current = sending;
+  }, [streaming, awaitingSessionRefresh, sending]);
 
   // ── Finalize message ─────────────────────────────────────
   const finalizeMessage = useCallback((targetSessionKey = sessionKey) => {
@@ -368,7 +329,9 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Build callbacks ──────────────────────────────────────
   const buildCallbacks = useCallback((callbackSessionKey: string): MessagingCallbacks => {
-    const isCurrentSession = () => activeSessionKeyRef.current === callbackSessionKey;
+    const isCurrentSession = () => mountedRef.current
+      && activeSessionKeyRef.current === callbackSessionKey
+      && useGatewayStore.getState().activeGatewayId === activeGatewayId;
     const touchStreamActivity = () => {
       lastStreamActivityAtRef.current = Date.now();
     };
@@ -383,9 +346,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         if (!isCurrentSession()) return;
         touchStreamActivity();
         streamRecoveryRef.current.markRecoverySucceeded();
-        clearQueuedDisplayTimer();
-        setOptimisticDeliveryState(undefined);
-        setInputQueued(false);
         setStreaming(true);
         streamingRef.current = true;
         updateStreamingMessage(() => {}, true);
@@ -393,11 +353,9 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       onUserTranscript: ({ text, attachments }) => {
         if (!isCurrentSession()) return;
         touchStreamActivity();
-        clearQueuedDisplayTimer();
-        setInputQueued(false);
         setProgress(null);
         setOptimisticMessages((prev) => {
-          const head = prev[0];
+          const head = prev.find(message => message.id === activeMessageIdRef.current);
           if (!head || head.role !== 'user-with-attachments') return prev;
           const content = [...head.content];
           const trimmed = text.trim();
@@ -425,7 +383,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
               };
             }
           }
-          return [{ ...head, content }];
+          return prev.map(message => message === head ? { ...head, content } : message);
         });
       },
       onToken: (delta, messageId) => {
@@ -572,7 +530,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           return;
         }
         sendingRef.current = false;
-        streamActiveRef.current = false;
         runBusyRef.current = true;
         if (streamingMsgRef.current) {
           finalizeStreamingThinking(streamingMsgRef.current.content);
@@ -588,14 +545,12 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         }
         if (isTransientNetworkError(msg) && streamRecoveryRef.current.recover(msg)) {
           sendingRef.current = false;
-          streamActiveRef.current = streamingRef.current;
           runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
           return;
         }
         sendingRef.current = false;
         setStreaming(false);
         streamingRef.current = false;
-        streamActiveRef.current = false;
         runBusyRef.current = awaitingSessionRefresh;
         clearStreamingMessage();
         setProgress(null);
@@ -611,6 +566,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       },
     };
   }, [
+    activeGatewayId,
+    queryClient,
     invalidateSessionByKey,
     invalidateSession,
     updateStreamingMessage,
@@ -618,170 +575,97 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     flushStreamingMessage,
     clearStreamingMessage,
     finalizeMessage,
-    followUp,
     awaitingSessionRefresh,
-    clearQueuedDisplayTimer,
-    setOptimisticDeliveryState,
+    setOptimisticMessages,
     m.chat.modelQuotaExhausted,
     m.chat.platformTokenLimitExceeded,
   ]);
 
-  // ── Send ─────────────────────────────────────────────────
-  const send = useCallback(
-    async (text: string, attachments?: WireAttachment[]): Promise<boolean> => {
-      if (!canSendComposerDraft(text, attachments?.length ?? 0) || !sessionKey || streaming) {
-        return false;
-      }
-      sendingRef.current = true;
-      setInputQueued(true);
-      streamActiveRef.current = true;
-      runBusyRef.current = true;
-      const userMsg = buildOptimisticUserMessage(text, attachments);
-      setOptimisticMessages([userMsg]);
-      clearStreamingMessage();
-      setProgress(null);
-      setClarifyPrompt(null);
-      setClarifySubmitError(null);
-      setClarifySubmitting(false);
-      streamRecoveryRef.current.cancelRecovery();
-      setAwaitingSessionRefresh(false);
-      lastStreamActivityAtRef.current = Date.now();
-      try {
-        await senderRef.current.sendMessage(
-          text.trim(),
-          sessionKey,
-          buildCallbacks(sessionKey),
-          attachments,
-          taskId,
-        );
-        setInputQueued(false);
-        return true;
-      } catch (e) {
-        if (activeSessionKeyRef.current !== sessionKey) {
-          invalidateSessionByKey(sessionKey);
-          return true;
-        }
-        if (streamRecoveryRef.current.recover(e)) {
-          scheduleQueuedDeliveryState(readPendingSessionInput(sessionKey)?.createdAt);
-          sendingRef.current = false;
-          streamActiveRef.current = streamingRef.current;
-          runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
-          return true;
-        }
-        if (e instanceof AgentStreamReplayExpiredError) {
-          await reconcileSessionHead(sessionKey);
-          return true;
-        }
-        clearQueuedDisplayTimer();
-        const pendingInput = readPendingSessionInput(sessionKey);
-        setInputQueued(Boolean(pendingInput));
-        setOptimisticDeliveryState(pendingInput && !pendingInput.needsReview ? 'queued' : 'failed');
-        setStreaming(false);
-        streamingRef.current = false;
+  // ── Submit once; only the message retry action submits again. ──────
+  const submitMessage = useCallback(async (input: MessageSubmission): Promise<void> => {
+    const targetScope = localMessageScope(input.gatewayId, input.sessionKey);
+    const updateMessage = (deliveryState: Message['deliveryState']) => {
+      useLocalMessagesStore.getState().update(targetScope, messages => messages.map(message =>
+        message.id === input.clientMessageId ? { ...message, deliveryState } : message));
+    };
+    const isCurrent = () => mountedRef.current && activeSessionKeyRef.current === input.sessionKey
+      && useGatewayStore.getState().activeGatewayId === input.gatewayId;
+    sendingRef.current = true;
+    runBusyRef.current = true;
+    activeMessageIdRef.current = input.clientMessageId;
+    updateMessage('sending');
+    clearStreamingMessage();
+    setProgress(null);
+    streamRecoveryRef.current.cancelRecovery();
+    let runId: string | undefined;
+    try {
+      ({ runId } = await senderRef.current.sendMessage(input));
+      updateMessage('sent');
+    } catch (error) {
+      updateMessage('failed');
+      if (isCurrent()) {
         sendingRef.current = false;
-        streamActiveRef.current = streaming || false;
-        runBusyRef.current = streaming || awaitingSessionRefresh;
-        return false;
+        runBusyRef.current = false;
+        setSnackMsg(error instanceof Error ? error.message : m.chat.sendFailed);
       }
-    },
-    [
-      sessionKey,
-      taskId,
-      streaming,
-      awaitingSessionRefresh,
-      invalidateSessionByKey,
-      clearStreamingMessage,
-      buildCallbacks,
-      clearQueuedDisplayTimer,
-      reconcileSessionHead,
-      scheduleQueuedDeliveryState,
-      setOptimisticDeliveryState,
-    ],
-  );
+      return;
+    }
+    if (!isCurrent()) return;
+    sendingRef.current = false;
+    if (!runId) {
+      runBusyRef.current = false;
+      finalizeMessage(input.sessionKey);
+      return;
+    }
+    setStreaming(true);
+    streamingRef.current = true;
+    lastStreamActivityAtRef.current = Date.now();
+    // A stream failure cannot change an accepted message back to failed.
+    void senderRef.current.resume(runId, input.sessionKey, buildCallbacks(input.sessionKey), {
+      replayFromStart: true,
+    }).catch(async error => {
+      if (!isCurrent()) return;
+      if (streamRecoveryRef.current.recover(error)) return;
+      await reconcileSessionHead(input.sessionKey);
+    });
+  }, [buildCallbacks, clearStreamingMessage, finalizeMessage, m.chat.sendFailed, reconcileSessionHead]);
 
-  sendRef.current = send;
-
-  // ── Send voice ───────────────────────────────────────────
-  const sendVoice = useCallback(
-    async (payload: { uri: string; durationMillis: number; mimeType?: string }) => {
-      if (!payload.uri || !sessionKey || streaming || awaitingSessionRefresh) return;
-      const userMsg: Message = {
-        role: 'user-with-attachments',
-        content: [
-          {
-            type: 'audio',
-            uri: payload.uri,
-            mimeType: payload.mimeType,
-            name: 'voice.m4a',
-            durationSeconds: Math.round(payload.durationMillis / 1000),
-          },
-        ],
-        timestamp: Date.now(),
-      };
-      setOptimisticMessages([userMsg]);
-      setInputQueued(true);
-      clearStreamingMessage();
-      setProgress({
-        stage: 'voice',
-        message: m.chat.voiceSending,
-        timestamp: Date.now(),
-      });
-      setClarifyPrompt(null);
-      setClarifySubmitError(null);
-      setClarifySubmitting(false);
-      streamRecoveryRef.current.cancelRecovery();
-      setAwaitingSessionRefresh(false);
-      try {
-        await senderRef.current.sendVoiceMessage(
-          payload,
-          sessionKey,
-          buildCallbacks(sessionKey),
-          taskId,
-        );
-        setInputQueued(false);
-      } catch (e) {
-        if (activeSessionKeyRef.current !== sessionKey) {
-          invalidateSessionByKey(sessionKey);
-          return;
-        }
-        if (streamRecoveryRef.current.recover(e)) {
-          scheduleQueuedDeliveryState(readPendingSessionInput(sessionKey)?.createdAt);
-          return;
-        }
-        if (e instanceof AgentStreamReplayExpiredError) {
-          await reconcileSessionHead(sessionKey);
-          return;
-        }
-        clearQueuedDisplayTimer();
-        const pendingInput = readPendingSessionInput(sessionKey);
-        setInputQueued(Boolean(pendingInput));
-        setOptimisticDeliveryState(pendingInput && !pendingInput.needsReview ? 'queued' : 'failed');
-        setStreaming(false);
-        streamingRef.current = false;
-        setProgress(null);
-        throw e;
-      }
-    },
-    [
+  const send = useCallback(async (text: string, attachments?: WireAttachment[]): Promise<boolean> => {
+    if (!canSendComposerDraft(text, attachments?.length ?? 0) || !sessionKey || !activeGatewayId
+      || runBusyRef.current || sendingRef.current
+      || readLocalMessages(scope).some(message => message.deliveryState === 'sending')) return false;
+    const input: MessageSubmission = {
+      clientMessageId: randomUUID(),
+      gatewayId: activeGatewayId,
       sessionKey,
+      expectedSessionId: readCachedSessionDetail(activeGatewayId, sessionKey)?.sessionId,
       taskId,
-      streaming,
-      awaitingSessionRefresh,
-      invalidateSessionByKey,
-      clearStreamingMessage,
-      buildCallbacks,
-      m.chat.voiceSending,
-      clearQueuedDisplayTimer,
-      reconcileSessionHead,
-      scheduleQueuedDeliveryState,
-      setOptimisticDeliveryState,
-    ],
-  );
+      content: text.trim(),
+      attachments: capAttachments(attachments) ?? [],
+    };
+    const message = {
+      ...buildOptimisticUserMessage(input.content, input.attachments),
+      id: input.clientMessageId,
+      submission: input,
+      deliveryState: 'sending' as const,
+    };
+    setOptimisticMessages(messages => [...messages, message]);
+    await submitMessage(input);
+    // The message now owns its content, including when submission failed.
+    return true;
+  }, [activeGatewayId, scope, sessionKey, setOptimisticMessages, submitMessage, taskId]);
+
+  const retryMessage = useCallback(async (message: Message): Promise<void> => {
+    const current = readLocalMessages(scope).find(row => row.id === message.id);
+    if (current?.deliveryState !== 'failed' || !current.submission
+      || runBusyRef.current || sendingRef.current
+      || readLocalMessages(scope).some(row => row.deliveryState === 'sending')) return;
+    await submitMessage(current.submission);
+  }, [scope, submitMessage]);
 
   // ── Abort ────────────────────────────────────────────────
   const abort = useCallback(() => {
     streamRecoveryRef.current.cancelRecovery();
-    clearQueuedDisplayTimer();
     setClarifyPrompt(null);
     setClarifySubmitError(null);
     setClarifySubmitting(false);
@@ -792,7 +676,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       flushStreamingMessage();
     }
     finalizeMessage();
-  }, [clearQueuedDisplayTimer, finalizeMessage, flushStreamingMessage]);
+  }, [finalizeMessage, flushStreamingMessage]);
 
   // ── Clarify answer ───────────────────────────────────────
   const submitClarifyAnswer = useCallback(async (answer: string) => {
@@ -839,7 +723,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Resume ───────────────────────────────────────────────
   const resume = useCallback(async (runId: string) => {
-    if (resumeInFlightRef.current) return;
+    if (resumeInFlightRef.current || sendingRef.current) return;
     resumeInFlightRef.current = true;
     try {
       if (activeSessionKeyRef.current !== sessionKey) return;
@@ -886,33 +770,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     sessionKey,
     activeSessionKeyRef,
     tryResume: resume,
-    tryPendingInput: () => senderRef.current.retryPendingMessage(
-      sessionKey,
-      buildCallbacks(sessionKey),
-    ),
     onParked: () => {
-      sendingRef.current = false;
-      streamActiveRef.current = false;
-      runBusyRef.current = Boolean(readPendingSessionInput(sessionKey)) || awaitingSessionRefresh;
-      setInputQueued(Boolean(readPendingSessionInput(sessionKey)));
-      setStreaming(false);
-      streamingRef.current = false;
-      const pendingInput = readPendingSessionInput(sessionKey);
-      if (pendingInput) scheduleQueuedDeliveryState(pendingInput.createdAt);
+      runBusyRef.current = Boolean(readPendingAgentRunId(sessionKey));
+      setStreaming(Boolean(readPendingAgentRunId(sessionKey)));
+      streamingRef.current = Boolean(readPendingAgentRunId(sessionKey));
     },
     onReconcile: async () => {
       await reconcileSessionHead(sessionKey);
-    },
-    onSubmissionFailed: () => {
-      clearQueuedDisplayTimer();
-      const pendingInput = readPendingSessionInput(sessionKey);
-      sendingRef.current = false;
-      streamActiveRef.current = false;
-      runBusyRef.current = Boolean(pendingInput);
-      setInputQueued(Boolean(pendingInput));
-      setStreaming(false);
-      streamingRef.current = false;
-      setOptimisticDeliveryState(pendingInput && !pendingInput.needsReview ? 'queued' : 'failed');
     },
   });
   streamRecoveryRef.current = streamRecovery;
@@ -924,15 +788,15 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     activeSessionKeyRef,
     wakeRecovery: streamRecovery.wake,
     streaming,
+    sending,
   });
 
   const wakeStreamRecovery = useCallback(() => {
-    if (!sessionKey) return;
+    if (!sessionKey || sendingRef.current) return;
     if (senderRef.current.isStreamingFor(sessionKey)) {
       senderRef.current.detachLocalStream();
     }
     sendingRef.current = false;
-    streamActiveRef.current = streamingRef.current;
     runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
     lastStreamActivityAtRef.current = Date.now();
     streamRecoveryRef.current.wake();
@@ -965,46 +829,29 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     return () => subscription.remove();
   }, [sessionKey, wakeStreamRecovery, refreshSessionHeadByKey, invalidateSessionByKey]);
 
-  useEffect(() => subscribeGatewayEvent(OUTBOX_CHANGED, () => {
-    const pending = readPendingSessionInput(sessionKey);
-    if (pending?.needsReview) setOptimisticDeliveryState('failed');
-    if (pending || sendingRef.current || senderRef.current.isStreamingFor(sessionKey)) return;
-    setInputQueued(false);
-    runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
-    setOptimisticMessages(current => current.filter(message => !message.deliveryState));
-  }), [sessionKey, awaitingSessionRefresh, setOptimisticDeliveryState]);
-
   // Resolve server-side active runs on session entry. Local pending run storage is
   // only a cache; the gateway is the source of truth when the screen remounts.
   useEffect(() => {
     if (!sessionKey) return undefined;
     let cancelled = false;
-    const pendingInput = readPendingSessionInput(sessionKey);
-    if (pendingInput) {
-      setOptimisticMessages([{
-        ...buildOptimisticUserMessage(pendingInput.content, pendingInput.attachments),
-        deliveryState: pendingInput.needsReview ? 'failed' : 'queued',
-      }]);
-      setInputQueued(true);
-      streamRecoveryRef.current.wake();
-      return undefined;
-    }
     void resolveResumeRunId(sessionKey).then((runId) => {
-      if (cancelled || !runId || activeSessionKeyRef.current !== sessionKey) return;
+      if (cancelled || !runId || sendingRef.current || activeSessionKeyRef.current !== sessionKey) return;
       streamRecoveryRef.current.wake();
+    }).catch(() => {
+      // A disconnected session is refreshed when connectivity returns.
     });
     return () => {
       cancelled = true;
     };
-  }, [sessionKey]);
+  }, [sessionKey, activeGatewayId]);
 
   // ── Gateway event subscription ───────────────────────────
   useEffect(() => {
     return subscribeGatewayEvent('session-updated', (detail) => {
       const key = (detail as { key?: string }).key;
-      if (!key || key !== sessionKey) return;
+      if (!key || key !== sessionKey || sendingRef.current) return;
       if (
-        (readPendingSessionInput(sessionKey) || readPendingAgentRunId(sessionKey)) &&
+        readPendingAgentRunId(sessionKey) &&
         !senderRef.current.isStreamingFor(sessionKey)
       ) {
         streamRecoveryRef.current.wake();
@@ -1016,12 +863,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Cleanup on unmount ───────────────────────────────────
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       senderRef.current.detachLocalStream();
       clearStreamingFlushTimer();
-      clearQueuedDisplayTimer();
     };
-  }, [clearQueuedDisplayTimer, clearStreamingFlushTimer]);
+  }, [clearStreamingFlushTimer]);
 
   // ── Gateway connectivity effects ─────────────────────────
   // Resume streams when gateway connectivity returns
@@ -1030,7 +878,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     prevGatewayOnlineForStreamRef.current = gatewayOnline;
     if (!wasOffline || !gatewayOnline || !sessionKey) return;
     const hasResumableStream =
-      inputQueued ||
       Boolean(pendingRunId) ||
       (streaming && senderRef.current.isStreamingFor(sessionKey));
     if (!hasResumableStream) return;
@@ -1039,7 +886,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     gatewayOnline,
     sessionKey,
     streaming,
-    inputQueued,
+    sending,
     pendingRunId,
     triggerStreamRecovery,
   ]);
@@ -1054,8 +901,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   useEffect(() => {
     return subscribeGatewayEvent('gateway.realtime-connected', () => {
-      if (!sessionKey || activeSessionKeyRef.current !== sessionKey) return;
-      if (!readPendingSessionInput(sessionKey) && !readPendingAgentRunId(sessionKey)) return;
+      if (!sessionKey || sendingRef.current || activeSessionKeyRef.current !== sessionKey) return;
+      if (!readPendingAgentRunId(sessionKey)) return;
       if (senderRef.current.isStreamingFor(sessionKey)) return;
       streamRecoveryRef.current.wake();
     });
@@ -1084,21 +931,18 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     clarifySubmitting,
     clarifySubmitError,
     optimisticMessages,
-    inputQueued,
+    sending,
     awaitingSessionRefresh,
     sessionDataUpdatedAtRef,
 
     // Actions
     send,
-    sendVoice,
+    retryMessage,
     abort,
     cancelRecovery: streamRecovery.cancelRecovery,
     submitClarifyAnswer,
     skipClarifyAnswer,
     clearAllState,
-
-    // Follow-up
-    followUp,
 
     // Refs
     activeSessionKeyRef,

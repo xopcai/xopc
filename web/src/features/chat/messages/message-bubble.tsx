@@ -171,7 +171,6 @@ export const MessageBubble = memo(function MessageBubble({
       fetchUrl: m.chat.stepFetchUrl,
       unknownTool: m.chat.stepUnknownTool,
       activityCompleted: m.chat.activityCompleted,
-      activityPartial: m.chat.activityPartial,
       activityFailedCount: m.chat.activityFailedCount,
       activityAnalysisComplete: m.chat.activityAnalysisComplete,
       toolFailedImpact: m.chat.toolFailedImpact,
@@ -199,7 +198,6 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.stepFetchUrl,
       m.chat.stepUnknownTool,
       m.chat.activityCompleted,
-      m.chat.activityPartial,
       m.chat.activityFailedCount,
       m.chat.activityAnalysisComplete,
       m.chat.toolFailedImpact,
@@ -634,6 +632,7 @@ export const MessageBubble = memo(function MessageBubble({
                 view={assistantTurnView}
                 authToken={authToken}
                 sessionKey={sessionKey}
+                projectId={projectId}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
                   '{{count}}',
                   String(assistantTurnView.sources.length),
@@ -655,6 +654,7 @@ export const MessageBubble = memo(function MessageBubble({
                   attachments={attachmentsForBubble}
                   authToken={authToken}
                   sessionKey={sessionKey}
+                  projectId={projectId}
                 />
               )
             ) : null}

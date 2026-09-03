@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { PanResponder } from 'react-native';
-import { useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { AppToast } from '../../components/AppToast';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_LONG } from '../../constants/toast';
@@ -15,7 +14,6 @@ import {
 } from '../../motion/haptics';
 import {
   VoiceRecordingCard,
-  type VoiceRecordingZone,
 } from '../chat/VoiceRecordingCard';
 import {
   beginRecording,
@@ -29,6 +27,8 @@ import {
   requestMicPermission,
   type ExpoRecording,
 } from '../chat/voiceRecording';
+
+type VoiceRecordingZone = 'center' | 'cancel' | 'text';
 
 const ZONE_CANCEL_DX = -72;
 const ZONE_TEXT_DX = 72;
@@ -102,7 +102,6 @@ export function useVoiceCaptureInteraction({
   const finalizeRef = useRef<() => void>(() => {});
   const valueRef = useRef(value);
   const mountedRef = useRef(true);
-  const voiceDragX = useSharedValue(0);
   valueRef.current = value;
 
   useEffect(() => () => {
@@ -129,8 +128,7 @@ export function useVoiceCaptureInteraction({
     setVoiceZone('center');
     setMeterSamples([]);
     setDurationMillis(0);
-    voiceDragX.value = withTiming(0, { duration: 140 });
-  }, [voiceDragX]);
+  }, []);
 
   const ensureMicAccess = useCallback(async (): Promise<boolean> => {
     try {
@@ -350,7 +348,6 @@ export function useVoiceCaptureInteraction({
         },
         onPanResponderMove: (_, g) => {
           if (!interactionStartedRef.current) return;
-          voiceDragX.value = g.dx;
           const zone = voiceZoneFromGesture(g.dx);
           if (releaseZoneRef.current === zone) return;
           hapticVoiceZoneChange();
@@ -359,7 +356,6 @@ export function useVoiceCaptureInteraction({
           setVoiceZone(zone);
         },
         onPanResponderRelease: () => {
-          voiceDragX.value = withTiming(0, { duration: 140 });
           if (longPressTimerRef.current) {
             clearTimeout(longPressTimerRef.current);
             longPressTimerRef.current = null;
@@ -374,7 +370,6 @@ export function useVoiceCaptureInteraction({
           void finalizeRecordingInteraction();
         },
         onPanResponderTerminate: () => {
-          voiceDragX.value = withTiming(0, { duration: 140 });
           if (longPressTimerRef.current) {
             clearTimeout(longPressTimerRef.current);
             longPressTimerRef.current = null;
@@ -392,7 +387,7 @@ export function useVoiceCaptureInteraction({
         },
         onPanResponderTerminationRequest: () => false,
       }),
-    [canCaptureVoice, finalizeRecordingInteraction, longPressDelayMs, onTap, startGrantFlow, voiceDragX],
+    [canCaptureVoice, finalizeRecordingInteraction, longPressDelayMs, onTap, startGrantFlow],
   );
 
   return {
@@ -400,26 +395,13 @@ export function useVoiceCaptureInteraction({
       <>
         <VoiceRecordingCard
           visible={starting || recordingActive || transcribing}
-          stage={transcribing ? 'transcribing' : starting ? 'starting' : 'recording'}
-          zone={voiceZone}
+          processing={transcribing || starting}
+          cancelled={voiceZone === 'cancel'}
           meterSamples={meterSamples}
           durationMillis={durationMillis}
-          centerHint={cm.voiceReleaseCenterSimpleHint}
-          textHint={cm.voiceReleaseTextHint}
-          cancelHint={cm.voiceReleaseCancelHint}
-          lockHint={cm.voiceReleaseLockHint}
-          startingLabel={cm.voiceStarting}
-          lockedLabel={cm.voiceLocked}
-          reviewLabel={cm.voiceReview}
-          transcribingLabel={cm.voiceTranscribing}
-          sendingLabel={cm.voiceSending}
-          deleteLabel={cm.voiceDelete}
-          stopLabel={cm.voiceStop}
-          convertTextLabel={cm.voiceConvertToText}
-          sendLabel={cm.send}
-          playLabel={cm.audioPlay}
-          pauseLabel={cm.audioPause}
-          dragX={voiceDragX}
+          hint={transcribing ? cm.voiceTranscribing : starting ? cm.voiceStarting
+            : voiceZone === 'cancel' ? cm.voiceReleaseCancelHint
+            : voiceZone === 'text' ? cm.voiceReleaseTextHint : cm.voiceReleaseCenterSimpleHint}
         />
         <AppToast
           visible={Boolean(snack)}
