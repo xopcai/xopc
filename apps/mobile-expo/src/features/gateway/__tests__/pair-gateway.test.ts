@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildDevicePairingProof } from '@xopcai/gateway-contract';
 
@@ -20,6 +21,9 @@ import { pairWithGateway, readPendingDevicePairing, useDevicePairingFlow } from 
 import type { ParsedGatewayQr } from '../parse-gateway-qr';
 
 const keys = crypto.generateKeyPairSync('ed25519');
+// Use the same AbortController as React Native; Node's signal has extra methods.
+const requireReactNative = createRequire(import.meta.resolve('react-native/package.json'));
+const { AbortController: NativeAbortController } = requireReactNative('abort-controller/dist/abort-controller');
 const gatewayPublicKey = keys.publicKey.export({ format: 'jwk' }).x!;
 const pairing: ParsedGatewayQr = { version: 3, gatewayId: 'computer-a', gatewayName: 'Work Mac', gatewayPublicKey,
   pairingToken: 'xopc_pair_123_secret', expiresAt: Date.now() + 600000,
@@ -30,7 +34,7 @@ function response(payload: unknown, tamper = false) {
   return new Response(JSON.stringify({ signedPayload: tamper ? signedPayload + 'A' : signedPayload, signature }));
 }
 describe('mobile approved pairing', () => {
-  beforeEach(() => { state.journal.clear(); state.saved.mockReset(); state.refresh.mockReset(); state.refresh.mockResolvedValue({ accessToken: 'access', accessTokenExpiresAt: Date.now() + 60000 }); vi.useFakeTimers(); });
+  beforeEach(() => { state.journal.clear(); state.saved.mockReset(); state.refresh.mockReset(); state.refresh.mockResolvedValue({ accessToken: 'access', accessTokenExpiresAt: Date.now() + 60000 }); vi.useFakeTimers(); vi.stubGlobal('AbortController', NativeAbortController); });
   afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
   it('proves device possession, waits for approval, then commits credentials once', async () => {
     const actions: string[] = [];
@@ -64,6 +68,48 @@ describe('mobile approved pairing', () => {
     await expect(pairWithGateway(pairing)).rejects.toThrow('PAIRING_IDENTITY_MISMATCH');
     expect(fetch).toHaveBeenCalledOnce();
     expect(state.saved).not.toHaveBeenCalled();
+  });
+  it('does not start a network request when already paused', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    await expect(pairWithGateway(pairing, controller.signal)).rejects.toThrow('PAIRING_PAUSED');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(useDevicePairingFlow.getState().error).toBeNull();
+  });
+  it('stops probing routes when paused without reporting a connection failure', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn(async () => {
+      controller.abort();
+      throw new Error('Aborted');
+    });
+    vi.stubGlobal('fetch', fetch);
+    const qr = { ...pairing, routes: [...pairing.routes, { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' }] };
+    await expect(pairWithGateway(qr, controller.signal)).rejects.toThrow('PAIRING_PAUSED');
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(readPendingDevicePairing()).toBeNull();
+    expect(useDevicePairingFlow.getState().error).toBeNull();
+  });
+  it('tries the next secure route after a pairing request connection failure', async () => {
+    const qr = { ...pairing, routes: [...pairing.routes, { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' }] };
+    const fetch = vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (url.endsWith('/probe')) return response({ gatewayId: qr.gatewayId, pairingId: '123', issuedAt: Date.now() });
+      if (url.startsWith(qr.routes[0]!.url)) throw new Error('Network request failed');
+      return response({ gateway: { id: qr.gatewayId, name: qr.gatewayName }, nonce: body.nonce,
+        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: qr.routes, scopes: ['sessions.read'] });
+    });
+    vi.stubGlobal('fetch', fetch);
+    const profile = await pairWithGateway(qr);
+    expect(profile.activeRouteId).toBe('fallback');
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      `${qr.routes[0]!.url}/api/device-pairing/probe`,
+      `${qr.routes[0]!.url}/api/device-pairing/requests`,
+      'https://fallback.example/api/device-pairing/requests',
+      expect.stringMatching(/^https:\/\/fallback\.example\/api\/device-pairing\/requests\/[^/]+\/complete$/),
+    ]);
+    expect(state.saved).toHaveBeenCalledOnce();
   });
   it('recovers completion after a failed refresh without repeating completion or replacing its token', async () => {
     const actions: string[] = [];

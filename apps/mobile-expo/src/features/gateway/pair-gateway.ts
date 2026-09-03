@@ -25,6 +25,11 @@ const JOURNAL = 'pairing';
 let running: Promise<GatewayProfile> | null = null;
 let flowController: AbortController | null = null;
 
+function throwIfPairingPaused(signal?: AbortSignal): void {
+  // React Native's AbortSignal does not implement throwIfAborted().
+  if (signal?.aborted) throw new Error('PAIRING_PAUSED');
+}
+
 export function readPendingDevicePairing(): ParsedGatewayQr | null {
   return readDeviceAuthJournal<PairingJournal>(JOURNAL)?.pairing ?? null;
 }
@@ -59,7 +64,7 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
   for (const origin of origins) {
     try { response = await post(origin, path, { ...body, signature }, signal); journal.origin = origin; break; }
     catch (error) {
-      signal?.throwIfAborted();
+      throwIfPairingPaused(signal);
       if (error instanceof Error && error.message.startsWith('PAIRING_') && error.message !== 'PAIRING_CONNECTION_FAILED') throw error;
     }
   }
@@ -81,7 +86,7 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
 async function reachableOrigin(pairing: ParsedGatewayQr, signal?: AbortSignal): Promise<string> {
   const pairingId = pairing.pairingToken.slice('xopc_pair_'.length).split('_')[0];
   for (const route of pairing.routes) {
-    signal?.throwIfAborted();
+    throwIfPairingPaused(signal);
     try {
       const response = await post(route.url, '/api/device-pairing/probe', { pairingId }, signal);
       if (!response.signedPayload || !response.signature || !verifyGatewayPayload(pairing.gatewayPublicKey, response.signedPayload, response.signature)) {
@@ -92,7 +97,10 @@ async function reachableOrigin(pairing: ParsedGatewayQr, signal?: AbortSignal): 
         throw new Error('PAIRING_IDENTITY_MISMATCH');
       }
       return route.url;
-    } catch (error) { if (error instanceof Error && error.message === 'PAIRING_IDENTITY_MISMATCH') throw error; }
+    } catch (error) {
+      throwIfPairingPaused(signal);
+      if (error instanceof Error && error.message === 'PAIRING_IDENTITY_MISMATCH') throw error;
+    }
   }
   throw new Error('PAIRING_CONNECTION_FAILED');
 }
@@ -156,14 +164,14 @@ export async function pairWithGateway(pairing: ParsedGatewayQr, signal?: AbortSi
       journal.profile = profile;
       writeDeviceAuthJournal(JOURNAL, journal);
     }
-    signal?.throwIfAborted();
+    throwIfPairingPaused(signal);
     if (!journal.refreshInstalled) {
       writeDeviceRefreshToken(pairing.gatewayId, journal.initialRefreshToken);
       journal.refreshInstalled = true;
       writeDeviceAuthJournal(JOURNAL, journal);
     }
     const tokens = await refreshCredentialsForProfile(journal.profile);
-    signal?.throwIfAborted();
+    throwIfPairingPaused(signal);
     useGatewayStore.getState().savePairedProfile(journal.profile, tokens.accessToken, tokens.accessTokenExpiresAt);
     clearDeviceAuthJournal(JOURNAL);
     useDevicePairingFlow.setState({ progress: null });
