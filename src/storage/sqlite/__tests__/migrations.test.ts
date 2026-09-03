@@ -388,13 +388,13 @@ describe('SQLite migrations', () => {
     ]);
   });
 
-  it('upgrades the main v142 schema with execution environments without losing device access', () => {
+  it.each([142, 143])('upgrades the main v%s schema with execution environments without losing device access', (version) => {
     const db = openEmptyDb();
     try {
       ensureSchemaMetaTable(db);
       db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
       setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 142 });
+      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: version });
       db.exec(`INSERT INTO devices (device_id, display_name, platform, public_key_jwk, scopes_json, created_at)
         VALUES ('device-1', 'Phone', 'ios', '{}', '["sessions.read"]', 1)`);
 
@@ -415,6 +415,8 @@ describe('SQLite migrations', () => {
       expect(bindingColumns).toContain('session_key');
       expect(bindingColumns).not.toContain('subject_kind');
       expect(bindingColumns).not.toContain('epoch');
+      const configColumns = db.prepare('PRAGMA table_info(session_config)').all().map((row) => row.name);
+      expect(configColumns).toContain('fixed_model');
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       db.close();

@@ -126,11 +126,11 @@ export const ChatComposer = memo(function ChatComposer({
   onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
   sessionModel: string;
   showModelSelector: boolean;
-  onModelChange: (modelId: string) => void;
+  onModelChange: (modelId: string) => void | Promise<void>;
   modelDisabled: boolean;
   thinkingLevel: string;
   modelSupportsThinking: boolean;
-  onThinkingChange: (level: string) => void;
+  onThinkingChange: (level: string) => void | Promise<void>;
   onSend: (text: string, attachments?: WireAttachment[], thinkingLevel?: string, contextRefs?: ComposerContextRef[]) => void;
   onAbort: () => void;
   onAddPendingFollowUp?: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;

@@ -27,7 +27,7 @@ export interface ComposerToolbarProps {
 
   thinkingLevel: string;
   modelSupportsThinking: boolean;
-  onThinkingChange: (level: string) => void;
+  onThinkingChange: (level: string) => void | Promise<void>;
 
   voiceActive: boolean;
   voiceReadiness: VoiceReadiness;
@@ -39,7 +39,7 @@ export interface ComposerToolbarProps {
 
   sessionModel: string;
   showModelSelector: boolean;
-  onModelChange: (modelId: string) => void;
+  onModelChange: (modelId: string) => void | Promise<void>;
   modelDisabled: boolean;
 }
 
@@ -105,7 +105,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             onModelChange={onModelChange}
             thinkingLevel={thinkingLevel}
             modelSupportsThinking={modelSupportsThinking}
-            thinkingDisabled={disabled || (sending && !streaming)}
+            thinkingDisabled={disabled || sending || streaming}
             onThinkingChange={onThinkingChange}
           />
         ) : null}

@@ -249,41 +249,15 @@ export function ModelSelector({
             {!error && !showRegistryEmpty && filtered.length === 0 ? (
               <div className="px-2 py-3 text-center text-xs text-fg-muted">{noMatches}</div>
             ) : null}
-            {filtered.map((model) => {
-              const showOutOfFilterHint =
-                Boolean(outOfFilterNote) &&
-                capabilitiesFilter === 'vision' &&
-                model.vision !== true &&
-                model.id === valueTrimmed;
-              return (
-                <button
-                  key={model.id}
-                  type="button"
-                  className={cn(
-                    'flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
-                    model.id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
-                  )}
-                  onClick={() => {
-                    onChange(model.id);
-                    setOpen(false);
-                    setQuery('');
-                  }}
-                >
-                  <span className="flex w-full min-w-0 items-center gap-2">
-                    <Check className={cn('size-4 shrink-0', model.id !== value && 'invisible')} aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="font-medium">{model.name}</span>{' '}
-                      <span className="text-fg-muted">({model.provider})</span>
-                    </span>
-                  </span>
-                  {showOutOfFilterHint ? (
-                    <span className="pl-6 text-[11px] leading-snug text-amber-700 dark:text-amber-300">
-                      {outOfFilterNote}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
+            <ModelPickerList
+              models={filtered}
+              value={value}
+              searchPlaceholder={searchPlaceholder}
+              noMatches={noMatches}
+              showSearch={false}
+              outOfFilterNote={capabilitiesFilter === 'vision' ? outOfFilterNote : undefined}
+              onChange={(modelId) => { onChange(modelId); setOpen(false); setQuery(''); }}
+            />
           </div>
           {footerLink ? (
             <div className="mt-1 border-t border-edge-subtle pt-1">
@@ -308,5 +282,44 @@ export function ModelSelector({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** Shared list content for form selectors and the composer's single popover. */
+export function ModelPickerList({ models, value, onChange, searchPlaceholder, noMatches, disabled, showSearch = models.length > 10, outOfFilterNote }: {
+  models: ConfiguredModel[];
+  value: string;
+  onChange: (id: string) => void;
+  searchPlaceholder: string;
+  noMatches: string;
+  disabled?: boolean;
+  showSearch?: boolean;
+  outOfFilterNote?: string;
+}) {
+  const [query, setQuery] = useState('');
+  const filtered = modelsMatchingQuery(models, showSearch ? query : '');
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {showSearch && <input type="search" aria-label={searchPlaceholder} placeholder={searchPlaceholder}
+        value={query} onChange={(event) => setQuery(event.target.value)}
+        className={cn('mx-1 mb-2 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg', formControlBorderFocusClass)} />}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {filtered.length === 0 && <p className="px-3 py-4 text-sm text-fg-muted">{noMatches}</p>}
+        {filtered.map((model) => (
+          <button key={model.id} type="button" disabled={disabled} title={model.id}
+            aria-pressed={model.id === value}
+            style={models.length > 50 ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 60px' } : undefined}
+            className={cn('flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover disabled:opacity-50', interaction.focusRingPanel, model.id === value && 'bg-surface-hover')}
+            onClick={() => onChange(model.id)}>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{model.name}</span>
+              <span className="block truncate text-xs text-fg-muted">{model.provider}</span>
+              {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
+            </span>
+            <Check className={cn('size-4 shrink-0 text-accent-fg', model.id !== value && 'invisible')} aria-hidden />
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

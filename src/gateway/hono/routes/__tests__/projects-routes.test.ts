@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,7 +37,7 @@ function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
 
 function registerSessionRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
-  registerSessionsRoutes(app, { service: service as GatewayService });
+  registerSessionsRoutes(app, { service: { ...service, sessions: { initializeChatModel: vi.fn(async () => ({ ok: true })), getFixedAgentConfig: vi.fn(async () => ({ model: 'test/model', thinkingLevel: 'off', configVersion: 1, fixedModel: true })), ...service.sessions } } as GatewayService });
   return app;
 }
 
@@ -68,6 +68,39 @@ describe('project association routes', () => {
       process.env.XOPC_STATE_DIR = previousStateDir;
     }
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it.each([true, false])('creates a workspace session with fixed-model initialization success=%s', async (success) => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Model workspace', workspaceRoot: stateDir });
+    const saveMessages = vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir); });
+    const deleteSession = vi.fn(async () => ({ ok: true }));
+    const app = registerSessionRouteApp({
+      currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }),
+      projects,
+      sessions: {
+        initializeChatModel: vi.fn(async () => success ? { ok: true } : { ok: false, error: 'Invalid model' }),
+        getSession: vi.fn(async (key: string) => ({ key })),
+        delete: deleteSession,
+      } as unknown as GatewayService['sessions'],
+      sessionIndexInstance: { saveMessages } as unknown as GatewayService['sessionIndexInstance'],
+    });
+    const response = await app.request('/api/sessions', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: project.id, initialAgentConfig: { model: 'test/model' } }),
+    });
+    const key = saveMessages.mock.calls[0]![0];
+    if (success) {
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({
+        session: { key }, agentConfig: { fixedModel: true }, environment: { kind: 'local_checkout', rootPath: realpathSync(stateDir) },
+      });
+      expect(new ExecutionEnvironmentStore().resolveBinding(key)).toBeDefined();
+    } else {
+      expect(response.status).toBe(400);
+      expect(deleteSession).toHaveBeenCalledWith(key);
+      expect(new ExecutionEnvironmentStore().resolveBinding(key)).toBeUndefined();
+    }
   });
 
   it('returns a structured conflict when creating with a missing workspace root', async () => {
@@ -486,8 +519,6 @@ describe('project association routes', () => {
     expect(res.status).toBe(201);
     expect(patchAgentConfig).toHaveBeenCalledOnce();
     expect(patchAgentConfig).toHaveBeenCalledWith(expect.any(String), {
-      model: 'openai/gpt-test',
-      thinkingLevel: 'high',
       userContextMode: 'temporary',
     });
     expect(patchAgentConfig.mock.invocationCallOrder[0]).toBeLessThan(getSession.mock.invocationCallOrder[0]!);

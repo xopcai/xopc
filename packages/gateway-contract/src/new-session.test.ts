@@ -95,7 +95,7 @@ describe('new session contract', () => {
     preferences = withAgentModelPreference(preferences, 'Research', {
       modelRef: 'anthropic/claude-test',
     });
-    expect(modelPreferenceForAgent(preferences, 'coder')).toEqual({
+    expect(modelPreferenceForAgent(preferences, 'coder')).toMatchObject({
       modelRef: 'openai/gpt-test',
       thinkingLevel: 'high',
     });

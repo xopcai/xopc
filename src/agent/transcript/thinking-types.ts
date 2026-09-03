@@ -21,7 +21,7 @@ import type { ResponseLanguage } from '../../i18n/response-language.js';
  * - xhigh: Extra high thinking (for supported models only)
  * - adaptive: Automatically adjust based on task complexity
  */
-export type ThinkLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
+export type ThinkLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'adaptive';
 
 /**
  * Reasoning visibility level.
@@ -90,6 +90,7 @@ export function normalizeThinkLevel(raw?: string | null): ThinkLevel | undefined
   const key = raw.trim().toLowerCase();
   const collapsed = key.replace(/[\s_-]+/g, '');
 
+  if (collapsed === 'max') return 'max';
   if (collapsed === 'adaptive' || collapsed === 'auto') {
     return 'adaptive';
   }
@@ -222,6 +223,7 @@ export function thinkLevelToNumber(level: ThinkLevel): number {
     medium: 3,
     high: 4,
     xhigh: 5,
+    max: 6,
     adaptive: 3, // adaptive defaults to medium
   };
   return map[level];

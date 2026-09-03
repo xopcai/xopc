@@ -69,6 +69,8 @@ export interface SessionContextUsage {
 export interface SessionAgentConfigView {
   thinkingLevel: ThinkingLevel;
   model: string;
+  configVersion: number;
+  fixedModel: boolean;
   reasoningLevel: ReasoningLevel;
   activityDetail: {
     default: ReasoningLevel;
@@ -249,7 +251,9 @@ export class SessionInspector {
     const isDefaultWorkspaceRoot = effectiveWorkspacePath === resolveDefaultAgentWorkspaceDir();
     return {
       thinkingLevel: level,
-      model,
+      model: sc?.modelOverride ?? model,
+      configVersion: sc?.updatedAt ?? 0,
+      fixedModel: sc?.fixedModel === true,
       reasoningLevel,
       activityDetail: {
         default: defReason,
