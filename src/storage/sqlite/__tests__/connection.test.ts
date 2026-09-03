@@ -89,6 +89,9 @@ describe('openXopcDatabase', () => {
         'context_run_items',
         'context_consolidation_runs',
         'context_consolidation_decisions',
+        'execution_environments',
+        'execution_environment_bindings',
+        'execution_environment_events',
       ]),
     );
     expect(tables).not.toContain('work_understanding_threads');
