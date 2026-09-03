@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, Circle, CircleCheck, CircleX, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -240,6 +241,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     conversationLoading,
     conversationError,
   } = useTaskDetail(taskId);
+  const [pageActionsContainer, setPageActionsContainer] = useState<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingOperations, setPendingOperations] = useState<ReadonlySet<TaskPendingOperation>>(() => new Set());
   const [dependencyCandidates, setDependencyCandidates] = useState<DependencyCandidate[]>([]);
@@ -558,7 +560,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     setPageHeader({
       startExtra: <Link to={returnPath} className="flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.backToWork}><ArrowLeft className="size-4" /></Link>,
       main: detail ? <div className="min-w-0"><p className="truncate text-sm font-semibold text-fg">{projectName ? `${projectName} / ${copy.taskLabel}` : copy.taskLabel}</p><p className="text-xs text-fg-muted">{copy.detailStatuses[detailStatusKey(detail)]}</p></div> : null,
-      end: null,
+      end: <div ref={setPageActionsContainer} className="flex min-w-0 items-center justify-end" />,
     });
     return clearPageHeader;
   }, [clearPageHeader, copy.backToWork, copy.detailStatuses, copy.taskLabel, detail, presentation, projectName, returnPath, setPageHeader]);
@@ -651,12 +653,43 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     </div>
   );
 
+  const headerActions = (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {taskActions}
+      {conversationSessionKey && presentation !== 'modal' ? (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn('h-8 shrink-0 px-2 text-xs', taskWorkspaceOpen && 'bg-surface-hover text-fg')}
+            aria-label={language === 'zh' ? '项目文件' : 'Project files'}
+            aria-pressed={taskWorkspaceOpen}
+            onClick={() => {
+              setSideChatOpen(conversationSessionKey, false);
+              openWorkspacePanelForSession(conversationSessionKey);
+            }}
+          >
+            <FolderOpen className="size-3.5" aria-hidden />
+            {language === 'zh' ? '文件' : 'Files'}
+          </Button>
+          <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs">
+            <Link to={taskChatHref(taskId)}>
+              <ExternalLink className="size-3.5" />
+              {language === 'zh' ? '全屏' : 'Full screen'}
+            </Link>
+          </Button>
+        </>
+      ) : null}
+    </div>
+  );
+
   return (
     <div
       ref={splitPaneRef}
       className={`${presentation === 'modal' ? 'flex h-full min-h-0 flex-col lg:flex-row' : 'flex min-h-[calc(100dvh-8rem)] flex-col overflow-hidden lg:flex-row'} ${resizingPanels ? 'lg:cursor-col-resize lg:select-none' : ''}`}
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
+      {presentation === 'page' && pageActionsContainer ? createPortal(headerActions, pageActionsContainer) : null}
       <section className="task-detail-scroll min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
       <header className={cn('px-4 pb-5', recentlyChanged('title') && 'task-detail-live-update')}>
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -815,33 +848,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
               <div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{language === 'zh' ? 'Agent 执行与对话' : 'Agent execution and chat'}</p><p className="mt-0.5 truncate text-xs text-fg-muted">{conversationAgent?.name ?? conversationAgentId ?? copy.unassigned} · {statusLabel}</p></div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {taskActions}
-            {conversationSessionKey && presentation !== 'modal' ? (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className={cn('h-8 shrink-0 px-2 text-xs', taskWorkspaceOpen && 'bg-surface-hover text-fg')}
-                  aria-label={language === 'zh' ? '项目文件' : 'Project files'}
-                  aria-pressed={taskWorkspaceOpen}
-                  onClick={() => {
-                    setSideChatOpen(conversationSessionKey, false);
-                    openWorkspacePanelForSession(conversationSessionKey);
-                  }}
-                >
-                  <FolderOpen className="size-3.5" aria-hidden />
-                  {language === 'zh' ? '文件' : 'Files'}
-                </Button>
-                <Button asChild variant="ghost" className="h-8 shrink-0 px-2 text-xs">
-                  <Link to={taskChatHref(taskId)}>
-                    <ExternalLink className="size-3.5" />
-                    {language === 'zh' ? '全屏' : 'Full screen'}
-                  </Link>
-                </Button>
-              </>
-            ) : null}
-          </div>
+          {presentation === 'modal' ? headerActions : null}
         </div>
         {conversationSessionKey ? (
           <div className="min-h-0 flex-1"><ChatPage embedded sessionKey={conversationSessionKey} taskId={taskId} /></div>
