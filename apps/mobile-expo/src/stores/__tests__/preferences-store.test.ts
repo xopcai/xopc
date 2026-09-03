@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { memory, appearance } = vi.hoisted(() => {
+const { memory, appearance, getLocales } = vi.hoisted(() => {
   const state = {
     scheme: 'light' as 'light' | 'dark',
   };
   return {
     memory: new Map<string, string>(),
+    getLocales: vi.fn(() => [{ languageCode: 'en', languageTag: 'en-US' }]),
     appearance: {
       state,
       setColorScheme: vi.fn(),
@@ -14,6 +15,8 @@ const { memory, appearance } = vi.hoisted(() => {
     },
   };
 });
+
+vi.mock('expo-localization', () => ({ getLocales }));
 
 vi.mock('react-native', () => ({
   Appearance: appearance,
@@ -63,6 +66,39 @@ function resetStore(): void {
 describe('usePreferencesStore', () => {
   beforeEach(() => {
     resetStore();
+    getLocales.mockReset().mockReturnValue([{ languageCode: 'en', languageTag: 'en-US' }]);
+  });
+
+  it.each(['zh-CN', 'zh-Hans-CN', 'zh-Hant-TW'])('starts in Chinese for %s and saves the initial language', (languageTag) => {
+    getLocales.mockReturnValue([{ languageCode: 'zh', languageTag }]);
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().language).toBe('zh');
+    expect(memory.get(KEYS.language)).toBe('zh');
+
+    getLocales.mockReturnValue([{ languageCode: 'en', languageTag: 'en-US' }]);
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().language).toBe('zh');
+  });
+
+  it.each(['en', 'zh'] as const)('preserves a manual %s selection on the next startup', (language) => {
+    usePreferencesStore.getState().setLanguage(language);
+    getLocales.mockReturnValue([{ languageCode: language === 'en' ? 'zh' : 'en', languageTag: language === 'en' ? 'zh-CN' : 'en-US' }]);
+    usePreferencesStore.setState({ language: language === 'en' ? 'zh' : 'en' });
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().language).toBe(language);
+    expect(getLocales).not.toHaveBeenCalled();
+  });
+
+  it('uses English when the first preferred language is unsupported', () => {
+    getLocales.mockReturnValue([{ languageCode: 'fr', languageTag: 'fr-FR' }, { languageCode: 'zh', languageTag: 'zh-CN' }]);
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().language).toBe('en');
+  });
+
+  it('falls back to English when device language settings are unavailable', () => {
+    getLocales.mockImplementation(() => { throw new Error('Locales unavailable'); });
+    usePreferencesStore.getState().hydrate();
+    expect(usePreferencesStore.getState().language).toBe('en');
   });
 
   it('leaves clipboard intake off until the user opts in', () => {
