@@ -22,6 +22,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { noteAttachmentRef, uploadNoteMedia } from '@/features/notes/notes-api';
 
 import { AudioNode } from './extensions/audio-node';
+import { DiagramCodeBlock } from './extensions/diagram-code-block';
 import { focusAfterBlockInsert } from './extensions/block-insert-focus';
 import { ExtraKeyboardShortcuts } from './extensions/keyboard-shortcuts';
 import { SlashCommands } from './extensions/slash-commands';
@@ -86,8 +87,9 @@ export function BlockEditor({
     extensions: [
       StarterKit.configure({
         ...NOTE_STARTER_KIT_OPTIONS,
-        codeBlock: { HTMLAttributes: { class: 'block-editor-code' } },
+        codeBlock: false,
       }),
+      DiagramCodeBlock.configure({ HTMLAttributes: { class: 'block-editor-code' } }),
       BlockTrailingNode,
       ResizableImage.configure({
         inline: false,
