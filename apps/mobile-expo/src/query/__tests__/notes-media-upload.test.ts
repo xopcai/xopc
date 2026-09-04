@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
-import { captureNote, quickCaptureNote, uploadNoteMedia } from '../notes';
+import { captureNote, openNoteConversation, quickCaptureNote, uploadNoteMedia } from '../notes';
 
 const platform = vi.hoisted(() => ({ OS: 'ios' }));
 
@@ -166,5 +166,29 @@ describe('quickCaptureNote', () => {
       headers: { 'Idempotency-Key': 'operation-1' },
       body: JSON.stringify({ text: 'shared text', channel: 'share', platform: 'ios' }),
     });
+  });
+});
+
+describe('openNoteConversation', () => {
+  it('opens a note-bound chat without copying note content into the request', async () => {
+    mockedApiFetch.mockReset();
+    mockedApiFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        sessionKey: 'agent:main:webchat:default:direct:note_1',
+        reused: false,
+        sourceBinding: {
+          kind: 'note',
+          sourceId: 'note/1',
+          version: '42',
+          attachedAt: 100,
+        },
+      }),
+    } as Response);
+
+    const result = await openNoteConversation('note/1');
+
+    expect(result.sourceBinding).toMatchObject({ sourceId: 'note/1', version: '42' });
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/notes/note%2F1/chat', { method: 'POST' });
   });
 });

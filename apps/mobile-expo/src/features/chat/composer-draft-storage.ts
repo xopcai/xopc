@@ -1,11 +1,12 @@
 import { storage } from '../../storage/mmkv';
 
-const STORAGE_PREFIX = 'xopc.chat.composerDraft:v1:';
+const STORAGE_PREFIX = 'xopc.chat.composerDraft:v2:';
 const MAX_DRAFT_LENGTH = 20_000;
 
 export type ComposerDraftSnapshot = {
   text: string;
   cursorPos: number;
+  contextRefs: Array<{ kind: 'note'; sourceId: string; expectedVersion: string; title: string }>;
 };
 
 function storageKey(sessionKey: string): string {
@@ -34,11 +35,18 @@ export function readComposerDraftSnapshot(sessionKey: string): ComposerDraftSnap
     if (!isRecord(parsed) || typeof parsed.text !== 'string') return null;
 
     const text = parsed.text.slice(0, MAX_DRAFT_LENGTH);
-    if (!text.trim()) return null;
-
+    const contextRefs = Array.isArray(parsed.contextRefs)
+      ? parsed.contextRefs.flatMap((value) => {
+          if (!isRecord(value) || value.kind !== 'note' || typeof value.sourceId !== 'string'
+            || typeof value.expectedVersion !== 'string' || typeof value.title !== 'string') return [];
+          return [{ kind: 'note' as const, sourceId: value.sourceId, expectedVersion: value.expectedVersion, title: value.title }];
+        }).slice(0, 5)
+      : [];
+    if (!text.trim() && contextRefs.length === 0) return null;
     return {
       text,
       cursorPos: normalizeCursorPos(parsed.cursorPos, text.length),
+      contextRefs,
     };
   } catch {
     return null;
@@ -47,13 +55,13 @@ export function readComposerDraftSnapshot(sessionKey: string): ComposerDraftSnap
 
 export function writeComposerDraftSnapshot(
   sessionKey: string,
-  snapshot: ComposerDraftSnapshot,
+  snapshot: Omit<ComposerDraftSnapshot, 'contextRefs'> & { contextRefs?: ComposerDraftSnapshot['contextRefs'] },
 ): void {
   const normalizedSessionKey = sessionKey.trim();
   if (!normalizedSessionKey) return;
 
   const text = snapshot.text.slice(0, MAX_DRAFT_LENGTH);
-  if (!text.trim()) {
+  if (!text.trim() && !snapshot.contextRefs?.length) {
     clearComposerDraftSnapshot(normalizedSessionKey);
     return;
   }
@@ -61,10 +69,11 @@ export function writeComposerDraftSnapshot(
   const payload: ComposerDraftSnapshot = {
     text,
     cursorPos: normalizeCursorPos(snapshot.cursorPos, text.length),
+    contextRefs: snapshot.contextRefs?.slice(0, 5) ?? [],
   };
 
   try {
-    storage.set(storageKey(normalizedSessionKey), JSON.stringify({ v: 1, ...payload }));
+    storage.set(storageKey(normalizedSessionKey), JSON.stringify({ v: 2, ...payload }));
   } catch {
     /* ignore quota */
   }

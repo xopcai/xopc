@@ -2,13 +2,12 @@
  * Chat detail screen — renders the existing chat UI.
  *
  * Route: /chat/[k] where k is the session key.
- * Query param `msg` can prefill a first message.
- *
  * Delegates to `useChatPage()` which reads route params via
  * `useLocalSearchParams`.
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -24,7 +23,7 @@ import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 
 import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
-import { ChatContextBanner } from './ChatContextBanner';
+import { ChatContextControl } from './ChatContextControl';
 import { ChatHeader } from './ChatHeader';
 import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ClarifyPrompt } from './ClarifyPrompt';
@@ -33,6 +32,8 @@ import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
 import { useAutoReadAloud } from './use-auto-read-aloud';
 import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
+import type { ComposerContextRef } from './composer.types';
+import { dispatchMobileComposerAppend } from './mobile-composer-fill';
 
 const AnimatedView = Animated.createAnimatedComponent(View);
 
@@ -49,6 +50,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
   const transition = useOptionalWorkspaceTransition();
   const isShellEmbedded = embedded || overlay;
   const page = useChatPage({ embedded: isShellEmbedded, onBack: onRequestHome });
+  const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
   const {
     sessionKey,
     urlSessionKey,
@@ -58,7 +60,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     agentsQuery,
     modelsQuery,
     sessionHistoryQuery,
-    sessionContext,
     currentSessionAgentId,
     effectiveModelId,
     agentName,
@@ -70,8 +71,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     composerDisabled,
     composerSuggestion,
     setComposerSuggestion,
-    composerPrefillAttachments,
-    setComposerPrefillAttachments,
     bootstrap,
     chat,
     activeGatewayId,
@@ -83,7 +82,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
-    handleRemoveProject,
+    handleContextChange,
     handleStarterPrefill,
     handleComposerSend,
     handleUserMessageCopy,
@@ -154,12 +153,6 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         onReconnect={openReconnectLanding}
       />
 
-
-      <ChatContextBanner
-        projectId={sessionContext.projectId}
-        taskId={sessionContext.taskId}
-        onRemoveProject={handleRemoveProject}
-      />
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>
         <AnimatedView style={[styles.chatBodyInner, bodyRevealStyle]}>
@@ -254,6 +247,13 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             onSubmit={(answer) => void chat.submitClarifyAnswer(answer)}
             onSkip={() => void chat.skipClarifyAnswer()}
           />
+          {sessionKey ? <ChatContextControl
+            sessionKey={sessionKey}
+            draftRefs={composerContextRefs}
+            onRemoveDraftRef={(sourceId) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId))}
+            onAddSource={() => dispatchMobileComposerAppend('@')}
+            onChangeScope={handleContextChange}
+          /> : null}
           <ChatComposer
             sessionKey={sessionKey}
             disabled={composerDisabled}
@@ -264,9 +264,9 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             placeholder={m.chat.inputPlaceholder}
             suggestionDraft={composerSuggestion}
             onConsumeSuggestionDraft={() => setComposerSuggestion(undefined)}
-            prefillAttachments={composerPrefillAttachments}
-            onConsumePrefillAttachments={() => setComposerPrefillAttachments(undefined)}
             overlayShell={overlay}
+            contextRefs={composerContextRefs}
+            onContextRefsChange={setComposerContextRefs}
           />
         </KeyboardStickyView>
         </AnimatedView>

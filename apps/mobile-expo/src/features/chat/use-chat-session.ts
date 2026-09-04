@@ -33,7 +33,7 @@ import {
   canSendComposerDraft,
   buildOptimisticUserMessage,
 } from './composer-send-helpers';
-import type { WireAttachment } from './composer.types';
+import type { ComposerContextRef, WireAttachment } from './composer.types';
 import type { AudioContent, Message, ProgressState } from './messages.types';
 import type { ClarifyPromptState } from './ClarifyPrompt';
 import {
@@ -97,7 +97,7 @@ export interface UseChatSessionReturn {
   sessionDataUpdatedAtRef: React.MutableRefObject<number>;
 
   // Actions
-  send: (text: string, attachments?: WireAttachment[]) => Promise<boolean>;
+  send: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => Promise<boolean>;
   retryMessage: (message: Message) => Promise<void>;
   abort: () => void;
   cancelRecovery: () => void;
@@ -235,6 +235,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       queryKey: queryKeys.sessionHistory(targetSessionKey, activeGatewayId),
     });
     invalidateSessionLists(queryClient);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(targetSessionKey) });
   }, [activeGatewayId, queryClient]);
 
   const refreshSessionHeadByKey = useCallback(async (targetSessionKey: string) => {
@@ -630,8 +631,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     });
   }, [buildCallbacks, clearStreamingMessage, finalizeMessage, m.chat.sendFailed, reconcileSessionHead]);
 
-  const send = useCallback(async (text: string, attachments?: WireAttachment[]): Promise<boolean> => {
-    if (!canSendComposerDraft(text, attachments?.length ?? 0) || !sessionKey || !activeGatewayId
+  const send = useCallback(async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]): Promise<boolean> => {
+    if (!canSendComposerDraft(text, attachments?.length ?? 0, contextRefs?.length ?? 0) || !sessionKey || !activeGatewayId
       || runBusyRef.current || sendingRef.current
       || readLocalMessages(scope).some(message => message.deliveryState === 'sending')) return false;
     const input: MessageSubmission = {
@@ -642,9 +643,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       taskId,
       content: text.trim(),
       attachments: capAttachments(attachments) ?? [],
+      contextRefs: (contextRefs ?? []).map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),
     };
     const message = {
-      ...buildOptimisticUserMessage(input.content, input.attachments),
+      ...buildOptimisticUserMessage(input.content, input.attachments, contextRefs),
       id: input.clientMessageId,
       submission: input,
       deliveryState: 'sending' as const,

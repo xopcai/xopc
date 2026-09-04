@@ -80,6 +80,18 @@ describe('createSession', () => {
 
     expect(body).toEqual({ channel: 'webchat', projectId: 'project-1' });
   });
+
+  it('forwards an explicit project execution environment', async () => {
+    await createSession({ projectId: 'project-1', executionMode: 'managed_worktree', baseRef: ' main ' });
+
+    const [, init] = mockedApiFetch.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      channel: 'webchat',
+      projectId: 'project-1',
+      executionMode: 'managed_worktree',
+      baseRef: 'main',
+    });
+  });
 });
 
 describe('fetchSessionsList', () => {

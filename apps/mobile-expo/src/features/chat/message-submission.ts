@@ -1,4 +1,4 @@
-import type { WireAttachment } from './composer.types';
+import type { WireAttachment, WireContextRef } from './composer.types';
 
 /** One explicit send attempt, retained by its message for manual retry. */
 export type MessageSubmission = {
@@ -9,4 +9,5 @@ export type MessageSubmission = {
   taskId?: string;
   content: string;
   attachments: WireAttachment[];
+  contextRefs: WireContextRef[];
 };

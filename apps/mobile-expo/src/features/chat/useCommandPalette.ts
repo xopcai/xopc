@@ -35,13 +35,14 @@ export interface CommandPaletteState {
 export function useCommandPalette(
   draft: string,
   cursor: number,
+  suppress = false,
 ): CommandPaletteState {
   const [allItems, setAllItems] = useState<PaletteItem[]>([]);
   const [loading, setLoading] = useState(false);
   const fetchedRef = useRef(false);
 
   // Detect slash range
-  const slashRange = useMemo(() => detectSlashRange(draft, cursor), [draft, cursor]);
+  const slashRange = useMemo(() => suppress ? null : detectSlashRange(draft, cursor), [draft, cursor, suppress]);
   const paletteActive = slashRange !== null;
 
   // Fetch items when palette becomes active
