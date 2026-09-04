@@ -30,4 +30,13 @@ describe('runtime command runner', () => {
     });
     expect(result).toMatchObject({ ok: false, timedOut: false, aborted: true });
   });
+
+  it('bounds command output', async () => {
+    const result = await runRuntimeCommand({
+      command: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(2 * 1024 * 1024))'],
+    });
+    expect(result).toMatchObject({ ok: false, outputTruncated: true });
+    expect(Buffer.byteLength(result.stdout)).toBeLessThanOrEqual(1024 * 1024);
+  });
 });

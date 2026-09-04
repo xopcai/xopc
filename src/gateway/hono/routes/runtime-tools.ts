@@ -6,6 +6,7 @@ import { RuntimeToolsConfigSchema, type Config } from '../../../config/schema.js
 import { ManagedRuntimeManager } from '../../../runtime-tools/manager.js';
 import type { RuntimeKind, RuntimeProgressEvent } from '../../../runtime-tools/types.js';
 import { pruneRuntimeTools } from '../../../runtime-tools/prune.js';
+import { normalizeRuntimeVersionRequest } from '../../../runtime-tools/probe.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -86,6 +87,9 @@ export function registerRuntimeToolsRoutes(
         const version = typeof body.version === 'string' && body.version.trim()
           ? body.version.trim()
           : undefined;
+        if (version && !normalizeRuntimeVersionRequest(version)) {
+          return c.json({ ok: false, error: 'invalid-version', message: 'Invalid runtime version' }, 400);
+        }
 
         return streamSSE(c, async (stream) => {
           const manager = runtimeManager(service.currentConfig);
@@ -102,7 +106,7 @@ export function registerRuntimeToolsRoutes(
           manager.on('progress', onProgress);
           try {
             const resolved = action === 'repair'
-              ? await manager.repair(runtime)
+              ? await manager.repair(runtime, version)
               : await manager.install(runtime, version);
             await writes;
             await stream.writeSSE({
