@@ -142,6 +142,7 @@ export interface ElectronShellAPI {
   }): Promise<ElectronShellOpenResult>;
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
   showFileResourceInFolder(fileResourceId: string): Promise<{ success: boolean; error?: string }>;
+  copyFileResourcePath(fileResourceId: string): Promise<ElectronShellOpenResult>;
   trashFileResource(fileResourceId: string): Promise<ElectronShellOpenResult>;
   chooseAppAndOpenPath(filePath: string): Promise<ElectronShellOpenResult>;
   chooseAppAndOpenFileResource(fileResourceId: string): Promise<ElectronShellOpenResult>;

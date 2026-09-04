@@ -98,6 +98,12 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
     } catch (error) { return errorResponse(c, error); }
   });
 
+  authenticated.get('/api/files/spaces/:id/root', async (c) => {
+    try {
+      return c.json({ resource: await files.rootResource(c.req.param('id')) });
+    } catch (error) { return errorResponse(c, error); }
+  });
+
   authenticated.get('/api/files/recent', async (c) => {
     try {
       const limit = Math.min(100, Math.max(1, Number(c.req.query('limit')) || 50));

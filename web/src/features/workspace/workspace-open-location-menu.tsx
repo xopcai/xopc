@@ -6,20 +6,21 @@ import { Button } from '@/components/ui/button';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type DetectedApp = { name: string; path: string };
 
 type WorkspaceOpenLocationMenuProps = {
-  workspacePath: string;
+  resourceId: string;
+  displayName?: string;
   className?: string;
 };
 
-/** Opens the current workspace root with the file manager or a locally installed editor. */
+/** Opens a managed workspace root without exposing its host path to the renderer. */
 export function WorkspaceOpenLocationMenu({
-  workspacePath,
+  resourceId,
+  displayName,
   className,
 }: WorkspaceOpenLocationMenuProps) {
   const language = useLocaleStore((state) => state.language);
@@ -28,24 +29,26 @@ export function WorkspaceOpenLocationMenu({
   const [recommendedApps, setRecommendedApps] = useState<DetectedApp[]>([]);
   const [recentApps, setRecentApps] = useState<DetectedApp[]>([]);
   const [busy, setBusy] = useState(false);
-  const available = isElectron() && Boolean(workspacePath.trim()) && Boolean(window.electronAPI?.shell?.openPath);
+  const electron = isElectron();
+  const shell = electron ? window.electronAPI?.shell : undefined;
+  const available = electron && Boolean(resourceId.trim());
+  const compatible = Boolean(shell?.openFileResource);
 
   const refreshApps = useCallback(async () => {
-    const shell = window.electronAPI?.shell;
-    if (!shell?.getOpenWithAppsForPath || !workspacePath.trim()) {
+    if (!shell?.getOpenWithAppsForFileResource || !resourceId.trim()) {
       setRecommendedApps([]);
       setRecentApps([]);
       return;
     }
     try {
-      const apps = await shell.getOpenWithAppsForPath(workspacePath);
+      const apps = await shell.getOpenWithAppsForFileResource(resourceId);
       setRecommendedApps(apps.recommended.map((app) => ({ name: app.name, path: app.path })));
       setRecentApps(apps.recent.map((app) => ({ name: app.name, path: app.path })));
     } catch {
       setRecommendedApps([]);
       setRecentApps([]);
     }
-  }, [workspacePath]);
+  }, [resourceId, shell]);
 
   useEffect(() => {
     void refreshApps();
@@ -59,25 +62,23 @@ export function WorkspaceOpenLocationMenu({
   );
 
   const openInFileManager = useCallback(async () => {
-    const shell = window.electronAPI?.shell;
-    if (!shell?.openPath || !workspacePath) return;
+    if (!shell?.openFileResource || !resourceId) return;
     setBusy(true);
     try {
-      const result = await shell.openPath(workspacePath);
+      const result = await shell.openFileResource(resourceId);
       if (result.ok === false) reportFailure(result.error);
     } finally {
       setBusy(false);
       setOpen(false);
     }
-  }, [reportFailure, workspacePath]);
+  }, [reportFailure, resourceId, shell]);
 
   const openWithApp = useCallback(
     async (appPath: string) => {
-      const shell = window.electronAPI?.shell;
-      if (!shell?.openPathWithApp || !workspacePath) return;
+      if (!shell?.openFileResourceWithApp || !resourceId) return;
       setBusy(true);
       try {
-        const result = await shell.openPathWithApp(workspacePath, appPath);
+        const result = await shell.openFileResourceWithApp(resourceId, appPath);
         if (result.ok === false) reportFailure(result.error);
         else void refreshApps();
       } finally {
@@ -85,32 +86,46 @@ export function WorkspaceOpenLocationMenu({
         setOpen(false);
       }
     },
-    [refreshApps, reportFailure, workspacePath],
+    [refreshApps, reportFailure, resourceId, shell],
   );
 
   const chooseApp = useCallback(async () => {
-    const shell = window.electronAPI?.shell;
-    if (!shell?.chooseAppAndOpenPath || !workspacePath) return;
+    if (!shell?.chooseAppAndOpenFileResource || !resourceId) return;
     setBusy(true);
     try {
-      const result = await shell.chooseAppAndOpenPath(workspacePath);
+      const result = await shell.chooseAppAndOpenFileResource(resourceId);
       if (result.ok === false && result.code !== 'CANCELED') reportFailure(result.error);
       if (result.ok) void refreshApps();
     } finally {
       setBusy(false);
       setOpen(false);
     }
-  }, [refreshApps, reportFailure, workspacePath]);
+  }, [refreshApps, reportFailure, resourceId, shell]);
 
   const copyPath = useCallback(async () => {
-    const copied = await copyTextToClipboard(workspacePath);
-    showComposerNotification(copied ? 'success' : 'warning', copied ? m.pathCopied : m.copyPathFailed, undefined, {
-      duration: copied ? 2500 : 4000,
+    if (!shell?.copyFileResourcePath || !resourceId) return;
+    const result = await shell.copyFileResourcePath(resourceId);
+    showComposerNotification(result.ok ? 'success' : 'warning', result.ok ? m.pathCopied : (result.error || m.copyPathFailed), undefined, {
+      duration: result.ok ? 2500 : 4000,
     });
     setOpen(false);
-  }, [m.copyPathFailed, m.pathCopied, workspacePath]);
+  }, [m.copyPathFailed, m.pathCopied, resourceId, shell]);
 
   if (!available) return null;
+
+  if (!compatible) {
+    return (
+      <Button
+        variant="ghost"
+        className={cn('min-w-0 max-w-40 shrink rounded-md px-2 py-1.5 text-xs', className)}
+        disabled
+        title={m.desktopUpdateRequired}
+      >
+        <MonitorUp className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{displayName || m.openLocation}</span>
+      </Button>
+    );
+  }
 
   const actionClass = 'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-fg hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50';
   const defaultApp = recommendedApps[0] ?? recentApps[0];
@@ -136,7 +151,7 @@ export function WorkspaceOpenLocationMenu({
           title={m.openLocation}
         >
           <MonitorUp className="size-4 shrink-0" aria-hidden />
-          <span className="truncate">{defaultApp?.name ?? m.openLocation}</span>
+          <span className="truncate">{defaultApp?.name ?? displayName ?? m.openLocation}</span>
           <ChevronDown className="size-3.5 shrink-0" aria-hidden />
         </Button>
       </Popover.Trigger>
@@ -210,7 +225,7 @@ export function WorkspaceOpenLocationMenu({
               <MonitorUp className="size-4 shrink-0 text-fg-muted" aria-hidden />
               {m.chooseApp}
             </button>
-            <button type="button" className={actionClass} onClick={() => void copyPath()}>
+            <button type="button" disabled={busy || !shell?.copyFileResourcePath} className={actionClass} onClick={() => void copyPath()}>
               <Copy className="size-4 shrink-0 text-fg-muted" aria-hidden />
               {m.copyPath}
             </button>

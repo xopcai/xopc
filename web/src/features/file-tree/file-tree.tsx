@@ -12,10 +12,12 @@ type FileTreeActionLabels = {
   copyPath: string;
   share?: string;
   openDefault?: string;
+  openDirectory?: string;
   openWith?: string;
   revealInFolder?: string;
   trash?: string;
   recommendedApps?: string;
+  desktopUpdateRequired?: string;
 };
 
 function ActionMenu({
@@ -34,7 +36,6 @@ function ActionMenu({
   useEffect(() => {
     if (
       !menuOpen ||
-      entry.isDirectory ||
       !entry.fileId ||
       !isElectron() ||
       !window.electronAPI?.shell?.getOpenWithAppsForFileResource
@@ -58,9 +59,9 @@ function ActionMenu({
     };
   }, [entry.fileId, entry.isDirectory, menuOpen]);
 
-  // Directories only get share + copy-path; preview/download have no sensible meaning.
+  // Managed directories can be opened locally, but preview/download still apply only to files.
   const recommendedItems: { action: FileTreeAction; label: string; appPath: string }[] =
-    entry.fileId && !entry.isDirectory
+    entry.fileId
       ? recommendedApps.map((app) => ({
           action: 'openWithApp' as const,
           label: app.name,
@@ -69,12 +70,13 @@ function ActionMenu({
       : [];
 
   const shell = isElectron() ? window.electronAPI?.shell : undefined;
+  const defaultOpenLabel = entry.isDirectory ? labels.openDirectory : labels.openDefault;
   const localItems: { action: FileTreeAction; label: string; appPath?: string }[] = entry.fileId
     ? [
-        ...(entry.isDirectory || !labels.openDefault || !shell?.openFileResource
+        ...(!defaultOpenLabel || !shell?.openFileResource
           ? []
-          : [{ action: 'openDefault' as const, label: labels.openDefault }]),
-        ...(entry.isDirectory || !labels.openWith || !shell?.chooseAppAndOpenFileResource
+          : [{ action: 'openDefault' as const, label: defaultOpenLabel }]),
+        ...(!labels.openWith || !shell?.chooseAppAndOpenFileResource
           ? []
           : [{ action: 'openWith' as const, label: labels.openWith }]),
         ...(labels.revealInFolder && shell?.showFileResourceInFolder
@@ -139,6 +141,17 @@ function ActionMenu({
             className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
             onPointerDown={(e) => e.stopPropagation()}
           >
+            {isElectron() && entry.fileId && !shell?.openFileResource && labels.desktopUpdateRequired ? (
+              <button
+                type="button"
+                role="menuitem"
+                disabled
+                className="block w-full cursor-not-allowed px-3 py-1.5 text-left text-sm text-fg-subtle opacity-70"
+                title={labels.desktopUpdateRequired}
+              >
+                <span className="block truncate">{labels.desktopUpdateRequired}</span>
+              </button>
+            ) : null}
             {localItems.filter((item) => item.action === 'openDefault').map(({ action, label, appPath }) => (
               <button
                 key={appPath ? `${action}:${appPath}` : action}

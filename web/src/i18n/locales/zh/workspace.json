@@ -35,6 +35,7 @@
     "openLocation": "打开位置",
     "openInFileManager": "在资源管理器中打开",
     "openLocationFailed": "无法打开工作区位置",
+    "desktopUpdateRequired": "需要更新并重启桌面应用才能打开本地文件",
     "copyPathFailed": "无法复制路径",
     "openSystemApp": "用默认应用打开",
     "openFileFailed": "无法打开文件",

@@ -3,7 +3,7 @@ import { watch as fsWatch } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
-import { type IpcMain, app, dialog, shell } from 'electron';
+import { type IpcMain, app, clipboard, dialog, shell } from 'electron';
 import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
 import { resolveFileResourceHostPath } from './file-resource-path.js';
@@ -804,6 +804,16 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
     if (!validation.ok) return { success: false as const, error: validation.error };
     shell.showItemInFolder(resolved.path);
     return { success: true as const };
+  });
+
+  ipcMain.handle('shell:copy-file-resource-path', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {
+    assertTrustedRenderer(event);
+    const resolved = await resolveFileResourceHostPath(fileResourceId);
+    if (!resolved.ok) return resolved;
+    const validation = await validateOpenPath(resolved.path);
+    if (!validation.ok) return validation;
+    clipboard.writeText(resolved.path);
+    return { ok: true };
   });
 
   ipcMain.handle('shell:trash-file-resource', async (event, fileResourceId: unknown): Promise<ShellOpenResult> => {

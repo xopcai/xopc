@@ -57,6 +57,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
         success: boolean;
         error?: string;
       }>,
+    copyFileResourcePath: (fileResourceId: string) =>
+      ipcRenderer.invoke("shell:copy-file-resource-path", fileResourceId) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
     trashFileResource: (fileResourceId: string) =>
       ipcRenderer.invoke("shell:trash-file-resource", fileResourceId) as Promise<
         { ok: true } | { ok: false; error: string; code?: string }
