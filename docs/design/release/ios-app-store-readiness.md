@@ -19,15 +19,15 @@ Deploy the gateway update before distributing the new mobile version: older gate
 
 | Field | Status / required decision |
 | --- | --- |
-| Publisher / legal operator | Confirmed as an individual developer; supply the account holder's legal name exactly as shown in Apple Developer |
-| Private privacy contact | Supply a monitored email address; do not use public GitHub issues for personal deletion requests |
-| Initial storefronts | China mainland is included. Obtain an App ICP filing number and ensure its operator/app metadata matches the Simplified Chinese App Store metadata before submission |
+| Publisher / legal operator | Confirmed: individual developer 徐巧民 (Qiaomin Xu) |
+| Private privacy contact | Confirmed: `lyxopc.ai@gmail.com`; do not use public GitHub issues for personal deletion requests |
+| Initial storefronts | All 175 current storefronts are selected, including China mainland, with future storefronts enabled. Obtain an App ICP filing number and ensure its operator/app metadata matches the Simplified Chinese App Store metadata before submission |
 | Business model | Confirmed: free, with no purchases or subscriptions; connects only to gateways operated by the user |
-| Final privacy policy URL | Complete and publish the policy drafts under `apps/mobile-expo/app-store/`; then add the actual URL to the app and App Store Connect |
-| Support URL | Publish a page describing pairing, HTTPS access, consent, gateway updates and a way to contact support |
+| Final privacy policy URL | Published at `https://xopc.ai/zh/privacy` and `https://xopc.ai/en/privacy`; the Simplified Chinese URL is configured in App Store Connect |
+| Support URL | Published at `https://xopc.ai/zh/support` and `https://xopc.ai/en/support`; the Simplified Chinese URL is configured in App Store Connect |
 | Provider practices | Confirm actual retention, training and subprocessors for any publisher-operated gateway; the app cannot infer contracts from a model identifier |
 
-The in-app privacy explanation is implemented. It does **not** substitute for a finalized publisher privacy policy. Do not label the policy drafts as published or submit their placeholder values.
+The in-app privacy explanation is implemented and the finalized bilingual publisher policy is public. Keep the public pages and App Store privacy answers aligned with the actual shipped build and service practices.
 
 The dynamic recipient catalog is a disclosure of configured model/speech/image/search services, not a complete audit of arbitrary extensions, MCP servers, browser destinations, model proxy subprocessors or user-authored programs. Review the actual enabled integrations of a publisher-operated service, disclose them in its policy, and retain their existing action approvals. Withdrawing mobile consent stops future content submissions from this app; it cannot retract previously sent content or cancel existing server-side automation.
 
@@ -119,6 +119,16 @@ The publisher confirmed China mainland as an initial storefront. Apple reports a
 | Diagnostics | Gateway request logs and provider logs depend on the deployment; audit actual fields and retention |
 | Tracking | No advertising or cross-app tracking flow was added; verify all bundled SDK practices before answering |
 
+For the submitted iOS build and the confirmed user-operated gateway model, use the following App Privacy answers:
+
+- Data collection: **Yes**
+- Data type: **Identifiers → Device ID** (the optional Expo push token)
+- Purpose: **App Functionality**
+- Linked to the user: **Yes** (Apple treats linkage through a device as identity linkage)
+- Used for tracking: **No**
+
+User content, photos, audio, contacts and pairing identifiers are sent only to the gateway chosen and administered by the user, not to a publisher-operated backend. Local usage/performance records never leave the device. Expo stores notification contents only long enough to deliver them, while the Expo push token is a persistent device-level identifier, so the conservative disclosure is Device ID rather than “Data Not Collected.” Revisit these answers if the publisher later operates a gateway, adds remote telemetry or changes the push provider.
+
 ## Validation gates
 
 Checks completed on the 2026-09-03 working copy:
@@ -129,7 +139,7 @@ Checks completed on the 2026-09-03 working copy:
 - The Release simulator build succeeded after clean prebuild. On an iPhone 17 Pro / iOS 26.4 simulator, clean launch, the paste-link entry, pre-pairing privacy information, scrolling and returning to pairing were verified. Screenshots are in the local ignored `apps/mobile-expo/dist/ios/qa/` directory. An earlier build with signing disabled could not access secure storage; the normal simulator-signed build resolved that failure.
 - The verifier rejected the previous production IPA for its missing production APNs entitlement, as expected. Version `0.0.25` then passed the artifact verifier, Apple validation and App Store Connect upload.
 - Live Universal Links hosting and Apple's CDN were verified after deployment; physical-device automatic opening remains pending.
-- TestFlight physical-device checks, Beta App Review, App ICP filing, store metadata/screenshots, privacy answers and actual App Store submission remain outstanding.
+- TestFlight physical-device checks, App ICP filing, App Privacy answers and the actual App Store submission remain outstanding. Store metadata, screenshots, reviewer access, free pricing and all 175 current storefront selections are configured.
 
 ```bash
 pnpm run mobile:lint
