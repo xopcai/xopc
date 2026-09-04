@@ -41,6 +41,11 @@ describe('SharedUnderstandingPanel', () => {
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    globalThis.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -79,11 +84,27 @@ describe('SharedUnderstandingPanel', () => {
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
-  it('shows only related nodes and keeps their actions in the selected detail', async () => {
+  it('shows the whole network and keeps node actions in the selected detail', async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
+    const secondFocus: UserFocus = {
+      ...activeFocus,
+      id: 'second-map-focus',
+      versionId: 'second-map-focus-v1',
+      title: '完善发布自动化',
+      summary: '继续改进发布流程',
+      updatedAt: 1,
+    };
+    const unrelatedUnderstanding: UserUnderstanding = {
+      ...preference,
+      id: 'unrelated-understanding',
+      versionId: 'unrelated-understanding-v1',
+      kind: 'task_lesson',
+      scope: { type: 'session', id: 'another-session' },
+      statement: '数据库迁移必须使用事务',
+    };
     await act(async () => root.render(<SharedUnderstandingPanel
-      focuses={[activeFocus]}
-      understandings={[preference]}
+      focuses={[activeFocus, secondFocus]}
+      understandings={[preference, unrelatedUnderstanding]}
       language="zh"
       onRefresh={onRefresh}
     />));
@@ -91,11 +112,13 @@ describe('SharedUnderstandingPanel', () => {
     const mapTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
       .find((button) => button.textContent?.includes('关系'));
     await act(async () => mapTab?.click());
-    expect([...container.querySelectorAll<HTMLButtonElement>('button')]
-      .some((button) => button.textContent === '编辑')).toBe(true);
+    expect(container.textContent).toContain('整体关系网');
+    expect(container.textContent).toContain('发布 XOPC 1.0');
+    expect(container.textContent).toContain('完善发布自动化');
+    expect(container.textContent).toContain('数据库迁移必须使用事务');
+    expect(container.textContent).not.toContain('图中关注');
 
-    const contextNode = [...container.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.includes('发布前先完成验证'));
+    const contextNode = container.querySelector<HTMLElement>('[data-id="understanding:preference"]');
     await act(async () => contextNode?.click());
 
     expect(container.textContent).toContain('为什么展示这条关系');

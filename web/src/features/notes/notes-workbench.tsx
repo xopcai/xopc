@@ -19,6 +19,7 @@ import useSWR from 'swr';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { openDiscussionCapture } from '@/features/discussions/discussion-events';
+import { htmlLangAttribute } from '@/lib/locale-default';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -305,7 +306,8 @@ export function NotesWorkbench({
     today: n.today,
     yesterday: n.yesterday,
     daysAgo: n.daysAgo,
-  }), [n.justNow, n.minutesAgo, n.today, n.yesterday, n.daysAgo]);
+    locale: htmlLangAttribute(language),
+  }), [language, n.justNow, n.minutesAgo, n.today, n.yesterday, n.daysAgo]);
 
   const libraryViews = useMemo<LibraryView[]>(() => [
     {
