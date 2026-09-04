@@ -35,6 +35,7 @@
     "openLocation": "Open location",
     "openInFileManager": "Open in file manager",
     "openLocationFailed": "Could not open workspace location",
+    "desktopUpdateRequired": "Update and restart the desktop app to open local files",
     "copyPathFailed": "Could not copy path",
     "openSystemApp": "Open with default app",
     "openFileFailed": "Could not open file",

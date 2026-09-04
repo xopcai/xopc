@@ -31,6 +31,7 @@ export const FileResourceSchema = z.object({
   capabilities: z.array(FileCapabilitySchema),
 });
 
+export const FileResourceResponseSchema = z.object({ resource: FileResourceSchema });
 export const FileSpacesResponseSchema = z.object({ spaces: z.array(FileSpaceSchema) });
 export const FileResourcesResponseSchema = z.object({ items: z.array(FileResourceSchema) });
 
