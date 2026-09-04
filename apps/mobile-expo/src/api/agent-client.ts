@@ -372,6 +372,7 @@ export class AgentMessageSender {
         content: input.content,
         origin,
         ...(input.attachments.length ? { attachments: input.attachments } : {}),
+        ...(input.contextRefs.length ? { contextRefs: input.contextRefs } : {}),
       }),
     });
     assertCurrent();

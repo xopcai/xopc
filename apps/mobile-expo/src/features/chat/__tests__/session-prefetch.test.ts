@@ -67,4 +67,12 @@ describe('server session prefetch', () => {
     );
     expect(mockedCreate).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps explicit execution environments in separate cache entries', async () => {
+    prefetchNewChatSession({ agentId: 'main', projectId: 'project-1', executionMode: 'local_checkout' });
+    await takeNewChatSessionKey({ agentId: 'main', projectId: 'project-1', executionMode: 'managed_worktree' });
+
+    expect(mockedCreate).toHaveBeenCalledWith({ agentId: 'main', projectId: 'project-1', executionMode: 'local_checkout' });
+    expect(mockedCreate).toHaveBeenCalledWith({ agentId: 'main', projectId: 'project-1', executionMode: 'managed_worktree' });
+  });
 });

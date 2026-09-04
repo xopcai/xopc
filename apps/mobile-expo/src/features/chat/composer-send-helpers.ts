@@ -1,4 +1,4 @@
-import type { WireAttachment } from './composer.types';
+import type { ComposerContextRef, WireAttachment } from './composer.types';
 import type { Message, MessageAttachment, MessageContent, TextContent } from './messages.types';
 import { stripRuntimeContextForDisplay, stripUserMessageForDisplay } from './wire-text-scrub';
 
@@ -113,13 +113,22 @@ export function findPrecedingUserMessage(messages: Message[], fromIndex: number)
   return null;
 }
 
-export function buildUserResendPayload(message: Message): { text: string; attachments?: WireAttachment[] } | null {
+export function buildUserResendPayload(message: Message): { text: string; attachments?: WireAttachment[]; contextRefs?: ComposerContextRef[] } | null {
   const hasAudio = message.content.some((b) => b.type === 'audio');
   if (hasAudio) return null;
   const text = extractUserMessageText(message.content);
   const attachments = messageAttachmentsToWire(message.attachments);
   if (!text && !attachments?.length) return null;
-  return { text, attachments };
+  return {
+    text,
+    attachments,
+    contextRefs: message.contextRefs?.map((ref) => ({
+      kind: ref.kind,
+      sourceId: ref.sourceId,
+      expectedVersion: ref.version,
+      title: ref.title,
+    })),
+  };
 }
 
 export function isLastAssistantMessage(messages: Message[], index: number): boolean {
@@ -174,7 +183,7 @@ export function buildUserMessageContent(text: string, wire?: WireAttachment[]): 
   return blocks;
 }
 
-export function buildOptimisticUserMessage(text: string, wire?: WireAttachment[]): Message {
+export function buildOptimisticUserMessage(text: string, wire?: WireAttachment[], contextRefs?: ComposerContextRef[]): Message {
   const attachments = wire?.length ? wireAttachmentsToMessageAttachments(wire) : undefined;
   const content = buildUserMessageContent(text, wire);
   const hasAttachments = Boolean(attachments?.length);
@@ -184,10 +193,16 @@ export function buildOptimisticUserMessage(text: string, wire?: WireAttachment[]
     role: hasAttachments ? 'user-with-attachments' : 'user',
     content: content.length ? content : [{ type: 'text', text: text.trim() || '' }],
     attachments,
+    contextRefs: contextRefs?.map((ref) => ({
+      kind: ref.kind,
+      sourceId: ref.sourceId,
+      version: ref.expectedVersion,
+      title: ref.title,
+    })),
     timestamp,
   };
 }
 
-export function canSendComposerDraft(text: string, attachmentCount: number): boolean {
-  return text.trim().length > 0 || attachmentCount > 0;
+export function canSendComposerDraft(text: string, attachmentCount: number, contextRefCount = 0): boolean {
+  return text.trim().length > 0 || attachmentCount > 0 || contextRefCount > 0;
 }

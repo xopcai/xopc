@@ -90,7 +90,7 @@ import type { MessageSubmission } from '../../features/chat/message-submission';
 function submission(overrides: Partial<MessageSubmission> = {}): MessageSubmission {
   return {
     clientMessageId: 'message-a', gatewayId: 'computer-a', sessionKey: 'session-a',
-    expectedSessionId: 'instance-a', content: 'hello', attachments: [], ...overrides,
+    expectedSessionId: 'instance-a', content: 'hello', attachments: [], contextRefs: [], ...overrides,
   };
 }
 
@@ -160,6 +160,18 @@ describe('AgentMessageSender voice message', () => {
     ]);
     expect(submitted.attachments[0]).not.toHaveProperty('data');
     expect(submitted.attachments[0]).not.toHaveProperty('localUri');
+  });
+
+  it('submits frozen note context references', async () => {
+    publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
+    testState.apiFetch.mockResolvedValue(accepted());
+
+    await new AgentMessageSender().sendMessage(submission({
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '42' }],
+    }));
+
+    const body = JSON.parse(String(testState.apiFetch.mock.calls[0]?.[1]?.body));
+    expect(body.contextRefs).toEqual([{ kind: 'note', sourceId: 'note-1', expectedVersion: '42' }]);
   });
 
   it('uploads transcription audio natively with the preferred UI language', async () => {

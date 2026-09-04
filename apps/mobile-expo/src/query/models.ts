@@ -164,6 +164,18 @@ export async function setSessionInitialAgentConfig(
   throw new Error(errBody.error ?? formatApiHttpError(res.status, res.statusText));
 }
 
+export async function setSessionWorkingDirectory(sessionKey: string, workingDirectory: string): Promise<void> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workingDirectory: workingDirectory.trim() }),
+  });
+  if (res.ok) return;
+  const body = await res.json().catch(() => ({})) as { error?: string | { message?: string } };
+  const message = typeof body.error === 'string' ? body.error : body.error?.message;
+  throw new Error(message ?? formatApiHttpError(res.status, res.statusText));
+}
+
 /** Fetch the session's agent-config (model override, thinking level, etc.). */
 export async function fetchSessionAgentConfig(
   sessionKey: string,

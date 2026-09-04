@@ -1,7 +1,7 @@
 /**
  * Chat detail stack — pushed on top of the home navigator.
  *
- * Route: /chat/[k]   (k = session key, optional msg = prefill message)
+ * Route: /chat/[k]   (k = session key)
  */
 import { Stack } from 'expo-router';
 

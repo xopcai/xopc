@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
 import { queryKeys } from '../keys';
-import { fetchSessionAgentConfig, resolveEffectiveModelId, sessionModelMutationOptions, setSessionModelRef } from '../models';
+import { fetchSessionAgentConfig, resolveEffectiveModelId, sessionModelMutationOptions, setSessionModelRef, setSessionWorkingDirectory } from '../models';
 
 vi.mock('../../api/client', () => ({
   apiFetch: vi.fn(),
@@ -53,6 +53,21 @@ describe('setSessionModelRef', () => {
     }), { status: 400 }));
 
     await expect(setSessionModelRef('session-1', 'missing/model')).rejects.toThrow('Model unavailable');
+  });
+});
+
+describe('setSessionWorkingDirectory', () => {
+  beforeEach(() => mockedApiFetch.mockReset());
+
+  it('updates the session override with a trimmed host path', async () => {
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await setSessionWorkingDirectory('session/1', ' /work/repo ');
+
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/sessions/session%2F1/agent-config', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ workingDirectory: '/work/repo' }),
+    }));
   });
 });
 

@@ -24,10 +24,17 @@ import { useMessages } from '../../i18n/messages';
 import { motion } from '../../motion';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
+import { detectAtMentionRange, formatWorkspacePath, replaceAtMention } from './at-mention-utils';
 import { canSendComposerDraft } from './composer-send-helpers';
-import type { ComposerAttachment, WireAttachment } from './composer.types';
+import {
+  MAX_COMPOSER_CONTEXT_REFS,
+  type ComposerContextRef,
+  type WireAttachment,
+} from './composer.types';
 import { AttachmentSourceSheet } from './attachment-source-sheet';
+import { AtMentionPaletteBar } from './AtMentionPaletteBar';
 import { ComposerAttachmentStrip } from './composer-attachment-strip';
+import { ComposerContextChips } from './ComposerContextChips';
 import { CommandPaletteBar } from './CommandPaletteBar';
 import { SlashTokenInput } from './SlashTokenInput';
 import {
@@ -37,13 +44,14 @@ import {
   MIN_COMPOSER_INPUT_HEIGHT,
 } from './composer-layout';
 import { useCommandPalette } from './useCommandPalette';
+import { useAtMentionPicker, type MobileAtMentionItem } from './use-at-mention-picker';
 import {
   clearComposerDraftSnapshot,
   readComposerDraftSnapshot,
   writeComposerDraftSnapshot,
 } from './composer-draft-storage';
 import { useComposerAttachments } from './use-composer-attachments';
-import { MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
+import { MOBILE_COMPOSER_APPEND_EVENT, MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
 import { VoiceRecordingCard } from './VoiceRecordingCard';
 import { useChatVoiceRecording } from './use-chat-voice-recording';
 
@@ -58,23 +66,23 @@ export const ChatComposer = memo(function ChatComposer({
   placeholder,
   suggestionDraft,
   onConsumeSuggestionDraft,
-  prefillAttachments,
-  onConsumePrefillAttachments,
   keyboardVisible = false,
   overlayShell = false,
+  contextRefs,
+  onContextRefsChange,
 }: {
   sessionKey: string;
   disabled: boolean;
   streaming: boolean;
-  onSend: (text: string, attachments?: WireAttachment[]) => Promise<boolean>;
+  onSend: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => Promise<boolean>;
   onAbort: () => void;
   placeholder?: string;
   suggestionDraft?: string;
   onConsumeSuggestionDraft?: () => void;
-  prefillAttachments?: ComposerAttachment[];
-  onConsumePrefillAttachments?: () => void;
   keyboardVisible?: boolean;
   overlayShell?: boolean;
+  contextRefs: ComposerContextRef[];
+  onContextRefsChange: (refs: ComposerContextRef[]) => void;
 }) {
   const m = useMessages();
   const cm = m.chat;
@@ -91,7 +99,7 @@ export const ChatComposer = memo(function ChatComposer({
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener(
+    const fillSubscription = DeviceEventEmitter.addListener(
       MOBILE_COMPOSER_FILL_EVENT,
       (text: unknown) => {
         if (typeof text !== 'string') return;
@@ -101,7 +109,24 @@ export const ChatComposer = memo(function ChatComposer({
         requestAnimationFrame(() => inputRef.current?.focus());
       },
     );
-    return () => subscription.remove();
+    const appendSubscription = DeviceEventEmitter.addListener(
+      MOBILE_COMPOSER_APPEND_EVENT,
+      (text: unknown) => {
+        if (typeof text !== 'string') return;
+        setMode('text');
+        setDraft((current) => {
+          const separator = current && !/\s$/.test(current) ? ' ' : '';
+          const next = `${current}${separator}${text}`;
+          setCursorPos(next.length);
+          return next;
+        });
+        requestAnimationFrame(() => inputRef.current?.focus());
+      },
+    );
+    return () => {
+      fillSubscription.remove();
+      appendSubscription.remove();
+    };
   }, []);
 
   const measureShell = useCallback(async () => {
@@ -144,14 +169,15 @@ export const ChatComposer = memo(function ChatComposer({
     attachmentCameraPermissionDenied: cm.attachmentCameraPermissionDenied,
   });
 
-  const palette = useCommandPalette(draft, cursorPos);
+  const atRangeActive = detectAtMentionRange(draft, cursorPos) !== null;
+  const palette = useCommandPalette(draft, cursorPos, atRangeActive);
+  const atPicker = useAtMentionPicker(draft, cursorPos, sessionKey, palette.open);
 
   const [snack, setSnack] = useState('');
-  const lastLoadedPrefillAttachmentsRef = useRef<ComposerAttachment[] | null>(null);
   const restoredDraftSessionKeyRef = useRef<string | null>(null);
   const skipDraftPersistSessionKeyRef = useRef<string | null>(null);
   const runBusy = streaming || disabled;
-  const hasDraft = canSendComposerDraft(draft, att.attachments.length);
+  const hasDraft = canSendComposerDraft(draft, att.attachments.length, contextRefs.length);
   /** Programmatic draft updates (palette, suggestions, restore) set cursor explicitly. */
   const updateDraft = useCallback(
     (nextDraft: string, nextCursor = nextDraft.length) => {
@@ -173,8 +199,13 @@ export const ChatComposer = memo(function ChatComposer({
     setMode('text');
   }, [att.setAttachments]);
   const onRecorded = useCallback(async (attachment: WireAttachment) => {
-    if (!await onSend('', [attachment])) onRecordingDraft(attachment);
-  }, [onRecordingDraft, onSend]);
+    const refs = contextRefs;
+    if (await onSend('', [attachment], refs.length ? refs : undefined)) {
+      onContextRefsChange([]);
+    } else {
+      onRecordingDraft(attachment);
+    }
+  }, [contextRefs, onContextRefsChange, onRecordingDraft, onSend]);
   const onTranscribed = useCallback((text: string) => {
     const current = draftRef.current.trim();
     updateDraft(current ? `${current} ${text}` : text);
@@ -200,12 +231,14 @@ export const ChatComposer = memo(function ChatComposer({
 
     if (!normalizedSessionKey) {
       resetEditor();
+      onContextRefsChange([]);
       return;
     }
 
     const snapshot = readComposerDraftSnapshot(normalizedSessionKey);
     if (!snapshot) {
       resetEditor();
+      onContextRefsChange([]);
       return;
     }
 
@@ -213,7 +246,8 @@ export const ChatComposer = memo(function ChatComposer({
     setCursorPos(snapshot.cursorPos);
     setInputHeight(estimateComposerInputHeight(snapshot.text));
     setMode('text');
-  }, [resetEditor, sessionKey]);
+    onContextRefsChange(snapshot.contextRefs);
+  }, [onContextRefsChange, resetEditor, sessionKey]);
 
   useEffect(() => {
     const normalizedSessionKey = sessionKey.trim();
@@ -224,17 +258,19 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
 
-    writeComposerDraftSnapshot(normalizedSessionKey, { text: draft, cursorPos });
-  }, [cursorPos, draft, sessionKey]);
+    writeComposerDraftSnapshot(normalizedSessionKey, { text: draft, cursorPos, contextRefs });
+  }, [contextRefs, cursorPos, draft, sessionKey]);
 
   const isExpanded = useMemo(
     () =>
       isFocused ||
       draft.length > 0 ||
       att.attachments.length > 0 ||
+      contextRefs.length > 0 ||
       keyboardVisible ||
-      palette.open,
-    [isFocused, draft.length, att.attachments.length, keyboardVisible, palette.open],
+      palette.open ||
+      atPicker.open,
+    [atPicker.open, isFocused, draft.length, att.attachments.length, contextRefs.length, keyboardVisible, palette.open],
   );
 
   useEffect(() => {
@@ -263,15 +299,6 @@ export const ChatComposer = memo(function ChatComposer({
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [suggestionDraft, onConsumeSuggestionDraft, updateDraft]);
 
-  useEffect(() => {
-    if (!prefillAttachments?.length) return;
-    if (prefillAttachments === lastLoadedPrefillAttachmentsRef.current) return;
-    lastLoadedPrefillAttachmentsRef.current = prefillAttachments;
-    att.restoreAttachments(prefillAttachments);
-    setMode('text');
-    onConsumePrefillAttachments?.();
-  }, [att, onConsumePrefillAttachments, prefillAttachments]);
-
   const canSendIdle = hasDraft && !runBusy && !voiceInteractionActive;
 
   const handlePaletteSelect = useCallback(
@@ -282,18 +309,48 @@ export const ChatComposer = memo(function ChatComposer({
     [palette, updateDraft],
   );
 
+  const handleAtMentionSelect = useCallback((item: MobileAtMentionItem) => {
+    const range = atPicker.range;
+    if (!range) return;
+    if (item.kind === 'note') {
+      if (!contextRefs.some((ref) => ref.sourceId === item.id) && contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS) {
+        setSnack(cm.contextLimitReached);
+        return;
+      } else if (!contextRefs.some((ref) => ref.sourceId === item.id)) {
+        onContextRefsChange([...contextRefs, {
+          kind: 'note',
+          sourceId: item.id,
+          expectedVersion: item.expectedVersion,
+          title: item.name,
+        }]);
+      }
+      updateDraft(replaceAtMention(draft, range, ' '), range.start + 1);
+    } else {
+      const path = item.isDirectory && !item.relativePath.endsWith('/') ? `${item.relativePath}/` : item.relativePath;
+      const token = `@file:${formatWorkspacePath(path)} `;
+      updateDraft(replaceAtMention(draft, range, token), range.start + token.length);
+    }
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, [atPicker.range, cm.contextLimitReached, contextRefs, draft, onContextRefsChange, updateDraft]);
+
   const handleSend = useCallback(() => {
     if (!canSendIdle || runBusy) return;
 
     const previousDraft = draft;
     const previousAttachments = att.attachments;
+    const previousContextRefs = contextRefs;
     const wire = att.toWirePayload();
 
     resetEditor();
     att.clearAttachments();
+    onContextRefsChange([]);
     inputRef.current?.blur();
 
-    void onSend(previousDraft.trim(), wire.length ? wire : undefined)
+    void onSend(
+      previousDraft.trim(),
+      wire.length ? wire : undefined,
+      previousContextRefs.length ? previousContextRefs : undefined,
+    )
       .then((accepted) => {
         if (accepted) {
           clearComposerDraftSnapshot(sessionKey);
@@ -301,14 +358,16 @@ export const ChatComposer = memo(function ChatComposer({
         }
         updateDraft(previousDraft);
         att.restoreAttachments(previousAttachments);
+        onContextRefsChange(previousContextRefs);
         requestAnimationFrame(() => inputRef.current?.focus());
       })
       .catch(() => {
         updateDraft(previousDraft);
         att.restoreAttachments(previousAttachments);
+        onContextRefsChange(previousContextRefs);
         requestAnimationFrame(() => inputRef.current?.focus());
       });
-  }, [att, canSendIdle, draft, onSend, resetEditor, runBusy, sessionKey, updateDraft]);
+  }, [att, canSendIdle, contextRefs, draft, onContextRefsChange, onSend, resetEditor, runBusy, sessionKey, updateDraft]);
 
   const handleAbort = useCallback(() => {
     onAbort();
@@ -560,6 +619,15 @@ export const ChatComposer = memo(function ChatComposer({
         />
       ) : null}
 
+      {atPicker.open ? (
+        <AtMentionPaletteBar
+          items={atPicker.items}
+          loading={atPicker.loading}
+          emptyLabel={cm.contextSearchEmpty}
+          onSelect={handleAtMentionSelect}
+        />
+      ) : null}
+
       {att.attachments.length > 0 ? (
         <ComposerAttachmentStrip
           attachments={att.attachments}
@@ -569,6 +637,11 @@ export const ChatComposer = memo(function ChatComposer({
           editLabel={cm.editImage}
         />
       ) : null}
+
+      <ComposerContextChips
+        refs={contextRefs}
+        onRemove={(sourceId) => onContextRefsChange(contextRefs.filter((ref) => ref.sourceId !== sourceId))}
+      />
 
       {contextNotice ? (
         <View

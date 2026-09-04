@@ -3,21 +3,13 @@ import { useRouter } from 'expo-router';
 import { Keyboard, Share } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';
 
-import { t } from '../../i18n/messages';
 import { openChat } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
 import { noteToIndexEntry, upsertNoteInListCaches } from '../../query/note-list-cache';
 import { invalidateNoteLists } from '../../query/workspace-sync';
-import { updateNote, type Note } from '../../query/notes';
-import { createSession } from '../../query/sessions';
+import { openNoteConversation, updateNote, type Note } from '../../query/notes';
 import { flushWorkspaceSyncNow } from '../../sync/use-workspace-sync-flush';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
-import { writeNoteChatPrefill } from '../chat/note-chat-prefill-storage';
-import {
-  buildNoteChatContextText,
-  collectNoteAttachmentsForChat,
-  extractVoiceTranscripts,
-} from '../notes/note-to-chat-payload';
 
 type UseNotePageActionsArgs = {
   id: string | undefined;
@@ -31,10 +23,6 @@ type UseNotePageActionsArgs = {
   dismissMore: () => void;
   messages: {
     actionFailed: string;
-    editorSendToChatPrefix: string;
-    noteChatImagePlaceholder: string;
-    noteChatTitleLabel: string;
-    noteChatVoiceTranscript: string;
     pin: string;
     saved: string;
     shareNotesCopied: string;
@@ -60,23 +48,6 @@ export function useNotePageActions({
   const router = useRouter();
   const [actionLoading, setActionLoading] = useState<'pin' | 'openChat' | null>(null);
 
-  const buildChatPrefill = useCallback((instruction: string): string => {
-    const context = buildNoteChatContextText(
-      markdownRef.current,
-      {
-        imagePlaceholder: (alt) => t(messages.noteChatImagePlaceholder, { alt }),
-        voiceTranscript: (text) => t(messages.noteChatVoiceTranscript, { text }),
-      },
-      { voiceTranscripts: extractVoiceTranscripts(note?.attachments) },
-    );
-    const noteTitle = titleRef.current.trim();
-    return [
-      instruction.trim(),
-      noteTitle ? `${messages.noteChatTitleLabel}: ${noteTitle}` : '',
-      context,
-    ].filter(Boolean).join('\n\n');
-  }, [markdownRef, messages, note?.attachments, titleRef]);
-
   const handleOpenNoteChat = useCallback(async () => {
     if (!id || !note) return;
     setActionLoading('openChat');
@@ -84,21 +55,14 @@ export function useNotePageActions({
       Keyboard.dismiss();
       await flushEditorToDraft();
       await flushSave();
-      const prefill = buildChatPrefill(messages.editorSendToChatPrefix);
-      const media = await collectNoteAttachmentsForChat(id, markdownRef.current, [], note.attachments);
-      const key = await createSession();
-      writeNoteChatPrefill(key, {
-        text: prefill,
-        attachments: media.attachments,
-        droppedCount: media.droppedCount,
-      });
-      openChat(router, key, { msg: prefill });
+      const { sessionKey } = await openNoteConversation(id);
+      openChat(router, sessionKey);
     } catch (error) {
       setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
     } finally {
       setActionLoading(null);
     }
-  }, [buildChatPrefill, flushEditorToDraft, flushSave, id, markdownRef, messages, note, router, setSnackMsg]);
+  }, [flushEditorToDraft, flushSave, id, messages.actionFailed, note, router, setSnackMsg]);
 
   const handleShare = useCallback(async () => {
     dismissMore();

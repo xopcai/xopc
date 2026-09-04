@@ -2,6 +2,7 @@ import {
   newSessionCacheKey,
   type ResolvedNewSessionSpec,
   type SessionInitialAgentConfig,
+  type SessionCreateRequest,
 } from '@xopcai/gateway-contract';
 
 import { createSession } from '../../query/sessions';
@@ -15,11 +16,15 @@ type PrefetchedEntry = {
   expiresAt: number;
 };
 
+type NewChatScope = Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'> & {
+  executionMode?: SessionCreateRequest['executionMode'];
+};
+
 const cache = new Map<string, PrefetchedEntry>();
 const pendingCreates = new Map<string, Promise<string>>();
 
-function cacheKeyOf(spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>): string {
-  return newSessionCacheKey(useGatewayStore.getState().activeGatewayId ?? 'default', spec);
+function cacheKeyOf(spec: NewChatScope): string {
+  return `${newSessionCacheKey(useGatewayStore.getState().activeGatewayId ?? 'default', spec)}:${spec.executionMode ?? 'default'}`;
 }
 
 function dropExpired(now: number): void {
@@ -29,18 +34,19 @@ function dropExpired(now: number): void {
 }
 
 async function createServerSession(
-  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  spec: NewChatScope,
   initialAgentConfig?: SessionInitialAgentConfig,
 ): Promise<string> {
   return createSession({
     agentId: spec.agentId,
     ...(spec.projectId ? { projectId: spec.projectId } : {}),
+    ...(spec.executionMode ? { executionMode: spec.executionMode } : {}),
     ...(initialAgentConfig ? { initialAgentConfig } : {}),
   });
 }
 
 function startCreate(
-  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  spec: NewChatScope,
   initialAgentConfig?: SessionInitialAgentConfig,
 ): Promise<string> {
   const key = cacheKeyOf(spec);
@@ -60,7 +66,7 @@ function startCreate(
 }
 
 export function prefetchNewChatSession(
-  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  spec: NewChatScope,
 ): void {
   const now = Date.now();
   dropExpired(now);
@@ -70,7 +76,7 @@ export function prefetchNewChatSession(
 }
 
 export async function takeNewChatSessionKey(
-  spec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>,
+  spec: NewChatScope,
   initialAgentConfig?: SessionInitialAgentConfig,
 ): Promise<string> {
   const now = Date.now();
