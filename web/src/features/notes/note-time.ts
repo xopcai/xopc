@@ -4,6 +4,7 @@ export interface NoteTimeLabels {
   today: string;
   yesterday: string;
   daysAgo: string;
+  locale: string;
 }
 
 const MINUTE = 60_000;
@@ -28,12 +29,12 @@ export function formatRelativeTime(ts: number, now: number, labels: NoteTimeLabe
 
   const todayStart = startOfDay(now);
   if (ts >= todayStart) {
-    return labels.today + ' ' + new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return labels.today + ' ' + new Date(ts).toLocaleTimeString(labels.locale, { hour: '2-digit', minute: '2-digit' });
   }
 
   const yesterdayStart = todayStart - DAY;
   if (ts >= yesterdayStart) {
-    return labels.yesterday + ' ' + new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return labels.yesterday + ' ' + new Date(ts).toLocaleTimeString(labels.locale, { hour: '2-digit', minute: '2-digit' });
   }
 
   if (diff < 7 * DAY) {
@@ -41,7 +42,7 @@ export function formatRelativeTime(ts: number, now: number, labels: NoteTimeLabe
     return labels.daysAgo.replace('{{n}}', String(days));
   }
 
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(ts).toLocaleDateString(labels.locale, { month: 'short', day: 'numeric' });
 }
 
 /** Date group label for list separators. */
@@ -55,9 +56,9 @@ export function formatDateGroup(ts: number, now: number, labels: NoteTimeLabels)
   const d = new Date(ts);
   const nowDate = new Date(now);
   if (d.getFullYear() === nowDate.getFullYear()) {
-    return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+    return d.toLocaleDateString(labels.locale, { month: 'long', day: 'numeric' });
   }
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  return d.toLocaleDateString(labels.locale, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 /** Group key — same day = same group. */
