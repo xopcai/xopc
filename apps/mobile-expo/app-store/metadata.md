@@ -2,6 +2,8 @@
 
 Do not submit until publisher, territories, business model, policy URL and review access are confirmed. No live credentials belong in this file.
 
+Confirmed product model: distributed by an individual developer; free with no purchases or subscriptions; connects only to gateways run by users. China mainland is an intended initial storefront and requires completion of App ICP filing before release there.
+
 ## English
 
 - Name: xopc
@@ -14,6 +16,8 @@ Connect to your xopc gateway and bring your workspace with you. Capture notes an
 Choose the tools you use: attach a photo, record a voice message, listen to an answer, or share content into your workspace. Review configured AI and speech services before sharing your content, and manage permission in the app.
 
 An accessible xopc gateway is required for connected features. The gateway and its configured services determine available AI capabilities. Pair securely by scanning a fresh code or pasting a pairing link.
+
+xopc does not include a hosted account or gateway service. Run and administer your own gateway and choose its model providers.
 
 ## 简体中文
 
@@ -28,9 +32,13 @@ An accessible xopc gateway is required for connected features. The gateway and i
 
 联网功能需要可访问的 xopc 网关。可用的 AI 能力由网关及其配置的服务决定。扫描新生成的二维码或粘贴配对链接，即可安全连接。
 
+xopc 不提供托管账号或网关服务。用户需自行运行和管理网关，并选择所使用的模型服务商。本 App 免费提供，不含购买或订阅。
+
 ## App Review notes template
 
 xopc is a native companion to an xopc gateway. We provide a dedicated review gateway with synthetic data and functioning AI services for testing.
+
+The app is free and contains no purchases or subscriptions. It does not provide a publisher-hosted account or gateway service; production users run and administer their own gateway. The dedicated review environment exists only to let App Review exercise the client with synthetic data.
 
 Review access URL: [PUBLISHER TO SUPPLY]
 

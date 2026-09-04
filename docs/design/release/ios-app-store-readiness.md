@@ -1,6 +1,6 @@
 # iOS App Store release readiness
 
-Updated: 2026-09-03. This is a submission checklist, not an assertion that the app has passed review.
+Updated: 2026-09-04. This is a submission checklist, not an assertion that the app has passed review.
 
 ## Changes prepared in this release
 
@@ -19,10 +19,10 @@ Deploy the gateway update before distributing the new mobile version: older gate
 
 | Field | Status / required decision |
 | --- | --- |
-| Publisher / legal operator | Supply the actual name used in the developer account and privacy policy |
+| Publisher / legal operator | Confirmed as an individual developer; supply the account holder's legal name exactly as shown in Apple Developer |
 | Private privacy contact | Supply a monitored email address; do not use public GitHub issues for personal deletion requests |
-| Initial storefronts | Confirm whether China mainland is included; determine applicable filing and service requirements before enabling it |
-| Business model | Confirm free / paid / subscription, and whether the app connects only to user-operated gateways or also a publisher-operated service |
+| Initial storefronts | China mainland is included. Obtain an App ICP filing number and ensure its operator/app metadata matches the Simplified Chinese App Store metadata before submission |
+| Business model | Confirmed: free, with no purchases or subscriptions; connects only to gateways operated by the user |
 | Final privacy policy URL | Complete and publish the policy drafts under `apps/mobile-expo/app-store/`; then add the actual URL to the app and App Store Connect |
 | Support URL | Publish a page describing pairing, HTTPS access, consent, gateway updates and a way to contact support |
 | Provider practices | Confirm actual retention, training and subprocessors for any publisher-operated gateway; the app cannot infer contracts from a model identifier |
@@ -35,9 +35,13 @@ The dynamic recipient catalog is a disclosure of configured model/speech/image/s
 
 The successful [2026-09-03 TestFlight workflow](https://github.com/xopcai/xopc/actions/runs/33702819293) produced version 0.0.21. Inspection of that actual IPA found no signed APNs, App Group or Associated Domains entitlement on the main app, and no signed App Group on the Widget. Its embedded main provisioning profile authorizes production APNs and the App Group, but does not contain Associated Domains.
 
-The build script previously archived with `CODE_SIGNING_ALLOWED=NO` and only signed at export. The prepared fix archives with distribution signing and assigns each Release target its own profile through `with-ios-release-signing`. The IPA verifier rejects the old artifact. A corrected signed IPA still needs to be built and checked.
+The build script previously archived with `CODE_SIGNING_ALLOWED=NO` and only signed at export. The fix archives with distribution signing and assigns each Release target its own profile through `with-ios-release-signing`. The IPA verifier rejects the old artifact.
 
-Associated Domains has now been enabled for `ai.xopc.xopc` through the Apple API. A new main App Store profile was created with the existing distribution certificate; production APNs, App Group and Associated Domains were checked before updating `IOS_PROVISIONING_PROFILE_MAIN_BASE64` in `xopcai/xopc` (2026-09-03 02:57:57 UTC). Existing certificates and the old profile were not revoked. The Widget profile already authorizes its App Group. The next signed build must still verify the actual signed app and extension entitlements.
+Associated Domains was enabled for `ai.xopc.xopc` through the Apple API. A new main App Store profile was created with the existing distribution certificate; production APNs, App Group and Associated Domains were checked before updating `IOS_PROVISIONING_PROFILE_MAIN_BASE64` in `xopcai/xopc` (2026-09-03 02:57:57 UTC). Existing certificates and the old profile were not revoked. The Widget profile already authorizes its App Group.
+
+Workflow run [33777734402](https://github.com/xopcai/xopc/actions/runs/33777734402) subsequently built and uploaded version `0.0.25` (build `1`). The retained verifier report passed all three signed bundles, iPhoneOS 26.5 SDK metadata, production APNs, Universal Links, the shared Widget App Group and 14 packaged privacy manifests. App Store Connect processed the build as valid. On 2026-09-04 its external state was `WAITING_FOR_BETA_REVIEW` and its internal state was `IN_BETA_TESTING`.
+
+The external group `Beta Test` contains this build and currently has no testers. Invite approved website applicants after Beta App Review succeeds. Its current beta description (`pre release`) and privacy-policy URL (the site root) must be replaced with real public information before wider testing.
 
 ## Review gateway setup
 
@@ -77,6 +81,16 @@ Still pending: install the corrected distribution-signed app and open a real tes
 
 ## App Store Connect materials
 
+### China mainland
+
+The publisher confirmed China mainland as an initial storefront. Apple reports a missing or invalid ICP filing number as a distribution blocker in that storefront. Treat App ICP filing as required for this connected client unless MIIT or Apple confirms otherwise for the exact filing record.
+
+- Complete the mobile-app filing through a qualified network access/service provider and obtain the App ICP filing number.
+- Use the individual developer's legal name as the filing operator where applicable. The App name, domain, Bundle ID/platform identifiers and Simplified Chinese metadata supplied to Apple must match the filing record.
+- Enter the verified ICP filing information under **App Information → Availability in China mainland**. Apple submits this information with the next app version review and displays a verified filing number on the product page.
+- The confirmed product does not provide a publisher-operated generative-AI service: it is a free client for user-operated gateways. Keep the store copy and reviewer notes precise about that boundary. Reassess licensing and algorithm/AI obligations before introducing a hosted gateway, public model service, paid digital capability, news, publishing, religious content or games.
+- Complete any China-mainland account compliance item shown under **Business → Agreements → Compliance** for the individual account.
+
 - Name, subtitle, description and keywords: start from `apps/mobile-expo/app-store/metadata.md`.
 - Privacy policy and support URLs: publish completed pages and verify on an unauthenticated device.
 - Screenshots: capture the actual Release build with synthetic content on the supported iPhone and iPad sizes. Cover workspace, notes, chat and tasks. Verify current screenshot slots in App Store Connect before exporting.
@@ -111,9 +125,9 @@ Checks completed on the 2026-09-03 working copy:
 - Gateway typecheck, 7 privacy/scope tests and 16 agent-stream tests passed.
 - A real manual-signing prebuild assigned separate Release profiles to the main app, ShareIntake and Widget. The temporary test signing settings were removed by a clean normal prebuild afterward.
 - The Release simulator build succeeded after clean prebuild. On an iPhone 17 Pro / iOS 26.4 simulator, clean launch, the paste-link entry, pre-pairing privacy information, scrolling and returning to pairing were verified. Screenshots are in the local ignored `apps/mobile-expo/dist/ios/qa/` directory. An earlier build with signing disabled could not access secure storage; the normal simulator-signed build resolved that failure.
-- The verifier rejected the previous production IPA for its missing production APNs entitlement, as expected.
+- The verifier rejected the previous production IPA for its missing production APNs entitlement, as expected. Version `0.0.25` then passed the artifact verifier, Apple validation and App Store Connect upload.
 - Live Universal Links hosting and Apple's CDN were verified after deployment; physical-device automatic opening remains pending.
-- A newly exported distribution IPA, TestFlight device checks and actual App Store submission remain outstanding.
+- TestFlight physical-device checks, Beta App Review, App ICP filing, store metadata/screenshots, privacy answers and actual App Store submission remain outstanding.
 
 ```bash
 pnpm run mobile:lint
