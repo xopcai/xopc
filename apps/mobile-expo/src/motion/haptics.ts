@@ -17,6 +17,11 @@ export function hapticSelectionEnter(): void {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 }
 
+/** A verified workspace change, not the initial row tap. */
+export function hapticGatewaySwitchSuccess(): void {
+  void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+}
+
 export function hapticVoiceStart(): void {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 }
