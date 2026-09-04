@@ -1,8 +1,15 @@
 import { Easing } from 'react-native-reanimated';
 
-/** Workspace Ask AI overlay motion tokens. */
+/**
+ * Shared motion language. Durations stay short enough that feedback feels
+ * immediate; the longer workspace values preserve the spatial Ask AI reveal.
+ */
 export const motion = {
   duration: {
+    press: 80,
+    quick: 140,
+    standard: 220,
+    ambient: 600,
     open: 320,
     close: 260,
     reduced: 180,
@@ -11,6 +18,7 @@ export const motion = {
     staggerComposer: 280,
   },
   spring: {
+    settle: { damping: 24, stiffness: 300, mass: 0.82 },
     open: { damping: 22, stiffness: 240, mass: 0.9 },
     close: { damping: 24, stiffness: 280, mass: 0.85 },
     dismissSnap: { damping: 20, stiffness: 300, mass: 0.8 },
