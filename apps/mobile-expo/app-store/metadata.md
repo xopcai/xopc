@@ -40,14 +40,16 @@ xopc is a native companion to an xopc gateway. We provide a dedicated review gat
 
 The app is free and contains no purchases or subscriptions. It does not provide a publisher-hosted account or gateway service; production users run and administer their own gateway. The dedicated review environment exists only to let App Review exercise the client with synthetic data.
 
-Review access URL: [PUBLISHER TO SUPPLY]
+Review access URL: https://tf.xopc.io
 
-Dedicated review username / credential: [ENTER ONLY IN APP STORE CONNECT]
+Dedicated review username: reviewer
 
-1. Open the review access URL and sign in with the review credentials.
-2. Open the mobile access / pairing screen and create a fresh pairing code. Each code lasts 10 minutes and can be used once. Generate a new one for each device or reinstall.
-3. In xopc, scan the code or choose “Other options” → “Paste pairing link” after copying its link. Manual shared gateway tokens are not used by the mobile app.
-4. Compare the confirmation code on the phone with the review gateway's pairing screen and approve that device there. The supplied review access must allow this approval without assistance from the developer.
+Dedicated review password: [ENTER ONLY IN APP STORE CONNECT]
+
+1. Open https://tf.xopc.io in Safari and enter the dedicated review password. The username above is only the App Store Connect account label; the gateway asks for the password as its access credential.
+2. Select “Connect phone” at the bottom of the gateway console to create a fresh pairing link. Each link lasts 10 minutes and can be used once. Generate a new one for each device or reinstall.
+3. When reviewing on one iPhone, expand the fallback option, copy the pairing link, switch to xopc, and choose “Other options” → “Paste pairing link”. A reviewer using a second screen may scan the QR code instead. Manual shared gateway passwords are not entered in the mobile app.
+4. Compare the six-digit confirmation code on the phone with the review gateway's pairing screen, return to Safari, and approve that device. The reviewer can complete this without assistance from the developer.
 5. Open a sample note, create a task, and start an assistant conversation. Review the named gateway services and choose “Agree and continue” before submitting content.
 6. Optional features: attach an image, record a voice input, listen to an answer, use the share extension, and add the Quick Entry widget.
 7. Privacy and data controls are available under “Other options” before pairing and under Settings → About → Privacy and data sharing. Permission can be withdrawn there.

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
@@ -12,6 +13,7 @@ import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { openChat, openNoteDetail } from '../../lib/navigation';
+import { motion, useReducedMotion } from '../../motion';
 import {
   mobileAppJsStartedAt,
   recordPerformanceEvent,
@@ -622,6 +624,7 @@ function RunningSection({ items, loading }: { items: RunningItem[]; loading: boo
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   const [expanded, setExpanded] = useState(false);
+  const reducedMotion = useReducedMotion();
   if (loading) {
     return <Section title={hm.sectionRunning}><ListSkeleton count={1} /></Section>;
   }
@@ -642,6 +645,7 @@ function RunningSection({ items, loading }: { items: RunningItem[]; loading: boo
             style={styles.sectionAction}
             onPress={() => setExpanded((value) => !value)}
             accessibilityRole="button"
+            accessibilityState={{ expanded }}
           >
             <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>
               {expanded ? hm.showLess : hm.viewAll}
@@ -649,37 +653,46 @@ function RunningSection({ items, loading }: { items: RunningItem[]; loading: boo
           </Pressable>
         ) : null}
       </View>
-      <View style={[
-        styles.runningList,
-        { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle },
-      ]}>
+      <Animated.View
+        layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.standard)}
+        style={[
+          styles.runningList,
+          { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle },
+        ]}
+      >
         {visibleItems.map((item, index) => (
-          <Pressable
+          <Animated.View
             key={item.id}
-            style={({ pressed }) => [
-              styles.runningRow,
-              pressed && { backgroundColor: colors.surface.pressed },
-            ]}
-            onPress={item.onPress}
-            accessibilityRole="button"
+            entering={index < 3 || reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+            exiting={index < 3 || reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
+            layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)}
           >
-            <View style={[styles.runningIcon, { backgroundColor: colors.accent.soft }]}>
-              <Icon source={item.icon} size={20} color={colors.accent.primary} />
-            </View>
-            <View style={styles.rowCopy}>
-              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-              <Text numberOfLines={1} style={[styles.runningMeta, { color: colors.accent.primary }]}>{item.meta}</Text>
-              {item.summary ? (
-                <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.runningRow,
+                pressed && { backgroundColor: colors.surface.pressed },
+              ]}
+              onPress={item.onPress}
+              accessibilityRole="button"
+            >
+              <View style={[styles.runningIcon, { backgroundColor: colors.accent.soft }]}>
+                <Icon source={item.icon} size={20} color={colors.accent.primary} />
+              </View>
+              <View style={styles.rowCopy}>
+                <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+                <Text numberOfLines={1} style={[styles.runningMeta, { color: colors.accent.primary }]}>{item.meta}</Text>
+                {item.summary ? (
+                  <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
+                ) : null}
+              </View>
+              <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+              {index < visibleItems.length - 1 ? (
+                <View style={[styles.runningDivider, { backgroundColor: colors.border.subtle }]} />
               ) : null}
-            </View>
-            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-            {index < visibleItems.length - 1 ? (
-              <View style={[styles.runningDivider, { backgroundColor: colors.border.subtle }]} />
-            ) : null}
-          </Pressable>
+            </Pressable>
+          </Animated.View>
         ))}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -754,6 +767,7 @@ function NeedsYouSection({
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   const [expanded, setExpanded] = useState(false);
+  const reducedMotion = useReducedMotion();
   if (items.length === 0) return null;
   const visibleItems = expanded ? items : items.slice(0, 3);
   return (
@@ -764,22 +778,36 @@ function NeedsYouSection({
           <Text style={[styles.sectionCount, { color: colors.text.tertiary, backgroundColor: colors.surface.grouped }]}>{items.length}</Text>
         </View>
         {items.length > 3 ? (
-          <Pressable style={styles.sectionAction} onPress={() => setExpanded((value) => !value)} accessibilityRole="button">
+          <Pressable
+            style={styles.sectionAction}
+            onPress={() => setExpanded((value) => !value)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+          >
             <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>{expanded ? hm.showLess : hm.viewAll}</Text>
           </Pressable>
         ) : null}
       </View>
-      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+      <Animated.View
+        layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.standard)}
+        style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}
+      >
         {visibleItems.map((item, index) => (
-          <AttentionRow
+          <Animated.View
             key={item.id}
-            item={item}
-            pending={pending}
-            last={index === visibleItems.length - 1}
-            onAction={onAction}
-          />
+            entering={index < 3 || reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+            exiting={index < 3 || reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
+            layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)}
+          >
+            <AttentionRow
+              item={item}
+              pending={pending}
+              last={index === visibleItems.length - 1}
+              onAction={onAction}
+            />
+          </Animated.View>
         ))}
-      </View>
+      </Animated.View>
     </View>
   );
 }
