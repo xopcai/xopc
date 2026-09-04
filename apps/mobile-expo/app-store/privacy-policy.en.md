@@ -1,16 +1,14 @@
-# xopc Mobile privacy policy — publication draft
+# xopc Mobile Privacy Policy
 
-**Not ready to publish.** Add the legal name and contact email, then complete the publication review. This draft describes the code reviewed on 2026-09-04 and the confirmed product model.
+Publisher / operator: Qiaomin Xu (徐巧民)
 
-Publisher / operator: [LEGAL NAME]
+Private privacy and deletion contact: lyxopc.ai@gmail.com
 
-Private privacy and deletion contact: [EMAIL]
-
-Effective date: [DATE]
+Effective date: September 4, 2026
 
 ## Scope
 
-This policy describes the xopc Mobile application distributed by the individual developer [LEGAL NAME]. The app is free, contains no purchases or subscriptions, and connects only to gateways run and administered by users. The publisher does not provide app users with a hosted gateway, app account or mandatory AI cloud service. Gateways, models and other services selected by users have their own operators, privacy policies and data-handling responsibilities.
+This policy describes the xopc Mobile application distributed by individual developer Qiaomin Xu (徐巧民). The app is free, contains no purchases or subscriptions, and connects only to gateways run and administered by users. The publisher does not provide app users with a hosted gateway, app account or mandatory AI cloud service. Gateways, models and other services selected by users have their own operators, privacy policies and data-handling responsibilities.
 
 ## Data and purposes
 
@@ -42,10 +40,10 @@ For independently operated gateways and providers, contact the relevant operator
 
 You can withdraw mobile content-sharing permission in Settings → About → Privacy and data sharing, disable clipboard suggestions and notifications, and change system permissions. Withdrawal blocks new content submissions from the app; it does not retract content already received or stop already scheduled server work. Pause automations and ongoing work separately.
 
-Use the corresponding workspace screens to delete content, revoke the device on the gateway, and contact the gateway operator for backup or downstream deletion. Uninstalling the app does not delete remote content. For data controlled by [LEGAL NAME], contact [EMAIL] privately. Include enough information to identify the relevant interaction; the publisher may request reasonable proof that you control the affected account, device or email address before responding.
+Use the corresponding workspace screens to delete content, revoke the device on the gateway, and contact the gateway operator for backup or downstream deletion. Uninstalling the app does not delete remote content. For data controlled by Qiaomin Xu, contact lyxopc.ai@gmail.com privately. Include enough information to identify the relevant interaction; the publisher may request reasonable proof that you control the affected account, device or email address before responding.
 
 ## Updates and contact
 
 Material changes will be announced through this policy page, app release notes or an in-app notice. Users may request access to, correction of or deletion of personal data controlled by the publisher as provided by applicable law. Requests concerning user-operated gateways or user-selected services should be directed to their respective operators.
 
-For privacy questions, contact [EMAIL]. Do not post personal content or credentials in public issue trackers.
+For privacy questions, contact lyxopc.ai@gmail.com. Do not post personal content or credentials in public issue trackers.
