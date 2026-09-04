@@ -1,7 +1,9 @@
 import { memo, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
+import { motion, useReducedMotion } from '../../motion';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import { isEditableImageAttachment } from './attachment-file-io-core';
@@ -73,6 +75,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   readOnly?: boolean;
 }) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const token = useGatewayStore((s) => s.accessToken);
   const [preview, setPreview] = useState<PreviewableFile | null>(null);
   const [audioPreview, setAudioPreview] = useState<AudioContent | null>(null);
@@ -98,7 +101,13 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
           const uri = thumbnailUri(att);
           const audio = isAudioAttachment(att);
           return (
-            <View key={att.id} style={[styles.tileWrap, { borderColor: border }]}>
+            <Animated.View
+              key={att.id}
+              entering={reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+              exiting={reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
+              layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)}
+              style={[styles.tileWrap, { borderColor: border }]}
+            >
               <Pressable
                 style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
                 onPress={() => {
@@ -155,7 +164,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
                   </View>
                 </Pressable>
               ) : null}
-            </View>
+            </Animated.View>
           );
         })}
       </ScrollView>

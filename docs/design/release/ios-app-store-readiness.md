@@ -47,6 +47,8 @@ The external group `Beta Test` contains this build and currently has no testers.
 
 Use a dedicated gateway with synthetic notes, files, tasks and conversations. Keep it reachable over public HTTPS throughout review and re-review. Avoid a gateway containing personal files, production credentials or internal infrastructure access.
 
+The selected review console is `https://tf.xopc.io`. It uses one dedicated review password that Apple reviewers may share across review sessions. Store that password only in the private TestFlight Beta App Review and App Review Information fields, rotate it after review, and never commit it to this repository.
+
 1. Update it to a version containing `/api/mobile/privacy`.
 2. Configure the actual model/voice services and working credentials needed by the review scenarios.
 3. Provide the reviewer a protected way to generate a fresh pairing code. The existing isolated gateway console's mobile access screen can do this; a separate review portal is another option if already deployed.

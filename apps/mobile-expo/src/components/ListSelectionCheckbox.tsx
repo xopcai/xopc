@@ -1,8 +1,15 @@
-import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
 import { Icon } from 'react-native-paper';
+import Animated, {
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
-import { useReducedMotion } from '../motion';
+import { motion, useReducedMotion } from '../motion';
 import { useTheme } from '../theme';
 
 type ListSelectionCheckboxProps = {
@@ -13,60 +20,44 @@ type ListSelectionCheckboxProps = {
 export function ListSelectionCheckbox({ selected, size = 36 }: ListSelectionCheckboxProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
-  const appear = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
-  const check = useRef(new Animated.Value(selected ? 1 : 0)).current;
+  const appear = useSharedValue(reducedMotion ? 1 : 0);
+  const check = useSharedValue(selected ? 1 : 0);
 
   useEffect(() => {
     if (reducedMotion) {
-      appear.setValue(1);
+      appear.value = 1;
       return;
     }
-    Animated.spring(appear, {
-      toValue: 1,
-      damping: 18,
-      stiffness: 260,
-      mass: 0.7,
-      useNativeDriver: true,
-    }).start();
+    appear.value = withSpring(1, motion.spring.settle);
   }, [appear, reducedMotion]);
 
   useEffect(() => {
     if (reducedMotion) {
-      check.setValue(selected ? 1 : 0);
+      check.value = selected ? 1 : 0;
       return;
     }
-    Animated.spring(check, {
-      toValue: selected ? 1 : 0,
-      damping: 16,
-      stiffness: 300,
-      mass: 0.6,
-      useNativeDriver: true,
-    }).start();
+    check.value = withSpring(selected ? 1 : 0, motion.spring.settle);
   }, [check, reducedMotion, selected]);
 
-  const appearStyle = {
-    opacity: appear,
-    transform: [
-      {
-        scale: appear.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.86, 1],
-        }),
-      },
-    ],
-  };
+  const appearStyle = useAnimatedStyle(() => ({
+    opacity: appear.value,
+    borderColor: interpolateColor(
+      check.value,
+      [0, 1],
+      [colors.border.strong, colors.accent.primary],
+    ),
+    backgroundColor: interpolateColor(
+      check.value,
+      [0, 1],
+      ['transparent', colors.accent.primary],
+    ),
+    transform: [{ scale: interpolate(appear.value, [0, 1], [0.9, 1]) }],
+  }));
 
-  const checkStyle = {
-    opacity: check,
-    transform: [
-      {
-        scale: check.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.7, 1],
-        }),
-      },
-    ],
-  };
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: check.value,
+    transform: [{ scale: interpolate(check.value, [0, 1], [0.78, 1]) }],
+  }));
 
   return (
     <Animated.View
@@ -77,13 +68,11 @@ export function ListSelectionCheckbox({ selected, size = 36 }: ListSelectionChec
           width: size,
           height: size,
           borderRadius: size / 2,
-          borderColor: selected ? colors.accent.primary : colors.border.strong,
-          backgroundColor: selected ? colors.accent.primary : 'transparent',
         },
       ]}
     >
       <Animated.View style={checkStyle}>
-        {selected ? <Icon source="check" size={14} color={colors.text.inverse} /> : null}
+        <Icon source="check" size={14} color={colors.text.inverse} />
       </Animated.View>
     </Animated.View>
   );

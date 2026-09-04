@@ -8,8 +8,11 @@
 import { memo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
+import { AnimatedDisclosureIcon } from '../../components/AnimatedDisclosureIcon';
 import { chatColors } from './styles';
+import { motion, useReducedMotion } from '../../motion';
 import { useTheme } from '../../theme';
 
 export type ThinkingBlockLabels = {
@@ -31,6 +34,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const muted = colors.text.secondary;
   const subtle = colors.text.tertiary;
   const bodyColor = colors.text.primary;
@@ -106,7 +110,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   const preview = hasContent && !expanded ? trimmed.slice(0, 80) : '';
 
   return (
-    <View
+    <Animated.View
+      layout={reducedMotion || streaming ? undefined : LinearTransition.duration(motion.duration.standard)}
       style={[
         styles.container,
         {
@@ -120,6 +125,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityState={{ expanded }}
       >
         <Icon
           source={streaming ? 'loading' : 'lightbulb-outline'}
@@ -130,11 +136,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
           {label}
         </Text>
         {hasContent ? (
-          <Icon
-            source={expanded ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color={muted}
-          />
+          <AnimatedDisclosureIcon expanded={expanded} size={14} color={muted} />
         ) : null}
         {preview && !expanded ? (
           <Text
@@ -147,7 +149,11 @@ export const ThinkingBlock = memo(function ThinkingBlock({
         ) : null}
       </Pressable>
       {expanded && hasContent ? (
-        <View style={styles.body}>
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
+          style={styles.body}
+        >
           <Text
             variant="bodySmall"
             style={{ color: bodyColor, lineHeight: 18 }}
@@ -155,9 +161,9 @@ export const ThinkingBlock = memo(function ThinkingBlock({
           >
             {trimmed}
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 });
 
