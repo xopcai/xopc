@@ -214,6 +214,15 @@ describe('streaming assistant Markdown rendering', () => {
     expect(firstNarrationSentence('I will inspect the project. Then I will edit it.')).toBe(
       'I will inspect the project.',
     );
+    expect(firstNarrationSentence('发现关键情况：项目里已经有你的 `.env`。后面还有内容')).toBe(
+      '发现关键情况：项目里已经有你的 `.env`。',
+    );
+    expect(firstNarrationSentence('检查 v1.2.3 和 example.com。然后继续。')).toBe(
+      '检查 v1.2.3 和 example.com。',
+    );
+    expect(firstNarrationSentence('运行 `foo.bar?x=1` 后继续。然后完成。')).toBe(
+      '运行 `foo.bar?x=1` 后继续。',
+    );
 
     render([
       {
@@ -225,6 +234,18 @@ describe('streaming assistant Markdown rendering', () => {
 
     expect(container.textContent).toContain('I will inspect the project.');
     expect(container.textContent).not.toContain('long implementation plan');
+  });
+
+  it('renders dotfile names in process narration without truncating their inline code', () => {
+    render([{
+      type: 'text',
+      text: '发现关键情况：项目里已经有你的 `.env`。后面还有内容。',
+      presentation: 'narration',
+    }], false);
+
+    expect(container.querySelector('code')?.textContent).toBe('.env');
+    expect(container.textContent).toContain('发现关键情况：项目里已经有你的 .env。');
+    expect(container.textContent).not.toContain('后面还有内容');
   });
 
   it('collapses adjacent narration segments into one process update', () => {

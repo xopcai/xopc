@@ -1,5 +1,6 @@
 import {
   FileResourceSchema,
+  FileResourceResponseSchema,
   FileResourcesResponseSchema,
   FileSpaceSchema,
   type FileResource,
@@ -108,6 +109,16 @@ export async function fetchWorkspaceDirectoryListing(
 
 export async function listWorkspaceDir(dir = '', options?: WorkspaceEditorRequestOptions): Promise<WorkspaceEntry[]> {
   return (await fetchWorkspaceDirectoryListing(dir, options)).entries;
+}
+
+export async function fetchWorkspaceRootResource(
+  options?: WorkspaceEditorRequestOptions,
+): Promise<WorkspaceEntry> {
+  const space = await resolveSpace(options);
+  const body = FileResourceResponseSchema.parse(await requestJson(
+    `/api/files/spaces/${encodeURIComponent(space.id)}/root`,
+  ));
+  return toEntry(body.resource);
 }
 
 export async function searchWorkspaceFiles(
