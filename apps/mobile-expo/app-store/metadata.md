@@ -1,8 +1,8 @@
 # App Store metadata
 
-Publisher, storefronts, business model, policy URLs and review access are confirmed. App ICP filing and App Privacy publication remain required before submission. No live credentials belong in this file.
+Publisher, storefronts, business model, policy URLs and review access are confirmed. App Privacy is published and the review draft is ready to submit. No live credentials belong in this file.
 
-Confirmed product model: distributed by an individual developer; free with no purchases or subscriptions; connects only to gateways run by users. China mainland is an intended initial storefront and requires completion of App ICP filing before release there.
+Confirmed product model: distributed by an individual developer; free with no purchases or subscriptions; connects only to gateways run by users. China mainland availability is deferred, so App ICP filing is outside the current release scope.
 
 ## English
 

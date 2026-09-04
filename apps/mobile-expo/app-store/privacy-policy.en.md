@@ -18,15 +18,15 @@ Messages, relevant conversation history, synchronized notes, tasks, files, attac
 
 Camera, photo, microphone and contact access are used for the associated features. Contact tools ask for approval and return selected or matching names, phone numbers and email addresses. Clipboard suggestions are disabled by default; enabling them permits reading clipboard text when the app opens or returns to the foreground. Explicitly choosing “Paste pairing link” reads the clipboard for that action.
 
-If notifications are enabled, the app registers an Expo push token, platform and language with the gateway. Push notifications pass through Expo and Apple Push Notification service on iOS, and may contain previews configured by the gateway.
+If notifications are enabled, the app registers an Expo push token, platform and language with the gateway. Notifications pass through Expo Push Service and the platform's Apple Push Notification service or Google Firebase Cloud Messaging, and may contain previews configured by the gateway.
 
-The app keeps preferences, cached workspace content, pending submissions, consent choices and up to 200 usage/performance events locally. The reviewed distribution build contains no remote analytics, advertising or third-party crash-reporting SDK. TestFlight itself may provide Apple crash and testing diagnostics to the developer while a beta build is used.
+The app keeps preferences, cached workspace content, pending submissions, consent choices and up to 200 usage/performance events locally. The reviewed distribution build contains no remote analytics, advertising or third-party crash-reporting SDK. When distributed through TestFlight or Google Play testing or production, the platform may provide the developer with crash, application-not-responding and testing diagnostics it collects.
 
 ## Service providers and transfers
 
 The publisher does not select or operate the gateways, AI, search, image, speech or other content-processing services configured by users. Users or their gateway administrators are responsible for selecting those services and reviewing each provider's privacy policy, processing locations, cross-border arrangements, retention and model-training practices.
 
-If notifications are enabled, push tokens and notification content pass through Expo Push Service and Apple Push Notification service. When the `link.xopc.ai` pairing page is opened, the pairing payload in the URL fragment is not sent in the HTTP request. The page uses no analytics or third-party scripts and does not read the clipboard automatically. Hosting and certificate services may still process network connection information and operational error logs needed to serve and secure the page.
+If notifications are enabled, push tokens and notification content pass through Expo Push Service and the platform's Apple Push Notification service or Google Firebase Cloud Messaging. When the `link.xopc.ai` pairing page is opened, the pairing payload in the URL fragment is not sent in the HTTP request. The page uses no analytics or third-party scripts and does not read the clipboard automatically. Hosting and certificate services may still process network connection information and operational error logs needed to serve and secure the page.
 
 A self-hosted gateway may still use cloud providers. Proxies may use downstream providers. User-configured extensions, connected services and tools may access additional destinations; the gateway administrator is responsible for explaining those services. Do not submit sensitive content until you understand the gateway and provider practices.
 
