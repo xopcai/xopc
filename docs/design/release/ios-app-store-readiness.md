@@ -21,7 +21,7 @@ Deploy the gateway update before distributing the new mobile version: older gate
 | --- | --- |
 | Publisher / legal operator | Confirmed: individual developer 徐巧民 (Qiaomin Xu) |
 | Private privacy contact | Confirmed: `lyxopc.ai@gmail.com`; do not use public GitHub issues for personal deletion requests |
-| Initial storefronts | All 175 current storefronts are selected, including China mainland, with future storefronts enabled. Obtain an App ICP filing number and ensure its operator/app metadata matches the Simplified Chinese App Store metadata before submission |
+| Initial storefronts | 174 current storefronts are selected, with future storefronts enabled. China mainland is intentionally unavailable for version 1.0 and can be enabled after obtaining an App ICP filing number |
 | Business model | Confirmed: free, with no purchases or subscriptions; connects only to gateways operated by the user |
 | Final privacy policy URL | Published at `https://xopc.ai/zh/privacy` and `https://xopc.ai/en/privacy`; the Simplified Chinese URL is configured in App Store Connect |
 | Support URL | Published at `https://xopc.ai/zh/support` and `https://xopc.ai/en/support`; the Simplified Chinese URL is configured in App Store Connect |
@@ -85,9 +85,9 @@ Still pending: install the corrected distribution-signed app and open a real tes
 
 ### China mainland
 
-The publisher confirmed China mainland as an initial storefront. Apple reports a missing or invalid ICP filing number as a distribution blocker in that storefront. Treat App ICP filing as required for this connected client unless MIIT or Apple confirms otherwise for the exact filing record.
+China mainland is intentionally excluded from the initial version 1.0 storefronts. App ICP filing is therefore not a blocker for the current App Review submission. Apple reports a missing or invalid ICP filing number as a distribution blocker whenever the app is made available in that storefront.
 
-- Complete the mobile-app filing through a qualified network access/service provider and obtain the App ICP filing number.
+- Before adding China mainland later, complete the mobile-app filing through a qualified network access/service provider and obtain the App ICP filing number.
 - Use the individual developer's legal name as the filing operator where applicable. The App name, domain, Bundle ID/platform identifiers and Simplified Chinese metadata supplied to Apple must match the filing record.
 - Enter the verified ICP filing information under **App Information → Availability in China mainland**. Apple submits this information with the next app version review and displays a verified filing number on the product page.
 - The confirmed product does not provide a publisher-operated generative-AI service: it is a free client for user-operated gateways. Keep the store copy and reviewer notes precise about that boundary. Reassess licensing and algorithm/AI obligations before introducing a hosted gateway, public model service, paid digital capability, news, publishing, religious content or games.
@@ -139,8 +139,9 @@ Checks completed on the 2026-09-03 working copy:
 - The Release simulator build succeeded after clean prebuild. On an iPhone 17 Pro / iOS 26.4 simulator, clean launch, the paste-link entry, pre-pairing privacy information, scrolling and returning to pairing were verified. Screenshots are in the local ignored `apps/mobile-expo/dist/ios/qa/` directory. An earlier build with signing disabled could not access secure storage; the normal simulator-signed build resolved that failure.
 - The verifier rejected the previous production IPA for its missing production APNs entitlement, as expected. Version `0.0.25` then passed the artifact verifier, Apple validation and App Store Connect upload. App Store Connect also processed `0.0.26` (build `1`) as valid, and that build is selected for version 1.0.
 - Live Universal Links hosting and Apple's CDN were verified after deployment; physical-device automatic opening remains pending.
-- App Privacy was published with Device ID / App Functionality / linked to the user / not used for tracking. Store metadata, screenshots, reviewer access, free pricing and all 175 current storefront selections are configured. Version 1.0 was added to an App Review draft and passed App Store Connect's required-field validation.
-- TestFlight physical-device checks, the App ICP filing and the final **Submit for Review** action remain outstanding. China mainland will show `ICP Filing Number Missing` and remain unavailable until Apple verifies a matching filing number.
+- App Privacy was published with Device ID / App Functionality / linked to the user / not used for tracking. Store metadata, screenshots, reviewer access and free pricing are configured. Version 1.0 was added to an App Review draft and passed App Store Connect's required-field validation.
+- App availability is configured for 174 current storefronts. China mainland is explicitly unavailable, so its App ICP filing does not block this submission; future territories remain enabled.
+- TestFlight physical-device checks and the final **Submit for Review** action remain outstanding. App ICP filing is deferred until China mainland distribution is planned.
 
 ```bash
 pnpm run mobile:lint
