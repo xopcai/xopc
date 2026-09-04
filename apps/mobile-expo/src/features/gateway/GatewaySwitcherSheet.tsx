@@ -1,10 +1,21 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
+import { hapticGatewaySwitchSuccess } from '../../motion/haptics';
+import { motion, useReducedMotion } from '../../motion';
 import { useGatewayStore } from '../../stores/gateway-store';
+import type { GatewayProfile } from '../../stores/gateway-types';
 import { spacing, typography, useTheme } from '../../theme';
 import type { GatewayConnectivityError } from '../../api/gateway-error';
 
@@ -50,6 +61,11 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
     error: GatewayConnectivityError;
   } | null>(null);
   const uiAttemptRef = useRef(0);
+  const stableActiveIdRef = useRef(activeGatewayId);
+
+  useEffect(() => {
+    if (!pendingProfileId) stableActiveIdRef.current = activeGatewayId;
+  }, [activeGatewayId, pendingProfileId]);
 
   useEffect(() => {
     if (!visible) return;
@@ -86,9 +102,16 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
       return;
     }
     setFailure(null);
+    const profile = useGatewayStore.getState().profiles.find((item) => item.gatewayId === profileId);
+    hapticGatewaySwitchSuccess();
+    if (profile) {
+      AccessibilityInfo.announceForAccessibility(
+        copy.switched.replace('{{name}}', profile.name),
+      );
+    }
     onDismiss();
     onSwitched?.(profileId);
-  }, [dismiss, onDismiss, onSwitched]);
+  }, [copy.switched, dismiss, onDismiss, onSwitched]);
 
   const openEdit = useCallback((profileId: string) => {
     dismiss();
@@ -115,87 +138,170 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
       }
     >
       {pendingProfileId ? (
-        <View style={[styles.guard, { backgroundColor: colors.accent.soft }]}>
-          <Text style={[styles.guardText, { color: colors.accent.primary }]}>
-            {copy.verifying}
-          </Text>
-        </View>
+        <Animated.View
+          entering={FadeIn.duration(motion.duration.quick)}
+          exiting={FadeOut.duration(motion.duration.press)}
+          style={[styles.guard, { backgroundColor: colors.accent.soft }]}
+          accessibilityLiveRegion="polite"
+        >
+          <Text style={[styles.guardText, { color: colors.accent.primary }]}>{copy.verifying}</Text>
+        </Animated.View>
       ) : null}
 
       {profiles.length === 0 ? (
         <Text style={[styles.emptyText, { color: colors.text.secondary }]}>{copy.empty}</Text>
       ) : profiles.map((profile) => {
-        const isActive = profile.gatewayId === activeGatewayId;
+        const displayedActiveId = pendingProfileId ? stableActiveIdRef.current : activeGatewayId;
+        const isActive = profile.gatewayId === displayedActiveId;
         const isPending = profile.gatewayId === pendingProfileId;
         const rowFailure = failure?.profileId === profile.gatewayId ? failure.error : null;
         const subtitle = rowFailure
           ? failedMessage(rowFailure, messages)
           : `${gatewayProfileHost(profile)} · ${isActive && gatewayOnline ? copy.online : isActive ? copy.offline : ''}`.replace(/ · $/, '');
 
-        return (
-          <View key={profile.gatewayId}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                isActive && { backgroundColor: colors.accent.selectionBg },
-                pressed && !isPending && { backgroundColor: colors.surface.hover },
-              ]}
-              onPress={() => { void selectProfile(profile.gatewayId); }}
-              disabled={isPending}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive, busy: isPending }}
-            >
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: rowFailure
-                    ? colors.semantic.errorBold
-                    : isActive && gatewayOnline
-                      ? colors.semantic.success
-                      : colors.text.tertiary },
-                ]}
-              />
-              <View style={styles.rowContent}>
-                <Text
-                  style={[styles.rowName, { color: colors.text.primary }]}
-                  numberOfLines={1}
-                >
-                  {profile.name}
-                </Text>
-                <Text
-                  style={[
-                    styles.rowDescription,
-                    { color: rowFailure ? colors.semantic.errorBold : colors.text.tertiary },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {subtitle}
-                </Text>
-              </View>
-              {isPending ? (
-                <ActivityIndicator size={18} />
-              ) : isActive ? (
-                <Text style={[styles.currentLabel, { color: colors.accent.primary }]}>
-                  {copy.current}
-                </Text>
-              ) : (
-                <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-              )}
-            </Pressable>
-            {rowFailure ? (
-              <View style={styles.failureActions}>
-                <Button compact mode="text" onPress={() => { void selectProfile(profile.gatewayId); }}>
-                  {copy.retry}
-                </Button>
-                <Button compact mode="text" onPress={() => openEdit(profile.gatewayId)}>
-                  {copy.edit}
-                </Button>
-              </View>
-            ) : null}
-          </View>
-        );
+        return <GatewayProfileRow
+          key={profile.gatewayId}
+          profile={profile}
+          subtitle={subtitle}
+          isActive={isActive}
+          isPending={isPending}
+          disabled={pendingProfileId !== null}
+          online={gatewayOnline}
+          failure={rowFailure}
+          currentLabel={copy.current}
+          retryLabel={copy.retry}
+          editLabel={copy.edit}
+          onSelect={selectProfile}
+          onEdit={openEdit}
+        />;
       })}
     </BottomSheetModal>
+  );
+});
+
+type GatewayProfileRowProps = {
+  profile: GatewayProfile;
+  subtitle: string;
+  isActive: boolean;
+  isPending: boolean;
+  disabled: boolean;
+  online: boolean;
+  failure: GatewayConnectivityError | null;
+  currentLabel: string;
+  retryLabel: string;
+  editLabel: string;
+  onSelect: (profileId: string) => Promise<void>;
+  onEdit: (profileId: string) => void;
+};
+
+const GatewayProfileRow = memo(function GatewayProfileRow({
+  profile,
+  subtitle,
+  isActive,
+  isPending,
+  disabled,
+  online,
+  failure,
+  currentLabel,
+  retryLabel,
+  editLabel,
+  onSelect,
+  onEdit,
+}: GatewayProfileRowProps) {
+  const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+  const backgroundColor = useSharedValue(isActive ? colors.accent.selectionBg : 'transparent');
+  const dotColor = useSharedValue(
+    failure
+      ? colors.semantic.errorBold
+      : isActive && online
+        ? colors.semantic.success
+        : colors.text.tertiary,
+  );
+
+  useEffect(() => {
+    const duration = reducedMotion ? 0 : motion.duration.quick;
+    backgroundColor.value = withTiming(
+      isActive || isPending ? colors.accent.selectionBg : 'transparent',
+      { duration },
+    );
+    dotColor.value = withTiming(
+      failure
+        ? colors.semantic.errorBold
+        : isActive && online
+          ? colors.semantic.success
+          : colors.text.tertiary,
+      { duration },
+    );
+  }, [backgroundColor, colors, dotColor, failure, isActive, isPending, online, reducedMotion]);
+
+  const animatedRowStyle = useAnimatedStyle(() => ({
+    backgroundColor: backgroundColor.value,
+    transform: [{ scale: scale.value }],
+  }));
+  const animatedDotStyle = useAnimatedStyle(() => ({ backgroundColor: dotColor.value }));
+  const accessoryTransition = reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick);
+
+  return (
+    <Animated.View layout={accessoryTransition}>
+      <Animated.View style={[styles.row, animatedRowStyle]}>
+        <Pressable
+          style={styles.rowPressTarget}
+          onPress={() => { void onSelect(profile.gatewayId); }}
+          onPressIn={() => {
+            if (!disabled) scale.value = withTiming(0.985, { duration: motion.duration.press });
+          }}
+          onPressOut={() => {
+            scale.value = withTiming(1, { duration: motion.duration.press });
+          }}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isActive, busy: isPending, disabled }}
+        >
+          <Animated.View style={[styles.statusDot, animatedDotStyle]} />
+          <View style={styles.rowContent}>
+            <Text style={[styles.rowName, { color: colors.text.primary }]} numberOfLines={1}>
+              {profile.name}
+            </Text>
+            <Text
+              style={[
+                styles.rowDescription,
+                { color: failure ? colors.semantic.errorBold : colors.text.tertiary },
+              ]}
+              numberOfLines={2}
+            >
+              {subtitle}
+            </Text>
+          </View>
+          <Animated.View key={isPending ? 'pending' : isActive ? 'active' : 'idle'} layout={accessoryTransition}>
+            {isPending ? (
+              <ActivityIndicator size={18} color={colors.accent.primary} />
+            ) : isActive ? (
+              <Text style={[styles.currentLabel, { color: colors.accent.primary }]}>
+                {currentLabel}
+              </Text>
+            ) : (
+              <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+            )}
+          </Animated.View>
+        </Pressable>
+      </Animated.View>
+      {failure ? (
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
+          style={styles.failureActions}
+        >
+          <Button compact mode="text" onPress={() => { void onSelect(profile.gatewayId); }}>
+            {retryLabel}
+          </Button>
+          <Button compact mode="text" onPress={() => onEdit(profile.gatewayId)}>
+            {editLabel}
+          </Button>
+        </Animated.View>
+      ) : null}
+    </Animated.View>
   );
 });
 
@@ -210,12 +316,16 @@ const styles = StyleSheet.create({
   guardText: { ...typography.caption },
   row: {
     minHeight: 66,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  rowPressTarget: {
+    minHeight: 66,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    borderRadius: 12,
   },
   statusDot: { width: 9, height: 9, borderRadius: 5 },
   rowContent: { flex: 1, minWidth: 0 },
