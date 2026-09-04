@@ -39,9 +39,6 @@ export function RuntimeToolsSettingsPanel() {
     if (data?.payload.config) setDraft(structuredClone(data.payload.config));
   }, [data?.payload.config]);
 
-  if (isLoading || !draft) {
-    return <SettingsPageFrame><SettingsPageSkeleton sections={3} /></SettingsPageFrame>;
-  }
   if (error) {
     return (
       <SettingsPageFrame>
@@ -49,6 +46,9 @@ export function RuntimeToolsSettingsPanel() {
         <Button onClick={() => void mutate()}>{t.refresh}</Button>
       </SettingsPageFrame>
     );
+  }
+  if (isLoading || !draft) {
+    return <SettingsPageFrame><SettingsPageSkeleton sections={3} /></SettingsPageFrame>;
   }
 
   const statusMap = new Map(data?.payload.statuses.map((status) => [status.runtime, status]));
@@ -77,6 +77,7 @@ export function RuntimeToolsSettingsPanel() {
     setRunning(runtime);
     setActionError(null);
     try {
+      await saveRuntimeToolsConfig(draft);
       const version = runtime === 'uv' ? draft.uv.version : draft[runtime].version;
       await runRuntimeOperation({
         runtime,

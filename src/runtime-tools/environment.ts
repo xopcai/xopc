@@ -1,8 +1,8 @@
-import { dirname, join } from 'node:path';
-import { access, readdir } from 'node:fs/promises';
+import { delimiter, dirname, join } from 'node:path';
+import { access } from 'node:fs/promises';
 
 import type { RuntimeToolsConfig } from '../config/schema.js';
-import { applyPathPrepend } from '../infra/path-prepend.js';
+import { applyPathPrepend, findPathKey, normalizePathPrepend } from '../infra/path-prepend.js';
 import { ManagedRuntimeManager } from './manager.js';
 import type { ResolvedRuntime, RuntimeKind } from './types.js';
 
@@ -29,6 +29,7 @@ export interface RuntimeEnvironmentOptions {
   baseEnv: Record<string, string>;
   runtimes?: RuntimeKind[];
   extraBinDirs?: string[];
+  skillEnvironmentIds?: string[];
 }
 
 export interface RuntimeEnvironmentResult {
@@ -36,14 +37,8 @@ export interface RuntimeEnvironmentResult {
   resolved: ResolvedRuntime[];
 }
 
-async function skillEnvironmentBinDirs(stateDir: string): Promise<string[]> {
+async function skillEnvironmentBinDirs(stateDir: string, environmentIds: string[]): Promise<string[]> {
   const root = join(stateDir, 'tools', 'environments', 'skills');
-  let environmentIds: string[];
-  try {
-    environmentIds = await readdir(root);
-  } catch {
-    return [];
-  }
   const candidates = environmentIds.flatMap((id) => [
     join(root, id, 'bin'),
     join(root, id, 'node_modules', '.bin'),
@@ -57,6 +52,12 @@ async function skillEnvironmentBinDirs(stateDir: string): Promise<string[]> {
     }
   }));
   return existing.filter((candidate): candidate is string => candidate !== null);
+}
+
+function appendPathEntries(env: Record<string, string>, entries: string[]): void {
+  const pathKey = findPathKey(env);
+  const existing = (env[pathKey] ?? '').split(delimiter).filter(Boolean);
+  env[pathKey] = normalizePathPrepend([...existing, ...entries]).join(delimiter);
 }
 
 export async function buildRuntimeEnvironment(
@@ -77,12 +78,16 @@ export async function buildRuntimeEnvironment(
   const managedBinDirs = resolved
     .filter((item) => item.source === 'managed')
     .map((item) => dirname(item.executable));
-  const skillBinDirs = await skillEnvironmentBinDirs(options.stateDir);
+  const skillBinDirs = await skillEnvironmentBinDirs(
+    options.stateDir,
+    options.skillEnvironmentIds ?? [],
+  );
   applyPathPrepend(env, [
     ...managedBinDirs,
-    ...skillBinDirs,
     ...(options.extraBinDirs ?? []),
   ]);
+  // Skill-installed commands remain available, but cannot shadow managed or host executables.
+  appendPathEntries(env, skillBinDirs);
 
   if (resolved.some((item) => item.runtime === 'python')) {
     env.PYTHONNOUSERSITE = '1';

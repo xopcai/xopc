@@ -1,13 +1,22 @@
 import { lstat, readdir, rm, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 import type { RuntimeToolsConfig } from '../config/schema.js';
-import { readRuntimeManifest } from './manifest-store.js';
-import { runtimeToolsRoot } from './paths.js';
+import { DEFAULT_RUNTIME_VERSIONS } from './catalog.js';
+import { readRuntimeManifests, removeRuntimeManifest } from './manifest-store.js';
+import { runtimeLockPath, runtimeToolsRoot } from './paths.js';
+import { withInstallLock } from './install-lock.js';
+import { versionSatisfies } from './probe.js';
 import type { RuntimeKind } from './types.js';
 
 const RUNTIMES: RuntimeKind[] = ['node', 'uv', 'python'];
 const STALE_TEMP_MS = 24 * 60 * 60 * 1_000;
+
+function configuredVersion(config: RuntimeToolsConfig, runtime: RuntimeKind): string {
+  if (runtime === 'node') return config.node.version ?? DEFAULT_RUNTIME_VERSIONS.node;
+  if (runtime === 'python') return config.python.version ?? DEFAULT_RUNTIME_VERSIONS.python;
+  return config.uv.version ?? DEFAULT_RUNTIME_VERSIONS.uv;
+}
 
 export type RuntimePruneResult = { removed: string[]; reclaimedBytes: number };
 
@@ -43,25 +52,35 @@ export async function pruneRuntimeTools(params: {
   const root = runtimeToolsRoot(params.stateDir);
 
   for (const runtime of RUNTIMES) {
-    const versionsRoot = join(root, runtime, 'versions');
-    const entries = (await listEntries(versionsRoot)).sort((a, b) => b.mtimeMs - a.mtimeMs);
-    const manifest = await readRuntimeManifest(params.stateDir, runtime);
-    const entryPaths = new Set(entries.map((entry) => resolve(entry.path)));
-    const activePath = manifest && entryPaths.has(resolve(manifest.installDir))
-      ? resolve(manifest.installDir)
-      : null;
-    const keep = new Set<string>();
-    if (activePath) keep.add(activePath);
-    for (const entry of entries) {
-      if (keep.size >= params.config.retention.keepVersions) break;
-      keep.add(resolve(entry.path));
-    }
-    for (const entry of entries) {
-      if (keep.has(resolve(entry.path))) continue;
-      await rm(entry.path, { recursive: true, force: true });
-      removed.push(entry.path);
-      reclaimedBytes += entry.size;
-    }
+    await withInstallLock(runtimeLockPath(params.stateDir, runtime, 'prune'), {
+      pid: process.pid,
+      runtime,
+      action: 'prune',
+    }, async () => {
+      const versionsRoot = join(root, runtime, 'versions');
+      const entries = (await listEntries(versionsRoot)).sort((a, b) => b.mtimeMs - a.mtimeMs);
+      const manifests = await readRuntimeManifests(params.stateDir, runtime);
+      const manifest = manifests.find((item) => (
+        versionSatisfies(item.version, configuredVersion(params.config, runtime))
+      )) ?? manifests[0];
+      const entryPaths = new Set(entries.map((entry) => resolve(entry.path)));
+      const activePath = manifest && entryPaths.has(resolve(manifest.installDir))
+        ? resolve(manifest.installDir)
+        : null;
+      const keep = new Set<string>();
+      if (activePath) keep.add(activePath);
+      for (const entry of entries) {
+        if (keep.size >= params.config.retention.keepVersions) break;
+        keep.add(resolve(entry.path));
+      }
+      for (const entry of entries) {
+        if (keep.has(resolve(entry.path))) continue;
+        await rm(entry.path, { recursive: true, force: true });
+        await removeRuntimeManifest(params.stateDir, runtime, basename(entry.path));
+        removed.push(entry.path);
+        reclaimedBytes += entry.size;
+      }
+    });
   }
 
   const now = params.now ?? Date.now();
@@ -75,6 +94,7 @@ export async function pruneRuntimeTools(params: {
   const maxCacheBytes = params.config.retention.maxCacheBytes;
   if (maxCacheBytes !== undefined) {
     const cacheEntries = (await listEntries(join(root, 'downloads')))
+      .filter((entry) => !entry.path.endsWith('.partial'))
       .sort((a, b) => b.mtimeMs - a.mtimeMs);
     let retained = 0;
     for (const entry of cacheEntries) {

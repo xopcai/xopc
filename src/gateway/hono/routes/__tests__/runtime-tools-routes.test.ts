@@ -59,4 +59,14 @@ describe('runtime tools routes', () => {
     expect(runtimeResponse.status).toBe(400);
     expect(saveConfig).not.toHaveBeenCalled();
   });
+
+  it('rejects unsafe runtime versions before starting a stream', async () => {
+    const { app } = createApp();
+    const response = await app.request('/api/runtime-tools/node/install/stream', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ version: '../../tmp' }),
+    });
+    expect(response.status).toBe(400);
+  });
 });

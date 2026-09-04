@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import semver from 'semver';
 
 import {
   AgentModelsOverrideSchema,
@@ -263,9 +264,19 @@ const RuntimePreferenceSchema = z.enum([
 
 const RuntimeProvisionSchema = z.enum(['eager', 'on-demand', 'disabled']);
 
+const RuntimeVersionRequestSchema = z.string()
+  .trim()
+  .min(1)
+  .max(128)
+  .refine(
+    (value) => !value.includes('/') && !value.includes('\\') && !value.includes('\0'),
+    'Runtime version must not contain path separators',
+  )
+  .refine((value) => semver.validRange(value) !== null, 'Runtime version must be a valid SemVer version or range');
+
 const LanguageRuntimeSchema = z.object({
   enabled: z.boolean().default(true),
-  version: z.string().min(1).optional(),
+  version: RuntimeVersionRequestSchema.optional(),
   preference: RuntimePreferenceSchema.default('managed-first'),
   provision: RuntimeProvisionSchema.default('on-demand'),
 });
@@ -305,7 +316,7 @@ export const RuntimeToolsConfigSchema = z.object({
   }),
   uv: z.object({
     enabled: z.boolean().default(true),
-    version: z.string().min(1).optional(),
+    version: RuntimeVersionRequestSchema.optional(),
   }).default({ enabled: true }),
   download: z.object({
     bundleDir: z.string().min(1).optional(),

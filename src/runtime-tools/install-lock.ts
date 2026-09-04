@@ -8,16 +8,15 @@ function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 async function staleLock(path: string): Promise<boolean> {
   try {
-    const value = JSON.parse(await readFile(path, 'utf8')) as { pid?: unknown; createdAt?: unknown };
+    const value = JSON.parse(await readFile(path, 'utf8')) as { pid?: unknown };
     const pid = typeof value.pid === 'number' ? value.pid : 0;
-    const createdAt = typeof value.createdAt === 'number' ? value.createdAt : 0;
-    return !isProcessAlive(pid) && Date.now() - createdAt > LOCK_STALE_MS;
+    return !isProcessAlive(pid);
   } catch {
     return true;
   }
@@ -27,9 +26,12 @@ export async function withInstallLock<T>(
   path: string,
   metadata: Record<string, unknown>,
   fn: () => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
   await mkdir(dirname(path), { recursive: true });
+  const waitStartedAt = Date.now();
   while (true) {
+    if (signal?.aborted) throw signal.reason ?? new Error('Runtime installation was aborted');
     try {
       const handle = await open(path, 'wx', 0o600);
       await handle.writeFile(JSON.stringify({ pid: process.pid, createdAt: Date.now(), ...metadata }));
@@ -42,7 +44,20 @@ export async function withInstallLock<T>(
         await unlink(path).catch(() => undefined);
         continue;
       }
-      await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_MS));
+      if (Date.now() - waitStartedAt > LOCK_STALE_MS) {
+        throw new Error(`Timed out waiting for runtime installation lock: ${path}`);
+      }
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          signal?.removeEventListener('abort', abort);
+          resolve();
+        }, LOCK_WAIT_MS);
+        const abort = () => {
+          clearTimeout(timeout);
+          reject(signal?.reason ?? new Error('Runtime installation was aborted'));
+        };
+        signal?.addEventListener('abort', abort, { once: true });
+      });
     }
   }
 
