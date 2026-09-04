@@ -1,6 +1,6 @@
 # xopc Mobile privacy policy — publication draft
 
-**Not ready to publish.** Complete the bracketed fields and confirm the actual publisher-operated services and provider contracts before release. This draft describes the code reviewed on 2026-09-03.
+**Not ready to publish.** Add the legal name and contact email, then complete the publication review. This draft describes the code reviewed on 2026-09-04 and the confirmed product model.
 
 Publisher / operator: [LEGAL NAME]
 
@@ -10,7 +10,7 @@ Effective date: [DATE]
 
 ## Scope
 
-This policy describes the xopc Mobile application distributed by [LEGAL NAME]. The app connects to a gateway selected by the user. A gateway operated by someone else has its own operator, privacy policy and data-handling responsibilities. [DESCRIBE ANY GATEWAY, ACCOUNT OR CLOUD SERVICE OPERATED BY THE PUBLISHER.]
+This policy describes the xopc Mobile application distributed by the individual developer [LEGAL NAME]. The app is free, contains no purchases or subscriptions, and connects only to gateways run and administered by users. The publisher does not provide app users with a hosted gateway, app account or mandatory AI cloud service. Gateways, models and other services selected by users have their own operators, privacy policies and data-handling responsibilities.
 
 ## Data and purposes
 
@@ -22,17 +22,19 @@ Camera, photo, microphone and contact access are used for the associated feature
 
 If notifications are enabled, the app registers an Expo push token, platform and language with the gateway. Push notifications pass through Expo and Apple Push Notification service on iOS, and may contain previews configured by the gateway.
 
-The app keeps preferences, cached workspace content, pending submissions, consent choices and a bounded set of usage/performance events locally. [CONFIRM ANY REMOTE DIAGNOSTICS OR ANALYTICS IN THE FINAL DISTRIBUTION BUILD.]
+The app keeps preferences, cached workspace content, pending submissions, consent choices and up to 200 usage/performance events locally. The reviewed distribution build contains no remote analytics, advertising or third-party crash-reporting SDK. TestFlight itself may provide Apple crash and testing diagnostics to the developer while a beta build is used.
 
 ## Service providers and transfers
 
-[LIST THE ACTUAL PUBLISHER-OPERATED GATEWAY, HOSTING, AI, SPEECH, NOTIFICATION AND OTHER PROCESSORS; PURPOSES; RELEVANT PRIVACY LINKS; LOCATIONS/TRANSFER ARRANGEMENTS; AND CONTRACTUAL DATA PROTECTIONS.]
+The publisher does not select or operate the gateways, AI, search, image, speech or other content-processing services configured by users. Users or their gateway administrators are responsible for selecting those services and reviewing each provider's privacy policy, processing locations, cross-border arrangements, retention and model-training practices.
+
+If notifications are enabled, push tokens and notification content pass through Expo Push Service and Apple Push Notification service. When the `link.xopc.ai` pairing page is opened, the pairing payload in the URL fragment is not sent in the HTTP request. The page uses no analytics or third-party scripts and does not read the clipboard automatically. Hosting and certificate services may still process network connection information and operational error logs needed to serve and secure the page.
 
 A self-hosted gateway may still use cloud providers. Proxies may use downstream providers. User-configured extensions, connected services and tools may access additional destinations; the gateway administrator is responsible for explaining those services. Do not submit sensitive content until you understand the gateway and provider practices.
 
 ## Retention and training
 
-[STATE ACTUAL RETENTION PERIODS OR CRITERIA FOR PUBLISHER-OPERATED CONTENT, LOGS, CREDENTIALS AND BACKUPS, AND ACTUAL MODEL-TRAINING PRACTICES.]
+The publisher does not store users' messages, notes, files, audio, gateway credentials or AI content on a publisher backend and does not use that content to train models. On-device data remains until the user deletes it in the app, removes a connection, clears app data or uninstalls the app. The pairing page does not retain pairing payloads; necessary operational error logs are retained only as needed for site security and troubleshooting.
 
 For independently operated gateways and providers, contact the relevant operator for their retention and training practices. This application does not make a blanket promise that all configurable providers retain no data or never train on it.
 
@@ -40,10 +42,10 @@ For independently operated gateways and providers, contact the relevant operator
 
 You can withdraw mobile content-sharing permission in Settings → About → Privacy and data sharing, disable clipboard suggestions and notifications, and change system permissions. Withdrawal blocks new content submissions from the app; it does not retract content already received or stop already scheduled server work. Pause automations and ongoing work separately.
 
-Use the corresponding workspace screens to delete content, revoke the device on the gateway, and contact the gateway operator for backup or downstream deletion. Uninstalling the app does not delete remote content. For data controlled by [LEGAL NAME], contact [EMAIL] using [DESCRIBE THE PRIVATE REQUEST AND IDENTITY-VERIFICATION PROCESS].
+Use the corresponding workspace screens to delete content, revoke the device on the gateway, and contact the gateway operator for backup or downstream deletion. Uninstalling the app does not delete remote content. For data controlled by [LEGAL NAME], contact [EMAIL] privately. Include enough information to identify the relevant interaction; the publisher may request reasonable proof that you control the affected account, device or email address before responding.
 
 ## Updates and contact
 
-[DESCRIBE NOTICE OF MATERIAL POLICY CHANGES AND APPLICABLE USER RIGHTS FOR THE SELECTED DISTRIBUTION REGIONS.]
+Material changes will be announced through this policy page, app release notes or an in-app notice. Users may request access to, correction of or deletion of personal data controlled by the publisher as provided by applicable law. Requests concerning user-operated gateways or user-selected services should be directed to their respective operators.
 
 For privacy questions, contact [EMAIL]. Do not post personal content or credentials in public issue trackers.
