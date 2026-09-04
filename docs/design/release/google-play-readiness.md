@@ -2,6 +2,8 @@
 
 Updated: 2026-09-04
 
+Google Play publication is deferred. The current Android distribution channel is the signed APK provided by `https://xopc.ai`; the Play listing material is retained for a later launch.
+
 ## Current release
 
 | Item | Status |
