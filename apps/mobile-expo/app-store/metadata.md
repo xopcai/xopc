@@ -1,6 +1,6 @@
-# App Store metadata draft
+# App Store metadata
 
-Do not submit until publisher, territories, business model, policy URL and review access are confirmed. No live credentials belong in this file.
+Publisher, storefronts, business model, policy URLs and review access are confirmed. App ICP filing and App Privacy publication remain required before submission. No live credentials belong in this file.
 
 Confirmed product model: distributed by an individual developer; free with no purchases or subscriptions; connects only to gateways run by users. China mainland is an intended initial storefront and requires completion of App ICP filing before release there.
 
@@ -54,6 +54,6 @@ Dedicated review password: [ENTER ONLY IN APP STORE CONNECT]
 6. Optional features: attach an image, record a voice input, listen to an answer, use the share extension, and add the Quick Entry widget.
 7. Privacy and data controls are available under “Other options” before pairing and under Settings → About → Privacy and data sharing. Permission can be withdrawn there.
 
-The review gateway will remain available throughout review. Contact: [PUBLISHER TO SUPPLY].
+The review gateway will remain available throughout review. Contact: lyxopc.ai@gmail.com.
 
 Before submitting these notes, perform every step on a clean device and replace the labels with the actual deployed review UI. Do not claim a review gateway or portal exists until it has been provisioned and tested.
