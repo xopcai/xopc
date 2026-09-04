@@ -9,7 +9,9 @@
 import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
+import { AnimatedDisclosureIcon } from '../../components/AnimatedDisclosureIcon';
 import {
   buildStepsRoundActiveSummary,
   buildStepsRoundCompleteSummary,
@@ -22,6 +24,7 @@ import { chatColors } from './styles';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolUseBlock } from './ToolUseBlock';
 import { useMessages } from '../../i18n/messages';
+import { motion, useReducedMotion } from '../../motion';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { useTheme } from '../../theme';
 
@@ -85,6 +88,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   const m = useMessages();
   const language = usePreferencesStore((s) => s.language);
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   const visibleBlocks = useMemo(
     () => resolveStepBlocksForRender(blocks, isMessageStreaming),
@@ -188,7 +192,8 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   const headerMain = completedHeader;
 
   return (
-    <View
+    <Animated.View
+      layout={reducedMotion || anyActive ? undefined : LinearTransition.duration(motion.duration.standard)}
       style={[
         styles.container,
         {
@@ -237,15 +242,13 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
           )}
         </View>
 
-        <Icon
-          source={expanded ? 'chevron-up' : 'chevron-down'}
-          size={16}
-          color={colors.text.tertiary}
-        />
+        <AnimatedDisclosureIcon expanded={expanded} size={16} color={colors.text.tertiary} />
       </Pressable>
 
       {expanded ? (
-        <View
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
           style={[
             styles.timelineOuter,
             { borderTopColor: isDark ? chatColors.stepsBorderDark : chatColors.stepsBorder },
@@ -282,9 +285,9 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
               );
             })}
           </View>
-        </View>
+        </Animated.View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 });
 

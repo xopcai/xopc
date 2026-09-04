@@ -1,7 +1,10 @@
 import { memo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
+import { AnimatedDisclosureIcon } from '../../components/AnimatedDisclosureIcon';
+import { motion, useReducedMotion } from '../../motion';
 import { useTheme } from '../../theme';
 import type { WebSearchResultLink } from './web-search-tool-result-links';
 
@@ -24,6 +27,7 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
 }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   if (links.length === 0) return null;
 
@@ -43,35 +47,44 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
         {formatSummary(labels.summary, links.length)}
       </Text>
 
-      <View style={styles.links}>
-        {visibleLinks.map(({ url, title, host }) => (
-          <Pressable
+      <Animated.View
+        layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.standard)}
+        style={styles.links}
+      >
+        {visibleLinks.map(({ url, title, host }, index) => (
+          <Animated.View
             key={url}
-            style={styles.linkRow}
-            onPress={() => {
-              void Linking.openURL(url);
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={title}
+            entering={index < DEFAULT_VISIBLE_LINKS || reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
+            exiting={index < DEFAULT_VISIBLE_LINKS || reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
+            layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)}
           >
-            <Icon source="open-in-new" size={12} color={colors.text.secondary} />
-            <Text
-              variant="bodySmall"
-              numberOfLines={1}
-              style={[styles.host, { color: colors.text.secondary }]}
+            <Pressable
+              style={styles.linkRow}
+              onPress={() => {
+                void Linking.openURL(url);
+              }}
+              accessibilityRole="link"
+              accessibilityLabel={title}
             >
-              {host}
-            </Text>
-            <Text
-              variant="bodySmall"
-              numberOfLines={1}
-              style={[styles.title, { color: colors.accent.primary }]}
-            >
-              {title}
-            </Text>
-          </Pressable>
+              <Icon source="open-in-new" size={12} color={colors.text.secondary} />
+              <Text
+                variant="bodySmall"
+                numberOfLines={1}
+                style={[styles.host, { color: colors.text.secondary }]}
+              >
+                {host}
+              </Text>
+              <Text
+                variant="bodySmall"
+                numberOfLines={1}
+                style={[styles.title, { color: colors.accent.primary }]}
+              >
+                {title}
+              </Text>
+            </Pressable>
+          </Animated.View>
         ))}
-      </View>
+      </Animated.View>
 
       {canToggle ? (
         <Pressable
@@ -84,11 +97,7 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
           <Text variant="labelSmall" style={[styles.toggleText, { color: colors.text.tertiary }]}>
             {expanded ? labels.showLess : labels.showMore}
           </Text>
-          <Icon
-            source={expanded ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color={colors.text.tertiary}
-          />
+          <AnimatedDisclosureIcon expanded={expanded} size={14} color={colors.text.tertiary} />
         </Pressable>
       ) : null}
     </View>
