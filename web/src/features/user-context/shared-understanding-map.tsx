@@ -1,49 +1,78 @@
-import { CheckCircle2, Eye, EyeOff, Pencil, Target, UserRound } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  Background,
+  Controls,
+  Handle,
+  Position,
+  ReactFlow,
+  type Edge,
+  type Node,
+  type NodeProps,
+  type ReactFlowInstance,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { CheckCircle2, Eye, EyeOff, Network, Pencil, Target, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Select, SelectOption } from '@/components/ui/popover-select';
+import { cn } from '@/lib/cn';
 
 import { updateUnderstanding, updateUserFocus, type UserFocus, type UserUnderstanding } from './user-context-api';
 import { rankUnderstandingRelations, type UnderstandingRelation } from './shared-understanding-model';
 import { UNDERSTANDING_KIND_LABELS } from './understanding-kind-labels';
 
-const NODE_POSITIONS = [
-  { x: 15, y: 17 }, { x: 14, y: 51 }, { x: 19, y: 83 },
-  { x: 85, y: 17 }, { x: 86, y: 51 }, { x: 81, y: 83 },
-] as const;
-
 const COPY = {
   en: {
-    focus: 'Focus', selectFocus: 'Focus in view', you: 'You', active: 'Active', pending: 'Needs review',
-    hint: 'A local map around one focus — enough context to explain xopc’s help, without turning your portrait into a database.',
+    focus: 'Focus', you: 'You', active: 'Active', pending: 'Needs review',
+    hint: 'All current focuses and context are shown in one connected map. Select any node to inspect it.',
     confirmed: 'Confirmed', possible: 'Possible', weak: 'Show weak signals', hideWeak: 'Hide weak signals',
     noFocus: 'Confirm a focus first, then xopc can show the context that affects it.',
     noRelations: 'No relationship is strong enough to show yet.', why: 'Why this relationship is shown',
     project_scope: 'Both belong to the same project.', topic_overlap: 'They share a meaningful topic signal.',
     global_context: 'This confirmed context may shape work across projects.',
-    projectEdge: 'same project', topicEdge: 'shared topic', contextEdge: 'shapes work',
     edit: 'Edit', pause: 'Pause', complete: 'Complete', incorrect: 'Not true', archive: 'Move to history',
     save: 'Save', cancel: 'Cancel', review: 'Review this suggestion',
     explicit: 'You said this directly', observed: 'Observed across work', inferred: 'Inferred — may be wrong',
-    relatedCount: 'relationships',
+    relatedCount: 'relationships', overview: 'Whole network', overviewTitle: 'Your shared context at a glance',
+    overviewHint: 'Select a focus or understanding node to see its details and available actions.',
+    focusCount: 'current focuses', understandingCount: 'understandings', connectedFocuses: 'Connected focuses',
+    ariaLabel: 'Shared understanding network',
   },
   zh: {
-    focus: '当前关注', selectFocus: '图中关注', you: '你', active: '进行中', pending: '待确认',
-    hint: '只围绕一个当前重点展开局部关系：足以解释 xopc 为什么这样帮助你，又不会把画像变成数据库。',
+    focus: '当前关注', you: '你', active: '进行中', pending: '待确认',
+    hint: '把所有进行中的关注和有效理解放在同一张关系网中；选择任一节点即可查看详情。',
     confirmed: '已确认', possible: '可能关联', weak: '显示弱信号', hideWeak: '隐藏弱信号',
     noFocus: '先确认一项关注，xopc 才能展示会影响它的上下文。',
     noRelations: '目前还没有足够明确的关系。', why: '为什么展示这条关系',
     project_scope: '它们属于同一个项目。', topic_overlap: '它们共享了有意义的主题信号。',
     global_context: '这条已确认的上下文可能影响不同项目中的工作。',
-    projectEdge: '同一项目', topicEdge: '主题相关', contextEdge: '影响工作方式',
     edit: '编辑', pause: '暂停', complete: '完成', incorrect: '不正确', archive: '移入历史',
     save: '保存', cancel: '取消', review: '去确认这条建议',
     explicit: '由你直接告知', observed: '从过往工作中观察到', inferred: '推断内容，可能有误',
-    relatedCount: '条关系',
+    relatedCount: '条关系', overview: '整体关系网', overviewTitle: '你的共同上下文',
+    overviewHint: '选择一个关注或理解节点，可以查看详情和可用操作。',
+    focusCount: '项当前关注', understandingCount: '条有效理解', connectedFocuses: '关联的关注',
+    ariaLabel: '共同理解关系网',
   },
 } as const;
 
+type Copy = typeof COPY.en | typeof COPY.zh;
+type MapRelation = UnderstandingRelation & { focus: UserFocus };
+type MapSelection = { type: 'focus'; id: string } | { type: 'understanding'; id: string } | null;
+
+interface YouNodeData extends Record<string, unknown> { label: string }
+interface FocusNodeData extends Record<string, unknown> { focus: UserFocus; dimmed: boolean }
+interface UnderstandingNodeData extends Record<string, unknown> {
+  understanding: UserUnderstanding;
+  kindLabel: string;
+  dimmed: boolean;
+}
+
+type YouFlowNode = Node<YouNodeData>;
+type FocusFlowNode = Node<FocusNodeData>;
+type UnderstandingFlowNode = Node<UnderstandingNodeData>;
+type MapFlowNode = YouFlowNode | FocusFlowNode | UnderstandingFlowNode;
+
+const VISIBLE_UNDERSTANDING_STATUSES = new Set<UserUnderstanding['status']>(['active', 'candidate', 'needs_review', 'stale']);
 const inputClass = 'w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/20';
 
 export function SharedUnderstandingMap({ focuses, understandings, language, onRefresh, onOpenReview }: {
@@ -54,68 +83,81 @@ export function SharedUnderstandingMap({ focuses, understandings, language, onRe
   onOpenReview: () => void;
 }) {
   const t = COPY[language];
-  const [focusId, setFocusId] = useState(focuses[0]?.id ?? '');
-  const focus = focuses.find((item) => item.id === focusId) ?? focuses[0];
-  const allRelations = useMemo(() => focus ? rankUnderstandingRelations(focus, understandings) : [], [focus, understandings]);
   const [showWeak, setShowWeak] = useState(false);
-  const relations = useMemo(() => showWeak ? allRelations : allRelations.filter((relation) => relation.score >= 0.25), [allRelations, showWeak]);
-  const [selectedUnderstandingId, setSelectedUnderstandingId] = useState<string | null>(null);
-  const selectedRelation = relations.find((relation) => relation.understanding.id === selectedUnderstandingId) ?? null;
+  const [selection, setSelection] = useState<MapSelection>(null);
+  const flowRef = useRef<ReactFlowInstance<MapFlowNode, Edge> | null>(null);
+  const visibleUnderstandings = useMemo(() => understandings.filter((understanding) =>
+    VISIBLE_UNDERSTANDING_STATUSES.has(understanding.status)), [understandings]);
+  const allRelations = useMemo(() => focuses.flatMap((focus) =>
+    rankUnderstandingRelations(focus, visibleUnderstandings, visibleUnderstandings.length)
+      .map((relation) => ({ ...relation, focus }))), [focuses, visibleUnderstandings]);
+  const relations = useMemo(() => showWeak
+    ? allRelations
+    : allRelations.filter((relation) => relation.score >= 0.25), [allRelations, showWeak]);
+  const visibleUnderstandingIds = useMemo(() => new Set(visibleUnderstandings.map((item) => item.id)), [visibleUnderstandings]);
 
   useEffect(() => {
-    if (!focus || focus.id === focusId) return;
-    setFocusId(focus.id);
-  }, [focus, focusId]);
-  useEffect(() => {
-    if (selectedUnderstandingId && !relations.some((relation) => relation.understanding.id === selectedUnderstandingId)) {
-      setSelectedUnderstandingId(null);
-    }
-  }, [relations, selectedUnderstandingId]);
+    if (selection?.type === 'focus' && !focuses.some((focus) => focus.id === selection.id)) setSelection(null);
+    if (selection?.type === 'understanding' && !visibleUnderstandingIds.has(selection.id)) setSelection(null);
+  }, [focuses, selection, visibleUnderstandingIds]);
 
-  if (!focus) return <div className="rounded-2xl border border-dashed border-edge px-5 py-16 text-center text-sm text-fg-muted">{t.noFocus}</div>;
+  const nodes = useMemo<MapFlowNode[]>(() => buildNodes(
+    focuses, visibleUnderstandings, relations, selection, language, t,
+  ), [focuses, language, relations, selection, t, visibleUnderstandings]);
+  const edges = useMemo<Edge[]>(() => buildEdges(focuses, relations, selection), [focuses, relations, selection]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      void flowRef.current?.fitView({ padding: 0.2, minZoom: 0.1, maxZoom: 1, duration: 250 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focuses.length, relations.length, visibleUnderstandings.length]);
+
+  if (!focuses.length) return <div className="rounded-2xl border border-dashed border-edge px-5 py-16 text-center text-sm text-fg-muted">{t.noFocus}</div>;
 
   return <section className="overflow-hidden rounded-2xl border border-edge bg-surface-panel">
-    <header className="flex flex-col gap-3 border-b border-edge px-4 py-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-2xl text-xs leading-5 text-fg-muted">{t.hint}</p>
-        {focuses.length > 1 ? <label className="flex shrink-0 items-center gap-2 text-xs text-fg-muted"><span>{t.selectFocus}</span><Select value={focus.id} onChange={(event) => { setFocusId(event.target.value); setSelectedUnderstandingId(null); }} triggerClassName="min-w-44 bg-surface-base">{focuses.map((item) => <SelectOption key={item.id} value={item.id}>{item.title}</SelectOption>)}</Select></label> : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-fg-subtle">
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-edge px-4 py-3">
+      <p className="min-w-0 flex-1 text-xs leading-5 text-fg-muted">{t.hint}</p>
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-fg-subtle">
         <span className="inline-flex items-center gap-1.5"><span className="h-px w-5 bg-edge-strong" />{t.confirmed}</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-5 border-t border-dashed border-warning" />{t.possible}</span>
-        {allRelations.some((relation) => relation.score < 0.25) ? <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-md text-fg-muted hover:text-accent" onClick={() => setShowWeak((value) => !value)}>{showWeak ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}{showWeak ? t.hideWeak : t.weak}</button> : null}
+        {allRelations.some((relation) => relation.score < 0.25) ? <button type="button" className="inline-flex items-center gap-1.5 rounded-md text-fg-muted hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30" onClick={() => setShowWeak((value) => !value)}>{showWeak ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}{showWeak ? t.hideWeak : t.weak}</button> : null}
       </div>
     </header>
 
-    <div className="grid lg:grid-cols-[minmax(0,1fr)_19rem]">
-      <div className="min-w-0 bg-surface-base/45 p-3 sm:p-4">
-        <div className="relative hidden h-[30rem] overflow-hidden rounded-xl border border-edge bg-surface-base sm:block">
-          <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(var(--color-edge)_0.7px,transparent_0.7px)] [background-size:20px_20px]" aria-hidden="true" />
-          <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <line x1="50" y1="13" x2="50" y2="50" className="stroke-edge-strong" strokeWidth="0.35" vectorEffect="non-scaling-stroke" />
-            {relations.map((relation, index) => <line key={relation.understanding.id} x1="50" y1="50" x2={NODE_POSITIONS[index]?.x ?? 50} y2={NODE_POSITIONS[index]?.y ?? 50} className={relation.understanding.status === 'active' ? 'stroke-edge-strong' : 'stroke-warning'} strokeWidth={selectedUnderstandingId === relation.understanding.id ? '0.55' : '0.3'} strokeDasharray={relation.understanding.status === 'active' ? undefined : '1.4 1.4'} vectorEffect="non-scaling-stroke" />)}
-          </svg>
-
-          <div className="absolute left-1/2 top-[13%] z-10 flex size-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-white shadow-surface"><UserRound className="size-5" /><span className="sr-only">{t.you}</span></div>
-          <button type="button" onClick={() => setSelectedUnderstandingId(null)} className={`absolute left-1/2 top-1/2 z-10 flex w-44 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm font-medium shadow-surface transition-colors ${selectedRelation ? 'border-edge bg-surface-panel hover:bg-surface-hover' : 'border-accent bg-accent-soft text-accent-fg ring-2 ring-accent/15'}`}><Target className="size-4 shrink-0" /><span className="line-clamp-2">{focus.title}</span></button>
-          {relations.map((relation, index) => {
-            const position = NODE_POSITIONS[index] ?? NODE_POSITIONS[0];
-            return <span key={`edge:${relation.understanding.id}`} style={{ left: `${(50 + position.x) / 2}%`, top: `${(50 + position.y) / 2}%` }} className="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2 rounded bg-surface-base/90 px-1.5 py-0.5 text-[9px] text-fg-subtle">{relationEdgeLabel(relation, t)}</span>;
-          })}
-          {relations.map((relation, index) => <GraphNode key={relation.understanding.id} relation={relation} position={NODE_POSITIONS[index] ?? NODE_POSITIONS[0]} language={language} selected={selectedUnderstandingId === relation.understanding.id} onSelect={() => setSelectedUnderstandingId(relation.understanding.id)} />)}
-          {!relations.length ? <p className="absolute inset-x-0 bottom-8 text-center text-xs text-fg-muted">{t.noRelations}</p> : null}
-        </div>
-
-        <div className="grid gap-2 sm:hidden">
-          <button type="button" onClick={() => setSelectedUnderstandingId(null)} className={`rounded-xl border p-3 text-left ${selectedRelation ? 'border-edge bg-surface-panel' : 'border-accent bg-accent-soft'}`}><span className="text-xs text-fg-muted">{t.focus}</span><p className="mt-1 text-sm font-medium text-fg">{focus.title}</p></button>
-          {relations.map((relation) => <button key={relation.understanding.id} type="button" onClick={() => setSelectedUnderstandingId(relation.understanding.id)} className={`rounded-xl border p-3 text-left ${selectedUnderstandingId === relation.understanding.id ? 'border-accent bg-accent-soft' : relation.understanding.status === 'active' ? 'border-edge bg-surface-panel' : 'border-dashed border-warning/40 bg-warning-soft'}`}><span className="flex items-center justify-between gap-2 text-[11px] text-fg-subtle"><span>{UNDERSTANDING_KIND_LABELS[relation.understanding.kind][language]}</span><span>{relationEdgeLabel(relation, t)}</span></span><p className="mt-1 line-clamp-2 text-sm text-fg">{relation.understanding.statement}</p></button>)}
-        </div>
+    <div className="grid lg:h-[min(42rem,calc(100dvh-14rem))] lg:min-h-[32rem] lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="h-[28rem] min-w-0 bg-surface-base/45 lg:h-auto" aria-label={t.ariaLabel}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable
+          onNodeClick={(_event, node) => {
+            if (node.type === 'you') setSelection(null);
+            else if (node.type === 'focus') setSelection({ type: 'focus', id: node.id.slice('focus:'.length) });
+            else setSelection({ type: 'understanding', id: node.id.slice('understanding:'.length) });
+          }}
+          onPaneClick={() => setSelection(null)}
+          onInit={(instance) => { flowRef.current = instance; }}
+          fitView
+          fitViewOptions={{ padding: 0.2, minZoom: 0.1, maxZoom: 1 }}
+          minZoom={0.1}
+          maxZoom={1.35}
+          panOnScroll
+          zoomOnDoubleClick={false}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background color="var(--color-edge)" gap={22} size={1} />
+          <Controls showInteractive={false} className="!border-edge !bg-surface-panel !shadow-surface" />
+        </ReactFlow>
       </div>
-
-      <ContextDetail
-        focus={focus}
-        relation={selectedRelation}
-        relationCount={relations.length}
+      <MapDetail
+        selection={selection}
+        focuses={focuses}
+        understandings={visibleUnderstandings}
+        relations={relations}
         language={language}
         t={t}
         onRefresh={onRefresh}
@@ -125,50 +167,185 @@ export function SharedUnderstandingMap({ focuses, understandings, language, onRe
   </section>;
 }
 
-function relationEdgeLabel(relation: UnderstandingRelation, t: typeof COPY.en | typeof COPY.zh): string {
-  if (relation.reasons.includes('project_scope')) return t.projectEdge;
-  if (relation.reasons.includes('topic_overlap')) return t.topicEdge;
-  return t.contextEdge;
+function buildNodes(
+  focuses: UserFocus[],
+  understandings: UserUnderstanding[],
+  relations: MapRelation[],
+  selection: MapSelection,
+  language: 'en' | 'zh',
+  t: Copy,
+): MapFlowNode[] {
+  const focusColumnWidth = 250;
+  const understandingColumnWidth = 220;
+  const focusColumns = Math.max(1, Math.min(5, focuses.length));
+  const understandingColumns = Math.max(1, Math.min(6, understandings.length));
+  const focusRows = Math.ceil(focuses.length / focusColumns);
+  const focusWidth = focusColumns * focusColumnWidth;
+  const understandingWidth = understandingColumns * understandingColumnWidth;
+  const graphWidth = Math.max(focusWidth, understandingWidth);
+  const focusOffset = (graphWidth - focusWidth) / 2;
+  const understandingOffset = (graphWidth - understandingWidth) / 2;
+  const understandingStartY = 280 + focusRows * 105;
+  const connectedFocusIds = selection?.type === 'understanding'
+    ? new Set(relations.filter((relation) => relation.understanding.id === selection.id).map((relation) => relation.focus.id))
+    : null;
+  const connectedUnderstandingIds = selection?.type === 'focus'
+    ? new Set(relations.filter((relation) => relation.focus.id === selection.id).map((relation) => relation.understanding.id))
+    : null;
+
+  return [
+    {
+      id: 'you', type: 'you', position: { x: graphWidth / 2 - 28, y: 0 },
+      data: { label: t.you }, selected: selection === null,
+    } satisfies YouFlowNode,
+    ...focuses.map((focus, index): FocusFlowNode => ({
+      id: `focus:${focus.id}`,
+      type: 'focus',
+      position: {
+        x: focusOffset + (index % focusColumns) * focusColumnWidth + 28,
+        y: 140 + Math.floor(index / focusColumns) * 105,
+      },
+      data: { focus, dimmed: selection?.type === 'understanding' && !connectedFocusIds?.has(focus.id) },
+      selected: selection?.type === 'focus' && selection.id === focus.id,
+    })),
+    ...understandings.map((understanding, index): UnderstandingFlowNode => ({
+      id: `understanding:${understanding.id}`,
+      type: 'understanding',
+      position: {
+        x: understandingOffset + (index % understandingColumns) * understandingColumnWidth,
+        y: understandingStartY + Math.floor(index / understandingColumns) * 100,
+      },
+      data: {
+        understanding,
+        kindLabel: UNDERSTANDING_KIND_LABELS[understanding.kind][language],
+        dimmed: selection?.type === 'focus' && !connectedUnderstandingIds?.has(understanding.id),
+      },
+      selected: selection?.type === 'understanding' && selection.id === understanding.id,
+    })),
+  ];
 }
 
-function GraphNode({ relation, position, language, selected, onSelect }: {
-  relation: UnderstandingRelation;
-  position: { x: number; y: number };
+function buildEdges(focuses: UserFocus[], relations: MapRelation[], selection: MapSelection): Edge[] {
+  const selectedFocusId = selection?.type === 'focus' ? selection.id : null;
+  const selectedUnderstandingId = selection?.type === 'understanding' ? selection.id : null;
+  return [
+    ...focuses.map((focus): Edge => ({
+      id: `you:${focus.id}`,
+      source: 'you',
+      target: `focus:${focus.id}`,
+      style: {
+        stroke: 'var(--color-edge-strong)',
+        strokeWidth: selectedFocusId === focus.id ? 2 : 1.25,
+        opacity: selectedUnderstandingId && !relations.some((relation) =>
+          relation.focus.id === focus.id && relation.understanding.id === selectedUnderstandingId) ? 0.15 : 1,
+      },
+    })),
+    ...relations.map((relation): Edge => {
+      const pending = relation.understanding.status !== 'active';
+      const connected = !selection
+        || selectedFocusId === relation.focus.id
+        || selectedUnderstandingId === relation.understanding.id;
+      return {
+        id: `${relation.focus.id}:${relation.understanding.id}`,
+        source: `focus:${relation.focus.id}`,
+        target: `understanding:${relation.understanding.id}`,
+        style: {
+          stroke: pending ? 'var(--color-warning)' : 'var(--color-edge-strong)',
+          strokeWidth: connected && selection ? 1.8 : 1.1,
+          strokeDasharray: pending ? '5 5' : undefined,
+          opacity: connected ? 1 : 0.12,
+        },
+      };
+    }),
+  ];
+}
+
+function YouNode({ data, selected }: NodeProps<YouFlowNode>) {
+  return <div className={cn(
+    'flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-surface transition-shadow',
+    selected && 'ring-4 ring-accent/20',
+  )}>
+    <UserRound className="size-5" aria-hidden />
+    <span className="sr-only">{data.label}</span>
+    <Handle type="source" position={Position.Bottom} className="!invisible" />
+  </div>;
+}
+
+function FocusNode({ data, selected }: NodeProps<FocusFlowNode>) {
+  return <div className={cn(
+    'w-48 rounded-xl border bg-surface-panel px-3 py-3 text-left shadow-surface transition-[border-color,box-shadow,opacity]',
+    selected ? 'border-accent ring-2 ring-accent/20' : 'border-edge',
+    data.dimmed && 'opacity-30',
+  )}>
+    <Handle type="target" position={Position.Top} className="!invisible" />
+    <div className="flex items-start gap-2"><Target className="mt-0.5 size-4 shrink-0 text-accent" /><strong className="line-clamp-2 text-sm font-medium leading-5 text-fg">{data.focus.title}</strong></div>
+    <Handle type="source" position={Position.Bottom} className="!invisible" />
+  </div>;
+}
+
+function UnderstandingNode({ data, selected }: NodeProps<UnderstandingFlowNode>) {
+  const pending = data.understanding.status !== 'active';
+  return <div className={cn(
+    'w-44 rounded-xl border bg-surface-panel px-3 py-2.5 text-left shadow-surface transition-[border-color,box-shadow,opacity]',
+    selected ? 'border-accent ring-2 ring-accent/20' : pending ? 'border-dashed border-warning/60 bg-warning-soft' : 'border-edge',
+    data.dimmed && 'opacity-30',
+  )}>
+    <Handle type="target" position={Position.Top} className="!invisible" />
+    <span className="flex items-center gap-1.5 text-[10px] text-fg-subtle"><span className={cn('size-1.5 rounded-full', pending ? 'bg-warning' : 'bg-success')} />{data.kindLabel}</span>
+    <span className="mt-1 line-clamp-2 block text-xs leading-5 text-fg">{data.understanding.statement}</span>
+  </div>;
+}
+
+const NODE_TYPES = { you: YouNode, focus: FocusNode, understanding: UnderstandingNode };
+
+function MapDetail({ selection, focuses, understandings, relations, language, t, onRefresh, onOpenReview }: {
+  selection: MapSelection;
+  focuses: UserFocus[];
+  understandings: UserUnderstanding[];
+  relations: MapRelation[];
   language: 'en' | 'zh';
-  selected: boolean;
-  onSelect: () => void;
+  t: Copy;
+  onRefresh: () => Promise<unknown>;
+  onOpenReview: () => void;
 }) {
-  const pending = relation.understanding.status !== 'active';
-  return <button
-    type="button"
-    onClick={onSelect}
-    style={{ left: `${position.x}%`, top: `${position.y}%` }}
-    className={`absolute z-10 flex max-w-40 -translate-x-1/2 -translate-y-1/2 items-start gap-2 rounded-xl border px-3 py-2.5 text-left text-xs leading-5 shadow-surface transition-colors ${selected ? 'border-accent bg-accent-soft ring-2 ring-accent/15' : pending ? 'border-dashed border-warning/60 bg-warning-soft hover:border-warning' : 'border-edge bg-surface-panel hover:bg-surface-hover'}`}
-  >
-    <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${pending ? 'bg-warning' : 'bg-success'}`} />
-    <span className="min-w-0"><span className="block text-[10px] text-fg-subtle">{UNDERSTANDING_KIND_LABELS[relation.understanding.kind][language]}</span><span className="line-clamp-2 text-fg">{relation.understanding.statement}</span></span>
-  </button>;
+  if (!selection) return <aside className="overflow-y-auto border-t border-edge bg-surface-panel p-5 lg:border-l lg:border-t-0">
+    <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"><Network className="size-4" /></div>
+    <p className="mt-4 text-[11px] font-medium text-accent">{t.overview}</p>
+    <h2 className="mt-2 text-base font-semibold leading-6 text-fg">{t.overviewTitle}</h2>
+    <p className="mt-2 text-sm leading-6 text-fg-muted">{t.overviewHint}</p>
+    <div className="mt-5 grid grid-cols-2 gap-2">
+      <div className="rounded-xl bg-surface-muted p-3"><strong className="block text-lg text-fg">{focuses.length}</strong><span className="text-[11px] text-fg-muted">{t.focusCount}</span></div>
+      <div className="rounded-xl bg-surface-muted p-3"><strong className="block text-lg text-fg">{understandings.length}</strong><span className="text-[11px] text-fg-muted">{t.understandingCount}</span></div>
+    </div>
+    {!relations.length ? <p className="mt-5 text-xs text-fg-muted">{t.noRelations}</p> : null}
+  </aside>;
+
+  if (selection.type === 'focus') {
+    const focus = focuses.find((item) => item.id === selection.id);
+    return focus ? <NodeDetail focus={focus} relations={relations.filter((relation) => relation.focus.id === focus.id)} language={language} t={t} onRefresh={onRefresh} onOpenReview={onOpenReview} /> : null;
+  }
+  const understanding = understandings.find((item) => item.id === selection.id);
+  return understanding ? <NodeDetail understanding={understanding} relations={relations.filter((relation) => relation.understanding.id === understanding.id)} language={language} t={t} onRefresh={onRefresh} onOpenReview={onOpenReview} /> : null;
 }
 
-function ContextDetail({ focus, relation, relationCount, language, t, onRefresh, onOpenReview }: {
-  focus: UserFocus;
-  relation: UnderstandingRelation | null;
-  relationCount: number;
+function NodeDetail({ focus, understanding, relations, language, t, onRefresh, onOpenReview }: {
+  focus?: UserFocus;
+  understanding?: UserUnderstanding;
+  relations: MapRelation[];
   language: 'en' | 'zh';
-  t: typeof COPY.en | typeof COPY.zh;
+  t: Copy;
   onRefresh: () => Promise<unknown>;
   onOpenReview: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(focus.title);
-  const [statement, setStatement] = useState(relation?.understanding.statement ?? focus.summary);
+  const [title, setTitle] = useState(focus?.title ?? '');
+  const [statement, setStatement] = useState(understanding?.statement ?? focus?.summary ?? '');
   const [pending, setPending] = useState(false);
-  const understanding = relation?.understanding;
   useEffect(() => {
     setEditing(false);
-    setTitle(focus.title);
-    setStatement(understanding?.statement ?? focus.summary);
-  }, [focus.id, focus.summary, focus.title, understanding?.id, understanding?.statement]);
+    setTitle(focus?.title ?? '');
+    setStatement(understanding?.statement ?? focus?.summary ?? '');
+  }, [focus?.id, focus?.summary, focus?.title, understanding?.id, understanding?.statement]);
 
   const mutate = async (action: () => Promise<unknown>) => {
     setPending(true);
@@ -176,34 +353,36 @@ function ContextDetail({ focus, relation, relationCount, language, t, onRefresh,
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!statement.trim() || (!understanding && !title.trim())) return;
+    if (!statement.trim() || (focus && !title.trim())) return;
     await mutate(() => understanding
-      ? updateUnderstanding(understanding.id, { statement })
-      : updateUserFocus(focus.id, { title, summary: statement }));
+      ? updateUnderstanding(understanding.id, { statement: statement.trim() })
+      : updateUserFocus(focus!.id, { title: title.trim(), summary: statement.trim() }));
     setEditing(false);
   };
 
   const sourceLabel = understanding
     ? understanding.explicitness === 'explicit' ? t.explicit : understanding.explicitness === 'observed' ? t.observed : t.inferred
-    : `${relationCount} ${t.relatedCount}`;
-  const statusLabel = understanding?.status === 'active' || !understanding ? t.active : t.pending;
+    : `${relations.length} ${t.relatedCount}`;
+  const statusLabel = understanding?.status === 'active' || focus ? t.active : t.pending;
+  const reasons = [...new Set(relations.flatMap((relation) => relation.reasons))];
 
-  return <aside className="border-t border-edge bg-surface-panel p-5 lg:border-l lg:border-t-0">
+  return <aside className="overflow-y-auto border-t border-edge bg-surface-panel p-5 lg:border-l lg:border-t-0">
     <p className="text-[11px] font-medium text-accent">{understanding ? UNDERSTANDING_KIND_LABELS[understanding.kind][language] : t.focus}</p>
     {editing ? <form className="mt-3 space-y-3" onSubmit={submit}>
-      {!understanding ? <input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /> : null}
+      {focus ? <input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} /> : null}
       <textarea autoFocus className={inputClass} rows={5} value={statement} onChange={(event) => setStatement(event.target.value)} />
-      <div className="flex justify-end gap-2"><Button type="button" disabled={pending} onClick={() => setEditing(false)}>{t.cancel}</Button><Button type="submit" variant="primary" disabled={pending || !statement.trim() || (!understanding && !title.trim())}>{t.save}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" disabled={pending} onClick={() => setEditing(false)}>{t.cancel}</Button><Button type="submit" variant="primary" disabled={pending || !statement.trim() || Boolean(focus && !title.trim())}>{t.save}</Button></div>
     </form> : <>
-      <h2 className="mt-2 text-base font-semibold leading-6 text-fg">{understanding?.statement ?? focus.title}</h2>
-      {!understanding ? <p className="mt-2 text-sm leading-6 text-fg-muted">{focus.summary}</p> : null}
-      <div className="mt-3 flex items-center gap-2 text-xs text-fg-muted"><span className={`size-1.5 rounded-full ${understanding?.status === 'active' || !understanding ? 'bg-success' : 'bg-warning'}`} />{statusLabel}<span>·</span><span>{sourceLabel}</span></div>
+      <h2 className="mt-2 text-base font-semibold leading-6 text-fg">{understanding?.statement ?? focus?.title}</h2>
+      {focus ? <p className="mt-2 text-sm leading-6 text-fg-muted">{focus.summary}</p> : null}
+      <div className="mt-3 flex items-center gap-2 text-xs text-fg-muted"><span className={cn('size-1.5 rounded-full', understanding?.status === 'active' || focus ? 'bg-success' : 'bg-warning')} />{statusLabel}<span>·</span><span>{sourceLabel}</span></div>
 
-      {relation ? <div className="mt-6"><p className="text-xs font-medium text-fg-muted">{t.why}</p><div className="mt-2 grid gap-2">{relation.reasons.map((reason) => <p key={reason} className="rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-fg-muted">{t[reason]}</p>)}</div></div> : null}
+      {understanding && relations.length ? <div className="mt-6"><p className="text-xs font-medium text-fg-muted">{t.connectedFocuses}</p><div className="mt-2 grid gap-1.5">{relations.map((relation) => <p key={relation.focus.id} className="rounded-lg bg-surface-muted px-3 py-2 text-xs leading-5 text-fg-muted">{relation.focus.title}</p>)}</div></div> : null}
+      {understanding && reasons.length ? <div className="mt-5"><p className="text-xs font-medium text-fg-muted">{t.why}</p><div className="mt-2 grid gap-2">{reasons.map((reason) => <p key={reason} className="rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-fg-muted">{t[reason]}</p>)}</div></div> : null}
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {!understanding ? <Button disabled={pending} onClick={() => setEditing(true)}><Pencil className="size-3.5" />{t.edit}</Button> : understanding.status !== 'active' ? <Button variant="primary" onClick={onOpenReview}>{t.review}</Button> : <Button disabled={pending} onClick={() => setEditing(true)}><Pencil className="size-3.5" />{t.edit}</Button>}
-        {!understanding ? <><Button disabled={pending} onClick={() => void mutate(() => updateUserFocus(focus.id, { status: 'paused' }))}>{t.pause}</Button><Button variant="ghost" disabled={pending} onClick={() => void mutate(() => updateUserFocus(focus.id, { status: 'completed' }))}><CheckCircle2 className="size-3.5" />{t.complete}</Button></> : understanding.status === 'active' ? <><Button variant="ghost" disabled={pending} onClick={() => void mutate(() => updateUnderstanding(understanding.id, { status: 'archived' }))}>{t.archive}</Button><Button variant="ghost" className="text-danger" disabled={pending} onClick={() => void mutate(() => updateUnderstanding(understanding.id, { status: 'rejected' }))}>{t.incorrect}</Button></> : null}
+        {focus || understanding?.status === 'active' ? <Button disabled={pending} onClick={() => setEditing(true)}><Pencil className="size-3.5" />{t.edit}</Button> : <Button variant="primary" onClick={onOpenReview}>{t.review}</Button>}
+        {focus ? <><Button disabled={pending} onClick={() => void mutate(() => updateUserFocus(focus.id, { status: 'paused' }))}>{t.pause}</Button><Button variant="ghost" disabled={pending} onClick={() => void mutate(() => updateUserFocus(focus.id, { status: 'completed' }))}><CheckCircle2 className="size-3.5" />{t.complete}</Button></> : understanding?.status === 'active' ? <><Button variant="ghost" disabled={pending} onClick={() => void mutate(() => updateUnderstanding(understanding.id, { status: 'archived' }))}>{t.archive}</Button><Button variant="ghost" className="text-danger" disabled={pending} onClick={() => void mutate(() => updateUnderstanding(understanding.id, { status: 'rejected' }))}>{t.incorrect}</Button></> : null}
       </div>
     </>}
   </aside>;
