@@ -39,9 +39,9 @@ The build script previously archived with `CODE_SIGNING_ALLOWED=NO` and only sig
 
 Associated Domains was enabled for `ai.xopc.xopc` through the Apple API. A new main App Store profile was created with the existing distribution certificate; production APNs, App Group and Associated Domains were checked before updating `IOS_PROVISIONING_PROFILE_MAIN_BASE64` in `xopcai/xopc` (2026-09-03 02:57:57 UTC). Existing certificates and the old profile were not revoked. The Widget profile already authorizes its App Group.
 
-Workflow run [33777734402](https://github.com/xopcai/xopc/actions/runs/33777734402) subsequently built and uploaded version `0.0.25` (build `1`). The retained verifier report passed all three signed bundles, iPhoneOS 26.5 SDK metadata, production APNs, Universal Links, the shared Widget App Group and 14 packaged privacy manifests. App Store Connect processed the build as valid. On 2026-09-04 its external state was `WAITING_FOR_BETA_REVIEW` and its internal state was `IN_BETA_TESTING`.
+Workflow run [33777734402](https://github.com/xopcai/xopc/actions/runs/33777734402) subsequently built and uploaded version `0.0.25` (build `1`). The retained verifier report passed all three signed bundles, iPhoneOS 26.5 SDK metadata, production APNs, Universal Links, the shared Widget App Group and 14 packaged privacy manifests. App Store Connect processed that build as valid. Version `0.0.26` (build `1`) was processed as valid on 2026-09-04 with the same minimum OS and exempt-encryption declaration, and is the build selected for App Store version 1.0.
 
-The external group `Beta Test` contains this build and currently has no testers. Invite approved website applicants after Beta App Review succeeds. Its current beta description (`pre release`) and privacy-policy URL (the site root) must be replaced with real public information before wider testing.
+The external group `Beta Test` currently has no testers. Invite approved website applicants after Beta App Review succeeds. The TestFlight description, feedback email and published privacy-policy URL were configured on 2026-09-04.
 
 ## Review gateway setup
 
@@ -97,7 +97,7 @@ The publisher confirmed China mainland as an initial storefront. Apple reports a
 - Privacy policy and support URLs: publish completed pages and verify on an unauthenticated device.
 - Screenshots: capture the actual Release build with synthetic content on the supported iPhone and iPad sizes. Cover workspace, notes, chat and tasks. Verify current screenshot slots in App Store Connect before exporting.
 - Age rating: complete the current questionnaire based on unrestricted AI output and any linked content; do not infer a rating solely from the productivity category.
-- App Privacy: use the worksheet below and actual provider practices, not an automatic “Data Not Collected” answer based on self-hosting.
+- App Privacy: published on 2026-09-04 using the answers below; keep it aligned with actual provider practices rather than assuming “Data Not Collected” from self-hosting.
 - App Review Information: insert dedicated reviewer access and the steps from `metadata.md`.
 - Account deletion: review again if adding publisher-managed account creation. Removing a paired device is not deletion of a publisher-managed account.
 - Commerce: if selling digital capabilities or subscriptions, resolve the purchase flow and applicable storefront rules before submission.
@@ -137,9 +137,10 @@ Checks completed on the 2026-09-03 working copy:
 - Gateway typecheck, 7 privacy/scope tests and 16 agent-stream tests passed.
 - A real manual-signing prebuild assigned separate Release profiles to the main app, ShareIntake and Widget. The temporary test signing settings were removed by a clean normal prebuild afterward.
 - The Release simulator build succeeded after clean prebuild. On an iPhone 17 Pro / iOS 26.4 simulator, clean launch, the paste-link entry, pre-pairing privacy information, scrolling and returning to pairing were verified. Screenshots are in the local ignored `apps/mobile-expo/dist/ios/qa/` directory. An earlier build with signing disabled could not access secure storage; the normal simulator-signed build resolved that failure.
-- The verifier rejected the previous production IPA for its missing production APNs entitlement, as expected. Version `0.0.25` then passed the artifact verifier, Apple validation and App Store Connect upload.
+- The verifier rejected the previous production IPA for its missing production APNs entitlement, as expected. Version `0.0.25` then passed the artifact verifier, Apple validation and App Store Connect upload. App Store Connect also processed `0.0.26` (build `1`) as valid, and that build is selected for version 1.0.
 - Live Universal Links hosting and Apple's CDN were verified after deployment; physical-device automatic opening remains pending.
-- TestFlight physical-device checks, App ICP filing, App Privacy answers and the actual App Store submission remain outstanding. Store metadata, screenshots, reviewer access, free pricing and all 175 current storefront selections are configured.
+- App Privacy was published with Device ID / App Functionality / linked to the user / not used for tracking. Store metadata, screenshots, reviewer access, free pricing and all 175 current storefront selections are configured. Version 1.0 was added to an App Review draft and passed App Store Connect's required-field validation.
+- TestFlight physical-device checks, the App ICP filing and the final **Submit for Review** action remain outstanding. China mainland will show `ICP Filing Number Missing` and remain unavailable until Apple verifies a matching filing number.
 
 ```bash
 pnpm run mobile:lint
