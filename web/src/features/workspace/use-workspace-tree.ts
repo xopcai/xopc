@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TreeEntry } from '@/features/file-tree/file-tree-types';
-import { fetchWorkspaceDirectoryListing, listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/workspace-api';
+import {
+  fetchWorkspaceDirectoryListing,
+  fetchWorkspaceRootResource,
+  listWorkspaceDir,
+  type WorkspaceEntry,
+} from '@/features/workspace/workspace-api';
 
 /** Convert flat API entries into TreeEntry nodes (children initially empty for dirs). */
 function toTreeEntries(entries: WorkspaceEntry[]): TreeEntry[] {
@@ -33,6 +38,7 @@ function mergeChildren(
 
 export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const [tree, setTree] = useState<TreeEntry[]>([]);
+  const [rootResource, setRootResource] = useState<TreeEntry | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadedDirsRef = useRef<Set<string>>(new Set());
@@ -53,10 +59,15 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
     setError(null);
     loadedDirsRef.current.clear();
     try {
-      const listing = await fetchWorkspaceDirectoryListing('', editorOpts);
+      const [listing, root] = await Promise.all([
+        fetchWorkspaceDirectoryListing('', editorOpts),
+        fetchWorkspaceRootResource(editorOpts),
+      ]);
       setTree(toTreeEntries(listing.entries));
+      setRootResource(toTreeEntries([root])[0] ?? null);
       loadedDirsRef.current.add('');
     } catch (err) {
+      setRootResource(null);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -80,9 +91,10 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
 
   const reset = useCallback(() => {
     setTree([]);
+    setRootResource(null);
     setError(null);
     loadedDirsRef.current.clear();
   }, []);
 
-  return { tree, loading, error, loadRoot, loadChildren, reset };
+  return { tree, rootResource, loading, error, loadRoot, loadChildren, reset };
 }

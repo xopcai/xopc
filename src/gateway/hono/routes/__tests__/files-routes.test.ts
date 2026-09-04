@@ -110,6 +110,28 @@ describe('files routes', () => {
     expect(await response.json()).toMatchObject({ space: { id: fileSpaceId(realpathSync(main)) } });
   });
 
+  it('returns an opaque managed resource for a file-space root', async () => {
+    const workspaceRoot = join(stateDir, 'workspace');
+    mkdirSync(workspaceRoot);
+    const { app } = appFor(workspaceRoot);
+    const spaceId = fileSpaceId(realpathSync(workspaceRoot));
+
+    const response = await app.request(`/api/files/spaces/${spaceId}/root`);
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { resource: Record<string, unknown> };
+    expect(body.resource).toMatchObject({
+      id: fileResourceId(spaceId, ''),
+      spaceId,
+      name: 'workspace',
+      relativePath: '',
+      parentPath: '',
+      kind: 'directory',
+    });
+    expect(body.resource).not.toHaveProperty('absolutePath');
+    expect(body.resource).not.toHaveProperty('root');
+  });
+
   it('supports fuzzy paths and empty-query file suggestions', async () => {
     const root = join(stateDir, 'workspace');
     mkdirSync(join(root, 'docs'), { recursive: true });

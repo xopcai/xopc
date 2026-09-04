@@ -5,6 +5,7 @@ import {
   type ProjectMonitoringPolicy,
   type ProjectMonitoringUpdate,
   type ProjectOperatingView,
+  FileResourceResponseSchema,
   FileResourcesResponseSchema,
   FileSpaceSchema,
 } from '@xopcai/gateway-contract';
@@ -132,6 +133,11 @@ export type ProjectFilesResponse = {
   path: string;
   parentPath: string | null;
   entries: ProjectFileEntry[];
+};
+
+export type ProjectRootFileResource = {
+  fileId: string;
+  name: string;
 };
 
 export type ProjectFileSearchEntry = {
@@ -414,6 +420,17 @@ export async function fetchProjectFiles(projectId: string, path?: string): Promi
       updatedAt: new Date(item.modifiedAt).toISOString(),
     })),
   };
+}
+
+export async function fetchProjectRootFileResource(projectId: string): Promise<ProjectRootFileResource> {
+  const context = await fetchJson<{ space: unknown }>(
+    apiUrl(`/api/files/contexts/project/${encodeURIComponent(projectId)}`),
+  );
+  const space = FileSpaceSchema.parse(context.space);
+  const result = FileResourceResponseSchema.parse(await fetchJson(
+    apiUrl(`/api/files/spaces/${encodeURIComponent(space.id)}/root`),
+  ));
+  return { fileId: result.resource.id, name: result.resource.name };
 }
 
 export async function searchProjectFiles(projectId: string, query: string, limit = 50): Promise<ProjectFileSearchEntry[]> {

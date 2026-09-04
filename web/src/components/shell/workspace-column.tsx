@@ -30,6 +30,7 @@ import { useShareLink } from '@/features/shares/use-share-link';
 import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { writeWorkspaceFileDrag } from '@/features/workspace/workspace-file-drag';
+import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
@@ -66,7 +67,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
-  const { tree, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
+  const { tree, rootResource, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
     workspaceAgentId,
     chatSessionKey,
   );
@@ -405,6 +406,11 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                   <Folder className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
                   <span className="truncate">{m.workspace.title}</span>
                 </div>
+              ) : rootResource ? (
+                <WorkspaceOpenLocationMenu
+                  resourceId={rootResource.fileId}
+                  displayName={rootResource.name}
+                />
               ) : null}
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 <Button
@@ -525,10 +531,12 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                   ...(electron
                     ? {
                         openDefault: m.workspace.openSystemApp,
+                        openDirectory: m.workspace.openInFileManager,
                         openWith: m.workspace.chooseApp,
                         revealInFolder: m.workspace.revealInFolder,
                         trash: m.workspace.moveToTrash,
                         recommendedApps: m.workspace.recommendedApps,
+                        desktopUpdateRequired: m.workspace.desktopUpdateRequired,
                       }
                     : {}),
                 }}

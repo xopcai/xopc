@@ -231,6 +231,12 @@ export class FileSpaceService {
     return { space, resource: await fileResourceFromPath(space, absolutePath, resolve(space.root, locator.relativePath)), absolutePath };
   }
 
+  async rootResource(spaceId: string): Promise<FileResource> {
+    const space = await this.get(spaceId);
+    const absolutePath = await resolveFilePath(space.root, '');
+    return fileResourceFromPath(space, absolutePath);
+  }
+
   async children(spaceId: string, path = ''): Promise<FileResource[]> {
     const space = await this.get(spaceId);
     const directory = await resolveFilePath(space.root, path);

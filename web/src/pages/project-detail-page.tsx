@@ -31,6 +31,7 @@ import {
   fetchProjectFiles,
   fetchProject,
   fetchProjectOperatingView,
+  fetchProjectRootFileResource,
   updateProjectMonitoring,
   fetchProjects,
   fetchProjectSessions,
@@ -44,6 +45,7 @@ import {
   type ProjectActivityEvent,
   type ProjectFileEntry,
   type ProjectFileSearchEntry,
+  type ProjectRootFileResource,
   type ProjectSession,
   type ProjectStatus,
   type ProjectWithDetails,
@@ -667,6 +669,7 @@ export function ProjectDetailPage() {
   const [projectActivityIncludeRelated, setProjectActivityIncludeRelated] = useState(false);
   const [savingDigest, setSavingDigest] = useState(false);
   const [projectFileTree, setProjectFileTree] = useState<TreeEntry[]>([]);
+  const [projectRootFileResource, setProjectRootFileResource] = useState<ProjectRootFileResource | null>(null);
   const loadedProjectFileDirsRef = useRef<Set<string>>(new Set());
   const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
   const [pendingTrashFile, setPendingTrashFile] = useState<TreeEntry | null>(null);
@@ -772,12 +775,14 @@ export function ProjectDetailPage() {
       fetchProjectOperatingView(projectId),
       fetchProjectSessions(projectId),
       fetchGatewayAgents().catch(() => null),
+      fetchProjectRootFileResource(projectId).catch(() => null),
     ])
-      .then(([projectResult, operatingViewResult, sessionResult, agentPayload]) => {
+      .then(([projectResult, operatingViewResult, sessionResult, agentPayload, rootFileResource]) => {
         if (cancelled) return;
         setProject(projectResult);
         setOperatingView(operatingViewResult);
         setSessions(sessionResult);
+        setProjectRootFileResource(rootFileResource);
         const nextAgents = agentPayload?.agents ?? [];
         setAgents(nextAgents);
         setSelectedAgentId(projectResult.defaultAgentId ?? '');
@@ -795,7 +800,10 @@ export function ProjectDetailPage() {
         setDraft(loadedDraft);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) {
+          setProjectRootFileResource(null);
+          setError(err instanceof Error ? err.message : String(err));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -1178,6 +1186,9 @@ export function ProjectDetailPage() {
   function applyProjectUpdate(updated: Project) {
     setProject((current) => current ? { ...current, ...updated } : null);
     setSelectedAgentId(updated.defaultAgentId ?? '');
+    void fetchProjectRootFileResource(updated.id)
+      .then(setProjectRootFileResource)
+      .catch(() => setProjectRootFileResource(null));
     window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: updated.id } }));
   }
 
@@ -1851,7 +1862,12 @@ export function ProjectDetailPage() {
               >
                 <aside className="flex min-h-0 flex-col border-b border-edge lg:border-b-0 lg:border-r">
                   <div className="flex h-11 items-center gap-1 border-b border-edge bg-surface-muted/50 px-3 text-sm">
-                    <WorkspaceOpenLocationMenu workspacePath={workspaceRootLabel} />
+                    {projectRootFileResource ? (
+                      <WorkspaceOpenLocationMenu
+                        resourceId={projectRootFileResource.fileId}
+                        displayName={projectRootFileResource.name}
+                      />
+                    ) : null}
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       <button
                         type="button"
@@ -1958,10 +1974,12 @@ export function ProjectDetailPage() {
                         download: msg.workspace.download,
                         copyPath: msg.workspace.copyPath,
                         openDefault: msg.workspace.openSystemApp,
+                        openDirectory: msg.workspace.openInFileManager,
                         openWith: msg.workspace.openWith,
                         revealInFolder: msg.workspace.revealInFolder,
                         trash: msg.workspace.moveToTrash,
                         recommendedApps: msg.workspace.recommendedApps,
+                        desktopUpdateRequired: msg.workspace.desktopUpdateRequired,
                       }}
                       emptyHint={pm.files.emptyDirectory}
                     />
@@ -2277,7 +2295,12 @@ export function ProjectDetailPage() {
                       <Copy className="size-4" aria-hidden />
                       {pm.settings.copyWorkspacePath}
                     </Button>
-                    <WorkspaceOpenLocationMenu workspacePath={workspaceRootLabel} />
+                    {projectRootFileResource ? (
+                      <WorkspaceOpenLocationMenu
+                        resourceId={projectRootFileResource.fileId}
+                        displayName={projectRootFileResource.name}
+                      />
+                    ) : null}
                     <Button type="button" variant="secondary" className="rounded-lg" onClick={openWorkspaceMigration}>
                       <FolderPlus className="size-4" aria-hidden />
                       {pm.settings.migrateWorkspace}
