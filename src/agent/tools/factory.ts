@@ -83,6 +83,7 @@ import type { ProjectService } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import { createLogger } from '../../utils/logger.js';
+import { skillEnvironmentId } from '../skills/installer.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
@@ -118,6 +119,8 @@ export interface ToolFactoryDeps {
   getPrimaryModel?: () => Model<Api>;
   /** Memory orchestration (prefetch/sync + external tools). */
   getMemoryManager?: () => MemoryManager;
+  /** Skill runtime for the current workspace/session. */
+  getSkillManager?: () => SkillManager;
   /** Session store for `session_search`. */
   getSessionStore?: () => SessionStore;
   /** When set (gateway webchat), enables the `clarify` tool. */
@@ -185,10 +188,17 @@ export class AgentToolsFactory {
   private prepareRuntimeEnv = async (baseEnv: Record<string, string>): Promise<Record<string, string>> => {
     const config = this.deps.getConfig?.();
     if (!config) return baseEnv;
+    const indexing = this.deps.getSkillIndexingContext?.();
+    const skillEnvironmentIds = this.deps.getSkillManager?.()
+      ?.getEnabledSkillsForAgentSession(indexing)
+      .flatMap((skill) => (
+        skill.metadata.install ?? []
+      ).map((installSpec) => skillEnvironmentId(skill, installSpec)));
     return (await buildRuntimeEnvironment({
       stateDir: resolveStateDir(),
       config: config.runtimeTools,
       baseEnv,
+      skillEnvironmentIds,
     })).env;
   };
 

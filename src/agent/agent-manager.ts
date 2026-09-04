@@ -449,6 +449,7 @@ export class AgentManager implements AgentInstanceGateway {
       getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
       getMemoryManager: () => this.getCurrentWorkspaceRuntime().memoryManager,
+      getSkillManager: () => this.getCurrentWorkspaceRuntime().skillManager,
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,

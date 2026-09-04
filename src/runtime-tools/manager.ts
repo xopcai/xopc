@@ -21,7 +21,7 @@ import {
 } from './download-source.js';
 import { RuntimeError } from './errors.js';
 import { withInstallLock } from './install-lock.js';
-import { readRuntimeManifest, writeRuntimeManifest } from './manifest-store.js';
+import { readRuntimeManifests, writeRuntimeManifest } from './manifest-store.js';
 import {
   bundledPythonArchiveName,
   resolveOfflineBundleArtifact,
@@ -33,7 +33,13 @@ import {
   runtimeToolsRoot,
   runtimeVersionDir,
 } from './paths.js';
-import { parseRuntimeVersion, probeSystemRuntime, versionSatisfies } from './probe.js';
+import {
+  normalizeRuntimeVersionRequest,
+  parseRuntimeVersion,
+  probeSystemRuntime,
+  resolveInstallVersion,
+  versionSatisfies,
+} from './probe.js';
 import type {
   InstalledRuntimeManifest,
   ResolvedRuntime,
@@ -75,6 +81,22 @@ function uvExecutables(installDir: string): RuntimeExecutables {
   const uv = join(installDir, executableName('uv'));
   const uvx = join(installDir, executableName('uvx'));
   return { primary: uv, uv, uvx };
+}
+
+function isPathWithin(root: string, target: string): boolean {
+  return target === root || target.startsWith(`${root}${process.platform === 'win32' ? '\\' : '/'}`);
+}
+
+async function validateManagedExecutables(
+  installDir: string,
+  executables: RuntimeExecutables,
+): Promise<boolean> {
+  for (const executable of Object.values(executables)) {
+    if (!executable) continue;
+    const executablePath = await realpath(executable);
+    if (!isPathWithin(installDir, executablePath)) return false;
+  }
+  return true;
 }
 
 function managedNodeProbeEnvironment(executables: RuntimeExecutables): NodeJS.ProcessEnv {
@@ -142,7 +164,17 @@ export class ManagedRuntimeManager extends EventEmitter {
 
   async resolve(request: RuntimeRequest): Promise<ResolvedRuntime> {
     const config = runtimeConfig(this.options, request.runtime);
-    const requestedVersion = request.version ?? this.defaultVersion(request.runtime);
+    const rawVersion = request.version ?? this.defaultVersion(request.runtime);
+    const requestedVersion = normalizeRuntimeVersionRequest(rawVersion);
+    if (!requestedVersion) {
+      throw new RuntimeError(
+        `Invalid ${request.runtime} runtime version: ${rawVersion}`,
+        'RUNTIME_VERSION_MISMATCH',
+        request.runtime,
+        'validate_version',
+        false,
+      );
+    }
     if (!this.options.config.enabled || !config.enabled) {
       throw new RuntimeError(
         `${request.runtime} runtime is disabled`,
@@ -214,33 +246,34 @@ export class ManagedRuntimeManager extends EventEmitter {
   }
 
   async probeManaged(runtime: RuntimeKind, requestedVersion: string): Promise<ResolvedRuntime | null> {
-    const manifest = await readRuntimeManifest(this.options.stateDir, runtime);
-    if (!manifest || !versionSatisfies(manifest.version, requestedVersion)) return null;
-    try {
-      const toolsRoot = await realpath(runtimeToolsRoot(this.options.stateDir));
-      const installDir = await realpath(manifest.installDir);
-      if (installDir !== toolsRoot && !installDir.startsWith(`${toolsRoot}${process.platform === 'win32' ? '\\' : '/'}`)) {
-        return null;
+    const manifests = (await readRuntimeManifests(this.options.stateDir, runtime))
+      .filter((manifest) => versionSatisfies(manifest.version, requestedVersion));
+    for (const manifest of manifests) {
+      try {
+        const toolsRoot = await realpath(runtimeToolsRoot(this.options.stateDir));
+        const installDir = await realpath(manifest.installDir);
+        if (!isPathWithin(toolsRoot, installDir)) continue;
+        if (!await validateManagedExecutables(installDir, manifest.executables)) continue;
+        const result = await runRuntimeCommand({ command: manifest.executables.primary, args: ['--version'] });
+        const version = parseRuntimeVersion(`${result.stdout}\n${result.stderr}`);
+        if (!result.ok || !version || !versionSatisfies(version, requestedVersion)) continue;
+        if (runtime === 'node') {
+          const packageManagers = await probeNodePackageManagers(manifest.executables);
+          if (!packageManagers?.npm.ok || !packageManagers.npx.ok) continue;
+        }
+        return {
+          runtime,
+          version,
+          source: 'managed',
+          executable: manifest.executables.primary,
+          executables: manifest.executables,
+          installDir: manifest.installDir,
+        };
+      } catch {
+        // Try another retained version satisfying the same request.
       }
-      await access(manifest.executables.primary);
-      const result = await runRuntimeCommand({ command: manifest.executables.primary, args: ['--version'] });
-      const version = parseRuntimeVersion(`${result.stdout}\n${result.stderr}`);
-      if (!result.ok || !version || !versionSatisfies(version, requestedVersion)) return null;
-      if (runtime === 'node') {
-        const packageManagers = await probeNodePackageManagers(manifest.executables);
-        if (!packageManagers?.npm.ok || !packageManagers.npx.ok) return null;
-      }
-      return {
-        runtime,
-        version,
-        source: 'managed',
-        executable: manifest.executables.primary,
-        executables: manifest.executables,
-        installDir: manifest.installDir,
-      };
-    } catch {
-      return null;
     }
+    return null;
   }
 
   async install(runtime: RuntimeKind, version = this.defaultVersion(runtime), signal?: AbortSignal): Promise<ResolvedRuntime> {
@@ -254,14 +287,25 @@ export class ManagedRuntimeManager extends EventEmitter {
         false,
       );
     }
-    if (runtime === 'python') return await this.installPython(version, signal);
-    return await this.installDistribution(runtime, version, signal);
+    const installVersion = resolveInstallVersion(version, DEFAULT_RUNTIME_VERSIONS[runtime]);
+    if (!installVersion) {
+      throw new RuntimeError(
+        `Managed ${runtime} installation requires an exact version or a range containing catalog version ${DEFAULT_RUNTIME_VERSIONS[runtime]}`,
+        'RUNTIME_VERSION_MISMATCH',
+        runtime,
+        'validate_version',
+        false,
+      );
+    }
+    if (runtime === 'python') return await this.installPython(installVersion, signal);
+    return await this.installDistribution(runtime, installVersion, signal);
   }
 
   private async installDistribution(
     runtime: 'node' | 'uv',
     version: string,
     signal?: AbortSignal,
+    alreadyLocked = false,
   ): Promise<ResolvedRuntime> {
     const platform = detectRuntimePlatform();
     if (!platform) {
@@ -282,7 +326,7 @@ export class ManagedRuntimeManager extends EventEmitter {
     const installDir = runtimeVersionDir(this.options.stateDir, runtime, version);
     const lockPath = runtimeLockPath(this.options.stateDir, runtime, version);
 
-    return await withInstallLock(lockPath, { operationId, runtime, version }, async () => {
+    const performInstall = async (): Promise<ResolvedRuntime> => {
       const ready = await this.probeManaged(runtime, version);
       if (ready) return ready;
       this.progress({ operationId, runtime, phase: 'resolve', message: `Preparing ${runtime} ${version}` });
@@ -311,22 +355,28 @@ export class ManagedRuntimeManager extends EventEmitter {
       if (offline) {
         archivePath = offline.archivePath;
       } else {
+        let lastDownloadProgressAt = 0;
         const download = async () => await downloadVerifiedArchive({
           runtime,
           url: selectedDownload!.url,
-          targetPath: runtimeDownloadPath(this.options.stateDir, asset.archiveFile),
+          targetPath: runtimeDownloadPath(this.options.stateDir, `${version}-${asset.archiveFile}`),
           expectedSha256,
           timeoutMs: this.options.config.download.timeoutMs,
           proxy: this.options.config.download.proxy,
           signal,
-          onProgress: (downloadedBytes, totalBytes) => this.progress({
-            operationId,
-            runtime,
-            phase: 'download',
-            message: `Downloading ${runtime} ${version}`,
-            downloadedBytes,
-            totalBytes,
-          }),
+          onProgress: (downloadedBytes, totalBytes) => {
+            const now = Date.now();
+            if (downloadedBytes !== totalBytes && now - lastDownloadProgressAt < 100) return;
+            lastDownloadProgressAt = now;
+            this.progress({
+              operationId,
+              runtime,
+              phase: 'download',
+              message: `Downloading ${runtime} ${version}`,
+              downloadedBytes,
+              totalBytes,
+            });
+          },
         });
         try {
           archivePath = await download();
@@ -421,14 +471,26 @@ export class ManagedRuntimeManager extends EventEmitter {
         executables,
         installDir,
       };
-    });
+    };
+    return alreadyLocked
+      ? await performInstall()
+      : await withInstallLock(lockPath, { operationId, runtime, version }, performInstall, signal);
   }
 
-  private async installPython(version: string, signal?: AbortSignal): Promise<ResolvedRuntime> {
+  private async installPython(
+    version: string,
+    signal?: AbortSignal,
+    alreadyLocked = false,
+  ): Promise<ResolvedRuntime> {
     const operationId = randomUUID();
     const installDir = runtimeVersionDir(this.options.stateDir, 'python', version);
     const lockPath = runtimeLockPath(this.options.stateDir, 'python', version);
-    return await withInstallLock(lockPath, { operationId, runtime: 'python', version }, async () => {
+    const ready = await this.probeManaged('python', version);
+    if (ready) return ready;
+    const uv = this.options.config.download.bundleDir
+      ? null
+      : await this.resolve({ runtime: 'uv', allowProvision: true, signal });
+    const performInstall = async (): Promise<ResolvedRuntime> => {
       const ready = await this.probeManaged('python', version);
       if (ready) return ready;
       if (this.options.config.download.bundleDir) {
@@ -439,7 +501,7 @@ export class ManagedRuntimeManager extends EventEmitter {
           bundleDir: this.options.config.download.bundleDir,
         });
       }
-      const uv = await this.resolve({ runtime: 'uv', allowProvision: true, signal });
+      if (!uv) throw new Error('uv runtime was not resolved');
       await mkdir(dirname(installDir), { recursive: true });
       const uvEnv = this.uvEnvironment(installDir);
       this.progress({ operationId, runtime: 'python', phase: 'install', message: `Installing Python ${version}` });
@@ -535,7 +597,10 @@ export class ManagedRuntimeManager extends EventEmitter {
         executables,
         installDir,
       };
-    });
+    };
+    return alreadyLocked
+      ? await performInstall()
+      : await withInstallLock(lockPath, { operationId, runtime: 'python', version }, performInstall, signal);
   }
 
   private async installBundledPython(params: {
@@ -693,8 +758,9 @@ export class ManagedRuntimeManager extends EventEmitter {
     } catch {
       // Inspect persisted managed state below so corruption is distinct from absence.
     }
-    const manifest = await readRuntimeManifest(this.options.stateDir, runtime);
-    if (manifest) {
+    const matchingManifests = (await readRuntimeManifests(this.options.stateDir, runtime))
+      .filter((manifest) => versionSatisfies(manifest.version, requestedVersion));
+    if (matchingManifests.length > 0) {
       return {
         runtime,
         state: 'corrupted',
@@ -716,28 +782,57 @@ export class ManagedRuntimeManager extends EventEmitter {
     return await Promise.all((['node', 'uv', 'python'] as const).map((runtime) => this.status(runtime)));
   }
 
-  async repair(runtime: RuntimeKind): Promise<ResolvedRuntime> {
-    const version = this.defaultVersion(runtime);
+  async repair(runtime: RuntimeKind, requestedVersion = this.defaultVersion(runtime)): Promise<ResolvedRuntime> {
+    const config = runtimeConfig(this.options, runtime);
+    if (!this.options.config.enabled || !config.enabled) {
+      throw new RuntimeError(
+        `${runtime} runtime is disabled`,
+        'RUNTIME_DISABLED',
+        runtime,
+        'repair',
+        false,
+      );
+    }
+    const version = resolveInstallVersion(requestedVersion, DEFAULT_RUNTIME_VERSIONS[runtime]);
+    if (!version) {
+      throw new RuntimeError(
+        `Managed ${runtime} repair requires an exact version or a range containing catalog version ${DEFAULT_RUNTIME_VERSIONS[runtime]}`,
+        'RUNTIME_VERSION_MISMATCH',
+        runtime,
+        'validate_version',
+        false,
+      );
+    }
     const installDir = runtimeVersionDir(this.options.stateDir, runtime, version);
     const backupDir = `${installDir}.repair-backup-${randomUUID()}`;
-    let hasBackup = false;
-    try {
-      await rename(installDir, backupDir);
-      hasBackup = true;
-    } catch {
-      // Missing or incomplete targets can be installed directly.
-    }
-    try {
-      const resolved = await this.install(runtime, version);
-      if (hasBackup) await rm(backupDir, { recursive: true, force: true });
-      return resolved;
-    } catch (error) {
-      if (hasBackup) {
-        await rm(installDir, { recursive: true, force: true });
-        await rename(backupDir, installDir);
+    const lockPath = runtimeLockPath(this.options.stateDir, runtime, version);
+    return await withInstallLock(lockPath, {
+      operationId: randomUUID(),
+      runtime,
+      version,
+      action: 'repair',
+    }, async () => {
+      let hasBackup = false;
+      try {
+        await rename(installDir, backupDir);
+        hasBackup = true;
+      } catch {
+        // Missing or incomplete targets can be installed directly.
       }
-      throw error;
-    }
+      try {
+        const resolved = runtime === 'python'
+          ? await this.installPython(version, undefined, true)
+          : await this.installDistribution(runtime, version, undefined, true);
+        if (hasBackup) await rm(backupDir, { recursive: true, force: true });
+        return resolved;
+      } catch (error) {
+        if (hasBackup) {
+          await rm(installDir, { recursive: true, force: true });
+          await rename(backupDir, installDir);
+        }
+        throw error;
+      }
+    });
   }
 
   private progress(event: RuntimeProgressEvent): void {

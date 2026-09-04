@@ -30,6 +30,20 @@ export interface InstallContext {
   timeoutMs: number;
 }
 
+export function skillEnvironmentId(
+  skill: Pick<SkillEntry['skill'], 'name' | 'filePath'>,
+  installSpec: SkillInstallSpec,
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      skill: skill.name,
+      path: skill.filePath,
+      installSpec,
+    }))
+    .digest('hex')
+    .slice(0, 24);
+}
+
 /**
  * Check if a binary exists
  */
@@ -265,14 +279,7 @@ export async function installSkill(ctx: InstallContext): Promise<SkillInstallRes
     }
   }
   
-  const environmentId = createHash('sha256')
-    .update(JSON.stringify({
-      skill: ctx.skillEntry.skill.name,
-      path: ctx.skillEntry.skill.filePath,
-      installSpec,
-    }))
-    .digest('hex')
-    .slice(0, 24);
+  const environmentId = skillEnvironmentId(ctx.skillEntry.skill, installSpec);
   const environmentDir = join(
     ctx.stateDir,
     'tools',
