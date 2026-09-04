@@ -21,11 +21,14 @@ describe('runtime environment', () => {
     });
     try {
       const skillBin = join(stateDir, 'tools', 'environments', 'skills', 'demo', 'bin');
+      const unrelatedSkillBin = join(stateDir, 'tools', 'environments', 'skills', 'unrelated', 'bin');
       await mkdir(skillBin, { recursive: true });
+      await mkdir(unrelatedSkillBin, { recursive: true });
       const result = await buildRuntimeEnvironment({
         stateDir,
         config,
         runtimes: ['node'],
+        skillEnvironmentIds: ['demo'],
         baseEnv: {
           PATH: process.env.PATH ?? '',
           NODE_OPTIONS: '--require=/tmp/host-hook.js',
@@ -39,6 +42,7 @@ describe('runtime environment', () => {
       expect(result.env.PYTHONPATH).toBeUndefined();
       expect(result.env.COREPACK_HOME).toContain(join('tools', 'cache', 'corepack'));
       expect(result.env.PATH?.split(process.platform === 'win32' ? ';' : ':')).toContain(skillBin);
+      expect(result.env.PATH?.split(process.platform === 'win32' ? ';' : ':')).not.toContain(unrelatedSkillBin);
       expect(result.resolved).toEqual([
         expect.objectContaining({ runtime: 'node', source: 'system' }),
       ]);

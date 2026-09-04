@@ -19,6 +19,27 @@ export function versionSatisfies(actual: string, requested: string): boolean {
   return semver.satisfies(normalized, requested) || normalized === requested;
 }
 
+export function normalizeRuntimeVersionRequest(requested: string): string | null {
+  const value = requested.trim();
+  if (
+    !value
+    || value.length > 128
+    || value.includes('/')
+    || value.includes('\\')
+    || value.includes('\0')
+    || semver.validRange(value) === null
+  ) return null;
+  return value;
+}
+
+export function resolveInstallVersion(requested: string, catalogDefault: string): string | null {
+  const normalized = normalizeRuntimeVersionRequest(requested);
+  if (!normalized) return null;
+  const exact = semver.valid(normalized);
+  if (exact) return exact;
+  return versionSatisfies(catalogDefault, normalized) ? catalogDefault : null;
+}
+
 function commandNames(runtime: RuntimeKind): string[] {
   if (runtime === 'node') return process.platform === 'win32' ? ['node.exe', 'node'] : ['node'];
   if (runtime === 'uv') return process.platform === 'win32' ? ['uv.exe', 'uv'] : ['uv'];

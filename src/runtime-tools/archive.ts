@@ -8,6 +8,8 @@ import { RuntimeError } from './errors.js';
 import type { RuntimeKind } from './types.js';
 
 const MAX_ARCHIVE_ENTRIES = 50_000;
+const MAX_TAR_OUTPUT_BYTES = 16 * 1024 * 1024;
+const MAX_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024;
 
 function validateMemberPath(memberPath: string): void {
   const portablePath = memberPath.replaceAll('\\', '/');
@@ -23,7 +25,8 @@ function validateMemberPath(memberPath: string): void {
   }
 }
 
-async function validateExtractedTree(root: string, current = root): Promise<void> {
+async function validateExtractedTree(root: string, current = root): Promise<number> {
+  let totalBytes = 0;
   for (const entry of await readdir(current)) {
     const entryPath = join(current, entry);
     const details = await lstat(entryPath);
@@ -35,8 +38,12 @@ async function validateExtractedTree(root: string, current = root): Promise<void
       }
       continue;
     }
-    if (details.isDirectory()) await validateExtractedTree(root, entryPath);
+    totalBytes += details.isDirectory()
+      ? await validateExtractedTree(root, entryPath)
+      : details.size;
+    if (totalBytes > MAX_EXTRACTED_BYTES) throw new Error('Extracted archive exceeds size limit');
   }
+  return totalBytes;
 }
 
 async function runTar(args: string[]): Promise<string> {
@@ -44,8 +51,16 @@ async function runTar(args: string[]): Promise<string> {
     let stdout = '';
     let stderr = '';
     const child = spawn('tar', args, { shell: false, windowsHide: true });
-    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    const append = (current: string, chunk: Buffer) => {
+      if (Buffer.byteLength(current) + chunk.byteLength > MAX_TAR_OUTPUT_BYTES) {
+        child.kill('SIGKILL');
+        reject(new Error('tar output exceeds size limit'));
+        return current;
+      }
+      return current + chunk.toString();
+    };
+    child.stdout?.on('data', (chunk: Buffer) => { stdout = append(stdout, chunk); });
+    child.stderr?.on('data', (chunk: Buffer) => { stderr = append(stderr, chunk); });
     child.once('error', reject);
     child.once('close', (code) => {
       if (code === 0) resolvePromise(stdout);
@@ -58,6 +73,8 @@ async function extractZip(archivePath: string, destination: string): Promise<voi
   const zip = new AdmZip(archivePath);
   const entries = zip.getEntries();
   if (entries.length > MAX_ARCHIVE_ENTRIES) throw new Error('Archive contains too many entries');
+  const expandedBytes = entries.reduce((total, entry) => total + entry.header.size, 0);
+  if (expandedBytes > MAX_EXTRACTED_BYTES) throw new Error('Extracted archive exceeds size limit');
   for (const entry of entries) validateMemberPath(entry.entryName);
   zip.extractAllTo(destination, true, false);
 }

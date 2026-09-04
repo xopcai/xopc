@@ -17,11 +17,12 @@ describe('runtime repair rollback', () => {
       await mkdir(installDir, { recursive: true });
       await writeFile(join(installDir, 'sentinel'), 'old');
       const manager = new ManagedRuntimeManager({ stateDir, config });
-      manager.install = vi.fn(async () => {
+      const installDistribution = vi.fn(async () => {
         await mkdir(installDir, { recursive: true });
         await writeFile(join(installDir, 'sentinel'), 'new');
         throw new Error('probe failed');
       });
+      Object.assign(manager, { installDistribution });
 
       await expect(manager.repair('node')).rejects.toThrow('probe failed');
       await expect(readFile(join(installDir, 'sentinel'), 'utf8')).resolves.toBe('old');
