@@ -16,6 +16,7 @@ import {
   type SessionStatus as GatewaySessionStatus,
   type SessionsListResponse,
   type SessionCreateRequest,
+  type SessionContextSummary,
   modelPreferenceForAgent,
   createDefaultNewSessionPreferences,
 } from '@xopcai/gateway-contract';
@@ -195,12 +196,22 @@ export async function fetchSessionMessagePage(
   return parseSessionMessagePage(await res.json());
 }
 
+export async function fetchSessionContextSummary(key: string): Promise<SessionContextSummary> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(key)}/context-summary`);
+  if (!res.ok) throwApiError(res, await parseErrorBody(res));
+  const body = await res.json() as { summary?: SessionContextSummary };
+  if (!body.summary) throw new Error('Session context is unavailable');
+  return body.summary;
+}
+
 export async function createSession(
   input: Omit<SessionCreateRequest, 'channel'> = {},
 ): Promise<string> {
   const body: SessionCreateRequest = { channel: 'webchat' };
   if (input.agentId?.trim()) body.agentId = input.agentId.trim().toLowerCase();
   if (input.projectId?.trim()) body.projectId = input.projectId.trim();
+  if (input.executionMode) body.executionMode = input.executionMode;
+  if (input.baseRef?.trim()) body.baseRef = input.baseRef.trim();
   if (input.temporary === true) body.temporary = true;
   const gatewayId = useGatewayStore.getState().activeGatewayId ?? '';
   const preferences = usePreferencesStore.getState()

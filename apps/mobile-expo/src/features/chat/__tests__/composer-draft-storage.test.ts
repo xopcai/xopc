@@ -31,6 +31,7 @@ describe('composer-draft-storage', () => {
     expect(readComposerDraftSnapshot('session-a')).toEqual({
       text: 'hello mobile',
       cursorPos: 5,
+      contextRefs: [],
     });
   });
 
@@ -52,7 +53,19 @@ describe('composer-draft-storage', () => {
   it('clamps cursor position into the text range', () => {
     writeComposerDraftSnapshot('x', { text: 'abc', cursorPos: 99 });
 
-    expect(readComposerDraftSnapshot('x')).toEqual({ text: 'abc', cursorPos: 3 });
+    expect(readComposerDraftSnapshot('x')).toEqual({ text: 'abc', cursorPos: 3, contextRefs: [] });
+  });
+
+  it('persists note-only draft context with a frozen version', () => {
+    writeComposerDraftSnapshot('note', {
+      text: '',
+      cursorPos: 0,
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '42', title: 'Plan' }],
+    });
+
+    expect(readComposerDraftSnapshot('note')?.contextRefs).toEqual([
+      { kind: 'note', sourceId: 'note-1', expectedVersion: '42', title: 'Plan' },
+    ]);
   });
 
   it('clearComposerDraftSnapshot removes persisted draft', () => {

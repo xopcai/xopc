@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
 import { fetchFileChildren, fetchFileHostPath, fetchFileResource, resolveFileResource, uploadFileResource } from '../files';
+import { fetchHostDirectories } from '../host-fs';
 
 vi.mock('../../api/client', () => ({
   apiFetch: vi.fn(),
@@ -41,5 +42,21 @@ describe('managed file requests', () => {
     fetch.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'File already exists' } }), { status: 409 }));
     await expect(uploadFileResource({ spaceId: 'space', directory: 'docs', uri: 'file:///tmp/note.txt', name: 'note.txt' }))
       .rejects.toThrow('File already exists');
+  });
+
+  it('lists only host directories for the working-folder picker', async () => {
+    fetch.mockResolvedValue(new Response(JSON.stringify({ payload: {
+      currentPath: '/work',
+      parentPath: '/',
+      entries: [
+        { name: 'repo', absolutePath: '/work/repo', isDirectory: true },
+        { name: 'readme.md', absolutePath: '/work/readme.md', isDirectory: false },
+      ],
+    } })));
+
+    await expect(fetchHostDirectories('/work')).resolves.toMatchObject({
+      entries: [{ name: 'repo', absolutePath: '/work/repo', isDirectory: true }],
+    });
+    expect(fetch).toHaveBeenCalledWith('/api/host/fs/list?path=%2Fwork');
   });
 });

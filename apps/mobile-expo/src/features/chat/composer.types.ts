@@ -12,6 +12,17 @@ export type WireAttachment = {
   durationSeconds?: number;
 };
 
+export type ComposerContextRef = {
+  kind: 'note';
+  sourceId: string;
+  expectedVersion: string;
+  title: string;
+};
+
+export type WireContextRef = Pick<ComposerContextRef, 'kind' | 'sourceId' | 'expectedVersion'>;
+
+export const MAX_COMPOSER_CONTEXT_REFS = 5;
+
 /** Pending attachment in the mobile composer before send. */
 export type ComposerAttachment = {
   id: string;

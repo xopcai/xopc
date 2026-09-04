@@ -13,6 +13,7 @@ const ProjectSchema = z.object({
   description: z.string().optional(),
   status: z.string().optional(),
   defaultAgentId: z.string().optional(),
+  executionMode: z.enum(['local_checkout', 'managed_worktree']).optional(),
   updatedAt: z.number().optional(),
   operating: ProjectOperatingSummarySchema,
 });
@@ -64,6 +65,7 @@ const ProjectDetailsSchema = z.object({
   defaultAgentId: z.string().optional(),
   workspaceRoot: z.string().optional(),
   effectiveWorkspaceRoot: z.string().optional(),
+  executionMode: z.enum(['local_checkout', 'managed_worktree']).optional(),
   pinnedAt: z.number().optional(),
   milestones: z.array(ProjectMilestoneSchema).default([]),
   recentUpdates: z.array(ProjectUpdateSchema).default([]),
@@ -148,6 +150,17 @@ export async function fetchProject(projectId: string): Promise<ProjectDetails> {
   const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`);
   if (!response.ok) throw await readError(response);
   return ProjectDetailsSchema.parse((await response.json() as { project?: unknown }).project);
+}
+
+export async function fetchProjectEnvironmentOptions(projectId: string) {
+  const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/environment-options`);
+  if (!response.ok) throw await readError(response);
+  return z.object({
+    options: z.object({
+      localAvailable: z.boolean(),
+      worktreeUnavailableReason: z.enum(['workspace_unavailable', 'git_commit_required', 'uncommitted_changes']).optional(),
+    }),
+  }).parse(await response.json()).options;
 }
 
 export async function fetchProjectActivity(projectId: string, limit = 8): Promise<ProjectActivityEvent[]> {
