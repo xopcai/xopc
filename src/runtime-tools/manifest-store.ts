@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import {
-  runtimeManifestPath,
   runtimeVersionManifestDir,
   runtimeVersionManifestPath,
 } from './paths.js';
@@ -50,11 +49,7 @@ export async function readRuntimeManifests(
       if (manifest) manifests.push(manifest);
     }
   } catch {
-    // Older installations only have the legacy per-runtime manifest below.
-  }
-  const legacy = await readManifestFile(runtimeManifestPath(stateDir, runtime), runtime);
-  if (legacy && !manifests.some((manifest) => manifest.version === legacy.version)) {
-    manifests.push(legacy);
+    return [];
   }
   return manifests.sort((a, b) => b.verifiedAt.localeCompare(a.verifiedAt));
 }
@@ -76,7 +71,4 @@ export async function removeRuntimeManifest(
   version: string,
 ): Promise<void> {
   await rm(runtimeVersionManifestPath(stateDir, runtime, version), { force: true });
-  const legacyPath = runtimeManifestPath(stateDir, runtime);
-  const legacy = await readManifestFile(legacyPath, runtime);
-  if (legacy?.version === version) await rm(legacyPath, { force: true });
 }
