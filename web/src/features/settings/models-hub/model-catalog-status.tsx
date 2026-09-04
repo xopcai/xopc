@@ -1,11 +1,14 @@
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { capabilitySettingsPath } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
@@ -41,6 +44,35 @@ interface CapabilityReadinessPayload {
     selectionSource: string;
     primary?: { provider: string; model: string };
   }>;
+}
+
+function capabilityAction(capability: CapabilityId, zh: boolean) {
+  switch (capability) {
+    case 'vision':
+      return {
+        href: `${capabilitySettingsPath('models')}?add=1`,
+        guidance: zh ? '接入支持图片理解的模型服务' : 'Connect a model service that supports vision',
+        action: zh ? '去接入模型' : 'Connect model',
+      };
+    case 'image-generation':
+      return {
+        href: capabilitySettingsPath('image'),
+        guidance: zh ? '选择图片模型并配置所需凭据' : 'Choose an image model and configure its credentials',
+        action: zh ? '去配置图片生成' : 'Configure image generation',
+      };
+    case 'stt':
+      return {
+        href: capabilitySettingsPath('voice'),
+        guidance: zh ? '选择语音识别服务，或安装本地语音模型' : 'Choose a speech-to-text service or install a local voice model',
+        action: zh ? '去配置语音识别' : 'Configure speech-to-text',
+      };
+    case 'tts':
+      return {
+        href: capabilitySettingsPath('voice'),
+        guidance: zh ? '选择语音合成服务并完成凭据配置' : 'Choose a text-to-speech service and configure its credentials',
+        action: zh ? '去配置语音合成' : 'Configure text-to-speech',
+      };
+  }
 }
 
 async function fetchCatalog(): Promise<CatalogPayload> {
@@ -96,6 +128,9 @@ export function ModelCatalogStatus() {
   const failure = actionError ?? (error instanceof Error
     ? error.message
     : data?.sync.lastError ?? Object.values(data?.sync.sourceErrors ?? {})[0]);
+  const capabilityNeedsAttention = Object.values(readiness?.capabilities ?? {}).some(
+    (plan) => plan.status === 'degraded' || plan.status === 'unavailable',
+  );
 
   const refresh = async () => {
     setRefreshing(true);
@@ -116,7 +151,7 @@ export function ModelCatalogStatus() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            {failure || unavailable.length > 0 ? (
+            {failure || unavailable.length > 0 || capabilityNeedsAttention ? (
               <AlertTriangle className="size-4 text-amber-500" aria-hidden />
             ) : (
               <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
@@ -146,8 +181,10 @@ export function ModelCatalogStatus() {
                 ? (zh ? '图片生成' : 'Image generation')
                 : capability.toUpperCase();
             const automatic = plan.selectionSource !== 'explicit-config';
-            return (
-              <div key={capability} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+            const needsAttention = plan.status === 'degraded' || plan.status === 'unavailable';
+            const action = capabilityAction(capability, zh);
+            const content = (
+              <>
                 <div className="flex items-start justify-between gap-2">
                   <span className="min-w-0 text-xs font-medium text-fg">{label}</span>
                   <span className={plan.status === 'ready'
@@ -169,6 +206,38 @@ export function ModelCatalogStatus() {
                     ? `${automatic ? (zh ? '自动' : 'Auto') : (zh ? '显式' : 'Explicit')} · ${plan.primary.provider}/${plan.primary.model}`
                     : (zh ? '无可用实现' : 'No available implementation')}
                 </p>
+                {needsAttention ? (
+                  <div className="mt-2 border-t border-edge-subtle pt-2">
+                    <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
+                      {plan.status === 'degraded'
+                        ? (zh ? `当前配置不可用，正在使用备用方案。${action.guidance}` : `The current configuration is unavailable, so a fallback is in use. ${action.guidance}.`)
+                        : action.guidance}
+                    </p>
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent">
+                      {action.action}
+                      <ArrowRight className="size-3.5" aria-hidden />
+                    </span>
+                  </div>
+                ) : null}
+              </>
+            );
+
+            return needsAttention ? (
+              <Link
+                key={capability}
+                to={action.href}
+                aria-label={`${label}：${action.action}`}
+                className={cn(
+                  'rounded-xl border border-amber-400/40 bg-amber-500/5 px-3 py-2',
+                  'transition-colors hover:border-amber-400/70 hover:bg-amber-500/10',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                )}
+              >
+                {content}
+              </Link>
+            ) : (
+              <div key={capability} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+                {content}
               </div>
             );
           })}
