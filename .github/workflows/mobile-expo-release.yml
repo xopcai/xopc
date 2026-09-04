@@ -166,18 +166,27 @@ jobs:
           name: xopc-android-production
           path: release-assets
 
+      - name: Create Android checksum
+        working-directory: release-assets
+        run: sha256sum xopc-android.apk > xopc-android.apk.sha256
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/xopc-android.apk
+          files: |
+            release-assets/xopc-android.apk
+            release-assets/xopc-android.apk.sha256
           generate_release_notes: true
           fail_on_unmatched_files: true
           body: |
             ## Android install
 
-            Download `xopc-android.apk` and install it on an Android device.
+            Download `xopc-android.apk` from https://xopc.ai and install it on an Android device.
 
-            The signed Android App Bundle is retained as a private workflow artifact for Google Play submission.
+            Android may ask the user to allow the browser to install this APK. Future versions can be installed over the existing app without uninstalling it. Use `xopc-android.apk.sha256` to verify the download.
+
+            - Package: `ai.xopc.xopc`
+            - Signing certificate SHA-256: `5F:74:9E:91:95:46:5B:63:7D:4C:64:D9:2F:87:1B:7C:D0:B5:C5:E9:2D:20:5E:00:86:F1:81:AF:A8:0D:74:95`
 
             ## Build details
 
