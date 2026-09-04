@@ -1,6 +1,6 @@
 # iOS App Store release readiness
 
-Updated: 2026-09-04. This is a submission checklist, not an assertion that the app has passed review.
+Updated: 2026-09-04. Version 1.0 has been submitted, but this document does not assert that the app has passed review.
 
 ## Changes prepared in this release
 
@@ -141,7 +141,8 @@ Checks completed on the 2026-09-03 working copy:
 - Live Universal Links hosting and Apple's CDN were verified after deployment; physical-device automatic opening remains pending.
 - App Privacy was published with Device ID / App Functionality / linked to the user / not used for tracking. Store metadata, screenshots, reviewer access and free pricing are configured. Version 1.0 was added to an App Review draft and passed App Store Connect's required-field validation.
 - App availability is configured for 174 current storefronts. China mainland is explicitly unavailable, so its App ICP filing does not block this submission; future territories remain enabled.
-- TestFlight physical-device checks and the final **Submit for Review** action remain outstanding. App ICP filing is deferred until China mainland distribution is planned.
+- App Store version 1.0 using build `0.0.26 (1)` was submitted on 2026-09-04 at 13:56 Asia/Shanghai. App Store Connect submission `18e7913c-f7f8-498b-92ac-057341c5925f` is **Waiting for Review**.
+- TestFlight physical-device checks remain outstanding. App ICP filing is deferred until China mainland distribution is planned.
 
 ```bash
 pnpm run mobile:lint
