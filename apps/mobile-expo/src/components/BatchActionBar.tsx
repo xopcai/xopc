@@ -1,10 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Animated } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useReducedMotion } from '../motion';
+import { motion, useReducedMotion } from '../motion';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, useTheme } from '../theme';
 
 export type BatchActionBarItem = {
@@ -25,42 +30,26 @@ export function BatchActionBar({ items }: BatchActionBarProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
-  const progress = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
+  const progress = useSharedValue(reducedMotion ? 1 : 0);
   const barBg = colors.surface.panel;
   const defaultIcon = colors.text.secondary;
   const defaultLabel = colors.text.tertiary;
 
   useEffect(() => {
     if (reducedMotion) {
-      progress.setValue(1);
+      progress.value = 1;
       return;
     }
-    Animated.spring(progress, {
-      toValue: 1,
-      damping: 22,
-      stiffness: 260,
-      mass: 0.8,
-      useNativeDriver: true,
-    }).start();
+    progress.value = withSpring(1, motion.spring.settle);
   }, [progress, reducedMotion]);
 
-  const animatedStyle = {
-    opacity: progress,
-    transform: [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [16, 0],
-        }),
-      },
-      {
-        scale: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.98, 1],
-        }),
-      },
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: reducedMotion ? [] : [
+      { translateY: interpolate(progress.value, [0, 1], [14, 0]) },
+      { scale: interpolate(progress.value, [0, 1], [0.985, 1]) },
     ],
-  };
+  }));
 
   return (
     <Animated.View style={[styles.wrap, animatedStyle, { paddingBottom: floatingBottomPadding(insets.bottom) }]}>
