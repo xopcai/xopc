@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import useSWR from 'swr';
 
 import { cn } from '@/lib/cn';
+import { htmlLangAttribute } from '@/lib/locale-default';
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 
@@ -47,7 +48,14 @@ export type NoteHistoryPanelProps = {
 export function NoteHistoryPanel({ noteId, activeTimestamp, onSelect, onClose, onRestored }: NoteHistoryPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
-  const timeLabels: NoteTimeLabels = n;
+  const timeLabels: NoteTimeLabels = {
+    justNow: n.justNow,
+    minutesAgo: n.minutesAgo,
+    today: n.today,
+    yesterday: n.yesterday,
+    daysAgo: n.daysAgo,
+    locale: htmlLangAttribute(language),
+  };
 
   const { data: entries } = useSWR(
     noteId ? ['note-history', noteId] : null,
