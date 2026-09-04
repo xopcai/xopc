@@ -23,7 +23,7 @@ import { agentDisplayName } from '../ai/agent-presentation';
 import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
 import { useKeyboardVisible } from '../../hooks/use-keyboard-visible';
-import { useMessages, t } from '../../i18n/messages';
+import { useMessages } from '../../i18n/messages';
 import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId } from '../../query/agents';
 import { fetchChatModels, resolveEffectiveModelId, sessionModelMutationOptions, fetchSessionAgentConfig } from '../../query/models';
 import { queryKeys } from '../../query/keys';
@@ -39,7 +39,7 @@ import {
   findPrecedingUserMessage,
   mergeOptimisticUserMessages,
 } from './composer-send-helpers';
-import type { ComposerAttachment, WireAttachment } from './composer.types';
+import type { ComposerContextRef, WireAttachment } from './composer.types';
 import { coerceReasoningLevel, type Message } from './messages.types';
 import {
   parseSessionMessages,
@@ -47,8 +47,6 @@ import {
   mergeStreamingAssistantIntoMessages,
 } from './session-message-parser';
 import { takeNewChatSessionKey } from './session-prefetch';
-import { consumeNoteChatPrefill } from './note-chat-prefill-storage';
-import { MAX_CHAT_ATTACHMENTS } from './chat-limits';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
@@ -63,14 +61,12 @@ export type UseChatPageOptions = {
 
 export function useChatPage(options: UseChatPageOptions = {}) {
   const { embedded = false, onBack } = options;
-  const { k: rawKey, msg: rawMsg, taskId: rawTaskId } = useLocalSearchParams<{
+  const { k: rawKey, taskId: rawTaskId } = useLocalSearchParams<{
     k?: string;
-    msg?: string;
     taskId?: string;
   }>();
   const savingAssistantNoteRef = useRef(false);
   const urlSessionKey = typeof rawKey === 'string' ? rawKey : Array.isArray(rawKey) ? rawKey[0] : '';
-  const urlPrefillMessage = typeof rawMsg === 'string' ? rawMsg : Array.isArray(rawMsg) ? rawMsg[0] : '';
   const routeTaskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
   const router = useRouter();
   useDismissOnHardwareBack(router, { enabled: !embedded });
@@ -286,7 +282,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // ── Derived UI state ─────────────────────────────────────
   const [composerSuggestion, setComposerSuggestion] = useState<string | undefined>(undefined);
-  const [composerPrefillAttachments, setComposerPrefillAttachments] = useState<ComposerAttachment[] | undefined>();
 
   const welcomeModel = useMemo(
     () => buildMobileWelcomeModel({
@@ -331,15 +326,15 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [chatSession, modelMutation.isPending, sessionKey]);
 
   const handleComposerSend = useCallback(
-    async (text: string, attachments?: WireAttachment[]) => {
+    async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => {
       if (modelMutation.isPending) return false;
       if (bootstrap.bootstrapError && !sessionKey) return false;
       const trimmed = text.trim();
-      const hasContent = Boolean(trimmed) || Boolean(attachments?.length);
+      const hasContent = Boolean(trimmed) || Boolean(attachments?.length) || Boolean(contextRefs?.length);
       if (!hasContent) return false;
 
       if (!sessionKey || bootstrap.creatingInitialSession) return false;
-      return chatSession.send(text, attachments);
+      return chatSession.send(text, attachments, contextRefs);
     },
     [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, sessionKey, modelMutation.isPending],
   );
@@ -452,7 +447,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     });
   }, [currentSessionAgentId, defaultAgentId, embedded, router, chatSession, bootstrap, newSessionPreferences, sessionContext.projectId]);
 
-  const handleRemoveProject = useCallback(() => {
+  const handleContextChange = useCallback((projectId: string | null, executionMode?: 'local_checkout' | 'managed_worktree') => {
     chatSession.activeSessionKeyRef.current = '';
     chatSession.cancelRecovery();
     chatSession.clearAllState();
@@ -461,7 +456,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     void (async () => {
       const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
       const key = await takeNewChatSessionKey(
-        { agentId, projectId: null },
+        { agentId, projectId, executionMode },
         preference
           ? {
               model: preference.modelRef,
@@ -471,7 +466,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       );
       chatSession.activeSessionKeyRef.current = key;
       bootstrap.setPendingBootstrapKey(key);
-      if (activeGatewayId) rememberLastChatScope(activeGatewayId, null);
+      if (activeGatewayId) rememberLastChatScope(activeGatewayId, projectId);
       if (!embedded) openChat(router, key, { replace: true });
     })().catch((err) => {
       chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
@@ -489,27 +484,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const trimmed = text.trim();
     if (trimmed) setComposerSuggestion(trimmed);
   }, []);
-
-  // Consume prefill message from URL params (e.g. from Notes → Chat)
-  useEffect(() => {
-    if (urlPrefillMessage) {
-      setComposerSuggestion(urlPrefillMessage);
-    }
-  }, [urlPrefillMessage]);
-
-  useEffect(() => {
-    if (!sessionKey) return;
-    const snap = consumeNoteChatPrefill(sessionKey);
-    if (!snap) return;
-    if (snap.attachments.length) {
-      setComposerPrefillAttachments(snap.attachments);
-    }
-    if (snap.droppedCount) {
-      chatSession.setSnackMsg(
-        t(m.chat.maxAttachmentsTruncated, { dropped: snap.droppedCount, max: MAX_CHAT_ATTACHMENTS }),
-      );
-    }
-  }, [sessionKey, chatSession, m.chat.maxAttachmentsTruncated]);
 
   const { registerFinalizeHandler } = useWorkspaceNavigation();
 
@@ -579,7 +553,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       if (!userMessage) return;
       const payload = buildUserResendPayload(userMessage);
       if (!payload) return;
-      void chatSession.send(payload.text, payload.attachments);
+      void chatSession.send(payload.text, payload.attachments, payload.contextRefs);
     },
     [chatSession, displayMessages, sessionKey],
   );
@@ -625,8 +599,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     composerDisabled,
     composerSuggestion,
     setComposerSuggestion,
-    composerPrefillAttachments,
-    setComposerPrefillAttachments,
 
     // Bootstrap
     bootstrap,
@@ -648,7 +620,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
-    handleRemoveProject,
+    handleContextChange,
     handleStarterSend,
     handleStarterPrefill,
     handleComposerSend,

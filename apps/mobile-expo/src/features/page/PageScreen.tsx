@@ -224,10 +224,6 @@ export function PageScreen() {
     dismissMore: () => setMoreVisible(false),
     messages: {
       actionFailed: pm.actionFailed,
-      editorSendToChatPrefix: pm.editorSendToChatPrefix,
-      noteChatImagePlaceholder: pm.noteChatImagePlaceholder,
-      noteChatTitleLabel: pm.noteChatTitleLabel,
-      noteChatVoiceTranscript: pm.noteChatVoiceTranscript,
       pin: pm.pin,
       saved: pm.saved,
       shareNotesCopied: pm.shareNotesCopied,

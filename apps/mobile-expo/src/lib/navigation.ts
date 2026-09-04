@@ -10,7 +10,7 @@ export { chatRoute, noteDetailRoute } from './navigation-routes';
 export function openChat(
   router: ImperativeRouter,
   key: string,
-  options?: { msg?: string; taskId?: string; replace?: boolean },
+  options?: { taskId?: string; replace?: boolean },
 ): void {
   const href = chatRoute(key, options);
   if (options?.replace) router.replace(href);

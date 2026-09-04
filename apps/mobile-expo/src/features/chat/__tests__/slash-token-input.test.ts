@@ -34,4 +34,9 @@ describe('findPillTokenEndingAtCursor', () => {
     const text = '/skill:search';
     expect(findPillTokenEndingAtCursor(text, 3)).toBeNull();
   });
+
+  it('removes quoted workspace file references atomically', () => {
+    const token = '@file:"docs/my plan.md"';
+    expect(findPillTokenEndingAtCursor(`${token} `, token.length)).toEqual({ start: 0, end: token.length });
+  });
 });

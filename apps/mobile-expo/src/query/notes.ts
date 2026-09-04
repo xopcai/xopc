@@ -330,6 +330,20 @@ export async function fetchNote(id: string): Promise<Note> {
   return result.note;
 }
 
+export async function openNoteConversation(id: string): Promise<{
+  sessionKey: string;
+  reused: boolean;
+  sourceBinding: { kind: 'note'; sourceId: string; version: string; attachedAt: number };
+}> {
+  const res = await apiFetch(`/api/notes/${encodeURIComponent(id)}/chat`, { method: 'POST' });
+  if (!res.ok) throw await readError(res);
+  return res.json() as Promise<{
+    sessionKey: string;
+    reused: boolean;
+    sourceBinding: { kind: 'note'; sourceId: string; version: string; attachedAt: number };
+  }>;
+}
+
 export async function deleteNote(id: string): Promise<void> {
   const res = await apiFetch(`/api/notes/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) throw await readError(res);

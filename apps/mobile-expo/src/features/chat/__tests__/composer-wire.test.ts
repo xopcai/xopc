@@ -99,6 +99,7 @@ describe('canSendComposerDraft', () => {
     expect(canSendComposerDraft('hi', 0)).toBe(true);
     expect(canSendComposerDraft('  ', 1)).toBe(true);
     expect(canSendComposerDraft('', 1)).toBe(true);
+    expect(canSendComposerDraft('', 0, 1)).toBe(true);
   });
 });
 
@@ -168,7 +169,19 @@ describe('assistant regenerate helpers', () => {
   });
 
   it('buildUserResendPayload returns text for user messages', () => {
-    expect(buildUserResendPayload(messages[2])).toEqual({ text: 'again', attachments: undefined });
+    expect(buildUserResendPayload(messages[2])).toEqual({ text: 'again', attachments: undefined, contextRefs: undefined });
+  });
+
+  it('buildUserResendPayload preserves frozen note references', () => {
+    expect(buildUserResendPayload({
+      role: 'user',
+      content: [{ type: 'text', text: 'review' }],
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', version: '42', title: 'Plan' }],
+    })).toEqual({
+      text: 'review',
+      attachments: undefined,
+      contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: '42', title: 'Plan' }],
+    });
   });
 
   it('isLastAssistantMessage only matches the final assistant row', () => {

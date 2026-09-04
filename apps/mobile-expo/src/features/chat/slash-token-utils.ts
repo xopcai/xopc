@@ -1,5 +1,5 @@
-/** Regex to match `/skill:name` tokens (name is non-whitespace). */
-const SLASH_TOKEN_RE = /\/skill:\S+/g;
+/** Whole tokens that should be removed atomically on mobile. */
+const COMPOSER_TOKEN_RE = /\/skill:\S+|@file:(?:"(?:[^"\\]|\\.)*"|\S+)/g;
 
 export interface SlashTokenSegment {
   text: string;
@@ -13,7 +13,7 @@ export function parseSlashTokens(text: string): SlashTokenSegment[] {
   const segments: SlashTokenSegment[] = [];
   let lastIndex = 0;
 
-  const regex = new RegExp(SLASH_TOKEN_RE.source, 'g');
+  const regex = new RegExp(COMPOSER_TOKEN_RE.source, 'g');
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
@@ -54,7 +54,7 @@ export function findPillTokenEndingAtCursor(
   text: string,
   cursor: number,
 ): { start: number; end: number } | null {
-  const regex = new RegExp(SLASH_TOKEN_RE.source, 'g');
+  const regex = new RegExp(COMPOSER_TOKEN_RE.source, 'g');
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
