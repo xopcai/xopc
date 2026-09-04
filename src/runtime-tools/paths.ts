@@ -9,10 +9,6 @@ export function runtimeVersionDir(stateDir: string, runtime: RuntimeKind, versio
   return containedPath(join(runtimeToolsRoot(stateDir), runtime, 'versions'), version, 'runtime version');
 }
 
-export function runtimeManifestPath(stateDir: string, runtime: RuntimeKind): string {
-  return join(runtimeToolsRoot(stateDir), 'manifests', `${runtime}.json`);
-}
-
 export function runtimeVersionManifestDir(stateDir: string, runtime: RuntimeKind): string {
   return join(runtimeToolsRoot(stateDir), 'manifests', runtime);
 }
