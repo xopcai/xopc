@@ -319,6 +319,18 @@ describe('useRealtimeVoice', () => {
     expect(voice.responsePhase).toBe('speaking');
   });
 
+  it('stops capture and playback on memory invalidation without exposing protocol text or restarting', async () => {
+    await startResponse();
+    act(() => onEvent({ type: 'session.error', payload: { code: 'CONTEXT_CHANGED', recoverable: false, message: 'Internal context revision changed' } }));
+    expect(voice.error).toBe(messages('en').chat.voiceContextChanged);
+    expect(voice.phase).toBe('error');
+    expect(track.stop).toHaveBeenCalled();
+    expect(cancelCapture).toHaveBeenCalled();
+    expect(mocks.playerClose).toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledWith('surface_closed');
+    expect(mocks.connect).toHaveBeenCalledOnce();
+  });
+
   it.each([true, false])('honors bargeIn=%s for ducking and waits for authoritative cancellation', async (enabled) => {
     await startResponse();
     bargeIn = enabled;

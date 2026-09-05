@@ -5,7 +5,7 @@ import {
   recordInteractionPerformanceEvent,
   recordUsageEvent,
 } from '../../product/usage-metrics';
-import { claimAudioPlayback, releaseAudioPlayback } from './audio-playback-coordinator';
+import { claimAudioPlayback, releaseAudioPlayback, isAudioCaptureActive } from './audio-playback-coordinator';
 import { generateSpeechChunk } from './read-aloud-api';
 import { ReadAloudCache } from './read-aloud-cache';
 import {
@@ -126,6 +126,7 @@ function removePlayer(): void {
 }
 
 function ensurePlayer(runGeneration: number): Promise<AudioPlayer> {
+  if (isAudioCaptureActive()) return Promise.reject(new Error('Microphone is in use'));
   if (player) return playerSetup ?? Promise.resolve(player);
 
   const audioMode = setAudioModeAsync({
@@ -367,6 +368,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   },
 
   resume: () => {
+    if (isAudioCaptureActive()) return;
     if (!activeInput) return;
     if (player && player.currentTime > 0) {
       claimAudioPlayback(PLAYBACK_OWNER, () => get().pause());
