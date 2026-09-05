@@ -33,6 +33,7 @@ import {
 import { getLocalVoiceRuntimeClient } from '../../../voice/local/runtime-client.js';
 import { getAudioDecoderStatus } from '../../../voice/audio/normalize.js';
 import { resolveStreamingStt, resolveStreamingTts, VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
+import { resolveOmniRoute } from '../../../voice/realtime/omniRoute.js';
 import { speakStream } from '../../../voice/tts/speak-core.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -184,12 +185,15 @@ async function refineTranscript(
 export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
-  authenticated.get('/api/voice/realtime/status', (c) => {
+  authenticated.get('/api/voice/realtime/status', async (c) => {
     const config = service.currentConfig as Config;
     const stt = resolveStreamingStt(config);
     const tts = resolveStreamingTts(config);
+    const omni = await resolveOmniRoute(config).catch(() => null);
     return c.json({ ok: true, payload: {
       enabled: config.voice?.realtime?.enabled === true,
+      defaultEngine: config.voice?.realtime?.defaultEngine ?? 'agent',
+      omni: omni?.route ?? null,
       stt: stt?.route ?? null,
       tts: tts ? {
         ...tts.route,
@@ -236,12 +240,16 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
   });
 
-  authenticated.post('/api/voice/realtime/sessions', strictRateLimitMiddleware, async (c) => {
+  for (const action of ['preflight', 'sessions'] as const) authenticated.post(`/api/voice/realtime/${action}`, strictRateLimitMiddleware, async (c) => {
     const parsed = createVoiceSessionRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice session request' } }, 400);
     }
     try {
+      if (action === 'preflight') {
+        await service.voiceRealtime.preflight(parsed.data);
+        return c.json({ ok: true });
+      }
       const principal = getGatewayPrincipal(c);
       const create = () => service.voiceRealtime.createSession(parsed.data, principal.principalId);
       const payload = parsed.data.sessionKey ? await withModelConfigLock(parsed.data.sessionKey, create) : await create();

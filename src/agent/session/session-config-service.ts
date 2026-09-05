@@ -110,8 +110,10 @@ export class SessionConfigService {
         });
         this.opts.modelManager.restoreSessionModel(sessionKey, modelRef, updated.fixedModel === true);
         try {
-          this.opts.agentManager.setModelForSession(sessionKey, modelRef);
-          this.opts.agentManager.setThinkingLevel(sessionKey, thinkingLevel as ThinkingLevel);
+          if (this.opts.agentManager.getAgent(sessionKey)) {
+            this.opts.agentManager.setModelForSession(sessionKey, modelRef);
+            this.opts.agentManager.setThinkingLevel(sessionKey, thinkingLevel as ThinkingLevel);
+          }
         } catch (err) {
           this.opts.agentManager.removeAgent(sessionKey);
           log.warn({ err, sessionKey, modelRef }, 'Saved model configuration; runtime will reload before the next turn');

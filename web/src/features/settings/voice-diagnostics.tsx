@@ -1,6 +1,8 @@
 import { Loader2, Mic, Play, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 
+import { VoiceCallContext } from '@/features/voice/realtime/voice-call-context';
+import { voiceInputConstraints } from '@/stores/voice-preferences-store';
 import { Button } from '@/components/ui/button';
 import { PcmFrameCapture, PcmStreamEncoder } from '@/features/chat/composer/pcm-wav-recorder';
 import { PcmPlayer } from '@/features/voice/realtime/pcm-player';
@@ -20,6 +22,7 @@ export function VoiceDiagnostics({ v, canListen, canSpeak, disabled, onVerified 
   onVerified?: (result: { input: boolean; output: boolean }) => void;
 }) {
   const s = v.setup;
+  const callActive = useContext(VoiceCallContext)?.active ?? false;
   const [phase, setPhase] = useState<Phase>('idle');
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState('');
@@ -94,7 +97,7 @@ export function VoiceDiagnostics({ v, canListen, canSpeak, disabled, onVerified 
         if (permission.status === 'denied') throw new Error(s.microphoneDenied);
       }
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: voiceInputConstraints(),
       });
       if (controller.signal.aborted) { stopInput(); return; }
       client = await VoiceSessionClient.connect({
@@ -136,17 +139,17 @@ export function VoiceDiagnostics({ v, canListen, canSpeak, disabled, onVerified 
   return (
     <div className="space-y-3 border-t border-edge pt-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="primary" disabled={disabled || !canListen || busy} onClick={() => void run(true)}>
+        <Button type="button" variant="primary" disabled={callActive || disabled || !canListen || busy} onClick={() => void run(true)}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Mic className="size-4" />}
           {canSpeak ? s.test : s.testInput}
         </Button>
-        <Button type="button" variant="secondary" disabled={disabled || !canSpeak || busy} onClick={() => void run(false)}>
+        <Button type="button" variant="secondary" disabled={callActive || disabled || !canSpeak || busy} onClick={() => void run(false)}>
           <Play className="size-4" />{v.tts.test.play}
         </Button>
         {busy ? <Button type="button" variant="ghost" onClick={() => { stop(); transition('idle'); }}><Square className="size-4" />{v.tts.test.stop}</Button> : null}
       </div>
       <div role="status" aria-live="polite" className="space-y-2 text-xs text-fg-muted">
-        {phase === 'idle' ? <p>{disabled ? s.saveBeforeTest : s.microphoneHint}</p> : null}
+        {phase === 'idle' ? <p>{callActive ? v.experience.endCallBeforeTest : disabled ? s.saveBeforeTest : s.microphoneHint}</p> : null}
         {phase === 'connecting' ? <p>{s.connecting}</p> : null}
         {phase === 'listening' ? <p>{s.speakNow}</p> : null}
         {transcript ? <p className="rounded-lg bg-surface-base p-3 text-sm text-fg">{transcript}</p> : null}

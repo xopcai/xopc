@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { normalizeVoiceSettings } from '../voice-config-api';
-import { configureRealtimeService } from '../voice-setup';
+import { configureRealtimeService } from '../voice-service-setup';
 
 describe('voice service setup', () => {
   it('configures Qwen without replacing readout or provider credentials', () => {
@@ -20,4 +20,14 @@ describe('voice service setup', () => {
     expect(next.voice.realtime.tts).toEqual({ provider: 'xopc-cloud' });
     expect(next.tts).toBe(form.tts);
   });
+  it('retains explicit settings when re-enabling the same service', () => {
+    const form = configureRealtimeService(normalizeVoiceSettings({}), 'alibaba');
+    form.voice.realtime.tts!.voice = 'Serena';
+    form.voice.realtime.omni!.apiKey = 'explicit-test-key';
+    const next = configureRealtimeService(form, 'alibaba');
+    expect(next.voice.realtime.tts!.voice).toBe('Serena');
+    expect(next.voice.realtime.omni!.apiKey).toBe('explicit-test-key');
+    expect(configureRealtimeService(form, 'xopc-cloud').voice.realtime.omni!.apiKey).toBeUndefined();
+  });
+
 });

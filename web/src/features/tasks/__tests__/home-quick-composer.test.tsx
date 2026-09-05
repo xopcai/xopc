@@ -4,13 +4,13 @@ import { act, createRef, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { UseComposerVoiceInputReturn } from '@/features/chat/composer/use-composer-voice-input';
+import type { UseRealtimeVoiceReturn } from '@/features/voice/realtime/use-realtime-voice';
 import { HomeQuickComposer, type HomeQuickComposerProps } from '@/features/tasks/home-quick-composer';
 import { messages } from '@/i18n/messages';
 
 function createVoice(
-  overrides: Partial<UseComposerVoiceInputReturn> = {},
-): UseComposerVoiceInputReturn {
+  overrides: Partial<UseRealtimeVoiceReturn> = {},
+): UseRealtimeVoiceReturn {
   return {
     phase: 'idle',
     voiceActive: false,
@@ -19,8 +19,11 @@ function createVoice(
     partialTranscript: '',
     finalTranscript: '',
     responseText: '',
+    activities: [], clarification: null, dismissClarification: vi.fn(),
     responsePhase: 'idle',
     muted: false,
+    error: null, failureKind: null,
+    endedReason: null,
     mode: 'dictation',
     startVoiceInput: vi.fn(async () => {}),
     startVoiceConversation: vi.fn(async () => {}),
@@ -89,7 +92,7 @@ describe('HomeQuickComposer', () => {
 
     expect(container.querySelector('textarea')).not.toBeNull();
     expect(container.querySelector('button[aria-label="Attach files"]')).not.toBeNull();
-    expect(container.querySelector('button[aria-label^="Voice input"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label^="Dictate"]')).not.toBeNull();
     expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -107,7 +110,7 @@ describe('HomeQuickComposer', () => {
     expect(editor?.classList.contains('hidden')).toBe(true);
     expect(container.textContent).toContain(messages('en').chat.voiceRecordingStatus);
     expect(container.textContent).toContain('0:08');
-    expect(container.querySelector('button[aria-label^="Voice input"]')).toBeNull();
+    expect(container.querySelector('button[aria-label^="Dictate"]')).toBeNull();
     expect((container.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
 
     act(() => {

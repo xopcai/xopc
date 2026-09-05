@@ -112,6 +112,7 @@ export interface ProcessDirectStreamingInput {
   signal?: AbortSignal;
   runId?: string;
   sourceContexts?: AgentSourceContext[];
+  presentation?: 'voice';
 }
 
 export type ProcessDirectStreamEvent = { type: string; [key: string]: unknown };
@@ -496,6 +497,7 @@ export async function* runProcessDirectStreaming(
                 userMessage,
                 abortSignal: signal,
                 sourceContexts,
+                presentation: input.presentation,
                 runId: input.runId,
                 onEvent: (embeddedEvent) => {
                   const event = { ...embeddedEvent };
@@ -539,7 +541,7 @@ export async function* runProcessDirectStreaming(
           'Coalesced stream progress events because the consumer fell behind',
         );
       }
-      if (!userAborted && !streamOverflowed && channel === 'webchat' && !explicitTtsEmitted) {
+      if (!userAborted && !streamOverflowed && channel === 'webchat' && !explicitTtsEmitted && input.presentation !== 'voice') {
         try {
           const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
           if (ttsAudioEvent) {

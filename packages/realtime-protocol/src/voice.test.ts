@@ -10,8 +10,8 @@ import {
 } from './voice.js';
 
 describe('voice realtime protocol', () => {
-  it('requires an explicit conversation engine and rejects it for dictation', () => {
-    expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test' }).success).toBe(false);
+  it('accepts the configured conversation engine and rejects overrides for dictation', () => {
+    expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test' }).success).toBe(true);
     for (const engine of ['agent', 'omni']) {
       expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test', engine }).success).toBe(true);
       expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'dictation', engine }).success).toBe(false);

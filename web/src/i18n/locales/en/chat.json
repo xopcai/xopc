@@ -522,10 +522,50 @@
         "tagline": "Act on its current state, blockers, and acceptance criteria.",
         "contextLabel": "Task: {{taskTitle}}",
         "categories": [
-          { "id": "task-next-step", "icon": "target", "title": "Continue next step", "description": "Move directly toward the goal", "scenarios": [{ "prompt": "Review the current state of task {{taskTitle}} and execute the smallest verifiable next step." }] },
-          { "id": "task-clarify", "icon": "search", "title": "Fill key gaps", "description": "Constraints, dependencies, decisions", "scenarios": [{ "prompt": "Check what input, dependency, or decision task {{taskTitle}} still needs, and ask only the most important question." }] },
-          { "id": "task-recover", "icon": "review", "title": "Diagnose and recover", "description": "Failures, blockers, retries", "scenarios": [{ "prompt": "Inspect failures and blockers for task {{taskTitle}}, then propose recovery and verification steps." }] },
-          { "id": "task-verify", "icon": "review", "title": "Verify the result", "description": "Acceptance criteria and evidence", "scenarios": [{ "prompt": "Check task {{taskTitle}} against its acceptance criteria and list evidence and remaining gaps." }] }
+          {
+            "id": "task-next-step",
+            "icon": "target",
+            "title": "Continue next step",
+            "description": "Move directly toward the goal",
+            "scenarios": [
+              {
+                "prompt": "Review the current state of task {{taskTitle}} and execute the smallest verifiable next step."
+              }
+            ]
+          },
+          {
+            "id": "task-clarify",
+            "icon": "search",
+            "title": "Fill key gaps",
+            "description": "Constraints, dependencies, decisions",
+            "scenarios": [
+              {
+                "prompt": "Check what input, dependency, or decision task {{taskTitle}} still needs, and ask only the most important question."
+              }
+            ]
+          },
+          {
+            "id": "task-recover",
+            "icon": "review",
+            "title": "Diagnose and recover",
+            "description": "Failures, blockers, retries",
+            "scenarios": [
+              {
+                "prompt": "Inspect failures and blockers for task {{taskTitle}}, then propose recovery and verification steps."
+              }
+            ]
+          },
+          {
+            "id": "task-verify",
+            "icon": "review",
+            "title": "Verify the result",
+            "description": "Acceptance criteria and evidence",
+            "scenarios": [
+              {
+                "prompt": "Check task {{taskTitle}} against its acceptance criteria and list evidence and remaining gaps."
+              }
+            ]
+          }
         ]
       },
       "file": {
@@ -533,9 +573,39 @@
         "tagline": "Understand it first, then edit, convert, or extract information.",
         "contextLabel": "File: {{fileName}}",
         "categories": [
-          { "id": "file-understand", "icon": "documents", "title": "Understand file", "description": "Summary, structure, highlights", "scenarios": [{ "prompt": "Read {{fileName}} and summarize its structure, core content, and important issues." }] },
-          { "id": "file-edit", "icon": "content", "title": "Edit or convert", "description": "Rewrite, organize, transform", "scenarios": [{ "prompt": "Review {{fileName}} and propose concrete editing or formatting improvements." }] },
-          { "id": "file-extract", "icon": "task", "title": "Extract actions", "description": "Tasks, data, conclusions", "scenarios": [{ "prompt": "Extract tasks, key data, and explicit conclusions from {{fileName}}." }] }
+          {
+            "id": "file-understand",
+            "icon": "documents",
+            "title": "Understand file",
+            "description": "Summary, structure, highlights",
+            "scenarios": [
+              {
+                "prompt": "Read {{fileName}} and summarize its structure, core content, and important issues."
+              }
+            ]
+          },
+          {
+            "id": "file-edit",
+            "icon": "content",
+            "title": "Edit or convert",
+            "description": "Rewrite, organize, transform",
+            "scenarios": [
+              {
+                "prompt": "Review {{fileName}} and propose concrete editing or formatting improvements."
+              }
+            ]
+          },
+          {
+            "id": "file-extract",
+            "icon": "task",
+            "title": "Extract actions",
+            "description": "Tasks, data, conclusions",
+            "scenarios": [
+              {
+                "prompt": "Extract tasks, key data, and explicit conclusions from {{fileName}}."
+              }
+            ]
+          }
         ]
       },
       "workflow": {
@@ -543,9 +613,39 @@
         "tagline": "Review outputs, handle failures, or continue the next step.",
         "contextLabel": "Workflow: {{workflowName}}",
         "categories": [
-          { "id": "workflow-next-step", "icon": "target", "title": "Continue next step", "description": "Build on existing outputs", "scenarios": [{ "prompt": "Review existing outputs from workflow {{workflowName}} and continue the best next step." }] },
-          { "id": "workflow-review", "icon": "review", "title": "Review run results", "description": "Outputs, evidence, gaps", "scenarios": [{ "prompt": "Summarize the results, evidence, and unfinished work from workflow {{workflowName}}." }] },
-          { "id": "workflow-recover", "icon": "search", "title": "Handle run failure", "description": "Locate, recover, retry", "scenarios": [{ "prompt": "Inspect errors from workflow {{workflowName}} and propose a recovery and retry plan." }] }
+          {
+            "id": "workflow-next-step",
+            "icon": "target",
+            "title": "Continue next step",
+            "description": "Build on existing outputs",
+            "scenarios": [
+              {
+                "prompt": "Review existing outputs from workflow {{workflowName}} and continue the best next step."
+              }
+            ]
+          },
+          {
+            "id": "workflow-review",
+            "icon": "review",
+            "title": "Review run results",
+            "description": "Outputs, evidence, gaps",
+            "scenarios": [
+              {
+                "prompt": "Summarize the results, evidence, and unfinished work from workflow {{workflowName}}."
+              }
+            ]
+          },
+          {
+            "id": "workflow-recover",
+            "icon": "search",
+            "title": "Handle run failure",
+            "description": "Locate, recover, retry",
+            "scenarios": [
+              {
+                "prompt": "Inspect errors from workflow {{workflowName}} and propose a recovery and retry plan."
+              }
+            ]
+          }
         ]
       }
     },
@@ -838,18 +938,16 @@
     "dropFiles": "Drop files here to attach",
     "voiceRecording": "Record voice",
     "voiceRecordingStop": "Stop recording",
-    "voiceInput": "Voice input",
-    "voiceConversation": "Start voice conversation",
+    "voiceInput": "Dictate",
+    "voiceConversation": "Voice call",
     "voiceAssistantMode": "Voice assistant",
     "voiceNaturalMode": "Natural chat · no tools",
     "voiceRecordingStatus": "Recording",
-    "voiceInputCancel": "Cancel recording",
-    "voiceInputConfirm": "Transcribe to text",
+    "voiceInputCancel": "Cancel",
+    "voiceInputConfirm": "Finish",
     "voiceThinking": "Thinking…",
     "voiceSpeaking": "Speaking…",
-    "voiceResponseInterrupt": "Interrupt response",
-    "voiceMute": "Mute voice output",
-    "voiceUnmute": "Unmute voice output",
+    "voiceResponseInterrupt": "Stop response",
     "voiceResponseFailed": "Voice playback failed; the text response is still available.",
     "voiceTranscribing": "Transcribing…",
     "voicePreparing": "Preparing local speech recognition…",
@@ -1241,6 +1339,35 @@
       "recentFiles": "Recent",
       "recentBadge": "Recent",
       "shiftHint": "Shift+Enter or Shift+click: add another @ mention."
-    }
+    },
+    "callFailed": "Call unavailable",
+    "callDisconnected": "Call disconnected",
+    "callReady": "Ready to talk?",
+    "callConnecting": "Connecting…",
+    "callMicMuted": "Microphone off",
+    "callListening": "Listening",
+    "callMute": "Mute microphone",
+    "callUnmute": "Unmute microphone",
+    "callEnd": "End call",
+    "callMinimize": "Minimize call",
+    "callSessionHint": "Voice and text belong to this conversation",
+    "callContinuity": "Continue this conversation whenever you call",
+    "callSettings": "Voice settings",
+    "callYou": "You",
+    "callViewChat": "View conversation",
+    "callCaptions": "Captions",
+    "callCaptureBusy": "Another voice input or call is using the microphone. End it first.",
+    "callReconnect": "Reconnect",
+    "callSetupHint": "Reconnect to try again. If the call still cannot start, check your voice service in Settings.",
+    "callMore": "More call options",
+    "voiceRefinementFailed": "Text cleanup is unavailable. Your original transcript was kept.",
+    "callWorking": "Working",
+    "callWorkDone": "Completed",
+    "callWorkFailed": "Failed",
+    "callApproval": "Review this action",
+    "callApprove": "Approve",
+    "callDeny": "Deny",
+    "callWaiting": "Waiting for your input",
+    "callErrorDetails": "Error details"
   }
 }

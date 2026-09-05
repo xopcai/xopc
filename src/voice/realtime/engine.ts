@@ -8,8 +8,9 @@ export type VoiceEventSink = <T extends VoiceServerEvent['type']>(
 export interface VoiceEngine {
   start(): Promise<void>;
   appendAudio(bytes: Uint8Array): void;
+  setInputMuted(muted: boolean): void | Promise<void>;
   commit(): Promise<void>;
   cancel(responseId: string, reason: 'client_cancelled' | 'barge_in'): boolean;
   acknowledge(responseId: string, playedBytes: number): void;
-  close(): void;
+  close(): void | Promise<void>;
 }

@@ -11,6 +11,19 @@ describe('SpeakableSegmenter', () => {
     expect(segmenter.flush()).toEqual(['我很好']);
   });
 
+  it('does not speak fenced code or split Markdown links across chunks', () => {
+    const segmenter = new SpeakableSegmenter();
+    const chunks = ['See **this** [guide](', 'https://example.com/a', ')!\n```ts\n', 'const secret = 1;\n', '```\nDone!'];
+    const spoken = [...chunks.flatMap((chunk) => segmenter.push(chunk)), ...segmenter.flush()].join(' ');
+    expect(spoken).toBe('See this guide! Done!');
+  });
+
+  it('keeps raw URLs and table rows out of audio', () => {
+    const segmenter = new SpeakableSegmenter();
+    const spoken = [...segmenter.push('Details: https://example.com/path \n| A | B |\n| 1 | 2 |\nDone!'), ...segmenter.flush()].join(' ');
+    expect(spoken).toBe('Details: Done!');
+  });
+
   it('bounds text without sentence punctuation', () => {
     const segmenter = new SpeakableSegmenter(10);
 

@@ -67,4 +67,14 @@ describe('openSqliteHydratingSessionManager', () => {
     expect(ctx.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     expect(loadLlmMessagesForSession(SESSION_KEY)).toHaveLength(2);
   });
+  it('restores voice speaker roles in the actual embedded Agent context', () => {
+    const created = ensureSessionRecord(SESSION_KEY, CWD);
+    for (const [role, content] of [['user', 'Remember my meeting'], ['assistant', 'We can prepare tomorrow']]) {
+      appendTranscriptEntry(SESSION_KEY, { role: 'custom', customType: 'voice_omni_transcript', content, details: { role }, timestamp: 1 });
+    }
+    const sm = openSqliteHydratingSessionManager({ sessionKey: SESSION_KEY, sessionId: created.sessionId!, cwd: CWD });
+    expect(sm.buildSessionContext().messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(sm.buildSessionContext().messages).toEqual(loadLlmMessagesForSession(SESSION_KEY));
+  });
+
 });

@@ -100,7 +100,7 @@ export async function openDashScopeStreamingTts(
   const onAbort = () => {
     const error = request.signal.reason instanceof Error
       ? request.signal.reason
-      : new Error('Realtime TTS aborted');
+      : new DOMException('Realtime TTS aborted', 'AbortError');
     fail(error, false);
     if (socket.readyState === WebSocket.OPEN) socket.close(1000, 'Aborted');
     else if (socket.readyState === WebSocket.CONNECTING) socket.terminate();
@@ -108,6 +108,7 @@ export async function openDashScopeStreamingTts(
   request.signal.addEventListener('abort', onAbort, { once: true });
 
   socket.on('message', (data, isBinary) => {
+    if (streamClosed || request.signal.aborted) return;
     if (isBinary) return;
     let message: DashScopeTtsMessage;
     try {
