@@ -120,12 +120,18 @@ export function HomeQuickComposer({
             phase={voice.phase}
             elapsedLabel={voice.elapsedLabel}
             audioLevel={voice.audioLevel}
-            readiness={voice.readiness}
-            hasRetainedRecording={voice.hasRetainedRecording}
+            partialTranscript={voice.partialTranscript}
+            finalTranscript={voice.finalTranscript}
+            responseText={voice.responseText}
+            responsePhase={voice.responsePhase}
+            muted={voice.muted}
+            mode={voice.mode}
             disabled={attachmentBusy}
             chat={chat}
             onCancel={voice.cancelVoiceInput}
             onConfirm={voice.confirmVoiceInput}
+            onInterruptResponse={voice.interruptResponse}
+            onToggleMute={voice.toggleMute}
             onRetry={voice.retryVoiceInput}
           />
         ) : null}
@@ -191,7 +197,6 @@ export function HomeQuickComposer({
           {!voice.voiceActive ? (
             <ComposerVoiceInputButton
               disabled={attachmentBusy}
-              readiness={voice.readiness}
               chat={chat}
               onStart={voice.startVoiceInput}
             />
