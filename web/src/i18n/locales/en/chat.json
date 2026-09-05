@@ -840,6 +840,8 @@
     "voiceRecordingStop": "Stop recording",
     "voiceInput": "Voice input",
     "voiceConversation": "Start voice conversation",
+    "voiceAssistantMode": "Voice assistant",
+    "voiceNaturalMode": "Natural chat · no tools",
     "voiceRecordingStatus": "Recording",
     "voiceInputCancel": "Cancel recording",
     "voiceInputConfirm": "Transcribe to text",

@@ -5,9 +5,19 @@ import {
   maskTtsConfigForWeb,
   mergeSttConfigPatch,
   mergeTtsConfigPatch,
+  maskRealtimeVoiceConfigForWeb,
+  mergeRealtimeVoiceConfigPatch,
 } from '../safe-voice-config.js';
 
 describe('safe-voice-config', () => {
+  it('masks Omni secrets and preserves masked saves without carrying keys across connection changes', () => {
+    const previous = { realtime: { omni: { provider: 'alibaba', apiKey: 'sk-secret', model: 'qwen3-omni-flash-realtime' } } };
+    const masked = maskRealtimeVoiceConfigForWeb(previous);
+    expect(JSON.stringify(masked)).not.toContain('sk-secret');
+    expect(mergeRealtimeVoiceConfigPatch(previous, masked)).toEqual(previous);
+    expect(mergeRealtimeVoiceConfigPatch(previous, { realtime: { omni: { provider: 'xopc-cloud' } } })).toEqual({ realtime: { omni: { provider: 'xopc-cloud' } } });
+    expect(mergeRealtimeVoiceConfigPatch(previous, { realtime: { omni: { apiKey: '' } } })).toEqual({ realtime: { omni: { apiKey: undefined } } });
+  });
   it('masks STT api keys for web GET', () => {
     const masked = maskSttConfigForWeb({
       enabled: true,

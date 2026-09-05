@@ -30,6 +30,16 @@ describe('voice-config-api', () => {
     expect(state.voice.languageMode).toBe('auto');
   });
 
+  it('preserves independent Agent output and Omni configuration when saving voice settings', async () => {
+    fetchJson.mockResolvedValue({ ok: true });
+    const omni = { provider: 'alibaba', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', apiKey: '••••••', instructions: 'Chat without tools' };
+    const tts = { provider: 'alibaba', voice: 'Ethan' };
+    const state = normalizeVoiceSettings({ voice: { realtime: { enabled: true, tts, omni } } });
+    await patchVoiceSettings(state);
+    expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.omni).toEqual(omni);
+    expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body)).voice.realtime.tts).toEqual(tts);
+  });
+
   it('round-trips explicit refinement in the safe config patch', async () => {
     fetchJson.mockResolvedValue({ ok: true });
     const state = normalizeVoiceSettings({

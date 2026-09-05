@@ -1,7 +1,8 @@
 import { z } from 'zod';
+export { encodeVoiceAudioFrame, decodeVoiceAudioFrame } from './voice-audio.js';
 
-export const VOICE_REALTIME_PROTOCOL_VERSION = 1 as const;
-export const VOICE_REALTIME_WS_PATH = '/api/voice/realtime/v1/ws' as const;
+export const VOICE_REALTIME_PROTOCOL_VERSION = 2 as const;
+export const VOICE_REALTIME_WS_PATH = '/api/voice/realtime/v2/ws' as const;
 export const VOICE_REALTIME_MAX_BINARY_FRAME_BYTES = 64 * 1024;
 export const VOICE_REALTIME_START_TIMEOUT_MS = 10_000;
 export const VOICE_REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
@@ -10,6 +11,7 @@ const idSchema = z.uuid();
 const timestampSchema = z.number().int().nonnegative();
 
 export const voicePurposeSchema = z.enum(['dictation', 'conversation']);
+export const voiceEngineSchema = z.enum(['agent', 'omni']);
 export const voiceInputModeSchema = z.literal('server_vad');
 export const voiceLanguageSchema = z.enum(['zh', 'en']);
 export const voicePcmFormatSchema = z.strictObject({
@@ -24,18 +26,23 @@ export const voiceProviderRouteSchema = z.strictObject({
   managed: z.boolean(),
 });
 
-export const voiceRouteSchema = z.strictObject({
-  stt: voiceProviderRouteSchema,
-  tts: voiceProviderRouteSchema.optional(),
-});
+export const voiceRouteSchema = z.discriminatedUnion('engine', [
+  z.strictObject({ engine: z.literal('dictation'), stt: voiceProviderRouteSchema }),
+  z.strictObject({ engine: z.literal('agent'), stt: voiceProviderRouteSchema, tts: voiceProviderRouteSchema }),
+  z.strictObject({ engine: z.literal('omni'), omni: voiceProviderRouteSchema }),
+]);
 
 export const createVoiceSessionRequestSchema = z.strictObject({
   purpose: voicePurposeSchema,
+  engine: voiceEngineSchema.optional(),
   sessionKey: z.string().min(1).max(512).optional(),
   language: voiceLanguageSchema.optional(),
 }).superRefine((value, context) => {
   if (value.purpose === 'conversation' && !value.sessionKey) {
     context.addIssue({ code: 'custom', path: ['sessionKey'], message: 'sessionKey is required for conversation' });
+  }
+  if ((value.purpose === 'conversation') !== (value.engine !== undefined)) {
+    context.addIssue({ code: 'custom', path: ['engine'], message: 'engine is required only for conversation' });
   }
 });
 

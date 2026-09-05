@@ -1,256 +1,133 @@
 # Realtime voice technical design
 
-> Status: Implemented
->
-> Date: 2026-09-04
->
-> Product contract: [Realtime voice PRD](./realtime-voice-prd.md)
->
-> Wire contract: [Realtime voice WebSocket protocol](./realtime-voice-websocket-protocol.md)
+Updated: 2026-09-05. [PRD](./realtime-voice-prd.md) · [WebSocket protocol](./realtime-voice-websocket-protocol.md)
 
-## 1. Architecture
-
-Realtime voice is an ephemeral gateway runtime around existing provider and Agent boundaries:
+## Ownership
 
 ```text
-Browser PCM16
-  <-> VoiceRealtimeRuntime
-      -> MediaUnderstandingProvider.openAudioStream()
-      -> GatewayAgentRunner.runAgent()
-      -> SpeechProviderPlugin.synthesizeStream()
-  <-> Browser PCM player
+Browser / Electron
+  capture + resampler + PCM player + voice session client
+    ↕ protocol v2
+VoiceRealtimeRuntime
+  tickets, authentication, bounds, session reservation, lifetime
+    ├─ AgentVoiceEngine → existing streaming STT → existing Agent → streaming TTS
+    └─ OmniVoiceEngine  → Qwen native realtime audio
+                            direct DashScope OR XOPC Platform
 ```
 
-There is one browser protocol and one session runtime. Provider wire formats do not leak to the browser. Voice turns do not create a second transcript path.
+The engine interface has only start, appendAudio, commit, cancel, acknowledge and close. The runtime does not perform business turns. Engine implementations do not allocate browser tickets or own gateway authentication. No generic provider framework or runtime fallback chain is added.
 
-The general gateway realtime socket remains unchanged because it intentionally handles JSON topic events rather than binary media.
-
-## 2. Source layout
-
-| Area | Source |
+| Component | Implementation |
 |---|---|
-| Shared wire schemas | `packages/realtime-protocol/src/voice.ts` |
-| Session/ticket/WebSocket runtime | `src/voice/realtime/runtime.ts` |
-| Phrase segmentation | `src/voice/realtime/speakable-segmenter.ts` |
-| DashScope streaming STT | `src/voice/dashscope/streaming-stt-session.ts` |
-| DashScope streaming TTS | `src/voice/dashscope/streaming-tts-stream.ts` |
-| Provider integration | `src/voice/stt/providers/{alibaba,xopc-cloud}-transcription.ts` |
-| Provider integration | `src/voice/tts/providers/{alibaba,xopc-cloud}-speech.ts` |
-| HTTP session route | `src/gateway/hono/routes/voice.ts` |
-| Browser client/player | `web/src/features/voice/realtime/` |
-| Capture/resampling | `web/src/features/chat/composer/pcm-wav-recorder.ts` |
-| Composer lifecycle | `web/src/features/chat/composer/use-composer-voice-input.ts` |
+| Wire schemas and binary codec | `packages/realtime-protocol/src/voice{,-audio}.ts` |
+| Session lifecycle | `src/voice/realtime/runtime.ts` |
+| Existing Agent pipeline | `src/voice/realtime/agentEngine.ts` |
+| Native pipeline / route resolution | `src/voice/realtime/{omniEngine,omniRoute}.ts` |
+| Output flow control | `src/voice/realtime/audio-playback-window.ts` |
+| Capture / playback | Existing PCM capture, resampler and `PcmPlayer` |
+| Platform relay and usage | `apps/model-gateway/src/omni-{relay,repository}.ts` in xopc-platform |
 
-There are no separate ticket store, session manager, Agent bridge, provider registry, audio transport abstraction, or compatibility adapter. Those would duplicate existing ownership without changing runtime behavior.
+## Preflight and configuration
 
-## 3. Configuration and preflight
+Creation clones config, validates the selected engine, checks Chat existence/busy state, freezes credentials/routes and issues a one-use ticket. The web input acceptance path and call creation share the existing per-session configuration lock.
 
-Provider credentials remain in `tools.media.audio` and `messages.tts`. Conversation output can select a voice independently of ordinary message readout:
+Agent resolves the existing STT/TTS providers and requires actual streaming PCM support. Omni resolves only `voice.realtime.omni`; it never resolves STT/TTS or invokes the Agent.
 
-```ts
-interface RealtimeVoiceConfig {
-  enabled: boolean;
-  silenceDurationMs: number;
-  idleTimeoutMs: number;
-  maxDictationMs: number;
-  maxConversationMs: number;
-  bargeIn: boolean;
-  tts?: { provider: 'alibaba' | 'xopc-cloud'; voice?: string };
+```json
+{
+  "voice": {
+    "realtime": {
+      "enabled": true,
+      "omni": {
+        "provider": "alibaba",
+        "model": "qwen3-omni-flash-realtime",
+        "voice": "Cherry",
+        "instructions": "You are a friendly voice companion. You cannot execute tools."
+      }
+    }
+  }
 }
 ```
 
-Session creation:
+This is a config fragment. Direct credentials use `apiKey` or the existing DashScope auth resolver / `DASHSCOPE_API_KEY`. Managed mode uses `provider: "xopc-cloud"` and existing XOPC OAuth. The optional `baseUrl` is a full realtime WSS URL for DashScope, or the platform router base for managed mode.
 
-1. clones the current config;
-2. verifies realtime voice is enabled;
-3. resolves an existing streaming STT provider;
-4. for conversation, verifies the Chat exists, is idle, has no reserved voice connection, and has native PCM streaming TTS;
-5. freezes safe provider routes and full server-only config in a 60-second ticket.
+Only certified DashScope hosts and the native realtime path are allowed in direct mode. The platform also derives the upstream realtime path from its administrator-owned DashScope connection. No client-supplied upstream URL is accepted by the relay.
 
-Configuration reload affects only later tickets.
+## Agent engine
 
-When `voice.realtime.tts` is set, message readout enablement, model, and voice do not control conversation output. Direct Alibaba uses its fixed realtime model and defaults to Cherry. Its credential is resolved from the input provider slice, then `DASHSCOPE_API_KEY`, then the speech provider slice. Credentials never travel to the browser to be copied between fields. Managed output selects an available streaming PCM catalog model and its default voice. An omitted conversation output selection inherits the existing message speech route; Edge cannot satisfy native streaming output.
+The existing streaming STT adapter produces revisions and final utterances. Final utterance IDs are deduplicated. One serialized conversation tail runs normal webchat Agent turns; barge-in cancels the current response before the next turn.
 
-The settings page uses the same route resolvers as session creation. `GET /api/voice/realtime/status` is configuration preflight, not live verification. `POST /api/voice/realtime/preview` plays a fixed sample through `speakStream` with fallback disabled, a 20-second deadline, and a 960 KB PCM limit. The browser buffers only this short diagnostic sample. The actual conversation transport remains streaming WebSocket PCM. The combined test uses a dictation session, not an Agent run; resources close on cancel, config change, tab departure, and unmount.
+Agent text is shown immediately and segmented deterministically at punctuation or a 120-character boundary for streaming TTS. TTS cancellation shares the response AbortSignal. Normal Agent persistence remains unchanged; interrupted replies retain the existing bounded audit entry.
 
-### 3.1 Provider selection
+Dictation uses the STT portion only; its commit ends input, and final text is returned to the composer.
 
-- `alibaba` uses a locally configured DashScope key.
-- `xopc-cloud` resolves the existing XOPC access token and model catalog.
-- STT uses `qwen-audio-3.0-asr-flash-streaming`.
-- Direct TTS uses `qwen3-tts-flash-realtime`.
-- Managed TTS requires a catalog model whose metadata declares streaming PCM output.
+## Native engine
 
-Only `server_vad` is negotiated. The selected Qwen Audio 3.0 run-task protocol does not expose true manual turn detection, so no manual config or dormant codec exists.
+1. Open one Qwen realtime WebSocket.
+2. On `session.created`, configure text/audio modalities, PCM formats, a supported voice, instructions, `gummy-realtime-v1` input transcription and server VAD.
+3. Wait for `session.updated` before declaring local readiness.
+4. Append base64 PCM chunks to Qwen; the browser protocol itself remains binary.
+5. Map speech boundaries, final input transcription, response creation, audio transcript deltas, audio deltas and completion into local events.
+6. Decode output, apply playback-window backpressure and tag each binary frame with response ID.
+7. On interruption, abort pending audio, clear the active response and reject late data. Cancel the upstream generation for an explicit user cancellation only while it is still generating.
+8. On disconnect/error, terminate the upstream and release waits.
 
-## 4. Provider contracts
+The certified Qwen endpoint can return `invalid_request_error / Conversation has none active response` when completion races with cancellation. Only that exact error after a locally issued cancellation is ignored. Other errors remain fatal.
 
-### 4.1 Streaming STT
+Server VAD controls automatic responses. There is no manual native commit, semantic-VAD setting, tool registration or session resumption.
 
-The existing `MediaUnderstandingProvider` has two optional streaming members:
+## Playback and cancellation
 
-```ts
-interface MediaUnderstandingProvider {
-  streamingAudio?: {
-    inputSampleRates: readonly number[];
-    turnDetection: readonly 'server_vad'[];
-    defaultModel: string;
-    models: readonly string[];
-  };
-  openAudioStream?(request: StreamingSttOpenRequest): Promise<StreamingSttSession>;
-}
-```
+Connection, input capture and response playback are distinct lifetimes. A provider generation can finish while local audio remains queued. The active response is retained until playback acknowledges it, allowing interruption of tail audio.
 
-`StreamingSttSession` has only `appendAudio`, `commit`, `close`, and `abort`. Normalized events are ready, speech start/stop, transcript delta/final, usage, and error.
+The shared window allows 96,000 unacknowledged PCM bytes (two seconds). Output chunks are at most 24,000 PCM bytes. Lack of playback progress for 15 seconds fails the response. Native unsent audio is additionally capped at 192,000 bytes; input/upstream buffers are bounded. Overflow fails explicitly.
 
-The DashScope adapter:
+The client checks binary sequence and response identity; late audio or text from a cancelled response cannot affect its replacement. Capture attempts are generation-fenced, so a delayed permission, connection or recorder callback cannot revive an ended call.
 
-- opens `/api-ws/v1/inference`;
-- sends `run-task` and waits for `task-started`;
-- forwards binary PCM after readiness;
-- maps `silenceDurationMs` to Qwen's `max_sentence_silence` parameter;
-- maps `result-generated` sentence revisions;
-- sends `finish-task` for dictation commit/close;
-- caps upstream buffered audio at 512 KiB;
-- aborts setup and active sockets through the request signal.
+Browser echo cancellation is requested, not guaranteed. Local speech energy ducks output; confirmed server speech or manual interruption clears it.
 
-### 4.2 Streaming TTS
+## Persistence and context isolation
 
-The existing `SpeechProviderPlugin.synthesizeStream()` is the only TTS seam. Realtime conversation selects only providers with a native implementation and freezes fallback off.
+Native final transcripts use `SessionIndex.appendTranscriptCustomMessageEntry` → the existing SQLite writer. They carry `voice_omni_transcript`, call ID, provider item/response ID, role and interruption status. The frozen session identity is checked inside the storage mutation before append.
 
-The DashScope adapter:
+Native entries render in Chat as user/assistant messages but are excluded by `buildSessionContextForLlm`; raw audio and partial text are not stored. The companion starts fresh each call and does not automatically import Agent history, memory or tools.
 
-1. opens `/api-ws/v1/realtime?model=qwen3-tts-flash-realtime`;
-2. waits for `session.created`;
-3. sends `session.update` for commit mode, PCM, 24 kHz, and configured voice;
-4. appends and commits one speakable phrase;
-5. decodes `response.audio.delta` base64 into binary PCM chunks;
-6. finishes/release-closes the provider socket.
+Generated text is not proof of played audio. On interruption the UI labels the transcript accordingly. We do not issue an undocumented provider context-truncation operation or claim exact heard-context restoration.
 
-All speech requests now require an `AbortSignal`. HTTP providers pass it to fetch, WebSocket providers close their socket, and local providers terminate their subprocess or abandon the local call result.
+## Platform relay and settlement
 
-## 5. Session runtime
+Endpoint: `WS /v1/audio/conversations/realtime?model=qwen3-omni-flash-realtime`.
 
-`VoiceRealtimeRuntime` owns a no-server `WebSocketServer`, outstanding tickets, active sockets per principal, and conversation reservations per Chat.
+Authorization uses the existing bearer token with `models:invoke`, active-user check, concurrency/rate limits and a healthy enabled key in an available upstream pool. Debug access uses a separate one-use ticket bound to administrator, origin, capability and model. Tickets never appear in URLs.
 
-### 5.1 Ticket and connection invariants
+The relay permits one strict `session.update`, PCM append and response cancel. It rejects tools, manual response creation and arbitrary conversation mutations. Existing provider-pool admission also applies.
 
-- Ticket values are 256-bit random strings and stored only as SHA-256 keys.
-- Tickets are one-use, expire after 60 seconds, and bind principal, purpose, Chat, config, limits, and provider routes.
-- First-frame authentication is required in 10 seconds.
-- The pre-auth IP budget is reused from the gateway security layer.
-- Limits are 50 connected sockets globally and 2 per principal.
-- One conversation reservation exists per Chat.
-- Closing is idempotent and releases the reservation, principal slot, pre-auth budget, STT, response abort signal, timers, and socket.
+Tables:
 
-### 5.2 Conversation turn flow
+- `model_omni_route`: certified model, existing provider connection, enabled state and four prices.
+- `model_omni_call`: call identity, price snapshot, reservation, settlement state/reason.
+- `model_omni_usage`: one usage row per call/response; primary key deduplicates completion events.
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant V as Voice runtime
-    participant S as Qwen STT
-    participant A as xopc Agent
-    participant T as Qwen TTS
+Usage is taken from Qwen's `input_tokens_details` / `output_tokens_details`. Text/audio detail totals must match the reported input/output totals. Unrecognized or missing usage is not zero.
 
-    B->>V: PCM16 frames
-    V->>S: PCM16 frames
-    S-->>V: transcript_final
-    V-->>B: input.transcript.final
-    V->>A: normal webchat Agent turn
-    A-->>V: assistant_delta
-    V-->>B: response.text.delta
-    V->>T: stable phrase
-    T-->>V: PCM16 chunks
-    V-->>B: binary PCM16
-```
+Credits = ceil(sum(modality tokens × frozen modality price) / 1,000,000). Calls reserve 100,000 tokens at the highest modality price and stop after reaching that reported budget or 30 minutes. A final response can exceed the admission estimate; customer charges never exceed the reserved amount, and that excess is platform cost.
 
-Final utterances are serialized through one `conversationTail`. A new speech-start event aborts the active response immediately; a later final utterance cannot overlap the previous Agent cleanup.
+On close, the relay stops admitting input, requests cancellation where applicable and allows a bounded 1.5-second usage drain. Missing/in-flight usage, uncompleted speech or input without a usage-bearing response leaves the call pending and its credit reservation held. Startup marks interrupted running calls pending. This assumes the existing single gateway writer deployment, not active-active multi-instance serving.
 
-The Agent call uses `GatewayAgentRunner.runAgent()` with channel `webchat` and the existing session key. This preserves the embedded runner, tools, approvals, model/session config, partial-output persistence, realtime run topics, and SQLite transcript synchronization.
+Known settlement and manual reconciliation update the shared reservation/credit ledger and Omni state in one SQLite transaction. Repeated settlement cannot charge again. The generic reservation expiry reaper must not refund running/pending native calls.
 
-## 6. Text segmentation and response failure
+The native relay has independent pricing; it never adds STT minutes or TTS character fees. No prices or upstream keys are auto-published during migration.
 
-`SpeakableSegmenter` is deterministic:
+## Operations and verification
 
-- emit at `。！？!?；;：:` or newline;
-- otherwise emit at a clause boundary or hard 120-character bound;
-- preserve exact visible Agent text;
-- flush remaining text only on normal completion.
+Platform diagnostics expose call ID, route, authorization/quota stage, handshake/first-result timing, audio volume and settlement outcome. No raw audio, provider payload, transcript or secret is logged.
 
-One TTS stream is drained before the next begins. The queue Promise never rejects without a handler; the first speech error is retained and handled after Agent text completes.
+Automated gates cover engine regression, tagged frames, late-response fencing, session identity, masked secrets, provider policy, origin-bound tickets, duplicate usage and pending reconciliation. The opt-in `XOPC_LIVE_OMNI=1` test generates a short synthetic speech fixture in memory and verifies native input transcription plus audio output using the actual vendor.
 
-Success emits `response.text.done`, optional `response.audio.done`, and `response.done`. A TTS/Agent error emits a recoverable `session.error` plus `response.done` with `text_only` or `audio_partial`; generated text remains available.
+Real microphone/speaker echo, interruptions under weak networks and suspended browser tabs require device acceptance. Push, deployment and production price publication are separate operations.
 
-## 7. Capture and playback
+## Agent output selection and diagnostics
 
-### 7.1 Input
+Optional voice.realtime.tts selects the Agent conversation provider (alibaba or xopc-cloud) and voice independently of message readout. Without it, Agent output inherits the message speech route; only streaming PCM qualifies. Direct output uses the fixed realtime model, defaults to Cherry, and resolves credentials from the input provider slice, then DASHSCOPE_API_KEY, then the speech provider slice. Managed output uses an available streaming PCM catalog model. Omni does not use this selection.
 
-`PcmFrameCapture` uses the existing AudioWorklet capture source. `PcmStreamEncoder` retains fractional resampling state between chunks, converts to PCM16, and flushes the final sample on dictation confirmation.
-
-Target input is mono PCM16 at 16 kHz. The browser requests echo cancellation, noise suppression, and automatic gain control.
-
-### 7.2 Output
-
-`PcmPlayer` uses Web Audio buffer-source scheduling:
-
-- convert little-endian PCM16 to Float32;
-- schedule from an 80 ms initial allowance;
-- acknowledge played PCM bytes on source completion; the gateway bounds outstanding audio to two seconds by waiting for playback capacity;
-- route sources through one GainNode for mute and local-speech ducking;
-- stop all scheduled sources on cancellation;
-- close and disconnect the AudioContext on session end.
-
-An AudioWorklet ring buffer was not introduced because the bounded Web Audio queue satisfies the current PCM stream without a second playback protocol or worker lifecycle.
-
-## 8. Cancellation and retention
-
-Authoritative STT `speech_started` cancels the active Agent/TTS response when `bargeIn` is enabled. Manual interruption uses the same response abort path. Late deltas are fenced by active-response object identity.
-
-The browser clears scheduled audio on `response.cancelled`, not on `input.speech_started`. When the frozen session `bargeIn` setting is enabled, it also ducks locally on microphone energy before provider confirmation. Manual interruption always clears playback immediately. Server completion and local playback completion are tracked separately so queued tail audio remains interruptible.
-
-For barge-in and manual cancellation, the normal Agent path persists generated assistant text. One `kind: context` audit row records bounded interruption facts and is excluded from model messages. Dictation and partial transcripts do not write rows.
-
-## 9. Backpressure and limits
-
-| Boundary | Limit/behavior |
-|---|---|
-| Browser control frame | 16 KiB parser limit |
-| Browser binary frame | 64 KiB, non-empty, even length |
-| Browser WebSocket input | sends only while `OPEN` |
-| DashScope STT socket | 512 KiB `bufferedAmount` ceiling |
-| Gateway output socket | 1 MiB `bufferedAmount` ceiling |
-| Gateway to browser playback | 96,000 unacknowledged PCM bytes (2 seconds), 24,000-byte frames; wait for `response.audio.played` |
-| Dictation duration | 10 minutes default |
-| Conversation duration | 60 minutes default |
-| Idle timeout | 60 seconds default |
-
-Playback capacity applies backpressure instead of cancelling normal fast synthesis. Acknowledgements are cumulative and cannot exceed sent bytes; cancellation/disconnect releases waits immediately, and 15 seconds without playback progress fails the response. Other queue overflow is explicit and terminates the affected media operation. No arbitrary middle-frame drop is used.
-
-## 10. Managed relay
-
-For `xopc-cloud`, the gateway converts the catalog router HTTP URL to WSS and opens:
-
-```text
-/audio/transcriptions/realtime?model=<model>
-/audio/speech/realtime?model=<model>
-Authorization: Bearer <XOPC access token>
-```
-
-The platform endpoint is a transparent, allowlisted DashScope frame relay. Local Alibaba and managed providers therefore share the same codec and differ only in endpoint and authorization resolution.
-
-## 11. Security and observability
-
-- Provider credentials are resolved only in the gateway/provider layer.
-- No raw PCM, full transcript, provider body, authorization header, or secret URL is logged.
-- Safe logs record session/response IDs, provider/model, purpose, setup latency, first-text latency, and first-audio latency.
-- HTTP creation distinguishes not-found (404), conflict (409), limit (429), and unavailable (503).
-- Client clock skew is limited to 60 seconds and duplicate message IDs are bounded.
-
-## 12. Verification
-
-Tests cover protocol strictness, config bounds, stateful resampling, phrase segmentation, provider route freezing, Chat reservation/conflict, dictation projection, conversation text/audio, interruption cleanup, and surface integration. The phase gate runs root/Web type checks, focused and full Vitest suites, lint, production build, docs check, and `git diff --check`.
-
-## 13. Deliberately absent designs
-
-No WebRTC, alternate realtime protocol, base64 browser audio, socket resume, manual Qwen Audio mode, Omni runtime, provider switch after media begins, dual transcript write, buffered TTS masquerading as streaming, or legacy event alias.
+Settings preflight uses the same Agent route resolvers as call creation. The fixed preview disables fallback and has a 20-second deadline and 960 KB PCM limit. Combined diagnostics use dictation plus preview, never an Agent or Omni call. Resources close on cancellation, configuration changes, departure and unmount.
