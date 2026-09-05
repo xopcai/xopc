@@ -1,10 +1,12 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Platform,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -31,12 +33,18 @@ import {
   deleteNote,
   fetchNotes,
   updateNote,
+  type Note,
   type NoteIndexEntry,
   type NoteKind,
   type NoteStatus,
 } from '../../query/notes';
 import { queryKeys } from '../../query/keys';
-import { refreshNotesList } from '../../query/infinite-list-sync';
+import {
+  noteToIndexEntry,
+  removeNoteFromListCaches,
+  upsertNoteInListCaches,
+} from '../../query/note-list-cache';
+import { refreshNotesList, resetNoteListPagination } from '../../query/infinite-list-sync';
 import { useGatewayConfigured } from '../../query/sessions';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, typography, useTheme } from '../../theme';
 
@@ -47,6 +55,7 @@ import { NoteCard } from './NoteCard';
 
 type StatusFilter = 'all' | NoteStatus;
 type KindFilter = 'all' | NoteKind;
+type ScopeFilter = 'all' | 'inbox' | 'tasks' | 'archived';
 
 export type NotesScreenProps = {
   embedded?: boolean;
@@ -89,12 +98,19 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     dismissOrHome(router);
   }, [onRequestHome, router]);
 
-  const initialKind = (params.kind as KindFilter) || 'all';
-  const statusFilter: StatusFilter = 'all';
-  const kindFilter: KindFilter = initialKind;
+  const initialScope: ScopeFilter = params.kind === 'task' ? 'tasks' : 'all';
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScope);
+  const statusFilter: StatusFilter = scopeFilter === 'inbox'
+    ? 'inbox'
+    : scopeFilter === 'archived'
+      ? 'archived'
+      : 'all';
+  const kindFilter: KindFilter = scopeFilter === 'tasks' ? 'task' : 'all';
   const [tagFilter, setTagFilter] = useState<NoteTagFilter>('all');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [focusTagCreate, setFocusTagCreate] = useState(false);
   const [snackMsg, setSnackMsg] = useState('');
@@ -140,8 +156,8 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
 
   const createNoteMutation = useMutation({
     mutationFn: createBlankNote,
-    onSuccess: async (result) => {
-      await refreshNotesList(queryClient, notesListQueryKey);
+    onSuccess: (result) => {
+      upsertNoteInListCaches(queryClient, noteToIndexEntry(result.note as Note));
       router.push(noteDetailRoute(result.note.id));
     },
     onError: (err) => {
@@ -163,7 +179,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   const handleSwipeAction = useCallback((note: NoteIndexEntry, action: SwipeAction) => {
     if (action.key === 'pin' || action.key === 'unpin') {
       void updateNote(note.id, { pinned: action.key === 'pin' })
-        .then(refreshList)
+        .then((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)))
         .then(() => setSnackMsg(pm.updated))
         .catch((err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed));
       return;
@@ -171,7 +187,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
 
     if (action.key === 'archive') {
       void updateNote(note.id, { status: 'archived' })
-        .then(refreshList)
+        .then((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)))
         .then(() => setSnackMsg(pm.updated))
         .catch((err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed));
       return;
@@ -182,27 +198,51 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
         note.id,
         async () => {
           await deleteNote(note.id);
-          await refreshList();
+          removeNoteFromListCaches(queryClient, note.id);
+          await resetNoteListPagination(queryClient);
         },
         (err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed),
       );
       setSnackMsg(pm.deleted);
     }
-  }, [pm.actionFailed, pm.deleted, pm.updated, refreshList, scheduleDelete]);
+  }, [pm.actionFailed, pm.deleted, pm.updated, queryClient, scheduleDelete]);
+
+  const handleSearchToggle = useCallback(() => {
+    if (searchOpen) {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+      searchInputRef.current?.clear();
+      setSearchText('');
+    }
+    setSearchOpen(!searchOpen);
+  }, [searchOpen]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      searchTimerRef.current = null;
+      setSearchText(value.trim());
+    }, 250);
+  }, []);
+
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  }, []);
 
   const runBatchMutation = useCallback(
-    async (runner: () => Promise<unknown>, successMsg: string) => {
+    async (runner: () => Promise<Note[]>, successMsg: string) => {
       if (selectedCount === 0) return;
       try {
-        await runner();
-        await refreshList();
+        const updatedNotes = await runner();
+        updatedNotes.forEach((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)));
+        await resetNoteListPagination(queryClient);
         setSnackMsg(successMsg);
         exitSelectionMode();
       } catch (err) {
         setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
       }
     },
-    [exitSelectionMode, pm.actionFailed, refreshList, selectedCount],
+    [exitSelectionMode, pm.actionFailed, queryClient, selectedCount],
   );
 
   const handleBatchArchive = useCallback(() => {
@@ -226,21 +266,22 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     if (selectedCount === 0) return;
     try {
       await Promise.all([...selectedIds].map((id) => deleteNote(id)));
-      await refreshList();
+      selectedIds.forEach((id) => removeNoteFromListCaches(queryClient, id));
+      await resetNoteListPagination(queryClient);
       setSnackMsg(pm.deleted);
       exitSelectionMode();
       setShowBatchDelete(false);
     } catch (err) {
       setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
     }
-  }, [exitSelectionMode, pm.actionFailed, pm.deleted, refreshList, selectedCount, selectedIds]);
+  }, [exitSelectionMode, pm.actionFailed, pm.deleted, queryClient, selectedCount, selectedIds]);
 
   const handleApplyBatchTags = useCallback(
     async (tags: string[]) => {
       if (selectedCount === 0) return;
       try {
-        await Promise.all([...selectedIds].map((id) => updateNote(id, { tags })));
-        await refreshList();
+        const updatedNotes = await Promise.all([...selectedIds].map((id) => updateNote(id, { tags })));
+        updatedNotes.forEach((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)));
         setSnackMsg(pm.tagUpdated);
         exitSelectionMode();
         setBatchTagPicker(false);
@@ -248,7 +289,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
         setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
       }
     },
-    [exitSelectionMode, pm.actionFailed, pm.tagUpdated, refreshList, selectedCount, selectedIds],
+    [exitSelectionMode, pm.actionFailed, pm.tagUpdated, queryClient, selectedCount, selectedIds],
   );
 
   const notes = useMemo(
@@ -267,6 +308,13 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     )),
     [notes, pendingDeleteIds, tagFilter],
   );
+
+  const scopeOptions = useMemo<Array<{ key: ScopeFilter; label: string }>>(() => [
+    { key: 'all', label: pm.filterAll },
+    { key: 'inbox', label: pm.filterInbox },
+    { key: 'tasks', label: pm.kindTodo },
+    { key: 'archived', label: pm.filterArchived },
+  ], [pm.filterAll, pm.filterArchived, pm.filterInbox, pm.kindTodo]);
 
   const handleCreateTag = useCallback(
     (raw: string) => {
@@ -381,7 +429,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
         onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}
-        onSearchPress={!selectionMode ? () => setSearchOpen((value) => !value) : undefined}
+        onSearchPress={!selectionMode ? handleSearchToggle : undefined}
         searchPlaceholder={searchText.trim() || m.common.search}
         rightActions={!selectionMode ? [
           {
@@ -405,8 +453,9 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
           <View style={[styles.searchBox, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
             <Icon source="magnify" size={18} color={colors.text.tertiary} />
             <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
+              ref={searchInputRef}
+              defaultValue=""
+              onChangeText={handleSearchChange}
               placeholder={m.common.search}
               placeholderTextColor={colors.text.tertiary}
               style={[styles.searchInput, { color: colors.text.primary }]}
@@ -414,6 +463,39 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
             />
           </View>
         </View>
+      ) : null}
+
+      {!selectionMode ? (
+        <ScrollView
+          horizontal
+          style={styles.filterScroll}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+        >
+          {scopeOptions.map((option) => {
+            const active = scopeFilter === option.key;
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => setScopeFilter(option.key)}
+                style={({ pressed }) => [
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? colors.accent.selectionBg : colors.surface.panel,
+                    borderColor: active ? colors.accent.primary : colors.border.subtle,
+                    opacity: pressed ? 0.72 : 1,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.filterChipText, { color: active ? colors.accent.primary : colors.text.secondary }]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       ) : null}
 
       <View style={styles.listArea}>
@@ -439,10 +521,10 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
                   <Icon source="note-text-outline" size={40} color={colors.accent.primary} />
                 </View>
                 <Text style={{ color: colors.text.secondary, marginTop: spacing.md, ...typography.heading }}>
-                  {searchText.trim() ? pm.searchNoResults : tagFilter === 'all' ? pm.empty : pm.tagEmptyFiltered}
+                  {searchText.trim() ? pm.searchNoResults : tagFilter === 'all' && scopeFilter === 'all' ? pm.empty : pm.tagEmptyFiltered}
                 </Text>
                 <Text style={{ color: colors.text.tertiary, textAlign: 'center', maxWidth: 240, ...typography.label }}>
-                  {searchText.trim() ? pm.searchPlaceholder : tagFilter === 'all' ? pm.emptyHint : pm.tagEmptyFilteredHint}
+                  {searchText.trim() ? pm.searchPlaceholder : tagFilter === 'all' && scopeFilter === 'all' ? pm.emptyHint : pm.tagEmptyFilteredHint}
                 </Text>
               </View>
             }
@@ -498,33 +580,6 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  notesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 18,
-  },
-  notesTitle: {
-    flex: 1,
-    fontSize: 34,
-    lineHeight: 40,
-    fontWeight: '800',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  headerIconButton: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIconPlaceholder: {
-    width: 0,
-    height: 34,
-  },
   searchWrap: {
     paddingHorizontal: spacing.lg,
     paddingBottom: 12,
@@ -543,6 +598,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingVertical: Platform.select({ ios: 10, android: 6, default: 8 }),
   },
+  filters: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  filterScroll: { flexGrow: 0, flexShrink: 0 },
+  filterChip: {
+    minHeight: 34,
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 17,
+    paddingHorizontal: spacing.md,
+  },
+  filterChipText: {
+    ...typography.label,
+    fontWeight: '600',
+  },
   listArea: { flex: 1, minHeight: 0 },
   list: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
@@ -553,59 +625,5 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  composerWrap: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 4,
-    gap: 4,
-  },
-  intentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginLeft: 6,
-  },
-  composerShell: {
-    borderRadius: 22,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  composerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    gap: 2,
-  },
-  toolBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composerInput: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 20,
-    paddingHorizontal: 4,
-    paddingVertical: Platform.select({ ios: 5, android: 4, default: 4 }),
-    borderWidth: 0,
-    maxHeight: 100,
-  },
-  sendCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recordingBtn: {
-    borderRadius: 18,
   },
 });

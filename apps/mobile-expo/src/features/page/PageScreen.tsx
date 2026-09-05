@@ -12,6 +12,7 @@ import { useTheme } from '../../theme';
 
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
 import { NoteViewActionBar, type NoteViewActionBarItem } from '../notes/NoteViewActionBar';
+import { NoteReadSurface } from '../notes/NoteReadSurface';
 import { NoteTagPickerSheet } from '../notes/NoteTagPickerSheet';
 import {
   NoteEditorBridge,
@@ -19,7 +20,6 @@ import {
   type NoteEditorBridgeHandle,
 } from '../notes/editor/NoteEditorBridge';
 import { countNoteCharacters } from '../notes/note-title';
-import { useVoiceCaptureInteraction } from '../notes/use-voice-capture-interaction';
 import { applyMarkdownPatchResult } from '../notes/markdown/markdown-patch';
 import type {
   EditorCommand,
@@ -28,9 +28,11 @@ import type {
 } from '../notes/editor/editor-protocol';
 import { useNoteTagsStore } from '../../stores/note-tags-store';
 import { requestNoteAiEdit } from '../../query/notes';
+import { recordInteractionPerformanceEvent } from '../../product/usage-metrics';
 import { useNoteEditSession } from './useNoteEditSession';
 import { useNoteEditorAttachments } from './useNoteEditorAttachments';
 import { useNotePageActions } from './useNotePageActions';
+import { NoteVoiceControl } from './NoteVoiceControl';
 
 function firstRouteParam(value: string | string[] | undefined): string | undefined {
   return typeof value === 'string' ? value : Array.isArray(value) ? value[0] : undefined;
@@ -56,11 +58,20 @@ export function PageScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
   const allowNextRemoveRef = useRef(false);
   const savingBeforeLeaveRef = useRef(false);
+  const initializedModeNoteRef = useRef<string | null>(null);
+  const noteOpenTimingRef = useRef({ id, startedAt: Date.now(), recorded: false });
+  const editorStartedAtRef = useRef<number | null>(null);
+
+  if (noteOpenTimingRef.current.id !== id) {
+    noteOpenTimingRef.current = { id, startedAt: Date.now(), recorded: false };
+    editorStartedAtRef.current = null;
+  }
 
   useEffect(() => {
     hydrateNoteTags();
@@ -82,9 +93,12 @@ export function PageScreen() {
     titleRef,
     flushSave,
     applyDraft,
-    updateMarkdown,
-    updateTitle,
+    updateMarkdownFromEditor,
+    updateTitleFromEditor,
+    replaceMarkdown,
+    replaceTitle,
     updateTags,
+    persistForSync,
     attachmentDisplaySeed,
   } = useNoteEditSession({
     id,
@@ -133,19 +147,32 @@ export function PageScreen() {
     setEditorCommand({ id: editorCommandIdRef.current, ...next } as EditorCommand);
   }, []);
 
-  const voice = useVoiceCaptureInteraction({
-    value: markdownRef.current,
-    onChangeText: updateMarkdown,
-    onVoiceCapture: (payload) => {
-      void (async () => {
-        const attachment = await handleCreateVoiceAttachment(payload);
-        if (!attachment) return;
-        sendEditorCommand({ type: 'insertPreparedAttachment', attachment });
-      })();
-    },
-    disabled: !id || !note,
-    enabled: Boolean(id && note),
-  });
+  const handleTopCommandConsumed = useCallback((commandId: number) => {
+    setEditorCommand((current) => current?.id === commandId ? null : current);
+  }, []);
+
+  useEffect(() => {
+    if (!id || !note || initializedModeNoteRef.current === id) return;
+    initializedModeNoteRef.current = id;
+    const shouldEdit = !note.title?.trim() && !note.markdown?.trim();
+    if (shouldEdit) editorStartedAtRef.current = Date.now();
+    setEditing(shouldEdit);
+  }, [id, note]);
+
+  useEffect(() => {
+    if (!note || noteOpenTimingRef.current.recorded) return;
+    noteOpenTimingRef.current.recorded = true;
+    recordInteractionPerformanceEvent(
+      'note_content_ready',
+      Date.now() - noteOpenTimingRef.current.startedAt,
+    );
+  }, [note]);
+
+  const handleVoiceCapture = useCallback((payload: Parameters<typeof handleCreateVoiceAttachment>[0]) => {
+    void handleCreateVoiceAttachment(payload).then((attachment) => {
+      if (attachment) sendEditorCommand({ type: 'insertPreparedAttachment', attachment });
+    });
+  }, [handleCreateVoiceAttachment, sendEditorCommand]);
 
   const flushEditorToDraft = useCallback(async () => {
     const draft = await editorRef.current?.flushDraft();
@@ -154,8 +181,8 @@ export function PageScreen() {
 
   const saveEditorBeforeLeave = useCallback(async () => {
     await flushEditorToDraft();
-    await flushSave();
-  }, [flushEditorToDraft, flushSave]);
+    persistForSync();
+  }, [flushEditorToDraft, persistForSync]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -236,10 +263,8 @@ export function PageScreen() {
 
   const handleCreateTag = useCallback((raw: string) => addNoteTag(raw), [addNoteTag]);
 
-  const handleSelectPrimaryTag = useCallback((tag: string | null) => {
-    const nextTags = tag ? [tag] : [];
+  const handleApplyTags = useCallback((nextTags: string[]) => {
     updateTags(nextTags);
-    setTagPickerVisible(false);
   }, [updateTags]);
 
   const labels = useMemo<NoteEditorLabels>(() => ({
@@ -326,10 +351,10 @@ export function PageScreen() {
           text: m.common.apply,
           onPress: () => {
             if (patchResult.markdown !== currentMarkdown) {
-              updateMarkdown(patchResult.markdown);
+              replaceMarkdown(patchResult.markdown);
             }
             if (patchResult.metadata.title !== undefined) {
-              updateTitle(patchResult.metadata.title ?? '');
+              replaceTitle(patchResult.metadata.title ?? '');
             }
             if (patchResult.metadata.tags !== undefined) {
               updateTags(patchResult.metadata.tags);
@@ -356,16 +381,61 @@ export function PageScreen() {
     pm.editorAIApplied,
     pm.editorAINoChanges,
     titleRef,
-    updateMarkdown,
+    replaceMarkdown,
     updateTags,
-    updateTitle,
+    replaceTitle,
   ]);
 
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
   const showMissing = !showLoading && !showError && (!id || !note);
   const showViewActions = Boolean(note && id && !keyboardVisible);
+  const showReadActions = showViewActions && !editing;
   const wordCount = useMemo(() => countNoteCharacters(markdown), [markdown]);
+  const saveStatusLabel = saveState === 'saved'
+    ? pm.saved
+    : saveState === 'pending'
+      ? pm.syncPendingShort
+      : saveState === 'failed'
+        ? pm.saveFailed
+        : pm.saving;
+
+  const finishEditing = useCallback((): void => {
+    void flushEditorToDraft().finally(() => setEditing(false));
+  }, [flushEditorToDraft]);
+
+  const startEditing = useCallback((): void => {
+    editorStartedAtRef.current = Date.now();
+    setEditing(true);
+  }, []);
+
+  const handleEditorRuntimeState = useCallback((state: { ready: boolean }): void => {
+    if (!state.ready || editorStartedAtRef.current === null) return;
+    recordInteractionPerformanceEvent('note_editor_ready', Date.now() - editorStartedAtRef.current);
+    editorStartedAtRef.current = null;
+  }, []);
+
+  const headerActions = useMemo<Array<{ icon: string; label: string; disabled?: boolean; onPress: () => void }>>(() => note && id ? [
+    {
+      icon: 'chat-processing-outline',
+      label: pm.openChat,
+      disabled: actionLoading === 'openChat',
+      onPress: (): void => { void handleOpenNoteChat(); },
+    },
+    {
+      icon: editing ? 'check' : 'pencil-outline',
+      label: editing ? pm.done : pm.edit,
+      onPress: editing ? finishEditing : startEditing,
+    },
+    {
+      icon: 'dots-horizontal',
+      label: pm.viewMore,
+      onPress: () => {
+        Keyboard.dismiss();
+        setMoreVisible(true);
+      },
+    },
+  ] : [], [actionLoading, editing, finishEditing, handleOpenNoteChat, id, note, pm.done, pm.edit, pm.openChat, pm.viewMore, startEditing]);
 
   const viewActionItems = useMemo<NoteViewActionBarItem[]>(() => [
     {
@@ -402,6 +472,8 @@ export function PageScreen() {
       <NoteDetailHeader
         onBack={handleBack}
         backLabel={m.common.back}
+        statusLabel={note ? saveStatusLabel : undefined}
+        rightActions={headerActions}
       />
 
       {showLoading ? (
@@ -425,7 +497,7 @@ export function PageScreen() {
           </Text>
           <Button mode="contained-tonal" onPress={handleBack}>{m.common.back}</Button>
         </View>
-      ) : note && id ? (
+      ) : note && id && editing ? (
         <View style={styles.editorWrap}>
           {editorReady ? (
             <NoteEditorBridge
@@ -438,28 +510,39 @@ export function PageScreen() {
               mode="edit"
               attachmentSrcMap={attachmentSrcMap}
               topCommand={editorCommand}
+              onTopCommandConsumed={handleTopCommandConsumed}
               labels={labels}
-              onChangeTitle={updateTitle}
-              onChangeMarkdown={updateMarkdown}
+              onChangeTitle={updateTitleFromEditor}
+              onChangeMarkdown={updateMarkdownFromEditor}
               onRequestAttachment={handleRequestAttachment}
               aiActions={aiActions}
               aiLoadingKey={aiLoadingKey}
               onRequestAiAction={handleRequestAiAction}
-              voiceFeedback={voice.feedback}
-              voicePanHandlers={voice.panHandlers}
-              voicePressHandler={voice.onPress}
-              voiceActive={voice.active}
-              voiceDisabled={!id || !note || voice.transcribing}
+              onRuntimeStateChange={handleEditorRuntimeState}
             />
           ) : (
             <View style={styles.center}>
               <ActivityIndicator color={colors.accent.primary} />
             </View>
           )}
+          <NoteVoiceControl
+            markdownRef={markdownRef}
+            disabled={!editorReady}
+            onChangeMarkdown={replaceMarkdown}
+            onVoiceCapture={handleVoiceCapture}
+          />
         </View>
+      ) : note && id ? (
+        <NoteReadSurface
+          title={title}
+          markdown={markdown}
+          tags={tags}
+          attachmentSrcMap={attachmentSrcMap}
+          untitledLabel={pm.untitledNote}
+        />
       ) : null}
 
-      {showViewActions ? (
+      {showReadActions ? (
         <View style={styles.wordCountWrap} pointerEvents="none">
           <Text style={[styles.wordCountText, { color: colors.text.tertiary }]}>
             {t(pm.charCount, { count: wordCount })}
@@ -471,7 +554,7 @@ export function PageScreen() {
         <Pressable
           style={[
             styles.retryBar,
-            showViewActions ? styles.retryBarAboveActions : null,
+            showReadActions ? styles.retryBarAboveActions : null,
             { backgroundColor: colors.surface.panel, borderColor: colors.border.default },
           ]}
           onPress={() => {
@@ -492,7 +575,7 @@ export function PageScreen() {
         </Pressable>
       ) : null}
 
-      {showViewActions ? (
+      {showReadActions ? (
         <NoteViewActionBar
           items={viewActionItems}
         />
@@ -540,9 +623,10 @@ export function PageScreen() {
 
       <NoteTagPickerSheet
         visible={tagPickerVisible}
+        mode="multi"
         tags={noteTags}
-        selectedTag={tags?.[0] ?? null}
-        onSelect={handleSelectPrimaryTag}
+        selectedTags={tags ?? []}
+        onApplyTags={handleApplyTags}
         onCreateTag={handleCreateTag}
         onDismiss={() => setTagPickerVisible(false)}
       />
@@ -577,49 +661,6 @@ const styles = StyleSheet.create({
   editorWrap: {
     flex: 1,
     minHeight: 0,
-  },
-  titleWrap: {
-    paddingHorizontal: 22,
-    paddingTop: 10,
-    paddingBottom: 8,
-  },
-  titleWrapCompact: {
-    paddingBottom: 4,
-  },
-  titleInputFrame: {
-    position: 'relative',
-  },
-  titleInput: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: '800',
-    paddingVertical: 2,
-  },
-  titleText: {
-    fontSize: 25,
-    lineHeight: 31,
-    fontWeight: '700',
-    paddingVertical: 4,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 8,
-  },
-  categoryChip: {
-    minHeight: 30,
-    maxWidth: '76%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 15,
-    paddingHorizontal: 10,
-  },
-  categoryChipText: {
-    flexShrink: 1,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
   },
   wordCountWrap: {
     position: 'absolute',

@@ -211,7 +211,12 @@ export function createOfflineQueue<T>(options: OfflineQueueOptions<T>): OfflineQ
         }
       }
 
-      writeIds(remainingIds);
+      const originalIds = new Set(ids);
+      const currentIds = readIds();
+      writeIds([
+        ...remainingIds.filter((id) => currentIds.includes(id)),
+        ...currentIds.filter((id) => !originalIds.has(id)),
+      ]);
       return flushed;
     },
 

@@ -36,6 +36,8 @@ import {
   flushPendingWorkspaceOperations,
   getWorkspaceSyncStatus,
   queueWorkspaceCapture,
+  queueWorkspaceOperation,
+  getPendingWorkspaceOperations,
   subscribeWorkspaceSyncStatus,
 } from '../workspace-sync';
 import { listSyncJournalEntries } from '../sync-journal';
@@ -46,6 +48,38 @@ describe('workspace sync status', () => {
     memory.clear();
     clearWorkspaceSyncQueue();
     clearWorkspaceSyncDeadLetters();
+  });
+
+  it.each([true, false])('preserves the newest draft when an older in-flight save fails=%s', async (fails) => {
+    const { updateNote } = await import('../../query/notes');
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    vi.mocked(updateNote).mockImplementationOnce(async () => {
+      await gate;
+      if (fails) throw new Error('network failed');
+      return { id: 'note-1', markdown: 'A' } as Awaited<ReturnType<typeof updateNote>>;
+    });
+    queueWorkspaceOperation({ type: 'update_note', noteId: 'note-1', patch: { markdown: 'A' } });
+    const flushing = flushPendingWorkspaceOperations();
+    queueWorkspaceOperation({ type: 'update_note', noteId: 'note-1', patch: { markdown: 'B' } });
+    queueWorkspaceOperation({ type: 'update_note', noteId: 'note-1', patch: { markdown: 'C' } });
+    finish();
+    await flushing;
+    expect(getPendingWorkspaceOperations().at(-1)?.payload).toMatchObject({ patch: { markdown: 'C' } });
+
+    vi.mocked(updateNote).mockResolvedValue({ id: 'note-1', markdown: 'C' } as Awaited<ReturnType<typeof updateNote>>);
+    await flushPendingWorkspaceOperations();
+    expect(vi.mocked(updateNote).mock.calls.at(-1)).toEqual(['note-1', { markdown: 'C' }]);
+    expect(getWorkspaceSyncStatus().pendingCount).toBe(0);
+    expect(listSyncJournalEntries()).toEqual([]);
+  });
+
+  it('merges pending patches without discarding unrelated fields', () => {
+    queueWorkspaceOperation({ type: 'update_note', noteId: 'note-1', patch: { markdown: 'A', tags: ['work'] } });
+    queueWorkspaceOperation({ type: 'update_note', noteId: 'note-1', patch: { markdown: 'B' } });
+    expect(getPendingWorkspaceOperations()).toHaveLength(1);
+    expect(getPendingWorkspaceOperations()[0].payload).toMatchObject({ patch: { markdown: 'B', tags: ['work'] } });
+    expect(listSyncJournalEntries()).toHaveLength(1);
   });
 
   it('notifies the UI immediately when an operation is queued', () => {

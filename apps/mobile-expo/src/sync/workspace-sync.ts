@@ -28,6 +28,7 @@ const WORKSPACE_SYNC_MAX_RETRIES = 8;
 const captureResultRequests = new Set<string>();
 const captureResultIds = new Map<string, string>();
 let flushPromise: Promise<number> | null = null;
+let activeOperationId: string | null = null;
 
 function shouldCountWorkspaceRetry(error: unknown): boolean {
   return !isGatewayConnectivityError(error)
@@ -41,6 +42,7 @@ function rememberCaptureResult(operationId: string, noteId: string): void {
 }
 
 async function processWorkspaceOperation(operation: QueuedOperation<WorkspaceSyncOperation>): Promise<void> {
+  activeOperationId = operation.id;
   const payload = operation.payload;
 
   updateSyncJournalEntry(operation.id, { state: 'syncing', error: undefined });
@@ -87,6 +89,8 @@ async function processWorkspaceOperation(operation: QueuedOperation<WorkspaceSyn
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
+  } finally {
+    activeOperationId = null;
   }
 }
 
@@ -129,7 +133,21 @@ export function getWorkspaceSyncStatus(): WorkspaceSyncStatus {
 }
 
 export function queueWorkspaceOperation(operation: WorkspaceSyncOperation): string {
+  const noteId = operation.type === 'update_note' ? operation.noteId : undefined;
+  const superseded = operation.type === 'update_note'
+    ? workspaceSyncQueue.pending().filter((item) => item.id !== activeOperationId
+      && item.payload.type === 'update_note' && item.payload.noteId === noteId)
+    : [];
+  if (operation.type === 'update_note') {
+    const patch = Object.assign({}, ...superseded.map((item) =>
+      item.payload.type === 'update_note' ? item.payload.patch : {}), operation.patch);
+    operation = { ...operation, patch };
+  }
   const operationId = workspaceSyncQueue.enqueue(operation);
+  for (const item of superseded) {
+    workspaceSyncQueue.remove(item.id);
+    removeSyncJournalEntry(item.id);
+  }
   const entityId = 'noteId' in operation ? operation.noteId : `local:${operationId}`;
   const kind = operation.type === 'capture' || operation.type === 'capture_voice'
     ? 'create_note'

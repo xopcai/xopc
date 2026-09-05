@@ -1,7 +1,5 @@
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import type { GestureResponderHandlers } from 'react-native';
 import { InteractionManager, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
-import type { ReactNode } from 'react';
 import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,7 +32,6 @@ type ToolbarAction = {
   icon: string;
   active?: boolean;
   disabled?: boolean;
-  panHandlers?: GestureResponderHandlers;
   onPress: () => void;
 };
 
@@ -135,6 +132,7 @@ export interface NoteEditorBridgeProps {
   mode: NoteEditorMode;
   attachmentSrcMap?: Record<string, string>;
   topCommand?: EditorCommand | null;
+  onTopCommandConsumed?: (id: number) => void;
   labels: NoteEditorLabels;
   onChangeTitle: (title: string) => void;
   onChangeMarkdown: (markdown: string) => void;
@@ -145,11 +143,6 @@ export interface NoteEditorBridgeProps {
   aiActions?: NoteEditorAiAction[];
   aiLoadingKey?: string | null;
   onRequestAiAction?: (action: NoteEditorAiAction) => void;
-  voiceFeedback?: ReactNode;
-  voicePanHandlers?: GestureResponderHandlers;
-  voicePressHandler?: () => void;
-  voiceActive?: boolean;
-  voiceDisabled?: boolean;
 }
 
 export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEditorBridgeProps>(function NoteEditorBridge({
@@ -160,6 +153,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   mode,
   attachmentSrcMap,
   topCommand,
+  onTopCommandConsumed,
   labels,
   onChangeTitle,
   onChangeMarkdown,
@@ -170,10 +164,6 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   aiActions = [],
   aiLoadingKey,
   onRequestAiAction,
-  voiceFeedback,
-  voicePressHandler,
-  voiceActive,
-  voiceDisabled,
 }, ref) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -287,7 +277,8 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     if (!topCommand) return;
     commandIdRef.current += 1;
     setCommand({ ...topCommand, id: commandIdRef.current } as EditorCommand);
-  }, [topCommand]);
+    onTopCommandConsumed?.(topCommand.id);
+  }, [onTopCommandConsumed, topCommand]);
 
   const handleFlushDraft = useCallback(async (requestId: number, nextDraft: NoteEditorDraft) => {
     latestTitleRef.current = nextDraft.title;
@@ -461,7 +452,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     editorState.focused
     && editorState.focusTarget === 'body'
     && !nativeModalVisible
-  ) || Boolean(voiceActive);
+  );
 
   return (
     <View style={styles.container}>
@@ -645,18 +636,6 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
               }}
             />
           ) : null}
-          {voicePressHandler ? (
-            <ImageSourceRow
-              label={labels.audio}
-              icon="microphone-outline"
-              disabled={voiceDisabled}
-              suffix={voiceActive ? '●' : undefined}
-              onPress={() => {
-                closeEditorSheet();
-                voicePressHandler();
-              }}
-            />
-          ) : null}
         </View>
       </BottomSheetModal>
       <BottomSheetModal
@@ -736,7 +715,6 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
           </View>
         </View>
       </BottomSheetModal>
-      {voiceFeedback}
     </View>
   );
 }));
@@ -794,7 +772,6 @@ function EditorToolbar({
               accessibilityRole="button"
               accessibilityLabel={action.label}
               hitSlop={4}
-              {...action.panHandlers}
             >
               <Icon
                 source={action.icon}

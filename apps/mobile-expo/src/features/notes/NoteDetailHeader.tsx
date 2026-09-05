@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../theme';
@@ -7,6 +7,7 @@ import { useTheme } from '../../theme';
 interface NoteDetailHeaderProps {
   onBack: () => void;
   backLabel: string;
+  statusLabel?: string;
   rightActions?: Array<{
     icon: string;
     label: string;
@@ -15,7 +16,7 @@ interface NoteDetailHeaderProps {
   }>;
 }
 
-export function NoteDetailHeader({ onBack, backLabel, rightActions = [] }: NoteDetailHeaderProps) {
+export function NoteDetailHeader({ onBack, backLabel, statusLabel, rightActions = [] }: NoteDetailHeaderProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const backgroundColor = colors.surface.input;
@@ -30,7 +31,7 @@ export function NoteDetailHeader({ onBack, backLabel, rightActions = [] }: NoteD
       >
         <Icon source="chevron-left" size={24} color={colors.text.secondary} />
       </Pressable>
-      <View style={styles.spacer} />
+      <View style={styles.spacer}>{statusLabel ? <Text numberOfLines={1} style={[styles.status, { color: colors.text.tertiary }]}>{statusLabel}</Text> : null}</View>
       {rightActions.length ? rightActions.map((action) => (
         <Pressable
           key={`${action.icon}:${action.label}`}
@@ -58,7 +59,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 8,
   },
-  spacer: { flex: 1 },
+  spacer: { flex: 1, alignItems: 'center' },
+  status: { fontSize: 12, fontWeight: '500' },
   iconButton: {
     width: 44,
     height: 44,

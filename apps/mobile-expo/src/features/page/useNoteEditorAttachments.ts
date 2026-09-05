@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { apiFetch } from '../../api/client';
 import { uploadNoteMedia, type NoteAttachment } from '../../query/notes';
@@ -50,6 +50,8 @@ export function useNoteEditorAttachments({
   messages,
 }: UseNoteEditorAttachmentsArgs) {
   const [attachmentSrcMap, setAttachmentSrcMap] = useState<Record<string, string>>({});
+  const attachmentCacheRef = useRef<Record<string, string>>({});
+  const activeNoteIdRef = useRef<string | null>(null);
 
   const resolveAttachmentRefsForDisplay = useCallback(async (
     currentNoteId: string,
@@ -74,30 +76,38 @@ export function useNoteEditorAttachments({
       });
     }
 
-    for (const [canonical, ref] of refs) {
-      if (!ref.noteId || !ref.attachmentId) continue;
+    await Promise.all([...refs].map(async ([canonical, ref]) => {
+      if (!ref.noteId || !ref.attachmentId || attachmentCacheRef.current[canonical]) return;
       try {
         const res = await apiFetch(attachmentApiPath(ref.noteId, ref.attachmentId));
-        if (!res.ok) continue;
+        if (!res.ok) return;
         const contentType = res.headers.get('Content-Type') || 'application/octet-stream';
         const dataUri = `data:${contentType};base64,${arrayBufferToBase64(await res.arrayBuffer())}`;
         nextMap[canonical] = dataUri;
       } catch {
-        continue;
+        return;
       }
-    }
+    }));
     return nextMap;
   }, []);
 
   useEffect(() => {
     if (!displaySeed) {
+      activeNoteIdRef.current = null;
+      attachmentCacheRef.current = {};
       setAttachmentSrcMap({});
       return;
     }
+    if (activeNoteIdRef.current !== displaySeed.noteId) {
+      activeNoteIdRef.current = displaySeed.noteId;
+      attachmentCacheRef.current = {};
+      setAttachmentSrcMap({});
+    }
     let cancelled = false;
-    setAttachmentSrcMap({});
     void resolveAttachmentRefsForDisplay(displaySeed.noteId, displaySeed.markdown, displaySeed.attachments).then((nextMap) => {
-      if (!cancelled) setAttachmentSrcMap(nextMap);
+      if (cancelled || Object.keys(nextMap).length === 0) return;
+      attachmentCacheRef.current = { ...attachmentCacheRef.current, ...nextMap };
+      setAttachmentSrcMap(attachmentCacheRef.current);
     });
     return () => {
       cancelled = true;
@@ -117,7 +127,11 @@ export function useNoteEditorAttachments({
       });
       const src = noteAttachmentRef(id, attachment.id);
       if (picked.type === 'image' || picked.mimeType.startsWith('image/')) {
-        setAttachmentSrcMap((current) => ({ ...current, [src]: picked.localUri ?? current[src] }));
+        const displaySrc = picked.localUri ?? attachmentCacheRef.current[src];
+        if (displaySrc) {
+          attachmentCacheRef.current = { ...attachmentCacheRef.current, [src]: displaySrc };
+          setAttachmentSrcMap(attachmentCacheRef.current);
+        }
       }
       setSnackMsg(messages.added);
       return {
