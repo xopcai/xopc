@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
+import { resetNewChatHandoffInflightForTests } from '@/features/chat/session/new-chat-handoff';
 
 const sessionKey = 'agent:main:webchat:default:direct:chat_new';
 
@@ -15,6 +16,42 @@ describe('useChatSessionInit', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
     useChatSessionStore.setState({ sessions: {} });
+    resetNewChatHandoffInflightForTests();
+    localStorage.clear();
+  });
+
+  it('adopts the created session and loads its model after StrictMode effect replay', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const config = { model: 'test/model', thinkingLevel: 'medium', configVersion: 1 };
+    const sessionManager = {
+      createSession: vi.fn(async () => ({ key: sessionKey, sessionId: 'new', messageCount: 0 })),
+      loadSessionAgentConfig: vi.fn(async () => config),
+    } as unknown as SessionManager;
+    const navigateToSession = vi.fn();
+    const adoptEmptySession = vi.fn();
+    const applyAgentConfig = vi.fn();
+    function Harness() {
+      useChatSessionInit({
+        token: 'token', isNewRoute: true, forceNewChat: true, decodedKey: undefined,
+        locationKey: 'new-location', locationSearch: '', sessionMgrRef: { current: sessionManager },
+        resolveAgentIdForPost: () => 'main', navigateToSession, adoptEmptySession, applyAgentConfig,
+        loadSessionById: vi.fn(async () => []), tryResumeAgentRun: vi.fn(async () => {}),
+        restoreLiveCacheIfNeeded: vi.fn(() => false), patchInitUi: vi.fn(),
+      });
+      return null;
+    }
+    try {
+      await act(async () => root.render(<StrictMode><Harness /></StrictMode>));
+      expect(sessionManager.createSession).toHaveBeenCalledOnce();
+      expect(adoptEmptySession).toHaveBeenCalledWith(sessionKey, null);
+      expect(navigateToSession).toHaveBeenCalledOnce();
+      expect(applyAgentConfig).toHaveBeenCalledWith(sessionKey, config);
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 
   it('does not hydrate known-empty history again when runtime callbacks change', async () => {

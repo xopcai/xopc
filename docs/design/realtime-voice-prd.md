@@ -68,8 +68,8 @@ Configuration has one source per concern:
 
 ```text
 tools.media.audio   STT provider, key, URL, language, and fallback
-messages.tts        TTS provider, key, URL, model, and voice
-voice.realtime      session behavior only
+messages.tts        Message readout provider, key, URL, model, and voice
+voice.realtime      Session behavior and independent conversation output selection
 ```
 
 `voice.realtime` contains:
@@ -79,7 +79,10 @@ voice.realtime      session behavior only
 - `idleTimeoutMs`, default `60000`;
 - `maxDictationMs`, default `600000`;
 - `maxConversationMs`, default `3600000`;
-- `bargeIn`, default `true`.
+- `bargeIn`, default `true`;
+- optional `tts: { provider: 'alibaba' | 'xopc-cloud', voice?: string }`, independent of message readout enablement. Omission inherits the message speech route; only native streaming PCM routes qualify.
+
+The default settings view shows service choice, shared credential, conversation voice, interruption behavior, and a real audio test. Ordinary message readout and advanced input settings are collapsed. Configuration alone is labeled unverified. A combined audio test must receive a final transcript and user-confirmed playback before showing success; it does not verify the Agent model. Changing settings invalidates that result. No microphone access occurs without a user action.
 
 Qwen Audio 3.0 streaming recognition uses server VAD. A manual-turn option is deliberately absent because that model/protocol does not provide a true manual segmentation mode. `input.commit` ends dictation; it is not a second conversation mode.
 

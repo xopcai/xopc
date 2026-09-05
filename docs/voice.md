@@ -11,9 +11,19 @@ xopc can turn voice messages into text (speech-to-text, or STT) and assistant re
 
 ## Configure speech-to-text
 
+### Realtime dictation and conversation
+
+Open **Settings → Capabilities → Voice** and choose **XOPC hosted** or **Your API key** (Alibaba Qwen). Hosted voice requires a signed-in account and available realtime models. For Alibaba, dictation and conversation share the input credential; existing Edge message readout stays unchanged.
+
+Choose a conversation voice, then use **Test voice**. The test opens the microphone only after a click, displays a real final transcript, plays a fixed sample through the native streaming speech provider, and asks you to confirm that you heard it. It does not create a chat or call an Agent. **Not tested** means a route is configured, not that a live connection has succeeded. Testing may incur provider usage. When only input is configured, use **Test dictation**.
+
+After testing, open Chat and use its microphone for dictation or voice conversation. Conversation also requires a working Agent model. **Read messages aloud** controls ordinary message readout separately. **Advanced settings** contains language, pause duration, input providers, fallback, and transcript cleanup.
+
+### Audio attachments and message channels
+
 In the Gateway console, open **Settings → Capabilities → Voice**:
 
-1. Enable speech-to-text.
+1. Expand **Advanced settings** and enable speech-to-text.
 2. Choose a provider and model.
 3. Add the provider credential if it is not already configured.
 4. Save and upload a short test recording in Chat.
@@ -28,7 +38,7 @@ Discussion capture keeps the compressed original recording as recoverable eviden
 
 ## Configure text-to-speech
 
-1. Enable text-to-speech on the same Voice settings page.
+1. Expand **Read messages aloud** on the same Voice settings page and enable text-to-speech.
 2. Choose a provider, model, and voice.
 3. Choose when audio is created:
 

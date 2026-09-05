@@ -214,8 +214,8 @@ function LazySectionHost({
         visible ? 'flex flex-col gap-3' : undefined,
       )}
     >
-      {visible ? <p className="text-sm leading-relaxed text-fg-muted">{hint}</p> : null}
-      {children}
+      {visible && id !== 'voice' ? <p className="text-sm leading-relaxed text-fg-muted">{hint}</p> : null}
+      {id === 'voice' && !visible ? null : children}
     </div>
   );
 }
