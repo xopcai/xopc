@@ -1,0 +1,10 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+group = 'ai.xopc.voice'
+version = '1.0.0'
+android {
+  namespace 'ai.xopc.voice'
+  defaultConfig { versionCode 1; versionName '1.0.0' }
+}

@@ -24,6 +24,7 @@ function classifyFetchError(error: unknown): GatewayErrorKind {
 }
 
 export type ApiFetchOptions = RequestInit & {
+  onResolvedOrigin?: (origin: string) => void;
   timeoutMs?: number;
   recoverRouteOnNetworkError?: boolean;
 };
@@ -69,7 +70,7 @@ async function fetchRoute(
 }
 
 export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promise<Response> {
-  const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, recoverRouteOnNetworkError, ...requestInit } = init;
+  const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, recoverRouteOnNetworkError, onResolvedOrigin, ...requestInit } = init;
   const method = (requestInit.method ?? 'GET').toUpperCase();
   const gatewayId = useGatewayStore.getState().activeGatewayId;
   const generation = useGatewayStore.getState().connectionGeneration;
@@ -107,6 +108,7 @@ export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promis
         if (gatewayId) useGatewayStore.getState().selectRoute(gatewayId, route.id);
       }
       if (response.status === 401) useGatewayStore.getState().onUnauthorized();
+      onResolvedOrigin?.(route.url);
       return response;
     } catch (error) {
       if (requestInit.signal?.aborted) throw error;

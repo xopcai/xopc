@@ -1,5 +1,5 @@
 import { MobilePrivacyDisclosureSchema, type MobilePrivacyDisclosure } from '@xopcai/gateway-contract';
-import { AppState } from 'react-native';
+import { AppState, DeviceEventEmitter } from 'react-native';
 import { create } from 'zustand';
 
 import { apiFetch } from '../../api/client';
@@ -72,5 +72,6 @@ export function revokeDataSharingConsent(): void {
   const gatewayId = useGatewayStore.getState().activeGatewayId;
   if (!gatewayId) return;
   dataSharingConsent.revoke(gatewayId);
+  DeviceEventEmitter.emit('voice-consent-revoked');
   useDataSharingPrompt.getState().prompt?.finish(false);
 }

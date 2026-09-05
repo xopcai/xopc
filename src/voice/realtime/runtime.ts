@@ -26,6 +26,7 @@ import type {
 } from '../../media-understanding/types.js';
 import { createPreauthConnectionBudget } from '../../gateway/security/preauth-connection-budget.js';
 import { createLogger } from '../../utils/logger.js';
+import { onUserContextChange } from '../../user-context/changes.js';
 import { mergeSttConfigFromAppConfig } from '../stt/config.js';
 import { resolveSTTProviderChain } from '../stt/factory.js';
 import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
@@ -431,6 +432,9 @@ export class VoiceRealtimeRuntime {
     let lastActivityAt = Date.now();
     const abortController = new AbortController();
     const seenMessageIds = new Set<string>();
+    let context: VoiceConversationContext | undefined;
+    let unsubscribeMemory: (() => void) | undefined;
+    let unsubscribeSession: (() => void) | undefined;
 
     const send: VoiceEventSink = (type, payload) => {
       if (!claim || socket.readyState !== WebSocketState.OPEN) return;
@@ -455,6 +459,7 @@ export class VoiceRealtimeRuntime {
     const shutdown = async (reason: string, notify: boolean) => {
       if (closed) return;
       closed = true;
+      unsubscribeMemory?.(); unsubscribeSession?.();
       clearTimeout(startTimer);
       clearInterval(lifecycleTimer);
       abortController.abort(reason);
@@ -470,10 +475,17 @@ export class VoiceRealtimeRuntime {
     const startTimer = setTimeout(() => socket.close(4401, 'Voice session start timeout'), VOICE_REALTIME_START_TIMEOUT_MS);
     const lifecycleTimer = setInterval(() => {
       if (!claim) return;
+      if (context?.memory && !context.memory.isCurrent()) { invalidateContext(); return; }
       const now = Date.now();
       if (now - lastActivityAt > claim.idleTimeoutMs) void shutdown('idle_timeout', true);
       else if (now - claim.createdAt > claim.maxSessionMs) void shutdown('session_limit', true);
     }, 1_000);
+
+    const invalidateContext = () => {
+      if (closed) return;
+      send('session.error', { code: 'CONTEXT_CHANGED', message: 'Conversation context changed. Reconnect to use the updated information.', recoverable: false });
+      void shutdown('context_changed', true);
+    };
 
     const authenticate = async (message: Extract<VoiceClientMessage, { type: 'session.start' }>) => {
       const consumed = this.consumeTicket(message.payload.ticket, message.payload.sessionId);
@@ -494,8 +506,15 @@ export class VoiceRealtimeRuntime {
       let setupStage: 'context' | 'engine' = 'context';
       try {
         if (consumed.omni) {
-          const context = await this.options.getConversationContext!(consumed.request.sessionKey!, consumed.conversationSessionId!);
+          unsubscribeSession = onUserContextChange((change) => {
+            if (change.kind === 'session-reset' && change.id === consumed.request.sessionKey) invalidateContext();
+          });
+          context = await this.options.getConversationContext!(consumed.request.sessionKey!, consumed.conversationSessionId!);
           if (closed) return;
+          if (context.memory) {
+            unsubscribeMemory = context.memory.subscribe(invalidateContext);
+            if (!context.memory.isCurrent()) { invalidateContext(); return; }
+          }
           consumed.omni = { ...consumed.omni, instructions: voiceConversationInstructions(consumed.omni.instructions, context) };
         }
         setupStage = 'engine';
@@ -530,6 +549,7 @@ export class VoiceRealtimeRuntime {
           heartbeatIntervalMs: VOICE_REALTIME_HEARTBEAT_INTERVAL_MS,
         });
       } catch (error) {
+        if (closed) return;
         log.warn({ err: error, sessionId: consumed.sessionId, provider: consumed.omni?.route.provider ?? consumed.stt?.route.provider }, 'Realtime voice setup failed');
         send('session.error', { code: 'PROVIDER_UNAVAILABLE', message: setupStage === 'context' ? 'Conversation context could not be restored. Check voice and agent instructions.' : 'Voice engine is unavailable', recoverable: false });
         await shutdown('provider_unavailable', true);

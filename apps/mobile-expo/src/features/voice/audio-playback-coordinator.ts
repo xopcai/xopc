@@ -4,8 +4,23 @@ type PlaybackOwner = {
 };
 
 let activeOwner: PlaybackOwner | null = null;
+let captureOwner: symbol | null = null;
+
+export function claimAudioCapture(owner: symbol): boolean {
+  if (captureOwner && captureOwner !== owner) return false;
+  pauseActiveAudioPlayback();
+  captureOwner = owner;
+  return true;
+}
+
+export function releaseAudioCapture(owner: symbol): void {
+  if (captureOwner === owner) captureOwner = null;
+}
+
+export function isAudioCaptureActive(): boolean { return captureOwner !== null; }
 
 export function claimAudioPlayback(id: string, pause: () => void): void {
+  if (captureOwner) throw new Error('Microphone is in use');
   if (activeOwner?.id !== id) activeOwner?.pause();
   activeOwner = { id, pause };
 }

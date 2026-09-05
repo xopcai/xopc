@@ -12,7 +12,7 @@ import type { AudioRecorder, RecordingOptions } from 'expo-audio';
 import { File } from 'expo-file-system';
 import { Platform } from 'react-native';
 
-import { pauseActiveAudioPlayback } from '../voice/audio-playback-coordinator';
+import { claimAudioCapture, releaseAudioCapture } from '../voice/audio-playback-coordinator';
 
 export type ExpoRecording = AudioRecorder;
 
@@ -65,6 +65,7 @@ export function classifyVoiceTranscriptionFailure(error: unknown): VoiceTranscri
 
 /** expo-audio only emits recordingStatusUpdate on finish/error — poll for live metering. */
 const METERING_POLL_MS = 100;
+const captureOwners = new WeakMap<ExpoRecording, symbol>();
 const meteringPolls = new WeakMap<ExpoRecording, ReturnType<typeof setInterval>>();
 
 function stopMeteringPoll(rec: ExpoRecording): void {
@@ -173,36 +174,47 @@ export async function beginRecording(
   onStatus: (metering: number | undefined, durationMillis: number) => void,
   options?: { persistent?: boolean },
 ): Promise<ExpoRecording> {
-  pauseActiveAudioPlayback();
+  const owner = Symbol('recording');
+  if (!claimAudioCapture(owner)) throw new VoiceRecordingError('audio_mode', new Error('Microphone is in use'));
   try {
-    await setAudioModeAsync({
-      allowsRecording: true,
-      playsInSilentMode: true,
-    });
-  } catch (error) {
-    throw new VoiceRecordingError('audio_mode', error);
-  }
+    try {
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+    } catch (error) {
+      throw new VoiceRecordingError('audio_mode', error);
+    }
 
-  const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
-  const recorder = new AudioModule.AudioRecorder(
-    nativeRecordingOptionsForPlatform(platform, options?.persistent ? 'document' : undefined),
-  );
-  try {
-    await recorder.prepareToRecordAsync();
-  } catch (error) {
-    recorder.release();
-    await restorePlaybackAudioMode();
-    throw new VoiceRecordingError('prepare', error);
-  }
-  try {
-    recorder.record();
-  } catch (error) {
-    recorder.release();
-    await restorePlaybackAudioMode();
-    throw new VoiceRecordingError('start', error);
-  }
-  startMeteringPoll(recorder, onStatus);
-  return recorder;
+    const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
+    const recorder = new AudioModule.AudioRecorder(
+      nativeRecordingOptionsForPlatform(platform, options?.persistent ? 'document' : undefined),
+    );
+    try {
+      await recorder.prepareToRecordAsync();
+    } catch (error) {
+      recorder.release();
+      await restorePlaybackAudioMode();
+      throw new VoiceRecordingError('prepare', error);
+    }
+    try {
+      recorder.record();
+    } catch (error) {
+      recorder.release();
+      await restorePlaybackAudioMode();
+      throw new VoiceRecordingError('start', error);
+    }
+    captureOwners.set(recorder, owner);
+    startMeteringPoll(recorder, onStatus);
+    return recorder;
+  } catch (error) { releaseAudioCapture(owner); throw error; }
+}
+
+async function releaseRecordingCapture(rec: ExpoRecording): Promise<void> {
+  await restorePlaybackAudioMode();
+  const owner = captureOwners.get(rec);
+  if (owner) releaseAudioCapture(owner);
+  captureOwners.delete(rec);
 }
 
 export async function discardRecording(rec: ExpoRecording): Promise<void> {
@@ -213,9 +225,10 @@ export async function discardRecording(rec: ExpoRecording): Promise<void> {
   } catch {
     /* already unloaded / too short on Android */
   } finally {
-    rec.release();
-    deleteRecordingFile(uri ?? rec.uri);
-    await restorePlaybackAudioMode();
+    try {
+      deleteRecordingFile(uri ?? rec.uri);
+      rec.release();
+    } finally { await releaseRecordingCapture(rec); }
   }
 }
 
@@ -237,16 +250,16 @@ export function readRecordingDurationMillis(rec: ExpoRecording): number {
 }
 
 export async function finishRecording(rec: ExpoRecording): Promise<{ uri: string | null; durationMillis: number }> {
-  const durationMillis = readRecordingDurationMillis(rec);
   stopMeteringPoll(rec);
   try {
+    const durationMillis = readRecordingDurationMillis(rec);
     await rec.stop();
     return { uri: rec.uri, durationMillis };
   } catch (error) {
     throw new VoiceRecordingError('stop', error);
   } finally {
-    rec.release();
-    await restorePlaybackAudioMode();
+    try { rec.release(); }
+    finally { await releaseRecordingCapture(rec); }
   }
 }
 

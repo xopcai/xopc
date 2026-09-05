@@ -14,7 +14,7 @@ import type { AudioContent } from './messages.types';
 import { audioNameFromPath, resolveAudioPlaybackUrl } from './audio-url';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 import { MessageAudioCache } from './message-audio-cache';
-import { claimAudioPlayback, releaseAudioPlayback } from '../voice/audio-playback-coordinator';
+import { claimAudioPlayback, releaseAudioPlayback, isAudioCaptureActive } from '../voice/audio-playback-coordinator';
 
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return '0:00';
@@ -103,6 +103,7 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   }, [audio.durationSeconds, unload, uri]);
 
   const ensurePlayer = useCallback(async () => {
+    if (isAudioCaptureActive()) throw new Error('Microphone is in use');
     if (playerRef.current) return playerRef.current;
     if (!uri) throw new Error(m.chat.audioMissingSource);
     const sourceGeneration = sourceGenerationRef.current;

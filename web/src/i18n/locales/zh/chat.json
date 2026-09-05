@@ -950,6 +950,7 @@
     "voiceResponseInterrupt": "停止回复",
     "voiceResponseFailed": "语音播放失败，文字回复仍可查看。",
     "voiceInputDropped": "语音连接拥堵，这段输入已丢弃；请在连接恢复后重新说一遍。",
+    "voiceContextChanged": "对话或记忆设置已更新，请重新连接以继续通话。",
     "voiceTranscribing": "正在转写…",
     "voicePreparing": "正在准备本地中文语音…",
     "voicePreparingProgress": "正在准备本地中文语音… {progress}%",

@@ -3,11 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { parseSessionKey } from '../routing/session-key.js';
 
-import type { UserContextPlan, PlannedUserContextItem, UserContextRejectionReason } from '../agent/memory/context/types.js';
+import type { UserContextPlan, PlannedUserContextItem } from '../agent/memory/context/types.js';
 import { readAgentMessageContent } from '../agent/memory/agent-message-access.js';
 import { buildUserContextBlock } from '../agent/memory/context-fence.js';
 import { buildRetrievalQueryProfile } from '../retrieval/queryProfile.js';
-import { retrievalLexicalSimilarity } from '../retrieval/textFeatures.js';
 import {
   ensureContextConsent,
   getUserProfile,
@@ -27,6 +26,7 @@ import {
 import type { UserFocus } from './sources/types.js';
 import { UserUnderstandingRetriever } from './retriever.js';
 import { matchesUserContextScope } from './scope.js';
+import { rejectionReason, focusRejectionReason, focusScore } from './selection-policy.js';
 
 const DEFAULT_MAX_CONTEXT_CHARS = 6_000;
 const DEFAULT_MAX_RESULTS = 12;
@@ -99,55 +99,12 @@ function focusSourceDescription(focus: UserFocus): {
   return { origin: 'inferred', label: 'Suggested from prior work' };
 }
 
-function rejectionReason(
-  item: UserUnderstanding,
-  input: { sessionKey: string; workspaceId: string; projectId?: string },
-  now: number,
-  timeHints: string[],
-): UserContextRejectionReason | undefined {
-  const historical = timeHints.includes('historical') && item.validTo !== undefined;
-  if (item.status === 'needs_review' || item.status === 'candidate' || (item.status === 'stale' && !historical)) return 'needs_review';
-  if (item.status === 'rejected' || (item.status === 'archived' && !historical)) return 'disabled';
-  if (!matchesUserContextScope(item.scope, input)) return 'scope_mismatch';
-  if (item.validFrom && item.validFrom > now && !timeHints.includes('future')) return 'not_yet_valid';
-  if (((item.validTo && item.validTo < now) || (item.expiresAt && item.expiresAt < now)) && !historical) return 'expired';
-  if (item.sensitivity === 'secret' || item.sensitivity === 'regulated') return 'sensitive';
-  if (item.conflictGroupId) return 'conflict';
-  return undefined;
-}
-
 function ruleMatches(rule: CollaborationRule, input: { sessionKey: string; workspaceId: string; projectId?: string; channel?: string; agentId?: string }): boolean {
   if (rule.status !== 'active' || !matchesUserContextScope(rule.scope, input)) return false;
   const channel = typeof rule.conditions.channel === 'string' ? rule.conditions.channel : undefined;
   const agentId = typeof rule.conditions.agentId === 'string' ? rule.conditions.agentId : undefined;
   return (!channel || channel === input.channel) && (!agentId || agentId === input.agentId);
 }
-
-function focusRejectionReason(
-  focus: UserFocus,
-  input: { sessionKey: string; workspaceId: string; projectId?: string },
-  now: number,
-): UserContextRejectionReason | undefined {
-  if (focus.status !== 'active') return 'disabled';
-  if (!matchesUserContextScope(focus.scope, input)) return 'scope_mismatch';
-  if (focus.validFrom && focus.validFrom > now) return 'not_yet_valid';
-  if (focus.validTo && focus.validTo < now) return 'expired';
-  if (focus.sensitivity === 'secret' || focus.sensitivity === 'regulated') return 'sensitive';
-  if (focus.disclosurePolicy === 'ask_before_reference') return 'requires_consent';
-  return undefined;
-}
-
-function focusScore(focus: UserFocus, query: string, scopeInput: {
-  sessionKey: string;
-  workspaceId: string;
-  projectId?: string;
-}): number {
-  const profile = buildRetrievalQueryProfile(query, scopeInput);
-  const lexical = retrievalLexicalSimilarity(profile.normalized, `${focus.title} ${focus.summary}`);
-  const scoped = focus.scope.type !== 'global' && matchesUserContextScope(focus.scope, scopeInput);
-  return Math.min(1, lexical * 0.75 + focus.confidence * 0.15 + (scoped ? 0.25 : 0));
-}
-
 function renderContextBlock(params: {
   profileLines: string[];
   focuses: UserFocus[];

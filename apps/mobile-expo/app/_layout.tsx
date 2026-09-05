@@ -35,6 +35,7 @@ import { mobileAppJsStartedAt, recordPerformanceEvent } from '@/product/usage-me
 import { GlobalReadAloudPlayer } from '@/features/voice/GlobalReadAloudPlayer';
 import { clearStaleReadAloudCache } from '@/features/voice/read-aloud-cache';
 import { clearStaleReadAloudLiveActivities } from '@/features/voice/read-aloud-live-activity';
+import { VoiceCallSurface } from '@/features/voice/VoiceCallSurface';
 import { DataSharingConsentDialog } from '@/features/privacy/DataSharingConsentDialog';
 
 export default function RootLayout() {
@@ -196,6 +197,7 @@ export default function RootLayout() {
                 />
               </Stack>
               <GlobalReadAloudPlayer />
+              <VoiceCallSurface />
               <DataSharingConsentDialog />
               <GatewayConnectLandingModal
                 visible={connectLandingVisible}

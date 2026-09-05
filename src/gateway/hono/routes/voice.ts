@@ -190,8 +190,20 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const stt = resolveStreamingStt(config);
     const tts = resolveStreamingTts(config);
     const omni = await resolveOmniRoute(config).catch(() => null);
+    const enabled = config.voice?.realtime?.enabled === true;
+    const availability = (configured: boolean) => ({
+      available: enabled && configured,
+      ...(!enabled ? { reasonCode: 'VOICE_DISABLED' } : !configured ? { reasonCode: 'PROVIDER_UNAVAILABLE' } : {}),
+    });
     return c.json({ ok: true, payload: {
-      enabled: config.voice?.realtime?.enabled === true,
+      enabled,
+      capabilities: {
+        dictation: availability(Boolean(stt)),
+        agent: availability(Boolean(stt && tts)),
+        omni: availability(Boolean(omni)),
+        languages: ['zh', 'en'],
+        bargeIn: config.voice?.realtime?.bargeIn ?? true,
+      },
       defaultEngine: config.voice?.realtime?.defaultEngine ?? 'agent',
       omni: omni?.route ?? null,
       stt: stt?.route ?? null,
