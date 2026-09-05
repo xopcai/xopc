@@ -1,9 +1,8 @@
-import { Plus, Send, Square } from 'lucide-react';
+import { AudioLines, Plus, Send, Square } from 'lucide-react';
 import { memo } from 'react';
 
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
 import { ComposerVoiceInputButton } from '@/features/chat/composer/composer-voice-input-button';
-import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
 import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -30,8 +29,9 @@ export interface ComposerToolbarProps {
   onThinkingChange: (level: string) => void | Promise<void>;
 
   voiceActive: boolean;
-  voiceReadiness: VoiceReadiness;
   onStartVoiceInput: () => void;
+  voiceConversationEnabled: boolean;
+  onStartVoiceConversation: () => void;
 
   onSend: () => void;
   onAbort: () => void;
@@ -58,8 +58,9 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   modelSupportsThinking,
   onThinkingChange,
   voiceActive,
-  voiceReadiness,
   onStartVoiceInput,
+  voiceConversationEnabled,
+  onStartVoiceConversation,
   onSend,
   onAbort,
   onInterrupt,
@@ -111,12 +112,29 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         ) : null}
         <div className="flex shrink-0 items-center gap-1">
           {!voiceActive ? (
-            <ComposerVoiceInputButton
-              disabled={disabled}
-              readiness={voiceReadiness}
-              chat={m}
-              onStart={onStartVoiceInput}
-            />
+            <>
+              <ComposerVoiceInputButton
+                disabled={disabled}
+                chat={m}
+                onStart={onStartVoiceInput}
+              />
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                  interaction.transition,
+                  interaction.press,
+                  interaction.focusRingPanel,
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+                disabled={disabled || !voiceConversationEnabled}
+                title={m.voiceConversation}
+                aria-label={m.voiceConversation}
+                onClick={() => void onStartVoiceConversation()}
+              >
+                <AudioLines className="size-4 stroke-[1.75]" />
+              </button>
+            </>
           ) : null}
           {runBusy ? (
             <>

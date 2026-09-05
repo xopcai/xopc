@@ -349,9 +349,6 @@ export const minimaxSpeechProvider: SpeechProviderPlugin = {
     const callTimeoutMs = Math.max(req.timeoutMs, DEFAULT_TIMEOUT_MS);
 
     log.debug({ model, voice, textLength: req.text.length }, 'MiniMax TTS submit');
-    // SpeechSynthesisRequest carries no AbortSignal — orchestrator controls
-    // timeouts via timeoutMs. If user cancellation is required later, expose
-    // it through fetchWithTimeoutGuarded's `signal` option.
     const taskId = await submitTask({
       baseUrl: config.baseUrl,
       apiKey,
@@ -359,18 +356,21 @@ export const minimaxSpeechProvider: SpeechProviderPlugin = {
       voiceId: voice,
       text: req.text,
       timeoutMs: callTimeoutMs,
+      signal: req.signal,
     });
     const fileId = await pollTask({
       baseUrl: config.baseUrl,
       apiKey,
       taskId,
       timeoutMs: callTimeoutMs,
+      signal: req.signal,
     });
     const audioBuffer = await downloadAudio({
       baseUrl: config.baseUrl,
       apiKey,
       fileId,
       timeoutMs: callTimeoutMs,
+      signal: req.signal,
     });
     log.debug({ size: audioBuffer.length, taskId }, 'MiniMax TTS completed');
     return {

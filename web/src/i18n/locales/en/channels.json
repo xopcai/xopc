@@ -162,6 +162,14 @@
       "autoDescription": "STT language and the built-in Edge voice follow the app language automatically.",
       "manualDescription": "App language changes will not overwrite the model language or selected voice."
     },
+    "realtime": {
+      "title": "Realtime voice",
+      "description": "Stream microphone audio for live transcription and low-latency voice conversations.",
+      "turnDetection": "Automatic turn detection",
+      "turnDetectionDescription": "Qwen detects speech pauses and sends each completed utterance automatically.",
+      "bargeIn": "Allow interruption",
+      "bargeInDescription": "Speaking while the assistant replies stops the current response."
+    },
     "behavior": {
       "title": "How voice should work",
       "description": "Choose the user-facing behavior first. Engine details stay below.",

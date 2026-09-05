@@ -139,6 +139,52 @@ export interface AudioTranscriptionResult {
   durationSeconds?: number;
 }
 
+export interface PcmAudioFormat {
+  encoding: 'pcm_s16le';
+  sampleRate: 16_000 | 24_000;
+  channels: 1;
+}
+
+export interface StreamingSttCapabilities {
+  inputSampleRates: readonly number[];
+  turnDetection: readonly 'server_vad'[];
+  defaultModel: string;
+  models: readonly string[];
+}
+
+export type StreamingSttEvent =
+  | { type: 'ready' }
+  | { type: 'speech_started'; utteranceId: string }
+  | { type: 'speech_stopped'; utteranceId: string }
+  | { type: 'transcript_delta'; utteranceId: string; revision: number; text: string }
+  | { type: 'transcript_final'; utteranceId: string; revision: number; text: string; language?: string }
+  | { type: 'usage'; inputAudioMs: number }
+  | { type: 'error'; error: Error };
+
+export interface StreamingSttOpenRequest {
+  model: string;
+  inputFormat: PcmAudioFormat;
+  apiKey?: string;
+  baseUrl?: string;
+  headers?: Record<string, string>;
+  language?: string;
+  prompt?: string;
+  turnDetection: {
+    mode: 'server_vad';
+    silenceDurationMs: number;
+  };
+  timeoutMs: number;
+  signal: AbortSignal;
+  onEvent: (event: StreamingSttEvent) => void;
+}
+
+export interface StreamingSttSession {
+  appendAudio(chunk: Uint8Array): void;
+  commit(): Promise<void>;
+  close(): Promise<void>;
+  abort(reason: string): void;
+}
+
 export interface ImageDescriptionRequest {
   buffer: Buffer;
   fileName: string;
@@ -212,6 +258,8 @@ export interface MediaUnderstandingProvider {
   // Capability methods. Providers declare ONLY the ones they implement; absence
   // is the unambiguous "not supported" signal (no stub bodies, no NotImplemented).
   transcribeAudio?: (req: AudioTranscriptionRequest) => Promise<AudioTranscriptionResult>;
+  streamingAudio?: StreamingSttCapabilities;
+  openAudioStream?: (req: StreamingSttOpenRequest) => Promise<StreamingSttSession>;
   describeImage?: (req: ImageDescriptionRequest) => Promise<ImageDescriptionResult>;
   describeVideo?: (req: VideoDescriptionRequest) => Promise<VideoDescriptionResult>;
 }

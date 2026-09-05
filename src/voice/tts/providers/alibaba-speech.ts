@@ -6,11 +6,6 @@
  * doesn't fit the OpenAI-compatible factory.
  *
  * Implementation notes (per docs/voice-rearchitecture.md §8.4.1):
- *   - `synthesizeStream` is intentionally not implemented. Native qwen-tts
- *     streaming uses a WebSocket protocol
- *     (wss://dashscope.aliyuncs.com/api-ws/v1/inference); speak-core's stream
- *     fallback wraps `synthesize` output as a single-chunk ReadableStream so
- *     callers see the same shape.
  *   - `maxTextLength = 512` (DashScope qwen-tts hard limit). Enforced upstream
  *     via `truncateAtSentenceBoundary` before this provider sees the text.
  *   - The audio URL returned by DashScope is hosted on Alibaba's CDN (variable
@@ -30,6 +25,7 @@ import {
   postJsonRequest,
 } from '../../../media-shared/http/index.js';
 import { createLogger } from '../../../utils/logger.js';
+import { openDashScopeStreamingTts } from '../../dashscope/streaming-tts-stream.js';
 import { registerSpeechProvider } from '../speech-registry.js';
 import type {
   SpeechDirectiveTokenParseContext,
@@ -40,6 +36,7 @@ import type {
   SpeechProviderResolveConfigContext,
   SpeechSynthesisRequest,
   SpeechSynthesisResult,
+  SpeechSynthesisStreamResult,
 } from '../speech-provider-types.js';
 
 const log = createLogger('SpeechProvider:Alibaba');
@@ -47,6 +44,7 @@ const log = createLogger('SpeechProvider:Alibaba');
 const DEFAULT_BASE_URL =
   'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
 const DEFAULT_MODEL = 'qwen-tts';
+export const ALIBABA_REALTIME_TTS_MODEL = 'qwen3-tts-flash-realtime';
 const DEFAULT_VOICE = 'longxiaochun';
 const ENV_KEY = 'DASHSCOPE_API_KEY';
 const MAX_TEXT_LENGTH = 512;
@@ -189,6 +187,7 @@ export const alibabaSpeechProvider: SpeechProviderPlugin = {
         input: { text: req.text },
         parameters: { voice },
       },
+      signal: req.signal,
     });
 
     const data = (await response.json()) as CosyVoiceResponse;
@@ -206,6 +205,7 @@ export const alibabaSpeechProvider: SpeechProviderPlugin = {
         timeoutMs: req.timeoutMs,
         label: 'Alibaba TTS audio download',
         allowPrivateNetwork: false,
+        signal: req.signal,
       });
       if (!audioResponse.ok) {
         throw new ProviderHttpError({
@@ -236,8 +236,28 @@ export const alibabaSpeechProvider: SpeechProviderPlugin = {
       voiceCompatible: false,
     };
   },
-
-  // synthesizeStream intentionally omitted — see file-level DECISION.
+  synthesizeStream: async (req): Promise<SpeechSynthesisStreamResult> => {
+    const config = readProviderConfig(req.providerConfig);
+    const apiKey = resolveApiKey(config);
+    if (!apiKey) {
+      throw new Error(
+        `Alibaba TTS API key missing (set ${ENV_KEY} or messages.tts.providers.alibaba.apiKey)`,
+      );
+    }
+    const overrides = req.providerOverrides ?? {};
+    const voice = trimToUndefined(overrides.voice ?? overrides.voiceId) ?? config.voice;
+    const instructions = trimToUndefined(overrides.instructions);
+    return openDashScopeStreamingTts({
+      apiKey,
+      baseUrl: config.baseUrl,
+      model: ALIBABA_REALTIME_TTS_MODEL,
+      voice,
+      text: req.text,
+      ...(instructions ? { instructions } : {}),
+      signal: req.signal,
+      timeoutMs: req.timeoutMs,
+    });
+  },
 };
 
 registerSpeechProvider(alibabaSpeechProvider);
