@@ -1,6 +1,6 @@
 # iOS App Store release readiness
 
-Updated: 2026-09-04. Version 1.0 has been submitted, but this document does not assert that the app has passed review.
+Updated: 2026-09-05. Version 1.0 received a Guideline 2.1 information request. Apple requires a physical-device screen recording and six product/business-model answers before review can continue.
 
 ## Changes prepared in this release
 
@@ -141,7 +141,7 @@ Checks completed on the 2026-09-03 working copy:
 - Live Universal Links hosting and Apple's CDN were verified after deployment; physical-device automatic opening remains pending.
 - App Privacy was published with Device ID / App Functionality / linked to the user / not used for tracking. Store metadata, screenshots, reviewer access and free pricing are configured. Version 1.0 was added to an App Review draft and passed App Store Connect's required-field validation.
 - App availability is configured for 174 current storefronts. China mainland is explicitly unavailable, so its App ICP filing does not block this submission; future territories remain enabled.
-- App Store version 1.0 using build `0.0.26 (1)` was submitted on 2026-09-04 at 13:56 Asia/Shanghai. App Store Connect submission `18e7913c-f7f8-498b-92ac-057341c5925f` is **Waiting for Review**.
+- App Store version 1.0 using build `0.0.26 (1)` was submitted on 2026-09-04 at 13:56 Asia/Shanghai. On 2026-09-05, App Store Connect submission `18e7913c-f7f8-498b-92ac-057341c5925f` was rejected under Guideline 2.1 as an information request for a new developer account with limited review history. Apple requested a physical-device recording plus the purpose, audience, access instructions, external services, regional differences, and regulated-content status. The prepared reply and recording checklist are in `apps/mobile-expo/app-store/review-response-2.1.md`.
 - TestFlight physical-device checks remain outstanding. App ICP filing is deferred until China mainland distribution is planned.
 
 ```bash
