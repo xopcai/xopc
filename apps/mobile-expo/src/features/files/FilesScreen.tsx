@@ -22,7 +22,7 @@ import {
 } from '../../query/files';
 import { queryKeys } from '../../query/keys';
 import { floatingBottomPadding, spacing, useTheme } from '../../theme';
-import { FilePreviewModal, type PreviewableFile } from '../chat/FilePreviewModal';
+import { FilePreviewModal, type PreviewableFile } from '../file-preview/FilePreviewModal';
 
 import { useFileActions } from './file-actions';
 
