@@ -7,6 +7,23 @@ import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import type { OmniRoute } from './omniRoute.js';
 
 const log = createLogger('Voice:Omni');
+// Generation can outrun playback. Keep one minute of PCM, while the client window stays two seconds.
+const MAX_QUEUED_AUDIO_BYTES = 24_000 * 2 * 60;
+const FAILURE_MESSAGES: Record<string, string> = {
+  OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
+  OMNI_START_TIMEOUT: 'The voice service did not become ready in time.',
+  OMNI_CONNECTION_FAILED: 'Could not connect to the voice service. Check network and service availability.',
+  OMNI_CONNECTION_REJECTED: 'The voice service rejected the connection. Check account access, quota and route configuration.',
+  OMNI_CONNECTION_CLOSED: 'The voice service closed the connection.',
+  OMNI_PROVIDER_ERROR: 'The voice service reported an error.',
+  OMNI_RESPONSE_FAILED: 'The voice service could not complete its reply.',
+  OMNI_INVALID_TRANSCRIPT: 'The voice service returned an invalid transcript.',
+  OMNI_INVALID_AUDIO: 'The voice service returned invalid audio.',
+  OMNI_TRANSCRIPT_LIMIT: 'The voice reply exceeded the transcript limit.',
+  OMNI_PROTOCOL_ERROR: 'The voice service returned an unexpected message.',
+  OMNI_ITEM_LIMIT: 'This call reached its conversation limit.',
+  TRANSCRIPT_WRITE_FAILED: 'The conversation could not be saved. Check gateway storage.',
+};
 
 export interface OmniTranscript {
   itemId: string;
@@ -39,6 +56,12 @@ export function createOmniVoiceEngine(options: {
   let socket: WebSocket | undefined;
   let closed = false;
   let ready = false;
+  let muted = false;
+  let inputBlocked = false;
+  let clearingInput = false;
+  let clearTimer: ReturnType<typeof setTimeout> | undefined;
+  const discardedInputs = new Set<string>();
+  const pendingInputs = new Set<string>();
   let failed = false;
   let platformRequestId: string | undefined;
   let active: ResponseState | undefined;
@@ -85,13 +108,30 @@ export function createOmniVoiceEngine(options: {
     options.send('response.done', { responseId: response.id, audio: response.audio, finishReason: response.audio ? 'completed' : 'text_only' });
     active = undefined;
   };
-  function fail(code: string) {
+  const stopReply = (response: ResponseState, code: string) => {
+    if (closed || active !== response) return;
+    log.warn({ sessionId: options.callId, platformRequestId, responseId: response.id, code, queuedBytes: response.queuedBytes }, 'Native voice reply stopped; call remains connected');
+    cancel('client_cancelled');
+    options.send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice playback could not keep up. This reply was stopped; you can continue speaking.', recoverable: true });
+  };
+  function fail(code: string, details: { closeCode?: number; upstreamStatus?: number } = {}) {
     if (closed || failed) return;
     failed = true;
-    log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code }, 'Native voice conversation failed');
+    log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code, ...details }, `Native voice conversation failed: ${code}`);
     rejectStart?.(new Error(code));
-    options.send('session.error', { code, message: 'Natural conversation ended. Reconnect to continue.', recoverable: false });
+    const reference = platformRequestId ?? options.callId;
+    options.send('session.error', { code, message: `${FAILURE_MESSAGES[code] ?? 'Natural conversation failed.'} (${code}; reference: ${reference})`, recoverable: false });
     void options.onClose('omni_error', true);
+  }
+  function discardInput() {
+    inputBlocked = true;
+    if (clearingInput) return;
+    clearingInput = true;
+    clearTimer = setTimeout(() => fail('OMNI_INPUT_RESET_TIMEOUT'), 5_000);
+    for (const id of pendingInputs) discardedInputs.add(id);
+    pendingInputs.clear();
+    if (discardedInputs.size > 10_000) { fail('OMNI_ITEM_LIMIT'); return; }
+    send('input_audio_buffer.clear');
   }
   const engine: VoiceEngine = {
     start() {
@@ -105,7 +145,11 @@ export function createOmniVoiceEngine(options: {
         });
         timer = setTimeout(() => { fail('OMNI_START_TIMEOUT'); engine.close(); }, 15_000);
         socket.on('error', () => fail('OMNI_CONNECTION_FAILED'));
-        socket.on('close', () => { if (!closed) fail('OMNI_CONNECTION_CLOSED'); });
+        socket.on('close', (closeCode) => { if (!closed) fail('OMNI_CONNECTION_CLOSED', { closeCode }); });
+        socket.on('unexpected-response', (_request, response) => {
+          response.resume();
+          fail('OMNI_CONNECTION_REJECTED', { upstreamStatus: response.statusCode });
+        });
         socket.on('message', (raw, binary) => {
           if (closed) return;
           try {
@@ -125,17 +169,30 @@ export function createOmniVoiceEngine(options: {
               } });
             } else if (event.type === 'session.updated' && !ready) {
               ready = true; clearTimeout(timer); rejectStart = undefined; resolve();
+            } else if (event.type === 'input_audio_buffer.cleared') {
+              clearingInput = false;
+              clearTimeout(clearTimer);
             } else if (event.type === 'input_audio_buffer.speech_started') {
+              if (muted || clearingInput) { discardedInputs.add(String(event.item_id)); return; }
+              inputBlocked = false;
+              pendingInputs.add(String(event.item_id));
               if (options.bargeIn) cancel('barge_in');
               options.send('input.speech_started', { utteranceId: String(event.item_id) });
             } else if (event.type === 'input_audio_buffer.speech_stopped') {
+              if (muted || inputBlocked || discardedInputs.has(String(event.item_id))) return;
               options.send('input.speech_stopped', { utteranceId: String(event.item_id) });
             } else if (event.type === 'conversation.item.input_audio_transcription.completed') {
-              if (typeof event.transcript !== 'string' || event.transcript.length > 32_000 || typeof event.item_id !== 'string') throw new Error('Invalid transcript');
-              if (recorded.has(event.item_id)) return;
+              if (typeof event.transcript !== 'string' || event.transcript.length > 32_000 || typeof event.item_id !== 'string') { fail('OMNI_INVALID_TRANSCRIPT'); return; }
+              if (muted || inputBlocked || discardedInputs.has(event.item_id) || recorded.has(event.item_id)) return;
+              pendingInputs.delete(event.item_id);
               save({ itemId: event.item_id, role: 'user', text: event.transcript, interrupted: false });
               options.send('input.transcript.final', { utteranceId: event.item_id, revision: 1, text: event.transcript });
             } else if (event.type === 'response.created') {
+              if (muted || inputBlocked) {
+                cancellationPending = true;
+                send('response.cancel');
+                return;
+              }
               cancellationPending = false;
               if (active) cancel('barge_in');
               const id = event.response?.id;
@@ -143,15 +200,15 @@ export function createOmniVoiceEngine(options: {
               active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve() };
               options.send('response.created', { responseId: id });
             } else if (active && event.response_id === active.id && event.type === 'response.audio_transcript.delta') {
-              if (typeof event.delta !== 'string' || active.text.length + event.delta.length > 32_000) throw new Error('Transcript limit');
+              if (typeof event.delta !== 'string' || active.text.length + event.delta.length > 32_000) { fail('OMNI_TRANSCRIPT_LIMIT'); return; }
               active.text += event.delta;
               options.send('response.text.delta', { responseId: active.id, delta: event.delta });
             } else if (active && event.response_id === active.id && event.type === 'response.audio.delta') {
-              if (typeof event.delta !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(event.delta)) throw new Error('Invalid audio');
+              if (typeof event.delta !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(event.delta)) { fail('OMNI_INVALID_AUDIO'); return; }
               const audio = Buffer.from(event.delta, 'base64');
-              if (!audio.length || audio.length % 2) throw new Error('Invalid PCM');
+              if (!audio.length || audio.length % 2) { fail('OMNI_INVALID_AUDIO'); return; }
               const response = active;
-              if (response.queuedBytes + audio.length > 192_000) throw new Error('Omni output backpressure');
+              if (response.queuedBytes + audio.length > MAX_QUEUED_AUDIO_BYTES) { stopReply(response, 'OMNI_OUTPUT_BACKPRESSURE'); return; }
               response.queuedBytes += audio.length;
               response.tail = response.tail.then(async () => {
                 for (let offset = 0; offset < audio.length; offset += 24_000) {
@@ -162,7 +219,7 @@ export function createOmniVoiceEngine(options: {
                   if (!response.audio) { response.audio = true; options.send('response.audio.started', { responseId: response.id, format: { encoding: 'pcm_s16le', channels: 1, sampleRate: 24_000 } }); }
                   options.sendAudio(response.id, chunk);
                 }
-              }).catch(() => { if (!response.abort.signal.aborted) fail('OMNI_PLAYBACK_FAILED'); }).finally(() => { response.queuedBytes -= audio.length; });
+              }).catch(() => { if (!response.abort.signal.aborted) stopReply(response, 'OMNI_PLAYBACK_FAILED'); }).finally(() => { response.queuedBytes -= audio.length; });
             } else if (event.type === 'response.done' && active?.id === event.response?.id) {
               active.generating = false;
               if (event.response.status === 'cancelled') cancel('barge_in');
@@ -170,27 +227,37 @@ export function createOmniVoiceEngine(options: {
               else {
                 const response = active;
                 options.send('response.text.done', { responseId: response.id });
-                void finish(response).catch(() => { if (!response.abort.signal.aborted) fail('OMNI_PLAYBACK_FAILED'); });
+                void finish(response).catch(() => { if (!response.abort.signal.aborted) stopReply(response, 'OMNI_PLAYBACK_FAILED'); });
               }
             }
           } catch { fail('OMNI_PROTOCOL_ERROR'); }
         });
       });
     },
+    setInputMuted(next) {
+      muted = next;
+      if (next) discardInput();
+    },
     appendAudio(bytes) {
+      if (muted) return;
       if (!ready || !bytes.length || bytes.length % 2 || bytes.length > 64 * 1024) throw new Error('Invalid Omni input');
       for (let offset = 0; offset < bytes.length; offset += 24_000) {
         send('input_audio_buffer.append', { audio: Buffer.from(bytes.subarray(offset, offset + 24_000)).toString('base64') });
       }
     },
     async commit() { throw new Error('Natural conversation uses automatic turn detection'); },
-    cancel(responseId, reason) { return active?.id === responseId ? cancel(reason) : false; },
+    cancel(responseId, reason) {
+      if (active?.id !== responseId) return false;
+      if (reason === 'client_cancelled') discardInput();
+      return cancel(reason);
+    },
     acknowledge(responseId, playedBytes) { if (active?.id === responseId) active.playback.acknowledge(playedBytes); },
     close() {
-      if (closed) return;
-      closed = true; cancel('session_closed'); clearTimeout(timer);
+      if (closed) return writes;
+      closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer);
       rejectStart?.(new Error('Omni connection closed')); rejectStart = undefined;
       socket?.terminate();
+      return writes;
     },
   };
   return engine;

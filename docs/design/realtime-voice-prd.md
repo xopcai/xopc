@@ -1,88 +1,46 @@
-# Realtime voice PRD
+# Persistent voice conversation PRD
 
-Updated: 2026-09-05. Scope: gateway console / Electron renderer and XOPC Platform relay.
+Updated: 2026-09-05. Scope: xopc gateway console and Electron renderer.
 
-## Product decision
+## Product contract
 
-One voice surface supports independent dictation and two explicitly selected conversation engines.
+One Chat Session owns the conversation. Text, voice calls, hangups and reconnects share its history. A call is an interaction inside that Chat, not a new Chat. Only explicit new-chat/reset actions start a new conversation.
 
-| Action | Pipeline | Tools and Agent memory |
-|---|---|---|
-| Dictation | Microphone → streaming STT → editable composer | No automatic submission |
-| Voice assistant (`agent`) | STT → existing xopc Agent → streaming TTS | Existing tools, approvals and session context |
-| Natural chat (`omni`) | Microphone → Qwen Omni → audio reply | No tools; fresh provider conversation per call |
+| Action | Experience | Context and capabilities |
+| --- | --- | --- |
+| Dictation | Microphone → editable text in the composer | No automatic submission |
+| Voice assistant | Continuous speech with the current Agent | Existing tools, approvals and Chat history |
+| Natural conversation | Native audio replies, without tools | Configured Agent name/instructions and bounded history from the same Chat |
 
-These are supported product capabilities, not migration fallbacks. Choose the conversation mode before starting. There is no automatic downgrade, live engine switch or socket resume.
+## User journey
 
-## User journeys
+1. Click the call action in Chat. A project preparation screen creates its initial Chat once if needed.
+2. Choose Voice assistant or Natural conversation in the call window. This mode remains selected during the current app session.
+3. Start the call. Validate capabilities, then request microphone permission. If services are missing, configure XOPC hosted voice or one shared DashScope credential in the call window or Settings.
+4. Talk naturally. See listening/thinking/speaking state and optional current-turn captions. Interrupt the reply when necessary.
+5. Mute the microphone to stop captured-audio upload while continuing to hear the assistant. Minimize the call to navigate other pages. Closing the expanded panel minimizes it; the separate End action terminates it.
+6. Hang up. Final transcript writes complete before the server releases the Chat reservation. Text conversation can then continue with the same history.
+7. Start another call from the Chat call button. Reuse the same Chat; restore the bounded model context for a new native connection.
 
-1. Open Settings → Capabilities → Voice and enable realtime voice.
-2. For the voice assistant, configure streaming STT and streaming PCM TTS.
-3. For natural chat, configure the Omni connection separately: XOPC Platform login or a local DashScope key.
-4. Open an existing Chat. Choose Voice assistant or Natural chat next to the call button.
-5. Speak naturally; server VAD detects turns. The call shows microphone level, the latest input text, response text, elapsed time and listening/thinking/speaking state.
-6. Mute controls speaker output, not microphone capture. Interrupt stops current playback; End releases capture and the connection.
-7. To use tools, end natural chat and explicitly choose Voice assistant.
+The composer call button is the single entry point. Connection timestamps and durations are not shown as a separate list; conversation content remains in Chat.
 
-Microphone permission is requested only after a user action. Final dictation text remains editable and is not sent automatically. Audio attachments and message read-aloud remain independent features.
+## Configuration
 
-## Configuration and credentials
+The default service choice configures dictation, Agent speech and native audio together. Ordinary message readout remains independent. Natural audio shares the input credential by default. Independent native endpoint, key, voice and instructions remain intentional advanced options. Re-enabling the same service preserves explicit settings; changing services discards incompatible native route overrides.
 
-- STT settings remain under `tools.media.audio`; TTS under `messages.tts`.
-- Session limits and barge-in remain under `voice.realtime`.
-- Native model, voice, instructions, provider and optional credentials/endpoint are under `voice.realtime.omni`.
-- Supported native model: `qwen3-omni-flash-realtime`.
-- Direct mode resolves the local key or the existing DashScope credential.
-- Managed mode uses the signed-in XOPC token; the platform resolves its upstream key.
-- The session payload contains only safe route metadata. The authenticated settings UI receives masked keys; unchanged masked values preserve stored secrets.
-- Configuration changes affect new calls only.
+The native model is `qwen3-omni-flash-realtime`. Hosted voice requires a signed-in XOPC account and published platform routes. Capability preflight validates local configuration and Chat availability; live connection failures remain possible. Settings diagnostics test actual speech routes separately.
 
-## Conversation ownership and history
+## State and limits
 
-One voice reservation exists per Chat, including an outstanding connection ticket. An active or queued Agent input prevents call creation. The normal web input/edit routes reject competing submissions during a reserved voice call.
+- One capture owner per renderer prevents dictation and calls from competing for the microphone.
+- One call reservation per Chat prevents concurrent text runs, edit/reset/delete operations and other calls from changing its context.
+- Route navigation/minimization preserves capture. Renderer reload, account/gateway change, device failure, network loss or time limit ends the call connection.
+- Disconnection leaves the Chat and its saved history intact. Reconnect is explicit; no automatic microphone reopening or indefinite provider socket is promised.
+- Mode changes take effect on the next call. There is no automatic engine fallback.
+- The model sees bounded context. Earlier excerpts may omit details; full persisted history remains available to the user.
+- Interrupted generated speech may contain unheard words. Subsequent model context includes an interruption marker instead of treating the generated reply as fully heard.
+- Raw audio and partial transcripts are not stored by this feature. Final native speech uses the existing SQLite transcript.
 
-Agent mode keeps the existing canonical Agent transcript writer. Natural chat stores only final user text and generated assistant text, using existing SQLite custom-message entries and call/item identifiers. It does not create an Agent run or synthetic tool results. These entries render with their actual speaker roles but are excluded from Agent model context; the two engines do not silently share conversational memory.
+## Acceptance
 
-An interrupted assistant entry is marked as interrupted and may contain text that was never played. Native provider context is not truncated to an exact heard offset; that capability is not certified. Reset/deletion invalidates the saved session identity so delayed native writes cannot recreate a deleted conversation or pollute a new one.
-
-Raw audio, partial transcripts and provider payloads are not retained.
-
-## Platform administration
-
-Models and routes → Conversation configures the certified model against an existing DashScope provider connection. Administrators explicitly set four credits-per-million-token rates: text input, audio input, text output, audio output.
-
-The audio debug lab offers native conversation through the production relay, with one-use origin-bound debug tickets, a two-minute limit, microphone consent, event-type history and a diagnostic ID. It does not validate an external device, acoustic echo cancellation or a native OAuth grant.
-
-Incomplete usage appears under Pending usage reconciliation. An administrator verifies provider billing, enters credits/tokens and a reason, then confirms settlement. No unknown usage is silently treated as free.
-
-## Limits and errors
-
-| Condition | Behavior |
-|---|---|
-| Disabled, missing credentials or unsupported native model | Fail preflight; link to Voice settings |
-| Existing Chat run, queued input or voice reservation | HTTP 409 |
-| Permission/device failure | No capture; draft preserved |
-| Agent/TTS response failure | Existing recoverable text-only/partial-audio behavior |
-| Native provider failure | End call with error; no switch to Agent |
-| Slow receiver / malformed frames | Bounded failure and cleanup; never discard arbitrary middle frames |
-| Disconnect | Close upstream, stop media, release runtime reservation |
-| Missing platform usage | Hold credit reservation pending reconciliation |
-
-Limits: 50 connections globally, two per principal, mono PCM16 input at 16 kHz and output at 24 kHz. Runtime defaults are 10 minutes for dictation, 60 minutes for conversation and 60 seconds idle; managed Omni additionally caps calls at 30 minutes and reserves a 100,000-token budget.
-
-## Acceptance and delivery gates
-
-1. Extract Agent execution behind the engine boundary and rerun existing voice tests.
-2. Add explicit engine selection and protocol v2 tagged audio; reject malformed or stale response data.
-3. Add the native engine, final transcript projection, credential handling and interruption tests.
-4. Add platform authorization, allowlisted relay, independent pricing, durable usage and reconciliation.
-5. Add settings/debug surfaces; run regression tests, typechecks, lint and builds.
-6. Perform an opt-in paid synthetic-speech vendor round trip. Separately verify real microphone, speaker echo, weak network and mobile/browser suspension before release.
-
-No WebRTC, telephony, meetings, camera input, voice cloning, automatic tool bridge, silent fallback or compatibility protocol is included.
-
-See [technical design](./realtime-voice-technical-design.md), [wire protocol](./realtime-voice-websocket-protocol.md) and [usage](../voice.md).
-
-## Agent voice setup and diagnostics
-
-The settings retain shared service/key setup, independent Agent conversation voice, interruption control and an explicit audio test. Readout and advanced input settings remain collapsed. Configuration is unverified until final transcription and user-confirmed playback; this verifies neither the Agent model nor the native Omni route. Changes invalidate verification. Microphone access requires user action.
+Verify text → call → text → call on the same key, both call modes, minimize/navigation, actual input mute, end/reconnect, missing configuration, denied microphone permission, late asynchronous capture completion, transcript refresh and reset/deletion fencing. Automated checks use synthetic audio or mocked providers; physical-device and paid-provider acceptance are separate from those checks.

@@ -27,6 +27,8 @@ export interface TtsTestInput {
 
 export interface RealtimeVoiceStatus {
   enabled: boolean;
+  defaultEngine: 'agent' | 'omni';
+  omni: { provider: string; model: string; managed: boolean } | null;
   stt: { provider: string; model: string; managed: boolean } | null;
   tts: { provider: string; model: string; managed: boolean; voice?: string } | null;
 }
@@ -234,6 +236,7 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
       },
       realtime: {
         enabled: realtime.enabled === true,
+        defaultEngine: realtime.defaultEngine === 'omni' ? 'omni' : 'agent',
         silenceDurationMs: typeof realtime.silenceDurationMs === 'number' ? realtime.silenceDurationMs : 700,
         idleTimeoutMs: typeof realtime.idleTimeoutMs === 'number' ? realtime.idleTimeoutMs : 60_000,
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,

@@ -110,4 +110,21 @@ describe('coalesceThinkingDeltas', () => {
     });
     await expect(iterator.next()).rejects.toThrow('provider failed');
   });
+  it('handles a rejected prefetched event after the consumer interrupts', async () => {
+    let reject!: (error: Error) => void;
+    const pending = new Promise<void>((_resolve, fail) => { reject = fail; });
+    let cleaned = false;
+    async function* source() {
+      try { yield assistant('Hello'); await pending; }
+      finally { cleaned = true; }
+    }
+    const iterator = coalesceThinkingDeltas(source());
+    await iterator.next();
+    reject(new DOMException('Interrupted', 'AbortError'));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await iterator.return();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(cleaned).toBe(true);
+  });
+
 });

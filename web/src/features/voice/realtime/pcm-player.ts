@@ -3,7 +3,6 @@ export class PcmPlayer {
   private readonly output = this.context.createGain();
   private readonly sources = new Set<AudioBufferSourceNode>();
   private nextStartTime = 0;
-  private muted = false;
 
   constructor() {
     this.output.connect(this.context.destination);
@@ -41,16 +40,10 @@ export class PcmPlayer {
   }
 
   duck(active: boolean): void {
-    if (this.context.state === 'closed' || this.muted) return;
+    if (this.context.state === 'closed') return;
     const gain = active ? 0.15 : 1;
     this.output.gain.cancelScheduledValues(this.context.currentTime);
     this.output.gain.setTargetAtTime(gain, this.context.currentTime, 0.015);
-  }
-
-  setMuted(muted: boolean): void {
-    this.muted = muted;
-    this.output.gain.cancelScheduledValues(this.context.currentTime);
-    this.output.gain.setValueAtTime(muted ? 0 : 1, this.context.currentTime);
   }
 
   clear(): void {

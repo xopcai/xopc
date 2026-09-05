@@ -39,6 +39,8 @@ import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { VoiceDeviceSettings } from './voice-device-settings';
+import { useVoicePreferencesStore } from '@/stores/voice-preferences-store';
 import { VoiceSetup } from './voice-setup';
 import { OmniVoiceSettings } from './omni-voice-settings';
 
@@ -205,6 +207,9 @@ export function VoiceSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const v = m.voiceSettings;
+  const [group, setGroup] = useState<'listening' | 'input' | 'devices' | 'service' | 'diagnostics'>('listening');
+  const captions = useVoicePreferencesStore((state) => state.captions);
+  const setCaptions = useVoicePreferencesStore((state) => state.setCaptions);
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
@@ -469,45 +474,39 @@ export function VoiceSettingsPanel() {
       </div>
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
-      <VoiceSetup v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} />
-
-      {form.voice.realtime.enabled ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
-
-      <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3">
-        <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">{v.setup.readout}<span className="ml-3 text-xs font-normal text-fg-muted">{tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off} · {ttsProviderLabel(tts.provider, v)}</span></summary>
-        <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p>
-        <TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
-      </details>
-
-      <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3">
-        <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">{v.setup.advanced}<span className="ml-3 text-xs font-normal text-fg-muted">{v.setup.advancedHint}</span></summary>
-        <div className="mt-4 flex flex-col gap-4">
-        <VoiceLanguageSection
-          v={v}
-          voice={form.voice}
-          updateLanguageMode={updateVoiceLanguageMode}
-        />
-        <label className="flex items-center justify-between gap-3 text-sm text-fg">{v.setup.silence}
+      <nav aria-label={v.setup.advanced} className="flex flex-wrap gap-2">
+        {(['listening', 'input', 'devices', 'service', 'diagnostics'] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
+      </nav>
+      {group === 'listening' || group === 'service' || group === 'diagnostics' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} /> : null}
+      {group === 'listening' ? <>
+        <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
+        <label className="flex items-center justify-between gap-3 text-sm text-fg">{v.experience.pace}
           <Select className={selectClassName()} value={String(form.voice.realtime.silenceDurationMs)} onChange={(e) => updateRealtime({ silenceDurationMs: Number(e.target.value) })}>
-            {[...new Set([400, 700, 1200, form.voice.realtime.silenceDurationMs])].sort((a, b) => a - b).map((ms) => <SelectOption key={ms} value={String(ms)}>{ms} ms</SelectOption>)}
+            <SelectOption value="400">{v.experience.fast}</SelectOption><SelectOption value="700">{v.experience.standard}</SelectOption><SelectOption value="1200">{v.experience.relaxed}</SelectOption>
+            {![400, 700, 1200].includes(form.voice.realtime.silenceDurationMs) ? <SelectOption value={String(form.voice.realtime.silenceDurationMs)}>{form.voice.realtime.silenceDurationMs} ms</SelectOption> : null}
           </Select>
         </label>
-
-        <SttSection
-          v={v}
-          apiKeyLabels={apiKeyLabels}
-          stt={stt}
-          models={models}
-          sttProviders={sttProviders}
-          refinement={refinement}
-          updateStt={updateStt}
-          updateSttFallback={updateSttFallback}
-          updateRefinement={updateVoiceRefinement}
-        />
-
-        <p className="text-xs text-fg-muted">{v.notes.envVars}</p>
-        </div>
-      </details>
+      </> : null}
+      {group === 'input' ? <>
+        <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>
+        <label className="space-y-2 text-sm"><span>{v.stt.refinement}</span><p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
+          <Select className={selectClassName()} value={refinement.mode} onChange={(e) => updateVoiceRefinement({ mode: e.target.value as typeof refinement.mode })}>
+            <SelectOption value="off">{v.stt.refinementOff}</SelectOption><SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption><SelectOption value="light">{v.stt.refinementLight}</SelectOption>
+            {refinement.mode === 'custom' ? <SelectOption value="custom">{v.setup.advanced}</SelectOption> : null}
+          </Select>
+        </label>
+        <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.setup.readout} · {tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off}</summary>
+          <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p><TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
+        </details>
+      </> : null}
+      {group === 'devices' ? <VoiceDeviceSettings v={v} /> : null}
+      {group === 'service' ? <>
+        {form.voice.realtime.enabled ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
+        <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
+          <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
+          <p className="text-xs text-fg-muted">{v.notes.envVars}</p>
+        </details>
+      </> : null}
     </div>
   );
 }
@@ -549,20 +548,16 @@ function SttSection({
   stt,
   models,
   sttProviders,
-  refinement,
   updateStt,
   updateSttFallback,
-  updateRefinement,
 }: {
   v: VoiceSettingsMessages;
   apiKeyLabels: VoiceApiKeyFieldLabels;
   stt: VoiceSettingsState['stt'];
   models: VoiceModelsPayload | null;
   sttProviders: SttProviderListEntry[];
-  refinement: VoiceSettingsState['voice']['input']['refinement'];
   updateStt: (p: Partial<VoiceSettingsState['stt']>) => void;
   updateSttFallback: (p: Partial<NonNullable<VoiceSettingsState['stt']['fallback']>>) => void;
-  updateRefinement: (p: Partial<VoiceSettingsState['voice']['input']['refinement']>) => void;
 }) {
   const providerOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -669,25 +664,7 @@ function SttSection({
               />
             </div>
 
-            <div className="grid gap-3 rounded-xl bg-surface-hover/50 p-3 dark:bg-surface-hover/35 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
-              <div>
-                <div className="text-sm font-medium text-fg">{v.stt.refinement}</div>
-                <p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
-              </div>
-              <Select
-                className={selectClassName()}
-                value={refinement.mode}
-                onChange={(e) =>
-                  updateRefinement({
-                    mode: e.target.value as VoiceSettingsState['voice']['input']['refinement']['mode'],
-                  })
-                }
-              >
-                <SelectOption value="off">{v.stt.refinementOff}</SelectOption>
-                <SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption>
-                <SelectOption value="light">{v.stt.refinementLight}</SelectOption>
-              </Select>
-            </div>
+
           </>
         ) : null}
       </div>

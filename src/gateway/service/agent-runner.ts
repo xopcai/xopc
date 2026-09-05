@@ -191,7 +191,7 @@ export class GatewayAgentRunner {
     origin: TurnOrigin,
     attachments?: UserTurnAttachment[],
     thinking?: string,
-    runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[] },
+    runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
   ): AsyncGenerator<
     { type: string; [key: string]: unknown },
     { status: string; summary: string },
@@ -225,12 +225,8 @@ export class GatewayAgentRunner {
     );
 
     try {
-      let step = await iter.next();
-      while (!step.done) {
-        yield step.value as unknown as { type: string; [key: string]: unknown };
-        step = await iter.next();
-      }
-      return step.value;
+      // Delegate return/throw so interrupted consumers also run the inner cleanup.
+      return yield* iter as unknown as ReturnType<GatewayAgentRunner['runAgent']>;
     } finally {
       if (trackedRunId) {
         this.resolveRunCompletions.get(trackedRunId)?.();

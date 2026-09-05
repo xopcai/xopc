@@ -95,6 +95,7 @@ export interface VoiceSettingsState {
     };
     realtime: {
       enabled: boolean;
+      defaultEngine: 'agent' | 'omni';
       silenceDurationMs: number;
       idleTimeoutMs: number;
       maxDictationMs: number;

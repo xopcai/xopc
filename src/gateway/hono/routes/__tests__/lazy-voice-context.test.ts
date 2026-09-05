@@ -32,11 +32,11 @@ describe('authenticated lazy voice context', () => {
     expect(createSession).toHaveBeenCalledWith({ purpose: 'dictation' }, 'gateway-owner');
   });
 
-  it('does not bypass authentication', async () => {
+  it.each(['sessions', 'preflight'])('does not bypass authentication for %s', async (action) => {
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
     const createSession = mount(app);
-    expect((await app.request('/api/voice/realtime/sessions', request())).status).toBe(401);
+    expect((await app.request(`/api/voice/realtime/${action}`, request())).status).toBe(401);
     expect(createSession).not.toHaveBeenCalled();
   });
 
@@ -52,4 +52,19 @@ describe('authenticated lazy voice context', () => {
     expect(responses.map((response) => response.status)).toEqual([200, 200]);
     expect(createSession.mock.calls.map((call) => call[1]).sort()).toEqual(['device-1', 'device-2']);
   });
+  it('preflights without creating a call', async () => {
+    const app = new Hono();
+    app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
+    const createSession = vi.fn();
+    const preflight = vi.fn(async () => {});
+    registerAuthenticatedLazyRouteFallback(app, {
+      service: { voiceRealtime: { createSession, preflight } },
+      strictRateLimitMiddleware: async (_c, next) => next(),
+    } as never);
+    expect((await app.request('/api/voice/realtime/preflight', request('test-token'))).status).toBe(200);
+    expect(preflight).toHaveBeenCalledWith({ purpose: 'dictation' });
+    expect(createSession).not.toHaveBeenCalled();
+
+  });
+
 });

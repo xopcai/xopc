@@ -61,7 +61,7 @@ export async function *runGatewayAgent(
   origin: TurnOrigin,
   attachments?: UserTurnAttachment[],
   thinking?: string,
-  runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[] },
+  runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -202,7 +202,7 @@ export async function *runGatewayAgent(
           origin,
           prepared,
           thinking,
-          { signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts },
+          { signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts, presentation: runOptions?.presentation },
         );
 
         const mappedEvents = (async function* (): AsyncGenerator<ChatStreamEvent> {
@@ -227,6 +227,15 @@ export async function *runGatewayAgent(
           summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
         };
       } catch (error) {
+        if (mergedSignal.aborted) {
+          terminalStatus = 'cancelled';
+          taskRunStatus = 'cancelled';
+          taskRunSummary = 'Interrupted';
+          yield* emitAndYield(mapper.end('cancelled', 'Interrupted'));
+          completeRealtimeTopic(`run:${runId}`);
+          runTopicCompleted = true;
+          return { status: 'aborted', summary: 'Interrupted' };
+        }
         const em = error instanceof Error ? error.message : String(error);
         log.error(
           {
@@ -250,6 +259,11 @@ export async function *runGatewayAgent(
         runTopicCompleted = true;
         return { status: 'error', summary: streamError };
       } finally {
+        if (mergedSignal.aborted) {
+          terminalStatus = 'cancelled';
+          taskRunStatus = 'cancelled';
+          taskRunSummary = 'Interrupted';
+        }
         if (registeredActiveWebchatRun && activeWebchatRunBySession.get(sessionKey) === runId) {
           activeWebchatRunBySession.delete(sessionKey);
           publishRealtime('sessions', 'run.completed', { sessionKey, runId, status: terminalStatus });

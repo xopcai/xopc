@@ -1332,6 +1332,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                   !taskId && agents.showChatAgentSelector ? agents.onChatAgentChange : undefined
                 }
                 currentAgentId={agents.displayAgentId}
+                voiceAgentName={welcomeAgent.name}
+                voiceTaskId={taskId ?? undefined}
+                prepareVoiceSession={session.projectPreparation ? () => session.projectPreparation!.create(projectComposer.mode) : undefined}
               />
             </div>
           </div>

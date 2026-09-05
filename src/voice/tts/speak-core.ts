@@ -417,6 +417,7 @@ export async function speakStream(
   config: TTSConfig,
   options?: SpeakStreamOptions,
 ): Promise<SpeakStreamResult> {
+  options?.signal?.throwIfAborted();
   if (!config.enabled) {
     throw new Error('TTS is not enabled');
   }
@@ -425,6 +426,7 @@ export async function speakStream(
   }
 
   const prepared = await prepareTextForSynthesis(text, config, options);
+  options?.signal?.throwIfAborted();
   const chain = options?.allowFallback === false
     ? [resolveSpeechProvider(prepared.selectedProvider, config)].filter(
         (provider): provider is ResolvedSpeechProvider => provider !== null,
@@ -435,7 +437,8 @@ export async function speakStream(
   }
 
   let lastError: Error | undefined;
-  for (const resolved of chain) {
+  for (const [index, resolved] of chain.entries()) {
+    options?.signal?.throwIfAborted();
     try {
       const baseRequest: SpeechSynthesisStreamRequest = buildSynthesisRequest(
         resolved,
@@ -461,6 +464,11 @@ export async function speakStream(
         );
       }
 
+      if (options?.signal?.aborted) {
+        await streamResult.release?.();
+        options.signal.throwIfAborted();
+      }
+
       log.info(
         {
           provider: resolved.providerId,
@@ -484,10 +492,11 @@ export async function speakStream(
         wasSummarized: prepared.wasSummarized,
       };
     } catch (error) {
+      options?.signal?.throwIfAborted();
       lastError = error instanceof Error ? error : new Error(String(error));
       log.warn(
         { err: lastError, provider: resolved.providerId },
-        `TTS stream provider "${resolved.providerId}" failed, trying next`,
+        `TTS stream provider "${resolved.providerId}" failed${index < chain.length - 1 ? ", trying next" : ""}`,
       );
     }
   }

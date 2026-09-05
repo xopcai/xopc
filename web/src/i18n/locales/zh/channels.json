@@ -227,10 +227,22 @@
       "title": "语音应该如何工作",
       "description": "先选择用户能感知的行为，引擎细节放在下方。",
       "modes": {
-        "text": { "title": "仅文字", "description": "不使用语音输入，也不朗读回复。" },
-        "listen": { "title": "听我说话", "description": "转写语音输入，但仍用文字回复。" },
-        "conversation": { "title": "我说话时也语音回复", "description": "语音输入、语音回复，适合作为聊天默认模式。" },
-        "always": { "title": "始终朗读回复", "description": "每条助手回复都会朗读。" }
+        "text": {
+          "title": "仅文字",
+          "description": "不使用语音输入，也不朗读回复。"
+        },
+        "listen": {
+          "title": "听我说话",
+          "description": "转写语音输入，但仍用文字回复。"
+        },
+        "conversation": {
+          "title": "我说话时也语音回复",
+          "description": "语音输入、语音回复，适合作为聊天默认模式。"
+        },
+        "always": {
+          "title": "始终朗读回复",
+          "description": "每条助手回复都会朗读。"
+        }
       }
     },
     "inputEngine": {
@@ -336,6 +348,38 @@
       "title": "说明",
       "duration": "长音频会自动分段；效果取决于服务商与模型。",
       "envVars": "环境变量：DASHSCOPE_API_KEY、OPENAI_API_KEY（未在表单填写时）。"
+    },
+    "experience": {
+      "listening": "说话与聆听",
+      "input": "输入与显示",
+      "devices": "音频设备",
+      "service": "语音服务",
+      "diagnostics": "排查问题",
+      "defaultEngine": "默认通话方案",
+      "agent": "当前助手",
+      "omni": "原生语音",
+      "agentHint": "沿用当前聊天的模型与工具能力。",
+      "omniHint": "直接进行音频交流，当前不支持执行工具。",
+      "nextCall": "更改会在下次通话生效。",
+      "captions": "显示通话字幕",
+      "microphone": "麦克风",
+      "systemDevice": "跟随系统",
+      "refreshDevices": "授权并刷新设备",
+      "deviceHint": "设备选择仅保存在当前浏览器。扬声器跟随系统。",
+      "dictationReady": "语音输入",
+      "agentReady": "助手通话",
+      "omniReady": "原生语音",
+      "ready": "已配置",
+      "unavailable": "未就绪",
+      "fast": "快速",
+      "standard": "标准",
+      "relaxed": "从容",
+      "pace": "回应节奏",
+      "technical": "独立模型与服务覆盖",
+      "inputProcessing": "听写处理",
+      "providerCheck": "检查连接配置",
+      "configurationOnly": "配置检查不代表已完成真实通话测试。",
+      "endCallBeforeTest": "请先挂断当前通话，再测试麦克风与播放。"
     }
   },
   "gatewaySettings": {

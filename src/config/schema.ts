@@ -883,6 +883,7 @@ export const VoiceConfigSchema = z
     realtime: z
       .object({
         enabled: z.boolean().default(false),
+        defaultEngine: z.enum(['agent', 'omni']).default('agent'),
         silenceDurationMs: z.number().int().min(300).max(2_000).default(700),
         idleTimeoutMs: z.number().int().min(10_000).max(300_000).default(60_000),
         maxDictationMs: z.number().int().min(10_000).max(3_600_000).default(600_000),
@@ -905,6 +906,7 @@ export const VoiceConfigSchema = z
       .strict()
       .default({
         enabled: false,
+        defaultEngine: 'agent',
         silenceDurationMs: 700,
         idleTimeoutMs: 60_000,
         maxDictationMs: 600_000,

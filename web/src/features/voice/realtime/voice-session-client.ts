@@ -47,6 +47,13 @@ export class VoiceSessionClient {
     readonly session: CreateVoiceSessionResponse,
   ) {}
 
+  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'engine' | 'sessionKey' | 'signal'>): Promise<void> {
+    await fetchJson(apiUrl('/api/voice/realtime/preflight'), {
+      method: 'POST', signal: options.signal,
+      body: JSON.stringify({ purpose: options.purpose, engine: options.engine, sessionKey: options.sessionKey }),
+    });
+  }
+
   static async connect(options: VoiceSessionClientOptions): Promise<VoiceSessionClient> {
     options.signal?.throwIfAborted();
     const response = await fetchJson<{ ok: true; payload: CreateVoiceSessionResponse }>(
@@ -129,6 +136,14 @@ export class VoiceSessionClient {
 
   sendAudio(audio: ArrayBuffer): void {
     if (audio.byteLength > 0 && this.socket.readyState === WebSocket.OPEN) this.socket.send(audio);
+  }
+
+  reportMetric(responseId: string, metric: 'speech_end_to_audio_received' | 'local_stop', durationMs: number): void {
+    this.sendControl('session.metric', { responseId, metric, durationMs: Math.min(600_000, Math.max(0, durationMs)) });
+  }
+
+  setInputMuted(muted: boolean): void {
+    this.sendControl('input.mute', { muted });
   }
 
   commit(): void {

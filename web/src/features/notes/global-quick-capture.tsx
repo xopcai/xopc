@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { openDiscussionCapture } from '@/features/discussions/discussion-events';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
-import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
+import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
 import {
   APP_SHORTCUT_RECORDING_EVENT,
   type VoiceInputShortcutTarget,
@@ -33,7 +33,7 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const voice = useComposerVoiceInput({
+  const voice = useRealtimeVoice({
     disabled: saving,
     chat,
     onTranscript: (transcript) => {
@@ -144,16 +144,16 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
               audioLevel={voice.audioLevel}
               partialTranscript={voice.partialTranscript}
               finalTranscript={voice.finalTranscript}
-              responseText={voice.responseText}
-              responsePhase={voice.responsePhase}
-              muted={voice.muted}
-              mode={voice.mode}
+
+
+
+
               disabled={saving}
               chat={chat}
               onCancel={voice.cancelVoiceInput}
               onConfirm={voice.confirmVoiceInput}
-              onInterruptResponse={voice.interruptResponse}
-              onToggleMute={voice.toggleMute}
+
+
               onRetry={voice.retryVoiceInput}
             />
           </div>
