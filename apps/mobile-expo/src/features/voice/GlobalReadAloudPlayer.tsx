@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
 import { radii, spacing, typography, useTheme } from '../../theme';
+import { useVoiceCall } from './voice-call';
 import { useReadAloudStore } from './read-aloud-store';
 
 function formatTime(seconds: number): string {
@@ -17,6 +18,7 @@ function formatTime(seconds: number): string {
 
 export function GlobalReadAloudPlayer() {
   const router = useRouter();
+  const call = useVoiceCall();
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -32,7 +34,7 @@ export function GlobalReadAloudPlayer() {
   const stop = useReadAloudStore((state) => state.stop);
   const retry = useReadAloudStore((state) => state.retry);
   const cycleRate = useReadAloudStore((state) => state.cycleRate);
-  const visible = Boolean(source) && status !== 'idle';
+  const visible = Boolean(source) && status !== 'idle' && call.phase === 'idle';
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
   const errorMessage = error === 'empty'
     ? m.messageReadAloudEmpty

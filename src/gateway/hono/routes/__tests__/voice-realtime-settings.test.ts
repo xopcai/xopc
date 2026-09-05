@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { realtimeVoiceStatusSchema } from '@xopcai/realtime-protocol/voice';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../../../config/schema.js';
@@ -35,12 +36,16 @@ describe('realtime voice setup endpoints', () => {
     } });
     expect(JSON.stringify(data)).not.toContain('private-key');
     expect(data.payload).not.toHaveProperty('verified');
+    expect(realtimeVoiceStatusSchema.parse(data.payload).capabilities.agent.available).toBe(true);
     expect(speakStream).not.toHaveBeenCalled();
   });
 
   it('keeps dictation configured when realtime output is unavailable', async () => {
     const response = await app(false).request('/api/voice/realtime/status');
-    expect(await response.json()).toMatchObject({ payload: { stt: { provider: 'alibaba' }, tts: null } });
+    expect(await response.json()).toMatchObject({ payload: {
+      stt: { provider: 'alibaba' }, tts: null,
+      capabilities: { dictation: { available: true }, agent: { available: false, reasonCode: 'PROVIDER_UNAVAILABLE' } },
+    } });
     expect((await app(false).request('/api/voice/realtime/preview', { method: 'POST' })).status).toBe(503);
     expect(speakStream).not.toHaveBeenCalled();
   });

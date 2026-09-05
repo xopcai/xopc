@@ -1,5 +1,9 @@
 import crypto from 'crypto';
 
+import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
+import { voiceMemoryBudget } from '../voice/realtime/conversation-context.js';
+import { getSessionConfig } from '../storage/sqlite/config-repository.js';
+import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
@@ -177,10 +181,17 @@ export class GatewayService {
       const after = await this.sessionIndex.getSessionMetadata(sessionKey);
       if (after?.sessionId !== expectedSessionId) throw new Error('Conversation changed while loading voice context');
       const profile = resolveEffectiveAgentProfileForSession(this.config, sessionKey);
-      return {
+      const context = {
         identity: [`Your name is ${profile.config.profile?.name ?? profile.agentId}.`, profile.customInstructions ?? ''].join('\n'),
         history: messages,
       };
+      const memory = buildVoiceMemoryContext({
+        getConfig: () => this.config, sessionKey,
+        workspaceId: getSessionConfig(sessionKey)?.workingDirectoryOverride ?? profile.resolvedWorkspacePath,
+        projectId: after?.projectId, history: messages,
+        maxChars: voiceMemoryBudget(this.config.voice.realtime.omni.instructions, context),
+      });
+      return { ...context, ...(memory ? { memory } : {}) };
     },
     getSessionIdentity: async (sessionKey) => (await this.sessionIndex.getSessionMetadata(sessionKey))?.sessionId,
     recordOmniTranscript: async (sessionKey, callId, entry, expectedSessionId) => {
@@ -1947,6 +1958,7 @@ export class GatewayService {
   }
 
   emit(type: string, payload: unknown): void {
+    if (type === 'config.reload') notifyUserContextChange({ kind: 'policy' });
     this.realtime.broker.publish('gateway', type, payload);
     this.createNotificationService().handleGatewayEvent(type, payload);
   }

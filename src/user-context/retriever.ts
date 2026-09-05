@@ -1,9 +1,9 @@
 import {
   listUnderstandings,
-  listUnderstandingEvidence,
   searchActiveUnderstandings,
   summarizeUnderstandingFeedback,
 } from '../storage/sqlite/index.js';
+import { understandingSourceBuckets } from '../storage/sqlite/user-context-repository.js';
 import { buildRetrievalQueryProfile } from '../retrieval/queryProfile.js';
 import {
   normalizeRetrievalText,
@@ -54,29 +54,19 @@ function temporalAdjustment(item: UserUnderstanding, hints: string[], now: numbe
   return score;
 }
 
-function sourceBucket(item: UserUnderstanding): string {
-  if (item.explicitness === 'explicit') return 'user';
-  const evidence = listUnderstandingEvidence(item.id)[0];
-  if (!evidence) return `unknown:${item.id}`;
-  if (evidence.sourceInstanceId) return `${evidence.sourceType}:${evidence.sourceInstanceId}`;
-  return `${evidence.sourceType}:${evidence.sourceRef.split(':entry:')[0]}`;
-}
-
 function diversify(results: UnderstandingRetrievalResult[], limit: number): UnderstandingRetrievalResult[] {
   const remaining = [...results];
   const selected: UnderstandingRetrievalResult[] = [];
   const sourceCounts = new Map<string, number>();
-  const sourceBuckets = new Map(
-    results.map((result) => [result.understanding.id, sourceBucket(result.understanding)]),
-  );
+  const redundancies = new Map<string, number>();
+  const evidenceBuckets = understandingSourceBuckets(results.filter((result) => result.understanding.explicitness !== 'explicit').map((result) => result.understanding.id));
+  const sourceBuckets = new Map(results.map(({ understanding: item }) => [item.id,
+    item.explicitness === 'explicit' ? 'user' : evidenceBuckets.get(item.id) ?? `unknown:${item.id}`]));
   while (remaining.length && selected.length < limit) {
     let bestIndex = 0;
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const [index, candidate] of remaining.entries()) {
-      const redundancy = selected.reduce((maximum, chosen) => Math.max(
-        maximum,
-        retrievalLexicalSimilarity(candidate.understanding.statement, chosen.understanding.statement),
-      ), 0);
+      const redundancy = redundancies.get(candidate.understanding.id) ?? 0;
       const bucket = sourceBuckets.get(candidate.understanding.id)!;
       const sourcePenalty = candidate.understanding.explicitness === 'explicit'
         ? 0 : (sourceCounts.get(bucket) ?? 0) * 0.04;
@@ -91,6 +81,12 @@ function diversify(results: UnderstandingRetrievalResult[], limit: number): Unde
       score: Math.max(0, bestScore),
       reasons: bestScore < candidate.score ? [...candidate.reasons, 'diversified'] : candidate.reasons,
     });
+    // Each pair is compared once; prior selections cannot lower redundancy.
+    if (selected.length < limit) for (const remainingItem of remaining) {
+      const id = remainingItem.understanding.id;
+      redundancies.set(id, Math.max(redundancies.get(id) ?? 0,
+        retrievalLexicalSimilarity(remainingItem.understanding.statement, candidate.understanding.statement)));
+    }
   }
   return selected;
 }
@@ -123,7 +119,7 @@ export class UserUnderstandingRetriever {
     const recentLimit = Math.max(200, Math.min(500, maxCandidates * 5));
     const statuses = profile.timeHints.includes('historical')
       ? ['active', 'archived', 'stale'] as const : ['active'] as const;
-    const recent = listUnderstandings([...statuses]).slice(0, recentLimit);
+    const recent = listUnderstandings([...statuses], undefined, recentLimit);
     const candidates = new Map<string, UserUnderstanding>();
     for (const result of fts) candidates.set(result.understanding.id, result.understanding);
     for (const item of recent) candidates.set(item.id, item);

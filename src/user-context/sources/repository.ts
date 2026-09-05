@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { notifyUserContextChange } from '../changes.js';
 import { USER_CONTEXT_PRINCIPAL_ID, type ContextEvidence, type UserContextScope } from '../domain.js';
 import { focusLifecycle } from '../focus-lifecycle.js';
 import type {
@@ -174,6 +175,7 @@ export function getUnderstandingSourceGrant(id: string): UnderstandingSourceGran
 export function upsertUnderstandingSourceGrant(input: Omit<UnderstandingSourceGrant, 'id' | 'status' | 'checkpoint' | 'lastCollectedAt' | 'createdAt' | 'updatedAt'> & {
   checkpoint?: Record<string, unknown>; lastCollectedAt?: number; nowMs?: number;
 }): UnderstandingSourceGrant {
+  notifyUserContextChange({ kind: 'policy' });
   const id = randomUUID();
   const now = input.nowMs ?? Date.now();
   const existingRow = getSqliteDatabase().prepare('SELECT * FROM understanding_source_grants WHERE source_key = ?')
@@ -226,6 +228,7 @@ export function updateUnderstandingSourceGrantPolicies(id: string, patch: {
   processingPolicy?: UnderstandingSourceGrant['processingPolicy'];
   nowMs?: number;
 }): UnderstandingSourceGrant | null {
+  notifyUserContextChange({ kind: 'policy' });
   const current = getUnderstandingSourceGrant(id);
   if (!current) return null;
   runSqliteWriteTransaction((db) => db.prepare(`
@@ -243,6 +246,7 @@ export function updateUnderstandingSourceGrantPolicies(id: string, patch: {
 }
 
 export function revokeUnderstandingSourceGrant(id: string, nowMs = Date.now()): UnderstandingSourceGrant | null {
+  notifyUserContextChange({ kind: 'policy' });
   runSqliteWriteTransaction((db) => db.prepare(
     "UPDATE understanding_source_grants SET status = 'revoked', updated_at = ? WHERE grant_id = ?",
   ).run(nowMs, id));
@@ -301,6 +305,7 @@ export function upsertUserFocus(input: UserFocusInput): UserFocus {
   if (existingRow?.explicitness === 'explicit' && explicitness !== 'explicit') {
     return focusFromRow(existingRow);
   }
+  if (existingRow) notifyUserContextChange({ kind: 'focus', id: existingRow.focus_id });
   let currentVersionId = existingRow?.current_version_id;
   runSqliteWriteTransaction((db) => {
     db.prepare(`
@@ -349,12 +354,19 @@ export function upsertUserFocus(input: UserFocusInput): UserFocus {
     .get(input.canonicalKey) as unknown as FocusRow);
 }
 
-export function listUserFocuses(statuses?: UserFocus['status'][]): UserFocus[] {
-  if (!statuses?.length) return (getSqliteDatabase().prepare('SELECT * FROM user_focuses ORDER BY updated_at DESC')
-    .all() as unknown as FocusRow[]).map(focusFromRow);
+export function listUserFocuses(statuses?: UserFocus['status'][], limit?: number): UserFocus[] {
+  const maxRows = limit === undefined ? -1 : Math.max(1, Math.min(200, Math.floor(limit)));
+  if (!statuses?.length) return (getSqliteDatabase().prepare('SELECT * FROM user_focuses ORDER BY updated_at DESC LIMIT ?')
+    .all(maxRows) as unknown as FocusRow[]).map(focusFromRow);
   const placeholders = statuses.map(() => '?').join(', ');
-  return (getSqliteDatabase().prepare(`SELECT * FROM user_focuses WHERE status IN (${placeholders}) ORDER BY updated_at DESC`)
-    .all(...statuses) as unknown as FocusRow[]).map(focusFromRow);
+  return (getSqliteDatabase().prepare(`SELECT * FROM user_focuses WHERE status IN (${placeholders}) ORDER BY updated_at DESC LIMIT ?`)
+    .all(...statuses, maxRows) as unknown as FocusRow[]).map(focusFromRow);
+}
+
+export function getUserFocus(id: string): UserFocus | undefined {
+  const row = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE focus_id = ? AND principal_id = ?')
+    .get(id, USER_CONTEXT_PRINCIPAL_ID) as FocusRow | undefined;
+  return row ? focusFromRow(row) : undefined;
 }
 
 export function updateUserFocus(
@@ -362,6 +374,7 @@ export function updateUserFocus(
   patch: Partial<Pick<UserFocus, 'title' | 'summary' | 'status' | 'validFrom' | 'validTo' | 'reviewAt'>>,
   nowMs = Date.now(),
 ): UserFocus | null {
+  notifyUserContextChange({ kind: 'focus', id });
   const currentRow = getSqliteDatabase().prepare('SELECT * FROM user_focuses WHERE focus_id = ?')
     .get(id) as FocusRow | undefined;
   if (!currentRow) return null;
@@ -404,5 +417,6 @@ export function updateUserFocus(
 }
 
 export function deleteUserFocus(id: string): boolean {
+  notifyUserContextChange({ kind: 'focus', id });
   return Number(getSqliteDatabase().prepare('DELETE FROM user_focuses WHERE focus_id = ?').run(id).changes) > 0;
 }

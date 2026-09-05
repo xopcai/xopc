@@ -32,6 +32,27 @@ export const voiceRouteSchema = z.discriminatedUnion('engine', [
   z.strictObject({ engine: z.literal('omni'), omni: voiceProviderRouteSchema }),
 ]);
 
+const availabilitySchema = z.strictObject({
+  available: z.boolean(),
+  reasonCode: z.enum(['VOICE_DISABLED', 'PROVIDER_UNAVAILABLE']).optional(),
+});
+
+export const realtimeVoiceStatusSchema = z.object({
+  enabled: z.boolean(),
+  defaultEngine: voiceEngineSchema,
+  omni: voiceProviderRouteSchema.nullable(),
+  stt: voiceProviderRouteSchema.nullable(),
+  tts: voiceProviderRouteSchema.extend({ voice: z.string().optional() }).nullable(),
+  capabilities: z.strictObject({
+    dictation: availabilitySchema,
+    agent: availabilitySchema,
+    omni: availabilitySchema,
+    languages: z.array(voiceLanguageSchema),
+    bargeIn: z.boolean(),
+  }),
+});
+export type RealtimeVoiceStatus = z.infer<typeof realtimeVoiceStatusSchema>;
+
 export const createVoiceSessionRequestSchema = z.strictObject({
   purpose: voicePurposeSchema,
   engine: voiceEngineSchema.optional(),

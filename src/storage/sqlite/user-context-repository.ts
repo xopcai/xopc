@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { DatabaseSync } from 'node:sqlite';
 
+import { notifyUserContextChange } from '../../user-context/changes.js';
 import {
   USER_CONTEXT_PRINCIPAL_ID,
   type CollaborationRule,
@@ -213,6 +214,7 @@ export function updateUserProfile(
   patch: Partial<Pick<UserProfile, 'callName' | 'role' | 'primaryGoal' | 'pronouns' | 'timezone' | 'locale' | 'accessibility'>>,
   principalId = USER_CONTEXT_PRINCIPAL_ID,
 ): UserProfile {
+  notifyUserContextChange({ kind: 'profile', id: 'profile' });
   const current = getUserProfile(principalId);
   const now = Date.now();
   const next = { ...current, ...patch, createdAt: current.createdAt || now, updatedAt: now };
@@ -302,15 +304,17 @@ export function getUnderstanding(id: string): UserUnderstanding | undefined {
 export function listUnderstandings(
   statuses?: UnderstandingStatus[],
   principalId = USER_CONTEXT_PRINCIPAL_ID,
+  limit?: number,
 ): UserUnderstanding[] {
   const db = getSqliteDatabase();
+  const maxRows = limit === undefined ? -1 : Math.max(1, Math.min(500, Math.floor(limit)));
   if (!statuses?.length) {
-    return (db.prepare(`${UNDERSTANDING_SELECT} WHERE u.principal_id = ? ORDER BY u.updated_at DESC`).all(principalId) as UnderstandingRow[])
+    return (db.prepare(`${UNDERSTANDING_SELECT} WHERE u.principal_id = ? ORDER BY u.updated_at DESC LIMIT ?`).all(principalId, maxRows) as UnderstandingRow[])
       .map(understandingFromRow);
   }
   const placeholders = statuses.map(() => '?').join(', ');
-  return (db.prepare(`${UNDERSTANDING_SELECT} WHERE u.principal_id = ? AND u.status IN (${placeholders}) ORDER BY u.updated_at DESC`)
-    .all(principalId, ...statuses) as UnderstandingRow[]).map(understandingFromRow);
+  return (db.prepare(`${UNDERSTANDING_SELECT} WHERE u.principal_id = ? AND u.status IN (${placeholders}) ORDER BY u.updated_at DESC LIMIT ?`)
+    .all(principalId, ...statuses, maxRows) as UnderstandingRow[]).map(understandingFromRow);
 }
 
 export function searchActiveUnderstandings(
@@ -351,6 +355,7 @@ export function reviseUnderstanding(
     changeReason: string;
   },
 ): UserUnderstanding {
+  notifyUserContextChange({ kind: 'understanding', id });
   const current = getUnderstanding(id);
   if (!current) throw new Error(`User understanding not found: ${id}`);
   const versionId = randomUUID();
@@ -388,6 +393,7 @@ export function setUnderstandingStatus(
     source?: string;
   },
 ): UserUnderstanding {
+  notifyUserContextChange({ kind: 'understanding', id });
   const current = getUnderstanding(id);
   if (!current) throw new Error(`User understanding not found: ${id}`);
   const now = Date.now();
@@ -422,6 +428,7 @@ export function setUnderstandingStatus(
 }
 
 export function closeUnderstandingValidity(id: string, validTo = Date.now()): UserUnderstanding {
+  notifyUserContextChange({ kind: 'understanding', id });
   getSqliteDatabase().prepare(`UPDATE user_understandings SET valid_to = ?, updated_at = ?
     WHERE understanding_id = ?`).run(validTo, validTo, id);
   const result = getUnderstanding(id);
@@ -434,6 +441,7 @@ export function rejectUnderstanding(
   reason: string,
   actorType: UnderstandingStatusEvent['actorType'] = 'runtime',
 ): UserUnderstanding {
+  notifyUserContextChange({ kind: 'understanding', id });
   const current = getUnderstanding(id);
   if (!current) throw new Error(`User understanding not found: ${id}`);
   const now = Date.now();
@@ -473,6 +481,7 @@ export function listUnderstandingStatusEvents(id: string): UnderstandingStatusEv
 }
 
 export function deleteUnderstanding(id: string): boolean {
+  notifyUserContextChange({ kind: 'understanding', id });
   return runSqliteWriteTransaction((db) => {
     db.prepare('DELETE FROM user_understanding_fts WHERE understanding_id = ?').run(id);
     return Number(db.prepare('DELETE FROM user_understandings WHERE understanding_id = ?').run(id).changes) > 0;
@@ -572,6 +581,7 @@ export function createContextEvidence(
     ? createHash('sha256').update(input.redactedExcerpt).digest('hex')
     : undefined);
   if (existing) {
+    notifyUserContextChange({ kind: 'policy' });
     getSqliteDatabase().prepare(`UPDATE context_evidence SET
       source_run_id = COALESCE(source_run_id, ?), source_item_id = COALESCE(source_item_id, ?),
       session_id = COALESCE(session_id, ?), turn_id = COALESCE(turn_id, ?),
@@ -622,6 +632,8 @@ export function linkUnderstandingEvidence(
   relation: 'supports' | 'contradicts' | 'supersedes',
   confidence: number,
 ): void {
+  const owner = getSqliteDatabase().prepare('SELECT understanding_id AS id FROM user_understanding_versions WHERE version_id = ?').get(versionId) as { id: string } | undefined;
+  if (owner) notifyUserContextChange({ kind: 'understanding', id: owner.id });
   getSqliteDatabase().prepare(`INSERT INTO understanding_evidence_links (
     version_id, evidence_id, relation, confidence
   ) VALUES (?, ?, ?, ?)
@@ -639,6 +651,21 @@ export function listUnderstandingEvidence(
     WHERE v.understanding_id = ? AND (? IS NULL OR l.relation = ?)
     ORDER BY e.observed_at DESC`).all(understandingId, relation ?? null, relation ?? null) as EvidenceRow[];
   return rows.map(evidenceFromRow);
+}
+
+/** Latest source labels for ranking, without fetching evidence bodies per candidate. */
+export function understandingSourceBuckets(ids: string[]): Map<string, string> {
+  if (!ids.length) return new Map();
+  const rows = getSqliteDatabase().prepare(`
+    SELECT understanding_id, source_type, source_instance_id, source_ref FROM (
+      SELECT v.understanding_id, e.source_type, e.source_instance_id, e.source_ref,
+        ROW_NUMBER() OVER (PARTITION BY v.understanding_id ORDER BY e.observed_at DESC) AS rank
+      FROM context_evidence e JOIN understanding_evidence_links l ON l.evidence_id = e.evidence_id
+      JOIN user_understanding_versions v ON v.version_id = l.version_id
+      WHERE v.understanding_id IN (${ids.map(() => '?').join(',')})
+    ) WHERE rank = 1
+  `).all(...ids) as Array<{ understanding_id: string; source_type: string; source_instance_id: string | null; source_ref: string }>;
+  return new Map(rows.map((row) => [row.understanding_id, `${row.source_type}:${row.source_instance_id ?? row.source_ref.split(':entry:')[0]}`]));
 }
 
 export function recordContextRun(input: {

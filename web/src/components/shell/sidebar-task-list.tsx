@@ -100,10 +100,10 @@ function isWebSession(session: SessionMetadata): boolean {
   return session.sourceChannel === 'webchat' || session.sourceChannel === 'web';
 }
 
-function rowShellClass(isActive: boolean): string {
+function rowShellClass(isActive: boolean, indented: boolean): string {
   return cn(
-    // `px-4` list + `pl-3` row = same inset as nav `px-4` + item `px-3` → aligns with menu icons.
-    'group relative flex w-full min-w-0 items-center rounded-lg pl-1.5 pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
+    'group relative flex w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
+    indented ? 'pl-[1.125rem]' : 'pl-1.5',
     'focus-within:outline-none',
     isActive
       ? 'bg-surface-active font-medium text-fg'
@@ -132,7 +132,7 @@ function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean })
 /** Mirrors the sidebar's section hierarchy so first load has a stable footprint. */
 function SidebarTaskListSkeleton() {
   return (
-    <div className="flex flex-col gap-3 p-4" aria-busy="true">
+    <div className="flex flex-col gap-3 px-2 py-4" aria-busy="true">
       <div>
         <Skeleton className="mb-1.5 h-2.5 w-14 animate-none" />
         <SidebarSessionSkeletonRow />
@@ -157,6 +157,7 @@ function SidebarTaskListSkeleton() {
 const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
+  indented = false,
   showSourceChannelIcon,
   onNavigate,
   mutate,
@@ -169,6 +170,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
 }: {
   session: SessionMetadata;
   isActive: boolean;
+  /** Keep nested titles indented while allowing the row background to span the full list width. */
+  indented?: boolean;
   /** When true (IM list), show a channel glyph before the title. */
   showSourceChannelIcon?: boolean;
   onNavigate?: () => void;
@@ -216,7 +219,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   };
 
   return (
-    <div className={rowShellClass(isActive)}>
+    <div className={rowShellClass(isActive, indented)}>
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
         className={cn(
@@ -603,12 +606,13 @@ function SidebarProjectSection({
       </div>
 
       {!isCollapsed ? (
-        <div className="ml-3 flex flex-col gap-0.5">
+        <div className="flex flex-col gap-0.5">
           {visibleSessions.map((session) => (
             <SidebarTaskRow
               key={session.key}
               session={session}
               isActive={activeSessionKey === session.key}
+              indented
               showSourceChannelIcon={!isWebSession(session)}
               onNavigate={onNavigate}
               mutate={mutate}
@@ -623,7 +627,7 @@ function SidebarProjectSection({
           {canToggleSessionLimit ? (
             <button
               type="button"
-              className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+              className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
               onClick={() => onToggleExpanded(group.project.id)}
               disabled={group.sessionLoading}
               aria-busy={group.sessionLoading || undefined}
@@ -728,12 +732,13 @@ function SidebarInboxSection({
           <Plus className="size-3.5" strokeWidth={1.75} aria-hidden />
         </button>
       </div>
-      <div className={cn('ml-3 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
+      <div className={cn('flex flex-col gap-0.5', isCollapsed && 'hidden')}>
         {unpinnedSessions.map((session) => (
           <SidebarTaskRow
             key={session.key}
             session={session}
             isActive={activeSessionKey === session.key}
+            indented
             showSourceChannelIcon={!isWebSession(session)}
             onNavigate={onNavigate}
             mutate={mutate}
@@ -748,7 +753,7 @@ function SidebarInboxSection({
         {hasMore ? (
           <button
             type="button"
-            className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+            className="ml-4 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
             onClick={onLoadMore}
             disabled={loadingMore}
             aria-busy={loadingMore || undefined}
@@ -1300,7 +1305,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         {loadingFirst ? (
           <SidebarTaskListSkeleton />
         ) : hasGroupedItems ? (
-          <div className="flex flex-col px-4 pt-4">
+          <div className="flex flex-col px-2 pt-4">
             <SidebarPinnedSection
               sessions={pinnedSessions}
               activeSessionKey={activeSessionKey}

@@ -106,6 +106,22 @@ describe('mobile gateway client', () => {
     ]);
     expect(gateway.selectRoute).toHaveBeenCalledWith('gateway-1', 'tailscale');
   });
+  it('returns the exact ticket route even if the selected route changes during the request', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementationOnce(async () => {
+      gateway.activeRouteId = 'tailscale';
+      return new Response('{}', { status: 201 });
+    });
+    const origin = vi.fn();
+    await apiFetch('/api/voice/realtime/sessions', { method: 'POST', onResolvedOrigin: origin });
+    expect(origin).toHaveBeenCalledExactlyOnceWith('https://primary.gateway');
+  });
+  it('does not replay an ambiguous voice ticket creation on another route', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network request failed'));
+    const origin = vi.fn();
+    await expect(apiFetch('/api/voice/realtime/sessions', { method: 'POST', onResolvedOrigin: origin })).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(origin).not.toHaveBeenCalled();
+  });
 
   it('uploads readable local files with device access', async () => {
     nativeFile.upload.mockResolvedValue({ body: '{}', status: 201, headers: {} });

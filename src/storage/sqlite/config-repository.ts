@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+import { notifyUserContextChange } from '../../user-context/changes.js';
 import type { SessionAgentConfig } from '../../session/config-types.js';
 import { sessionConfigRowToConfig, type SessionConfigRow } from './row-mappers.js';
 import { ensureSessionInTransaction } from './session-repository.js';
@@ -34,6 +35,7 @@ export function listSessionWorkspaceOverrides(): Array<{ sessionKey: string; wor
 }
 
 export function setSessionConfig(sessionKey: string, config: SessionAgentConfig, cwd: string): SessionAgentConfig {
+  notifyUserContextChange({ kind: 'session', id: sessionKey });
   return runSqliteWriteTransaction((db) => {
     ensureSessionInTransaction(db, sessionKey, cwd);
     const updatedAt = Math.max(Date.now(), (readConfigRow(db, sessionKey)?.updated_at ?? 0) + 1);
@@ -83,6 +85,7 @@ export function updateSessionConfig(
 }
 
 export function deleteSessionConfig(sessionKey: string): void {
+  notifyUserContextChange({ kind: 'session', id: sessionKey });
   runSqliteWriteTransaction((db) => {
     db.prepare(`DELETE FROM session_config WHERE session_key = ?`).run(sessionKey);
   });
