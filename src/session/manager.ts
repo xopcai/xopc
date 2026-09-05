@@ -406,6 +406,7 @@ export class SessionIndex extends EventEmitter {
   async appendTranscriptCustomMessageEntry(
     key: string,
     entry: {
+      expectedSessionId?: string;
       customType: string;
       content?: string | unknown[];
       display?: boolean;

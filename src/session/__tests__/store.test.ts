@@ -85,6 +85,19 @@ describe('SessionStore', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it('rejects late native voice writes after a session reset or deletion', async () => {
+    const key = 'agent:main:webchat:default:direct:voice';
+    await store.saveMessages(key, []);
+    const expectedSessionId = (await store.getMetadata(key))!.sessionId;
+    const entry = { customType: 'voice_omni_transcript', content: 'Hello', expectedSessionId };
+    await store.appendTranscriptCustomMessageEntry(key, entry);
+    await store.reset(key);
+    await expect(store.appendTranscriptCustomMessageEntry(key, entry)).rejects.toThrow('session changed');
+    await store.delete(key);
+    await expect(store.appendTranscriptCustomMessageEntry(key, entry)).rejects.toThrow('session changed');
+    expect(await store.getMetadata(key)).toBeNull();
+  });
+
   describe('routing metadata', () => {
     it('persists explicit routing metadata', async () => {
       const messages: any[] = [

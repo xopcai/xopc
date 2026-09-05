@@ -10,6 +10,7 @@ import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import { createVoiceSessionRequestSchema } from '@xopcai/realtime-protocol/voice';
 
 import type { Config } from '../../../config/schema.js';
+import { withModelConfigLock } from '../../../session/model-config-lock.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
 import {
@@ -242,7 +243,8 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
     try {
       const principal = getGatewayPrincipal(c);
-      const payload = await service.voiceRealtime.createSession(parsed.data, principal.principalId);
+      const create = () => service.voiceRealtime.createSession(parsed.data, principal.principalId);
+      const payload = parsed.data.sessionKey ? await withModelConfigLock(parsed.data.sessionKey, create) : await create();
       return c.json({ ok: true, payload });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Realtime voice is unavailable';

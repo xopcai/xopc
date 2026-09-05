@@ -1,6 +1,7 @@
 import {
   VOICE_REALTIME_PROTOCOL_VERSION,
   parseVoiceServerEvent,
+  decodeVoiceAudioFrame,
   type CreateVoiceSessionResponse,
   type VoiceClientMessage,
   type VoiceServerEvent,
@@ -12,9 +13,10 @@ import { apiUrl } from '@/lib/url';
 interface VoiceSessionClientOptions {
   signal?: AbortSignal;
   purpose: 'dictation' | 'conversation';
+  engine?: 'agent' | 'omni';
   sessionKey?: string;
   onEvent: (event: VoiceServerEvent) => void;
-  onAudio?: (audio: ArrayBuffer) => void;
+  onAudio?: (audio: ArrayBuffer, responseId: string) => void;
   onClose?: (reason: string) => void;
 }
 
@@ -54,6 +56,7 @@ export class VoiceSessionClient {
         signal: options.signal,
         body: JSON.stringify({
           purpose: options.purpose,
+          ...(options.engine ? { engine: options.engine } : {}),
           ...(options.sessionKey ? { sessionKey: options.sessionKey } : {}),
         }),
       },
@@ -67,6 +70,7 @@ export class VoiceSessionClient {
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let timeout: number | undefined;
+      let audioSeq = 0;
       const fail = (error: Error) => {
         if (settled) return;
         settled = true;
@@ -95,7 +99,12 @@ export class VoiceSessionClient {
       };
       socket.onmessage = (message) => {
         if (typeof message.data !== 'string') {
-          if (message.data instanceof ArrayBuffer) options.onAudio?.(message.data);
+          try {
+            const frame = decodeVoiceAudioFrame(new Uint8Array(message.data));
+            if (frame.seq !== audioSeq + 1) throw new Error('Invalid audio sequence');
+            audioSeq = frame.seq;
+            options.onAudio?.(frame.audio.buffer as ArrayBuffer, frame.responseId);
+          } catch { socket.close(4400, 'Invalid voice audio frame'); }
           return;
         }
         try {

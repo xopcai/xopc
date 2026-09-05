@@ -40,6 +40,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { VoiceSetup } from './voice-setup';
+import { OmniVoiceSettings } from './omni-voice-settings';
 
 const credentialFieldWidthClass = selectFieldMaxWidthClass;
 
@@ -469,6 +470,8 @@ export function VoiceSettingsPanel() {
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <VoiceSetup v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} />
+
+      {form.voice.realtime.enabled ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
 
       <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3">
         <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">{v.setup.readout}<span className="ml-3 text-xs font-normal text-fg-muted">{tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off} · {ttsProviderLabel(tts.provider, v)}</span></summary>

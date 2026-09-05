@@ -2,7 +2,19 @@
 
 xopc can turn voice messages into text (speech-to-text, or STT) and assistant replies into audio (text-to-speech, or TTS). Availability depends on the selected provider and client.
 
-## Where voice works
+## Realtime calls
+
+Enable realtime voice under **Settings → Capabilities → Voice**. On an existing Chat, choose **Voice assistant** (STT → Agent → TTS, with tools) or **Natural chat · no tools** (native Qwen audio), then start the call. The microphone button remains editable dictation.
+
+Natural chat has separate settings on the same page. Choose XOPC Platform to use your existing XOPC login, or DashScope to use your own key / `DASHSCOPE_API_KEY`. The certified model is `qwen3-omni-flash-realtime`. It does not require STT/TTS configuration. Each call starts fresh and does not import Agent history.
+
+For managed calls, a platform administrator must first configure **Models and routes → Conversation**, select an existing DashScope connection with a healthy key, explicitly set four token prices, and publish the route. **Debug audio → Natural conversation** tests that same relay. Missing usage requires manual reconciliation rather than an automatic refund.
+
+End a call before changing engines. Mute silences the speaker, not the microphone. Interrupted transcripts can include generated text that was not played. Update the renderer and gateway together for protocol v2.
+
+See the [voice PRD](./design/realtime-voice-prd.md) and [technical design](./design/realtime-voice-technical-design.md) for limits and verification boundaries.
+
+## Where else voice works
 
 - Web and desktop Chat can transcribe supported audio attachments.
 - Telegram can transcribe voice notes and send audio replies when configured.

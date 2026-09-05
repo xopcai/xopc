@@ -245,6 +245,7 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
               ...(typeof realtime.tts.voice === 'string' ? { voice: realtime.tts.voice } : {}),
             } }
           : {}),
+        ...(isRecord(realtime.omni) ? { omni: { ...realtime.omni } as NonNullable<VoiceSettingsState['voice']['realtime']['omni']> } : {}),
       },
     },
   };

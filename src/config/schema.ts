@@ -893,6 +893,14 @@ export const VoiceConfigSchema = z
           provider: z.enum(['alibaba', 'xopc-cloud']),
           voice: z.string().trim().min(1).max(200).optional(),
         }).strict().optional(),
+        omni: z.object({
+          provider: z.enum(['alibaba', 'xopc-cloud']),
+          model: z.string().min(1).max(200),
+          voice: z.string().min(1).max(100),
+          baseUrl: z.string().url().optional(),
+          apiKey: z.string().min(1).optional(),
+          instructions: z.string().max(8_000).default('You are a friendly voice companion. Keep replies conversational and concise. You cannot execute tools or perform actions.'),
+        }).strict().optional(),
       })
       .strict()
       .default({

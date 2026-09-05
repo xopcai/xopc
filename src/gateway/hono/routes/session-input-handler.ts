@@ -42,6 +42,9 @@ export async function submitSessionInput(
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session identity' } }, 400);
   }
   return withModelConfigLock(sessionKey, async () => {
+    if (deps.service.voiceRealtime?.hasConversation(sessionKey)) {
+      return c.json({ ok: false, error: { code: 'SESSION_BUSY', message: 'End the voice call before sending text' } }, 409);
+    }
     const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(sessionKey) : undefined;
     if (selection) {
       if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
@@ -104,6 +107,9 @@ export async function replaceLatestSessionTurn(
   }
 
   return withModelConfigLock(sessionKey, async () => {
+    if (deps.service.voiceRealtime?.hasConversation(sessionKey)) {
+      return c.json({ ok: false, error: { code: 'SESSION_BUSY', message: 'End the voice call before editing a turn' } }, 409);
+    }
     const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(sessionKey) : undefined;
     if (selection) {
       if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {

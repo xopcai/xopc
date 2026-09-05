@@ -485,6 +485,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       continue;
     }
     if (isTranscriptCustomMessageEntry(r)) {
+      if (r.customType === 'voice_omni_transcript') continue;
       out.push(customMessageRowToLlmMessage(r));
       continue;
     }

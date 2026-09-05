@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 
-import { createVoiceSessionResponseSchema, parseVoiceServerEvent, type VoiceClientMessage, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
+import { decodeVoiceAudioFrame, createVoiceSessionResponseSchema, parseVoiceServerEvent, type VoiceClientMessage, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
@@ -42,7 +42,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
   });
 
   function send(type: VoiceClientMessage['type'], payload: VoiceClientMessage['payload']) {
-    socket.send(JSON.stringify({ protocolVersion: 1, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
+    socket.send(JSON.stringify({ protocolVersion: 2, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
   }
 
   async function start(bargeIn = true) {
@@ -69,12 +69,12 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const session = createVoiceSessionResponseSchema.parse(await runtime.createSession({
-      purpose: 'conversation', sessionKey: 'agent:main:webchat:default:direct:voice',
+      purpose: 'conversation', engine: 'agent', sessionKey: 'agent:main:webchat:default:direct:voice',
     }, 'user-1'));
     expect(session.bargeIn).toBe(bargeIn);
     socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
     socket.on('message', (data, binary) => {
-      if (binary) frames.push(Buffer.byteLength(data as Buffer));
+      if (binary) frames.push(decodeVoiceAudioFrame(data as Buffer).audio.byteLength);
       else events.push(parseVoiceServerEvent(JSON.parse(data.toString())));
     });
     await once(socket, 'open');

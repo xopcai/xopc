@@ -1,176 +1,88 @@
-# Realtime voice product requirements
+# Realtime voice PRD
 
-> Status: Implemented
->
-> Date: 2026-09-04
->
-> Scope: Gateway Web UI and Electron renderer
+Updated: 2026-09-05. Scope: gateway console / Electron renderer and XOPC Platform relay.
 
-## 1. Product decision
+## Product decision
 
-xopc provides two realtime voice actions on one media-session foundation:
+One voice surface supports independent dictation and two explicitly selected conversation engines.
 
-1. **Realtime dictation** streams microphone audio to Qwen STT, shows partial text, and inserts only final text into the composer. The user edits and sends it normally.
-2. **Voice conversation** sends final speech to the existing xopc Agent, streams Agent text through Qwen TTS, and plays PCM audio while the answer is generated.
-
-The only conversation pipeline is:
-
-```text
-Qwen streaming STT -> existing xopc Agent turn -> Qwen streaming TTS
-```
-
-Voice is an input/output surface around the existing Agent. It does not create another assistant runtime, transcript store, permission model, or provider-owned conversation mode.
-
-## 2. User value
-
-Realtime dictation removes the record-upload-wait cycle while keeping consequential text reviewable. Voice conversation provides hands-free interaction without losing the selected Agent's personality, tools, memory, model configuration, approvals, or session history.
-
-## 3. Product surfaces
-
-### 3.1 Dictation
-
-The existing microphone button starts dictation.
-
-- Microphone permission is requested after the click.
-- Partial recognition replaces the current unconfirmed phrase.
-- A final phrase is inserted into the editable composer.
-- Confirm stops capture and commits the remaining upstream audio.
-- Cancel discards unconfirmed audio and text.
-- Dictation never submits a Chat message automatically.
-- Uploaded voice attachments remain a separate one-shot product, not a realtime fallback.
-
-### 3.2 Voice conversation
-
-The waveform button beside the microphone starts a conversation bound to the current Chat session.
-
-- The composer surface shows microphone level, latest transcript, response text, elapsed time, and response state.
-- Qwen server VAD completes each spoken turn automatically.
-- The user can mute output, interrupt the current response, or end the conversation.
-- When automatic interruption is enabled, speaking while an answer is active cancels the Agent/TTS response and clears queued playback.
-- The microphone stays active until the user ends the session or a bounded limit is reached.
-
-A conversation cannot start on a new/unsaved Chat, while that Chat already has an Agent run, or while another voice conversation is reserved for it.
-
-## 4. Credential routes
-
-Provider selection comes only from existing capability settings.
-
-| Provider ID | Route | Credential handling |
+| Action | Pipeline | Tools and Agent memory |
 |---|---|---|
-| `alibaba` | Local gateway connects directly to DashScope | `DASHSCOPE_API_KEY` or provider config remains server-side |
-| `xopc-cloud` | Local gateway connects to the XOPC Platform relay | Existing XOPC account token authenticates the relay; platform owns upstream credentials |
+| Dictation | Microphone → streaming STT → editable composer | No automatic submission |
+| Voice assistant (`agent`) | STT → existing xopc Agent → streaming TTS | Existing tools, approvals and session context |
+| Natural chat (`omni`) | Microphone → Qwen Omni → audio reply | No tools; fresh provider conversation per call |
 
-The renderer receives only provider/model names and a `managed` marker. It never receives provider keys, platform tokens, provider headers, or upstream URLs.
+These are supported product capabilities, not migration fallbacks. Choose the conversation mode before starting. There is no automatic downgrade, live engine switch or socket resume.
 
-## 5. Configuration
+## User journeys
 
-Configuration has one source per concern:
+1. Open Settings → Capabilities → Voice and enable realtime voice.
+2. For the voice assistant, configure streaming STT and streaming PCM TTS.
+3. For natural chat, configure the Omni connection separately: XOPC Platform login or a local DashScope key.
+4. Open an existing Chat. Choose Voice assistant or Natural chat next to the call button.
+5. Speak naturally; server VAD detects turns. The call shows microphone level, the latest input text, response text, elapsed time and listening/thinking/speaking state.
+6. Mute controls speaker output, not microphone capture. Interrupt stops current playback; End releases capture and the connection.
+7. To use tools, end natural chat and explicitly choose Voice assistant.
 
-```text
-tools.media.audio   STT provider, key, URL, language, and fallback
-messages.tts        Message readout provider, key, URL, model, and voice
-voice.realtime      Session behavior and independent conversation output selection
-```
+Microphone permission is requested only after a user action. Final dictation text remains editable and is not sent automatically. Audio attachments and message read-aloud remain independent features.
 
-`voice.realtime` contains:
+## Configuration and credentials
 
-- `enabled`, default `false`;
-- `silenceDurationMs`, default `700`, bounds `300..2000`;
-- `idleTimeoutMs`, default `60000`;
-- `maxDictationMs`, default `600000`;
-- `maxConversationMs`, default `3600000`;
-- `bargeIn`, default `true`;
-- optional `tts: { provider: 'alibaba' | 'xopc-cloud', voice?: string }`, independent of message readout enablement. Omission inherits the message speech route; only native streaming PCM routes qualify.
+- STT settings remain under `tools.media.audio`; TTS under `messages.tts`.
+- Session limits and barge-in remain under `voice.realtime`.
+- Native model, voice, instructions, provider and optional credentials/endpoint are under `voice.realtime.omni`.
+- Supported native model: `qwen3-omni-flash-realtime`.
+- Direct mode resolves the local key or the existing DashScope credential.
+- Managed mode uses the signed-in XOPC token; the platform resolves its upstream key.
+- The session payload contains only safe route metadata. The authenticated settings UI receives masked keys; unchanged masked values preserve stored secrets.
+- Configuration changes affect new calls only.
 
-The default settings view shows service choice, shared credential, conversation voice, interruption behavior, and a real audio test. Ordinary message readout and advanced input settings are collapsed. Configuration alone is labeled unverified. A combined audio test must receive a final transcript and user-confirmed playback before showing success; it does not verify the Agent model. Changing settings invalidates that result. No microphone access occurs without a user action.
+## Conversation ownership and history
 
-Qwen Audio 3.0 streaming recognition uses server VAD. A manual-turn option is deliberately absent because that model/protocol does not provide a true manual segmentation mode. `input.commit` ends dictation; it is not a second conversation mode.
+One voice reservation exists per Chat, including an outstanding connection ticket. An active or queued Agent input prevents call creation. The normal web input/edit routes reject competing submissions during a reserved voice call.
 
-## 6. Functional requirements
+Agent mode keeps the existing canonical Agent transcript writer. Natural chat stores only final user text and generated assistant text, using existing SQLite custom-message entries and call/item identifiers. It does not create an Agent run or synthetic tool results. These entries render with their actual speaker roles but are excluded from Agent model context; the two engines do not silently share conversational memory.
 
-### 6.1 Capture and recognition
+An interrupted assistant entry is marked as interrupted and may contain text that was never played. Native provider context is not truncated to an exact heard offset; that capability is not certified. Reset/deletion invalidates the saved session identity so delayed native writes cannot recreate a deleted conversation or pollute a new one.
 
-- Capture one microphone track with echo cancellation, noise suppression, and automatic gain control requested.
-- Convert audio to mono PCM16 little-endian at 16 kHz with a stateful resampler.
-- Send binary frames no larger than 64 KiB.
-- Show only the newest revision of a partial/final utterance.
-- Never persist partial recognition or raw audio.
-- Stop tracks, capture worklets, playback nodes, timers, and sockets on every exit path.
+Raw audio, partial transcripts and provider payloads are not retained.
 
-### 6.2 Agent execution
+## Platform administration
 
-- Submit only a non-empty final transcript.
-- Use the same embedded webchat turn path as typed Chat.
-- Keep one Agent response active per voice session.
-- Preserve existing tools, approvals, model routing, session config, and SQLite transcript synchronization.
-- Reject a voice conversation when the Chat is already running instead of starting concurrent Agent turns.
+Models and routes → Conversation configures the certified model against an existing DashScope provider connection. Administrators explicitly set four credits-per-million-token rates: text input, audio input, text output, audio output.
 
-### 6.3 Speech and playback
+The audio debug lab offers native conversation through the production relay, with one-use origin-bound debug tickets, a two-minute limit, microphone consent, event-type history and a diagnostic ID. It does not validate an external device, acoustic echo cancellation or a native OAuth grant.
 
-- Send visible Agent text deltas immediately.
-- Commit TTS input only on deterministic punctuation or a 120-character bound.
-- Synthesize one phrase at a time to preserve order and cancellation.
-- Accept only mono PCM16 at 24 kHz from realtime TTS.
-- Begin playback with an 80 ms jitter allowance and limit unplayed audio to two seconds through playback acknowledgements; fast synthesis waits rather than truncating replies.
-- When automatic interruption is enabled, duck playback on local speech energy; clear it after confirmed barge-in or manual interruption. Keep manual interruption available until local playback finishes.
-- A TTS failure keeps the text response visible and leaves the voice session recoverable.
+Incomplete usage appears under Pending usage reconciliation. An administrator verifies provider billing, enters credits/tokens and a reason, then confirms settlement. No unknown usage is silently treated as free.
 
-### 6.4 Lifecycle and limits
+## Limits and errors
 
-- HTTP creates a one-use, 60-second ticket; the ticket is sent only in the first WebSocket JSON frame.
-- First-frame authentication must finish in 10 seconds.
-- Maximum connected sessions: 50 globally and 2 per authenticated principal.
-- Maximum one voice conversation per Chat session.
-- Selected config/provider/model/voice is frozen when the ticket is created.
-- There is no socket resume or mid-session provider failover.
-- Provider/client backpressure fails explicitly instead of silently dropping arbitrary audio.
-
-## 7. Transcript and retention
-
-Dictation is not durable until the user sends the edited composer content.
-
-Conversation input and assistant output use the normal Agent/SQLite transcript path. When barge-in or manual cancellation interrupts an answer, xopc appends one bounded audit context row containing response ID, reason, generated character count, and whether interruption occurred while thinking or speaking.
-
-Raw PCM, provider messages, partial transcripts, credentials, and guessed playback offsets are never stored.
-
-## 8. Error behavior
-
-| Failure | User-visible result |
+| Condition | Behavior |
 |---|---|
-| Realtime disabled or provider missing | Session creation fails and links to Voice settings |
-| Microphone permission/device failure | Capture does not start; existing draft remains |
-| STT setup/runtime failure | Confirmed text remains; capture and socket close |
-| Chat/session conflict | Conversation is rejected with HTTP 409 |
-| Agent/TTS response failure | Text produced so far remains; conversation returns to listening |
-| Input/output backpressure | Active media work is cancelled with a bounded error |
-| Client disconnect or gateway shutdown | Provider sockets and Agent/TTS abort signals close |
+| Disabled, missing credentials or unsupported native model | Fail preflight; link to Voice settings |
+| Existing Chat run, queued input or voice reservation | HTTP 409 |
+| Permission/device failure | No capture; draft preserved |
+| Agent/TTS response failure | Existing recoverable text-only/partial-audio behavior |
+| Native provider failure | End call with error; no switch to Agent |
+| Slow receiver / malformed frames | Bounded failure and cleanup; never discard arbitrary middle frames |
+| Disconnect | Close upstream, stop media, release runtime reservation |
+| Missing platform usage | Hold credit reservation pending reconciliation |
 
-## 9. Delivery phases
+Limits: 50 connections globally, two per principal, mono PCM16 input at 16 kHz and output at 24 kHz. Runtime defaults are 10 minutes for dictation, 60 minutes for conversation and 60 seconds idle; managed Omni additionally caps calls at 30 minutes and reserves a 100,000-token budget.
 
-### Phase 1 — realtime dictation
+## Acceptance and delivery gates
 
-Delivered: protocol schemas, authenticated media WebSocket, ticket lifecycle, direct Alibaba and managed XOPC Cloud streaming STT, browser PCM capture/resampling, partial/final projection, configuration, and limits.
+1. Extract Agent execution behind the engine boundary and rerun existing voice tests.
+2. Add explicit engine selection and protocol v2 tagged audio; reject malformed or stale response data.
+3. Add the native engine, final transcript projection, credential handling and interruption tests.
+4. Add platform authorization, allowlisted relay, independent pricing, durable usage and reconciliation.
+5. Add settings/debug surfaces; run regression tests, typechecks, lint and builds.
+6. Perform an opt-in paid synthetic-speech vendor round trip. Separately verify real microphone, speaker echo, weak network and mobile/browser suspension before release.
 
-### Phase 2 — voice conversation
+No WebRTC, telephony, meetings, camera input, voice cloning, automatic tool bridge, silent fallback or compatibility protocol is included.
 
-Delivered: canonical Agent integration, deterministic phrase segmentation, native Alibaba and XOPC Cloud Qwen streaming TTS, bounded PCM playback, mute, interruption, barge-in, one-response/session-conflict invariants, interruption audit rows, and latency logs.
+See [technical design](./realtime-voice-technical-design.md), [wire protocol](./realtime-voice-websocket-protocol.md) and [usage](../voice.md).
 
-## 10. Acceptance
+## Agent voice setup and diagnostics
 
-- API keys and access tokens never enter renderer-visible payloads.
-- Dictation final text remains editable and is never auto-sent.
-- Conversation input/output persists only through the canonical Chat path.
-- A response can be interrupted without reconnecting the STT session.
-- TTS failure does not remove generated text.
-- Session end releases media tracks, timers, browser audio nodes, provider sockets, and abort controllers.
-- Protocol tests, feature tests, root/Web type checks, lint, and production build pass.
-
-## 11. Non-goals
-
-WebRTC, telephony, meetings, diarization, camera input, voice cloning, raw-audio retention, offline full-duplex mode, Qwen Omni Realtime, socket resumption, and mid-session provider switching.
-
-## 12. Related documents
-
-- [Technical design](./realtime-voice-technical-design.md)
-- [WebSocket protocol](./realtime-voice-websocket-protocol.md)
-- [Existing voice documentation](../voice.md)
+The settings retain shared service/key setup, independent Agent conversation voice, interruption control and an explicit audio test. Readout and advanced input settings remain collapsed. Configuration is unverified until final transcription and user-confirmed playback; this verifies neither the Agent model nor the native Omni route. Changes invalidate verification. Microphone access requires user action.

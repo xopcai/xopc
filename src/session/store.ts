@@ -641,6 +641,7 @@ export class SessionStore {
   async appendTranscriptCustomMessageEntry(
     key: string,
     entry: {
+      expectedSessionId?: string;
       customType: string;
       content?: string | unknown[];
       display?: boolean;
@@ -649,6 +650,9 @@ export class SessionStore {
   ): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
+      if (entry.expectedSessionId && getSessionMetadata(key)?.sessionId !== entry.expectedSessionId) {
+        throw new Error('Voice conversation session changed');
+      }
       const cwd = this.resolveWorkspaceCwd(key);
       ensureSessionRecord(key, cwd);
       const row: XopcTranscriptCustomMessageEntry = {
