@@ -522,10 +522,50 @@
         "tagline": "围绕当前状态，处理下一步、阻塞和验收。",
         "contextLabel": "任务：{{taskTitle}}",
         "categories": [
-          { "id": "task-next-step", "icon": "target", "title": "继续下一步", "description": "按目标直接推进", "scenarios": [{ "prompt": "梳理任务「{{taskTitle}}」的当前状态，并执行最小可验证的下一步。" }] },
-          { "id": "task-clarify", "icon": "search", "title": "补齐关键信息", "description": "约束、依赖、待决策", "scenarios": [{ "prompt": "检查任务「{{taskTitle}}」还缺少哪些输入、依赖或决策，只提出最关键的问题。" }] },
-          { "id": "task-recover", "icon": "review", "title": "排查与恢复", "description": "失败、阻塞、重试", "scenarios": [{ "prompt": "检查任务「{{taskTitle}}」的失败和阻塞记录，给出恢复方案和验证步骤。" }] },
-          { "id": "task-verify", "icon": "review", "title": "验证任务结果", "description": "验收标准与证据", "scenarios": [{ "prompt": "按验收标准检查任务「{{taskTitle}}」的结果，并列出证据和剩余缺口。" }] }
+          {
+            "id": "task-next-step",
+            "icon": "target",
+            "title": "继续下一步",
+            "description": "按目标直接推进",
+            "scenarios": [
+              {
+                "prompt": "梳理任务「{{taskTitle}}」的当前状态，并执行最小可验证的下一步。"
+              }
+            ]
+          },
+          {
+            "id": "task-clarify",
+            "icon": "search",
+            "title": "补齐关键信息",
+            "description": "约束、依赖、待决策",
+            "scenarios": [
+              {
+                "prompt": "检查任务「{{taskTitle}}」还缺少哪些输入、依赖或决策，只提出最关键的问题。"
+              }
+            ]
+          },
+          {
+            "id": "task-recover",
+            "icon": "review",
+            "title": "排查与恢复",
+            "description": "失败、阻塞、重试",
+            "scenarios": [
+              {
+                "prompt": "检查任务「{{taskTitle}}」的失败和阻塞记录，给出恢复方案和验证步骤。"
+              }
+            ]
+          },
+          {
+            "id": "task-verify",
+            "icon": "review",
+            "title": "验证任务结果",
+            "description": "验收标准与证据",
+            "scenarios": [
+              {
+                "prompt": "按验收标准检查任务「{{taskTitle}}」的结果，并列出证据和剩余缺口。"
+              }
+            ]
+          }
         ]
       },
       "file": {
@@ -533,9 +573,39 @@
         "tagline": "先理解内容，再编辑、转换或提取信息。",
         "contextLabel": "文件：{{fileName}}",
         "categories": [
-          { "id": "file-understand", "icon": "documents", "title": "理解文件", "description": "摘要、结构、重点", "scenarios": [{ "prompt": "阅读文件「{{fileName}}」，总结结构、核心内容和需要注意的问题。" }] },
-          { "id": "file-edit", "icon": "content", "title": "编辑与转换", "description": "改写、整理、格式转换", "scenarios": [{ "prompt": "检查文件「{{fileName}}」并提出具体的编辑或格式优化方案。" }] },
-          { "id": "file-extract", "icon": "task", "title": "提取可执行内容", "description": "任务、数据、结论", "scenarios": [{ "prompt": "从文件「{{fileName}}」中提取任务、关键数据和明确结论。" }] }
+          {
+            "id": "file-understand",
+            "icon": "documents",
+            "title": "理解文件",
+            "description": "摘要、结构、重点",
+            "scenarios": [
+              {
+                "prompt": "阅读文件「{{fileName}}」，总结结构、核心内容和需要注意的问题。"
+              }
+            ]
+          },
+          {
+            "id": "file-edit",
+            "icon": "content",
+            "title": "编辑与转换",
+            "description": "改写、整理、格式转换",
+            "scenarios": [
+              {
+                "prompt": "检查文件「{{fileName}}」并提出具体的编辑或格式优化方案。"
+              }
+            ]
+          },
+          {
+            "id": "file-extract",
+            "icon": "task",
+            "title": "提取可执行内容",
+            "description": "任务、数据、结论",
+            "scenarios": [
+              {
+                "prompt": "从文件「{{fileName}}」中提取任务、关键数据和明确结论。"
+              }
+            ]
+          }
         ]
       },
       "workflow": {
@@ -543,9 +613,39 @@
         "tagline": "检查产物、处理异常或继续下一步。",
         "contextLabel": "工作流：{{workflowName}}",
         "categories": [
-          { "id": "workflow-next-step", "icon": "target", "title": "继续下一步", "description": "沿用已有产物", "scenarios": [{ "prompt": "检查工作流「{{workflowName}}」的已有产物并继续最合适的下一步。" }] },
-          { "id": "workflow-review", "icon": "review", "title": "检查运行结果", "description": "产物、证据、缺口", "scenarios": [{ "prompt": "总结工作流「{{workflowName}}」的运行结果、证据和未完成事项。" }] },
-          { "id": "workflow-recover", "icon": "search", "title": "处理运行异常", "description": "定位、恢复、重试", "scenarios": [{ "prompt": "检查工作流「{{workflowName}}」的异常记录，并给出恢复和重试方案。" }] }
+          {
+            "id": "workflow-next-step",
+            "icon": "target",
+            "title": "继续下一步",
+            "description": "沿用已有产物",
+            "scenarios": [
+              {
+                "prompt": "检查工作流「{{workflowName}}」的已有产物并继续最合适的下一步。"
+              }
+            ]
+          },
+          {
+            "id": "workflow-review",
+            "icon": "review",
+            "title": "检查运行结果",
+            "description": "产物、证据、缺口",
+            "scenarios": [
+              {
+                "prompt": "总结工作流「{{workflowName}}」的运行结果、证据和未完成事项。"
+              }
+            ]
+          },
+          {
+            "id": "workflow-recover",
+            "icon": "search",
+            "title": "处理运行异常",
+            "description": "定位、恢复、重试",
+            "scenarios": [
+              {
+                "prompt": "检查工作流「{{workflowName}}」的异常记录，并给出恢复和重试方案。"
+              }
+            ]
+          }
         ]
       }
     },
@@ -838,18 +938,16 @@
     "dropFiles": "将文件拖放到此处添加",
     "voiceRecording": "录制语音",
     "voiceRecordingStop": "停止录音",
-    "voiceInput": "语音输入",
-    "voiceConversation": "开始语音对话",
+    "voiceInput": "听写",
+    "voiceConversation": "语音通话",
     "voiceAssistantMode": "语音助手",
     "voiceNaturalMode": "自然对话 · 无工具",
     "voiceRecordingStatus": "正在录音",
-    "voiceInputCancel": "取消录音",
-    "voiceInputConfirm": "转为文字",
+    "voiceInputCancel": "取消",
+    "voiceInputConfirm": "完成",
     "voiceThinking": "正在思考…",
     "voiceSpeaking": "正在回复…",
-    "voiceResponseInterrupt": "打断回复",
-    "voiceMute": "静音语音回复",
-    "voiceUnmute": "恢复语音回复",
+    "voiceResponseInterrupt": "停止回复",
     "voiceResponseFailed": "语音播放失败，文字回复仍可查看。",
     "voiceTranscribing": "正在转写…",
     "voicePreparing": "正在准备本地中文语音…",
@@ -1241,6 +1339,35 @@
       "recentFiles": "最近",
       "recentBadge": "最近",
       "shiftHint": "Shift+Enter 或 Shift+点击：继续添加 @ 引用。"
-    }
+    },
+    "callFailed": "通话未连接",
+    "callDisconnected": "通话已断开",
+    "callReady": "准备好聊一会儿了吗？",
+    "callConnecting": "正在连接…",
+    "callMicMuted": "麦克风已关闭",
+    "callListening": "我在听",
+    "callMute": "关闭麦克风",
+    "callUnmute": "打开麦克风",
+    "callEnd": "挂断",
+    "callMinimize": "收起通话",
+    "callSessionHint": "语音和文字保存在同一对话中",
+    "callContinuity": "再次通话，继续这段对话",
+    "callSettings": "语音设置",
+    "callYou": "你",
+    "callViewChat": "查看对话记录",
+    "callCaptions": "字幕",
+    "callCaptureBusy": "另一个语音输入或通话正在使用麦克风，请先结束。",
+    "callReconnect": "重新连接",
+    "callSetupHint": "可以重新连接；若仍无法开始，请在语音设置中检查服务。",
+    "callMore": "更多通话选项",
+    "voiceRefinementFailed": "润色暂不可用，已保留原始识别文本。",
+    "callWorking": "进行中",
+    "callWorkDone": "已完成",
+    "callWorkFailed": "未完成",
+    "callApproval": "请确认此操作",
+    "callApprove": "批准",
+    "callDeny": "拒绝",
+    "callWaiting": "等待你的确认",
+    "callErrorDetails": "错误详情"
   }
 }

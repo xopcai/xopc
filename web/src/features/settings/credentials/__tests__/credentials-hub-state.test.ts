@@ -62,6 +62,7 @@ describe('buildCredentialsHubSnapshot', () => {
           language: 'en',
           input: { refinement: { mode: 'off' } },
           realtime: {
+            defaultEngine: 'agent',
             enabled: false,
             silenceDurationMs: 700,
             idleTimeoutMs: 60_000,

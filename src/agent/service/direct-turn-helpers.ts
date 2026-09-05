@@ -144,6 +144,7 @@ export interface RunDirectAgentTurnInput {
   deadlineAtMs?: number;
   sourceImages?: ImageContent[];
   sourceContexts?: AgentSourceContext[];
+  presentation?: 'voice';
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }
 
@@ -201,6 +202,7 @@ export async function runDirectAgentTurn(
     runId: turnId,
     userMessage: userMessageForModel,
     llmImages,
+    presentation: input.presentation,
     sessionStore: deps.sessionStore,
     agentManager: deps.agentManager,
     modelManager: deps.modelManager,

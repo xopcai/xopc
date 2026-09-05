@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+
+import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
@@ -168,14 +170,29 @@ export class GatewayService {
   readonly endpointTools = new EndpointToolRuntime();
   readonly realtime = new RealtimeRuntime(this.endpointTools);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
+    getConversationContext: async (sessionKey, expectedSessionId) => {
+      const before = await this.sessionIndex.getSessionMetadata(sessionKey);
+      if (before?.sessionId !== expectedSessionId) throw new Error('Conversation changed before voice connection');
+      const messages = await this.sessionIndex.loadMessages(sessionKey);
+      const after = await this.sessionIndex.getSessionMetadata(sessionKey);
+      if (after?.sessionId !== expectedSessionId) throw new Error('Conversation changed while loading voice context');
+      const profile = resolveEffectiveAgentProfileForSession(this.config, sessionKey);
+      return {
+        identity: [`Your name is ${profile.config.profile?.name ?? profile.agentId}.`, profile.customInstructions ?? ''].join('\n'),
+        history: messages,
+      };
+    },
     getSessionIdentity: async (sessionKey) => (await this.sessionIndex.getSessionMetadata(sessionKey))?.sessionId,
-    recordOmniTranscript: (sessionKey, callId, entry, expectedSessionId) => this.sessionIndex.appendTranscriptCustomMessageEntry(sessionKey, {
-      expectedSessionId,
-      customType: 'voice_omni_transcript',
-      content: entry.text,
-      display: true,
-      details: { callId, itemId: entry.itemId, role: entry.role, interrupted: entry.interrupted, engine: 'omni' },
-    }),
+    recordOmniTranscript: async (sessionKey, callId, entry, expectedSessionId) => {
+      await this.sessionIndex.appendTranscriptCustomMessageEntry(sessionKey, {
+        expectedSessionId,
+        customType: 'voice_omni_transcript',
+        content: entry.text,
+        display: true,
+        details: { callId, itemId: entry.itemId, role: entry.role, interrupted: entry.interrupted, engine: 'omni' },
+      });
+      this.emit('session.transcript_updated', { key: sessionKey });
+    },
     getConfig: () => this.config,
     sessionExists: async (sessionKey) => Boolean(await this.sessionIndex.getSessionMetadata(sessionKey)),
     sessionBusy: (sessionKey) => Boolean(this.agentRunner.getActiveRunId(sessionKey)) || this.agentRunner.inputs.snapshot(sessionKey).inputs.some((input) => input.status === 'queued'),
@@ -200,7 +217,7 @@ export class GatewayService {
         { type: 'channel', channel: 'webchat' },
         undefined,
         undefined,
-        { signal },
+        { signal, presentation: 'voice' },
       );
     },
   });

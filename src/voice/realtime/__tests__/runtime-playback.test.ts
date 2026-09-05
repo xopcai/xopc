@@ -33,6 +33,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
   let events: VoiceServerEvent[];
   let frames: number[];
   let responseId: string;
+  let abortStt: ReturnType<typeof vi.fn>;
 
   afterEach(async () => {
     socket?.terminate();
@@ -45,12 +46,13 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     socket.send(JSON.stringify({ protocolVersion: 2, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
   }
 
-  async function start(bargeIn = true) {
+  async function start(bargeIn = true, recordInterruption = async () => {}) {
+    abortStt = vi.fn();
     events = [];
     frames = [];
     vi.spyOn(alibabaTranscriptionProvider, 'openAudioStream').mockImplementation(async (request) => {
       onSttEvent = request.onEvent;
-      return { appendAudio: vi.fn(), abort: vi.fn(), commit: vi.fn(async () => {}), close: vi.fn(async () => {}) };
+      return { appendAudio: vi.fn(), abort: abortStt, commit: vi.fn(async () => {}), close: vi.fn(async () => {}) };
     });
     const config = ConfigSchema.parse({
       voice: { realtime: { enabled: true, bargeIn } },
@@ -59,10 +61,11 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     });
     runtime = new VoiceRealtimeRuntime({
       getConfig: () => config,
+      getSessionIdentity: async () => 'durable-session',
       sessionExists: async () => true,
       sessionBusy: () => false,
       runAgent: async function* () { yield { type: 'assistant_delta', payload: { delta: 'Hello.' } }; },
-      recordInterruption: async () => undefined,
+      recordInterruption,
     });
     server = createServer();
     server.on('upgrade', (request, client, head) => runtime.handleUpgrade(request, client as Socket, head));
@@ -120,6 +123,23 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     await roundTrip();
     expect(frames).toHaveLength(4);
     expect(events.some((event) => event.type === 'response.done' || event.type === 'session.error')).toBe(false);
+  });
+
+  it('holds the session reservation until pending interruption metadata is saved', async () => {
+    let finish!: () => void;
+    const saved = new Promise<void>((resolve) => { finish = resolve; });
+    const record = vi.fn(async () => { await saved; });
+    await start(true, record);
+    send('response.cancel', { responseId });
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce());
+    send('session.stop', { reason: 'user_finished' });
+    await vi.waitFor(() => expect(abortStt).toHaveBeenCalled());
+    expect(runtime.hasConversation('agent:main:webchat:default:direct:voice')).toBe(true);
+    const closed = once(socket, 'close');
+    finish();
+    await closed;
+    expect(runtime.hasConversation('agent:main:webchat:default:direct:voice')).toBe(false);
+    await expect(runtime.createSession({ purpose: 'conversation', engine: 'agent', sessionKey: 'agent:main:webchat:default:direct:voice' }, 'user-1')).resolves.toHaveProperty('ticket');
   });
 
   it('rejects acknowledgements for audio that was never sent', async () => {

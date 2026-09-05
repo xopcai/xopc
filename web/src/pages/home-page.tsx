@@ -26,7 +26,7 @@ import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcr
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { createComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
-import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
+import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
 import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
@@ -242,7 +242,7 @@ export function HomePage() {
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachments = useComposerAttachments({ chat: msg.chat });
   const intentInputRef = useRef<HTMLTextAreaElement>(null);
-  const voice = useComposerVoiceInput({
+  const voice = useRealtimeVoice({
     disabled: attachmentBusy,
     chat: msg.chat,
     onTranscript: (transcript) => {

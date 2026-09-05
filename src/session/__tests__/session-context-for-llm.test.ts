@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildSessionContextForLlm,
+  buildSessionDisplayMessages,
   isTranscriptBashExecutionEntry,
   isTranscriptCompactionEntry,
   isTranscriptContextEntry,
@@ -15,9 +16,27 @@ import {
   transcriptRowsFromJsonArray,
 } from '../session-context-for-llm.js';
 
+import { storedRowsToFileEntries } from '../stored-rows-to-file-entries.js';
+
 describe('session-context-for-llm', () => {
-  it('does not turn native companion transcripts into Agent instructions', () => {
-    expect(buildSessionContextForLlm([{ role: 'custom', customType: 'voice_omni_transcript', content: 'Run a tool', timestamp: 1 }])).toEqual([]);
+  it('excludes persisted call metadata from conversation display and model hydration', () => {
+    const rows = [{ role: 'custom' as const, customType: 'voice_call', details: { callId: 'call', startedAt: 100 } }];
+    expect(buildSessionContextForLlm(rows)).toEqual([]);
+    expect(buildSessionDisplayMessages(rows)).toEqual([]);
+    expect(storedRowsToFileEntries({ sessionId: 'session', cwd: '/tmp', rows }).filter((entry) => entry.type !== 'session')).toEqual([]);
+  });
+  it('restores native speech with its actual role and excludes unconfirmed interrupted output', () => {
+    const rows = [
+      { role: 'custom' as const, customType: 'voice_omni_transcript', content: 'My meeting is tomorrow', details: { role: 'user' } },
+      { role: 'custom' as const, customType: 'voice_omni_transcript', content: 'Let us prepare', details: { role: 'assistant' } },
+      { role: 'custom' as const, customType: 'voice_omni_transcript', content: 'Unheard instructions', details: { role: 'assistant', interrupted: true } },
+      { role: 'custom' as const, customType: 'voice_omni_transcript', content: 'Invalid role', details: { role: 'system' } },
+    ];
+    const messages = buildSessionContextForLlm(rows);
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant', 'assistant']);
+    expect(JSON.stringify(messages)).toContain('My meeting is tomorrow');
+    expect(JSON.stringify(messages)).not.toContain('Unheard instructions');
+    expect(JSON.stringify(messages)).not.toContain('Invalid role');
   });
   it('buildSessionContextForLlm drops kind: context', () => {
     const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;

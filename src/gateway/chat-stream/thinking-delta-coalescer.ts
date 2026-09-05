@@ -59,7 +59,13 @@ export async function* coalesceThinkingDeltas(
   }
 
   const iterator = source[Symbol.asyncIterator]();
-  let next = iterator.next();
+  const readNext = () => {
+    const result = iterator.next();
+    // Prefetch may reject while the consumer is paused; awaiting it still propagates the error.
+    void result.catch(() => {});
+    return result;
+  };
+  let next = readNext();
   let pending: ThinkingDeltaEvent | undefined;
   let deadlineAt = 0;
 
@@ -68,7 +74,7 @@ export async function* coalesceThinkingDeltas(
       if (!pending) {
         const result = await next;
         if (result.done) break;
-        next = iterator.next();
+        next = readNext();
         if (!isThinkingDelta(result.value)) {
           yield result.value;
           continue;
@@ -95,7 +101,7 @@ export async function* coalesceThinkingDeltas(
         pending = undefined;
         break;
       }
-      next = iterator.next();
+      next = readNext();
       const event = result.value;
       if (!isThinkingDelta(event) || !belongsToSameThinkingStream(pending, event)) {
         yield pending;

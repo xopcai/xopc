@@ -76,7 +76,7 @@ describe('voice diagnostics lifecycle', () => {
     expect(captureCancel).toHaveBeenCalled();
     expect(clientStop).toHaveBeenCalled();
     expect(container.textContent).not.toContain(v.setup.passed);
-    await act(async () => mocks.play.mock.calls[0]![1]());
+    await act(async () => mocks.play.mock.calls[0][1]());
     await click(v.setup.heard);
     expect(container.textContent).toContain(v.setup.passed);
     expect(container.textContent).toContain('Testing voice');
@@ -89,7 +89,7 @@ describe('voice diagnostics lifecycle', () => {
     await act(async () => onEvent({ type: 'input.transcript.final', payload: { text: 'Hello' } }));
     expect(container.textContent).toContain(v.setup.inputPassed);
     expect(mocks.preview).not.toHaveBeenCalled();
-    expect(mocks.connect.mock.calls[0]![0]).not.toHaveProperty('sessionKey');
+    expect(mocks.connect.mock.calls[0][0]).not.toHaveProperty('sessionKey');
   });
 
   it('releases microphone permission granted after unmount', async () => {
@@ -112,7 +112,7 @@ describe('voice diagnostics lifecycle', () => {
     await click(v.tts.test.stop);
     await act(async () => resolvePreview(new ArrayBuffer(4)));
     expect(mocks.play).not.toHaveBeenCalled();
-    expect(mocks.preview.mock.calls[0]![0].aborted).toBe(true);
+    expect(mocks.preview.mock.calls[0][0].aborted).toBe(true);
   });
 
   it('disables tests while configuration is unsaved', async () => {

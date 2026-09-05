@@ -4,15 +4,17 @@ xopc can turn voice messages into text (speech-to-text, or STT) and assistant re
 
 ## Realtime calls
 
-Enable realtime voice under **Settings → Capabilities → Voice**. On an existing Chat, choose **Voice assistant** (STT → Agent → TTS, with tools) or **Natural chat · no tools** (native Qwen audio), then start the call. The microphone button remains editable dictation.
+A Chat keeps one conversation across text and repeated calls. Click **Voice call** in Chat to connect immediately using the saved default. **Current assistant** retains Agent tools; **Native voice · no tools** is an explicit alternative under Voice service settings. Hanging up, reconnecting, or changing voice modes keeps the same Chat and its saved history. Only an explicit new Chat or reset starts a new conversation.
 
-Natural chat has separate settings on the same page. Choose XOPC Platform to use your existing XOPC login, or DashScope to use your own key / `DASHSCOPE_API_KEY`. The certified model is `qwen3-omni-flash-realtime`. It does not require STT/TTS configuration. Each call starts fresh and does not import Agent history.
+The call has its own window. Minimize it to keep talking while visiting other pages. **Mute microphone** disables capture upload and discards unfinished input while assistant playback continues; **End call** releases the microphone. Dictation buffers text until **Finish**, applies the configured cleanup, and inserts an editable draft without sending. **Cancel** leaves the original draft untouched, including cancellation during cleanup. Finalized text remains recoverable after a disconnect. The same Chat cannot run a text response and a call simultaneously.
 
-For managed calls, a platform administrator must first configure **Models and routes → Conversation**, select an existing DashScope connection with a healthy key, explicitly set four token prices, and publish the route. **Debug audio → Natural conversation** tests that same relay. Missing usage requires manual reconciliation rather than an automatic refund.
+Choose **XOPC hosted** or **Your API key** once under **Settings → Capabilities → Voice**. This configures dictation, Agent speech and natural conversation together, without changing ordinary message readout. Natural voice defaults to the shared input credential; independent endpoints, keys and instructions are optional advanced settings. If setup is missing, the call window links to Voice settings, with a return link to the original Chat. Capability validation precedes microphone permission; it does not prove a live provider connection will succeed.
 
-End a call before changing engines. Mute silences the speaker, not the microphone. Interrupted transcripts can include generated text that was not played. Update the renderer and gateway together for protocol v2.
+Natural chat uses `qwen3-omni-flash-realtime`. Each connection restores the selected Agent's configured name/instructions and a bounded text projection of the same Chat's history. It has no tools. Older context may be excerpted; full records remain in Chat. Interrupted generated replies remain visible in records, but are omitted from subsequent model context because the exact portion heard is unknown.
 
-See the [voice PRD](./design/realtime-voice-prd.md) and [technical design](./design/realtime-voice-technical-design.md) for limits and verification boundaries.
+Use the composer’s call button to start or continue voice in the same Chat. Network failure, a call time limit or a page reload ends the connection; start again to continue the conversation. Minimize/route navigation does not end it. There is no silent microphone reopening or automatic indefinite connection renewal.
+
+Hosted natural calls require a published conversation route on XOPC Platform. Gateway and renderer must both support protocol v2. The platform relay must also accept `input_audio_buffer.clear`; ship its matching change before enabling the updated hosted client. See the [technical design](./design/realtime-voice-technical-design.md) and [delivery review](./design/persistent-voice-delivery.md) for implementation and verification limits.
 
 ## Where else voice works
 
@@ -29,13 +31,13 @@ Open **Settings → Capabilities → Voice** and choose **XOPC hosted** or **You
 
 Choose a conversation voice, then use **Test voice**. The test opens the microphone only after a click, displays a real final transcript, plays a fixed sample through the native streaming speech provider, and asks you to confirm that you heard it. It does not create a chat or call an Agent. **Not tested** means a route is configured, not that a live connection has succeeded. Testing may incur provider usage. When only input is configured, use **Test dictation**.
 
-After testing, open Chat and use its microphone for dictation or voice conversation. Conversation also requires a working Agent model. **Read messages aloud** controls ordinary message readout separately. **Advanced settings** contains language, pause duration, input providers, fallback, and transcript cleanup.
+After testing, open Chat and use the microphone for dictation or the call button for voice conversation. Voice assistant mode also requires a working Agent model. **Read messages aloud** controls ordinary message readout separately. Settings are grouped into **Speaking & listening**, **Input & display**, **Audio devices**, **Voice service**, and **Troubleshooting**. Voice/pacing/language are listening preferences; cleanup and message readout are input/display options; providers and fallback live under service. Captions and microphone selection are saved on this browser; output follows the system device.
 
 ### Audio attachments and message channels
 
 In the Gateway console, open **Settings → Capabilities → Voice**:
 
-1. Expand **Advanced settings** and enable speech-to-text.
+1. Open **Voice service → Technical settings** and enable speech-to-text.
 2. Choose a provider and model.
 3. Add the provider credential if it is not already configured.
 4. Save and upload a short test recording in Chat.
@@ -90,3 +92,11 @@ Use environment variables or the credential controls in the UI; do not put real 
 | Long replies are cut off | Shorten the response or increase the configured text limit within provider limits |
 
 Use **Settings → Logs** or `xopc logs tail` to find the first provider error. Never share recordings or credentials in a support report unless you intend to disclose their contents.
+
+## Interaction and validation
+
+**Stop reply** clears playback and cancels the current response, invalidating queued and unfinished input. It does not send a message or undo completed tool actions. Tool progress and explicit clarification/connector approval controls appear in the call. Ambient speech does not answer a pending clarification. Calls opened from a task retain its existing task status and detail link.
+
+The saved default is `voice.realtime.defaultEngine` (`agent` by default, or `omni`). A session creation request may omit `engine` to use it. Active calls keep their original route.
+
+Run `node scripts/voice-browser-smoke.mjs` for production-component checks with Chrome synthetic microphone input and a fake gateway. Set `XOPC_VOICE_SMOKE_BROWSER` to another Chrome/Chromium executable if needed. This does not measure real acoustic quality. See [delivery and audio acceptance](./design/voice-experience-delivery.md).

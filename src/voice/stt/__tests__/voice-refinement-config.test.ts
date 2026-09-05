@@ -13,6 +13,7 @@ describe('VoiceConfigSchema', () => {
     const parsed = VoiceConfigSchema.parse({ realtime: {} });
     expect(parsed?.realtime).toEqual({
       enabled: false,
+      defaultEngine: 'agent',
       silenceDurationMs: 700,
       idleTimeoutMs: 60_000,
       maxDictationMs: 600_000,

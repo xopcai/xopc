@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { VoiceCallProvider } from '@/features/voice/realtime/voice-call-provider';
 
 import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
@@ -82,6 +83,12 @@ function ExtensionNavigateListener() {
 }
 
 export function AppShell() {
+  const token = useGatewayStore((state) => state.token);
+  const baseUrl = useGatewayStore((state) => state.baseUrl);
+  return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><AppShellContent /></VoiceCallProvider>;
+}
+
+function AppShellContent() {
   const token = useGatewayStore((s) => s.token);
   const { pathname, search } = useLocation();
   const navigate = useNavigate();

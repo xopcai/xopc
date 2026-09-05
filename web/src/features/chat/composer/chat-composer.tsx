@@ -43,7 +43,8 @@ import { useComposerEditor } from '@/features/chat/composer/use-composer-editor'
 import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
-import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
+import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
+import { useVoiceCall } from '@/features/voice/realtime/voice-call-context';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { ReviewLauncherDialog } from '@/features/chat/review/review-launcher-dialog';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
@@ -116,6 +117,9 @@ export const ChatComposer = memo(function ChatComposer({
   modelDisabled,
   onChatAgentChange,
   currentAgentId,
+  voiceAgentName,
+  voiceTaskId,
+  prepareVoiceSession,
   editingUserTurnId,
   onCancelUserMessageEdit,
 }: {
@@ -160,9 +164,15 @@ export const ChatComposer = memo(function ChatComposer({
   onChatAgentChange?: (agentId: string) => void;
   /** Active session agent id; the matching agent row in `/` palette gets a "current" badge. */
   currentAgentId?: string;
+  voiceAgentName?: string;
+  voiceTaskId?: string;
+  prepareVoiceSession?: () => Promise<string>;
   editingUserTurnId?: string | null;
   onCancelUserMessageEdit?: () => void;
 }) {
+  const call = useVoiceCall();
+  const preparingCallRef = useRef(false);
+  disabled = disabled || call.sessionKey === sessionKey && call.active;
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -343,10 +353,9 @@ export const ChatComposer = memo(function ChatComposer({
 
   shouldSyncSelectionRef.current = pickers.shouldSyncSelection;
 
-  const voice = useComposerVoiceInput({
-    disabled,
+  const voice = useRealtimeVoice({
+    disabled: disabled || call.active,
     chat: m.chat,
-    sessionKey,
     onTranscript: (text) => {
       const prev = editor.valueRef.current;
       const next = appendTranscriptToDraft(prev, text);
@@ -736,16 +745,10 @@ export const ChatComposer = memo(function ChatComposer({
               audioLevel={voice.audioLevel}
               partialTranscript={voice.partialTranscript}
               finalTranscript={voice.finalTranscript}
-              responseText={voice.responseText}
-              responsePhase={voice.responsePhase}
-              muted={voice.muted}
-              mode={voice.mode}
               disabled={disabled}
               chat={m.chat}
               onCancel={voice.cancelVoiceInput}
               onConfirm={voice.confirmVoiceInput}
-              onInterruptResponse={voice.interruptResponse}
-              onToggleMute={voice.toggleMute}
               onRetry={voice.retryVoiceInput}
             />
           ) : null}
@@ -787,8 +790,16 @@ export const ChatComposer = memo(function ChatComposer({
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}
           onStartVoiceInput={voice.startVoiceInput}
-          voiceConversationEnabled={Boolean(sessionKey) && !runBusyState}
-          onStartVoiceConversation={voice.startVoiceConversation}
+          voiceConversationEnabled={Boolean(sessionKey || prepareVoiceSession) && !runBusyState}
+          onStartVoiceConversation={() => {
+            if (preparingCallRef.current) return;
+            if (sessionKey) { call.open({ sessionKey, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }); return; }
+            if (!prepareVoiceSession) return;
+            preparingCallRef.current = true;
+            void prepareVoiceSession().then((key) => call.open({ sessionKey: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }))
+              .catch((error: unknown) => showComposerNotification('error', error instanceof Error ? error.message : m.chat.callFailed))
+              .finally(() => { preparingCallRef.current = false; });
+          }}
           onSend={actions.send}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}

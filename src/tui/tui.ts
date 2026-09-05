@@ -696,6 +696,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       focus: () => tui.setFocus(component),
       unfocus: () => tui.setFocus(editor as Component),
       isFocused: () => false,
+      getBounds: () => undefined,
     };
   };
 

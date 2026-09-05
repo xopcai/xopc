@@ -71,4 +71,35 @@ describe('speakStream fallback control', () => {
     expect(result.provider).toBe('edge');
     expect(mocks.fallbackStream).toHaveBeenCalledOnce();
   });
+  it('never calls a provider for an already-cancelled reply', async () => {
+    const controller = new AbortController();
+    controller.abort('client_cancelled');
+    await expect(speakStream('hello', config, { signal: controller.signal })).rejects.toBe('client_cancelled');
+    expect(mocks.primaryStream).not.toHaveBeenCalled();
+    expect(mocks.fallbackStream).not.toHaveBeenCalled();
+  });
+
+  it('does not treat caller cancellation as a reason to try another provider', async () => {
+    const controller = new AbortController();
+    mocks.primaryStream.mockImplementationOnce(async () => {
+      controller.abort('barge_in');
+      throw new DOMException('Interrupted', 'AbortError');
+    });
+    mocks.fallbackStream.mockResolvedValueOnce(streamResult());
+    await expect(speakStream('hello', config, { signal: controller.signal })).rejects.toBe('barge_in');
+    expect(mocks.fallbackStream).not.toHaveBeenCalled();
+  });
+
+  it('releases a provider stream that becomes ready after cancellation', async () => {
+    const controller = new AbortController();
+    const release = vi.fn(async () => {});
+    mocks.primaryStream.mockImplementationOnce(async () => {
+      controller.abort('client_cancelled');
+      return { ...streamResult(), release };
+    });
+    await expect(speakStream('hello', config, { signal: controller.signal })).rejects.toBe('client_cancelled');
+    expect(release).toHaveBeenCalledOnce();
+    expect(mocks.fallbackStream).not.toHaveBeenCalled();
+  });
+
 });

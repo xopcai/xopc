@@ -130,7 +130,7 @@ export class TurnDispatcher {
     origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
-    options?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[] },
+    options?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
   ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
@@ -141,6 +141,7 @@ export class TurnDispatcher {
       signal: options?.signal,
       runId: options?.runId,
       sourceContexts: options?.sourceContexts,
+      presentation: options?.presentation,
     });
   }
 

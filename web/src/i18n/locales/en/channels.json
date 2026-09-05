@@ -227,10 +227,22 @@
       "title": "How voice should work",
       "description": "Choose the user-facing behavior first. Engine details stay below.",
       "modes": {
-        "text": { "title": "Text only", "description": "No voice input or spoken replies." },
-        "listen": { "title": "Listen to my voice", "description": "Transcribe voice input, but reply in text." },
-        "conversation": { "title": "Speak replies when I speak", "description": "Voice in, voice out. Best default for chat channels." },
-        "always": { "title": "Always speak replies", "description": "Read every assistant reply aloud." }
+        "text": {
+          "title": "Text only",
+          "description": "No voice input or spoken replies."
+        },
+        "listen": {
+          "title": "Listen to my voice",
+          "description": "Transcribe voice input, but reply in text."
+        },
+        "conversation": {
+          "title": "Speak replies when I speak",
+          "description": "Voice in, voice out. Best default for chat channels."
+        },
+        "always": {
+          "title": "Always speak replies",
+          "description": "Read every assistant reply aloud."
+        }
       }
     },
     "inputEngine": {
@@ -336,6 +348,38 @@
       "title": "Note",
       "duration": "Long audio is split automatically; quality depends on provider and model.",
       "envVars": "Environment variables: DASHSCOPE_API_KEY, OPENAI_API_KEY (when not set in this form)."
+    },
+    "experience": {
+      "listening": "Speaking and listening",
+      "input": "Input and display",
+      "devices": "Audio devices",
+      "service": "Voice service",
+      "diagnostics": "Troubleshooting",
+      "defaultEngine": "Default call mode",
+      "agent": "Current assistant",
+      "omni": "Native audio",
+      "agentHint": "Uses the current chat model and tools.",
+      "omniHint": "Direct audio conversation; tool execution is not supported.",
+      "nextCall": "Changes apply to the next call.",
+      "captions": "Show call captions",
+      "microphone": "Microphone",
+      "systemDevice": "System default",
+      "refreshDevices": "Allow access and refresh devices",
+      "deviceHint": "Device choices stay in this browser. Speakers follow the system.",
+      "dictationReady": "Dictation",
+      "agentReady": "Assistant calls",
+      "omniReady": "Native calls",
+      "ready": "Configured",
+      "unavailable": "Not ready",
+      "fast": "Fast",
+      "standard": "Standard",
+      "relaxed": "Unhurried",
+      "pace": "Response pace",
+      "technical": "Independent model and service overrides",
+      "inputProcessing": "Dictation processing",
+      "providerCheck": "Check connection settings",
+      "configurationOnly": "Configuration checks do not verify a live call.",
+      "endCallBeforeTest": "End the current call before testing the microphone and playback."
     }
   },
   "gatewaySettings": {

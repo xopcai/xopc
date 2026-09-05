@@ -46,6 +46,8 @@ export function CapabilitiesSettingsPanel() {
   const c = m.capabilitiesSettings;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo');
+  const chatReturnPath = returnTo?.startsWith('/chat/') ? returnTo : null;
   const { capability } = useParams<{ capability: string }>();
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -116,6 +118,7 @@ export function CapabilitiesSettingsPanel() {
       />
 
 
+      {capability === 'voice' && chatReturnPath ? <Link to={chatReturnPath} className="text-sm text-accent-fg hover:underline">{language === 'zh' ? '返回对话' : 'Return to conversation'}</Link> : null}
       <PageTabs
         items={sections}
         activeTab={capability}

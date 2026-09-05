@@ -34,6 +34,7 @@ import { resolveSpeechProviderChain, type ResolvedSpeechProvider } from '../tts/
 import type { TTSConfig } from '../tts/types.js';
 import { ALIBABA_REALTIME_TTS_MODEL } from '../tts/providers/alibaba-speech.js';
 import { createAgentVoiceEngine } from './agentEngine.js';
+import { voiceConversationInstructions, type VoiceConversationContext } from './conversation-context.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import { resolveOmniRoute, type OmniRoute } from './omniRoute.js';
 import { createOmniVoiceEngine, type OmniTranscript } from './omniEngine.js';
@@ -100,11 +101,12 @@ export class VoiceSessionCreationError extends Error {
 
 interface VoiceAgentEvent {
   type: string;
-  payload?: { delta?: unknown; message?: unknown; status?: unknown };
+  payload?: { delta?: unknown; message?: unknown; status?: unknown; toolCallId?: unknown; toolName?: unknown; requestId?: unknown; question?: unknown; choices?: unknown };
 }
 
 export interface VoiceRealtimeRuntimeOptions {
   recordOmniTranscript?: (sessionKey: string, callId: string, entry: OmniTranscript, expectedSessionId: string) => Promise<void>;
+  getConversationContext?: (sessionKey: string, expectedSessionId: string) => Promise<VoiceConversationContext>;
   getSessionIdentity?: (sessionKey: string) => Promise<string | undefined>;
   getConfig: () => Config;
   sessionExists: (sessionKey: string) => Promise<boolean>;
@@ -242,23 +244,20 @@ export class VoiceRealtimeRuntime {
     this.wss.on('error', (err) => log.error({ err }, 'Voice WebSocket server failed'));
   }
 
-  async createSession(
-    request: CreateVoiceSessionRequest,
-    principalId: string,
-    now = Date.now(),
-  ): Promise<CreateVoiceSessionResponse> {
+  private async prepareSession(request: CreateVoiceSessionRequest, now = Date.now()) {
     const config = structuredClone(this.options.getConfig());
     this.pruneTickets(now);
     if (!config.voice?.realtime?.enabled) {
       throw new VoiceSessionCreationError('VOICE_DISABLED', 'Realtime voice is disabled', 503);
     }
+    request = request.purpose === 'conversation' ? { ...request, engine: request.engine ?? config.voice.realtime.defaultEngine } : request;
     let omni: OmniRoute | undefined;
     if (request.engine === 'omni') {
       try { omni = await resolveOmniRoute(config); }
       catch { throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation is unavailable. Check its model, endpoint and credentials.', 503); }
     }
-    if (omni && !this.options.recordOmniTranscript) throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation storage is unavailable', 503);
-    const conversationSessionId = omni && request.sessionKey ? await this.options.getSessionIdentity?.(request.sessionKey) : undefined;
+    if (omni && (!this.options.recordOmniTranscript || !this.options.getConversationContext)) throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation storage is unavailable', 503);
+    const conversationSessionId = request.purpose === 'conversation' && request.sessionKey ? await this.options.getSessionIdentity?.(request.sessionKey) : undefined;
     if (omni && !conversationSessionId) throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
     const stt = omni ? undefined : resolveStreamingStt(config, request.language);
     if (!omni && !stt) {
@@ -299,6 +298,20 @@ export class VoiceRealtimeRuntime {
       throw new VoiceSessionCreationError('SESSION_LIMIT', 'Too many outstanding realtime voice tickets', 429);
     }
 
+    return { request, config, omni, conversationSessionId, stt, tts, inputMode };
+  }
+
+  async preflight(request: CreateVoiceSessionRequest): Promise<void> {
+    await this.prepareSession(request);
+  }
+
+  async createSession(
+    request: CreateVoiceSessionRequest,
+    principalId: string,
+    now = Date.now(),
+  ): Promise<CreateVoiceSessionResponse> {
+    const { request: resolvedRequest, config, omni, conversationSessionId, stt, tts, inputMode } = await this.prepareSession(request, now);
+    request = resolvedRequest;
     const sessionId = crypto.randomUUID();
     const ticket = crypto.randomBytes(32).toString('base64url');
     const maxSessionMs = request.purpose === 'conversation'
@@ -444,8 +457,9 @@ export class VoiceRealtimeRuntime {
       closed = true;
       clearTimeout(startTimer);
       clearInterval(lifecycleTimer);
-      engine?.close();
       abortController.abort(reason);
+      try { await engine?.close(); }
+      catch (err) { log.error({ err, sessionId: claim?.sessionId }, 'Voice cleanup failed'); }
       if (notify) send('session.closed', { reason });
       detachPrincipal();
       if (claim) this.releaseConversationReservation(claim);
@@ -477,7 +491,14 @@ export class VoiceRealtimeRuntime {
       principalSockets.add(socket);
       this.socketsByPrincipal.set(consumed.principalId, principalSockets);
       clearTimeout(startTimer);
+      let setupStage: 'context' | 'engine' = 'context';
       try {
+        if (consumed.omni) {
+          const context = await this.options.getConversationContext!(consumed.request.sessionKey!, consumed.conversationSessionId!);
+          if (closed) return;
+          consumed.omni = { ...consumed.omni, instructions: voiceConversationInstructions(consumed.omni.instructions, context) };
+        }
+        setupStage = 'engine';
         const sendAudio = (responseId: string, bytes: Uint8Array) => {
           if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
           if (!closed && socket.readyState === WebSocketState.OPEN) socket.send(encodeVoiceAudioFrame({ responseId, seq: ++audioSeq, audio: bytes }), { binary: true });
@@ -510,11 +531,12 @@ export class VoiceRealtimeRuntime {
         });
       } catch (error) {
         log.warn({ err: error, sessionId: consumed.sessionId, provider: consumed.omni?.route.provider ?? consumed.stt?.route.provider }, 'Realtime voice setup failed');
-        send('session.error', { code: 'PROVIDER_UNAVAILABLE', message: 'Voice engine is unavailable', recoverable: false });
+        send('session.error', { code: 'PROVIDER_UNAVAILABLE', message: setupStage === 'context' ? 'Conversation context could not be restored. Check voice and agent instructions.' : 'Voice engine is unavailable', recoverable: false });
         await shutdown('provider_unavailable', true);
       }
     };
 
+    const clientMetrics = new Set<string>();
     socket.on('message', (data, isBinary) => {
       lastActivityAt = Date.now();
       if (isBinary) {
@@ -571,6 +593,13 @@ export class VoiceRealtimeRuntime {
         send('session.pong', {});
       } else if (message.type === 'session.stop') {
         void shutdown(message.payload.reason, true);
+      } else if (message.type === 'session.metric') {
+        const { responseId, metric, durationMs } = message.payload;
+        const key = `${responseId}:${metric}`;
+        if (!clientMetrics.has(key) && clientMetrics.size < 512) {
+          clientMetrics.add(key);
+          log.info({ sessionId: claim.sessionId, responseId, metric, durationMs, source: 'client', engine: claim.request.engine }, 'Voice client timing sample');
+        }
       } else if (message.type === 'response.cancel') {
         if (!engine?.cancel(message.payload.responseId, 'client_cancelled')) {
           send('session.error', { code: 'NO_ACTIVE_RESPONSE', message: 'No matching response is active', recoverable: true });
@@ -578,6 +607,13 @@ export class VoiceRealtimeRuntime {
       } else if (message.type === 'response.audio.played') {
         try { engine?.acknowledge(message.payload.responseId, message.payload.playedBytes); }
         catch { socket.close(4400, 'Invalid playback acknowledgement'); }
+      } else if (message.type === 'input.mute') {
+        if (!ready || !engine || claim.request.purpose !== 'conversation') return;
+        void Promise.resolve().then(() => engine!.setInputMuted(message.payload.muted)).catch((error) => {
+          log.warn({ err: error, sessionId: claim?.sessionId }, 'Voice input reset failed');
+          send('session.error', { code: 'PROVIDER_ERROR', message: 'Could not resume microphone input', recoverable: false });
+          void shutdown('provider_error', true);
+        });
       } else if (message.type === 'input.commit') {
         if (!ready || !engine || claim.request.purpose !== 'dictation') {
           send('session.error', { code: 'INVALID_STATE', message: 'Input cannot be committed', recoverable: true });
