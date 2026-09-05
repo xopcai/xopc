@@ -29,6 +29,18 @@ Heartbeat interval    15 seconds
 
 ## 2. Create a session
 
+### Settings diagnostics (HTTP)
+
+These authenticated endpoints complement, but do not change, WebSocket version 1:
+
+- `GET /api/voice/realtime/status`: `{ ok: true, payload: { enabled, stt, tts } }`. Missing routes are `null`; routes contain `provider`, `model`, and `managed`, with an optional TTS `voice`. No secrets or live-verification claim are returned.
+- `POST /api/voice/realtime/preview`: rate-limited, fixed localized sample; returns `{ ok: true, payload: { audio, sampleRate: 24000 } }`. `audio` is base64 mono PCM16, capped at 960,000 bytes with a 20-second upstream deadline. No arbitrary text or credentials are accepted from the client. Missing output yields 503; synthesis/format/size failures yield 502.
+- `GET /api/voice/tts-voices?purpose=realtime&provider=…&model=…`: lists voices using the resolved realtime output configuration instead of ordinary message readout credentials.
+
+The browser input diagnostic uses the normal `dictation` session below. It does not create a chat or invoke an Agent.
+
+### Session request
+
 ```http
 POST /api/voice/realtime/sessions
 Authorization: Bearer <gateway token>

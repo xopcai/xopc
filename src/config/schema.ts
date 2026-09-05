@@ -888,6 +888,11 @@ export const VoiceConfigSchema = z
         maxDictationMs: z.number().int().min(10_000).max(3_600_000).default(600_000),
         maxConversationMs: z.number().int().min(10_000).max(7_200_000).default(3_600_000),
         bargeIn: z.boolean().default(true),
+        /** Conversation output selection; credentials stay in the provider configuration. */
+        tts: z.object({
+          provider: z.enum(['alibaba', 'xopc-cloud']),
+          voice: z.string().trim().min(1).max(200).optional(),
+        }).strict().optional(),
       })
       .strict()
       .default({

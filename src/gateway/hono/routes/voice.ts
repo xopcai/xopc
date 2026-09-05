@@ -31,7 +31,8 @@ import {
 } from '../../../voice/local/model-manager.js';
 import { getLocalVoiceRuntimeClient } from '../../../voice/local/runtime-client.js';
 import { getAudioDecoderStatus } from '../../../voice/audio/normalize.js';
-import { VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
+import { resolveStreamingStt, resolveStreamingTts, VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
+import { speakStream } from '../../../voice/tts/speak-core.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -182,6 +183,58 @@ async function refineTranscript(
 export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
+  authenticated.get('/api/voice/realtime/status', (c) => {
+    const config = service.currentConfig as Config;
+    const stt = resolveStreamingStt(config);
+    const tts = resolveStreamingTts(config);
+    return c.json({ ok: true, payload: {
+      enabled: config.voice?.realtime?.enabled === true,
+      stt: stt?.route ?? null,
+      tts: tts ? {
+        ...tts.route,
+        voice: tts.config.providers?.[tts.route.provider]?.voice ?? tts.provider.providerConfig.voice,
+      } : null,
+    } });
+  });
+
+  authenticated.post('/api/voice/realtime/preview', strictRateLimitMiddleware, async (c) => {
+    const config = service.currentConfig as Config;
+    const route = resolveStreamingTts(config);
+    if (!route) return c.json({ ok: false, error: { message: 'Realtime voice output is not configured' } }, 503);
+    const controller = new AbortController();
+    const signal = AbortSignal.any([c.req.raw.signal, controller.signal, AbortSignal.timeout(20_000)]);
+    let result: Awaited<ReturnType<typeof speakStream>> | undefined;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const text = config.voice?.language === 'en'
+        ? 'Hello, I am your assistant. You can talk to me naturally.'
+        : '你好，我是你的助手。现在可以和我自然对话了。';
+      result = await speakStream(text, route.config, { signal, appConfig: config, allowFallback: false, parseDirectives: false });
+      if (result.outputFormat !== 'pcm') throw new Error('Realtime preview requires PCM audio');
+      reader = result.audioStream.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      while (true) {
+        signal.throwIfAborted();
+        const { value, done } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 960_000) throw new Error('Realtime preview audio exceeds the limit');
+        chunks.push(value);
+      }
+      if (size === 0 || size % 2 !== 0) throw new Error('Realtime preview returned invalid audio');
+      return c.json({ ok: true, payload: { audio: Buffer.concat(chunks).toString('base64'), sampleRate: 24_000 } });
+    } catch (error) {
+      log.warn({ err: error, provider: route.route.provider }, 'Realtime voice preview failed');
+      return c.json({ ok: false, error: { message: 'Voice preview failed. Check the provider credentials and try again.' } }, 502);
+    } finally {
+      controller.abort();
+      await reader?.cancel().catch(() => undefined);
+      reader?.releaseLock();
+      await result?.release();
+    }
+  });
+
   authenticated.post('/api/voice/realtime/sessions', strictRateLimitMiddleware, async (c) => {
     const parsed = createVoiceSessionRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
@@ -237,7 +290,10 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     const config = service.currentConfig as Config;
-    const baseConfig = mergeTtsConfigFromAppConfig(config.messages?.tts);
+    const baseConfig = c.req.query('purpose') === 'realtime'
+      ? resolveStreamingTts(config)?.config
+      : mergeTtsConfigFromAppConfig(config.messages?.tts);
+    if (!baseConfig) return c.json({ ok: true, payload: { voices: [] } });
     const resolved = resolveSpeechProvider(provider, {
       ...baseConfig,
       provider,

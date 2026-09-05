@@ -1103,15 +1103,6 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           </div>
         ) : null}
         <div className={cn('relative flex min-h-0 min-w-0 flex-1', embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6')}>
-          {!embedded ? <ChatTimelinePanel
-            items={timeline.items}
-            activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
-            labels={timelineLabels}
-            openLabel={m.chat.timelineOpen}
-            closeLabel={m.chat.timelineClose}
-            currentLabel={m.chat.timelineCurrent}
-            onSelectMessage={handleTimelineSelect}
-          /> : null}
           {!embedded ? <div className="absolute inset-y-0 right-0 hidden xl:block">
             <ChatTimelineRail
               items={timeline.items}
@@ -1236,6 +1227,26 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 compactWelcomeLayout ? 'py-2.5' : 'py-4',
               )}
             >
+              <div
+                className={cn(
+                  'absolute bottom-full right-0 z-20 mb-2 flex items-center gap-1 rounded-full border border-edge bg-surface-panel p-1 shadow-float empty:hidden dark:shadow-none',
+                  (session.showSessionLoading || atBottom) && 'xl:hidden',
+                )}
+              >
+                {!embedded ? <ChatTimelinePanel
+                  items={timeline.items}
+                  activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
+                  labels={timelineLabels}
+                  openLabel={m.chat.timelineOpen}
+                  closeLabel={m.chat.timelineClose}
+                  currentLabel={m.chat.timelineCurrent}
+                  onSelectMessage={handleTimelineSelect}
+                /> : null}
+                <ScrollToBottomButton
+                  visible={!session.showSessionLoading && !atBottom}
+                  onClick={() => scrollToBottom(true)}
+                />
+              </div>
               {chatSessionKey ? <MemoryCaptureReceipt sessionKey={chatSessionKey} language={language} /> : null}
               {chatSessionKey ? <MemoryCandidatePrompt sessionKey={chatSessionKey} language={language} /> : null}
               {chatSessionKey ? <MemoryConsentPrompt sessionKey={chatSessionKey} language={language} /> : null}
@@ -1401,11 +1412,6 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-
-      <ScrollToBottomButton
-        visible={!session.showSessionLoading && !atBottom}
-        onClick={() => scrollToBottom(true)}
-      />
 
     </div>
   );
