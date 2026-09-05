@@ -488,7 +488,7 @@ export function VoiceSettingsPanel() {
         </label>
       </> : null}
       {group === 'input' ? <>
-        <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>
+        <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" aria-checked={captions} className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>
         <label className="space-y-2 text-sm"><span>{v.stt.refinement}</span><p className="text-xs text-fg-muted">{v.stt.refinementDesc}</p>
           <Select className={selectClassName()} value={refinement.mode} onChange={(e) => updateVoiceRefinement({ mode: e.target.value as typeof refinement.mode })}>
             <SelectOption value="off">{v.stt.refinementOff}</SelectOption><SelectOption value="punctuation">{v.stt.refinementPunctuation}</SelectOption><SelectOption value="light">{v.stt.refinementLight}</SelectOption>
