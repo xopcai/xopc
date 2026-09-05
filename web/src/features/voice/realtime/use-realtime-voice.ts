@@ -373,6 +373,9 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           if (event.type === 'session.error' && event.payload.recoverable && event.payload.code === 'RESPONSE_FAILED') {
             showComposerNotification('warning', m.voiceResponseFailed);
           }
+          if (event.type === 'session.error' && event.payload.recoverable && event.payload.code === 'INPUT_DROPPED') {
+            showComposerNotification('warning', m.voiceInputDropped);
+          }
           if (event.type === 'session.error' && !event.payload.recoverable) {
             setError(event.payload.message);
             setFailureKind('session');

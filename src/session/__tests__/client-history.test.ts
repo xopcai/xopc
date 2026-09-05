@@ -5,9 +5,9 @@ import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
-  it('renders native voice roles without claiming interrupted text was heard', () => {
+  it('renders native voice text without exposing internal interruption annotations', () => {
     const rows = [{ role: 'custom', customType: 'voice_omni_transcript', content: 'Hello', timestamp: 1, details: { role: 'assistant', interrupted: true } }] as TranscriptStoredRow[];
-    expect(transcriptRowsToClientHistory(rows)[0]).toMatchObject({ role: 'assistant', kind: 'message', content: expect.stringContaining('unplayed text') });
+    expect(transcriptRowsToClientHistory(rows)[0]).toMatchObject({ role: 'assistant', kind: 'message', content: 'Hello', rawContent: 'Hello' });
   });
   it('removes model-only context envelopes from user messages', () => {
     const history = messagesToClientHistory([{

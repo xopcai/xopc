@@ -56,13 +56,14 @@ vi.mock('@/features/chat/composer/pcm-wav-recorder', () => ({
 import { useRealtimeVoice, type UseRealtimeVoiceReturn } from '../use-realtime-voice';
 
 const chat = {
+  ...messages('en').chat,
   voiceMicDenied: 'Microphone unavailable',
   voiceMicUnavailable: 'Microphone device unavailable',
   voiceRecorderFailed: 'Recorder failed',
   voiceSttNotConfigured: 'No streaming STT',
   voiceTranscribeFailed: 'Transcription failed',
   voiceTranscribeEmpty: 'No speech detected',
-} as ChatMessages;
+} satisfies ChatMessages;
 
 describe('useRealtimeVoice', () => {
   let container: HTMLDivElement;
@@ -308,6 +309,14 @@ describe('useRealtimeVoice', () => {
     act(() => { played(); onAudio(new ArrayBuffer(24_000), 'r1'); });
     expect(acknowledgeAudio).not.toHaveBeenCalled();
     expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
+  });
+
+  it('warns about discarded input while keeping the call and current playback active', async () => {
+    await startResponse();
+    act(() => onEvent({ type: 'session.error', payload: { code: 'INPUT_DROPPED', recoverable: true } }));
+    expect(mocks.notify).toHaveBeenCalledWith('warning', messages('en').chat.voiceInputDropped);
+    expect(mocks.playerClear).not.toHaveBeenCalled();
+    expect(voice.responsePhase).toBe('speaking');
   });
 
   it.each([true, false])('honors bargeIn=%s for ducking and waits for authoritative cancellation', async (enabled) => {

@@ -85,14 +85,13 @@ function defaultStt(): SttSettings {
       'xopc-local': { model: 'sensevoice-small' },
       alibaba: { model: 'qwen-audio-3.0-asr-flash' },
       openai: { model: 'gpt-4o-mini-transcribe' },
-      groq: { model: 'whisper-large-v3-turbo' },
     },
     fallback: { enabled: false, order: ['xopc-local'] },
   };
 }
 
 // Defaults intentionally mirror src/config/schema.ts (TTSConfigSchema /
-// TTSEdgeConfigSchema) and extensions/tts-local-cli/xopc.extension.json so a
+// TTSEdgeConfigSchema) so a
 // PATCH /api/config round-trip never silently overrides backend defaults.
 function defaultTts(): TtsSettings {
   return {
@@ -106,7 +105,6 @@ function defaultTts(): TtsSettings {
       openai: { model: 'tts-1', voice: 'alloy' },
       edge: { voice: 'zh-CN-XiaoxiaoNeural', lang: 'zh-CN' },
       minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
-      'tts-local-cli': { command: '', outputFormat: 'wav' },
     },
   };
 }

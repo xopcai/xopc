@@ -9,7 +9,11 @@ import type { OmniRoute } from './omniRoute.js';
 const log = createLogger('Voice:Omni');
 // Generation can outrun playback. Keep one minute of PCM, while the client window stays two seconds.
 const MAX_QUEUED_AUDIO_BYTES = 24_000 * 2 * 60;
+// About two seconds of 16 kHz PCM, including one maximum-size client frame.
+const MAX_PENDING_INPUT_BYTES = 64 * 1024;
+const UPLOAD_TIMEOUT_MS = 10_000;
 const FAILURE_MESSAGES: Record<string, string> = {
+  OMNI_UPLOAD_TIMEOUT: 'The connection to the voice service stopped uploading audio. Check the network to your configured endpoint and reconnect.',
   OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
   OMNI_START_TIMEOUT: 'The voice service did not become ready in time.',
   OMNI_CONNECTION_FAILED: 'Could not connect to the voice service. Check network and service availability.',
@@ -70,11 +74,36 @@ export function createOmniVoiceEngine(options: {
   const recorded = new Set<string>();
   let writes = Promise.resolve();
   let cancellationPending = false;
+  let inputQueue: Buffer[] = [];
+  let queuedInputBytes = 0;
+  let uploadingBytes = 0;
+  let uploadTimer: ReturnType<typeof setTimeout> | undefined;
   const send = (type: string, fields: Record<string, unknown> = {}) => {
     if (closed || socket?.readyState !== WebSocket.OPEN) throw new Error('Omni connection is closed');
-    if (socket.bufferedAmount > 512 * 1024) throw new Error('Omni upload backpressure');
     socket.send(JSON.stringify({ type, event_id: crypto.randomUUID(), ...fields }));
   };
+  function pumpInput() {
+    if (closed || failed || uploadingBytes || muted || clearingInput) return;
+    const bytes = inputQueue.shift();
+    if (!bytes) return;
+    queuedInputBytes -= bytes.length;
+    uploadingBytes = bytes.length;
+    uploadTimer = setTimeout(() => fail('OMNI_UPLOAD_TIMEOUT'), UPLOAD_TIMEOUT_MS);
+    try {
+      if (socket?.readyState !== WebSocket.OPEN) throw new Error('Omni connection is closed');
+      // One write at a time keeps unsent audio discardable and leaves room for controls.
+      socket.send(JSON.stringify({ type: 'input_audio_buffer.append', event_id: crypto.randomUUID(), audio: bytes.toString('base64') }), (error) => {
+        clearTimeout(uploadTimer);
+        uploadingBytes = 0;
+        if (closed || failed) return;
+        if (error) { fail('OMNI_CONNECTION_FAILED'); return; }
+        pumpInput();
+      });
+    } catch {
+      clearTimeout(uploadTimer);
+      fail('OMNI_CONNECTION_FAILED');
+    }
+  }
   const save = (entry: OmniTranscript) => {
     if (!entry.text.trim() || recorded.has(entry.itemId)) return;
     if (recorded.size >= 10_000) { fail('OMNI_ITEM_LIMIT'); return; }
@@ -117,17 +146,22 @@ export function createOmniVoiceEngine(options: {
   function fail(code: string, details: { closeCode?: number; upstreamStatus?: number } = {}) {
     if (closed || failed) return;
     failed = true;
-    log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code, ...details }, `Native voice conversation failed: ${code}`);
+    log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code,
+      provider: options.route.route.provider, upstreamHost: new URL(options.route.url).hostname,
+      queuedInputBytes, uploadingBytes, bufferedAmount: socket?.bufferedAmount, ...details }, `Native voice conversation failed: ${code}`);
     rejectStart?.(new Error(code));
     const reference = platformRequestId ?? options.callId;
     options.send('session.error', { code, message: `${FAILURE_MESSAGES[code] ?? 'Natural conversation failed.'} (${code}; reference: ${reference})`, recoverable: false });
     void options.onClose('omni_error', true);
   }
   function discardInput() {
+    inputQueue = [];
+    queuedInputBytes = 0;
     inputBlocked = true;
     if (clearingInput) return;
     clearingInput = true;
-    clearTimer = setTimeout(() => fail('OMNI_INPUT_RESET_TIMEOUT'), 5_000);
+    // Clearing follows the in-flight write, so allow the upload deadline to fire first.
+    clearTimer = setTimeout(() => fail('OMNI_INPUT_RESET_TIMEOUT'), uploadingBytes ? UPLOAD_TIMEOUT_MS + 5_000 : 5_000);
     for (const id of pendingInputs) discardedInputs.add(id);
     pendingInputs.clear();
     if (discardedInputs.size > 10_000) { fail('OMNI_ITEM_LIMIT'); return; }
@@ -239,11 +273,22 @@ export function createOmniVoiceEngine(options: {
       if (next) discardInput();
     },
     appendAudio(bytes) {
-      if (muted) return;
+      if (closed || failed || muted || clearingInput) return;
       if (!ready || !bytes.length || bytes.length % 2 || bytes.length > 64 * 1024) throw new Error('Invalid Omni input');
-      for (let offset = 0; offset < bytes.length; offset += 24_000) {
-        send('input_audio_buffer.append', { audio: Buffer.from(bytes.subarray(offset, offset + 24_000)).toString('base64') });
+      if (queuedInputBytes + uploadingBytes + bytes.length > MAX_PENDING_INPUT_BYTES) {
+        log.warn({ sessionId: options.callId, provider: options.route.route.provider,
+          upstreamHost: new URL(options.route.url).hostname, queuedInputBytes, uploadingBytes,
+          bufferedAmount: socket?.bufferedAmount }, 'Native voice input discarded after upload congestion; call remains connected');
+        discardInput();
+        options.send('session.error', { code: 'INPUT_DROPPED', message: 'The voice connection is slow. This microphone input was discarded; please repeat it once the connection recovers.', recoverable: true });
+        return;
       }
+      for (let offset = 0; offset < bytes.length; offset += 24_000) {
+        const chunk = Buffer.from(bytes.subarray(offset, offset + 24_000));
+        inputQueue.push(chunk);
+        queuedInputBytes += chunk.length;
+      }
+      pumpInput();
     },
     async commit() { throw new Error('Natural conversation uses automatic turn detection'); },
     cancel(responseId, reason) {
@@ -254,7 +299,8 @@ export function createOmniVoiceEngine(options: {
     acknowledge(responseId, playedBytes) { if (active?.id === responseId) active.playback.acknowledge(playedBytes); },
     close() {
       if (closed) return writes;
-      closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer);
+      closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer); clearTimeout(uploadTimer);
+      inputQueue = []; queuedInputBytes = 0;
       rejectStart?.(new Error('Omni connection closed')); rejectStart = undefined;
       socket?.terminate();
       return writes;

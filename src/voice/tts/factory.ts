@@ -173,6 +173,7 @@ export function isTTSAvailable(config?: TTSConfig): boolean {
 }
 
 export function isProviderConfigured(provider: TTSProvider, config: TTSConfig): boolean {
+  if (!getSpeechProvider(provider)) return false;
   return resolveSpeechProvider(provider, config) !== null;
 }
 
