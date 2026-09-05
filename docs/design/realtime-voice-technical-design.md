@@ -45,7 +45,7 @@ There are no separate ticket store, session manager, Agent bridge, provider regi
 
 ## 3. Configuration and preflight
 
-Provider credentials and selection remain in `tools.media.audio` and `messages.tts`. `voice.realtime` owns only:
+Provider credentials remain in `tools.media.audio` and `messages.tts`. Conversation output can select a voice independently of ordinary message readout:
 
 ```ts
 interface RealtimeVoiceConfig {
@@ -55,6 +55,7 @@ interface RealtimeVoiceConfig {
   maxDictationMs: number;
   maxConversationMs: number;
   bargeIn: boolean;
+  tts?: { provider: 'alibaba' | 'xopc-cloud'; voice?: string };
 }
 ```
 
@@ -67,6 +68,10 @@ Session creation:
 5. freezes safe provider routes and full server-only config in a 60-second ticket.
 
 Configuration reload affects only later tickets.
+
+When `voice.realtime.tts` is set, message readout enablement, model, and voice do not control conversation output. Direct Alibaba uses its fixed realtime model and defaults to Cherry. Its credential is resolved from the input provider slice, then `DASHSCOPE_API_KEY`, then the speech provider slice. Credentials never travel to the browser to be copied between fields. Managed output selects an available streaming PCM catalog model and its default voice. An omitted conversation output selection inherits the existing message speech route; Edge cannot satisfy native streaming output.
+
+The settings page uses the same route resolvers as session creation. `GET /api/voice/realtime/status` is configuration preflight, not live verification. `POST /api/voice/realtime/preview` plays a fixed sample through `speakStream` with fallback disabled, a 20-second deadline, and a 960 KB PCM limit. The browser buffers only this short diagnostic sample. The actual conversation transport remains streaming WebSocket PCM. The combined test uses a dictation session, not an Agent run; resources close on cancel, config change, tab departure, and unmount.
 
 ### 3.1 Provider selection
 

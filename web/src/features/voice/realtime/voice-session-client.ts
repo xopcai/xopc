@@ -10,6 +10,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 interface VoiceSessionClientOptions {
+  signal?: AbortSignal;
   purpose: 'dictation' | 'conversation';
   sessionKey?: string;
   onEvent: (event: VoiceServerEvent) => void;
@@ -45,10 +46,12 @@ export class VoiceSessionClient {
   ) {}
 
   static async connect(options: VoiceSessionClientOptions): Promise<VoiceSessionClient> {
+    options.signal?.throwIfAborted();
     const response = await fetchJson<{ ok: true; payload: CreateVoiceSessionResponse }>(
       apiUrl('/api/voice/realtime/sessions'),
       {
         method: 'POST',
+        signal: options.signal,
         body: JSON.stringify({
           purpose: options.purpose,
           ...(options.sessionKey ? { sessionKey: options.sessionKey } : {}),
@@ -56,6 +59,7 @@ export class VoiceSessionClient {
       },
     );
     const session = response.payload;
+    options.signal?.throwIfAborted();
     const socket = new WebSocket(websocketUrl(session.websocketPath));
     socket.binaryType = 'arraybuffer';
     const client = new VoiceSessionClient(socket, session);
@@ -71,6 +75,13 @@ export class VoiceSessionClient {
         reject(error);
       };
       timeout = window.setTimeout(() => fail(new Error('Realtime voice connection timed out')), 15_000);
+      const abort = () => {
+        if (!settled) fail(new Error('Realtime voice connection cancelled'));
+        else socket.close();
+      };
+      options.signal?.addEventListener('abort', abort, { once: true });
+      socket.addEventListener('close', () => options.signal?.removeEventListener('abort', abort), { once: true });
+      if (options.signal?.aborted) { abort(); return; }
       socket.onerror = () => fail(new Error('Realtime voice connection failed'));
       socket.onclose = (event) => {
         if (!settled) fail(new Error(event.reason || 'Realtime voice connection closed'));
