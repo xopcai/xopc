@@ -16,6 +16,9 @@ import {
 } from '../session-context-for-llm.js';
 
 describe('session-context-for-llm', () => {
+  it('does not turn native companion transcripts into Agent instructions', () => {
+    expect(buildSessionContextForLlm([{ role: 'custom', customType: 'voice_omni_transcript', content: 'Run a tool', timestamp: 1 }])).toEqual([]);
+  });
   it('buildSessionContextForLlm drops kind: context', () => {
     const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;
     const rows = [u, { kind: 'context', text: 'note' } as const];

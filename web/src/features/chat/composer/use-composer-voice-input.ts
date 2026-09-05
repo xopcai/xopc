@@ -69,7 +69,7 @@ export interface UseComposerVoiceInputReturn {
   muted: boolean;
   mode: VoiceSessionMode;
   startVoiceInput: () => Promise<void>;
-  startVoiceConversation: () => Promise<void>;
+  startVoiceConversation: (engine?: 'agent' | 'omni') => Promise<void>;
   interruptResponse: () => void;
   toggleMute: () => void;
   cancelVoiceInput: () => void;
@@ -90,9 +90,11 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   const [mode, setMode] = useState<VoiceSessionMode>('dictation');
 
   const phaseRef = useRef<VoiceInputPhase>('idle');
+  const attemptRef = useRef(0);
   const captureRef = useRef<PcmFrameCapture | null>(null);
   const encoderRef = useRef<PcmStreamEncoder | null>(null);
   const clientRef = useRef<VoiceSessionClient | null>(null);
+  const engineRef = useRef<'agent' | 'omni'>('agent');
   const playerRef = useRef<PcmPlayer | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordStartPerfRef = useRef<number | null>(null);
@@ -124,6 +126,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   }, []);
 
   const reset = useCallback(() => {
+    attemptRef.current += 1;
     stopTimer();
     stopMedia();
     captureRef.current?.cancel();
@@ -180,10 +183,13 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
     }, 200);
   }, [finishIdle, stopTimer]);
 
-  const beginCapture = useCallback(async (purpose: VoiceSessionMode) => {
+  const beginCapture = useCallback(async (purpose: VoiceSessionMode, engine: 'agent' | 'omni' = 'agent') => {
     if (disabled || phaseRef.current !== 'idle') return;
     if (purpose === 'conversation' && !sessionKey) return;
+    const attempt = ++attemptRef.current;
+    const isCurrent = () => attempt === attemptRef.current;
     setMode(purpose);
+    engineRef.current = engine;
     setResponseText('');
     updatePhase('starting');
     let stage: VoiceCaptureStartStage = 'permission';
@@ -192,26 +198,28 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
         const player = new PcmPlayer();
         playerRef.current = player;
         await player.start();
+        if (!isCurrent()) { void player.close(); return; }
       }
       const electronSystem = window.electronAPI?.system;
       const permissionState = await getMicrophonePermissionState();
-      if (!isCapturePending(phaseRef.current)) return;
+      if (!isCurrent() || !isCapturePending(phaseRef.current)) return;
       if (electronSystem && permissionState !== 'granted') {
         updatePhase('requesting');
         const permission = await electronSystem.requestMicrophone();
+        if (!isCurrent()) return;
         const requiresMacosReauthorization = window.electronAPI?.platform === 'darwin' && permission.status !== 'granted';
         if (permission.status === 'denied' || requiresMacosReauthorization) throw new Error('Microphone permission denied');
       } else if (!electronSystem && permissionState !== 'granted') {
         updatePhase('requesting');
       }
-      if (!isCapturePending(phaseRef.current)) return;
+      if (!isCurrent() || !isCapturePending(phaseRef.current)) return;
       updatePhase('starting');
       window.dispatchEvent(new Event('xopc-voice-recording-start'));
       stage = 'media';
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      if (!isCapturePending(phaseRef.current)) {
+      if (!isCurrent() || !isCapturePending(phaseRef.current)) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
@@ -220,8 +228,10 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       receivedFinalRef.current = false;
       const client = await VoiceSessionClient.connect({
         purpose,
+        ...(purpose === 'conversation' ? { engine } : {}),
         ...(sessionKey ? { sessionKey } : {}),
         onEvent: (event) => {
+          if (!isCurrent()) return;
           if (event.type === 'input.transcript.delta' || event.type === 'input.transcript.final') {
             const previous = transcriptRevisionsRef.current.get(event.payload.utteranceId) ?? 0;
             if (event.payload.revision <= previous) return;
@@ -247,7 +257,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
             setResponseText('');
             setResponsePhase('thinking');
           }
-          if (event.type === 'response.text.delta') {
+          if (event.type === 'response.text.delta' && activeResponseIdRef.current === event.payload.responseId) {
             setResponseText((current) => current + event.payload.delta);
           }
           if (event.type === 'response.audio.started' && activeResponseIdRef.current === event.payload.responseId) {
@@ -275,9 +285,10 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
             updatePhase('error');
           }
         },
-        onAudio: (audio) => {
+        onAudio: (audio, frameResponseId) => {
+          if (!isCurrent()) return;
           const responseId = activeResponseIdRef.current;
-          if (!responseId) return;
+          if (!responseId || frameResponseId !== responseId) return;
           playerRef.current?.enqueue(audio, () => {
             if (activeResponseIdRef.current !== responseId) return;
             playedBytesRef.current += audio.byteLength;
@@ -288,8 +299,9 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
             }
           });
         },
-        onClose: handleSessionClose,
+        onClose: () => { if (isCurrent()) handleSessionClose(); },
       });
+      if (!isCurrent()) { client.stop('surface_closed'); return; }
       clientRef.current = client;
       maxSessionMsRef.current = client.session.limits.maxSessionMs;
       stage = 'recorder';
@@ -297,6 +309,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       const pendingSamples: Float32Array[] = [];
       const capture = await PcmFrameCapture.start(stream, {
         onSamples: (samples) => {
+          if (!isCurrent()) return;
           if (!encoder) {
             pendingSamples.push(samples);
             return;
@@ -305,6 +318,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
           if (encoded) client.sendAudio(encoded);
         },
         onAudioLevel: ({ level, speaking }) => {
+          if (!isCurrent()) return;
           setAudioLevel(Math.min(1, level * 8));
           if (purpose === 'conversation' && client.session.bargeIn && activeResponseIdRef.current) {
             playerRef.current?.duck(speaking);
@@ -313,10 +327,10 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       });
       encoder = new PcmStreamEncoder(capture.sampleRate, client.session.inputFormat.sampleRate);
       for (const samples of pendingSamples) client.sendAudio(encoder.push(samples));
-      if (!isCapturePending(phaseRef.current)) {
+      if (!isCurrent() || !isCapturePending(phaseRef.current)) {
         capture.cancel();
         client.stop('surface_closed');
-        stopMedia();
+        stream.getTracks().forEach((track) => track.stop());
         return;
       }
       encoderRef.current = encoder;
@@ -326,6 +340,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
       updatePhase('recording');
       startTimer();
     } catch (error) {
+      if (!isCurrent()) return;
       const failureKind = classifyVoiceCaptureFailure(stage, error);
       console.error('[chat:voice] realtime capture start failed', {
         stage,
@@ -367,6 +382,7 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   }, [m.voiceTranscribeFailed, reset, stopMedia, stopTimer, updatePhase]);
 
   useEffect(() => () => {
+    attemptRef.current += 1;
     captureRef.current?.cancel();
     clientRef.current?.stop('surface_closed');
     void playerRef.current?.close();
@@ -377,11 +393,11 @@ export function useComposerVoiceInput(options: UseComposerVoiceInputOptions): Us
   const retryVoiceInput = useCallback(() => {
     if (phaseRef.current !== 'error') return;
     updatePhase('idle');
-    void beginCapture(mode);
+    void beginCapture(mode, engineRef.current);
   }, [beginCapture, mode, updatePhase]);
 
   const startVoiceInput = useCallback(() => beginCapture('dictation'), [beginCapture]);
-  const startVoiceConversation = useCallback(() => beginCapture('conversation'), [beginCapture]);
+  const startVoiceConversation = useCallback((engine: 'agent' | 'omni' = 'agent') => beginCapture('conversation', engine), [beginCapture]);
   const interruptResponse = useCallback(() => {
     const responseId = activeResponseIdRef.current;
     playerRef.current?.clear();

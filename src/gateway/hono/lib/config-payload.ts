@@ -32,7 +32,7 @@ import {
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
-import { maskSttConfigForWeb, maskTtsConfigForWeb } from './safe-voice-config.js';
+import { maskSttConfigForWeb, maskTtsConfigForWeb, maskRealtimeVoiceConfigForWeb } from './safe-voice-config.js';
 
 function readModelsJsonProviderApiKey(providerId: string): string | undefined {
   const { config } = loadModelsJson(getModelsJsonPath());
@@ -339,7 +339,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     },
     stt: maskSttConfigForWeb(config.tools?.media?.audio),
     tts: maskTtsConfigForWeb(config.messages?.tts),
-    voice: config.voice,
+    voice: maskRealtimeVoiceConfigForWeb(config.voice),
     tools: safeToolsWebForGet(config),
     bindings: Array.isArray(config.bindings) ? config.bindings : [],
     mcp: buildSafeMcpConfigForWeb(config),

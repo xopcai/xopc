@@ -61,7 +61,7 @@ describe('useComposerVoiceInput', () => {
   let voice: UseComposerVoiceInputReturn;
   let onEvent: (event: any) => void;
   let onClose: (reason: string) => void;
-  let onAudio: (audio: ArrayBuffer) => void;
+  let onAudio: (audio: ArrayBuffer, responseId: string) => void;
   const sendAudio = vi.fn();
   const commit = vi.fn();
   const stop = vi.fn();
@@ -177,8 +177,8 @@ describe('useComposerVoiceInput', () => {
     }));
     expect(mocks.playerStart).toHaveBeenCalledOnce();
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
-    act(() => onEvent({ type: 'response.text.delta', payload: { delta: '你好' } }));
-    act(() => onAudio(new ArrayBuffer(4)));
+    act(() => onEvent({ type: 'response.text.delta', payload: { responseId: 'r1', delta: '你好' } }));
+    act(() => onAudio(new ArrayBuffer(4), 'r1'));
     expect(voice.responseText).toBe('你好');
     expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
     mocks.playerClear.mockClear();
@@ -188,13 +188,30 @@ describe('useComposerVoiceInput', () => {
     expect(mocks.playerClear).toHaveBeenCalledOnce();
   });
 
+  it('selects Omni explicitly and ignores cancelled-response audio and text', async () => {
+    render(vi.fn(), 'agent:main:webchat:default:direct:voice');
+    await act(async () => voice.startVoiceConversation('omni'));
+    expect(mocks.connect).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'conversation', engine: 'omni' }));
+    act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
+    act(() => voice.interruptResponse());
+    act(() => onEvent({ type: 'response.created', payload: { responseId: 'r2' } }));
+    act(() => onAudio(new ArrayBuffer(4), 'r1'));
+    act(() => onEvent({ type: 'response.text.delta', payload: { responseId: 'r1', delta: 'late' } }));
+    expect(voice.responseText).toBe('');
+    expect(mocks.playerEnqueue).not.toHaveBeenCalled();
+    act(() => voice.cancelVoiceInput());
+    act(() => onEvent({ type: 'response.created', payload: { responseId: 'r3' } }));
+    expect(voice.phase).toBe('idle');
+    expect(voice.responsePhase).toBe('idle');
+  });
+
   async function startResponse() {
     render(vi.fn(), 'agent:main:webchat:default:direct:voice');
     await act(async () => voice.startVoiceConversation());
     act(() => {
       onEvent({ type: 'response.created', payload: { responseId: 'r1' } });
       onEvent({ type: 'response.audio.started', payload: { responseId: 'r1' } });
-      onAudio(new ArrayBuffer(24_000));
+      onAudio(new ArrayBuffer(24_000), 'r1');
     });
     mocks.pendingAudio = true;
     mocks.playerClear.mockClear();
@@ -222,7 +239,7 @@ describe('useComposerVoiceInput', () => {
     expect(mocks.playerClear).toHaveBeenCalledOnce();
     expect(cancelResponse).toHaveBeenCalledWith('r1');
     expect(voice.responsePhase).toBe('idle');
-    act(() => { played(); onAudio(new ArrayBuffer(24_000)); });
+    act(() => { played(); onAudio(new ArrayBuffer(24_000), 'r1'); });
     expect(acknowledgeAudio).not.toHaveBeenCalled();
     expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
   });

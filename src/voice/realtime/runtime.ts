@@ -11,11 +11,11 @@ import {
   VOICE_REALTIME_WS_PATH,
   parseVoiceClientJsonFrame,
   parseVoiceClientMessage,
+  encodeVoiceAudioFrame,
   type CreateVoiceSessionRequest,
   type CreateVoiceSessionResponse,
   type VoiceClientMessage,
   type VoiceProviderRoute,
-  type VoiceServerEvent,
 } from '@xopcai/realtime-protocol/voice';
 import type { RawData, WebSocket } from 'ws';
 
@@ -23,8 +23,6 @@ import type { Config } from '../../config/schema.js';
 import { getMediaUnderstandingProvider } from '../../media-understanding/registry.js';
 import type {
   MediaUnderstandingProvider,
-  StreamingSttEvent,
-  StreamingSttSession,
 } from '../../media-understanding/types.js';
 import { createPreauthConnectionBudget } from '../../gateway/security/preauth-connection-budget.js';
 import { createLogger } from '../../utils/logger.js';
@@ -33,11 +31,12 @@ import { resolveSTTProviderChain } from '../stt/factory.js';
 import { getModelCatalogStore } from '../../providers/model-catalog-store.js';
 import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
 import { resolveSpeechProviderChain, type ResolvedSpeechProvider } from '../tts/factory.js';
-import { speakStream } from '../tts/speak-core.js';
 import type { TTSConfig } from '../tts/types.js';
 import { ALIBABA_REALTIME_TTS_MODEL } from '../tts/providers/alibaba-speech.js';
-import { SpeakableSegmenter } from './speakable-segmenter.js';
-import { AudioPlaybackWindow } from './audio-playback-window.js';
+import { createAgentVoiceEngine } from './agentEngine.js';
+import type { VoiceEngine, VoiceEventSink } from './engine.js';
+import { resolveOmniRoute, type OmniRoute } from './omniRoute.js';
+import { createOmniVoiceEngine, type OmniTranscript } from './omniEngine.js';
 
 const { WebSocket: WebSocketState, WebSocketServer } = createRequire(import.meta.url)('ws') as typeof import('ws');
 const log = createLogger('Voice:Realtime');
@@ -58,7 +57,7 @@ interface ResolvedStreamingStt {
   route: VoiceProviderRoute;
 }
 
-interface VoiceTicketClaim {
+export interface VoiceTicketClaim {
   sessionId: string;
   principalId: string;
   request: CreateVoiceSessionRequest;
@@ -66,7 +65,9 @@ interface VoiceTicketClaim {
   idleTimeoutMs: number;
   maxSessionMs: number;
   silenceDurationMs: number;
-  stt: ResolvedStreamingStt;
+  stt?: ResolvedStreamingStt;
+  omni?: OmniRoute;
+  conversationSessionId?: string;
   tts?: ResolvedStreamingTts;
   config: Config;
   createdAt: number;
@@ -102,20 +103,9 @@ interface VoiceAgentEvent {
   payload?: { delta?: unknown; message?: unknown; status?: unknown };
 }
 
-interface ActiveVoiceResponse {
-  id: string;
-  playback: AudioPlaybackWindow;
-  abortController: AbortController;
-  segmenter: SpeakableSegmenter;
-  text: string;
-  audioStarted: boolean;
-  speechTail: Promise<void>;
-  speechError?: Error;
-  startedAt: number;
-  firstTextSeen: boolean;
-}
-
 export interface VoiceRealtimeRuntimeOptions {
+  recordOmniTranscript?: (sessionKey: string, callId: string, entry: OmniTranscript, expectedSessionId: string) => Promise<void>;
+  getSessionIdentity?: (sessionKey: string) => Promise<string | undefined>;
   getConfig: () => Config;
   sessionExists: (sessionKey: string) => Promise<boolean>;
   sessionBusy: (sessionKey: string) => boolean;
@@ -262,8 +252,16 @@ export class VoiceRealtimeRuntime {
     if (!config.voice?.realtime?.enabled) {
       throw new VoiceSessionCreationError('VOICE_DISABLED', 'Realtime voice is disabled', 503);
     }
-    const stt = resolveStreamingStt(config, request.language);
-    if (!stt) {
+    let omni: OmniRoute | undefined;
+    if (request.engine === 'omni') {
+      try { omni = await resolveOmniRoute(config); }
+      catch { throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation is unavailable. Check its model, endpoint and credentials.', 503); }
+    }
+    if (omni && !this.options.recordOmniTranscript) throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation storage is unavailable', 503);
+    const conversationSessionId = omni && request.sessionKey ? await this.options.getSessionIdentity?.(request.sessionKey) : undefined;
+    if (omni && !conversationSessionId) throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
+    const stt = omni ? undefined : resolveStreamingStt(config, request.language);
+    if (!omni && !stt) {
       throw new VoiceSessionCreationError(
         'PROVIDER_UNAVAILABLE',
         'No configured streaming speech-to-text provider is available',
@@ -271,14 +269,14 @@ export class VoiceRealtimeRuntime {
       );
     }
     const inputMode = 'server_vad' as const;
-    if (!stt.plugin.streamingAudio.turnDetection.includes(inputMode)) {
+    if (stt && !stt.plugin.streamingAudio.turnDetection.includes(inputMode)) {
       throw new VoiceSessionCreationError(
         'PROVIDER_UNAVAILABLE',
         `Streaming speech-to-text provider does not support ${inputMode}`,
         503,
       );
     }
-    const tts = request.purpose === 'conversation' ? resolveStreamingTts(config) : undefined;
+    const tts = request.engine === 'agent' ? resolveStreamingTts(config) : undefined;
     if (request.purpose === 'conversation') {
       if (!request.sessionKey || !await this.options.sessionExists(request.sessionKey)) {
         throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
@@ -289,7 +287,7 @@ export class VoiceRealtimeRuntime {
       if (this.conversationReservations.has(request.sessionKey)) {
         throw new VoiceSessionCreationError('SESSION_CONFLICT', 'Conversation session already has a voice connection', 409);
       }
-      if (!tts) {
+      if (!omni && !tts) {
         throw new VoiceSessionCreationError(
           'PROVIDER_UNAVAILABLE',
           'No configured PCM streaming text-to-speech provider is available',
@@ -304,9 +302,10 @@ export class VoiceRealtimeRuntime {
     const sessionId = crypto.randomUUID();
     const ticket = crypto.randomBytes(32).toString('base64url');
     const maxSessionMs = request.purpose === 'conversation'
-      ? config.voice.realtime.maxConversationMs
+      ? Math.min(config.voice.realtime.maxConversationMs, omni?.route.managed ? 30 * 60_000 : Number.MAX_SAFE_INTEGER)
       : config.voice.realtime.maxDictationMs;
     const claim: VoiceTicketClaim = {
+      conversationSessionId,
       sessionId,
       principalId,
       request,
@@ -315,6 +314,7 @@ export class VoiceRealtimeRuntime {
       maxSessionMs,
       silenceDurationMs: config.voice.realtime.silenceDurationMs,
       stt,
+      omni,
       ...(tts ? { tts } : {}),
       config,
       createdAt: now,
@@ -339,7 +339,7 @@ export class VoiceRealtimeRuntime {
         maxSessionMs,
         idleTimeoutMs: claim.idleTimeoutMs,
       },
-      route: { stt: stt.route, ...(tts ? { tts: tts.route } : {}) },
+      route: omni ? { engine: 'omni', omni: omni.route } : tts ? { engine: 'agent', stt: stt!.route, tts: tts.route } : { engine: 'dictation', stt: stt!.route },
     };
   }
 
@@ -362,6 +362,11 @@ export class VoiceRealtimeRuntime {
       throw error;
     }
     return true;
+  }
+
+  hasConversation(sessionKey: string): boolean {
+    this.pruneTickets(Date.now());
+    return this.conversationReservations.has(sessionKey);
   }
 
   close(): void {
@@ -403,26 +408,18 @@ export class VoiceRealtimeRuntime {
   }
 
   private handleConnection(socket: WebSocket, request: IncomingMessage): void {
-    const runtimeOptions = this.options;
     const clientIp = request.socket.remoteAddress;
     let claim: VoiceTicketClaim | undefined;
-    let sttSession: StreamingSttSession | undefined;
+    let engine: VoiceEngine | undefined;
     let ready = false;
-    let committing = false;
     let seq = 0;
-    let finalCount = 0;
-    let finalCountAtLastCommit = 0;
+    let audioSeq = 0;
     let closed = false;
-    let activeResponse: ActiveVoiceResponse | undefined;
-    let conversationTail = Promise.resolve();
     let lastActivityAt = Date.now();
     const abortController = new AbortController();
     const seenMessageIds = new Set<string>();
 
-    const send = <T extends VoiceServerEvent['type']>(
-      type: T,
-      payload: Extract<VoiceServerEvent, { type: T }>['payload'],
-    ) => {
+    const send: VoiceEventSink = (type, payload) => {
       if (!claim || socket.readyState !== WebSocketState.OPEN) return;
       const event = {
         protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION,
@@ -432,7 +429,7 @@ export class VoiceRealtimeRuntime {
         sentAt: Date.now(),
         sessionId: claim.sessionId,
         payload,
-      } as Extract<VoiceServerEvent, { type: T }>;
+      };
       socket.send(JSON.stringify(event));
     };
 
@@ -447,223 +444,14 @@ export class VoiceRealtimeRuntime {
       closed = true;
       clearTimeout(startTimer);
       clearInterval(lifecycleTimer);
-      cancelActiveResponse('session_closed');
+      engine?.close();
       abortController.abort(reason);
-      sttSession?.abort(reason);
       if (notify) send('session.closed', { reason });
       detachPrincipal();
       if (claim) this.releaseConversationReservation(claim);
       this.preauthBudget.release(clientIp);
       if (socket.readyState === WebSocketState.OPEN) socket.close(1000, reason.slice(0, 120));
     };
-
-    function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
-      const response = activeResponse;
-      if (!response) return false;
-      activeResponse = undefined;
-      response.abortController.abort(reason);
-      send('response.cancelled', { responseId: response.id, reason });
-      const sessionKey = claim?.request.sessionKey;
-      if (sessionKey && reason !== 'session_closed') {
-        void runtimeOptions.recordInterruption({
-          sessionKey,
-          responseId: response.id,
-          reason,
-          generatedCharacters: response.text.length,
-          interruptedDuring: response.audioStarted ? 'speaking' : 'thinking',
-        }).catch((error) => {
-          log.warn({ err: error, sessionId: claim?.sessionId, responseId: response.id }, 'Voice interruption audit failed');
-        });
-      }
-      return true;
-    }
-
-    async function speakPhrase(response: ActiveVoiceResponse, phrase: string): Promise<void> {
-      if (!claim?.tts || response.abortController.signal.aborted) return;
-      const result = await speakStream(phrase, claim.tts.config, {
-        appConfig: claim.config,
-        parseDirectives: false,
-        signal: response.abortController.signal,
-        allowFallback: false,
-      });
-      if (result.outputFormat !== 'pcm') {
-        await result.release();
-        throw new Error(`Realtime TTS returned unsupported format: ${result.outputFormat}`);
-      }
-      try {
-        const reader = result.audioStream.getReader();
-        while (true) {
-          const item = await reader.read();
-          if (item.done) break;
-          if (response.abortController.signal.aborted || activeResponse !== response) return;
-          if (!response.audioStarted) {
-            response.audioStarted = true;
-            log.info({
-              sessionId: claim.sessionId,
-              responseId: response.id,
-              latencyMs: Date.now() - response.startedAt,
-            }, 'Realtime voice first audio ready');
-            send('response.audio.started', {
-              responseId: response.id,
-              format: { encoding: 'pcm_s16le', sampleRate: 24_000, channels: 1 },
-            });
-          }
-          if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
-          if (socket.readyState !== WebSocketState.OPEN) return;
-          // Half-second frames keep acknowledgements flowing within the playback window.
-          for (let offset = 0; offset < item.value.byteLength; offset += 24_000) {
-            const chunk = item.value.subarray(offset, offset + 24_000);
-            await response.playback.reserve(chunk.byteLength, response.abortController.signal);
-            if (activeResponse !== response || socket.readyState !== WebSocketState.OPEN) return;
-            socket.send(chunk, { binary: true });
-          }
-        }
-      } finally {
-        await result.release();
-      }
-    }
-
-    function queuePhrases(response: ActiveVoiceResponse, phrases: string[]): void {
-      for (const phrase of phrases) {
-        response.speechTail = response.speechTail
-          .then(async () => {
-            if (response.speechError || response.abortController.signal.aborted) return;
-            try {
-              await speakPhrase(response, phrase);
-            } catch (error) {
-              if (!response.abortController.signal.aborted) {
-                response.speechError = error instanceof Error ? error : new Error(String(error));
-              }
-            }
-          });
-      }
-    }
-
-    async function runConversationTurn(text: string): Promise<void> {
-      if (!claim?.tts || !claim.request.sessionKey || !text.trim() || closed) return;
-      cancelActiveResponse('barge_in');
-      const response: ActiveVoiceResponse = {
-        id: `resp_${crypto.randomUUID()}`,
-        playback: new AudioPlaybackWindow(),
-        abortController: new AbortController(),
-        segmenter: new SpeakableSegmenter(),
-        text: '',
-        audioStarted: false,
-        speechTail: Promise.resolve(),
-        startedAt: Date.now(),
-        firstTextSeen: false,
-      };
-      activeResponse = response;
-      send('response.created', { responseId: response.id });
-      try {
-        for await (const event of runtimeOptions.runAgent(
-          text,
-          claim.request.sessionKey,
-          response.abortController.signal,
-        )) {
-          if (activeResponse !== response || response.abortController.signal.aborted) return;
-          if (event.type === 'assistant_delta' && typeof event.payload?.delta === 'string') {
-            if (!response.firstTextSeen) {
-              response.firstTextSeen = true;
-              log.info({
-                sessionId: claim.sessionId,
-                responseId: response.id,
-                latencyMs: Date.now() - response.startedAt,
-              }, 'Realtime voice first response text ready');
-            }
-            response.text += event.payload.delta;
-            send('response.text.delta', { responseId: response.id, delta: event.payload.delta });
-            queuePhrases(response, response.segmenter.push(event.payload.delta));
-          }
-          if (event.type === 'error') {
-            throw new Error(typeof event.payload?.message === 'string' ? event.payload.message : 'Agent response failed');
-          }
-        }
-        queuePhrases(response, response.segmenter.flush());
-        send('response.text.done', { responseId: response.id });
-        await response.speechTail;
-        if (response.speechError) throw response.speechError;
-        await response.playback.drain(response.abortController.signal);
-        if (activeResponse !== response || response.abortController.signal.aborted) return;
-        if (response.audioStarted) send('response.audio.done', { responseId: response.id });
-        send('response.done', {
-          responseId: response.id,
-          finishReason: response.audioStarted ? 'completed' : 'text_only',
-          audio: response.audioStarted,
-        });
-        activeResponse = undefined;
-      } catch (error) {
-        if (response.abortController.signal.aborted || closed) return;
-        log.warn({ err: error, sessionId: claim.sessionId, responseId: response.id }, 'Realtime voice response failed');
-        send('session.error', { code: 'RESPONSE_FAILED', message: 'Voice response failed', recoverable: true });
-        if (response.audioStarted) send('response.audio.done', { responseId: response.id });
-        send('response.done', {
-          responseId: response.id,
-          finishReason: response.audioStarted ? 'audio_partial' : 'text_only',
-          audio: response.audioStarted,
-        });
-        response.abortController.abort('provider_error');
-        if (activeResponse === response) activeResponse = undefined;
-      }
-    }
-
-    async function openSttSession(consumed: VoiceTicketClaim): Promise<StreamingSttSession> {
-      return consumed.stt.plugin.openAudioStream({
-        model: consumed.stt.model,
-        inputFormat: { encoding: 'pcm_s16le', sampleRate: 16_000, channels: 1 },
-        ...(consumed.stt.apiKey ? { apiKey: consumed.stt.apiKey } : {}),
-        ...(consumed.stt.baseUrl ? { baseUrl: consumed.stt.baseUrl } : {}),
-        ...(consumed.stt.headers ? { headers: consumed.stt.headers } : {}),
-        ...(consumed.stt.language ? { language: consumed.stt.language } : {}),
-        ...(consumed.stt.prompt ? { prompt: consumed.stt.prompt } : {}),
-        turnDetection: {
-          mode: consumed.inputMode,
-          silenceDurationMs: consumed.silenceDurationMs,
-        },
-        timeoutMs: 15_000,
-        signal: abortController.signal,
-        onEvent: onSttEvent,
-      });
-    }
-
-    function onSttEvent(event: StreamingSttEvent): void {
-      if (closed || !claim) return;
-      if (event.type === 'ready' || event.type === 'usage') return;
-      if (event.type === 'error') {
-        log.warn({ err: event.error, sessionId: claim.sessionId, provider: claim.stt.route.provider }, 'Realtime STT failed');
-        send('session.error', { code: 'PROVIDER_ERROR', message: 'Streaming transcription failed', recoverable: false });
-        void shutdown('provider_error', true);
-        return;
-      }
-      if (event.type === 'speech_started') {
-        if (claim.request.purpose === 'conversation' && claim.config.voice?.realtime?.bargeIn) {
-          cancelActiveResponse('barge_in');
-        }
-        send('input.speech_started', { utteranceId: event.utteranceId });
-      }
-      if (event.type === 'speech_stopped') send('input.speech_stopped', { utteranceId: event.utteranceId });
-      if (event.type === 'transcript_delta') {
-        send('input.transcript.delta', {
-          utteranceId: event.utteranceId,
-          revision: event.revision,
-          text: event.text,
-        });
-      }
-      if (event.type === 'transcript_final') {
-        const text = event.text.trim();
-        if (!text) return;
-        finalCount += 1;
-        send('input.transcript.final', {
-          utteranceId: event.utteranceId,
-          revision: event.revision,
-          text,
-          ...(event.language === 'zh' || event.language === 'en' ? { language: event.language } : {}),
-        });
-        if (claim.request.purpose === 'conversation') {
-          conversationTail = conversationTail.then(() => runConversationTurn(text));
-        }
-      }
-    }
 
     const startTimer = setTimeout(() => socket.close(4401, 'Voice session start timeout'), VOICE_REALTIME_START_TIMEOUT_MS);
     const lifecycleTimer = setInterval(() => {
@@ -690,25 +478,39 @@ export class VoiceRealtimeRuntime {
       this.socketsByPrincipal.set(consumed.principalId, principalSockets);
       clearTimeout(startTimer);
       try {
-        sttSession = await openSttSession(consumed);
+        const sendAudio = (responseId: string, bytes: Uint8Array) => {
+          if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
+          if (!closed && socket.readyState === WebSocketState.OPEN) socket.send(encodeVoiceAudioFrame({ responseId, seq: ++audioSeq, audio: bytes }), { binary: true });
+        };
+        engine = consumed.omni ? createOmniVoiceEngine({
+          callId: consumed.sessionId,
+          route: consumed.omni, silenceDurationMs: consumed.silenceDurationMs,
+          bargeIn: consumed.config.voice?.realtime?.bargeIn ?? true, send, sendAudio,
+          record: (entry) => this.options.recordOmniTranscript!(consumed.request.sessionKey!, consumed.sessionId, entry, consumed.conversationSessionId!),
+          onClose: shutdown,
+        }) : createAgentVoiceEngine({
+          claim: consumed, runtime: this.options, signal: abortController.signal, send, sendAudio, onClose: shutdown,
+        });
+        await engine.start();
+        if (closed) return;
         ready = true;
         log.info({
           sessionId: consumed.sessionId,
           purpose: consumed.request.purpose,
-          provider: consumed.stt.route.provider,
-          model: consumed.stt.route.model,
+          provider: consumed.omni?.route.provider ?? consumed.stt?.route.provider,
+          model: consumed.omni?.route.model ?? consumed.stt?.route.model,
           latencyMs: Date.now() - consumed.createdAt,
         }, 'Realtime voice session ready');
         send('session.ready', {
           purpose: consumed.request.purpose,
           inputMode: consumed.inputMode,
           inputFormat: { encoding: 'pcm_s16le', sampleRate: 16_000, channels: 1 },
-          route: { stt: consumed.stt.route, ...(consumed.tts ? { tts: consumed.tts.route } : {}) },
+          route: consumed.omni ? { engine: 'omni', omni: consumed.omni.route } : consumed.tts ? { engine: 'agent', stt: consumed.stt!.route, tts: consumed.tts.route } : { engine: 'dictation', stt: consumed.stt!.route },
           heartbeatIntervalMs: VOICE_REALTIME_HEARTBEAT_INTERVAL_MS,
         });
       } catch (error) {
-        log.warn({ err: error, sessionId: consumed.sessionId, provider: consumed.stt.route.provider }, 'Realtime STT setup failed');
-        send('session.error', { code: 'PROVIDER_UNAVAILABLE', message: 'Streaming transcription is unavailable', recoverable: false });
+        log.warn({ err: error, sessionId: consumed.sessionId, provider: consumed.omni?.route.provider ?? consumed.stt?.route.provider }, 'Realtime voice setup failed');
+        send('session.error', { code: 'PROVIDER_UNAVAILABLE', message: 'Voice engine is unavailable', recoverable: false });
         await shutdown('provider_unavailable', true);
       }
     };
@@ -730,14 +532,14 @@ export class VoiceRealtimeRuntime {
           void shutdown('invalid_audio', true);
           return;
         }
-        if (!ready || !sttSession) {
+        if (!ready || !engine) {
           socket.close(4401, 'Voice session is not ready');
           return;
         }
         try {
-          sttSession.appendAudio(bytes);
+          engine.appendAudio(bytes);
         } catch (error) {
-          log.warn({ err: error, sessionId: claim.sessionId }, 'Realtime STT rejected audio');
+          log.warn({ err: error, sessionId: claim.sessionId }, 'Realtime voice engine rejected audio');
           send('session.error', { code: 'AUDIO_BACKPRESSURE', message: 'Audio stream cannot keep up', recoverable: false });
           void shutdown('audio_backpressure', true);
         }
@@ -770,42 +572,22 @@ export class VoiceRealtimeRuntime {
       } else if (message.type === 'session.stop') {
         void shutdown(message.payload.reason, true);
       } else if (message.type === 'response.cancel') {
-        if (!activeResponse || activeResponse.id !== message.payload.responseId) {
+        if (!engine?.cancel(message.payload.responseId, 'client_cancelled')) {
           send('session.error', { code: 'NO_ACTIVE_RESPONSE', message: 'No matching response is active', recoverable: true });
-        } else {
-          cancelActiveResponse('client_cancelled');
         }
       } else if (message.type === 'response.audio.played') {
-        if (activeResponse?.id === message.payload.responseId) {
-          try {
-            activeResponse.playback.acknowledge(message.payload.playedBytes);
-          } catch {
-            socket.close(4400, 'Invalid playback acknowledgement');
-          }
-        }
+        try { engine?.acknowledge(message.payload.responseId, message.payload.playedBytes); }
+        catch { socket.close(4400, 'Invalid playback acknowledgement'); }
       } else if (message.type === 'input.commit') {
-        if (claim.request.purpose !== 'dictation') {
-          send('session.error', { code: 'INVALID_STATE', message: 'Conversation input uses server turn detection', recoverable: true });
+        if (!ready || !engine || claim.request.purpose !== 'dictation') {
+          send('session.error', { code: 'INVALID_STATE', message: 'Input cannot be committed', recoverable: true });
           return;
         }
-        if (!ready || !sttSession || committing) {
-          send('session.error', { code: 'INVALID_STATE', message: 'Input is already being committed', recoverable: true });
-          return;
-        }
-        const finalCountBeforeCommit = finalCount;
-        const alreadyFinalized = finalCountBeforeCommit > finalCountAtLastCommit;
-        const committingSession = sttSession;
         ready = false;
-        committing = true;
-        void committingSession.commit().then(async () => {
-          if (!alreadyFinalized && finalCount === finalCountBeforeCommit) {
-            send('session.error', { code: 'EMPTY_UTTERANCE', message: 'No speech was recognized', recoverable: true });
-          }
-          finalCountAtLastCommit = finalCount;
-          await shutdown('input_committed', true);
-        }).catch((error) => {
-          committing = false;
-          onSttEvent({ type: 'error', error: error instanceof Error ? error : new Error(String(error)) });
+        void engine.commit().catch(async (error) => {
+          log.warn({ err: error, sessionId: claim?.sessionId }, 'Voice input commit failed');
+          send('session.error', { code: 'PROVIDER_ERROR', message: 'Voice input commit failed', recoverable: false });
+          await shutdown('provider_error', true);
         });
       } else {
         send('session.error', { code: 'INVALID_STATE', message: 'Voice session is already started', recoverable: true });
