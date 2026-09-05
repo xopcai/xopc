@@ -116,14 +116,24 @@ describe('read aloud store', () => {
   });
 
   it('keeps core playback working when system media controls are unavailable', async () => {
-    mocks.mediaControlsError = new Error('Native media controls failed');
+    const mediaControlsError = new Error('Native media controls failed');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.mediaControlsError = mediaControlsError;
 
-    useReadAloudStore.getState().requestStart(input);
+    try {
+      useReadAloudStore.getState().requestStart(input);
 
-    await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
-    expect(mocks.generateSpeechChunk).toHaveBeenCalledOnce();
-    expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
-    expect(mocks.players[0]?.play).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(useReadAloudStore.getState().status).toBe('playing'));
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[ReadAloud] System media controls unavailable',
+        mediaControlsError,
+      );
+      expect(mocks.generateSpeechChunk).toHaveBeenCalledOnce();
+      expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
+      expect(mocks.players[0]?.play).toHaveBeenCalledOnce();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('waits for playable audio before activating system media controls', () => {
