@@ -10,6 +10,18 @@ import {
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 
 const log = createGatewayRouteLogger('LazyRoutes');
+const FORWARDED_VARIABLES = Symbol('gateway.forwardedVariables');
+
+function createSubApp(): Hono {
+  const sub = new Hono();
+  sub.use(async (c: Context, next) => {
+    // fetch() creates a new Context; transfer only request-local, server-owned variables.
+    const variables = c.env?.[FORWARDED_VARIABLES] as Record<string, unknown> | undefined;
+    for (const [key, value] of Object.entries(variables ?? {})) c.set(key, value);
+    await next();
+  });
+  return sub;
+}
 
 const authenticatedSubApps = new Map<string, Hono>();
 const appSubApps = new Map<string, Hono>();
@@ -50,7 +62,7 @@ async function ensureAuthenticatedLazyBundle(
     }
     pending = (async () => {
       const mod = await bundle.load();
-      const sub = new Hono();
+      const sub = createSubApp();
       mod.register(sub, deps);
       authenticatedSubApps.set(bundleId, sub);
       authenticatedLoadPromises.delete(bundleId);
@@ -79,7 +91,7 @@ async function ensureAppLazyBundle(
     }
     pending = (async () => {
       const mod = await bundle.load();
-      const sub = new Hono();
+      const sub = createSubApp();
       if (mod.registerOnApp) {
         mod.registerOnApp(sub, params.service);
       }
@@ -94,11 +106,12 @@ async function ensureAppLazyBundle(
 }
 
 async function forwardToSubApp(c: Context, sub: Hono): Promise<Response> {
+  const env = { ...c.env, [FORWARDED_VARIABLES]: { ...c.var } };
   try {
-    return await sub.fetch(c.req.raw, c.env, c.executionCtx);
+    return await sub.fetch(c.req.raw, env, c.executionCtx);
   } catch (error) {
     if (error instanceof Error && error.message.includes('ExecutionContext')) {
-      return sub.fetch(c.req.raw, c.env);
+      return sub.fetch(c.req.raw, env);
     }
     logRouteError(log, c, error, 'gateway.route.lazy_forward');
     throw error;

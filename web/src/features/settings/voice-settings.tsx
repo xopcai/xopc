@@ -39,6 +39,7 @@ import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { VoiceSetup } from './voice-setup';
 
 const credentialFieldWidthClass = selectFieldMaxWidthClass;
 
@@ -417,6 +418,10 @@ export function VoiceSettingsPanel() {
   }, [baseline?.stt.provider, v.saveError]);
 
   const autosave = useAutosave({ value: form, dirty, onSave: save });
+  const updateForm = useCallback((value: VoiceSettingsState) => {
+    dirtyRef.current = true;
+    dispatchForm({ type: 'update', updater: () => value });
+  }, []);
 
   if (!hasToken) {
     return (
@@ -456,32 +461,34 @@ export function VoiceSettingsPanel() {
   const apiKeyLabels = voiceApiKeyLabels(v);
 
   return (
-    <div className="flex flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
-      <div className="flex justify-end"><AutosaveStatus status={autosave.status} error={autosave.error} /></div>
+    <div className="flex w-full flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-relaxed text-fg-muted">{v.setup.subtitle}</p>
+        <AutosaveStatus status={autosave.status} error={autosave.error} />
+      </div>
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
-      <div className="flex flex-col gap-4">
+      <VoiceSetup v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} />
+
+      <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">{v.setup.readout}<span className="ml-3 text-xs font-normal text-fg-muted">{tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off} · {ttsProviderLabel(tts.provider, v)}</span></summary>
+        <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p>
+        <TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
+      </details>
+
+      <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">{v.setup.advanced}<span className="ml-3 text-xs font-normal text-fg-muted">{v.setup.advancedHint}</span></summary>
+        <div className="mt-4 flex flex-col gap-4">
         <VoiceLanguageSection
           v={v}
           voice={form.voice}
           updateLanguageMode={updateVoiceLanguageMode}
         />
-        <ProminentVoiceToggle
-          checked={form.voice.realtime.enabled}
-          title={v.realtime.title}
-          description={v.realtime.description}
-          onLabel={v.overview.ready}
-          offLabel={v.overview.off}
-          onChange={(enabled) => updateRealtime({ enabled })}
-        />
-        {form.voice.realtime.enabled ? (
-          <RealtimeVoiceSettings
-            v={v}
-            realtime={form.voice.realtime}
-            onChange={updateRealtime}
-          />
-        ) : null}
-        <VoiceOverview v={v} stt={stt} tts={tts} />
+        <label className="flex items-center justify-between gap-3 text-sm text-fg">{v.setup.silence}
+          <Select className={selectClassName()} value={String(form.voice.realtime.silenceDurationMs)} onChange={(e) => updateRealtime({ silenceDurationMs: Number(e.target.value) })}>
+            {[...new Set([400, 700, 1200, form.voice.realtime.silenceDurationMs])].sort((a, b) => a - b).map((ms) => <SelectOption key={ms} value={String(ms)}>{ms} ms</SelectOption>)}
+          </Select>
+        </label>
 
         <SttSection
           v={v}
@@ -495,22 +502,9 @@ export function VoiceSettingsPanel() {
           updateRefinement={updateVoiceRefinement}
         />
 
-        <TtsSection
-          v={v}
-          apiKeyLabels={apiKeyLabels}
-          tts={tts}
-          models={models}
-          ttsProviders={ttsProviders}
-          updateTts={updateTts}
-        />
-      </div>
-
-      <div className="rounded-xl border border-accent/25 bg-accent/5 px-4 py-3 dark:border-accent/30 dark:bg-accent/10">
-        <p className="text-sm text-fg">
-          <strong className="text-accent">{v.notes.title}</strong> {v.notes.duration}
-        </p>
-        <p className="mt-2 text-xs text-fg-muted">{v.notes.envVars}</p>
-      </div>
+        <p className="text-xs text-fg-muted">{v.notes.envVars}</p>
+        </div>
+      </details>
     </div>
   );
 }
@@ -543,74 +537,6 @@ function VoiceLanguageSection({
         </Select>
       </div>
     </section>
-  );
-}
-
-function RealtimeVoiceSettings({
-  v,
-  realtime,
-  onChange,
-}: {
-  v: VoiceSettingsMessages;
-  realtime: VoiceSettingsState['voice']['realtime'];
-  onChange: (patch: Partial<VoiceSettingsState['voice']['realtime']>) => void;
-}) {
-  return (
-    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-edge px-3 py-3 text-sm text-fg">
-          <span className="block font-medium">{v.realtime.turnDetection}</span>
-          <span className="mt-1 block text-xs text-fg-muted">{v.realtime.turnDetectionDescription}</span>
-        </div>
-        <label className="flex items-start gap-3 rounded-xl border border-edge px-3 py-3 text-sm text-fg">
-          <input
-            type="checkbox"
-            className="mt-0.5 size-4 accent-accent"
-            checked={realtime.bargeIn}
-            onChange={(event) => onChange({ bargeIn: event.target.checked })}
-          />
-          <span>
-            <span className="block font-medium">{v.realtime.bargeIn}</span>
-            <span className="mt-1 block text-xs font-normal text-fg-muted">{v.realtime.bargeInDescription}</span>
-          </span>
-        </label>
-      </div>
-    </section>
-  );
-}
-
-function VoiceOverview({
-  v,
-  stt,
-  tts,
-}: {
-  v: VoiceSettingsMessages;
-  stt: VoiceSettingsState['stt'];
-  tts: VoiceSettingsState['tts'];
-}) {
-  const configuredVoice = tts.providers?.[tts.provider]?.voice;
-  const replyVoice = typeof configuredVoice === 'string' ? configuredVoice : undefined;
-  return (
-    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
-      <div className="mb-4">
-        <div className="text-sm font-semibold text-fg">{v.overview.title}</div>
-        <p className="mt-1 text-xs text-fg-muted">{v.overview.description}</p>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <VoiceStatusPill label={v.overview.input} value={stt.enabled ? `${v.overview.ready} · ${sttProviderLabel(stt.provider, v)}` : v.overview.off} ready={stt.enabled} />
-        <VoiceStatusPill label={v.overview.replies} value={tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off} ready={tts.enabled && tts.trigger !== 'off'} />
-        <VoiceStatusPill label={v.overview.voice} value={tts.enabled ? `${ttsProviderLabel(tts.provider, v)}${replyVoice ? ` · ${replyVoice}` : ''}` : v.overview.off} ready={tts.enabled} />
-      </div>
-    </section>
-  );
-}
-
-function VoiceStatusPill({ label, value, ready }: { label: string; value: string; ready: boolean }) {
-  return (
-    <div className="rounded-xl bg-surface-panel/80 px-3 py-2.5 shadow-surface">
-      <div className="text-xs text-fg-muted">{label}</div>
-      <div className={cn('mt-1 text-sm font-medium', ready ? 'text-fg' : 'text-fg-muted')}>{value}</div>
-    </div>
   );
 }
 
@@ -687,12 +613,10 @@ function SttSection({
         <p className="mt-1 text-xs text-fg-muted">{v.stt.description}</p>
       </div>
       <div className="space-y-4">
-        <ProminentVoiceToggle
+        <VoiceToggle
           checked={stt.enabled}
           title={v.stt.enable}
           description={v.stt.enableDesc}
-          onLabel={v.overview.ready}
-          offLabel={v.overview.off}
           onChange={(enabled) => updateStt({ enabled })}
         />
 
@@ -905,8 +829,11 @@ function TtsSection({
   >({ status: 'idle' });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  const previewRequestRef = useRef<AbortController | null>(null);
 
   const stopTestAudio = useCallback(() => {
+    previewRequestRef.current?.abort();
+    previewRequestRef.current = null;
     audioRef.current?.pause();
     audioRef.current = null;
     if (audioUrlRef.current) {
@@ -957,11 +884,6 @@ function TtsSection({
   );
   const providerNeedsKey = Boolean(activeProvider?.diagnostics.requiresApiKey);
   const providerReady = Boolean(activeProvider?.configured) || !providerNeedsKey;
-  const statusTone = !tts.enabled
-    ? 'muted'
-    : providerReady
-      ? 'ready'
-      : 'action';
 
   const updateProviderSlice = useCallback(
     (patch: Record<string, unknown>) => {
@@ -999,6 +921,8 @@ function TtsSection({
       return;
     }
     stopTestAudio();
+    const request = new AbortController();
+    previewRequestRef.current = request;
     setTestState({ status: 'loading' });
     try {
       const result = await testTtsVoice({
@@ -1007,7 +931,8 @@ function TtsSection({
         providerConfig: providerSlice,
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentVoice ? { voice: currentVoice } : {}),
-      });
+      }, request.signal);
+      if (request.signal.aborted) return;
       const url = makeAudioUrl(result.audio, result.mimeType);
       audioUrlRef.current = url;
       const audio = new Audio(url);
@@ -1023,6 +948,7 @@ function TtsSection({
       await audio.play();
       setTestState({ status: 'playing', summary });
     } catch (err) {
+      if (request.signal.aborted) return;
       stopTestAudio();
       setTestState({ status: 'error', message: err instanceof Error ? err.message : String(err) });
     }
@@ -1038,34 +964,12 @@ function TtsSection({
         <p className="mt-1 text-xs text-fg-muted">{v.tts.description}</p>
       </div>
       <div className="space-y-4">
-        <ProminentVoiceToggle
+        <VoiceToggle
           checked={tts.enabled}
           title={v.tts.enable}
           description={v.tts.enableDesc}
-          onLabel={v.overview.ready}
-          offLabel={v.overview.off}
           onChange={(enabled) => updateTts({ enabled })}
         />
-
-        <div
-          className={cn(
-            'rounded-xl border px-3 py-2.5 text-sm',
-            statusTone === 'ready'
-              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100'
-              : statusTone === 'action'
-                ? 'border-amber-300/50 bg-amber-50 text-amber-900 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-100'
-                : 'border-edge bg-surface-panel text-fg-muted',
-          )}
-        >
-          <div className="font-medium text-fg">{v.tts.statusTitle}</div>
-          <p className="mt-1 text-xs">
-            {!tts.enabled
-              ? v.tts.statusOff
-              : providerReady
-                ? `${v.tts.statusReady} ${ttsProviderLabel(tts.provider, v)}${currentVoice ? ` · ${currentVoice}` : ''}`
-                : `${v.tts.statusNeedsSetup} ${ttsProviderLabel(tts.provider, v)} · ${activeProvider?.diagnostics.envKeys?.join(', ') ?? v.stt.apiKey}`}
-          </p>
-        </div>
 
         {tts.enabled ? (
           <>
@@ -1169,12 +1073,15 @@ function TtsSection({
                   </Button>
                 </div>
               </div>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-fg-muted">{v.setup.sampleText}</summary>
               <textarea
                 className={cn(inputClassName(), 'mt-3 min-h-20 resize-y')}
                 value={testText}
                 onChange={(e) => setTestText(e.target.value)}
                 maxLength={1000}
               />
+              </details>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-fg-subtle">{testText.length}/1000</span>
                 {testState.status === 'playing' || testState.status === 'done' ? (
@@ -1284,19 +1191,15 @@ function VoiceProviderConfigFields({
   });
 }
 
-function ProminentVoiceToggle({
+function VoiceToggle({
   checked,
   title,
   description,
-  onLabel,
-  offLabel,
   onChange,
 }: {
   checked: boolean;
   title: string;
   description: string;
-  onLabel: string;
-  offLabel: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -1306,24 +1209,16 @@ function ProminentVoiceToggle({
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        'group flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left shadow-surface transition-colors',
+        'group flex w-full items-center justify-between gap-4 rounded-lg border border-edge px-3 py-3 text-left transition-colors',
         settingsInputFocusClass,
         checked
-          ? 'bg-accent/10 text-fg ring-1 ring-accent/45 dark:bg-accent/15'
+          ? 'bg-surface-panel text-fg'
           : 'bg-surface-panel/80 text-fg hover:bg-surface-hover',
       )}
     >
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
           {title}
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[11px] font-medium',
-              checked ? 'bg-accent text-white' : 'bg-surface-hover text-fg-muted',
-            )}
-          >
-            {checked ? onLabel : offLabel}
-          </span>
         </span>
         <span className="mt-1 block text-xs leading-relaxed text-fg-muted">{description}</span>
       </span>

@@ -24,10 +24,10 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
     <button
       type="button"
       className={cn(
-        'z-20 flex items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-subtle shadow-float',
+        'flex shrink-0 items-center justify-center rounded-full text-fg-subtle',
         contained
-          ? 'absolute bottom-4 right-4 size-9'
-          : 'fixed bottom-[calc(11rem+env(safe-area-inset-bottom,0px))] right-6 size-11 md:right-10',
+          ? 'absolute bottom-4 right-4 z-20 size-9 border border-edge bg-surface-panel shadow-float'
+          : 'size-11',
         'hover:bg-surface-hover hover:text-fg dark:border-edge dark:shadow-none',
         interaction.transition,
         interaction.press,

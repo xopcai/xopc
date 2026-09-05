@@ -148,8 +148,8 @@ export function ChatTimelinePanel({
       <Dialog.Trigger asChild>
         <Button
           type="button"
-          variant="secondary"
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] right-4 z-40 size-11 rounded-full p-0 shadow-popover md:right-6 xl:hidden"
+          variant="ghost"
+          className="size-11 shrink-0 rounded-full p-0 xl:hidden"
           aria-label={openLabel}
           title={openLabel}
         >

@@ -139,7 +139,7 @@ function isStreamingProvider(
   return Boolean(provider?.streamingAudio && provider.openAudioStream);
 }
 
-function resolveStreamingStt(config: Config, language?: string): ResolvedStreamingStt | undefined {
+export function resolveStreamingStt(config: Config, language?: string): ResolvedStreamingStt | undefined {
   const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
   for (const entry of resolveSTTProviderChain(sttConfig)) {
     const plugin = getMediaUnderstandingProvider(entry.id);
@@ -159,8 +159,29 @@ function resolveStreamingStt(config: Config, language?: string): ResolvedStreami
   return undefined;
 }
 
-function resolveStreamingTts(config: Config): ResolvedStreamingTts | undefined {
-  const effective = mergeTtsConfigFromAppConfig(config.messages?.tts);
+export function resolveStreamingTts(config: Config): ResolvedStreamingTts | undefined {
+  let effective = mergeTtsConfigFromAppConfig(config.messages?.tts);
+  const selection = config.voice?.realtime?.tts;
+  if (selection) {
+    const slice = effective.providers?.[selection.provider] ?? {};
+    const input = config.tools?.media?.audio?.providers?.[selection.provider];
+    const apiKey = input?.apiKey || (selection.provider === 'alibaba' ? process.env.DASHSCOPE_API_KEY : undefined) || slice.apiKey;
+    effective = {
+      ...effective,
+      enabled: true,
+      provider: selection.provider,
+      managedAuto: false,
+      fallback: { enabled: false, order: [] },
+      providers: {
+        [selection.provider]: {
+          // Explicit conversation setup reuses the input credential on the server only.
+          ...(apiKey ? { apiKey } : {}),
+          ...(slice.baseUrl ? { baseUrl: slice.baseUrl } : {}),
+          ...(selection.voice ? { voice: selection.voice } : selection.provider === 'alibaba' ? { voice: 'Cherry' } : {}),
+        },
+      },
+    };
+  }
   if (!effective.enabled) return undefined;
   let chain: ResolvedSpeechProvider[];
   try {

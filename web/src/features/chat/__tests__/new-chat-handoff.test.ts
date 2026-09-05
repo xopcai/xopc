@@ -17,6 +17,22 @@ const createdSession: SessionInfo = {
 };
 
 describe('openNewChatHandoff', () => {
+  it('uses the live caller callbacks when an initialization is replayed', async () => {
+    let finish!: (session: SessionInfo) => void;
+    const pending = new Promise<SessionInfo>((resolve) => { finish = resolve; });
+    const sessionMgr = { createSession: vi.fn(() => pending) } as unknown as SessionManager;
+    const cancelled = { navigateToSession: vi.fn(), onOpened: vi.fn() };
+    const live = { navigateToSession: vi.fn(), onOpened: vi.fn() };
+    const first = openNewChatHandoff({ sessionMgr, agentId: 'main', forceNew: true, ...cancelled });
+    const replay = openNewChatHandoff({ sessionMgr, agentId: 'main', forceNew: true, ...live });
+    finish(createdSession);
+    await Promise.all([first, replay]);
+    expect(sessionMgr.createSession).toHaveBeenCalledOnce();
+    expect(live.onOpened).toHaveBeenCalledWith(createdSession.key);
+    expect(live.navigateToSession).toHaveBeenCalledOnce();
+    expect(cancelled.onOpened).not.toHaveBeenCalled();
+    expect(cancelled.navigateToSession).not.toHaveBeenCalled();
+  });
   it('coalesces repeated creation but keeps execution modes independent', async () => {
     let finish!: (session: SessionInfo) => void;
     const pending = new Promise<SessionInfo>((resolve) => { finish = resolve; });

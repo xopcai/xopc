@@ -25,8 +25,28 @@ export interface TtsTestInput {
   providerConfig?: Record<string, unknown>;
 }
 
-export async function fetchTtsVoices(provider: string, model: string): Promise<VoiceModelsPayload['ttsVoices'][string]> {
+export interface RealtimeVoiceStatus {
+  enabled: boolean;
+  stt: { provider: string; model: string; managed: boolean } | null;
+  tts: { provider: string; model: string; managed: boolean; voice?: string } | null;
+}
+
+export async function fetchRealtimeVoiceStatus(): Promise<RealtimeVoiceStatus> {
+  const result = await fetchJson<{ payload: RealtimeVoiceStatus }>(apiUrl('/api/voice/realtime/status'));
+  return result.payload;
+}
+
+export async function previewRealtimeVoice(signal: AbortSignal): Promise<ArrayBuffer> {
+  const result = await fetchJson<{ payload: { audio: string; sampleRate: number } }>(
+    apiUrl('/api/voice/realtime/preview'), { method: 'POST', signal },
+  );
+  if (result.payload.sampleRate !== 24_000) throw new Error('Unsupported preview sample rate');
+  return Uint8Array.from(atob(result.payload.audio), (c) => c.charCodeAt(0)).buffer;
+}
+
+export async function fetchTtsVoices(provider: string, model: string, purpose?: 'realtime'): Promise<VoiceModelsPayload['ttsVoices'][string]> {
   const params = new URLSearchParams({ provider, model });
+  if (purpose) params.set('purpose', purpose);
   const res = await fetchJson<{ ok?: boolean; payload?: { voices?: VoiceModelsPayload['ttsVoices'][string] } }>(
     apiUrl(`/api/voice/tts-voices?${params.toString()}`),
   );
@@ -219,6 +239,12 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,
         maxConversationMs: typeof realtime.maxConversationMs === 'number' ? realtime.maxConversationMs : 3_600_000,
         bargeIn: realtime.bargeIn !== false,
+        ...(isRecord(realtime.tts) && (realtime.tts.provider === 'alibaba' || realtime.tts.provider === 'xopc-cloud')
+          ? { tts: {
+              provider: realtime.tts.provider,
+              ...(typeof realtime.tts.voice === 'string' ? { voice: realtime.tts.voice } : {}),
+            } }
+          : {}),
       },
     },
   };
@@ -308,9 +334,10 @@ export type RevealVoiceApiKeyPayload = {
   source: 'config' | 'none';
 };
 
-export async function testTtsVoice(input: TtsTestInput): Promise<TtsTestPayload> {
+export async function testTtsVoice(input: TtsTestInput, signal?: AbortSignal): Promise<TtsTestPayload> {
   const res = await fetchJson<{ ok?: boolean; payload?: TtsTestPayload; error?: string | { message?: string } }>(apiUrl('/api/voice/tts-test'), {
     method: 'POST',
+    signal,
     body: JSON.stringify(input),
   });
   if (res.ok === false) {

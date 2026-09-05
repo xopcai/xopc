@@ -27,7 +27,10 @@ export type NewChatHandoffOpts = {
   search?: string;
 };
 
-const inflightByScope = new Map<string, Promise<string>>();
+const inflightByScope = new Map<string, {
+  promise: Promise<string>;
+  target: { opts: NewChatHandoffOpts; generation: number };
+}>();
 let latestHandoffGeneration = 0;
 
 /** Resolve reuse / noop / create; navigate when the target key changes. */
@@ -39,14 +42,20 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
   });
   const cacheKey = JSON.stringify([scopeKey, gateway.token, opts.forceNew === true, opts.temporary === true, opts.executionMode, opts.search]);
   const existing = inflightByScope.get(cacheKey);
-  if (existing) return existing;
-  const generation = ++latestHandoffGeneration;
+  if (existing) {
+    existing.target.opts = opts;
+    existing.target.generation = ++latestHandoffGeneration;
+    return existing.promise;
+  }
+  const target = { opts, generation: ++latestHandoffGeneration };
   const applyOpened = (sessionKey: string) => {
-    if (generation !== latestHandoffGeneration) return;
-    opts.onOpened(sessionKey);
-    const routeKey = opts.routeSessionKey?.trim() || null;
+    if (target.generation !== latestHandoffGeneration) return;
+    // A replay shares creation, but its callbacks replace the cancelled caller's closures.
+    const current = target.opts;
+    current.onOpened(sessionKey);
+    const routeKey = current.routeSessionKey?.trim() || null;
     if (routeKey !== sessionKey) {
-      opts.navigateToSession(sessionKey, opts.replaceNavigate ?? false, opts.search);
+      current.navigateToSession(sessionKey, current.replaceNavigate ?? false, current.search);
     }
   };
 
@@ -98,7 +107,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     inflightByScope.delete(cacheKey);
   });
 
-  inflightByScope.set(cacheKey, pending);
+  inflightByScope.set(cacheKey, { promise: pending, target });
   return pending;
 }
 
