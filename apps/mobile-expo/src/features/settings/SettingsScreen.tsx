@@ -85,6 +85,9 @@ export function SettingsScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        <SettingsSection>
+          <SettingsRow icon="phone-outline" label={m.voice.settings} onPress={() => router.push('/settings/voice')} />
+        </SettingsSection>
         <SettingsSection title={s.sectionConnection}>
           <SettingsRow
             icon="web"

@@ -377,7 +377,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             showComposerNotification('warning', m.voiceInputDropped);
           }
           if (event.type === 'session.error' && !event.payload.recoverable) {
-            setError(event.payload.message);
+            setError(event.payload.code === 'CONTEXT_CHANGED' ? m.voiceContextChanged : event.payload.message);
             setFailureKind('session');
             if (purpose === 'dictation') showComposerNotification('error', event.payload.message);
             clientRef.current?.stop('surface_closed');

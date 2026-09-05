@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
+import { notifyUserContextChange } from '../../user-context/changes.js';
 import { validateSessionId } from '../../session/session-id.js';
 import type { SessionListQuery, SessionMetadata, PaginatedResult } from '../../session/types.js';
 import { buildDefaultSessionMetadata, type SessionMetadataSeed } from './session-metadata.js';
@@ -296,6 +297,7 @@ export function patchSessionMetadata(
   sessionKey: string,
   updates: Partial<SessionMetadata>,
 ): SessionMetadata {
+  if ('projectId' in updates) notifyUserContextChange({ kind: 'session-reset', id: sessionKey });
   return runSqliteWriteTransaction((db) => {
     const existing = readSessionRow(db, sessionKey);
     if (!existing) {
@@ -410,6 +412,7 @@ export function resetSessionRecord(
   sessionKey: string,
   cwd: string,
 ): { sessionId: string; previousSessionId: string } | null {
+  notifyUserContextChange({ kind: 'session-reset', id: sessionKey });
   return runSqliteWriteTransaction((db) => {
     const existing = readSessionRow(db, sessionKey);
     if (!existing) {
@@ -445,6 +448,7 @@ export function resetSessionRecord(
 }
 
 export function deleteSessionRecord(sessionKey: string): boolean {
+  notifyUserContextChange({ kind: 'session-reset', id: sessionKey });
   return runSqliteWriteTransaction((db) => {
     const existing = readSessionRow(db, sessionKey);
     if (!existing) {

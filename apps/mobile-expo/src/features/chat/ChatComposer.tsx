@@ -1,10 +1,13 @@
 /**
- * Chat composer — Kimi-style compact/expanded input, attachments, text / voice modes.
+ * Chat composer — Kimi-style compact/expanded input, attachments, editable dictation and persistent calls.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LayoutChangeEvent,
   DeviceEventEmitter,
+  useWindowDimensions,
+  Modal,
+  ScrollView,
   Platform,
   Pressable,
   StyleSheet,
@@ -18,7 +21,8 @@ import Animated, {
   interpolate,
   useAnimatedStyle,
 } from 'react-native-reanimated';
-import { Icon } from 'react-native-paper';
+import { Button, Icon } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMessages } from '../../i18n/messages';
 import { motion } from '../../motion';
@@ -52,10 +56,11 @@ import {
 } from './composer-draft-storage';
 import { useComposerAttachments } from './use-composer-attachments';
 import { MOBILE_COMPOSER_APPEND_EVENT, MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
-import { VoiceRecordingCard } from './VoiceRecordingCard';
-import { useChatVoiceRecording } from './use-chat-voice-recording';
-
-type InputMode = 'text' | 'voice';
+import { useChatDictation } from './use-chat-dictation';
+import { useVoiceCall, voiceCall } from '../voice/voice-call';
+import { useVoicePreferences } from '../voice/voice-preferences';
+import { voiceErrorMessage } from '../voice/voice-error';
+import { useGatewayStore } from '../../stores/gateway-store';
 
 export const ChatComposer = memo(function ChatComposer({
   sessionKey,
@@ -85,12 +90,12 @@ export const ChatComposer = memo(function ChatComposer({
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
 }) {
   const m = useMessages();
+  const { height } = useWindowDimensions();
   const cm = m.chat;
   const { colors } = useTheme();
   const transition = useOptionalWorkspaceTransition();
   const shellRef = useRef<RNView>(null);
 
-  const [mode, setMode] = useState<InputMode>('text');
   const [draft, setDraft] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_COMPOSER_INPUT_HEIGHT);
   const [inputWidth, setInputWidth] = useState(0);
@@ -103,7 +108,6 @@ export const ChatComposer = memo(function ChatComposer({
       MOBILE_COMPOSER_FILL_EVENT,
       (text: unknown) => {
         if (typeof text !== 'string') return;
-        setMode('text');
         setDraft(text);
         setCursorPos(text.length);
         requestAnimationFrame(() => inputRef.current?.focus());
@@ -113,7 +117,6 @@ export const ChatComposer = memo(function ChatComposer({
       MOBILE_COMPOSER_APPEND_EVENT,
       (text: unknown) => {
         if (typeof text !== 'string') return;
-        setMode('text');
         setDraft((current) => {
           const separator = current && !/\s$/.test(current) ? ' ' : '';
           const next = `${current}${separator}${text}`;
@@ -190,33 +193,30 @@ export const ChatComposer = memo(function ChatComposer({
 
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const onRecordingDraft = useCallback((attachment: WireAttachment) => {
-    att.setAttachments(previous => [...previous, {
-      id: attachment.localUri!, type: 'audio', name: attachment.name!,
-      mimeType: attachment.mimeType!, size: 0, content: '',
-      localUri: attachment.localUri, durationSeconds: attachment.durationSeconds,
-    }]);
-    setMode('text');
-  }, [att.setAttachments]);
-  const onRecorded = useCallback(async (attachment: WireAttachment) => {
-    const refs = contextRefs;
-    if (await onSend('', [attachment], refs.length ? refs : undefined)) {
-      onContextRefsChange([]);
-    } else {
-      onRecordingDraft(attachment);
-    }
-  }, [contextRefs, onContextRefsChange, onRecordingDraft, onSend]);
+  const dictationCursor = useRef(0);
+  const dictationDraft = useRef('');
+  const insets = useSafeAreaInsets();
+  const [pendingTranscript, setPendingTranscript] = useState('');
+  useEffect(() => setPendingTranscript(''), [sessionKey]);
   const onTranscribed = useCallback((text: string) => {
-    const current = draftRef.current.trim();
-    updateDraft(current ? `${current} ${text}` : text);
-    setMode('text');
+    const current = draftRef.current;
+    if (current !== dictationDraft.current) { setPendingTranscript(text); return; }
+    const position = Math.min(dictationCursor.current, current.length);
+    const next = current.slice(0, position) + text + current.slice(position);
+    updateDraft(next, position + text.length);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [updateDraft]);
-  const voice = useChatVoiceRecording({
-    sessionKey, disabled: mode !== 'voice' || runBusy,
-    onRecorded, onTranscribed, onRecordingDraft, onError: setSnack,
-  });
-  const voiceInteractionActive = voice.stage !== 'idle';
+  const voice = useChatDictation(sessionKey, onTranscribed);
+  const voiceInteractionActive = voice.phase !== 'idle';
+  const call = useVoiceCall();
+  const callInChat = call.phase !== 'idle' && call.target?.sessionKey === sessionKey;
+  const gatewayId = useGatewayStore(s => s.activeGatewayId);
+  const voicePrefs = useVoicePreferences();
+  const startCall = () => {
+    if (call.phase !== 'idle') { voiceCall.expand(); return; }
+    if (!gatewayId || runBusy || disabled || voiceInteractionActive) return;
+    void voiceCall.start({ gatewayId, sessionKey, engine: voicePrefs.engines[gatewayId], background: voicePrefs.background });
+  };
 
   const resetEditor = useCallback(() => {
     setDraft('');
@@ -245,7 +245,6 @@ export const ChatComposer = memo(function ChatComposer({
     setDraft(snapshot.text);
     setCursorPos(snapshot.cursorPos);
     setInputHeight(estimateComposerInputHeight(snapshot.text));
-    setMode('text');
     onContextRefsChange(snapshot.contextRefs);
   }, [onContextRefsChange, resetEditor, sessionKey]);
 
@@ -274,10 +273,6 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   useEffect(() => {
-    if (streaming) setMode('text');
-  }, [streaming]);
-
-  useEffect(() => {
     if (!isFocused || draft.length > 0) return;
     setInputHeight(MIN_COMPOSER_INPUT_HEIGHT);
   }, [isFocused, draft.length]);
@@ -294,12 +289,11 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     if (suggestionDraft == null || suggestionDraft === '') return;
     updateDraft(suggestionDraft);
-    setMode('text');
     onConsumeSuggestionDraft?.();
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [suggestionDraft, onConsumeSuggestionDraft, updateDraft]);
 
-  const canSendIdle = hasDraft && !runBusy && !voiceInteractionActive;
+  const canSendIdle = hasDraft && !runBusy && !voiceInteractionActive && !callInChat;
 
   const handlePaletteSelect = useCallback(
     (item: import('./command-palette.types').PaletteItem) => {
@@ -399,11 +393,13 @@ export const ChatComposer = memo(function ChatComposer({
   const surface = colors.surface.elevated;
   const border = colors.border.default;
   const accent = colors.accent.primary;
-  const shellBorder = isExpanded || mode === 'voice' ? colors.border.strong : border;
-  const toggleMode = useCallback(() => {
-    if (disabled || streaming || voiceInteractionActive) return;
-    setMode(current => current === 'voice' ? 'text' : 'voice');
-  }, [disabled, streaming, voiceInteractionActive]);
+  const shellBorder = isExpanded ? colors.border.strong : border;
+  const startDictation = () => {
+    if (disabled || streaming || voiceInteractionActive || call.phase !== 'idle') return;
+    dictationCursor.current = cursorPos;
+    dictationDraft.current = draft;
+    void voice.start();
+  };
 
   const openAttachmentSheet = useCallback(() => {
     if (disabled || voiceInteractionActive) return;
@@ -414,7 +410,6 @@ export const ChatComposer = memo(function ChatComposer({
     async (source: Parameters<typeof att.addFromSource>[0]) => {
       const added = await att.addFromSource(source);
       if (!added) return;
-      setMode('text');
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     [att],
@@ -481,25 +476,38 @@ export const ChatComposer = memo(function ChatComposer({
     );
   };
 
+  const dictationDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle';
+  const renderCallButton = (primary = false) => (
+    <Pressable
+      style={[primary ? styles.sendCircle : styles.toolBtn, primary && { backgroundColor: colors.accent.primary }, { opacity: call.phase === 'idle' && (runBusy || voiceInteractionActive) ? 0.54 : 1 }]}
+      onPress={startCall}
+      disabled={call.phase === 'idle' && (runBusy || voiceInteractionActive)}
+      accessibilityRole="button"
+      accessibilityLabel={call.phase === 'idle' ? m.voice.title : m.voice.expand}
+    >
+      <Icon source="phone-outline" size={22} color={primary ? colors.text.inverse : accent} />
+    </Pressable>
+  );
+
   const renderVoiceToggle = () => (
     <Pressable
       style={({ pressed }) => [
         styles.toolBtn,
         {
           backgroundColor: pressed ? colors.surface.hover : colors.surface.input,
-          opacity: disabled || streaming || voiceInteractionActive ? 0.54 : 1,
+          opacity: dictationDisabled ? 0.54 : 1,
         },
       ]}
-      onPress={toggleMode}
-      disabled={disabled || streaming || voiceInteractionActive}
+      onPress={startDictation}
+      disabled={dictationDisabled}
       hitSlop={4}
       accessibilityRole="button"
-      accessibilityLabel={mode === 'text' ? cm.switchToVoice : cm.switchToKeyboard}
+      accessibilityLabel={m.voice.dictation}
     >
       <Icon
-        source={mode === 'text' ? 'microphone-outline' : 'keyboard-outline'}
+        source="microphone-outline"
         size={22}
-        color={disabled || streaming || voiceInteractionActive ? colors.text.tertiary : accent}
+        color={dictationDisabled ? colors.text.tertiary : accent}
       />
     </Pressable>
   );
@@ -553,6 +561,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const renderSendOrStop = () => {
     if (streaming) return renderStreamingRightActions();
+    if (!hasDraft) return renderCallButton(true);
     if (!isExpanded) return null;
     return (
       <Pressable
@@ -597,18 +606,33 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <View style={[styles.wrap, { borderTopColor: 'transparent' }]}>
-      <VoiceRecordingCard
-        visible={voiceInteractionActive}
-        processing={voice.stage === 'starting' || voice.stage === 'stopping' || voice.stage === 'transcribing'}
-        cancelled={voice.destination === 'cancel'}
-        meterSamples={voice.samples}
-        durationMillis={voice.durationMillis}
-        hint={voice.stage === 'starting' ? cm.voiceStarting
-          : voice.stage === 'stopping' ? cm.voiceSending
-          : voice.stage === 'transcribing' ? cm.voiceTranscribing
-          : voice.destination === 'cancel' ? cm.voiceReleaseCancelHint
-          : voice.destination === 'text' ? cm.voiceReleaseTextHint : cm.voiceReleaseCenterHint}
-      />
+      <Modal visible={voiceInteractionActive} transparent animationType="slide" onRequestClose={voice.cancel}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.surface.base, paddingBottom: Math.max(insets.bottom, spacing.lg), paddingTop: insets.top }}>
+          <View style={{ padding: spacing.lg, gap: spacing.md }}>
+            <Text style={[typography.heading, { color: colors.text.primary }]}>{m.voice.dictation}</Text>
+            <Text style={{ color: colors.text.secondary }}>{m.voice.voiceInputHint}</Text>
+            <Text style={{ color: colors.text.primary }}>{voice.phase === 'recording' ? m.voice.recording : voice.phase === 'error' ? voiceErrorMessage(voice.error, m.voice) : voice.phase === 'connecting' ? m.voice.connecting : m.voice.processing}</Text>
+            {voice.startedAt > 0 && <Text style={{ color: colors.text.secondary }}>{Math.floor(voice.elapsed / 60)}:{String(voice.elapsed % 60).padStart(2, '0')}</Text>}
+            <ScrollView style={{ maxHeight: height * 0.4 }}><Text style={{ color: colors.text.primary }}>{voice.text}</Text></ScrollView>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Button onPress={voice.cancel}>{m.voice.cancel}</Button>
+              <Button disabled={voice.phase !== 'recording' && !(voice.phase === 'error' && voice.text)} onPress={voice.phase === 'error' ? voice.insertExisting : voice.finish}>{voice.phase === 'error' ? m.voice.insert : m.voice.finish}</Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {callInChat && <Text style={{ color: colors.text.secondary }}>{m.voice.finishCallToSend}</Text>}
+      {pendingTranscript !== '' && <View style={{ gap: spacing.sm, padding: spacing.md }}>
+        <Text style={{ color: colors.text.secondary }}>{m.voice.draftChanged}</Text>
+        <Text style={{ color: colors.text.primary }} numberOfLines={4}>{pendingTranscript}</Text>
+        <View style={{ flexDirection: 'row' }}>
+          <Button onPress={() => setPendingTranscript('')}>{m.voice.cancel}</Button>
+          <Button onPress={() => {
+            updateDraft(draft + (draft ? '\n' : '') + pendingTranscript);
+            setPendingTranscript('');
+          }}>{m.voice.insert}</Button>
+        </View>
+      </View>}
 
       {palette.open ? (
         <CommandPaletteBar
@@ -686,8 +710,7 @@ export const ChatComposer = memo(function ChatComposer({
           shellRevealStyle,
         ]}
       >
-        {mode === 'text' ? (
-          <>
+        <>
             <View style={isExpanded ? undefined : styles.compactRow}>
               {!isExpanded ? renderVoiceToggle() : null}
               <View
@@ -711,11 +734,12 @@ export const ChatComposer = memo(function ChatComposer({
                   {...textInputProps}
                 />
               </View>
-              {!isExpanded ? (streaming ? renderStreamingRightActions() : renderAttachButton()) : null}
+              {!isExpanded ? (streaming ? renderStreamingRightActions() : <View style={styles.streamingActions}>{renderAttachButton()}{renderCallButton(true)}</View>) : null}
             </View>
             {isExpanded ? (
               <View style={styles.toolRow}>
                 {renderVoiceToggle()}
+                {hasDraft && !streaming ? renderCallButton() : null}
                 <View style={styles.toolSpacer} />
                 {streaming ? (
                   renderStreamingRightActions()
@@ -728,57 +752,6 @@ export const ChatComposer = memo(function ChatComposer({
               </View>
             ) : null}
           </>
-        ) : isExpanded ? (
-          <>
-            <View
-              style={[
-                styles.holdPad,
-                styles.holdPadExpanded,
-                {
-                  backgroundColor: voiceInteractionActive ? colors.surface.active : colors.surface.input,
-                  borderColor: colors.border.subtle,
-                },
-              ]}
-              {...voice.panHandlers}
-            >
-              <Text style={[styles.holdLabel, { color: colors.text.secondary }]}>
-                {cm.holdToSpeak}
-              </Text>
-            </View>
-            <View style={styles.toolRow}>
-              {renderVoiceToggle()}
-              <View style={styles.toolSpacer} />
-              {streaming ? (
-                renderStreamingRightActions()
-              ) : (
-                <>
-                  {renderAttachButton()}
-                  {renderSendOrStop()}
-                </>
-              )}
-            </View>
-          </>
-        ) : (
-          <View style={styles.compactRow}>
-            {renderVoiceToggle()}
-            <View
-              style={[
-                styles.holdPad,
-                styles.holdPadCompact,
-                {
-                  backgroundColor: voiceInteractionActive ? colors.surface.active : colors.surface.input,
-                  borderColor: colors.border.subtle,
-                },
-              ]}
-              {...voice.panHandlers}
-            >
-              <Text style={[styles.holdLabel, { color: colors.text.secondary }]}>
-                {cm.holdToSpeak}
-              </Text>
-            </View>
-            {streaming ? renderStreamingRightActions() : renderAttachButton()}
-          </View>
-        )}
       </Animated.View>
 
       <AttachmentSourceSheet
@@ -909,26 +882,5 @@ const styles = StyleSheet.create({
   },
   inputExpanded: {
     alignSelf: 'stretch',
-  },
-  holdPad: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  holdPadCompact: {
-    flex: 1,
-    minHeight: MIN_COMPOSER_INPUT_HEIGHT,
-    marginVertical: 1,
-  },
-  holdPadExpanded: {
-    minHeight: 44,
-    marginHorizontal: spacing.sm,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  holdLabel: {
-    ...typography.body,
-    fontWeight: '600',
   },
 });
