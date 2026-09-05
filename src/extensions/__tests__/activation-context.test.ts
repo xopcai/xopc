@@ -1,10 +1,32 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const logger = vi.hoisted(() => ({ warn: vi.fn() }));
+vi.mock('../../utils/logger.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils/logger.js')>();
+  return { ...actual, createLogger: (prefix: string) => {
+    const instance = actual.createLogger(prefix);
+    vi.spyOn(instance, 'warn').mockImplementation(logger.warn);
+    return instance;
+  } };
+});
 
 import { collectConfiguredProviderIds } from '../activation-context.js';
 import '../../voice/stt/providers/index.js';
 import '../../voice/tts/providers/index.js';
 
 describe('collectConfiguredProviderIds', () => {
+  it('quietly ignores saved configuration for unavailable voice extensions', () => {
+    logger.warn.mockClear();
+    const ids = collectConfiguredProviderIds({
+      messages: { tts: { provider: 'edge', providers: { 'tts-local-cli': { command: '' } } } },
+      tools: { media: { audio: { provider: 'alibaba', providers: { alibaba: { apiKey: 'test' }, groq: { model: 'whisper-large-v3-turbo' } } } } },
+    });
+    expect(ids).toContain('alibaba');
+    expect(ids).not.toContain('groq');
+    expect(ids).not.toContain('tts-local-cli');
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
   it('includes only configured TTS providers from messages.tts', () => {
     const ids = collectConfiguredProviderIds({
       messages: {

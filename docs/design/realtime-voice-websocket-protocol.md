@@ -134,6 +134,8 @@ Cancellation reason is barge_in, client_cancelled or session_closed. Clear playb
 
 Gateway playback window: 96000 unacknowledged PCM bytes (two seconds). Native upstream generation has a separate bounded queue of 2,880,000 PCM bytes (one minute), since generation can run ahead of playback. Native queue overflow or a 15-second playback acknowledgement stall cancels that reply and emits recoverable `session.error` with `RESPONSE_FAILED`; the call stays connected for the next turn. This does not silently discard audio and mark the reply complete. Fatal service/protocol errors include a specific code and diagnostic reference.
 
+Native microphone upload allows one WebSocket write at a time, with at most 65,536 pending PCM bytes (about two seconds, including the in-flight write). Brief stalls preserve queued PCM order. Overflow discards pending input, clears the provider input buffer, fences stale transcripts/responses and emits recoverable `INPUT_DROPPED`; the client warns the user to repeat that input. Audio resumes after the clear acknowledgement. Mute, manual interruption and close discard queued input too. A write stalled for ten seconds ends the call with `OMNI_UPLOAD_TIMEOUT`. The clear acknowledgement deadline is five seconds, extended to fifteen when an upload is still in flight. Diagnostic logs include provider, endpoint hostname and pending bytes, without credentials or audio.
+
 ## Close codes and security
 
 1000 = normal; 1001 = gateway stopping; 4400 = invalid frame/clock; 4401 = auth/readiness; 4429 = concurrency.

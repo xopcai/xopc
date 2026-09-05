@@ -949,6 +949,7 @@
     "voiceSpeaking": "Speaking…",
     "voiceResponseInterrupt": "Stop response",
     "voiceResponseFailed": "Voice playback failed; the text response is still available.",
+    "voiceInputDropped": "The voice connection is slow. This microphone input was discarded; please repeat it once the connection recovers.",
     "voiceTranscribing": "Transcribing…",
     "voicePreparing": "Preparing local speech recognition…",
     "voicePreparingProgress": "Preparing local speech recognition… {progress}%",
