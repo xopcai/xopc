@@ -27,8 +27,6 @@ import type {
   SpeechProviderResolveConfigContext,
   SpeechSynthesisRequest,
   SpeechSynthesisResult,
-  SpeechSynthesisStreamRequest,
-  SpeechSynthesisStreamResult,
 } from '../speech-provider-types.js';
 
 const log = createLogger('SpeechProvider:Edge');
@@ -118,9 +116,10 @@ function parseDirectiveTokenInternal(
   }
 }
 
-async function waitForNonEmptyFile(filePath: string, timeoutMs: number): Promise<void> {
+async function waitForNonEmptyFile(filePath: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
   const deadline = Date.now() + Math.min(Math.max(timeoutMs, 1000), 5000);
   while (Date.now() < deadline) {
+    if (signal.aborted) throw signal.reason;
     try {
       if (statSync(filePath).size > 0) return;
     } catch {
@@ -130,11 +129,30 @@ async function waitForNonEmptyFile(filePath: string, timeoutMs: number): Promise
   }
 }
 
+async function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) throw signal.reason;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function synthesizeToBuffer(
   text: string,
   config: EdgeTtsConfig,
   voiceOverride: string | undefined,
   timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<{ buffer: Buffer; outputFormat: string; ext: string }> {
   // Lazy import — node-edge-tts loads ws transitively; skip cost for users that
   // never enable the edge provider.
@@ -160,8 +178,8 @@ async function synthesizeToBuffer(
       volume: config.volume,
       timeout: timeoutMs,
     });
-    await tts.ttsPromise(text, outputPath);
-    await waitForNonEmptyFile(outputPath, timeoutMs);
+    await withAbort(tts.ttsPromise(text, outputPath), signal);
+    await waitForNonEmptyFile(outputPath, timeoutMs, signal);
     const buffer = readFileSync(outputPath);
     if (buffer.length === 0) {
       throw new Error(`Edge TTS produced an empty ${format} file for voice ${voice}`);
@@ -202,6 +220,7 @@ export const edgeSpeechProvider: SpeechProviderPlugin = {
       config,
       voiceOverride,
       req.timeoutMs,
+      req.signal,
     );
     return {
       audioBuffer: buffer,
@@ -211,35 +230,6 @@ export const edgeSpeechProvider: SpeechProviderPlugin = {
     };
   },
 
-  // True streaming would require a node-edge-tts upstream change. We expose a
-  // "fake stream" (single chunk) so callers don't fall through to speak-core's
-  // wrapBufferAsStream branch and can treat all providers uniformly.
-  synthesizeStream: async (req: SpeechSynthesisStreamRequest): Promise<SpeechSynthesisStreamResult> => {
-    const config = readProviderConfig(req.providerConfig);
-    if (!config.enabled) {
-      throw new Error('Edge TTS is disabled in config (messages.tts.providers.edge.enabled = false)');
-    }
-    const overrides = req.providerOverrides ?? {};
-    const voiceOverride = trimToUndefined(overrides.voice ?? overrides.voiceId);
-    const { buffer, outputFormat, ext } = await synthesizeToBuffer(
-      req.text,
-      config,
-      voiceOverride,
-      req.timeoutMs,
-    );
-    const audioStream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new Uint8Array(buffer));
-        controller.close();
-      },
-    });
-    return {
-      audioStream,
-      outputFormat,
-      fileExtension: ext,
-      voiceCompatible: outputFormat === 'opus' || outputFormat === 'ogg',
-    };
-  },
 };
 
 registerSpeechProvider(edgeSpeechProvider);

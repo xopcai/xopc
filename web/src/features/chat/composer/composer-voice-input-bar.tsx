@@ -1,8 +1,7 @@
-import { Check, Loader2, RotateCcw, X } from 'lucide-react';
+import { Check, Loader2, RotateCcw, Square, Volume2, VolumeX, X } from 'lucide-react';
 import { memo } from 'react';
 
-import type { VoiceInputPhase } from '@/features/chat/composer/use-composer-voice-input';
-import type { VoiceReadiness } from '@/features/chat/composer/voice-transcribe-api';
+import type { VoiceInputPhase, VoiceResponsePhase, VoiceSessionMode } from '@/features/chat/composer/use-composer-voice-input';
 import type { ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -11,12 +10,18 @@ export interface ComposerVoiceInputBarProps {
   phase: VoiceInputPhase;
   elapsedLabel: string;
   audioLevel: number;
-  readiness: VoiceReadiness;
-  hasRetainedRecording: boolean;
+  partialTranscript: string;
+  finalTranscript: string;
+  responseText: string;
+  responsePhase: VoiceResponsePhase;
+  muted: boolean;
+  mode: VoiceSessionMode;
   disabled?: boolean;
   chat: ChatMessages;
   onCancel: () => void;
   onConfirm: () => void;
+  onInterruptResponse: () => void;
+  onToggleMute: () => void;
   onRetry: () => void;
 }
 
@@ -29,47 +34,47 @@ const iconBtnClass = cn(
   'disabled:cursor-not-allowed disabled:opacity-50',
 );
 
-function formatDownloadBytes(bytes: number | undefined): string | null {
-  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) return null;
-  return `${(bytes / 1024 / 1024).toFixed(bytes >= 100 * 1024 * 1024 ? 0 : 1)} MB`;
-}
-
 export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
   phase,
   elapsedLabel,
   audioLevel,
-  readiness,
-  hasRetainedRecording,
+  partialTranscript,
+  finalTranscript,
+  responseText,
+  responsePhase,
+  muted,
+  mode,
   disabled,
   chat: m,
   onCancel,
   onConfirm,
+  onInterruptResponse,
+  onToggleMute,
   onRetry,
 }: ComposerVoiceInputBarProps) {
   const transcribing = phase === 'transcribing';
-  const preparing = phase === 'preparing';
   const requesting = phase === 'requesting';
   const starting = phase === 'starting';
   const failed = phase === 'error';
-  const progress = typeof readiness.progress === 'number'
-    ? Math.round(Math.max(0, Math.min(1, readiness.progress)) * 100)
-    : null;
-  const downloaded = formatDownloadBytes(readiness.downloadedBytes);
-  const total = formatDownloadBytes(readiness.totalBytes);
-  const preparingStatus = progress === null
-    ? m.voicePreparing
-    : `${m.voicePreparingProgress.replace('{progress}', String(progress))}${downloaded && total ? ` · ${downloaded} / ${total}` : ''}`;
   const status = failed
-    ? hasRetainedRecording ? m.voiceRetryAvailable : m.voicePreparationFailed
-    : preparing
-      ? preparingStatus
+    ? m.voiceTranscribeFailed
+    : responseText
+      ? responseText
+      : partialTranscript
+        ? partialTranscript
+        : finalTranscript
+          ? finalTranscript
       : requesting
         ? m.voiceRequestingMicrophone
         : starting
           ? m.voiceStartingMicrophone
-        : transcribing
-          ? m.voiceTranscribing
-          : m.voiceRecordingStatus;
+          : transcribing
+            ? m.voiceTranscribing
+            : responsePhase === 'thinking'
+              ? m.voiceThinking
+              : responsePhase === 'speaking'
+                ? m.voiceSpeaking
+                : m.voiceRecordingStatus;
 
   return (
     <div
@@ -98,6 +103,16 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
       </span>
 
       <div className="flex shrink-0 items-center gap-0.5">
+        {mode === 'conversation' && !failed ? (
+          <button type="button" className={iconBtnClass} disabled={disabled} title={muted ? m.voiceUnmute : m.voiceMute} aria-label={muted ? m.voiceUnmute : m.voiceMute} onClick={onToggleMute}>
+            {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+          </button>
+        ) : null}
+        {mode === 'conversation' && responsePhase !== 'idle' ? (
+          <button type="button" className={iconBtnClass} disabled={disabled} title={m.voiceResponseInterrupt} aria-label={m.voiceResponseInterrupt} onClick={onInterruptResponse}>
+            <Square className="size-3.5" />
+          </button>
+        ) : null}
         <button
           type="button"
           className={iconBtnClass}
@@ -112,7 +127,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
           <button type="button" className={cn(iconBtnClass, 'text-fg')} disabled={disabled} title={m.voiceRetry} aria-label={m.voiceRetry} onClick={onRetry}>
             <RotateCcw className="size-4" />
           </button>
-        ) : phase === 'recording' ? (
+        ) : phase === 'recording' && mode === 'dictation' ? (
           <button type="button" className={cn(iconBtnClass, 'text-fg')} disabled={disabled} title={m.voiceInputConfirm} aria-label={m.voiceInputConfirm} onClick={onConfirm}>
             <Check className="size-4" />
           </button>

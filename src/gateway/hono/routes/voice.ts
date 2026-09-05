@@ -7,6 +7,7 @@
 
 import type { Context, Hono } from 'hono';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
+import { createVoiceSessionRequestSchema } from '@xopcai/realtime-protocol/voice';
 
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
@@ -30,7 +31,9 @@ import {
 } from '../../../voice/local/model-manager.js';
 import { getLocalVoiceRuntimeClient } from '../../../voice/local/runtime-client.js';
 import { getAudioDecoderStatus } from '../../../voice/audio/normalize.js';
+import { VoiceSessionCreationError } from '../../../voice/realtime/runtime.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createGatewayRouteLogger('Voice');
@@ -178,6 +181,24 @@ async function refineTranscript(
 
 export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+
+  authenticated.post('/api/voice/realtime/sessions', strictRateLimitMiddleware, async (c) => {
+    const parsed = createVoiceSessionRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice session request' } }, 400);
+    }
+    try {
+      const principal = getGatewayPrincipal(c);
+      const payload = await service.voiceRealtime.createSession(parsed.data, principal.principalId);
+      return c.json({ ok: true, payload });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Realtime voice is unavailable';
+      if (error instanceof VoiceSessionCreationError) {
+        return c.json({ ok: false, error: { code: error.code, message } }, error.status);
+      }
+      return c.json({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE', message } }, 503);
+    }
+  });
 
   authenticated.post('/api/voice/language', strictRateLimitMiddleware, async (c) => {
     let body: { language?: unknown } = {};

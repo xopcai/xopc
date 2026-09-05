@@ -6,9 +6,11 @@ import type {
   MediaUnderstandingProvider,
 } from '../../../media-understanding/types.js';
 import { createLogger } from '../../../utils/logger.js';
+import { openDashScopeStreamingStt } from '../../dashscope/streaming-stt-session.js';
 
 const log = createLogger('STT:Alibaba');
 const DEFAULT_MODEL = 'qwen-audio-3.0-asr-flash';
+const DEFAULT_STREAMING_MODEL = 'qwen-audio-3.0-asr-flash-streaming';
 const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
 
 function audioFormat(request: AudioTranscriptionRequest): string {
@@ -70,6 +72,16 @@ export const alibabaTranscriptionProvider: MediaUnderstandingProvider = {
   defaultModels: { audio: DEFAULT_MODEL },
   autoPriority: { audio: 10 },
   transcribeAudio,
+  streamingAudio: {
+    inputSampleRates: [16_000],
+    turnDetection: ['server_vad'],
+    defaultModel: DEFAULT_STREAMING_MODEL,
+    models: [DEFAULT_STREAMING_MODEL],
+  },
+  openAudioStream: (request) => openDashScopeStreamingStt({
+    ...request,
+    model: request.model || DEFAULT_STREAMING_MODEL,
+  }),
 };
 
 registerMediaUnderstandingProvider(alibabaTranscriptionProvider);

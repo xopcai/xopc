@@ -79,6 +79,56 @@ export function encodePcm16Wav(samples: Float32Array, sampleRate = TARGET_SAMPLE
   return buffer;
 }
 
+export function encodePcm16(samples: Float32Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(samples.length * 2);
+  const view = new DataView(buffer);
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(i * 2, sample < 0 ? sample * 32768 : sample * 32767, true);
+  }
+  return buffer;
+}
+
+/** Stateful linear resampler for continuous microphone chunks. */
+export class PcmStreamEncoder {
+  private pending = new Float32Array(0);
+  private position = 0;
+
+  constructor(
+    private readonly sourceRate: number,
+    private readonly targetRate = TARGET_SAMPLE_RATE,
+  ) {
+    if (sourceRate <= 0 || targetRate <= 0) throw new Error('PCM sample rates must be positive');
+  }
+
+  push(chunk: Float32Array): ArrayBuffer {
+    if (chunk.length === 0) return new ArrayBuffer(0);
+    const input = new Float32Array(this.pending.length + chunk.length);
+    input.set(this.pending);
+    input.set(chunk, this.pending.length);
+    const ratio = this.sourceRate / this.targetRate;
+    const output: number[] = [];
+    while (this.position + 1 < input.length) {
+      const left = Math.floor(this.position);
+      const fraction = this.position - left;
+      output.push(input[left] * (1 - fraction) + input[left + 1] * fraction);
+      this.position += ratio;
+    }
+    const consumed = Math.min(input.length - 1, Math.floor(this.position));
+    this.pending = input.slice(consumed);
+    this.position -= consumed;
+    return encodePcm16(Float32Array.from(output));
+  }
+
+  flush(): ArrayBuffer {
+    if (this.pending.length === 0) return new ArrayBuffer(0);
+    const sample = this.pending[Math.min(this.pending.length - 1, Math.floor(this.position))];
+    this.pending = new Float32Array(0);
+    this.position = 0;
+    return encodePcm16(Float32Array.of(sample));
+  }
+}
+
 const WORKLET_NAME = 'xopc-pcm-capture';
 const WORKLET_FLUSH_TIMEOUT_MS = 1_000;
 

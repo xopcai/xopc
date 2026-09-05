@@ -4,6 +4,7 @@ import {
   calculateRmsLevel,
   encodePcm16Wav,
   PcmFrameCapture,
+  PcmStreamEncoder,
   resamplePcm,
 } from '../pcm-wav-recorder';
 
@@ -102,6 +103,25 @@ describe('PCM WAV recorder helpers', () => {
     expect(output[0]).toBe(0);
     expect(output[2]).toBeCloseTo(0.5);
     expect(output[4]).toBeCloseTo(1);
+  });
+
+  it('keeps resampling continuous across microphone chunk boundaries', () => {
+    const source = Float32Array.from({ length: 4_800 }, (_, index) => Math.sin(index / 19));
+    const oneShot = new PcmStreamEncoder(48_000, 16_000);
+    const chunked = new PcmStreamEncoder(48_000, 16_000);
+    const expected = new Uint8Array(oneShot.push(source));
+    const parts = [
+      new Uint8Array(chunked.push(source.slice(0, 733))),
+      new Uint8Array(chunked.push(source.slice(733, 2_017))),
+      new Uint8Array(chunked.push(source.slice(2_017))),
+    ];
+    const actual = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+    let offset = 0;
+    for (const part of parts) {
+      actual.set(part, offset);
+      offset += part.length;
+    }
+    expect(actual).toEqual(expected);
   });
 
   it('calculates a stable normalized RMS level for local VAD', () => {

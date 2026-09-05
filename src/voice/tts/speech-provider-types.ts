@@ -97,6 +97,7 @@ export interface SpeechSynthesisRequest {
   providerOverrides?: SpeechProviderOverrides;
   /** Hard timeout from the orchestrator (already merged with provider defaults). */
   timeoutMs: number;
+  signal: AbortSignal;
 }
 
 export type SpeechSynthesisStreamRequest = SpeechSynthesisRequest;

@@ -311,6 +311,7 @@ export function createOpenAiCompatibleSpeechProvider(
           ...(speed === undefined ? {} : { speed }),
           ...buildExtraJsonBodyFields(config, options.extraJsonBodyFields),
         },
+        signal: req.signal,
       });
 
       const audioBuffer = Buffer.from(await response.arrayBuffer());
@@ -345,6 +346,7 @@ export function createOpenAiCompatibleSpeechProvider(
       const response = await fetchWithTimeoutGuarded(`${baseUrl}/audio/speech`, {
         timeoutMs: req.timeoutMs,
         label: options.apiErrorLabel ?? `${options.label} TTS streaming`,
+        signal: req.signal,
         init: {
           method: 'POST',
           headers: {
