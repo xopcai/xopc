@@ -832,6 +832,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key/messages — atomically delete one visible user turn from raw rows.
   authenticated.delete('/api/sessions/:key/messages', async (c) => {
     const key = c.req.param('key');
+    if (service.voiceRealtime?.hasConversation(key)) return c.json({ error: 'End the voice call before editing its history' }, 409);
     const body = await c.req.json().catch(() => ({}));
     const userRoundIndex =
       typeof body.userRoundIndex === 'number' ? body.userRoundIndex : undefined;
@@ -859,6 +860,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return blocked;
     }
     const key = c.req.param('key');
+    if (service.voiceRealtime?.hasConversation(key)) return c.json({ error: 'End the voice call before resetting the session' }, 409);
     const result = await service.sessions.reset(key);
     if (result.ok === false) {
       const status = result.error === 'Session not found' ? 404 : 400;
@@ -877,6 +879,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // DELETE /api/sessions/:key - Delete session (removes key from index)
   authenticated.delete('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
+    if (service.voiceRealtime?.hasConversation(key)) return c.json({ error: 'End the voice call before deleting the session' }, 409);
     if (environments.get(key) && service.getActiveWebchatRunId(key)) {
       return c.json({ ok: false, error: 'Stop the active session run before deleting its environment' }, 409);
     }

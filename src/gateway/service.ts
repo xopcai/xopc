@@ -168,9 +168,17 @@ export class GatewayService {
   readonly endpointTools = new EndpointToolRuntime();
   readonly realtime = new RealtimeRuntime(this.endpointTools);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
+    getSessionIdentity: async (sessionKey) => (await this.sessionIndex.getSessionMetadata(sessionKey))?.sessionId,
+    recordOmniTranscript: (sessionKey, callId, entry, expectedSessionId) => this.sessionIndex.appendTranscriptCustomMessageEntry(sessionKey, {
+      expectedSessionId,
+      customType: 'voice_omni_transcript',
+      content: entry.text,
+      display: true,
+      details: { callId, itemId: entry.itemId, role: entry.role, interrupted: entry.interrupted, engine: 'omni' },
+    }),
     getConfig: () => this.config,
     sessionExists: async (sessionKey) => Boolean(await this.sessionIndex.getSessionMetadata(sessionKey)),
-    sessionBusy: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
+    sessionBusy: (sessionKey) => Boolean(this.agentRunner.getActiveRunId(sessionKey)) || this.agentRunner.inputs.snapshot(sessionKey).inputs.some((input) => input.status === 'queued'),
     recordInterruption: (entry) => this.sessionIndex.appendTranscriptContextEntry(entry.sessionKey, {
       text: 'Voice response was interrupted before playback completed.',
       data: {

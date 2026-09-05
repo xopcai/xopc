@@ -25,7 +25,7 @@ import {
   mergeSessionConfigPatch,
   mergeUpdateConfigPatch,
 } from '../../../../config/web-patch.js';
-import { mergeSttConfigPatch, mergeTtsConfigPatch } from '../../lib/safe-voice-config.js';
+import { mergeSttConfigPatch, mergeTtsConfigPatch, mergeRealtimeVoiceConfigPatch } from '../../lib/safe-voice-config.js';
 import { assertGatewayRuntimeConfig } from '../../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../../auth.js';
 import {
@@ -228,7 +228,7 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     );
   }
   if (body.voice !== undefined) {
-    const parsed = VoiceConfigSchema.safeParse(body.voice);
+    const parsed = VoiceConfigSchema.safeParse(mergeRealtimeVoiceConfigPatch(config.voice, body.voice));
     if (!parsed.success) {
       return patchError(parsed.error.issues.map((i) => i.message).join('; '));
     }

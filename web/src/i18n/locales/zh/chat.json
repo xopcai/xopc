@@ -840,6 +840,8 @@
     "voiceRecordingStop": "停止录音",
     "voiceInput": "语音输入",
     "voiceConversation": "开始语音对话",
+    "voiceAssistantMode": "语音助手",
+    "voiceNaturalMode": "自然对话 · 无工具",
     "voiceRecordingStatus": "正在录音",
     "voiceInputCancel": "取消录音",
     "voiceInputConfirm": "转为文字",

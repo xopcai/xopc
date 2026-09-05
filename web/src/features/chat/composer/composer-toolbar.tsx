@@ -1,5 +1,7 @@
 import { AudioLines, Plus, Send, Square } from 'lucide-react';
 import { memo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
 import { ComposerVoiceInputButton } from '@/features/chat/composer/composer-voice-input-button';
@@ -31,7 +33,7 @@ export interface ComposerToolbarProps {
   voiceActive: boolean;
   onStartVoiceInput: () => void;
   voiceConversationEnabled: boolean;
-  onStartVoiceConversation: () => void;
+  onStartVoiceConversation: (engine: 'agent' | 'omni') => void;
 
   onSend: () => void;
   onAbort: () => void;
@@ -69,6 +71,8 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   onModelChange,
   modelDisabled,
 }: ComposerToolbarProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const voiceEngine = searchParams.get('voiceEngine') === 'omni' ? 'omni' : 'agent';
   const attachmentsFull = attachmentCount >= maxAttachments;
   const attachTitle = attachmentsFull
     ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
@@ -130,10 +134,19 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                 disabled={disabled || !voiceConversationEnabled}
                 title={m.voiceConversation}
                 aria-label={m.voiceConversation}
-                onClick={() => void onStartVoiceConversation()}
+                onClick={() => void onStartVoiceConversation(voiceEngine)}
               >
                 <AudioLines className="size-4 stroke-[1.75]" />
               </button>
+              <Select aria-label={m.voiceConversation} value={voiceEngine} disabled={disabled || !voiceConversationEnabled}
+                triggerClassName="h-8 max-w-36 text-xs" onChange={(event) => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('voiceEngine', event.target.value);
+                  setSearchParams(next, { replace: true });
+                }}>
+                <SelectOption value="agent">{m.voiceAssistantMode}</SelectOption>
+                <SelectOption value="omni">{m.voiceNaturalMode}</SelectOption>
+              </Select>
             </>
           ) : null}
           {runBusy ? (

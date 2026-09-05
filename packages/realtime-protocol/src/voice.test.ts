@@ -5,9 +5,29 @@ import {
   createVoiceSessionRequestSchema,
   parseVoiceClientMessage,
   parseVoiceServerEvent,
+  encodeVoiceAudioFrame,
+  decodeVoiceAudioFrame,
 } from './voice.js';
 
 describe('voice realtime protocol', () => {
+  it('requires an explicit conversation engine and rejects it for dictation', () => {
+    expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test' }).success).toBe(false);
+    for (const engine of ['agent', 'omni']) {
+      expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test', engine }).success).toBe(true);
+      expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'dictation', engine }).success).toBe(false);
+    }
+  });
+
+  it('round trips tagged audio and rejects old or malformed frames', () => {
+    const audio = new Uint8Array([1, 2, 3, 4]);
+    const frame = encodeVoiceAudioFrame({ responseId: 'response-1', seq: 3, audio });
+    expect(decodeVoiceAudioFrame(frame)).toEqual({ responseId: 'response-1', seq: 3, audio });
+    expect(() => decodeVoiceAudioFrame(audio)).toThrow();
+    expect(() => decodeVoiceAudioFrame(frame.subarray(0, frame.length - 1))).toThrow();
+    frame[0] = 0;
+    expect(() => decodeVoiceAudioFrame(frame)).toThrow();
+    expect(() => encodeVoiceAudioFrame({ responseId: 'x', seq: 0, audio })).toThrow();
+  });
   it('requires a session key for conversation only', () => {
     expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'dictation' }).success).toBe(true);
     expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation' }).success).toBe(false);
