@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WebSocketServer, type WebSocket } from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 
 import { createOmniVoiceEngine } from '../omniEngine.js';
 import type { VoiceEngine } from '../engine.js';
@@ -13,6 +13,7 @@ describe('Omni voice engine', () => {
     await engine?.close();
     for (const socket of server?.clients ?? []) socket.terminate();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    vi.restoreAllMocks();
   });
 
   async function setup(recordOverride?: () => Promise<void>, bargeIn = true) {
@@ -38,6 +39,95 @@ describe('Omni voice engine', () => {
     await engine.start();
     return { received, send, sendAudio, record, emit: (event: object) => upstream.send(JSON.stringify(event)) };
   }
+
+  function delayUploadCompletion() {
+    const original = WebSocket.prototype.send;
+    const callbacks: Array<(error?: Error) => void> = [];
+    vi.spyOn(WebSocket.prototype, 'send').mockImplementation(function (this: WebSocket, data, options, callback) {
+      if (typeof options === 'function' && JSON.parse(String(data)).type === 'input_audio_buffer.append') {
+        callbacks.push(options);
+        original.call(this, data, undefined, () => {});
+      } else original.call(this, data, options, callback);
+    });
+    return callbacks;
+  }
+
+  it('waits for upload completion and preserves PCM order across a brief stall', async () => {
+    const test = await setup();
+    const callbacks = delayUploadCompletion();
+    engine.appendAudio(Buffer.alloc(640, 1));
+    engine.appendAudio(Buffer.alloc(640, 2));
+    engine.appendAudio(Buffer.alloc(640, 3));
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'input_audio_buffer.append')).toHaveLength(1));
+    callbacks.shift()!();
+    callbacks.shift()!();
+    callbacks.shift()!();
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'input_audio_buffer.append')).toHaveLength(3));
+    expect(test.received.filter((event) => event.type === 'input_audio_buffer.append').map((event) => Buffer.from(event.audio, 'base64')[0])).toEqual([1, 2, 3]);
+    expect(test.send.mock.calls.some(([type]) => type === 'session.error')).toBe(false);
+  });
+
+  it('discards congested input once, fences stale turns and recovers within the same call', async () => {
+    const test = await setup();
+    const callbacks = delayUploadCompletion();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'stale' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', { utteranceId: 'stale' }));
+    for (let i = 0; i < 8; i++) engine.appendAudio(Buffer.alloc(24_000, i));
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'input_audio_buffer.clear')).toHaveLength(1));
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'INPUT_DROPPED', recoverable: true }));
+    expect(test.received.filter((event) => event.type === 'input_audio_buffer.append')).toHaveLength(1);
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'stale', transcript: 'Must not send' });
+    test.emit({ type: 'response.created', response: { id: 'stale-response' } });
+    await vi.waitFor(() => expect(test.received.some((event) => event.type === 'response.cancel')).toBe(true));
+    callbacks.shift()!();
+    test.emit({ type: 'input_audio_buffer.cleared' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    engine.appendAudio(Buffer.alloc(640, 9));
+    await vi.waitFor(() => expect(test.received.filter((event) => event.type === 'input_audio_buffer.append')).toHaveLength(2));
+    callbacks.shift()!();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'fresh' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'fresh', transcript: 'Keep this' });
+    await vi.waitFor(() => expect(test.record).toHaveBeenCalledOnce());
+    expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ itemId: 'fresh' }));
+    expect(test.send.mock.calls.filter(([type, payload]) => type === 'session.error' && !payload.recoverable)).toEqual([]);
+  });
+
+  it('discards queued audio on mute and does not replay it after unmute', async () => {
+    const test = await setup();
+    const callbacks = delayUploadCompletion();
+    engine.appendAudio(Buffer.alloc(640, 1));
+    engine.appendAudio(Buffer.alloc(640, 2));
+    engine.setInputMuted(true);
+    engine.setInputMuted(false);
+    engine.appendAudio(Buffer.alloc(640, 3));
+    callbacks.shift()!();
+    await vi.waitFor(() => expect(test.received.some((event) => event.type === 'input_audio_buffer.clear')).toBe(true));
+    expect(callbacks).toHaveLength(0);
+    expect(test.received.filter((event) => event.type === 'input_audio_buffer.append')).toHaveLength(1);
+  });
+
+  it('reports a stalled upload with a specific error and ignores completion after close', async () => {
+    const test = await setup();
+    const callbacks = delayUploadCompletion();
+    vi.useFakeTimers();
+    engine.appendAudio(Buffer.alloc(640));
+    engine.appendAudio(Buffer.alloc(640));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'OMNI_UPLOAD_TIMEOUT', recoverable: false }));
+    callbacks.shift()!();
+    expect(callbacks).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('handles asynchronous upload errors without leaving pending audio or timers', async () => {
+    const test = await setup();
+    const callbacks = delayUploadCompletion();
+    engine.appendAudio(Buffer.alloc(640));
+    engine.appendAudio(Buffer.alloc(640));
+    callbacks.shift()!(new Error('Connection reset'));
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'OMNI_CONNECTION_FAILED', recoverable: false }));
+    expect(callbacks).toHaveLength(0);
+  });
 
   it('configures native audio and sends PCM without invoking STT or Agent', async () => {
     const test = await setup();

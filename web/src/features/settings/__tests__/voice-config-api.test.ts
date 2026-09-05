@@ -28,6 +28,8 @@ describe('voice-config-api', () => {
     expect(state.tts.timeoutMs).toBe(60_000);
     expect(state.voice.input.refinement.mode).toBe('off');
     expect(state.voice.languageMode).toBe('auto');
+    expect(state.stt.providers).not.toHaveProperty('groq');
+    expect(state.tts.providers).not.toHaveProperty('tts-local-cli');
   });
 
   it('preserves independent Agent output and Omni configuration when saving voice settings', async () => {
