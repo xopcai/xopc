@@ -17,7 +17,7 @@ import {
   type VoiceProviderRoute,
   type VoiceServerEvent,
 } from '@xopcai/realtime-protocol/voice';
-import { WebSocket as WebSocketState, type RawData, type WebSocket } from 'ws';
+import type { RawData, WebSocket } from 'ws';
 
 import type { Config } from '../../config/schema.js';
 import { getMediaUnderstandingProvider } from '../../media-understanding/registry.js';
@@ -39,7 +39,7 @@ import { ALIBABA_REALTIME_TTS_MODEL } from '../tts/providers/alibaba-speech.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 
-const { WebSocketServer } = createRequire(import.meta.url)('ws') as typeof import('ws');
+const { WebSocket: WebSocketState, WebSocketServer } = createRequire(import.meta.url)('ws') as typeof import('ws');
 const log = createLogger('Voice:Realtime');
 const TICKET_TTL_MS = 60_000;
 const MAX_OUTSTANDING_TICKETS = 200;
