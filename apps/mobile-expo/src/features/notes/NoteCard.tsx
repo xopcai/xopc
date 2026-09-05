@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
@@ -39,7 +39,7 @@ export type NoteCardProps = {
   isLast?: boolean;
 };
 
-export function NoteCard({
+export const NoteCard = memo(function NoteCard({
   note,
   onPress,
   onLongPress,
@@ -160,7 +160,7 @@ export function NoteCard({
   }
 
   return cardContent;
-}
+});
 
 const styles = StyleSheet.create({
   card: {

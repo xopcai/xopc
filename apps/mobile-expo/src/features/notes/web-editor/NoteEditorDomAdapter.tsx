@@ -228,6 +228,8 @@ export default function NoteEditorDomAdapter({
   const pendingEditPositionRef = useRef<number | 'end' | null>(null);
   const initialBottomInsetRef = useRef(bottomInset);
   const lastRuntimeStateRef = useRef<EditorRuntimeState | null>(null);
+  const runtimeStateFrameRef = useRef<number | null>(null);
+  const pendingRuntimeEditorRef = useRef<NonNullable<ReturnType<typeof useEditor>> | null>(null);
 
   attachmentSrcMapRef.current = attachmentSrcMap ?? {};
   onChangeTitleRef.current = onChangeTitle;
@@ -248,6 +250,17 @@ export default function NoteEditorDomAdapter({
     lastRuntimeStateRef.current = nextState;
     void onStateChangeRef.current?.(nextState);
   }, []);
+
+  const scheduleRuntimeState = useCallback((nextEditor: NonNullable<ReturnType<typeof useEditor>>) => {
+    pendingRuntimeEditorRef.current = nextEditor;
+    if (runtimeStateFrameRef.current !== null) return;
+    runtimeStateFrameRef.current = window.requestAnimationFrame(() => {
+      runtimeStateFrameRef.current = null;
+      const pendingEditor = pendingRuntimeEditorRef.current;
+      pendingRuntimeEditorRef.current = null;
+      if (pendingEditor && !pendingEditor.isDestroyed) emitRuntimeState(pendingEditor);
+    });
+  }, [emitRuntimeState]);
 
   const emitMarkdown = useCallback(async (nextEditor: NonNullable<ReturnType<typeof useEditor>>) => {
     const markdown = markdownFromEditor(nextEditor);
@@ -330,11 +343,11 @@ export default function NoteEditorDomAdapter({
       },
     },
     onUpdate: ({ editor: nextEditor }) => {
-      emitRuntimeState(nextEditor);
+      scheduleRuntimeState(nextEditor);
       scheduleMarkdownEmit(nextEditor);
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
-      emitRuntimeState(nextEditor);
+      scheduleRuntimeState(nextEditor);
       if (onSelectionChangeRef.current) {
         void onSelectionChangeRef.current(selectionContextFromEditor(nextEditor));
       }
@@ -355,7 +368,7 @@ export default function NoteEditorDomAdapter({
     onCreate: ({ editor: nextEditor }) => {
       emitRuntimeState(nextEditor);
     },
-  }, [XopcImage, emitMarkdown, emitRuntimeState, labels.placeholder, scheduleMarkdownEmit]);
+  }, [XopcImage, emitMarkdown, emitRuntimeState, labels.placeholder, scheduleMarkdownEmit, scheduleRuntimeState]);
 
   useEffect(() => {
     if (!editor) return;
@@ -456,6 +469,10 @@ export default function NoteEditorDomAdapter({
   }, [initialTitle, noteId]);
 
   useEffect(() => () => {
+    if (runtimeStateFrameRef.current !== null) {
+      window.cancelAnimationFrame(runtimeStateFrameRef.current);
+      runtimeStateFrameRef.current = null;
+    }
     if (changeTimerRef.current) {
       clearTimeout(changeTimerRef.current);
       changeTimerRef.current = null;

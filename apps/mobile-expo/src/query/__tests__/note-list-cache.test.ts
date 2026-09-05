@@ -131,4 +131,27 @@ describe('upsertNoteInListCaches', () => {
     const home = queryClient.getQueryData<{ items: NoteIndexEntry[] }>(queryKeys.homeRecentNotes);
     expect(home?.items.map((item) => item.id)).toEqual(['note-new']);
   });
+
+  it('removes an updated note from caches whose filters no longer match', () => {
+    const queryClient = new QueryClient();
+    const inboxListKey = [...queryKeys.notesAll, 'inbox', 'all'] as const;
+    queryClient.setQueryData(inboxListKey, {
+      pages: [{
+        items: [makeEntry({ id: 'note-1', status: 'inbox' })],
+        total: 1,
+        limit: 20,
+        offset: 0,
+        hasMore: false,
+      }],
+      pageParams: [0],
+    });
+
+    upsertNoteInListCaches(queryClient, noteToIndexEntry(makeNote({ status: 'archived' })));
+
+    const inboxList = queryClient.getQueryData<{ pages: Array<{ items: NoteIndexEntry[]; total: number }> }>(
+      inboxListKey,
+    );
+    expect(inboxList?.pages[0]?.items).toEqual([]);
+    expect(inboxList?.pages[0]?.total).toBe(0);
+  });
 });

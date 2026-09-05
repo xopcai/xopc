@@ -18,7 +18,10 @@ export type PerformanceEventName =
   | 'app_shell_rendered'
   | 'home_content_ready';
 
-export type InteractionPerformanceEventName = 'read_aloud_first_audio';
+export type InteractionPerformanceEventName =
+  | 'read_aloud_first_audio'
+  | 'note_content_ready'
+  | 'note_editor_ready';
 export type TimedEventName = PerformanceEventName | InteractionPerformanceEventName;
 
 export const mobileAppJsStartedAt = Date.now();
