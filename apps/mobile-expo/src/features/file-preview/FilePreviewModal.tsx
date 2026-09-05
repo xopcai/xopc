@@ -5,12 +5,11 @@ import {
   Image,
   Linking,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import { ActivityIndicator, IconButton, Text } from 'react-native-paper';
+import { ActivityIndicator, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ShareAutoRequest } from '../../api/share';
@@ -18,12 +17,13 @@ import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { fetchFileContent } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
-import { spacing, useTheme } from '../../theme';
+import { useTheme } from '../../theme';
+import { FilePreviewHeader } from './FilePreviewHeader';
 import { ShareSheet } from '../share/ShareSheet';
-import { HtmlPreviewPane } from './HtmlPreviewPane';
-import { isHtmlFile } from './html-preview-source';
-import { MarkdownView } from './MarkdownView';
-import { mimeTypeFromFileName } from './tool-result-file-paths';
+import { HtmlPreviewPane } from '../chat/HtmlPreviewPane';
+import { isHtmlFile } from '../chat/html-preview-source';
+import { MarkdownView } from '../chat/MarkdownView';
+import { mimeTypeFromFileName } from '../chat/tool-result-file-paths';
 
 export type PreviewableFile = {
   fileId?: string;
@@ -285,37 +285,28 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
   const surface = colors.surface.base;
   const textColor = colors.text.primary;
   const muted = colors.text.secondary;
-  const border = colors.border.default;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { backgroundColor: surface, paddingTop: insets.top }]}> 
-        <View style={[styles.header, { borderBottomColor: border }]}> 
-          <Text variant="titleMedium" numberOfLines={1} style={[styles.title, { color: textColor }]}> 
-            {title}
-          </Text>
-          {canDownload ? (
-            <IconButton
-              icon="download-outline"
-              size={20}
-              iconColor={textColor}
-              onPress={downloadFile}
-              accessibilityLabel={m.chat.filePreviewDownload}
-              disabled={downloadPending}
-            />
-          ) : null}
-          {file?.fileId ? (
-            <IconButton
-              icon="share-variant"
-              size={spacing.content}
-              iconColor={textColor}
-              onPress={() => setShareTarget({ fileId: file.fileId!, audience: 'friend' })}
-              accessibilityLabel={cm.shareFile}
-              style={styles.shareButton}
-            />
-          ) : null}
-          <IconButton icon="close" size={22} iconColor={textColor} onPress={onClose} accessibilityLabel={cm.filePreviewClose} />
-        </View>
+        <FilePreviewHeader
+          title={title}
+          onClose={onClose}
+          closeLabel={cm.filePreviewClose}
+          shareLabel={cm.shareFilePreview}
+          moreActionsLabel={cm.filePreviewMoreActions}
+          share={file?.fileId ? {
+            onPress: () => setShareTarget({ fileId: file.fileId!, audience: 'friend' }),
+          } : undefined}
+          moreActions={[{
+            key: 'download',
+            label: cm.filePreviewDownload,
+            icon: 'download-outline',
+            onPress: downloadFile,
+            disabled: !canDownload,
+            loading: downloadPending,
+          }]}
+        />
 
         {downloadError ? (
           <View
@@ -376,9 +367,6 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
           ) : (
             <View style={styles.center}>
               <Text style={[styles.notice, { color: muted }]}>{cm.filePreviewUnsupported}</Text>
-              <Pressable style={[styles.closeButton, { borderColor: border }]} onPress={onClose} accessibilityRole="button">
-                <Text style={{ color: textColor }}>{m.common.close}</Text>
-              </Pressable>
             </View>
           )}
         </View>
@@ -395,21 +383,6 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  header: {
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingLeft: 16,
-  },
-  title: {
-    flex: 1,
-    fontWeight: '600',
-  },
-  shareButton: {
-    minWidth: spacing.xxxl,
-    minHeight: spacing.xxxl,
   },
   body: {
     flex: 1,
@@ -457,11 +430,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
-  },
-  closeButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
   },
 });

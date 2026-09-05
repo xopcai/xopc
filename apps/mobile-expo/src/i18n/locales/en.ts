@@ -331,6 +331,7 @@ export const en = {
     openSessionFiles: 'Open session files',
     filePreviewClose: 'Close preview',
     filePreviewDownload: 'Download file',
+    filePreviewMoreActions: 'More file actions',
     filePreviewDownloadFailed: 'Could not open download: {{message}}',
     filePreviewShareUnavailable: 'System sharing is unavailable on this device',
     filePreviewLoading: 'Loading preview…',
