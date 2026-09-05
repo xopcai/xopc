@@ -7,362 +7,252 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessages } from '@/i18n/messages';
 
 const mocks = vi.hoisted(() => ({
-  ready: false,
-  fetchVoiceReadiness: vi.fn(),
-  showComposerNotification: vi.fn(),
-  startRecorder: vi.fn(),
-  transcribeVoiceBlob: vi.fn(),
+  connect: vi.fn(),
+  startCapture: vi.fn(),
+  notify: vi.fn(),
+  playerStart: vi.fn(async () => undefined),
+  playerEnqueue: vi.fn(),
+  playerClear: vi.fn(),
+  playerDuck: vi.fn(),
+  playerSetMuted: vi.fn(),
+  playerClose: vi.fn(async () => undefined),
+  pendingAudio: false,
 }));
 
-vi.mock('@/features/chat/composer/voice-transcribe-api', () => ({
-  fetchVoiceReadiness: mocks.fetchVoiceReadiness,
-  transcribeVoiceBlob: mocks.transcribeVoiceBlob,
+vi.mock('@/features/voice/realtime/voice-session-client', () => ({
+  VoiceSessionClient: { connect: mocks.connect },
 }));
-
 vi.mock('@/features/chat/composer/composer-notifications', () => ({
-  showComposerNotification: mocks.showComposerNotification,
+  showComposerNotification: mocks.notify,
 }));
-
+vi.mock('@/features/voice/realtime/pcm-player', () => ({
+  PcmPlayer: class {
+    get hasPendingAudio() { return mocks.pendingAudio; }
+    start = mocks.playerStart;
+    enqueue = mocks.playerEnqueue;
+    clear = mocks.playerClear;
+    duck = mocks.playerDuck;
+    setMuted = mocks.playerSetMuted;
+    close = mocks.playerClose;
+  },
+}));
 vi.mock('@/features/chat/composer/pcm-wav-recorder', () => ({
-  PcmWavRecorder: { start: mocks.startRecorder },
+  PcmFrameCapture: { start: mocks.startCapture },
+  PcmStreamEncoder: class {
+    push() { return new ArrayBuffer(4); }
+    flush() { return new ArrayBuffer(2); }
+  },
 }));
 
-import {
-  useComposerVoiceInput,
-  type UseComposerVoiceInputReturn,
-} from '@/features/chat/composer/use-composer-voice-input';
+import { useComposerVoiceInput, type UseComposerVoiceInputReturn } from '../use-composer-voice-input';
 
 const chat = {
   voiceMicDenied: 'Microphone unavailable',
   voiceMicUnavailable: 'Microphone device unavailable',
   voiceRecorderFailed: 'Recorder failed',
-  voicePreparationFailed: 'Local model is not ready',
+  voiceSttNotConfigured: 'STT unavailable',
+  voiceTranscribeFailed: 'Transcription failed',
   voiceTranscribeEmpty: 'No speech detected',
 } as ChatMessages;
-
-async function flushEffectsUntil(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 20 && !predicate(); attempt += 1) {
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 0));
-    });
-  }
-}
 
 describe('useComposerVoiceInput', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   let voice: UseComposerVoiceInputReturn;
+  let onEvent: (event: any) => void;
+  let onClose: (reason: string) => void;
+  let onAudio: (audio: ArrayBuffer) => void;
+  const sendAudio = vi.fn();
+  const commit = vi.fn();
+  const stop = vi.fn();
+  const cancelResponse = vi.fn();
+  const acknowledgeAudio = vi.fn();
+  let onAudioLevel: (level: { level: number; speaking: boolean }) => void;
+  let bargeIn = true;
+  const cancelCapture = vi.fn();
+  const stopCapture = vi.fn(async () => undefined);
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    mocks.ready = false;
-    mocks.fetchVoiceReadiness.mockReset().mockImplementation(async () => (
-      mocks.ready
-        ? { state: 'ready', provider: 'xopc-local' }
-        : { state: 'preparing', provider: 'xopc-local', modelId: 'sensevoice-small' }
-    ));
-    mocks.showComposerNotification.mockReset();
-    mocks.startRecorder.mockReset();
-    mocks.transcribeVoiceBlob.mockReset();
-    Object.defineProperty(navigator, 'permissions', {
+    vi.clearAllMocks();
+    mocks.pendingAudio = false;
+    bargeIn = true;
+    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
+    Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined });
+    Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
-      value: undefined,
+      value: { getUserMedia: vi.fn(async () => stream) },
+    });
+    mocks.connect.mockImplementation(async (options) => {
+      onEvent = options.onEvent;
+      onClose = options.onClose;
+      onAudio = options.onAudio;
+      return {
+        session: {
+          inputMode: 'server_vad',
+          get bargeIn() { return bargeIn; },
+          inputFormat: { sampleRate: 16_000 },
+          limits: { maxSessionMs: 600_000 },
+        },
+        sendAudio,
+        commit,
+        stop,
+        cancelResponse,
+        acknowledgeAudio,
+      };
+    });
+    mocks.startCapture.mockImplementation(async (_stream, options) => {
+      onAudioLevel = options.onAudioLevel;
+      options.onSamples(new Float32Array([0, 0.25, -0.25]));
+      return { sampleRate: 48_000, cancel: cancelCapture, stop: stopCapture };
     });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
   });
 
-  it('skips the Electron permission request when microphone access is already granted', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
-    const requestMicrophone = vi.fn();
-    window.electronAPI = {
-      platform: 'darwin',
-      system: { requestMicrophone },
-    } as unknown as NonNullable<Window['electronAPI']>;
-    Object.defineProperty(navigator, 'permissions', {
-      configurable: true,
-      value: { query: vi.fn(async () => ({ state: 'granted' as const })) },
-    });
-    const stopTrack = vi.fn();
-    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
-    const getUserMedia = vi.fn(async () => stream);
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia },
-    });
-    const cancel = vi.fn();
-    mocks.startRecorder.mockResolvedValue({ cancel });
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-
-    expect(requestMicrophone).not.toHaveBeenCalled();
-    expect(getUserMedia).toHaveBeenCalledTimes(1);
-    expect(mocks.startRecorder).toHaveBeenCalledWith(stream, expect.any(Object));
-    expect(voice.phase).toBe('recording');
-  });
-
-  it('places a successful gateway transcript in the draft and returns to the editor', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
-    mocks.transcribeVoiceBlob.mockResolvedValue({
-      text: 'recognized text',
-      refinementAvailable: false,
-    });
-    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: vi.fn(async () => stream) },
-    });
-    mocks.startRecorder.mockImplementation(async (_stream, options) => {
-      options.onAudioLevel({ level: 0.05, speaking: true });
-      options.onAudioLevel({ level: 0.05, speaking: true });
-      return {
-        cancel: vi.fn(),
-        stop: vi.fn(async () => new Blob([new Uint8Array(64)], { type: 'audio/wav' })),
-      };
-    });
-    const onTranscript = vi.fn();
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-    act(() => voice.confirmVoiceInput());
-    await flushEffectsUntil(() => voice.phase === 'idle');
-
-    expect(mocks.transcribeVoiceBlob).toHaveBeenCalledWith(expect.any(Blob), 'audio/wav');
-    expect(onTranscript).toHaveBeenCalledWith('recognized text');
-    expect(voice.phase).toBe('idle');
-    expect(voice.hasRetainedRecording).toBe(false);
-  });
-
-  it('does not upload a silent recording for transcription', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
-    const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: vi.fn(async () => stream) },
-    });
-    mocks.startRecorder.mockResolvedValue({
-      cancel: vi.fn(),
-      stop: vi.fn(async () => new Blob([new Uint8Array(64)], { type: 'audio/wav' })),
-    });
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-    act(() => voice.confirmVoiceInput());
-    await flushEffectsUntil(() => voice.phase === 'idle');
-
-    expect(mocks.transcribeVoiceBlob).not.toHaveBeenCalled();
-    expect(mocks.showComposerNotification).toHaveBeenCalledWith('warning', 'No speech detected');
-    expect(voice.phase).toBe('idle');
-  });
-
-  it('reports recorder initialization failures separately from permission denial', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'xopc-local' });
-    const stopTrack = vi.fn();
-    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: vi.fn(async () => stream) },
-    });
-    mocks.startRecorder.mockRejectedValue(new DOMException(
-      "Unable to load a worklet's module.",
-      'AbortError',
-    ));
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-
-    expect(stopTrack).toHaveBeenCalledOnce();
-    expect(mocks.showComposerNotification).toHaveBeenCalledWith('error', 'Recorder failed');
-    expect(mocks.showComposerNotification).not.toHaveBeenCalledWith('error', 'Microphone unavailable');
-    expect(consoleError).toHaveBeenCalledWith(
-      '[chat:voice] capture start failed',
-      expect.objectContaining({ stage: 'recorder', kind: 'recorder', errorName: 'AbortError' }),
-    );
-    consoleError.mockRestore();
-  });
-
-  it('reports getUserMedia permission errors as permission denial', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: {
-        getUserMedia: vi.fn().mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError')),
-      },
-    });
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-
-    expect(mocks.showComposerNotification).toHaveBeenCalledWith('error', 'Microphone unavailable');
-    expect(consoleError).toHaveBeenCalledWith(
-      '[chat:voice] capture start failed',
-      expect.objectContaining({ stage: 'media', kind: 'permission', errorName: 'NotAllowedError' }),
-    );
-    consoleError.mockRestore();
-  });
-
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
     delete window.electronAPI;
-    vi.restoreAllMocks();
   });
 
-  it('requests Electron microphone permission once after an in-progress model download and returns to idle when denied', async () => {
-    let readinessCalls = 0;
-    mocks.fetchVoiceReadiness.mockImplementation(async () => {
-      readinessCalls += 1;
-      return readinessCalls >= 3
-        ? { state: 'ready', provider: 'xopc-local' }
-        : { state: 'preparing', provider: 'xopc-local', modelId: 'sensevoice-small' };
-    });
-    const requestMicrophone = vi.fn(async () => ({
-      status: 'denied' as const,
-      outcome: 'denied' as const,
-    }));
-    window.electronAPI = {
-      system: { requestMicrophone },
-    } as unknown as NonNullable<Window['electronAPI']>;
-    const getUserMedia = vi.fn();
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia },
-    });
-
+  function render(onTranscript = vi.fn(), sessionKey?: string) {
     function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
+      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript, sessionKey });
       return null;
     }
+    act(() => root.render(<Harness />));
+    return onTranscript;
+  }
 
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-    await flushEffectsUntil(() => requestMicrophone.mock.calls.length > 0 && voice.phase === 'idle');
+  it('streams microphone frames and applies final transcripts', async () => {
+    const onTranscript = render();
+    await act(async () => voice.startVoiceInput());
+    expect(voice.phase).toBe('recording');
+    expect(sendAudio).toHaveBeenCalled();
 
-    expect(requestMicrophone).toHaveBeenCalledTimes(1);
-    expect(getUserMedia).not.toHaveBeenCalled();
-    expect(voice.phase).toBe('idle');
-    expect(mocks.showComposerNotification).toHaveBeenCalledTimes(1);
-  });
+    act(() => onEvent({ type: 'input.transcript.delta', payload: { text: 'live' } }));
+    expect(voice.partialTranscript).toBe('live');
+    act(() => onEvent({ type: 'input.transcript.final', payload: { text: 'recognized text' } }));
+    expect(onTranscript).toHaveBeenCalledWith('recognized text');
 
-  it('does not call getUserMedia while macOS reauthorization settings are open', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({ state: 'ready', provider: 'cloud' });
-    const requestMicrophone = vi.fn(async () => ({
-      status: 'unknown' as const,
-      outcome: 'opened-settings' as const,
-    }));
-    window.electronAPI = {
-      platform: 'darwin',
-      system: { requestMicrophone },
-    } as unknown as NonNullable<Window['electronAPI']>;
-    const getUserMedia = vi.fn();
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia },
-    });
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-
-    expect(requestMicrophone).toHaveBeenCalledTimes(1);
-    expect(getUserMedia).not.toHaveBeenCalled();
+    act(() => voice.confirmVoiceInput());
+    await act(async () => Promise.resolve());
+    expect(commit).toHaveBeenCalledOnce();
+    act(() => onClose('input_committed'));
     expect(voice.phase).toBe('idle');
   });
 
-  it('does not start a missing local model download when the microphone button is pressed', async () => {
-    mocks.fetchVoiceReadiness.mockResolvedValue({
-      state: 'needs_download',
-      provider: 'xopc-local',
-      modelId: 'sensevoice-small',
-    });
-
-    function Harness() {
-      voice = useComposerVoiceInput({ disabled: false, chat, onTranscript: vi.fn() });
-      return null;
-    }
-
-    await act(async () => {
-      root.render(<Harness />);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await voice.startVoiceInput();
-    });
-
+  it('stops without uploading a buffered recording', async () => {
+    render();
+    await act(async () => voice.startVoiceInput());
+    act(() => voice.cancelVoiceInput());
+    expect(cancelCapture).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledWith('user_finished');
     expect(voice.phase).toBe('idle');
-    expect(mocks.showComposerNotification).toHaveBeenCalledWith(
+  });
+
+  it('reports session preflight failure before starting the recorder', async () => {
+    mocks.connect.mockRejectedValueOnce(new Error('No streaming STT'));
+    render();
+    await act(async () => voice.startVoiceInput());
+    expect(mocks.startCapture).not.toHaveBeenCalled();
+    expect(voice.phase).toBe('error');
+    expect(mocks.notify).toHaveBeenCalledWith(
       'error',
-      'Local model is not ready',
+      'STT unavailable',
       undefined,
       { href: '/settings/capabilities/voice' },
     );
+  });
+
+  it('streams assistant text and audio in conversation mode', async () => {
+    render(vi.fn(), 'agent:main:webchat:default:direct:voice');
+    await act(async () => voice.startVoiceConversation());
+
+    expect(mocks.connect).toHaveBeenCalledWith(expect.objectContaining({
+      purpose: 'conversation',
+      sessionKey: 'agent:main:webchat:default:direct:voice',
+    }));
+    expect(mocks.playerStart).toHaveBeenCalledOnce();
+    act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
+    act(() => onEvent({ type: 'response.text.delta', payload: { delta: '你好' } }));
+    act(() => onAudio(new ArrayBuffer(4)));
+    expect(voice.responseText).toBe('你好');
+    expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
+    mocks.playerClear.mockClear();
+    act(() => onEvent({ type: 'input.speech_started', payload: { utteranceId: 'u1' } }));
+    expect(mocks.playerClear).not.toHaveBeenCalled();
+    act(() => onEvent({ type: 'response.cancelled', payload: { responseId: 'r1', reason: 'barge_in' } }));
+    expect(mocks.playerClear).toHaveBeenCalledOnce();
+  });
+
+  async function startResponse() {
+    render(vi.fn(), 'agent:main:webchat:default:direct:voice');
+    await act(async () => voice.startVoiceConversation());
+    act(() => {
+      onEvent({ type: 'response.created', payload: { responseId: 'r1' } });
+      onEvent({ type: 'response.audio.started', payload: { responseId: 'r1' } });
+      onAudio(new ArrayBuffer(24_000));
+    });
+    mocks.pendingAudio = true;
+    mocks.playerClear.mockClear();
+    return mocks.playerEnqueue.mock.calls.at(-1)![1] as () => void;
+  }
+
+  it('keeps playback interruptible after server completion until audio drains', async () => {
+    const played = await startResponse();
+    act(() => {
+      onEvent({ type: 'response.audio.done', payload: { responseId: 'r1' } });
+      onEvent({ type: 'response.done', payload: { responseId: 'r1' } });
+    });
+    expect(voice.responsePhase).toBe('speaking');
+    expect(acknowledgeAudio).not.toHaveBeenCalled();
+    mocks.pendingAudio = false;
+    act(played);
+    expect(acknowledgeAudio).toHaveBeenCalledWith('r1', 24_000);
+    expect(voice.responsePhase).toBe('idle');
+  });
+
+  it('stops tail playback immediately and ignores late audio after manual interruption', async () => {
+    const played = await startResponse();
+    act(() => onEvent({ type: 'response.done', payload: { responseId: 'r1' } }));
+    act(() => voice.interruptResponse());
+    expect(mocks.playerClear).toHaveBeenCalledOnce();
+    expect(cancelResponse).toHaveBeenCalledWith('r1');
+    expect(voice.responsePhase).toBe('idle');
+    act(() => { played(); onAudio(new ArrayBuffer(24_000)); });
+    expect(acknowledgeAudio).not.toHaveBeenCalled();
+    expect(mocks.playerEnqueue).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])('honors bargeIn=%s for ducking and waits for authoritative cancellation', async (enabled) => {
+    await startResponse();
+    bargeIn = enabled;
+    act(() => {
+      onAudioLevel({ level: 0.5, speaking: true });
+      onEvent({ type: 'input.speech_started', payload: { utteranceId: 'u1' } });
+    });
+    expect(mocks.playerClear).not.toHaveBeenCalled();
+    expect(mocks.playerDuck).toHaveBeenCalledTimes(enabled ? 1 : 0);
+    act(() => voice.interruptResponse());
+    expect(cancelResponse).toHaveBeenCalledWith('r1');
+  });
+
+  it('finishes a response whose audio drained before the completion event', async () => {
+    const played = await startResponse();
+    mocks.pendingAudio = false;
+    act(played);
+    act(() => onEvent({ type: 'response.done', payload: { responseId: 'r1' } }));
+    expect(voice.responsePhase).toBe('idle');
+  });
+
+  it('stops capture when the realtime connection closes unexpectedly', async () => {
+    render();
+    await act(async () => voice.startVoiceInput());
+    act(() => onClose('provider_error'));
+    expect(cancelCapture).toHaveBeenCalled();
+    expect(voice.phase).toBe('idle');
   });
 });

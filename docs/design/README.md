@@ -11,3 +11,9 @@ Before adding a document, use this rule:
 - If it records a durable architecture decision, put it in `docs/adr/`.
 
 See [Documentation information architecture](./documentation-information-architecture.md) for the full writing and placement rules.
+
+Active proposed designs:
+
+- [Realtime voice product requirements](./realtime-voice-prd.md)
+- [Realtime voice technical design](./realtime-voice-technical-design.md)
+- [Realtime voice WebSocket protocol](./realtime-voice-websocket-protocol.md)

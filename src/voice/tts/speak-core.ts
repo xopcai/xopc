@@ -48,8 +48,13 @@ export interface SpeakOptions {
   parseDirectives?: boolean;
   modelOverrides?: TTSModelOverrideConfig;
   appConfig?: Config;
-  /** Optional caller-supplied AbortSignal (currently passed through to providers via timeoutMs guard only). */
+  /** Optional caller-supplied cancellation signal. */
   signal?: AbortSignal;
+}
+
+export interface SpeakStreamOptions extends SpeakOptions {
+  /** Disable provider/model fallback after a realtime route has been selected. */
+  allowFallback?: boolean;
 }
 
 /** Pulls the override bucket for a given provider id from the directive overrides. */
@@ -182,6 +187,7 @@ function buildSynthesisRequest(
   directiveOverrides: TtsDirectiveOverrides | undefined,
   appConfig: Config | undefined,
   target: 'audio-file' | 'voice-note',
+  signal?: AbortSignal,
 ): SpeechSynthesisRequest {
   const directiveBucket = pickProviderOverrides(directiveOverrides, resolved.providerId);
   const providerOverrides = mergeOverrides(ttsOptions, directiveBucket);
@@ -192,6 +198,9 @@ function buildSynthesisRequest(
     providerConfig: resolved.providerConfig,
     target,
     timeoutMs: callTimeoutMs,
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(callTimeoutMs)])
+      : AbortSignal.timeout(callTimeoutMs),
     ...(providerOverrides ? { providerOverrides } : {}),
   };
 }
@@ -273,6 +282,7 @@ export async function speak(
         prepared.directiveOverrides,
         options?.appConfig,
         'audio-file',
+        options?.signal,
       );
       const result = await resolved.plugin.synthesize(request);
       const durationSeconds = (Date.now() - startTime) / 1000;
@@ -358,6 +368,7 @@ export async function speakWithProvider(
     prepared.directiveOverrides,
     options?.appConfig,
     'audio-file',
+    options?.signal,
   );
   const result = await resolved.plugin.synthesize(request);
   const durationSeconds = (Date.now() - startTime) / 1000;
@@ -404,7 +415,7 @@ export interface SpeakStreamResult {
 export async function speakStream(
   text: string,
   config: TTSConfig,
-  options?: SpeakOptions,
+  options?: SpeakStreamOptions,
 ): Promise<SpeakStreamResult> {
   if (!config.enabled) {
     throw new Error('TTS is not enabled');
@@ -414,7 +425,14 @@ export async function speakStream(
   }
 
   const prepared = await prepareTextForSynthesis(text, config, options);
-  const chain = resolveSpeechProviderChain(config);
+  const chain = options?.allowFallback === false
+    ? [resolveSpeechProvider(prepared.selectedProvider, config)].filter(
+        (provider): provider is ResolvedSpeechProvider => provider !== null,
+      )
+    : resolveSpeechProviderChain(config);
+  if (chain.length === 0) {
+    throw new Error(`TTS provider "${prepared.selectedProvider}" is not available`);
+  }
 
   let lastError: Error | undefined;
   for (const resolved of chain) {
@@ -426,6 +444,7 @@ export async function speakStream(
         prepared.directiveOverrides,
         options?.appConfig,
         'voice-note',
+        options?.signal,
       );
 
       let streamResult: SpeechSynthesisStreamResult;
