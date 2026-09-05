@@ -195,6 +195,21 @@ describe('pre-turn auto-compaction', () => {
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalled();
   });
 
+  it('applies voice presentation to this turn without mutating the Agent prompt', async () => {
+    const agentManager = createMockAgentManager();
+    const input = {
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: createMockSessionStore({ needsCompaction: false }) as any,
+      agentManager: agentManager as any,
+      modelManager: createMockModelManager() as any,
+    };
+    await runEmbeddedTurnForSession({ ...input, presentation: 'voice' });
+    expect(mockRunXopcEmbeddedTurn.mock.calls.at(-1)?.[0].systemPrompt).toContain('live voice conversation');
+    await runEmbeddedTurnForSession(input);
+    expect(mockRunXopcEmbeddedTurn.mock.calls.at(-1)?.[0].systemPrompt).not.toContain('live voice conversation');
+  });
+
   it('does NOT trigger compaction when below threshold', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: false });
     const agentManager = createMockAgentManager();

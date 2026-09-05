@@ -13,7 +13,7 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
 import { ComposerVoiceInputButton } from '@/features/chat/composer/composer-voice-input-button';
-import type { UseComposerVoiceInputReturn } from '@/features/chat/composer/use-composer-voice-input';
+import type { UseRealtimeVoiceReturn } from '@/features/voice/realtime/use-realtime-voice';
 import type { ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
@@ -39,7 +39,7 @@ export interface HomeQuickComposerProps {
   isDragging: boolean;
   attachmentBusy: boolean;
   attachmentsFull: boolean;
-  voice: UseComposerVoiceInputReturn;
+  voice: UseRealtimeVoiceReturn;
   chat: ChatMessages;
   cancelAction?: ReactNode;
   onIntentChange: (value: string) => void;
@@ -122,16 +122,16 @@ export function HomeQuickComposer({
             audioLevel={voice.audioLevel}
             partialTranscript={voice.partialTranscript}
             finalTranscript={voice.finalTranscript}
-            responseText={voice.responseText}
-            responsePhase={voice.responsePhase}
-            muted={voice.muted}
-            mode={voice.mode}
+
+
+
+
             disabled={attachmentBusy}
             chat={chat}
             onCancel={voice.cancelVoiceInput}
             onConfirm={voice.confirmVoiceInput}
-            onInterruptResponse={voice.interruptResponse}
-            onToggleMute={voice.toggleMute}
+
+
             onRetry={voice.retryVoiceInput}
           />
         ) : null}

@@ -11,21 +11,12 @@ import { selectTriggerClass } from '@/lib/form-field-width';
 import { VoiceApiKeyField, type VoiceApiKeyFieldLabels } from './voice-api-key-field';
 import { fetchRealtimeVoiceStatus, fetchTtsVoices } from './voice-config-api';
 import { VoiceDiagnostics } from './voice-diagnostics';
+import { configureRealtimeService } from './voice-service-setup';
 import type { VoiceSettingsState, SttProviderListEntry } from './voice-settings.types';
 
-export function configureRealtimeService(form: VoiceSettingsState, provider: 'alibaba' | 'xopc-cloud'): VoiceSettingsState {
-  return {
-    ...form,
-    stt: { ...form.stt, enabled: true, provider },
-    voice: { ...form.voice, realtime: {
-      ...form.voice.realtime,
-      enabled: true,
-      tts: { provider, ...(provider === 'alibaba' ? { voice: 'Cherry' } : {}) },
-    } },
-  };
-}
 
-export function VoiceSetup({ v, form, pending, apiKeyLabels, sttProviders, onChange }: {
+export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProviders, onChange }: {
+  section: 'service' | 'listening' | 'diagnostics';
   v: VoiceSettingsMessages;
   form: VoiceSettingsState;
   pending: boolean;
@@ -57,7 +48,9 @@ export function VoiceSetup({ v, form, pending, apiKeyLabels, sttProviders, onCha
     : voices;
   const key = typeof form.stt.providers?.alibaba?.apiKey === 'string' ? form.stt.providers.alibaba.apiKey : '';
   const keyConfigured = Boolean(key) || sttProviders.some((entry) => entry.id === 'alibaba' && entry.configured);
-  const currentVoice = selection?.voice ?? status?.tts?.voice ?? '';
+  const native = realtime.defaultEngine === 'omni';
+  const currentVoice = native ? realtime.omni?.voice ?? 'Cherry' : selection?.voice ?? status?.tts?.voice ?? '';
+  const voiceOptions = native ? ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
   const canListen = Boolean(status?.enabled && status.stt);
   const canSpeak = Boolean(status?.enabled && status.tts);
   const updateRealtime = (patch: Partial<typeof realtime>) => onChange({
@@ -68,12 +61,9 @@ export function VoiceSetup({ v, form, pending, apiKeyLabels, sttProviders, onCha
 
   return (
     <section className="space-y-5 rounded-xl border border-edge bg-surface-panel p-4 sm:p-5" aria-label={s.service}>
+      {section === 'service' ? <>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
-        {isLoading ? <Skeleton className="h-5 w-64" /> : <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-fg-muted" role="status">
-          <span>{s.dictation} · {statusLabel(canListen, verified.input)}</span>
-          <span>{s.conversation} · {statusLabel(canListen && canSpeak, verified.input && verified.output)}</span>
-        </div>}
-        <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" className="size-4 accent-accent" checked={realtime.enabled} onChange={(e) => onChange({ ...form, stt: { ...form.stt, ...(e.target.checked ? { enabled: true } : {}) }, voice: { ...form.voice, realtime: { ...realtime, enabled: e.target.checked } } })} />{s.enable}</label>
+        <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" className="size-4 accent-accent" checked={realtime.enabled} onChange={(e) => { if (e.target.checked) configure(provider === 'alibaba' ? 'alibaba' : 'xopc-cloud'); else updateRealtime({ enabled: false }); }} />{s.enable}</label>
       </div>
       {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{s.statusError}</p> : null}
       <fieldset className="space-y-3">
@@ -99,18 +89,36 @@ export function VoiceSetup({ v, form, pending, apiKeyLabels, sttProviders, onCha
         <p className="mt-1 text-fg-muted">{form.tts.provider === 'edge' ? s.edgeHint : s.outputHint}</p>
         <Button className="mt-2" type="button" variant="secondary" onClick={() => configure(provider)}>{s.configureConversation}</Button>
       </div> : null}
+      <label className="block space-y-2 text-sm"><span>{v.experience.defaultEngine}</span>
+        <Select value={realtime.defaultEngine} className={selectTriggerClass} onChange={(e) => updateRealtime({ defaultEngine: e.target.value as 'agent' | 'omni' })}>
+          <SelectOption value="agent">{v.experience.agent}</SelectOption><SelectOption value="omni">{v.experience.omni}</SelectOption>
+        </Select>
+      </label>
+      <p className="text-xs text-fg-muted">{realtime.defaultEngine === 'agent' ? v.experience.agentHint : v.experience.omniHint} {v.experience.nextCall}</p>
+      </> : null}
+      {section === 'listening' ? <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label htmlFor="realtime-voice" className="text-sm font-medium text-fg">{s.voice}</label>
-        <Select id="realtime-voice" className={`${selectTriggerClass} w-full sm:w-56`} value={currentVoice} disabled={!selection && !status?.tts} onChange={(e) => {
-          if (outputProvider === 'alibaba' || outputProvider === 'xopc-cloud') updateRealtime({ tts: { provider: outputProvider, ...(e.target.value ? { voice: e.target.value } : {}) } });
+        <Select id="realtime-voice" className={`${selectTriggerClass} w-full sm:w-56`} value={currentVoice} disabled={native ? !realtime.omni : !selection && !status?.tts} onChange={(e) => {
+          if (native && realtime.omni) { updateRealtime({ omni: { ...realtime.omni, voice: e.target.value } }); return; }
+          if (outputProvider === 'alibaba' || outputProvider === 'xopc-cloud') updateRealtime({ tts: { provider: outputProvider, ...(e.target.value ? { voice: e.target.value } : {}) }, ...(realtime.omni && ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(e.target.value) ? { omni: { ...realtime.omni, voice: e.target.value } } : {}) });
         }}>
-          <SelectOption value="">{s.defaultVoice}</SelectOption>
-          {currentVoice && !realtimeVoices.some((voice) => voice.id === currentVoice) ? <SelectOption value={currentVoice}>{currentVoice}</SelectOption> : null}
-          {realtimeVoices.map((voice) => <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>)}
+          {!native ? <SelectOption value="">{s.defaultVoice}</SelectOption> : null}
+          {currentVoice && !voiceOptions.some((voice) => voice.id === currentVoice) ? <SelectOption value={currentVoice}>{currentVoice}</SelectOption> : null}
+          {voiceOptions.map((voice) => <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>)}
         </Select>
       </div>
       <label className="flex items-center justify-between gap-4 text-sm text-fg"><span>{s.bargeIn}<span className="mt-1 block text-xs text-fg-muted">{v.realtime.bargeInDescription}</span></span><input type="checkbox" role="switch" checked={realtime.bargeIn} className="size-4 accent-accent" onChange={(e) => updateRealtime({ bargeIn: e.target.checked })} /></label>
+      </> : null}
+      {section === 'diagnostics' ? <>
+        {isLoading ? <Skeleton className="h-16 w-full" /> : <div className="space-y-2 text-sm" role="status">
+          <p>{v.experience.dictationReady} · {statusLabel(canListen, verified.input)}</p>
+          <p>{v.experience.agentReady} · {statusLabel(canListen && canSpeak, verified.input && verified.output)}</p>
+          <p>{v.experience.omniReady} · {statusLabel(Boolean(status?.enabled && status.omni), false)}</p>
+        </div>}
+        <p className="text-xs text-fg-muted">{v.experience.configurationOnly}</p>
       <VoiceDiagnostics key={`${signature}:${JSON.stringify(status)}`} v={v} canListen={canListen} canSpeak={canSpeak} disabled={pending || isLoading || Boolean(error)} onVerified={(result) => setVerified({ signature, ...result })} />
+      </> : null}
     </section>
   );
 }

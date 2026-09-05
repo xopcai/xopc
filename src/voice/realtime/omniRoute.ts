@@ -26,7 +26,7 @@ export async function resolveOmniRoute(config: Config): Promise<OmniRoute> {
     || /^[a-zA-Z0-9-]+\.(cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com$/.test(url.hostname))
     || url.pathname !== '/api-ws/v1/realtime')) throw new Error('Unsupported DashScope realtime endpoint');
   const apiKey = managed ? await getProviderAuthService().resolveApiKey('xopc-cloud')
-    : slice.apiKey ?? await getProviderAuthService().resolveApiKey('dashscope');
+    : slice.apiKey ?? config.tools?.media?.audio?.providers?.alibaba?.apiKey ?? await getProviderAuthService().resolveApiKey('dashscope');
   if (!apiKey) throw new Error('Omni credentials are unavailable');
   url.search = new URLSearchParams({ model: slice.model }).toString();
   return { route: { provider: slice.provider, model: slice.model, managed }, url: url.toString(), apiKey, voice: slice.voice, instructions: slice.instructions };

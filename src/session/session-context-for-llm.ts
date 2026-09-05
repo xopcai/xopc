@@ -7,6 +7,7 @@
  */
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { VOICE_CALL_TYPE, VOICE_TRANSCRIPT_TYPE, voiceTranscriptMessage } from './voice-transcript.js';
 
 import {
   isCompactionAudit,
@@ -485,7 +486,12 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       continue;
     }
     if (isTranscriptCustomMessageEntry(r)) {
-      if (r.customType === 'voice_omni_transcript') continue;
+      if (r.customType === VOICE_CALL_TYPE) continue;
+      if (r.customType === VOICE_TRANSCRIPT_TYPE) {
+        const message = voiceTranscriptMessage(r);
+        if (message) out.push(message);
+        continue;
+      }
       out.push(customMessageRowToLlmMessage(r));
       continue;
     }
@@ -501,6 +507,7 @@ export function buildSessionDisplayMessages(rows: TranscriptStoredRow[]): AgentM
   const out: AgentMessage[] = [];
   for (const r of rows) {
     if (isTranscriptCustomMessageEntry(r)) {
+      if (r.customType === VOICE_CALL_TYPE) continue;
       if (r.display === false) {
         continue;
       }

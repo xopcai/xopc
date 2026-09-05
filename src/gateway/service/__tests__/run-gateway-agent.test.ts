@@ -294,4 +294,41 @@ describe('runGatewayAgent', () => {
     expect(completedTopics).toEqual(['run:run-setup-failure']);
   });
 
+  it.each(['throws', 'consumer_stops'])('reports cancellation and clears session ownership when %s', async (mode) => {
+    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const controller = new AbortController();
+    const emitted: Array<{ type: string; payload: unknown }> = [];
+    const deps = {
+      config: {}, bus: {}, runAbortControllers: new Map(), activeWebchatRunBySession: new Map(),
+      sessionIndex: { getSessionMetadata: async () => ({ sessionId: 'session-test' }), updateSessionMetadata: async () => {} },
+      agentService: {
+        resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined,
+        beginInboundTurn: () => {}, endInboundTurn: () => {}, getLastAssistantPlainText: () => '',
+        takeTaskReviewStreamHint: () => undefined,
+        outboundCoordinator: { emitSessionTurnComplete: async () => {} },
+        turnDispatcher: { processDirectStreaming: async function* () {
+          const message = { role: 'assistant', content: [] };
+          yield { type: 'message_start', message };
+          if (mode === 'throws') { controller.abort(); throw new DOMException('Interrupted', 'AbortError'); }
+          yield { type: 'message_update', message, assistantMessageEvent: { type: 'text_delta', delta: 'Hello' } };
+          if (!controller.signal.aborted) await new Promise<void>((resolve) => controller.signal.addEventListener('abort', () => resolve(), { once: true }));
+          throw new DOMException('Interrupted', 'AbortError');
+        } },
+      },
+      emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
+      publishRealtime: () => {}, completeRealtimeTopic: () => {},
+    } as unknown as RunGatewayAgentDeps;
+    const events = [];
+    for await (const event of runGatewayAgent(deps, 'hello', 'webchat', sessionKey, { type: 'channel', channel: 'webchat' }, undefined, undefined, { signal: controller.signal })) {
+      events.push(event);
+      if (mode === 'consumer_stops' && event.type === 'assistant_delta') { controller.abort(); break; }
+    }
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    expect(deps.activeWebchatRunBySession.size).toBe(0);
+    expect(deps.runAbortControllers.size).toBe(0);
+    expect(emitted.filter((event) => event.type === 'agent.run.ended')).toEqual([
+      { type: 'agent.run.ended', payload: expect.objectContaining({ status: 'cancelled' }) },
+    ]);
+  });
+
 });

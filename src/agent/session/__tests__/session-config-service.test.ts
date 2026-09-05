@@ -144,7 +144,7 @@ describe('SessionConfigService project workspace', () => {
   });
   function modelFixture() {
     const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
-    const runtime = { setModelForSession: vi.fn(), setThinkingLevel: vi.fn(), removeAgent: vi.fn() };
+    const runtime = { getAgent: vi.fn(() => ({})), setModelForSession: vi.fn(), setThinkingLevel: vi.fn(), removeAgent: vi.fn() };
     const modelManager = {
       findByRef: vi.fn((ref: string) => ref === 'test/missing' ? undefined : ({
         provider: 'test', id: ref.split('/')[1], reasoning: true,
@@ -187,6 +187,15 @@ describe('SessionConfigService project workspace', () => {
     expect(modelManager.restoreSessionModel).toHaveBeenCalledWith(SESSION_KEY, 'test/missing', true);
     await service.initializeModelSelection(SESSION_KEY, 'test/first', 'adaptive');
     expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'medium' });
+  });
+
+  it('saves model selection for a lazy session without mutating an absent Agent', async () => {
+    const { service, sessionConfigStore, runtime } = modelFixture();
+    runtime.getAgent.mockReturnValue(undefined as never);
+    expect(await service.patch(SESSION_KEY, { model: 'test/first', thinkingLevel: 'high' })).toEqual({ ok: true });
+    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
+    expect(runtime.setModelForSession).not.toHaveBeenCalled();
+    expect(runtime.setThinkingLevel).not.toHaveBeenCalled();
   });
 
 });

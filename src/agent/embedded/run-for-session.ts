@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { voicePresentationPrompt } from '../prompt/voice-presentation.js';
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
@@ -31,6 +32,7 @@ export type RunEmbeddedForSessionParams = {
   agentManager: AgentInstanceGateway;
   modelManager: ModelManager;
   thinkingOverride?: string | null;
+  presentation?: 'voice';
   abortSignal?: AbortSignal;
   /** Absolute parent deadline. The turn's own timeout is capped to the remaining budget. */
   deadlineAtMs?: number;
@@ -140,7 +142,7 @@ export async function runEmbeddedTurnForSession(
     agentManager.setModelForSession(sessionKey, modelRef);
     const tools = agent.state.tools;
     const turnPolicy = agentManager.createAgentTurnPolicy(sessionKey);
-    const systemPrompt = agent.state.systemPrompt ?? '';
+    const systemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : ''].filter(Boolean).join('\n\n');
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
     const promptCachePolicy = resolvePromptCachePolicy(

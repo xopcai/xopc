@@ -6,10 +6,16 @@ Updated: 2026-09-05. Source of truth: `packages/realtime-protocol/src/voice.ts` 
 
 - Create via `POST /api/voice/realtime/sessions`, authenticated with the existing gateway token.
 - Connect to `/api/voice/realtime/v2/ws`.
-- One socket owns one session; no resume or engine switching.
+- One socket owns one call connection (`sessionId` on the wire). The durable Chat is identified by `sessionKey`; reconnecting creates a new call ID in the same Chat. There is no transport replay/resume or engine switching inside an open connection.
 - Only v2 is accepted. Update renderer and gateway together; no v1 alias/adapter exists.
 - JSON control frames: at most 16 KiB. Binary frames: at most 64 KiB.
 - Ticket lifetime: 60 seconds. First-frame authentication: 10 seconds. Ping interval: 15 seconds.
+
+## REST lifecycle
+
+- `POST /api/voice/realtime/preflight` accepts the creation body and returns `{ok:true}` after the same capability and session checks. It creates neither a ticket nor a reservation, and opens no provider socket.
+- `POST /api/voice/realtime/sessions` creates a one-use ticket and reserves the Chat until expiry or call cleanup. Start capture only after capability preflight; upload only after `session.ready`.
+- Call lifecycle metadata is stored in the containing Chat transcript and excluded from model input. Native speech is restored with actual user/assistant roles on reconnect. Pending transcript writes finish before the reservation is released.
 
 ## Creation
 
@@ -17,7 +23,7 @@ Updated: 2026-09-05. Source of truth: `packages/realtime-protocol/src/voice.ts` 
 {"purpose":"conversation","engine":"omni","sessionKey":"agent:main:webchat:default:direct:voice"}
 ```
 
-`purpose` is `dictation | conversation`. Conversation requires `engine: agent | omni` and `sessionKey`. Dictation forbids engine. Optional `language: zh | en` is an STT hint; native language follows the audio/model instructions. Unknown fields, including credentials, model, voice, instructions and URLs, are rejected.
+`purpose` is `dictation | conversation`. Conversation requires `sessionKey`; optional `engine: agent | omni` overrides the saved `voice.realtime.defaultEngine` (default `agent`). Dictation forbids engine. Optional `language: zh | en` is an STT hint; native language follows the audio/model instructions. Unknown fields, including credentials, model, voice, instructions and URLs, are rejected.
 
 Response: `{ok:true,payload:{sessionId,ticket,ticketExpiresAt,websocketPath,protocolVersion,purpose,inputMode,bargeIn,inputFormat,limits,route}}`.
 
@@ -82,6 +88,8 @@ Reject malformed frames or discontinuous sequences. Discard a well-formed frame 
 | `input.commit` | `{}` | Dictation only; conversation returns recoverable INVALID_STATE |
 | `response.cancel` | `{responseId}` | Cancel active generation/playback; stale ID returns NO_ACTIVE_RESPONSE |
 | `response.audio.played` | `{responseId,playedBytes}` | Cumulative PCM bytes actually played for this response |
+| `input.mute` | `{muted:boolean}` | Conversation only; discard pending input without cancelling playback |
+| `session.metric` | `{responseId,metric,durationMs}` | Bounded client timings: speech_end_to_audio_received or local_stop; diagnostic only |
 | `session.ping` | `{}` | Server replies session.pong |
 | `session.stop` | `{reason}` | reason = user_finished, surface_closed or replaced |
 
@@ -94,6 +102,8 @@ Playback acknowledgement is nonnegative/even. It excludes header and ID bytes. D
 | `input.speech_started`, `input.speech_stopped` | `{utteranceId}` |
 | `input.transcript.delta`, `input.transcript.final` | `{utteranceId,revision,text,language?}` |
 | `response.created` | `{responseId}` |
+| `response.activity` | `{responseId,toolCallId,toolName,status}`; running/completed/failed |
+| `response.clarification` | `{responseId,requestId,question,choices?}`; existing clarify HTTP endpoint handles explicit answers |
 | `response.text.delta` | `{responseId,delta}` |
 | `response.text.done` | `{responseId}` |
 | `response.audio.started` | `{responseId,format:{encoding:"pcm_s16le",sampleRate:24000,channels:1}}` |
@@ -122,27 +132,31 @@ Cancellation reason is barge_in, client_cancelled or session_closed. Clear playb
 8. A response remains interruptible while local audio is queued.
 9. Terminal close/error releases upload, playback, upstream and timers.
 
-Gateway playback window: 96000 unacknowledged PCM bytes. A 15-second lack of progress fails playback. Native upstream output also has a bounded unsent queue; overload is an explicit error, not audio dropping.
+Gateway playback window: 96000 unacknowledged PCM bytes (two seconds). Native upstream generation has a separate bounded queue of 2,880,000 PCM bytes (one minute), since generation can run ahead of playback. Native queue overflow or a 15-second playback acknowledgement stall cancels that reply and emits recoverable `session.error` with `RESPONSE_FAILED`; the call stays connected for the next turn. This does not silently discard audio and mark the reply complete. Fatal service/protocol errors include a specific code and diagnostic reference.
 
 ## Close codes and security
 
 1000 = normal; 1001 = gateway stopping; 4400 = invalid frame/clock; 4401 = auth/readiness; 4429 = concurrency.
 
-Tickets appear only in the first control frame, not URLs. Provider credentials stay in the local gateway or platform. Logs exclude tickets, keys, raw audio and full transcripts. A new connection requires a new ticket and does not restore provider-owned context.
+Tickets appear only in the first control frame, not URLs. Provider credentials stay in the local gateway or platform. Logs exclude tickets, keys, raw audio and full transcripts. A new connection requires a new ticket. It restores application-owned Chat context through bounded initial instructions, rather than resuming a provider-owned socket.
 
 ## Platform boundary
 
 The platform socket is a separate server-to-server Qwen protocol relay:
 `/v1/audio/conversations/realtime?model=qwen3-omni-flash-realtime`.
 
-It accepts bearer authorization with models:invoke, or origin-bound administrator debug subprotocol tickets. It allows a single certified session.update, base64 PCM input_audio_buffer.append and response.cancel. It rejects browser-v2 envelopes, tool registration, manual generation and arbitrary item mutation. This boundary reuses the native engine's Qwen adapter; it is not another browser protocol.
+It accepts bearer authorization with models:invoke, or origin-bound administrator debug subprotocol tickets. It allows a single certified session.update, base64 PCM input_audio_buffer.append, input_audio_buffer.clear and response.cancel. The input-clear event requires the matching platform relay update. It rejects browser-v2 envelopes, tool registration, manual generation and arbitrary item mutation. This boundary reuses the native engine's Qwen adapter; it is not another browser protocol.
 
 ## Settings diagnostics (HTTP)
 
 These authenticated endpoints test Agent STT/TTS, not native Omni:
 
-- GET /api/voice/realtime/status returns {ok:true,payload:{enabled,stt,tts}}. Missing routes are null; routes contain provider, model, managed and optional TTS voice. This is configuration preflight, not live verification.
+- GET /api/voice/realtime/status returns {ok:true,payload:{enabled,defaultEngine,stt,tts,omni}}. Missing routes are null; routes contain provider, model, managed and optional TTS voice. This is configuration preflight, not live verification.
 - POST /api/voice/realtime/preview returns {ok:true,payload:{audio,sampleRate:24000}} with base64 mono PCM16 from a fixed localized sample. It is rate limited, capped at 960,000 bytes and 20 seconds, accepts no arbitrary text or credentials, and returns 503 for missing output or 502 for synthesis/format/size failure.
 - GET /api/voice/tts-voices?purpose=realtime&provider=…&model=… resolves Agent conversation output credentials independently of message readout.
 
 Input diagnostics use the normal v2 dictation session without a Chat or Agent invocation.
+
+Input cancellation has an explicit generation boundary. Agent cancellation/muting replaces only the STT stream, fences old callbacks and drops old queued turns; resumed audio has a bounded two-second reset buffer. Native cancellation/muting clears upstream input and rejects late input/replies until clear acknowledgement and fresh speech. A missing native clear acknowledgement ends the call with a specific diagnostic after five seconds. Neither path injects synthetic silence or replays discarded audio.
+
+Client timing samples are self-reported, deduplicated and capped at 512 per call. They measure audio receipt/local playback cancellation, not physical speaker output or acoustic end-of-speech latency.

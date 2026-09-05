@@ -20,6 +20,7 @@ interface ActiveVoiceResponse {
   queuedSpeechCharacters: number;
   startedAt: number;
   firstTextSeen: boolean;
+  awaitingClarification: boolean;
 }
 
 export function createAgentVoiceEngine(options: {
@@ -38,9 +39,17 @@ export function createAgentVoiceEngine(options: {
   let sttSession: StreamingSttSession | undefined;
   let activeResponse: ActiveVoiceResponse | undefined;
   let conversationTail = Promise.resolve();
+  let interruptionWrites = Promise.resolve();
+  let closing: Promise<void> | undefined;
   let queuedTurns = 0;
+  let inputGeneration = 0;
+  let muted = false;
+  let sttGeneration = 0;
+  let sttAbort = new AbortController();
+  let inputReset: Promise<void> | undefined;
+  let bufferedAudio: Uint8Array[] = [];
+  let bufferedBytes = 0;
   let finalCount = 0;
-  let finalCountAtLastCommit = 0;
   let committing = false;
   const finalizedUtterances = new Set<string>();
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
@@ -51,13 +60,13 @@ export function createAgentVoiceEngine(options: {
     send('response.cancelled', { responseId: response.id, reason });
     const sessionKey = claim.request.sessionKey;
     if (sessionKey && reason !== 'session_closed') {
-      void options.runtime.recordInterruption({
+      interruptionWrites = interruptionWrites.then(() => options.runtime.recordInterruption({
         sessionKey,
         responseId: response.id,
         reason,
         generatedCharacters: response.text.length,
         interruptedDuring: response.audioStarted ? 'speaking' : 'thinking',
-      }).catch((error) => {
+      })).catch((error) => {
         log.warn({ err: error, sessionId: claim.sessionId, responseId: response.id }, 'Voice interruption audit failed');
       });
     }
@@ -72,11 +81,9 @@ export function createAgentVoiceEngine(options: {
       signal: response.abortController.signal,
       allowFallback: false,
     });
-    if (result.outputFormat !== 'pcm') {
-      await result.release();
-      throw new Error(`Realtime TTS returned unsupported format: ${result.outputFormat}`);
-    }
     try {
+      if (response.abortController.signal.aborted || activeResponse !== response || closed) return;
+      if (result.outputFormat !== 'pcm') throw new Error(`Realtime TTS returned unsupported format: ${result.outputFormat}`);
       const reader = result.audioStream.getReader();
       while (true) {
         const item = await reader.read();
@@ -143,16 +150,20 @@ export function createAgentVoiceEngine(options: {
       queuedSpeechCharacters: 0,
       startedAt: Date.now(),
       firstTextSeen: false,
+      awaitingClarification: false,
     };
     activeResponse = response;
     send('response.created', { responseId: response.id });
     try {
+      await interruptionWrites;
+      if (response.abortController.signal.aborted || closed) return;
       for await (const event of options.runtime.runAgent(
         text,
         claim.request.sessionKey,
         response.abortController.signal,
       )) {
         if (activeResponse !== response || response.abortController.signal.aborted) return;
+        if (event.type === 'assistant_delta' || event.type === 'tool_end') response.awaitingClarification = false;
         if (event.type === 'assistant_delta' && typeof event.payload?.delta === 'string') {
           if (response.text.length + event.payload.delta.length > 32_000) throw new Error('Voice response text limit reached');
           if (!response.firstTextSeen) {
@@ -167,10 +178,18 @@ export function createAgentVoiceEngine(options: {
           send('response.text.delta', { responseId: response.id, delta: event.payload.delta });
           queuePhrases(response, response.segmenter.push(event.payload.delta));
         }
+        if ((event.type === 'tool_start' || event.type === 'tool_end') && typeof event.payload?.toolCallId === 'string' && typeof event.payload?.toolName === 'string') {
+          send('response.activity', { responseId: response.id, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
+        }
+        if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
+          response.awaitingClarification = true;
+          send('response.clarification', { responseId: response.id, requestId: event.payload.requestId.slice(0, 160), question: event.payload.question.slice(0, 8_000), ...(Array.isArray(event.payload.choices) ? { choices: event.payload.choices.filter((choice): choice is string => typeof choice === 'string').slice(0, 20).map((choice) => choice.slice(0, 1_000)) } : {}) });
+        }
         if (event.type === 'error') {
           throw new Error(typeof event.payload?.message === 'string' ? event.payload.message : 'Agent response failed');
         }
       }
+      if (activeResponse !== response || response.abortController.signal.aborted || closed) return;
       queuePhrases(response, response.segmenter.flush());
       send('response.text.done', { responseId: response.id });
       await response.speechTail;
@@ -196,10 +215,13 @@ export function createAgentVoiceEngine(options: {
       });
       response.abortController.abort('provider_error');
       if (activeResponse === response) activeResponse = undefined;
+    } finally {
+      await response.speechTail;
     }
   }
 
   async function openSttSession(consumed: VoiceTicketClaim): Promise<StreamingSttSession> {
+    const generation = sttGeneration;
     return stt!.plugin.openAudioStream({
       model: stt!.model,
       inputFormat: { encoding: 'pcm_s16le', sampleRate: 16_000, channels: 1 },
@@ -213,8 +235,8 @@ export function createAgentVoiceEngine(options: {
         silenceDurationMs: consumed.silenceDurationMs,
       },
       timeoutMs: 15_000,
-      signal: options.signal,
-      onEvent: onSttEvent,
+      signal: AbortSignal.any([options.signal, sttAbort.signal]),
+      onEvent: (event) => { if (generation === sttGeneration) onSttEvent(event); },
     });
   }
 
@@ -227,8 +249,9 @@ export function createAgentVoiceEngine(options: {
       void options.onClose('provider_error', true);
       return;
     }
+    if (muted || finalizedUtterances.has(event.utteranceId)) return;
     if (event.type === 'speech_started') {
-      if (claim.request.purpose === 'conversation' && claim.config.voice?.realtime?.bargeIn) {
+      if (claim.request.purpose === 'conversation' && claim.config.voice?.realtime?.bargeIn && !activeResponse?.awaitingClarification) {
         cancelActiveResponse('barge_in');
       }
       send('input.speech_started', { utteranceId: event.utteranceId });
@@ -244,7 +267,6 @@ export function createAgentVoiceEngine(options: {
     if (event.type === 'transcript_final') {
       const text = event.text.trim();
       if (!text) return;
-      if (finalizedUtterances.has(event.utteranceId)) return;
       if (finalizedUtterances.size >= 10_000) {
         void options.onClose('utterance_limit', true);
         return;
@@ -258,6 +280,7 @@ export function createAgentVoiceEngine(options: {
         ...(event.language === 'zh' || event.language === 'en' ? { language: event.language } : {}),
       });
       if (claim.request.purpose === 'conversation') {
+        if (activeResponse?.awaitingClarification) return;
         if (claim.config.voice?.realtime?.bargeIn) cancelActiveResponse('barge_in');
         if (queuedTurns >= 8) {
           send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Too many queued voice turns', recoverable: false });
@@ -265,11 +288,35 @@ export function createAgentVoiceEngine(options: {
           return;
         }
         queuedTurns += 1;
-        conversationTail = conversationTail.then(() => runConversationTurn(text)).finally(() => { queuedTurns -= 1; });
+        const generation = inputGeneration;
+        conversationTail = conversationTail.then(() => {
+          if (generation === inputGeneration) return runConversationTurn(text);
+        }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
       }
     }
   }
 
+
+  function discardInput(): Promise<void> {
+    inputGeneration += 1;
+    queuedTurns = 0;
+    bufferedAudio = [];
+    bufferedBytes = 0;
+    const generation = ++sttGeneration;
+    sttAbort.abort('input_discarded');
+    sttAbort = new AbortController();
+    sttSession?.abort('input_discarded');
+    sttSession = undefined;
+    // Restart only transcription; the Chat and current reply remain alive.
+    inputReset = openSttSession(claim).then((opened) => {
+      if (closed || generation !== sttGeneration) { opened.abort('input_replaced'); return; }
+      sttSession = opened;
+      for (const bytes of bufferedAudio) opened.appendAudio(bytes);
+      bufferedAudio = [];
+      bufferedBytes = 0;
+    }).catch((error) => { if (!closed && generation === sttGeneration) throw error; });
+    return inputReset;
+  }
 
   return {
     async start() {
@@ -280,7 +327,20 @@ export function createAgentVoiceEngine(options: {
       }
       sttSession = opened;
     },
+    async setInputMuted(next) {
+      if (closed || muted === next) return;
+      muted = next;
+      if (!next) return inputReset;
+      return discardInput();
+    },
     appendAudio(bytes) {
+      if (muted) return;
+      if (!closed && !sttSession && inputReset) {
+        if (bufferedBytes + bytes.byteLength > 64_000) throw new Error('Voice input reset exceeded audio buffer');
+        bufferedAudio.push(Uint8Array.from(bytes));
+        bufferedBytes += bytes.byteLength;
+        return;
+      }
       if (closed || !sttSession || committing) throw new Error('Voice input is not ready');
       sttSession.appendAudio(bytes);
     },
@@ -289,27 +349,35 @@ export function createAgentVoiceEngine(options: {
         throw new Error('Input cannot be committed');
       }
       committing = true;
-      const before = finalCount;
-      const alreadyFinalized = before > finalCountAtLastCommit;
       await sttSession.commit();
       if (closed) return;
-      if (!alreadyFinalized && finalCount === before) {
+      if (finalCount === 0) {
         send('session.error', { code: 'EMPTY_UTTERANCE', message: 'No speech was recognized', recoverable: true });
       }
-      finalCountAtLastCommit = finalCount;
       await options.onClose('input_committed', true);
     },
     cancel(responseId, reason) {
-      return activeResponse?.id === responseId ? cancelActiveResponse(reason) : false;
+      if (activeResponse?.id !== responseId) return false;
+      if (reason === 'client_cancelled') {
+        void discardInput().catch((error) => {
+          log.warn({ err: error, sessionId: claim.sessionId }, 'Voice input reset after interruption failed');
+          send('session.error', { code: 'PROVIDER_ERROR', message: 'Could not resume microphone input', recoverable: false });
+          void options.onClose('provider_error', true);
+        });
+      }
+      return cancelActiveResponse(reason);
     },
     acknowledge(responseId, playedBytes) {
       if (activeResponse?.id === responseId) activeResponse.playback.acknowledge(playedBytes);
     },
     close() {
-      if (closed) return;
+      if (closing) return closing;
       closed = true;
       cancelActiveResponse('session_closed');
+      sttAbort.abort('session_closed');
       sttSession?.abort('session_closed');
+      closing = Promise.all([conversationTail, interruptionWrites, inputReset]).then(() => {});
+      return closing;
     },
   };
 }

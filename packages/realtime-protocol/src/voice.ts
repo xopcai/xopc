@@ -41,8 +41,8 @@ export const createVoiceSessionRequestSchema = z.strictObject({
   if (value.purpose === 'conversation' && !value.sessionKey) {
     context.addIssue({ code: 'custom', path: ['sessionKey'], message: 'sessionKey is required for conversation' });
   }
-  if ((value.purpose === 'conversation') !== (value.engine !== undefined)) {
-    context.addIssue({ code: 'custom', path: ['engine'], message: 'engine is required only for conversation' });
+  if (value.purpose !== 'conversation' && value.engine !== undefined) {
+    context.addIssue({ code: 'custom', path: ['engine'], message: 'engine is only supported for conversation' });
   }
 });
 
@@ -80,6 +80,12 @@ export const voiceClientMessageSchema = z.discriminatedUnion('type', [
     sessionId: idSchema,
     ticket: z.string().min(32).max(512),
   })),
+  clientEnvelope('session.metric', z.strictObject({
+    responseId: z.string().min(1).max(160),
+    metric: z.enum(['speech_end_to_audio_received', 'local_stop']),
+    durationMs: z.number().finite().min(0).max(600_000),
+  })),
+  clientEnvelope('input.mute', z.strictObject({ muted: z.boolean() })),
   clientEnvelope('input.commit', z.strictObject({})),
   clientEnvelope('response.cancel', z.strictObject({ responseId: z.string().min(1).max(160) })),
   clientEnvelope('response.audio.played', z.strictObject({
@@ -125,6 +131,18 @@ export const voiceServerEventSchema = z.discriminatedUnion('type', [
   serverEnvelope('input.transcript.delta', transcriptPayloadSchema),
   serverEnvelope('input.transcript.final', transcriptPayloadSchema),
   serverEnvelope('response.created', z.strictObject({ responseId: z.string().min(1).max(160) })),
+  serverEnvelope('response.activity', z.strictObject({
+    responseId: z.string().min(1).max(160),
+    toolCallId: z.string().min(1).max(160),
+    toolName: z.string().min(1).max(256),
+    status: z.enum(['running', 'completed', 'failed']),
+  })),
+  serverEnvelope('response.clarification', z.strictObject({
+    responseId: z.string().min(1).max(160),
+    requestId: z.string().min(1).max(160),
+    question: z.string().min(1).max(8_000),
+    choices: z.array(z.string().max(1_000)).max(20).optional(),
+  })),
   serverEnvelope('response.text.delta', z.strictObject({
     responseId: z.string().min(1).max(160),
     delta: z.string().max(32 * 1024),
