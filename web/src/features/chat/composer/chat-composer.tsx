@@ -346,6 +346,7 @@ export const ChatComposer = memo(function ChatComposer({
   const voice = useComposerVoiceInput({
     disabled,
     chat: m.chat,
+    sessionKey,
     onTranscript: (text) => {
       const prev = editor.valueRef.current;
       const next = appendTranscriptToDraft(prev, text);
@@ -733,12 +734,18 @@ export const ChatComposer = memo(function ChatComposer({
               phase={voice.phase}
               elapsedLabel={voice.elapsedLabel}
               audioLevel={voice.audioLevel}
-              readiness={voice.readiness}
-              hasRetainedRecording={voice.hasRetainedRecording}
+              partialTranscript={voice.partialTranscript}
+              finalTranscript={voice.finalTranscript}
+              responseText={voice.responseText}
+              responsePhase={voice.responsePhase}
+              muted={voice.muted}
+              mode={voice.mode}
               disabled={disabled}
               chat={m.chat}
               onCancel={voice.cancelVoiceInput}
               onConfirm={voice.confirmVoiceInput}
+              onInterruptResponse={voice.interruptResponse}
+              onToggleMute={voice.toggleMute}
               onRetry={voice.retryVoiceInput}
             />
           ) : null}
@@ -779,8 +786,9 @@ export const ChatComposer = memo(function ChatComposer({
           modelSupportsThinking={modelSupportsThinking}
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}
-          voiceReadiness={voice.readiness}
           onStartVoiceInput={voice.startVoiceInput}
+          voiceConversationEnabled={Boolean(sessionKey) && !runBusyState}
+          onStartVoiceConversation={voice.startVoiceConversation}
           onSend={actions.send}
           onAbort={onAbort}
           onInterrupt={actions.interruptDraft}

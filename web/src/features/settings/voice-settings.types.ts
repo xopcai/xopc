@@ -93,6 +93,14 @@ export interface VoiceSettingsState {
         customInstruction?: string;
       };
     };
+    realtime: {
+      enabled: boolean;
+      silenceDurationMs: number;
+      idleTimeoutMs: number;
+      maxDictationMs: number;
+      maxConversationMs: number;
+      bargeIn: boolean;
+    };
   };
 }
 

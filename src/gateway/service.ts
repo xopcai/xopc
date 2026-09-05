@@ -96,6 +96,7 @@ import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
+import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
 import { reconcileDreamingAutomations as reconcileDreamingAutomationRecords } from './dreaming-automation-reconciler.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
@@ -166,6 +167,35 @@ export class GatewayService {
 
   readonly endpointTools = new EndpointToolRuntime();
   readonly realtime = new RealtimeRuntime(this.endpointTools);
+  readonly voiceRealtime = new VoiceRealtimeRuntime({
+    getConfig: () => this.config,
+    sessionExists: async (sessionKey) => Boolean(await this.sessionIndex.getSessionMetadata(sessionKey)),
+    sessionBusy: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
+    recordInterruption: (entry) => this.sessionIndex.appendTranscriptContextEntry(entry.sessionKey, {
+      text: 'Voice response was interrupted before playback completed.',
+      data: {
+        type: 'voice_response_interrupted',
+        responseId: entry.responseId,
+        reason: entry.reason,
+        generatedCharacters: entry.generatedCharacters,
+        interruptedDuring: entry.interruptedDuring,
+      },
+    }),
+    runAgent: (text, sessionKey, signal) => {
+      if (this.agentRunner.hasActiveRun(sessionKey)) {
+        throw new Error('Conversation session already has an active response');
+      }
+      return this.agentRunner.runAgent(
+        text,
+        'webchat',
+        sessionKey,
+        { type: 'channel', channel: 'webchat' },
+        undefined,
+        undefined,
+        { signal },
+      );
+    },
+  });
 
   getConfig(): Config {
     return this.config;
@@ -1330,6 +1360,7 @@ export class GatewayService {
     this.endpointTools.close();
     await this.sideChats.disposeAll();
     this.realtime.close();
+    this.voiceRealtime.close();
 
     await this.proactiveWorker.stop();
     await this.discussionWorker.stop();

@@ -2,6 +2,7 @@ import { getModelCatalogStore } from '../../../providers/model-catalog-store.js'
 import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
+import { openDashScopeStreamingTts } from '../../dashscope/streaming-tts-stream.js';
 import { registerSpeechProvider } from '../speech-registry.js';
 import type { SpeechProviderConfig, SpeechProviderPlugin, SpeechSynthesisResult } from '../speech-provider-types.js';
 
@@ -97,7 +98,7 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
         ...(speed !== undefined && catalogModel.tts?.speed ? { speed } : {}),
         ...(instructions && catalogModel.tts?.instructions ? { instructions } : {}),
       }),
-      signal: AbortSignal.timeout(request.timeoutMs), redirect: 'error',
+      signal: request.signal, redirect: 'error',
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null) as { error?: { message?: unknown } } | null;
@@ -107,6 +108,34 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     if (audioBuffer.length === 0) throw new Error('XOPC Cloud TTS returned empty audio');
     const fileExtension = extension(response.headers.get('content-type'), outputFormat);
     return { audioBuffer, outputFormat: fileExtension, fileExtension, voiceCompatible: fileExtension === 'opus' || fileExtension === 'ogg' };
+  },
+  synthesizeStream: async (request) => {
+    const config = readConfig(request.providerConfig);
+    const model = typeof request.providerOverrides?.model === 'string' ? request.providerOverrides.model : config.model;
+    const voice = typeof request.providerOverrides?.voice === 'string' ? request.providerOverrides.voice : config.voice;
+    if (!model || !voice) throw new Error('XOPC Cloud realtime TTS model or voice is unavailable');
+    const catalogModel = availableModels().find((entry) => entry.id === model);
+    if (!catalogModel?.tts?.streaming || !catalogModel.tts.outputFormats.includes('pcm')) {
+      throw new Error(`XOPC Cloud TTS model does not support PCM streaming: ${model}`);
+    }
+    const token = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
+    if (!token) throw new Error('XOPC Cloud authorization is unavailable');
+    const relayUrl = new URL(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech/realtime`);
+    relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    relayUrl.searchParams.set('model', model);
+    const instructions = typeof request.providerOverrides?.instructions === 'string'
+      ? request.providerOverrides.instructions.trim()
+      : config.instructions;
+    return openDashScopeStreamingTts({
+      apiKey: token,
+      baseUrl: relayUrl.toString(),
+      model,
+      voice,
+      text: request.text,
+      ...(instructions ? { instructions } : {}),
+      signal: request.signal,
+      timeoutMs: request.timeoutMs,
+    });
   },
 };
 
