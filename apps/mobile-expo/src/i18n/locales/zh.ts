@@ -331,6 +331,7 @@ export const zh: MessageBundle = {
     openSessionFiles: '查看对话文件',
     filePreviewClose: '关闭预览',
     filePreviewDownload: '下载文件',
+    filePreviewMoreActions: '更多文件操作',
     filePreviewDownloadFailed: '无法打开下载：{{message}}',
     filePreviewShareUnavailable: '当前设备不支持系统分享',
     filePreviewLoading: '正在加载预览…',

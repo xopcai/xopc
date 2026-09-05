@@ -1,38 +1,21 @@
-/**
- * SharePreviewModal — open a share URL inside an in-app WebView instead of
- * bouncing out to the system browser.
- *
- * Why bother with this when iOS already has a perfectly fine in-app browser?
- *  - Tapping the share link from inside the app and getting kicked out to
- *    Safari (or Chrome) is jarring — the user loses context. The same
- *    instinct that makes Twitter / Instagram use WKWebView for outbound
- *    links applies here.
- *  - We can show a header with the share title + an "Open externally" escape
- *    hatch, which the system browser cannot give us.
- *
- * Implementation:
- *  - Uses `react-native-webview` (already in the project's dep tree, used by
- *    HtmlPreviewPane).
- *  - Honors safe-area insets.
- *  - Falls back gracefully when WebView errors: shows the error + an
- *    "Open in browser" button.
- */
 import { useState } from 'react';
 import {
   Linking,
   Modal,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   View,
 } from 'react-native';
-import { ActivityIndicator, IconButton, Text } from 'react-native-paper';
+import { ActivityIndicator, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { useMessages } from '../../i18n/messages';
 import { radii, spacing, typography } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
+import { FilePreviewHeader } from '../file-preview/FilePreviewHeader';
 
 export type SharePreviewModalProps = {
   visible: boolean;
@@ -55,27 +38,25 @@ export function SharePreviewModal({ visible, url, title, onClose }: SharePreview
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { backgroundColor: colors.surface.base, paddingTop: insets.top }]}>
-        <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-          <Text variant="titleMedium" style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
-            {headerTitle}
-          </Text>
-          {url ? (
-            <IconButton
-              icon="open-in-new"
-              size={20}
-              iconColor={colors.text.primary}
-              onPress={() => void Linking.openURL(url)}
-              accessibilityLabel={m.share.previewOpenExternal}
-            />
-          ) : null}
-          <IconButton
-            icon="close"
-            size={22}
-            iconColor={colors.text.primary}
-            onPress={onClose}
-            accessibilityLabel={m.share.close}
-          />
-        </View>
+        <FilePreviewHeader
+          title={headerTitle}
+          onClose={onClose}
+          closeLabel={m.chat.filePreviewClose}
+          shareLabel={m.chat.shareFilePreview}
+          moreActionsLabel={m.chat.filePreviewMoreActions}
+          share={url ? {
+            onPress: async () => {
+              await Share.share({ message: `${headerTitle}\n${url}`, url, title: headerTitle });
+            },
+          } : undefined}
+          moreActions={[{
+            key: 'open-browser',
+            label: m.share.previewOpenExternal,
+            icon: 'open-in-new',
+            onPress: () => url ? Linking.openURL(url) : Promise.resolve(),
+            disabled: !url,
+          }]}
+        />
 
         {url ? (
           <View style={styles.body}>
@@ -142,17 +123,6 @@ function onIgnoredMessage(_event: WebViewMessageEvent): void {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  header: {
-    minHeight: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingLeft: spacing.lg,
-  },
-  title: {
-    flex: 1,
-    ...typography.ui,
   },
   body: {
     flex: 1,
