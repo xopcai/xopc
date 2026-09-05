@@ -10,7 +10,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import { artifactFileId } from './artifact-uri';
-import { FilePreviewModal, type PreviewableFile } from './FilePreviewModal';
+import { FilePreviewModal, type PreviewableFile } from '../file-preview/FilePreviewModal';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 import type { AudioContent, MessageAttachment } from './messages.types';
 import { mimeTypeFromFileName } from './tool-result-file-paths';

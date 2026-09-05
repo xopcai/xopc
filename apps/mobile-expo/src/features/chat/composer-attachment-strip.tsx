@@ -9,7 +9,7 @@ import { useTheme } from '../../theme';
 import { isEditableImageAttachment } from './attachment-file-io-core';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import type { ComposerAttachment } from './composer.types';
-import { FilePreviewModal, type PreviewableFile } from './FilePreviewModal';
+import { FilePreviewModal, type PreviewableFile } from '../file-preview/FilePreviewModal';
 import { ImageEditorModal } from './ImageEditorModal';
 import type { AudioContent } from './messages.types';
 

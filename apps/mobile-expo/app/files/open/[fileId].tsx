@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
-import { FilePreviewModal } from '@/features/chat/FilePreviewModal';
+import { FilePreviewModal } from '@/features/file-preview/FilePreviewModal';
 import { FileListSkeleton, FileLoadError } from '@/features/files/FilesScreen';
 import { useMessages } from '@/i18n/messages';
 import { fetchFileResource } from '@/query/files';
@@ -17,7 +17,7 @@ export default function FileOpenRoute() {
   const file = useQuery({ queryKey: ['files', 'resource', fileId], queryFn: () => fetchFileResource(fileId), enabled: Boolean(fileId) });
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.base }}>
-      <NativeScreenHeader title={file.data?.name ?? labels.title} onBack={() => router.back()} />
+      {!file.data ? <NativeScreenHeader title={labels.title} onBack={() => router.back()} /> : null}
       {file.isLoading ? <FileListSkeleton /> : !file.data ? <FileLoadError error={file.error} onRetry={() => void file.refetch()} /> : null}
       <FilePreviewModal
         visible={Boolean(file.data)}
