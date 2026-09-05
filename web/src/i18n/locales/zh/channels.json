@@ -162,6 +162,14 @@
       "autoDescription": "STT 识别语言和内置 Edge 音色会自动跟随应用语言。",
       "manualDescription": "切换应用语言时，不覆盖模型语言和已选择的音色。"
     },
+    "realtime": {
+      "title": "实时语音",
+      "description": "流式发送麦克风音频，用于实时转写和低延迟语音对话。",
+      "turnDetection": "自动语音分轮",
+      "turnDetectionDescription": "Qwen 根据说话停顿自动完成并发送每一轮。",
+      "bargeIn": "允许打断",
+      "bargeInDescription": "助手回复时再次说话，会停止当前回复。"
+    },
     "behavior": {
       "title": "语音应该如何工作",
       "description": "先选择用户能感知的行为，引擎细节放在下方。",

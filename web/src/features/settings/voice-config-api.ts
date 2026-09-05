@@ -188,6 +188,7 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
   const voice = isRecord(c.voice) ? c.voice : {};
   const input = isRecord(voice.input) ? voice.input : {};
   const refinement = isRecord(input.refinement) ? input.refinement : {};
+  const realtime = isRecord(voice.realtime) ? voice.realtime : {};
   const refinementMode =
     refinement.mode === 'punctuation' ||
     refinement.mode === 'light' ||
@@ -210,6 +211,14 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
             ? { customInstruction: refinement.customInstruction }
             : {}),
         },
+      },
+      realtime: {
+        enabled: realtime.enabled === true,
+        silenceDurationMs: typeof realtime.silenceDurationMs === 'number' ? realtime.silenceDurationMs : 700,
+        idleTimeoutMs: typeof realtime.idleTimeoutMs === 'number' ? realtime.idleTimeoutMs : 60_000,
+        maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,
+        maxConversationMs: typeof realtime.maxConversationMs === 'number' ? realtime.maxConversationMs : 3_600_000,
+        bargeIn: realtime.bargeIn !== false,
       },
     },
   };

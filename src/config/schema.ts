@@ -880,6 +880,24 @@ export const VoiceConfigSchema = z
       })
       .strict()
       .optional(),
+    realtime: z
+      .object({
+        enabled: z.boolean().default(false),
+        silenceDurationMs: z.number().int().min(300).max(2_000).default(700),
+        idleTimeoutMs: z.number().int().min(10_000).max(300_000).default(60_000),
+        maxDictationMs: z.number().int().min(10_000).max(3_600_000).default(600_000),
+        maxConversationMs: z.number().int().min(10_000).max(7_200_000).default(3_600_000),
+        bargeIn: z.boolean().default(true),
+      })
+      .strict()
+      .default({
+        enabled: false,
+        silenceDurationMs: 700,
+        idleTimeoutMs: 60_000,
+        maxDictationMs: 600_000,
+        maxConversationMs: 3_600_000,
+        bargeIn: true,
+      }),
   })
   .strict()
   .optional();

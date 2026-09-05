@@ -380,6 +380,17 @@ export function VoiceSettingsPanel() {
     });
   }, [language]);
 
+  const updateRealtime = useCallback((patch: Partial<VoiceSettingsState['voice']['realtime']>) => {
+    dirtyRef.current = true;
+    dispatchForm({
+      type: 'update',
+      updater: (f) => f ? {
+        ...f,
+        voice: { ...f.voice, realtime: { ...f.voice.realtime, ...patch } },
+      } : null,
+    });
+  }, []);
+
   const updateTts = useCallback((patch: Partial<VoiceSettingsState['tts']>) => {
     dirtyRef.current = true;
     dispatchForm({
@@ -455,6 +466,21 @@ export function VoiceSettingsPanel() {
           voice={form.voice}
           updateLanguageMode={updateVoiceLanguageMode}
         />
+        <ProminentVoiceToggle
+          checked={form.voice.realtime.enabled}
+          title={v.realtime.title}
+          description={v.realtime.description}
+          onLabel={v.overview.ready}
+          offLabel={v.overview.off}
+          onChange={(enabled) => updateRealtime({ enabled })}
+        />
+        {form.voice.realtime.enabled ? (
+          <RealtimeVoiceSettings
+            v={v}
+            realtime={form.voice.realtime}
+            onChange={updateRealtime}
+          />
+        ) : null}
         <VoiceOverview v={v} stt={stt} tts={tts} />
 
         <SttSection
@@ -515,6 +541,39 @@ function VoiceLanguageSection({
           <SelectOption value="auto">{v.language.auto}</SelectOption>
           <SelectOption value="manual">{v.language.manual}</SelectOption>
         </Select>
+      </div>
+    </section>
+  );
+}
+
+function RealtimeVoiceSettings({
+  v,
+  realtime,
+  onChange,
+}: {
+  v: VoiceSettingsMessages;
+  realtime: VoiceSettingsState['voice']['realtime'];
+  onChange: (patch: Partial<VoiceSettingsState['voice']['realtime']>) => void;
+}) {
+  return (
+    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-edge px-3 py-3 text-sm text-fg">
+          <span className="block font-medium">{v.realtime.turnDetection}</span>
+          <span className="mt-1 block text-xs text-fg-muted">{v.realtime.turnDetectionDescription}</span>
+        </div>
+        <label className="flex items-start gap-3 rounded-xl border border-edge px-3 py-3 text-sm text-fg">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-accent"
+            checked={realtime.bargeIn}
+            onChange={(event) => onChange({ bargeIn: event.target.checked })}
+          />
+          <span>
+            <span className="block font-medium">{v.realtime.bargeIn}</span>
+            <span className="mt-1 block text-xs font-normal text-fg-muted">{v.realtime.bargeInDescription}</span>
+          </span>
+        </label>
       </div>
     </section>
   );
