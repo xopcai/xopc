@@ -4,6 +4,9 @@ import { getProviderAuthService } from '../../../providers/provider-auth-service
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
 import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type { AudioTranscriptionRequest, MediaUnderstandingProvider } from '../../../media-understanding/types.js';
+import { openDashScopeStreamingStt } from '../../dashscope/streaming-stt-session.js';
+
+const DEFAULT_STREAMING_MODEL = 'qwen-audio-3.0-asr-flash-streaming';
 
 function defaultModel(): string | undefined {
   const source = getModelCatalogStore().getSource('xopc-cloud');
@@ -42,6 +45,27 @@ export const xopcCloudTranscriptionProvider: MediaUnderstandingProvider = {
     }
     if (typeof body?.text !== 'string') throw new Error('XOPC Cloud STT returned an invalid response');
     return { text: body.text, model, ...(request.language ? { language: request.language } : {}) };
+  },
+  streamingAudio: {
+    inputSampleRates: [16_000],
+    turnDetection: ['server_vad'],
+    defaultModel: DEFAULT_STREAMING_MODEL,
+    models: [DEFAULT_STREAMING_MODEL],
+  },
+  openAudioStream: async (request) => {
+    const accessToken = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
+    if (!accessToken) throw new Error('XOPC Cloud authorization is unavailable');
+    const source = getModelCatalogStore().getSource('xopc-cloud');
+    const baseUrl = (request.baseUrl ?? source?.baseUrl ?? resolveXopcModelRouterUrl()).replace(/\/+$/, '');
+    const relayUrl = new URL(`${baseUrl}/audio/transcriptions/realtime`);
+    relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    relayUrl.searchParams.set('model', request.model || DEFAULT_STREAMING_MODEL);
+    return openDashScopeStreamingStt({
+      ...request,
+      apiKey: accessToken,
+      baseUrl: relayUrl.toString(),
+      model: request.model || DEFAULT_STREAMING_MODEL,
+    });
   },
 };
 

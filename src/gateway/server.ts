@@ -102,6 +102,7 @@ export class GatewayServer {
       });
       inner.on('upgrade', (req, socket, head) => {
         try {
+          if (this.service.voiceRealtime.handleUpgrade(req, socket, head)) return;
           if (this.service.realtime.handleUpgrade(req, socket, head)) return;
           if (handleSiteShareUpgrade(this.service, req, socket, head)) return;
           socket.destroy();

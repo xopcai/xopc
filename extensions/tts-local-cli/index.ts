@@ -209,12 +209,12 @@ function getFileExt(format: OutputFormat): string {
 interface SpawnResult {
   buffer: Buffer;
   actualFormat: OutputFormat;
-  audioPath: string;
 }
 
 async function runCli(params: {
   config: CliConfig;
   text: string;
+  signal: AbortSignal;
 }): Promise<SpawnResult> {
   const cleanText = stripEmojis(params.text);
   if (!cleanText) {
@@ -222,76 +222,77 @@ async function runCli(params: {
   }
 
   const tempDir = mkdtempSync(path.join(tmpdir(), 'xopc-tts-cli-'));
-  const filePrefix = `speech-${Date.now()}`;
-  const expectedExt = getFileExt(params.config.outputFormat);
-
-  const ctx: Record<string, string | undefined> = {
-    Text: cleanText,
-    OutputPath: path.join(tempDir, `${filePrefix}${expectedExt}`),
-    OutputDir: tempDir,
-    OutputBase: filePrefix,
-  };
-
-  const { cmd, initialArgs } = parseCommand(params.config.command);
-  if (!cmd) {
-    throw new Error('Local CLI TTS: invalid command (empty after parse)');
-  }
-  const finalCmd = applyTemplate(cmd, ctx);
-  const finalInitialArgs = initialArgs.map((arg) => applyTemplate(arg, ctx));
-  const finalExtraArgs = (params.config.args ?? []).map((arg) => applyTemplate(arg, ctx));
-  const allArgs = [...finalInitialArgs, ...finalExtraArgs];
-
-  log.debug(
-    { cmd: finalCmd, args: allArgs, tempDir, textLength: cleanText.length },
-    'Spawning local TTS CLI',
-  );
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(finalCmd, allArgs, {
-      ...(params.config.cwd ? { cwd: params.config.cwd } : {}),
-      env: { ...process.env, ...(params.config.env ?? {}) },
-    });
-    let stderr = '';
-    child.stderr.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
-      reject(new Error(`Local CLI TTS: timed out after ${params.config.timeoutMs}ms`));
-    }, params.config.timeoutMs);
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `Local CLI TTS: command exited with code ${code}${stderr ? ` (${stderr.slice(0, 220)})` : ''}`,
-          ),
-        );
-      }
-    });
-  });
-
-  const audioPath = findAudioFile(tempDir, filePrefix);
-  if (!audioPath) {
-    throw new Error(`Local CLI TTS: no audio file produced in ${tempDir}`);
-  }
-  const buffer = readFileSync(audioPath);
-  const actualFormat = detectFormat(audioPath) ?? params.config.outputFormat;
-
-  // Best-effort cleanup. We log but never throw on cleanup failure.
   try {
-    rmSync(tempDir, { recursive: true, force: true });
-  } catch (cleanupErr) {
-    log.warn({ err: cleanupErr, tempDir }, 'Failed to cleanup local CLI temp dir');
-  }
+    const filePrefix = `speech-${Date.now()}`;
+    const expectedExt = getFileExt(params.config.outputFormat);
+    const ctx: Record<string, string | undefined> = {
+      Text: cleanText,
+      OutputPath: path.join(tempDir, `${filePrefix}${expectedExt}`),
+      OutputDir: tempDir,
+      OutputBase: filePrefix,
+    };
+    const { cmd, initialArgs } = parseCommand(params.config.command);
+    if (!cmd) throw new Error('Local CLI TTS: invalid command (empty after parse)');
+    const finalCmd = applyTemplate(cmd, ctx);
+    const allArgs = [
+      ...initialArgs.map((arg) => applyTemplate(arg, ctx)),
+      ...(params.config.args ?? []).map((arg) => applyTemplate(arg, ctx)),
+    ];
 
-  return { buffer, actualFormat, audioPath };
+    log.debug(
+      { cmd: finalCmd, args: allArgs, tempDir, textLength: cleanText.length },
+      'Spawning local TTS CLI',
+    );
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(finalCmd, allArgs, {
+        ...(params.config.cwd ? { cwd: params.config.cwd } : {}),
+        env: { ...process.env, ...(params.config.env ?? {}) },
+      });
+      let stderr = '';
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        params.signal.removeEventListener('abort', onAbort);
+        if (error) reject(error);
+        else resolve();
+      };
+      child.stderr.on('data', (chunk) => {
+        stderr += String(chunk);
+      });
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        finish(new Error(`Local CLI TTS: timed out after ${params.config.timeoutMs}ms`));
+      }, params.config.timeoutMs);
+      const onAbort = () => {
+        child.kill('SIGKILL');
+        finish(params.signal.reason instanceof Error ? params.signal.reason : new Error('Local CLI TTS aborted'));
+      };
+      params.signal.addEventListener('abort', onAbort, { once: true });
+      if (params.signal.aborted) onAbort();
+      child.on('error', (error) => finish(error));
+      child.on('close', (code) => {
+        finish(code === 0
+          ? undefined
+          : new Error(`Local CLI TTS: command exited with code ${code}${stderr ? ` (${stderr.slice(0, 220)})` : ''}`));
+      });
+    });
+
+    const audioPath = findAudioFile(tempDir, filePrefix);
+    if (!audioPath) throw new Error('Local CLI TTS did not produce an audio file');
+    return {
+      buffer: readFileSync(audioPath),
+      actualFormat: detectFormat(audioPath) ?? params.config.outputFormat,
+    };
+  } finally {
+    try {
+      rmSync(tempDir, { recursive: true, force: true });
+    } catch (cleanupErr) {
+      log.warn({ err: cleanupErr, tempDir }, 'Failed to cleanup local CLI temp dir');
+    }
+  }
 }
 
 function parseDirectiveTokenInternal(
@@ -325,7 +326,7 @@ export const localCliSpeechProvider: SpeechProviderPlugin = {
         'Local CLI TTS: command not configured (set messages.tts.providers["tts-local-cli"].command)',
       );
     }
-    const { buffer, actualFormat } = await runCli({ config, text: req.text });
+    const { buffer, actualFormat } = await runCli({ config, text: req.text, signal: req.signal });
     return {
       audioBuffer: buffer,
       outputFormat: actualFormat,
