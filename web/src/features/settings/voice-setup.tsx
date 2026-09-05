@@ -63,7 +63,7 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
     <section className="space-y-5 rounded-xl border border-edge bg-surface-panel p-4 sm:p-5" aria-label={s.service}>
       {section === 'service' ? <>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
-        <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" className="size-4 accent-accent" checked={realtime.enabled} onChange={(e) => { if (e.target.checked) configure(provider === 'alibaba' ? 'alibaba' : 'xopc-cloud'); else updateRealtime({ enabled: false }); }} />{s.enable}</label>
+        <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" aria-checked={realtime.enabled} className="size-4 accent-accent" checked={realtime.enabled} onChange={(e) => { if (e.target.checked) configure(provider === 'alibaba' ? 'alibaba' : 'xopc-cloud'); else updateRealtime({ enabled: false }); }} />{s.enable}</label>
       </div>
       {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{s.statusError}</p> : null}
       <fieldset className="space-y-3">
@@ -108,7 +108,7 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
           {voiceOptions.map((voice) => <SelectOption key={voice.id} value={voice.id}>{voice.name}</SelectOption>)}
         </Select>
       </div>
-      <label className="flex items-center justify-between gap-4 text-sm text-fg"><span>{s.bargeIn}<span className="mt-1 block text-xs text-fg-muted">{v.realtime.bargeInDescription}</span></span><input type="checkbox" role="switch" checked={realtime.bargeIn} className="size-4 accent-accent" onChange={(e) => updateRealtime({ bargeIn: e.target.checked })} /></label>
+      <label className="flex items-center justify-between gap-4 text-sm text-fg"><span>{s.bargeIn}<span className="mt-1 block text-xs text-fg-muted">{v.realtime.bargeInDescription}</span></span><input type="checkbox" role="switch" aria-checked={realtime.bargeIn} checked={realtime.bargeIn} className="size-4 accent-accent" onChange={(e) => updateRealtime({ bargeIn: e.target.checked })} /></label>
       </> : null}
       {section === 'diagnostics' ? <>
         {isLoading ? <Skeleton className="h-16 w-full" /> : <div className="space-y-2 text-sm" role="status">
