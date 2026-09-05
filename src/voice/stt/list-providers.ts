@@ -3,7 +3,7 @@
  */
 
 import type { Config } from '../../config/schema.js';
-import { listMediaUnderstandingProviders } from '../../media-understanding/registry.js';
+import { getMediaUnderstandingProvider, listMediaUnderstandingProviders } from '../../media-understanding/registry.js';
 import { getVoiceProviderMetadata, type VoiceProviderMetadata } from '../metadata/index.js';
 
 import { resolveSTTProviderConfig } from './factory.js';
@@ -39,6 +39,7 @@ function fallbackMetadata(providerId: string, aliases: readonly string[]): Voice
 }
 
 export function isSttProviderConfigured(providerId: string, config: STTConfig): boolean {
+  if (!getMediaUnderstandingProvider(providerId)?.transcribeAudio) return false;
   return resolveSTTProviderConfig(providerId, config) !== null;
 }
 

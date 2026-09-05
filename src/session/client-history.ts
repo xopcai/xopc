@@ -445,8 +445,7 @@ function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessag
   if (customType === 'voice_omni_transcript') {
     const details = r.details as Record<string, unknown> | undefined;
     if (details?.role !== 'user' && details?.role !== 'assistant') return null;
-    const text = typeof r.content === 'string' ? r.content : '';
-    const content = details.interrupted === true ? `${text}\n\n[Voice reply interrupted; transcript may include unplayed text.]` : text;
+    const content = typeof r.content === 'string' ? r.content : '';
     return { role: details.role, kind: 'message', content, rawContent: content,
       timestamp: parseTimestampValue(typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined) };
   }
