@@ -52,6 +52,9 @@ function noteMatchesListFilters(
 
 /** Insert or bump a note in the home recent-notes + filtered list caches. */
 export function upsertNoteInListCaches(queryClient: QueryClient, entry: NoteIndexEntry): void {
+  // Remove first so entries that no longer match a cached filter do not remain stale.
+  removeNoteFromListCachesInternal(queryClient, entry.id);
+
   queryClient.setQueriesData<NotesListResult>(
     {
       queryKey: queryKeys.notesAll,
@@ -117,7 +120,7 @@ function removeFromItems(items: NoteIndexEntry[], noteId: string): {
 }
 
 /** Optimistically remove a note from list caches; returns removed entry for undo. */
-export function removeNoteFromListCaches(queryClient: QueryClient, noteId: string): NoteIndexEntry | null {
+function removeNoteFromListCachesInternal(queryClient: QueryClient, noteId: string): NoteIndexEntry | null {
   let removedEntry: NoteIndexEntry | null = null;
 
   queryClient.setQueriesData<NotesListResult>(
@@ -155,7 +158,12 @@ export function removeNoteFromListCaches(queryClient: QueryClient, noteId: strin
     },
   );
 
-  void queryClient.invalidateQueries({ queryKey: queryKeys.homeInboxCount });
-
   return removedEntry;
+}
+
+/** Optimistically remove a note from every list cache; returns the removed entry for undo. */
+export function removeNoteFromListCaches(queryClient: QueryClient, noteId: string): NoteIndexEntry | null {
+  const removed = removeNoteFromListCachesInternal(queryClient, noteId);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.homeInboxCount });
+  return removed;
 }

@@ -7,12 +7,11 @@ import { invalidateNoteLists } from '../../query/workspace-sync';
 import {
   fetchNote,
   recordNoteOpen,
-  updateNote,
   type ApiError,
   type Note,
   type NoteAttachment,
 } from '../../query/notes';
-import { queueWorkspaceOperation } from '../../sync/workspace-sync';
+import { flushPendingWorkspaceOperations, getPendingWorkspaceOperations, getWorkspaceSyncDeadLetters, queueWorkspaceOperation } from '../../sync/workspace-sync';
 import type { NoteEditorDraft } from '../notes/editor/editor-protocol';
 
 const SAVE_DEBOUNCE_MS = 600;
@@ -103,11 +102,6 @@ export function useNoteEditSession({
   const saveAgainRef = useRef(false);
   const queuedSaveSnapshotRef = useRef<SaveSnapshot | null>(null);
 
-  markdownRef.current = markdown;
-  titleRef.current = title;
-  tagsRef.current = tags;
-  statusRef.current = noteStatus;
-
   const noteQuery = useQuery({
     queryKey: id ? queryKeys.note(id) : ['note', 'missing'],
     queryFn: () => fetchNote(id!),
@@ -157,6 +151,10 @@ export function useNoteEditSession({
     if (shouldHydrateFromServer) {
       seededNoteIdRef.current = note.id;
       dirtyRef.current = false;
+      markdownRef.current = nextMarkdown;
+      titleRef.current = nextTitle ?? '';
+      tagsRef.current = nextTags;
+      statusRef.current = nextStatus;
       setMarkdown(nextMarkdown);
       setTitle(nextTitle ?? '');
       setTags(nextTags);
@@ -173,7 +171,7 @@ export function useNoteEditSession({
       setEditorReady(true);
     } else if (localMatchesNextServer) {
       dirtyRef.current = false;
-      queuedSaveSnapshotRef.current = null;
+      if (!saveInFlightRef.current) queuedSaveSnapshotRef.current = null;
       setSaveState('saved');
       setEditorReady(true);
     } else {
@@ -247,20 +245,27 @@ export function useNoteEditSession({
       status: sentStatus,
     };
 
-    if (saveSnapshotsEqual(queuedSaveSnapshotRef.current, sentSnapshot)) {
-      setSaveState('pending');
-      return;
+    if (!saveSnapshotsEqual(queuedSaveSnapshotRef.current, sentSnapshot)) {
+      queueWorkspaceOperation({
+        type: 'update_note', noteId: id,
+        patch: { markdown: sentMarkdown, title: sentTitle ?? null, tags: sentTags, status: sentStatus },
+      });
+      queuedSaveSnapshotRef.current = sentSnapshot;
     }
 
     setSaveState('saving');
     const savePromise = (async () => {
       try {
-        const updated = await updateNote(id, {
-          markdown: sentMarkdown,
-          title: sentTitle ?? null,
-          tags: sentTags,
-          status: sentStatus,
-        });
+        await flushPendingWorkspaceOperations();
+        if (getPendingWorkspaceOperations().some((op) => op.payload.type === 'update_note' && op.payload.noteId === id)) {
+          setSaveState('pending');
+          return;
+        }
+        if (getWorkspaceSyncDeadLetters().some((op) => op.payload.type === 'update_note' && op.payload.noteId === id)) {
+          setSaveState('failed');
+          return;
+        }
+        const updated = await fetchNote(id);
         queryClient.setQueryData(queryKeys.note(id), updated);
         upsertNoteInListCaches(queryClient, noteToIndexEntry(updated));
         void invalidateNoteLists(queryClient);
@@ -269,15 +274,9 @@ export function useNoteEditSession({
         serverTitleRef.current = updated.title ?? undefined;
         serverTagsRef.current = updated.tags;
         serverStatusRef.current = updated.status;
-        queuedSaveSnapshotRef.current = null;
-        attachmentDisplayVersionRef.current += 1;
-        setAttachmentDisplaySeed({
-          version: attachmentDisplayVersionRef.current,
-          noteId: updated.id,
-          markdown: updated.markdown ?? sentMarkdown,
-          attachments: updated.attachments,
-        });
-
+        if (saveSnapshotsEqual(queuedSaveSnapshotRef.current, sentSnapshot)) {
+          queuedSaveSnapshotRef.current = null;
+        }
         const changedWhileSaving = markdownRef.current !== sentMarkdown
           || (titleRef.current.trim() || undefined) !== sentTitle
           || !tagsEqual(tagsRef.current, sentTags)
@@ -291,17 +290,6 @@ export function useNoteEditSession({
           setSnackMsg(error instanceof Error ? error.message : messages.savedOffline);
           return;
         }
-        queueWorkspaceOperation({
-          type: 'update_note',
-          noteId: id,
-          patch: {
-            markdown: sentMarkdown,
-            title: sentTitle ?? null,
-            tags: sentTags,
-            status: sentStatus,
-          },
-        });
-        queuedSaveSnapshotRef.current = sentSnapshot;
         dirtyRef.current = true;
         setSaveState('pending');
         setSnackMsg(messages.savedOffline);
@@ -332,27 +320,40 @@ export function useNoteEditSession({
   const applyDraft = useCallback((draft: NoteEditorDraft, schedule = true) => {
     const titleChanged = draft.title !== titleRef.current;
     const markdownChanged = draft.markdown !== markdownRef.current;
-    if (!titleChanged && !markdownChanged) return;
-    dirtyRef.current = true;
-    markdownRef.current = draft.markdown;
-    titleRef.current = draft.title;
-    setSaveState('dirty');
-    if (markdownChanged) {
-      setMarkdown(draft.markdown);
+    if (titleChanged || markdownChanged) {
+      dirtyRef.current = true;
+      markdownRef.current = draft.markdown;
+      titleRef.current = draft.title;
+      setSaveState('dirty');
+      if (schedule) scheduleSave();
     }
-    if (titleChanged) setTitle(draft.title);
-    if (schedule) scheduleSave();
+    setMarkdown(draft.markdown);
+    setTitle(draft.title);
   }, [scheduleSave]);
 
-  const updateMarkdown = useCallback((next: string) => {
-    applyDraft({ title: titleRef.current, markdown: next }, false);
-    void flushSave();
-  }, [applyDraft, flushSave]);
+  const updateMarkdownFromEditor = useCallback((next: string) => {
+    if (next === markdownRef.current) return;
+    markdownRef.current = next;
+    dirtyRef.current = true;
+    setSaveState('dirty');
+    scheduleSave();
+  }, [scheduleSave]);
 
-  const updateTitle = useCallback((next: string) => {
-    applyDraft({ title: next, markdown: markdownRef.current }, false);
-    void flushSave();
-  }, [applyDraft, flushSave]);
+  const updateTitleFromEditor = useCallback((next: string) => {
+    if (next === titleRef.current) return;
+    titleRef.current = next;
+    dirtyRef.current = true;
+    setSaveState('dirty');
+    scheduleSave();
+  }, [scheduleSave]);
+
+  const replaceMarkdown = useCallback((next: string) => {
+    applyDraft({ title: titleRef.current, markdown: next });
+  }, [applyDraft]);
+
+  const replaceTitle = useCallback((next: string) => {
+    applyDraft({ title: next, markdown: markdownRef.current });
+  }, [applyDraft]);
 
   const updateTags = useCallback((next: string[] | undefined) => {
     setTags(next);
@@ -361,6 +362,37 @@ export function useNoteEditSession({
     setSaveState('dirty');
     scheduleSave();
   }, [scheduleSave]);
+
+  const persistForSync = useCallback(() => {
+    if (!id || !note) return;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const snapshot: SaveSnapshot = {
+      markdown: markdownRef.current,
+      title: titleRef.current.trim() || undefined,
+      tags: tagsRef.current,
+      status: statusRef.current,
+    };
+    if ((snapshot.markdown === serverMarkdownRef.current
+      && snapshot.title === serverTitleRef.current
+      && tagsEqual(snapshot.tags, serverTagsRef.current)
+      && snapshot.status === serverStatusRef.current)
+      || saveSnapshotsEqual(queuedSaveSnapshotRef.current, snapshot)) return;
+    queueWorkspaceOperation({
+      type: 'update_note',
+      noteId: id,
+      patch: {
+        markdown: snapshot.markdown,
+        title: snapshot.title ?? null,
+        tags: snapshot.tags,
+        status: snapshot.status,
+      },
+    });
+    queuedSaveSnapshotRef.current = snapshot;
+    setSaveState('pending');
+  }, [id, note]);
 
   return {
     note,
@@ -376,9 +408,12 @@ export function useNoteEditSession({
     flushSave,
     scheduleSave,
     applyDraft,
-    updateMarkdown,
-    updateTitle,
+    updateMarkdownFromEditor,
+    updateTitleFromEditor,
+    replaceMarkdown,
+    replaceTitle,
     updateTags,
+    persistForSync,
     attachmentDisplaySeed,
   };
 }
