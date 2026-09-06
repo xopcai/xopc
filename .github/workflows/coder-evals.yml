@@ -12,6 +12,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
       - '.github/workflows/coder-evals.yml'
+      - '.github/workflows/coder-evals-live.yml'
   push:
     branches: [main, master]
     paths:
@@ -21,6 +22,7 @@ on:
       - 'pnpm-workspace.yaml'
       - 'pnpm-lock.yaml'
       - '.github/workflows/coder-evals.yml'
+      - '.github/workflows/coder-evals-live.yml'
 
 permissions:
   contents: read
