@@ -19,7 +19,7 @@ xopc 可以把语音转成文字（STT），也可以把助手回复转成音频
 
 使用输入框的通话按钮，即可在原会话中开始或继续语音聊天。断网、时长限制或刷新页面会结束当前连接；再次点击通话即可接着聊。最小化和切换页面不会结束连接，也不会在断线后未经操作自动开启麦克风。
 
-XOPC 托管自然聊天需要平台已有可用且发布的语音聊天路由。网页和网关应同时使用协议 v2。托管语音的平台转发层还需要支持 `input_audio_buffer.clear`，请先更新对应的平台网关。实现边界见[技术设计](../design/realtime-voice-technical-design.md)与[分阶段审查记录](../design/persistent-voice-delivery.md)。
+XOPC 托管自然聊天需要平台已有可用且发布的语音聊天路由。网页和网关应同时使用协议 v2。托管语音的平台转发层还需要支持 `input_audio_buffer.clear`，请先更新对应的平台网关。实现边界见[技术设计](https://github.com/xopcai/xopc/blob/main/docs/design/realtime-voice-technical-design.md)与[分阶段审查记录](https://github.com/xopcai/xopc/blob/main/docs/design/persistent-voice-delivery.md)。
 
 ## 还可以在哪里使用
 
@@ -98,4 +98,4 @@ xopc 可以使用受支持的云端语音服务，也可以使用已配置的本
 
 默认方案为 `voice.realtime.defaultEngine`，取值 `agent`（默认）或 `omni`，修改后在下次通话生效。
 
-验证记录及真机验收矩阵见[语音体验交付记录](../design/voice-experience-delivery.md)。
+验证记录及真机验收矩阵见[语音体验交付记录](https://github.com/xopcai/xopc/blob/main/docs/design/voice-experience-delivery.md)。
