@@ -59,8 +59,8 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
         if (mode === 'pending') return;
         if (mode === 'gap') return send('realtime.gap', { topic: subscription.topic, requestedSeq: 0, earliestSeq: 10, recoverable: false });
         const events = mode === 'error' ? [['error', { message: 'provider rejected' }]] : [
-          ['run_start', {}], ['llm_request', {}], ['assistant_delta', { delta: 'done' }],
-          ['llm_response', { usage: { input: 5, output: 2 } }], ['run_end', {}],
+          ['run_start', {}], ['assistant_message_start', {}], ['assistant_delta', { delta: 'done' }],
+          ['assistant_message_end', { usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }], ['run_end', { status: 'success' }],
         ];
         events.forEach(([event, payload], index) => {
           const data = { topic: subscription.topic, seq: index + 1, event, data: { type: event, runId: 'xopc-run', payload } };
@@ -94,7 +94,7 @@ it('submits signed session input and captures ordered realtime replay without du
     const result = await adapter.run(f.request, async event => { await new Promise(resolve => setTimeout(resolve, 2)); events.push(event); }, new AbortController().signal);
     await adapter.cleanup(f.request.runId);
     expect(result).toMatchObject({ status: 'completed', finalText: 'done', agentRunId: 'xopc-run', usage: { input: 5, output: 2 }, runtimeIdentity: { effectiveModelRef: 'test/model', manifestHash: 'manifest' } });
-    expect(events.map(event => event.type)).toEqual(['agent.event', 'run.started', 'model.request', 'model.response', 'model.response', 'run.completed']);
+    expect(events.map(event => event.type)).toEqual(['agent.event', 'run.started', 'model.request', 'agent.event', 'model.response', 'run.completed']);
     expect(f.requests.find(r => r.url.endsWith('/inputs'))?.body).toMatchObject({ content: 'Make the change', delivery: 'next', thinking: 'high', origin: { token: 't'.repeat(40) } });
     expect(f.requests.some(r => r.url === '/api/agent')).toBe(false);
     expect(f.requests.filter(r => r.method === 'DELETE')).toHaveLength(2);
