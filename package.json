@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.245",
+  "version": "0.0.246",
   "description": "Local-first personal AI assistant with reviewable user understanding, durable tasks, workflows, automations, and local or cloud models.",
   "packageManager": "pnpm@11.9.0",
   "type": "module",
