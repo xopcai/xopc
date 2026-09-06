@@ -69,6 +69,40 @@ class XopcVoiceModule : Module() {
     OnDestroy { handler.post { stop() } }
   }
 
+  private fun acquireAudioFocus(attributes: AudioAttributes): Boolean {
+    for (gain in intArrayOf(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)) {
+      val request = AudioFocusRequest.Builder(gain).setAudioAttributes(attributes)
+        .setOnAudioFocusChangeListener({ change -> if (change < 0) interrupt("interruption") }, handler).build()
+      if (manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+        focus = request
+        return true
+      }
+    }
+    return false
+  }
+
+  private fun startRecorder(bufferSize: Int): AudioRecord {
+    var lastError: RuntimeException? = null
+    for (source in intArrayOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC)) {
+      var candidate: AudioRecord? = null
+      try {
+        candidate = AudioRecord(source, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+        check(candidate.state == AudioRecord.STATE_INITIALIZED)
+        candidate.startRecording()
+        check(candidate.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+        return candidate
+      } catch (error: SecurityException) {
+        try { candidate?.release() } catch (_: RuntimeException) { }
+        throw IllegalStateException("PERMISSION_DENIED", error)
+      } catch (error: RuntimeException) {
+        lastError = error
+        try { candidate?.stop() } catch (_: RuntimeException) { }
+        try { candidate?.release() } catch (_: RuntimeException) { }
+      }
+    }
+    throw IllegalStateException("MICROPHONE_UNAVAILABLE", lastError)
+  }
+
   private fun start(enabled: Boolean, title: String, stopLabel: String) {
     savedContext = appContext.reactContext?.applicationContext
     stop()
@@ -80,22 +114,18 @@ class XopcVoiceModule : Module() {
         context.startForegroundService(Intent(context, VoiceCallService::class.java).putExtra("title", title).putExtra("stopLabel", stopLabel))
       }
       manager.mode = AudioManager.MODE_IN_COMMUNICATION
-      focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE).setAudioAttributes(attributes)
-        .setOnAudioFocusChangeListener({ change -> if (change < 0) interrupt("interruption") }, handler).build()
-      check(manager.requestAudioFocus(focus!!) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { "Audio focus unavailable" }
+      check(acquireAudioFocus(attributes)) { "AUDIO_FOCUS_UNAVAILABLE" }
       val minInput = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-      check(minInput > 0) { "Microphone format unavailable" }
-      val input = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minInput, 6400))
+      check(minInput > 0) { "MICROPHONE_FORMAT_UNAVAILABLE" }
+      val input = startRecorder(maxOf(minInput, 6400))
       recorder = input
-      check(input.state == AudioRecord.STATE_INITIALIZED) { "Microphone unavailable" }
       if (AcousticEchoCanceler.isAvailable()) echo = AcousticEchoCanceler.create(input.audioSessionId)?.apply { this.enabled = true }
       if (NoiseSuppressor.isAvailable()) noise = NoiseSuppressor.create(input.audioSessionId)?.apply { this.enabled = true }
       track = AudioTrack.Builder().setAudioAttributes(attributes)
         .setAudioFormat(AudioFormat.Builder().setSampleRate(24000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
         .setBufferSizeInBytes(96000).setTransferMode(AudioTrack.MODE_STREAM).build()
-      check(track?.state == AudioTrack.STATE_INITIALIZED) { "Playback unavailable" }
+      check(track?.state == AudioTrack.STATE_INITIALIZED) { "PLAYBACK_UNAVAILABLE" }
       track?.play()
-      input.startRecording()
       val generation = epoch
       inputThread = Thread({
         val buffer = ByteArray(1280)
@@ -116,7 +146,8 @@ class XopcVoiceModule : Module() {
       }
       manager.registerAudioDeviceCallback(devices, handler)
       handler.post(progress)
-    } catch (error: Throwable) { stop(); throw error }
+    } catch (error: SecurityException) { stop(); throw IllegalStateException("PERMISSION_DENIED", error) }
+    catch (error: Throwable) { stop(); throw error }
   }
 
   private fun enqueue(id: String, audio: String) {

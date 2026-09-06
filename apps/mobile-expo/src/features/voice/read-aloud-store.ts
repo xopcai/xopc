@@ -35,6 +35,7 @@ export type ReadAloudInput = {
 
 type ReadAloudState = {
   source: ReadAloudInput['source'] | null;
+  continuousSessionKey: string | null;
   status: ReadAloudStatus;
   error: ReadAloudError;
   currentChunkIndex: number;
@@ -42,6 +43,8 @@ type ReadAloudState = {
   currentTime: number;
   duration: number;
   rate: number;
+  enableContinuous: (sessionKey: string) => void;
+  disableContinuous: () => void;
   requestStart: (input: ReadAloudInput) => void;
   pause: () => void;
   resume: () => void;
@@ -346,7 +349,12 @@ function startPlayback(input: ReadAloudInput): void {
 
 export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   ...initialPlaybackState,
+  continuousSessionKey: null,
   rate: 1,
+
+  enableContinuous: (sessionKey) => set({ continuousSessionKey: sessionKey }),
+
+  disableContinuous: () => set({ continuousSessionKey: null }),
 
   requestStart: (input) => {
     const state = get();

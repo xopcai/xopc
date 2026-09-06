@@ -746,14 +746,12 @@ export const en = {
     headerSettingsTitle: 'Chat settings',
     headerCurrentConversation: 'This conversation',
     headerCurrentAgent: 'Current agent',
-    headerAutoReadAloud: 'Read replies aloud',
-    headerAutoReadAloudHint: 'Play speech automatically after each reply',
     headerQuickActions: 'Quick actions',
     headerNewChat: 'New chat',
     headerNewChatHint: 'Start a fresh conversation',
     headerSessionFilesHint: 'View files created or referenced in this chat',
-    autoReadAloudEnable: 'Turn on automatic read aloud',
-    autoReadAloudDisable: 'Turn off automatic read aloud',
+    continuousReadAloudActive: 'Reading future replies in this chat',
+    continuousReadAloudStop: 'Stop reading future replies',
   },
 
   // ── Settings screen ─────────────────────────────────────

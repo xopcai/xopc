@@ -4,7 +4,7 @@ import { Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
-import type { ChatModelOption } from '../../query/models';
+import { chatModelDisplayName, type ChatModelOption } from '../../query/models';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
 export const ModelPickerMenu = memo(function ModelPickerMenu({
@@ -49,7 +49,7 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
       ) : (
         models.map((model) => {
           const isActive = model.id === currentModelId;
-          const title = model.name ?? model.id;
+          const title = chatModelDisplayName(model);
           return (
             <Pressable
               key={model.id}
@@ -60,7 +60,7 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
               ]}
               onPress={() => handleSelect(model.id)}
               accessibilityRole="button"
-              accessibilityLabel={`${title}, ${model.id}`}
+              accessibilityLabel={title}
               accessibilityState={{ selected: isActive }}
             >
               <View style={styles.rowText}>
@@ -73,11 +73,6 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
                 >
                   {title}
                 </Text>
-                {model.name && model.id !== model.name ? (
-                  <Text style={[styles.rowId, { color: colors.text.tertiary }]} numberOfLines={1}>
-                    {model.id}
-                  </Text>
-                ) : null}
                 {model.description ? (
                   <Text style={[styles.rowDesc, { color: descColor }]} numberOfLines={2}>
                     {model.description}
@@ -120,10 +115,6 @@ const styles = StyleSheet.create({
   rowTitle: {
     ...typography.ui,
     fontWeight: '600',
-  },
-  rowId: {
-    ...typography.caption,
-    marginTop: spacing.xxs,
   },
   rowDesc: {
     ...typography.caption,

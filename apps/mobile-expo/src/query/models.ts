@@ -15,6 +15,11 @@ export type ChatModelsPayload = {
   items: ChatModelOption[];
 };
 
+export function chatModelDisplayName(model: Pick<ChatModelOption, 'id' | 'name'>): string {
+  const value = model.name?.trim() || model.id.trim();
+  return value.split('/').at(-1)?.trim() || value;
+}
+
 const modelRowSchema = z
   .object({
     id: z.string(),

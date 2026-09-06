@@ -25,7 +25,7 @@ import { useGatewayConnectLanding } from '../gateway/gateway-connect-context';
 import { useKeyboardVisible } from '../../hooks/use-keyboard-visible';
 import { useMessages } from '../../i18n/messages';
 import { fetchChatAgents, readPlaceholderAgents, resolveEffectiveDefaultAgentId } from '../../query/agents';
-import { fetchChatModels, resolveEffectiveModelId, sessionModelMutationOptions, fetchSessionAgentConfig } from '../../query/models';
+import { chatModelDisplayName, fetchChatModels, resolveEffectiveModelId, sessionModelMutationOptions, fetchSessionAgentConfig } from '../../query/models';
 import { queryKeys } from '../../query/keys';
 import { fetchTask, handoffTaskConversation } from '../../query/tasks';
 import { fetchProject, fetchProjectOperatingView } from '../../query/projects';
@@ -247,7 +247,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const models = modelsQuery.data?.items ?? [];
     if (!models.length) return m.chat.modelPickerSelect;
     const model = models.find((item) => item.id === effectiveModelId);
-    return model?.name ?? model?.id ?? (effectiveModelId || m.chat.modelPickerSelect);
+    return model
+      ? chatModelDisplayName(model)
+      : effectiveModelId
+        ? chatModelDisplayName({ id: effectiveModelId })
+        : m.chat.modelPickerSelect;
   }, [effectiveModelId, m.chat.modelPickerSelect, modelsQuery.data?.items]);
 
   // ── Parsed messages ──────────────────────────────────────

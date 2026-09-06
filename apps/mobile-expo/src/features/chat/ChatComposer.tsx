@@ -1,7 +1,7 @@
 /**
  * Chat composer — Kimi-style compact/expanded input, attachments, editable dictation and persistent calls.
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type LayoutChangeEvent,
   DeviceEventEmitter,
@@ -57,10 +57,8 @@ import {
 import { useComposerAttachments } from './use-composer-attachments';
 import { MOBILE_COMPOSER_APPEND_EVENT, MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
 import { useChatDictation } from './use-chat-dictation';
-import { useVoiceCall, voiceCall } from '../voice/voice-call';
-import { useVoicePreferences } from '../voice/voice-preferences';
+import { useVoiceCall } from '../voice/voice-call';
 import { voiceErrorMessage } from '../voice/voice-error';
-import { useGatewayStore } from '../../stores/gateway-store';
 
 export const ChatComposer = memo(function ChatComposer({
   sessionKey,
@@ -75,6 +73,7 @@ export const ChatComposer = memo(function ChatComposer({
   overlayShell = false,
   contextRefs,
   onContextRefsChange,
+  contextControl,
 }: {
   sessionKey: string;
   disabled: boolean;
@@ -88,6 +87,7 @@ export const ChatComposer = memo(function ChatComposer({
   overlayShell?: boolean;
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
+  contextControl?: ReactNode;
 }) {
   const m = useMessages();
   const { height } = useWindowDimensions();
@@ -210,13 +210,6 @@ export const ChatComposer = memo(function ChatComposer({
   const voiceInteractionActive = voice.phase !== 'idle';
   const call = useVoiceCall();
   const callInChat = call.phase !== 'idle' && call.target?.sessionKey === sessionKey;
-  const gatewayId = useGatewayStore(s => s.activeGatewayId);
-  const voicePrefs = useVoicePreferences();
-  const startCall = () => {
-    if (call.phase !== 'idle') { voiceCall.expand(); return; }
-    if (!gatewayId || runBusy || disabled || voiceInteractionActive) return;
-    void voiceCall.start({ gatewayId, sessionKey, engine: voicePrefs.engines[gatewayId], background: voicePrefs.background });
-  };
 
   const resetEditor = useCallback(() => {
     setDraft('');
@@ -464,7 +457,14 @@ export const ChatComposer = memo(function ChatComposer({
 
   const renderCaptureRail = () => {
     return (
-      <View style={styles.captureRail}>
+      <ScrollView
+        horizontal
+        style={styles.captureScroll}
+        contentContainerStyle={styles.captureRail}
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {contextControl}
         {captureItems.map((item) => {
           const itemDisabled = disabled
             || streaming
@@ -472,23 +472,11 @@ export const ChatComposer = memo(function ChatComposer({
             || att.attachments.length >= att.maxAttachments;
           return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);
         })}
-      </View>
+      </ScrollView>
     );
   };
 
   const dictationDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle';
-  const renderCallButton = (primary = false) => (
-    <Pressable
-      style={[primary ? styles.sendCircle : styles.toolBtn, primary && { backgroundColor: colors.accent.primary }, { opacity: call.phase === 'idle' && (runBusy || voiceInteractionActive) ? 0.54 : 1 }]}
-      onPress={startCall}
-      disabled={call.phase === 'idle' && (runBusy || voiceInteractionActive)}
-      accessibilityRole="button"
-      accessibilityLabel={call.phase === 'idle' ? m.voice.title : m.voice.expand}
-    >
-      <Icon source="phone-outline" size={22} color={primary ? colors.text.inverse : accent} />
-    </Pressable>
-  );
-
   const renderVoiceToggle = () => (
     <Pressable
       style={({ pressed }) => [
@@ -561,7 +549,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const renderSendOrStop = () => {
     if (streaming) return renderStreamingRightActions();
-    if (!hasDraft) return renderCallButton(true);
+    if (!hasDraft) return null;
     if (!isExpanded) return null;
     return (
       <Pressable
@@ -734,12 +722,11 @@ export const ChatComposer = memo(function ChatComposer({
                   {...textInputProps}
                 />
               </View>
-              {!isExpanded ? (streaming ? renderStreamingRightActions() : <View style={styles.streamingActions}>{renderAttachButton()}{renderCallButton(true)}</View>) : null}
+              {!isExpanded ? (streaming ? renderStreamingRightActions() : renderAttachButton()) : null}
             </View>
             {isExpanded ? (
               <View style={styles.toolRow}>
                 {renderVoiceToggle()}
-                {hasDraft && !streaming ? renderCallButton() : null}
                 <View style={styles.toolSpacer} />
                 {streaming ? (
                   renderStreamingRightActions()
@@ -798,6 +785,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
+  captureScroll: { flexGrow: 0, flexShrink: 0 },
   captureRail: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -805,9 +793,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   captureChip: {
-    flex: 1,
-    minWidth: 0,
-    height: 38,
+    flexShrink: 0,
+    minHeight: 44,
     borderRadius: radii.full,
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',

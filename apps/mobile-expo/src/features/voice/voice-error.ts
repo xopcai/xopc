@@ -4,7 +4,7 @@ export function voiceErrorMessage(code: string | undefined, m: MessageBundle['vo
   if (/EMPTY_UTTERANCE/.test(code)) return m.noSpeech;
   if (/PERMISSION/.test(code)) return m.permission;
   if (/UPGRADE|NATIVE_BUILD/.test(code)) return m.upgrade;
-  if (/CONFLICT|BUSY/.test(code)) return m.busy;
+  if (/CONFLICT|BUSY|AUDIO_FOCUS|MICROPHONE_(?:FORMAT_)?UNAVAILABLE/.test(code)) return m.busy;
   if (/SESSION_CHANGED|NOT_FOUND|context_changed/.test(code)) return m.sessionChanged;
   if (/TIME_LIMIT|max_duration|session_limit|idle_timeout/.test(code)) return m.timeLimit;
   if (/INPUT_DROPPED|audio_backpressure/.test(code)) return m.inputDropped;
