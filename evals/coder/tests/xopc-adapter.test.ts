@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage } from 'node:http';
 
 import { XopcGatewayAdapter } from '@agent-evals/adapter-xopc';
 import type { RunRequest, TraceEvent } from '@agent-evals/protocol';
-import { endpointHelloSigningPayload } from '@xopcai/endpoint-tools-protocol';
+import { endpointHelloSigningPayload, endpointPrincipalRegistrationSchema, endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import { WebSocketServer } from 'ws';
 import { expect, it } from 'vitest';
 
@@ -29,12 +29,12 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
     if (url.endsWith('/agent-config')) return res.end(JSON.stringify({ payload: { model: 'test/model', thinkingLevel: 'high', effectiveWorkspacePath: '/tmp/repo' } }));
     if (url.startsWith('/api/eval/runtime-identity')) return res.end(JSON.stringify({ payload: { manifestHash: 'manifest' } }));
     if (url === '/api/endpoint-tools/principals' && method === 'POST') {
-      registered = body;
+      registered = endpointPrincipalRegistrationSchema.parse(body);
       return res.end('{"ok":true}');
     }
     if (url === '/api/realtime/tickets') return res.end(JSON.stringify({ payload: { ticket: 'x'.repeat(40) } }));
     if (url.endsWith('/inputs')) {
-      if (!signatureValid || body.origin?.token !== turnToken) { res.statusCode = 401; return res.end('{}'); }
+      if (!signatureValid || !endpointTurnClaimSchema.safeParse(body.origin).success || body.origin?.token !== turnToken) { res.statusCode = 401; return res.end('{}'); }
       return res.end(JSON.stringify({ payload: { state: { activeRunId: 'xopc-run', activeInputId: 'input', inputs: [{ id: 'input', clientMessageId: body.clientMessageId, runId: 'xopc-run' }] } } }));
     }
     if (method === 'DELETE' || url === '/api/agent/abort') return res.end('{"ok":true}');
