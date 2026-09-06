@@ -9,6 +9,8 @@ const { models } = vi.hoisted(() => ({ models: [
     thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
   { id: 'other/two', name: 'Model Two', provider: 'other', reasoning: false,
     thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
+  { id: 'xopc-cloud/openai-codex/gpt-5.6-luna', name: 'openai-codex/gpt-5.6-luna', provider: 'xopc-cloud', reasoning: true,
+    thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
 ] }));
 vi.mock('swr', () => ({ default: () => ({ data: models, isLoading: false, mutate: vi.fn() }) }));
 
@@ -37,6 +39,16 @@ async function render(props = {}) {
 }
 
 describe('composer model configuration', () => {
+  it('shows only the model name for a provider-routed model and retains its identity in the picker', async () => {
+    await render({ sessionModel: 'xopc-cloud/openai-codex/gpt-5.6-luna', thinkingLevel: 'low' });
+    const trigger = container.querySelector('button')!;
+    expect(trigger.textContent).toBe('gpt-5.6-luna· Low');
+    expect(trigger.title).toBe('gpt-5.6-luna');
+    expect(trigger.getAttribute('aria-label')).not.toContain('openai-codex');
+    await click(button('openai-codex/gpt-5.6-lunaxopc-cloud'));
+    expect(button('openai-codex/gpt-5.6-lunaxopc-cloud').getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('shows concrete identity and only supported thinking levels in one popover', async () => {
     await render();
     expect(container.textContent).toContain('Model One');
