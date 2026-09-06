@@ -1,0 +1,58 @@
+name: Coder Evals (Live)
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Registered provider/model (API-key authentication)'
+        required: true
+        type: string
+      reasoning:
+        description: 'Reasoning level supported by the model'
+        type: choice
+        default: high
+        options: [off, low, medium, high]
+      repetitions:
+        description: 'Runs per task (8 tasks; up to 5 minutes per run)'
+        type: choice
+        default: '1'
+        options: ['1', '2', '3']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coder-evals-live
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run live coding evaluation
+        id: eval
+        env:
+          CODER_EVAL_API_KEY: ${{ secrets.CODER_EVAL_API_KEY }}
+          CODER_EVAL_MODEL: ${{ inputs.model }}
+          CODER_EVAL_REASONING: ${{ inputs.reasoning }}
+          CODER_EVAL_REPETITIONS: ${{ inputs.repetitions }}
+        run: node --import tsx evals/coder/scripts/run-github-eval.mjs
+      - name: Upload evaluation results
+        if: ${{ always() && steps.eval.outputs.artifacts_safe == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coder-eval-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coder-eval-results/
+          retention-days: 14
+          if-no-files-found: error
