@@ -63,17 +63,17 @@ function isNonRetryableCloseCode(code: number | undefined): boolean {
 export class RealtimeClient {
   private readonly desiredSubscriptions = new Map<string, number | undefined>();
   private readonly cursors = new Map<string, number>();
-  private socket?: RealtimeWebSocket;
-  private reconnectTimer?: ReturnType<typeof setTimeout>;
-  private heartbeatTimer?: ReturnType<typeof setInterval>;
-  private connectionTimer?: ReturnType<typeof setTimeout>;
-  private ticketAbort?: AbortController;
+  private socket: RealtimeWebSocket | undefined;
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  private connectionTimer: ReturnType<typeof setTimeout> | undefined;
+  private ticketAbort: AbortController | undefined;
   private generation = 0;
   private reconnectAttempts = 0;
   private shouldReconnect = false;
   private ready = false;
   private lastServerMessageAt = 0;
-  private endpointBinding?: RealtimeEndpointBinding;
+  private endpointBinding: RealtimeEndpointBinding | undefined;
   private reconnectWhenSocketOpens = false;
 
   constructor(private readonly options: RealtimeClientOptions) {}
