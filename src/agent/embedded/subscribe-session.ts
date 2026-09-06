@@ -7,9 +7,11 @@ import type { EmbeddedStreamEvent } from './types.js';
 export function subscribeEmbeddedSessionEvents(
   session: AgentSession,
   onEvent: (event: EmbeddedStreamEvent) => void,
+  onAgentEvent?: (event: AgentEvent) => void,
 ): () => void {
   return session.subscribe((event: AgentSessionEvent) => {
     const base = event as AgentEvent;
+    onAgentEvent?.(base);
     switch (base.type) {
       case 'agent_start':
         onEvent({ type: 'agent_start' });

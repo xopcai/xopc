@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseTaskJudgeDecision } from '../task-judge-service.js';
+import { parseTaskJudgeDecision, codingCompletionEvidence } from '../task-judge-service.js';
 
 describe('parseTaskJudgeDecision', () => {
   it('keeps only unique in-range criterion indexes', () => {
@@ -22,5 +22,18 @@ describe('parseTaskJudgeDecision', () => {
 
   it('rejects responses without a JSON object', () => {
     expect(() => parseTaskJudgeDecision('completed', 1)).toThrow('invalid JSON');
+  });
+});
+
+
+describe('coding completion evidence', () => {
+  it('cannot approve an unfinished run or a stale check based on assistant text', () => {
+    const start = { type: 'custom', customType: 'coding_run_started', data: { required: true } };
+    expect(codingCompletionEvidence([start] as any).allowed).toBe(false);
+    const final = { type: 'custom', customType: 'coding_verification', data: { required: true, changed: true,
+      evidence: [{ kind: 'check', status: 'warning' }, { kind: 'diff-review', status: 'passed' }] } };
+    expect(codingCompletionEvidence([start, final] as any).allowed).toBe(false);
+    final.data.evidence[0]!.status = 'passed';
+    expect(codingCompletionEvidence([start, final] as any).allowed).toBe(true);
   });
 });

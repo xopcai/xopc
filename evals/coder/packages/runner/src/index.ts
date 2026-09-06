@@ -121,7 +121,7 @@ export async function loadSuite(path: string): Promise<EvalSuite> {
   const suiteDir = dirname(absolute);
   const suiteRoot = await realpath(suiteDir);
   const cases = await Promise.all(raw.cases.map(async (evalCase) => {
-    const repo = { ...evalCase.repo };
+    const repo = { ...evalCase.repo, commit: expandEnvironment(evalCase.repo.commit) };
     if (repo.path) {
       const environmentBacked = /\$\{[A-Z_][A-Z0-9_]*\}/.test(repo.path);
       const expanded = expandEnvironment(repo.path);
@@ -154,11 +154,21 @@ export async function loadSuite(path: string): Promise<EvalSuite> {
     }));
     return { ...evalCase, repo, graders };
   }));
+  const fingerprint = createHash('sha256').update(content);
+  for (const evalCase of cases) {
+    fingerprint.update(evalCase.repo.commit);
+    for (const grader of evalCase.graders) {
+      if (grader.type !== 'command') continue;
+      for (const file of grader.hiddenFiles ?? []) {
+        fingerprint.update(file.target).update('\0').update(createHash('sha256').update(await readFile(file.source)).digest());
+      }
+    }
+  }
   return {
     ...raw,
     cases,
     sourcePath: absolute,
-    contentHash: createHash('sha256').update(content).digest('hex'),
+    contentHash: fingerprint.digest('hex'),
   };
 }
 
@@ -166,7 +176,12 @@ export async function loadExperiment(path: string): Promise<ExperimentSpec> {
   const content = await readFile(resolve(path), 'utf8');
   const raw = parse(content) as unknown;
   assertExperiment(raw);
-  return raw;
+  return { ...raw, variants: raw.variants.map(variant => ({
+    ...variant,
+    ...(variant.model ? { model: expandEnvironment(variant.model) } : {}),
+    ...(variant.config ? { config: Object.fromEntries(Object.entries(variant.config).map(([key, value]) =>
+      [key, typeof value === 'string' ? expandEnvironment(value) : value])) } : {}),
+  })) };
 }
 
 export interface EvalRunnerOptions {

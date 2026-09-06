@@ -215,7 +215,7 @@ export class LocalWorktreeManager {
     const environment = this.store.getRequired(environmentId);
     const inspection = await this.inspect(environmentId);
     if (inspection.healthy) {
-      if (environment.status !== 'degraded' && environment.status !== 'provisioning') return environment;
+      if (!['degraded', 'provisioning', 'error'].includes(environment.status)) return environment;
       const provisioning = environment.status === 'provisioning'
         ? environment
         : this.store.transition({
@@ -246,7 +246,7 @@ export class LocalWorktreeManager {
     });
   }
 
-  async remove(environmentId: string): Promise<ExecutionEnvironment> {
+  async remove(environmentId: string, options?: { releaseSessionKey: string }): Promise<ExecutionEnvironment> {
     const environment = this.store.getRequired(environmentId);
     if (environment.status === 'deleted') return environment;
     if (environment.kind === 'local_checkout') {
@@ -274,7 +274,7 @@ export class LocalWorktreeManager {
     }
     assertManagedPath(environment.rootPath, this.stateDir);
     const bindings = this.store.listBindings(environmentId);
-    if (bindings.length > 0) {
+    if (bindings.some(binding => binding.sessionKey !== options?.releaseSessionKey)) {
       throw new ExecutionEnvironmentConflictError(`Managed worktree ${environmentId} still has active bindings`);
     }
     const deleting = environment.status === 'deleting' ? environment : this.store.transition({
@@ -308,6 +308,7 @@ export class LocalWorktreeManager {
           }
         }
       });
+      if (options?.releaseSessionKey) this.store.releaseBinding(options.releaseSessionKey, environmentId);
       const deleted = this.store.transition({
         environmentId,
         expectedVersion: deleting.version,

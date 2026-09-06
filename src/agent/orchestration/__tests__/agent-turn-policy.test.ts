@@ -52,7 +52,9 @@ describe('agent turn policy', () => {
   it('uses assistant rounds as a hard safety fuse', () => {
     const policy = createAgentTurnPolicy({ maxTurns: 3 });
 
+    expect(policy.shouldStopAfterTurn(stopContext(1))).toBe(false);
     expect(policy.shouldStopAfterTurn(stopContext(2))).toBe(false);
-    expect(policy.shouldStopAfterTurn(stopContext(3))).toBe(true);
+    // A repair continuation has its own newMessages, but shares the run budget.
+    expect(policy.shouldStopAfterTurn(stopContext(1))).toBe(true);
   });
 });

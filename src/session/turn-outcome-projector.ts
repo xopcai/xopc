@@ -16,7 +16,6 @@ import {
 import { parseFileResourceId } from '../files/file-service.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 
-const VERIFICATION_COMMAND = /(^|[\s:/_-])(test|vitest|jest|pytest|lint|typecheck|type-check|build)([\s:/_-]|$)/i;
 const MAX_OUTCOME_DIFF_CHARS = 200_000;
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -116,18 +115,21 @@ export function projectTurnOutcome(params: {
   let removed = 0;
   let failedToolCount = 0;
   let createdAtMs = 0;
+  let verificationSummary: Record<string, unknown> | null = null;
 
   for (const source of params.rows) {
     const row = source as TranscriptStoredRow & Record<string, unknown>;
     if (row.turnId !== params.turnId) continue;
+    if (row.type === 'custom' && row.customType === 'coding_verification') {
+      verificationSummary = record(row.data);
+    }
     const timestamp = typeof row.timestamp === 'number'
       ? row.timestamp
       : Date.parse(typeof row.timestamp === 'string' ? row.timestamp : '');
     if (Number.isFinite(timestamp)) createdAtMs = Math.max(createdAtMs, timestamp);
     if (row.role !== 'toolResult' && row.role !== 'tool') continue;
-    if (row.isError === true) failedToolCount += 1;
-
     const details = record(row.details) ?? {};
+    if (row.isError === true && record(details.verification)?.kind !== 'check') failedToolCount += 1;
     const explicit = Array.isArray(details.artifacts)
       ? details.artifacts.flatMap((value): TurnOutcomeDeliverable[] => {
           const parsed = TurnOutcomeDeliverableSchema.safeParse(value);
@@ -165,16 +167,34 @@ export function projectTurnOutcome(params: {
       if (typeof details.removed === 'number') removed += Math.max(0, details.removed);
     }
 
-    if (row.toolName === 'exec_command' && VERIFICATION_COMMAND.test(text(details.command) ?? '')) {
+    const verification = record(details.verification);
+    if (verification?.kind === 'check' && text(verification.command)) {
       const toolCallId = text(row.toolCallId) ?? `check-${evidence.size + 1}`;
-      const command = text(details.command)!;
+      const command = text(verification.command)!;
       evidence.set(toolCallId, {
         evidenceId: `${params.turnId}:${toolCallId}:check`,
         kind: 'check',
         label: command,
-        status: details.exitCode === 0 && details.timedOut !== true ? 'passed' : 'failed',
+        // Without a final snapshot, a previously passing check may be stale.
+        status: verification.status === 'failed' ? 'failed' : 'warning',
         command,
         ...(typeof details.durationMs === 'number' ? { durationMs: Math.max(0, details.durationMs) } : {}),
+      });
+    }
+  }
+
+  if (verificationSummary) {
+    evidence.clear();
+    for (const raw of Array.isArray(verificationSummary.evidence) ? verificationSummary.evidence : []) {
+      const item = record(raw);
+      if (item?.kind !== 'check' || !text(item.command) || !text(item.toolCallId)) continue;
+      const id = `${params.turnId}:${item.toolCallId}:check`;
+      evidence.set(id, {
+        evidenceId: id, kind: 'check', label: String(item.command), command: String(item.command),
+        status: item.status === 'passed' ? 'passed' : item.status === 'failed' ? 'failed' : 'warning',
+        ...(text(item.revision) ? { revision: text(item.revision) } : {}),
+        ...(text(item.logPath) ? { logPath: text(item.logPath) } : {}),
+        ...(typeof item.durationMs === 'number' ? { durationMs: Math.max(0, item.durationMs) } : {}),
       });
     }
   }
@@ -182,8 +202,9 @@ export function projectTurnOutcome(params: {
   const evidenceItems = [...evidence.values()];
   const collectedArtifacts = [...deliverables.values()];
   const artifactItems = mergeTurnOutcomeDeliverables(collectedArtifacts);
-  const partial = failedToolCount > 0
-    || evidenceItems.some((item) => item.status === 'failed')
+  const partial = (!verificationSummary && failedToolCount > 0)
+    || evidenceItems.some((item) => item.status !== 'passed')
+    || (verificationSummary?.required === true && verificationSummary.changed === true && !evidenceItems.some((item) => item.status === 'passed'))
     || collectedArtifacts.some((item) => item.availability !== 'available');
   const diff = diffs.join('\n');
   const diffTruncated = diff.length > MAX_OUTCOME_DIFF_CHARS;

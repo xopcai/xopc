@@ -143,16 +143,13 @@ export async function *runGatewayAgent(
       taskRun?.capturePlan(event.payload.plan.map((item) => ({ title: item.step, status: item.status })));
       return;
     }
+    if (event.type === 'turn_outcome') {
+      taskRun?.captureOutcome(event.payload);
+      return;
+    }
     if (event.type === 'patch_applied') {
       taskRun?.capturePatch(event.payload.added, event.payload.removed);
       return;
-    }
-    if (
-      event.type === 'command_completed'
-      && event.payload.exitCode === 0
-      && /(^|\s)(test|vitest|jest|pytest|lint|typecheck|build)(\s|$|:)/i.test(event.payload.command)
-    ) {
-      taskRun?.captureCommand(event.payload.command, event.payload.durationMs);
     }
   };
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
@@ -368,8 +365,8 @@ export async function *runGatewayAgent(
     if (taskRun) {
       try {
         taskRun.finalize({
-        status: taskRunStatus,
-        summary: taskRunSummary,
+          status: taskRunStatus,
+          summary: taskRunSummary,
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);

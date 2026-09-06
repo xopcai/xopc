@@ -17,6 +17,8 @@ import { TaskApplicationService } from '../../tasks/task-application-service.js'
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { readWorkspaceRevision } from '../coding/workspace-revision.js';
+import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import type { ModelManager } from '../models/index.js';
 
 const log = createLogger('TaskJudge');
@@ -95,6 +97,20 @@ export function parseTaskJudgeDecision(raw: string, criteriaCount: number): Task
   };
 }
 
+export function codingCompletionEvidence(rows: readonly TranscriptStoredRow[]): { allowed: boolean; workspace?: string; revision?: string; evidence?: unknown } {
+  const entries = rows as readonly (TranscriptStoredRow & { type?: string; customType?: string; data?: Record<string, unknown> })[];
+  const start = entries.findLastIndex(row => row.type === 'custom' && row.customType === 'coding_run_started');
+  const final = entries.findLastIndex(row => row.type === 'custom' && row.customType === 'coding_verification');
+  const checkpoint = entries[Math.max(start, final)]?.data;
+  if (!checkpoint?.required) return { allowed: true };
+  if (start > final) return { allowed: false };
+  const evidence = Array.isArray(checkpoint.evidence) ? checkpoint.evidence as Array<{ kind?: string; status?: string }> : [];
+  const allowed = checkpoint.changed !== true || (evidence.some(item => item.kind === 'check' && item.status === 'passed')
+    && evidence.some(item => item.kind === 'diff-review' && item.status === 'passed') && evidence.every(item => item.status === 'passed'));
+  return { allowed, evidence, workspace: typeof checkpoint.workspace === 'string' ? checkpoint.workspace : undefined,
+    revision: typeof checkpoint.revision === 'string' ? checkpoint.revision : undefined };
+}
+
 function resolveJudgeModel(
   config: Config | undefined,
   sessionKey: string,
@@ -147,10 +163,12 @@ export class TaskJudgeService {
     }
 
     const history = compactHistory(await this.options.sessionStore.loadMessages(payload.sessionKey));
+    const proof = codingCompletionEvidence(await this.options.sessionStore.loadTranscriptRows(payload.sessionKey));
     const criteria = task.contract.acceptanceCriteria;
     const prompt = [
       'You are an independent task verifier. Be strict and evidence-driven.',
-      'Mark a criterion complete only when the transcript or latest response directly proves it.',
+      'Mark a criterion complete only when observed tool results or user-provided facts prove it. An assistant completion claim is not verification evidence.',
+      `Runtime coding evidence: ${JSON.stringify(proof)}`,
       'needsUser is true only when a specific decision, permission, credential, or missing fact must come from the user.',
       'Make one clear recommendation. Explain the decisive reasons, rejected alternatives, uncertainty, and calibrated confidence.',
       'Return only JSON: {"completedCriteria":[0],"needsUser":false,"nextAction":"...","recommendation":"...","reasons":["..."],"rejectedAlternatives":[{"option":"...","reason":"..."}],"uncertainty":"...","confidence":0.8}.',
@@ -171,6 +189,10 @@ export class TaskJudgeService {
       const modelError = getAssistantMessageErrorReason(response);
       if (modelError) throw new Error(modelError);
       const decision = parseTaskJudgeDecision(extractAssistantText(response.content), criteria.length);
+      if (!proof.allowed || (proof.workspace && (!proof.revision || await readWorkspaceRevision(proof.workspace) !== proof.revision))) {
+        decision.completedCriteria = [];
+        decision.judgment.reasons.unshift('Current workspace verification is missing, failed or stale.');
+      }
       const now = Date.now();
       const evidence: TaskEvidence[] = decision.completedCriteria.map((index) => ({
         kind: 'state',

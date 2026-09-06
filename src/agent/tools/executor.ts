@@ -17,6 +17,7 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
 } from '@earendil-works/pi-agent-core';
+import { commandTimeout } from '../commands/command-registry.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   DEFAULT_TOOL_EXECUTION_TIMEOUT_MS,
@@ -105,8 +106,15 @@ export async function executeToolWithProtection<TDetails>(
     if (signal?.aborted) onParentAbort();
     else signal?.addEventListener('abort', onParentAbort, { once: true });
 
-    const execute = () => tool.execute(toolCallId, params, controller.signal, onUpdate);
-    const result = fullConfig.enableTimeout
+    const policyDeadline = fullConfig.resolveTimeoutMs?.(toolName);
+    const commandDeadlineField = toolName === 'exec_command' ? 'timeoutMs'
+      : toolName === 'managed_job' && params.action === 'start' ? 'maxRuntimeMs' : undefined;
+    const executionParams = commandDeadlineField && policyDeadline
+      ? { ...params, [commandDeadlineField]: Math.min(commandTimeout(params[commandDeadlineField]), policyDeadline) }
+      : params;
+    const execute = () => tool.execute(toolCallId, executionParams, controller.signal, onUpdate);
+    // The command registry owns its deadline and waits for the process tree to exit.
+    const result = fullConfig.enableTimeout && toolName !== 'exec_command'
       ? executeWithTimeout(execute, {
           toolName,
           timeoutMs: resolveTimeoutMs(tool, fullConfig),
