@@ -84,6 +84,21 @@ describe('project session preparation', () => {
     expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({ agentId: requestedAgentId ?? 'coder', temporary: true, executionMode: 'managed_worktree' }));
   });
 
+  it('uses a newly selected agent instead of the project default on first send', async () => {
+    vi.mocked(fetchProject).mockResolvedValue({ ...project, defaultAgentId: 'coder' });
+    await act(async () => root.render(<Harness />));
+    expect(preparation?.agentId).toBe('coder');
+    expect(openNewChatHandoff).not.toHaveBeenCalled();
+    await act(async () => root.render(<Harness locationKey="changed-agent" requestedAgentId="reviewer" />));
+    expect(preparation?.agentId).toBe('reviewer');
+    expect(preparation?.project.id).toBe('project-a');
+    expect(openNewChatHandoff).not.toHaveBeenCalled();
+    await act(async () => preparation!.create('local_checkout'));
+    expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({
+      agentId: 'reviewer', projectId: 'project-a', executionMode: 'local_checkout',
+    }));
+  });
+
   it('keeps non-workspace projects on the existing creation flow', async () => {
     vi.mocked(fetchProject).mockResolvedValue({ ...project, workspaceRoot: undefined });
     await act(async () => root.render(<Harness />));

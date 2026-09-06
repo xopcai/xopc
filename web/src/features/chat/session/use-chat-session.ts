@@ -135,6 +135,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     sessionKey: focusedSessionKey,
     isNewRoute,
     locationState,
+    locationSearch,
   });
 
   const sessionRoutePending = Boolean(decodedKey !== undefined && focusedSessionKey !== decodedKey);

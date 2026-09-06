@@ -20,7 +20,7 @@ export function ChatWorkspaceControl({
   available = true,
   onWorkspaceChange,
 }: {
-  sessionKey: string;
+  sessionKey: string | null;
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
   disabled: boolean;
@@ -50,8 +50,8 @@ export function ChatWorkspaceControl({
   const pickerDisabled = disabled || directoryPicker.picking;
 
   const openProjectFiles = () => {
-    setSideChatOpen(sessionKey, false);
-    openWorkspacePanelForSession(sessionKey);
+    if (sessionKey) setSideChatOpen(sessionKey, false);
+    openWorkspacePanelForSession(sessionKey ?? '');
   };
 
   return (

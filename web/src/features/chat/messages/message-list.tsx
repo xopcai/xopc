@@ -82,6 +82,7 @@ export const MessageList = memo(function MessageList({
         <div className="pb-1.5">
           <ChatWelcomeSpotlight
             spotlight={welcomeSpotlight}
+            projectId={projectId}
             onPickPrompt={onPickWelcomePrompt}
             onRetryContext={onRetryWelcomeContext}
             onRefreshExploration={onRefreshWelcomeExploration}

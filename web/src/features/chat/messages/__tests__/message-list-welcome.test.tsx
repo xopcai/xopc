@@ -12,6 +12,14 @@ vi.mock('@/features/chat/messages/message-bubble', () => ({
 import { MessageList } from '@/features/chat/messages/message-list';
 import { buildWelcomeSpotlight } from '@/features/chat/welcome/welcome-suggestions';
 import { messages } from '@/i18n/messages';
+import { useGatewayStore } from '@/stores/gateway-store';
+
+vi.mock('@/features/projects/api', () => ({
+  fetchProjects: vi.fn().mockResolvedValue({ items: [{ id: 'project-1', name: 'Project' }] }),
+}));
+vi.mock('@/features/work-discovery/api', () => ({
+  fetchWorkDiscoveryOnboarding: vi.fn().mockResolvedValue(null),
+}));
 
 describe('MessageList welcome state', () => {
   let container: HTMLDivElement;
@@ -27,6 +35,40 @@ describe('MessageList welcome state', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+  });
+
+  it('hides project selection when a project is selected before welcome context loads', async () => {
+    const previousToken = useGatewayStore.getState().token;
+    useGatewayStore.setState({ token: 'test' });
+    const welcomeSpotlight = buildWelcomeSpotlight({ kind: 'empty' }, messages('zh').chat.welcomeSpotlight, { id: 'main' });
+    const render = async (projectId?: string) => act(async () => {
+      root.render(
+        <MemoryRouter>
+          <MessageList
+            messages={[]}
+            streaming={false}
+            progress={null}
+            reasoningLevel="stream"
+            registerListContentRef={() => {}}
+            onPickWelcomePrompt={() => {}}
+            onSelectWelcomeProject={() => {}}
+            welcomeSpotlight={welcomeSpotlight}
+            projectId={projectId}
+          />
+        </MemoryRouter>,
+      );
+    });
+    try {
+      await render();
+      expect(container.textContent).toContain(messages('en').onboarding.workDiscovery.selectProject);
+      await render('project-1');
+      expect(container.textContent).not.toContain(messages('en').onboarding.workDiscovery.selectProject);
+      expect(container.textContent).toContain('办公输出');
+      await render();
+      expect(container.textContent).toContain(messages('en').onboarding.workDiscovery.selectProject);
+    } finally {
+      await act(async () => useGatewayStore.setState({ token: previousToken }));
+    }
   });
 
   it('renders three flat, directly actionable suggestions for an empty non-streaming chat', () => {

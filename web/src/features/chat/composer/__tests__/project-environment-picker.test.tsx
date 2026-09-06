@@ -110,19 +110,30 @@ describe('composer project environment selection and first send', () => {
     expect(commit).toHaveBeenCalledOnce();
   });
 
-  it('blocks unavailable Worktree and allows an explicit Local first send', async () => {
+  it('hides environment selection for a directory without a usable Git commit and sends locally', async () => {
     vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'git_commit_required' } });
     await render();
-    await act(async () => submit().click());
-    expect(create).not.toHaveBeenCalled();
-    expect(commit).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('at least one commit');
-    await act(async () => select().click());
-    const options = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')];
-    expect(options[1]?.disabled).toBe(true);
-    await act(async () => options[0].click());
+    expect(select()).toBeNull();
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(selection.mode).toBe('local_checkout');
+    expect(selection.allowed).toBe(true);
     await act(async () => submit().click());
     expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
+  });
+
+  it('keeps dirty Worktree unavailable without showing an inline warning', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'uncommitted_changes' } });
+    await render();
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(selection.allowed).toBe(false);
+    expect(container.querySelector('[aria-label="Recheck environment"]')).not.toBeNull();
+    await act(async () => selection.changeMode('local_checkout'));
+    expect(select().textContent).toBe('Local');
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(selection.allowed).toBe(true);
+    await act(async () => select().click());
+    const choices = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')];
+    expect(choices[1]?.disabled).toBe(true);
   });
 
   it('waits for preflight and allows retrying a failed check without consuming the draft', async () => {
