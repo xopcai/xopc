@@ -55,6 +55,7 @@ coverage/
 *.pem
 .cache/
 .xopc-evals/
+/coder-eval-results/
 .agent-evals/
 
 # Memory (local notes, not for git)
