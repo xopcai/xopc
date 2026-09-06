@@ -188,13 +188,13 @@ describe('AgentMessageSender voice message', () => {
       uri: 'file:///documents/voice.m4a',
       fieldName: 'audio',
       mimeType: 'audio/mp4',
-      parameters: { language: 'zh-CN' },
+      parameters: { language: 'zh' },
       timeoutMs: 60_000,
       recoverRouteOnNetworkError: true,
     });
   });
 
-  it('allows callers to override the transcription language', async () => {
+  it('normalizes a caller locale override to an STT language code', async () => {
     testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       payload: { text: 'hello', refinementAvailable: false },
@@ -204,7 +204,7 @@ describe('AgentMessageSender voice message', () => {
 
     expect(testState.apiUploadFile).toHaveBeenCalledWith(
       '/api/voice/transcriptions',
-      expect.objectContaining({ parameters: { language: 'en-US' } }),
+      expect.objectContaining({ parameters: { language: 'en' } }),
     );
   });
 
@@ -219,8 +219,36 @@ describe('AgentMessageSender voice message', () => {
 
     expect(testState.apiUploadFile).toHaveBeenCalledWith(
       '/api/voice/transcriptions',
-      expect.objectContaining({ parameters: { language: 'en-US' } }),
+      expect.objectContaining({ parameters: { language: 'en' } }),
     );
+  });
+
+  it.each([
+    [' zh-CN ', 'zh'],
+    ['EN_us', 'en'],
+    ['ja-JP', 'ja'],
+    ['auto', 'auto'],
+    ['', 'zh'],
+  ])('uses a provider language code for %j', async (locale, language) => {
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
+      ok: true, payload: { text: 'hello', refinementAvailable: false },
+    }), { status: 200 }));
+
+    await transcribeVoice('file:///documents/voice.m4a', 'audio/mp4', { language: locale });
+
+    expect(testState.apiUploadFile).toHaveBeenCalledWith(
+      '/api/voice/transcriptions',
+      expect.objectContaining({ parameters: { language } }),
+    );
+  });
+
+  it('preserves gateway transcription error details for the recording UI', async () => {
+    testState.apiUploadFile.mockResolvedValue(new Response(JSON.stringify({
+      ok: false, error: { message: 'STT is not configured' },
+    }), { status: 503, statusText: 'Service Unavailable' }));
+
+    await expect(transcribeVoice('file:///documents/voice.m4a', 'audio/mp4'))
+      .rejects.toThrow('503 Service Unavailable: STT is not configured');
   });
 
   it('refines an already returned transcript through the separate endpoint', async () => {

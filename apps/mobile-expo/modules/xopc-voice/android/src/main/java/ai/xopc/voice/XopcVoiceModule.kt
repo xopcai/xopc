@@ -29,6 +29,11 @@ class XopcVoiceModule : Module() {
   private var responseId = ""
   private var submitted = 0
   private var lastPlayed = 0
+  private var playbackVolume = 1f
+  private var inputDeviceId: Int? = null
+  private var outputDeviceId: Int? = null
+  private var inputRoutingListener: AudioRouting.OnRoutingChangedListener? = null
+  private var outputRoutingListener: AudioRouting.OnRoutingChangedListener? = null
   private val handler = Handler(Looper.getMainLooper())
   private var savedContext: Context? = null
   private val context get() = requireNotNull(savedContext ?: appContext.reactContext?.applicationContext)
@@ -66,15 +71,27 @@ class XopcVoiceModule : Module() {
         manager.isSpeakerphoneOn = enabled
       }
     }.runOnQueue(Queues.MAIN)
-    OnActivityEntersBackground { if (!background && recorder != null) handler.post { interrupt("background") } }
+    OnActivityEntersBackground {
+      val generation = epoch
+      if (!background && recorder != null) handler.post { if (epoch == generation) interrupt("background") }
+    }
     OnDestroy { handler.post { stop() } }
   }
 
   private fun acquireAudioFocus(attributes: AudioAttributes): Boolean {
+    val generation = epoch
     for (gain in intArrayOf(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)) {
       try {
-        val request = AudioFocusRequest.Builder(gain).setAudioAttributes(attributes)
-          .setOnAudioFocusChangeListener({ change -> if (change < 0) interrupt("interruption") }, handler).build()
+        lateinit var request: AudioFocusRequest
+        request = AudioFocusRequest.Builder(gain).setAudioAttributes(attributes)
+          .setOnAudioFocusChangeListener({ change ->
+            when (audioFocusAction(change, epoch == generation && focus === request)) {
+              AudioFocusAction.RESTORE -> { playbackVolume = 1f; track?.setVolume(playbackVolume) }
+              AudioFocusAction.DUCK -> { playbackVolume = 0.2f; track?.setVolume(playbackVolume) }
+              AudioFocusAction.PAUSE -> interrupt("audio_focus_lost")
+              AudioFocusAction.IGNORE -> Unit
+            }
+          }, handler).build()
         if (manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
           focus = request
           return true
@@ -110,8 +127,15 @@ class XopcVoiceModule : Module() {
       player.release()
       throw IllegalStateException("PLAYBACK_UNAVAILABLE")
     }
-    player.play()
     track = player
+    val generation = epoch
+    outputRoutingListener = AudioRouting.OnRoutingChangedListener { routing ->
+      if (epoch == generation && track === player) routing.routedDevice?.let { outputDeviceId = it.id }
+    }
+    player.addOnRoutingChangedListener(outputRoutingListener!!, handler)
+    player.setVolume(playbackVolume)
+    player.play()
+    outputDeviceId = player.routedDevice?.id
     handler.post(progress)
     return player
   }
@@ -157,12 +181,20 @@ class XopcVoiceModule : Module() {
       recorder = input
       configureInputEffects(input)
       val generation = epoch
+      inputDeviceId = input.routedDevice?.id
+      inputRoutingListener = AudioRouting.OnRoutingChangedListener { routing ->
+        if (epoch == generation && recorder === input) routing.routedDevice?.let { inputDeviceId = it.id }
+      }
+      input.addOnRoutingChangedListener(inputRoutingListener!!, handler)
       inputThread = Thread({
         val buffer = ByteArray(1280)
         while (epoch == generation) {
           val currentCapture = captureId
           val count = input.read(buffer, 0, buffer.size)
-          if (count < 0) { handler.post { if (epoch == generation) interrupt("interruption") }; break }
+          if (count < 0) {
+            handler.post { if (epoch == generation) { Log.w("XopcVoice", "AudioRecord read failed: $count"); interrupt("capture_failed") } }
+            break
+          }
           if (count > 0 && capturing && captureId == currentCapture) {
             val audio = Base64.encodeToString(buffer, 0, count, Base64.NO_WRAP)
             handler.post { if (epoch == generation && capturing && captureId == currentCapture) sendEvent("pcm", mapOf("audio" to audio, "captureId" to currentCapture)) }
@@ -171,7 +203,7 @@ class XopcVoiceModule : Module() {
       }, "xopc-voice-capture").apply { start() }
       devices = object : AudioDeviceCallback() {
         override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) {
-          if (removed.any { it.isSource || it.isSink }) interrupt("route_lost")
+          if (activeAudioDeviceRemoved(removed.map { it.id }, inputDeviceId, outputDeviceId, epoch == generation)) interrupt("route_lost")
         }
       }
       try { manager.registerAudioDeviceCallback(devices, handler) }
@@ -202,6 +234,7 @@ class XopcVoiceModule : Module() {
 
   private fun interrupt(reason: String) {
     if (recorder == null) return
+    Log.w("XopcVoice", "Audio interrupted: reason=$reason epoch=$epoch inputDevice=$inputDeviceId outputDevice=$outputDeviceId")
     stop()
     sendEvent("interrupted", mapOf("reason" to reason))
   }
@@ -212,8 +245,10 @@ class XopcVoiceModule : Module() {
     capturing = false
     handler.removeCallbacks(progress)
     flush()
+    outputRoutingListener?.let { track?.removeOnRoutingChangedListener(it) }; outputRoutingListener = null
     track?.release()
     track = null
+    inputRoutingListener?.let { recorder?.removeOnRoutingChangedListener(it) }; inputRoutingListener = null
     try { recorder?.stop() } catch (_: IllegalStateException) { }
     inputThread?.join(200)
     inputThread = null
@@ -228,5 +263,8 @@ class XopcVoiceModule : Module() {
     VoiceCallService.onStop = null
     context.stopService(Intent(context, VoiceCallService::class.java))
     background = false
+    playbackVolume = 1f
+    inputDeviceId = null
+    outputDeviceId = null
   }
 }
