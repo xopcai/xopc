@@ -7,7 +7,7 @@
  */
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -25,6 +25,7 @@ import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
 import { ChatHeader } from './ChatHeader';
+import { ContinuousReadAloudBar } from './ContinuousReadAloudBar';
 import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ClarifyPrompt } from './ClarifyPrompt';
 import { MessageList } from './MessageList';
@@ -34,6 +35,9 @@ import { useAutoReadAloud } from './use-auto-read-aloud';
 import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
 import type { ComposerContextRef } from './composer.types';
 import { dispatchMobileComposerAppend } from './mobile-composer-fill';
+import { useReadAloudStore } from '../voice/read-aloud-store';
+import { useVoiceCall, voiceCall } from '../voice/voice-call';
+import { useVoicePreferences } from '../voice/voice-preferences';
 
 const AnimatedView = Animated.createAnimatedComponent(View);
 
@@ -94,17 +98,33 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleGatewayManageSettings,
   } = page;
   const language = usePreferencesStore((state) => state.language);
-  const autoReadAloudEnabled = usePreferencesStore((state) => state.autoReadAloudEnabled);
-  const setAutoReadAloudEnabled = usePreferencesStore((state) => state.setAutoReadAloudEnabled);
+  const call = useVoiceCall();
+  const voicePreferences = useVoicePreferences();
 
   useAutoReadAloud({
-    enabled: autoReadAloudEnabled,
     language,
     messages: displayMessages,
     sessionKey,
     streaming: chat.streaming,
     title: m.chat.messageReadAloudTitle,
   });
+
+  const handleVoiceCallPress = useCallback(() => {
+    if (call.phase !== 'idle') {
+      voiceCall.expand();
+      return;
+    }
+    if (!activeGatewayId || !sessionKey || composerDisabled || chat.streaming) return;
+    const readAloud = useReadAloudStore.getState();
+    readAloud.disableContinuous();
+    readAloud.stop();
+    void voiceCall.start({
+      gatewayId: activeGatewayId,
+      sessionKey,
+      engine: voicePreferences.engines[activeGatewayId],
+      background: voicePreferences.background,
+    });
+  }, [activeGatewayId, call.phase, chat.streaming, composerDisabled, sessionKey, voicePreferences.background, voicePreferences.engines]);
 
   const headerPaddingTop = insets.top + (overlay ? 0 : 8);
   const canvasBg = colors.surface.base;
@@ -138,10 +158,11 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
           currentModelId={effectiveModelId}
           paddingTop={headerPaddingTop}
           pillText={colors.text.primary}
-          autoReadAloudEnabled={autoReadAloudEnabled}
+          voiceCallActive={call.phase !== 'idle'}
+          voiceCallDisabled={call.phase === 'idle' && (!activeGatewayId || !sessionKey || composerDisabled || chat.streaming)}
           onBackPress={overlay ? onRequestHome : isShellEmbedded ? undefined : handleBack}
           onAgentPress={openAgentsPicker}
-          onAutoReadAloudToggle={() => setAutoReadAloudEnabled(!autoReadAloudEnabled)}
+          onVoiceCallPress={handleVoiceCallPress}
           onModelSelect={handleModelSelect}
           onFilesPress={sessionKey ? () => router.push(`/files/context/session/${encodeURIComponent(sessionKey)}` as never) : undefined}
           onNewChat={handleNewChat}
@@ -240,6 +261,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             paddingBottom: floatingBottomPadding(insets.bottom),
           }}
         >
+          <ContinuousReadAloudBar sessionKey={sessionKey} />
           <ClarifyPrompt
             prompt={chat.clarifyPrompt}
             submitting={chat.clarifySubmitting}
@@ -247,14 +269,14 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             onSubmit={(answer) => void chat.submitClarifyAnswer(answer)}
             onSkip={() => void chat.skipClarifyAnswer()}
           />
-          {sessionKey ? <ChatContextControl
-            sessionKey={sessionKey}
-            draftRefs={composerContextRefs}
-            onRemoveDraftRef={(sourceId) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId))}
-            onAddSource={() => dispatchMobileComposerAppend('@')}
-            onChangeScope={handleContextChange}
-          /> : null}
           <ChatComposer
+            contextControl={sessionKey ? <ChatContextControl
+              sessionKey={sessionKey}
+              draftRefs={composerContextRefs}
+              onRemoveDraftRef={(sourceId) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId))}
+              onAddSource={() => dispatchMobileComposerAppend('@')}
+              onChangeScope={handleContextChange}
+            /> : null}
             sessionKey={sessionKey}
             disabled={composerDisabled}
             streaming={chat.streaming}

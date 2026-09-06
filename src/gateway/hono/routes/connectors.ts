@@ -409,6 +409,23 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
+  authenticated.get('/api/connectors/approvals', (c) => {
+    const status = c.req.query('status');
+    const allowedStatuses = new Set(['pending', 'approved', 'denied', 'expired', 'consumed']);
+    if (status && !allowedStatuses.has(status)) {
+      return c.json({ ok: false, error: 'Invalid approval status.' }, 400);
+    }
+    const principalId = c.req.query('principalId')?.trim() || 'local-owner';
+    const sessionKey = c.req.query('sessionKey')?.trim() || undefined;
+    const approvals = listConnectorApprovals({
+      principalId,
+      sessionKey,
+      status: status as 'pending' | 'approved' | 'denied' | 'expired' | 'consumed' | undefined,
+      limit: Number(c.req.query('limit') ?? '100'),
+    });
+    return c.json({ ok: true, payload: { approvals } });
+  });
+
   authenticated.get('/api/connectors/:id', (c) => {
     const connectorId = c.req.param('id');
     const connector = getConnectorDefinition(connectorId);
@@ -482,23 +499,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
-  });
-
-  authenticated.get('/api/connectors/approvals', (c) => {
-    const status = c.req.query('status');
-    const allowedStatuses = new Set(['pending', 'approved', 'denied', 'expired', 'consumed']);
-    if (status && !allowedStatuses.has(status)) {
-      return c.json({ ok: false, error: 'Invalid approval status.' }, 400);
-    }
-    const principalId = c.req.query('principalId')?.trim() || 'local-owner';
-    const sessionKey = c.req.query('sessionKey')?.trim() || undefined;
-    const approvals = listConnectorApprovals({
-      principalId,
-      sessionKey,
-      status: status as 'pending' | 'approved' | 'denied' | 'expired' | 'consumed' | undefined,
-      limit: Number(c.req.query('limit') ?? '100'),
-    });
-    return c.json({ ok: true, payload: { approvals } });
   });
 
   authenticated.post('/api/connectors/approvals/respond', strictRateLimitMiddleware, async (c) => {

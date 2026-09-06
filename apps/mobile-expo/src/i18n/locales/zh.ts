@@ -746,14 +746,12 @@ export const zh: MessageBundle = {
     headerSettingsTitle: '对话设置',
     headerCurrentConversation: '本次对话',
     headerCurrentAgent: '当前智能体',
-    headerAutoReadAloud: '自动朗读回复',
-    headerAutoReadAloudHint: '回复完成后自动播放语音',
     headerQuickActions: '快捷操作',
     headerNewChat: '新建对话',
     headerNewChatHint: '开始一个全新的对话',
     headerSessionFilesHint: '查看这段对话生成和引用的文件',
-    autoReadAloudEnable: '开启自动语音播报',
-    autoReadAloudDisable: '关闭自动语音播报',
+    continuousReadAloudActive: '正在连续朗读本对话的后续回复',
+    continuousReadAloudStop: '停止朗读后续回复',
   },
 
   // ── 设置界面 ────────────────────────────────────────────

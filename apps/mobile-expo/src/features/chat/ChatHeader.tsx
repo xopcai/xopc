@@ -15,10 +15,11 @@ export const ChatHeader = memo(function ChatHeader({
   currentModelId,
   paddingTop,
   pillText,
-  autoReadAloudEnabled,
+  voiceCallActive,
+  voiceCallDisabled,
   onBackPress,
   onAgentPress,
-  onAutoReadAloudToggle,
+  onVoiceCallPress,
   onModelSelect,
   onFilesPress,
   onNewChat,
@@ -29,10 +30,11 @@ export const ChatHeader = memo(function ChatHeader({
   currentModelId: string;
   paddingTop: number;
   pillText: string;
-  autoReadAloudEnabled: boolean;
+  voiceCallActive: boolean;
+  voiceCallDisabled: boolean;
   onBackPress?: () => void;
   onAgentPress: () => void;
-  onAutoReadAloudToggle: () => void;
+  onVoiceCallPress: () => void;
   onModelSelect: (modelId: string) => void;
   onFilesPress?: () => void;
   onNewChat: () => void;
@@ -67,13 +69,13 @@ export const ChatHeader = memo(function ChatHeader({
   return (
     <>
       <View style={[styles.header, { paddingTop }]}>
-        <View style={styles.sideSlot}>
-          {onBackPress ? (
+        {onBackPress ? (
+          <View style={styles.sideSlot}>
             <Pressable style={styles.iconButton} onPress={onBackPress} hitSlop={6}>
               <Icon source="chevron-left" size={26} color={pillText} />
             </Pressable>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
         <View style={styles.headerCenter}>
           <Pressable
@@ -91,17 +93,16 @@ export const ChatHeader = memo(function ChatHeader({
 
         <View style={styles.rightActions}>
           <Pressable
-            style={styles.iconButton}
-            onPress={onAutoReadAloudToggle}
+            style={[styles.iconButton, voiceCallDisabled && styles.disabled]}
+            onPress={onVoiceCallPress}
+            disabled={voiceCallDisabled}
             hitSlop={6}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: autoReadAloudEnabled }}
-            accessibilityLabel={autoReadAloudEnabled
-              ? m.chat.autoReadAloudDisable
-              : m.chat.autoReadAloudEnable}
+            accessibilityRole="button"
+            accessibilityLabel={voiceCallActive ? m.voice.expand : m.voice.title}
+            accessibilityState={{ disabled: voiceCallDisabled }}
           >
             <Icon
-              source={autoReadAloudEnabled ? 'volume-high' : 'volume-off'}
+              source={voiceCallActive ? 'phone-in-talk' : 'phone-outline'}
               size={23}
               color={pillText}
             />
@@ -150,8 +151,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  disabled: { opacity: 0.44 },
   sideSlot: {
-    width: 88,
+    width: 44,
     alignItems: 'flex-start',
   },
   rightActions: {
@@ -164,16 +166,17 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 44,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingLeft: 4,
+    paddingRight: 8,
   },
   titlePressable: {
     maxWidth: '100%',
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 4,
     paddingHorizontal: 8,
   },
@@ -181,6 +184,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 16,
     fontWeight: '600',
-    textAlign: 'center',
+    textAlign: 'left',
   },
 });

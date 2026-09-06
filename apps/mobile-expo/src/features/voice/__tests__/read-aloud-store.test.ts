@@ -74,6 +74,7 @@ const input: ReadAloudInput = {
 describe('read aloud store', () => {
   beforeEach(() => {
     useReadAloudStore.getState().stop();
+    useReadAloudStore.getState().disableContinuous();
     mocks.players.length = 0;
     mocks.playerSources.length = 0;
     mocks.playerOptions.length = 0;
@@ -86,6 +87,14 @@ describe('read aloud store', () => {
       bytes: new Uint8Array([1]),
       mimeType: 'audio/mpeg',
     });
+  });
+
+  it('keeps continuous reading scoped to one chat', () => {
+    useReadAloudStore.getState().enableContinuous('session-1');
+    expect(useReadAloudStore.getState().continuousSessionKey).toBe('session-1');
+
+    useReadAloudStore.getState().disableContinuous();
+    expect(useReadAloudStore.getState().continuousSessionKey).toBeNull();
   });
 
   it('keeps the store idle when an app background event pauses without an active source', () => {
