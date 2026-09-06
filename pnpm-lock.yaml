@@ -590,6 +590,12 @@ importers:
       '@agent-evals/protocol':
         specifier: workspace:*
         version: link:../../protocol
+      '@xopcai/endpoint-tools-protocol':
+        specifier: workspace:*
+        version: link:../../../../../packages/endpoint-tools-protocol
+      '@xopcai/realtime-client':
+        specifier: workspace:*
+        version: link:../../../../../packages/realtime-client
 
   evals/coder/packages/graders:
     dependencies:
