@@ -1,4 +1,4 @@
-import type { AgentMessage, AgentToolResult, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { AgentEvent, AgentMessage, AgentToolResult, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type {
   AssistantMessageEvent,
   Model,
@@ -75,9 +75,11 @@ export type RunXopcEmbeddedTurnParams = {
   turnPolicy?: AgentTurnPolicy;
   abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
+  onAgentEvent?: (event: AgentEvent) => void;
   images?: ImageContent[];
   /** Continue from the persisted trailing user row instead of appending it again. */
   resumeLastUserMessage?: boolean;
+  verifyChanges?: boolean;
 };
 
 export type RunXopcEmbeddedTurnResult = {

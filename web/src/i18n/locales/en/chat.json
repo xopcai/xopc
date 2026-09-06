@@ -1098,6 +1098,9 @@
     "attachmentPreviewImage": "Preview image",
     "turnOutcome": {
       "heading": "Result from this turn",
+      "statusPartial": "Partially complete",
+      "checkedRevision": "Checked revision",
+      "commandLog": "Command log path",
       "statusSucceeded": "Completed",
       "statusFailed": "Not completed",
       "deliverables": "Deliverables",

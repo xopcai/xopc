@@ -51,3 +51,17 @@ describe('executeToolWithProtection', () => {
     expect(receivedSignal?.aborted).toBe(true);
   });
 });
+
+it('passes a configured command deadline to the native process lifecycle', async () => {
+  const { createExecCommandTool } = await import('../exec-command.js');
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = await mkdtemp(join(tmpdir(), 'command-policy-'));
+  try {
+    const result = await executeToolWithProtection(createExecCommandTool(root), 'limited',
+      { cmd: 'node -e "setTimeout(() => {}, 10000)"', timeoutMs: 60000 }, undefined, undefined,
+      { resolveTimeoutMs: () => 20, enableRetry: false });
+    expect(result.details).toMatchObject({ status: 'timed_out', timedOut: true });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

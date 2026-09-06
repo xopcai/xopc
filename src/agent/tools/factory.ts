@@ -10,6 +10,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 import type { Page } from 'playwright-core';
+import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
@@ -72,10 +73,11 @@ import {
   resolveBrowserBackendFromConfig,
 } from '../../browser/index.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
+import { createReviewWorkspaceTool } from './review-workspace.js';
+import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
-import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
 import type { BrowserRecipeService } from '../../browser/recipes/index.js';
 import type { NotesService } from '../../notes/index.js';
@@ -313,6 +315,10 @@ export class AgentToolsFactory {
       agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main'),
     });
     const agentId = options?.agentId;
+    const getCommandIsolation = () => {
+      const config = this.deps.getConfig?.();
+      return config ? resolveEffectiveAgentConfigForSession(config, this.deps.getCurrentContext()?.sessionKey ?? `agent:${agentId ?? 'main'}:internal`).config.runtime.commandIsolation : undefined;
+    };
 
     const externalTools = createDefaultExternalToolGatewayTools({
       workspace,
@@ -403,14 +409,19 @@ export class AgentToolsFactory {
       grep,
       find,
       createExecCommandTool(workspace, {
+        getCommandIsolation,
+        getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
         prepareEnv: this.prepareRuntimeEnv,
       }),
+      createReviewWorkspaceTool(workspace),
+      createLanguageDiagnosticsTool(workspace, { getCommandIsolation, getSessionKey: () => this.deps.getCurrentContext()?.sessionKey, prepareEnv: this.prepareRuntimeEnv }),
       createManagedJobTool(
         workspace,
         () => this.deps.getCurrentContext()?.sessionKey,
         this.deps.getSkillPassthroughEnvVarNames,
         this.prepareRuntimeEnv,
+        getCommandIsolation,
       ),
       createWebSearchTool(() => this.deps.getConfig?.()),
       createWebFetchTool(() => this.deps.getConfig?.()),
@@ -537,7 +548,7 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(false && primary
+      ...(primary
         ? [
             createDelegateTool({
               workspace,
@@ -552,7 +563,6 @@ export class AgentToolsFactory {
               bus: this.deps.bus,
               getConfig: () => this.deps.getConfig?.(),
               getCurrentContext: () => this.deps.getCurrentContext?.() ?? null,
-              hookRunner: this.deps.hookRunner,
               toolExecutorConfig: this.deps.toolExecutorConfig,
               // Injected so `child-agent-factory.ts` does not need to import
               // `AgentToolsFactory` directly (which would form a cycle).
@@ -609,15 +619,6 @@ export class AgentToolsFactory {
   createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {
     const coreTools = this.createCoreTools(coreOptions);
     const wrapped = wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
-
-    const executeEnabled = false && !coreOptions?.disabledTools?.has('execute_code');
-
-    if (executeEnabled) {
-      const sandboxMap = buildSandboxToolMap(wrapped);
-      const executeTool = createExecuteCodeTool({ getSandboxToolMap: () => sandboxMap });
-      const wrappedExecute = wrapToolsWithProtection([executeTool as any], this.deps.toolExecutorConfig);
-      return sortToolsForPromptCache([...wrapped, ...wrappedExecute]);
-    }
 
     return sortToolsForPromptCache(wrapped);
   }

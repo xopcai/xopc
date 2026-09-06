@@ -45,7 +45,9 @@ export class SessionEnvironmentService {
           `Session ${input.sessionKey} is already using ${existing.kind}; release it before switching to ${input.mode}`,
         );
       }
-      return existing;
+      const checked = existing.kind === 'managed_worktree' ? await this.worktrees.reconcile(existing.id) : existing;
+      if (checked.status !== 'ready') throw new ExecutionEnvironmentConflictError(`Execution environment ${checked.id} is ${checked.status}; repair it before resuming`);
+      return checked;
     }
     const workspaceRoot = input.project.workspaceRoot?.trim();
     if (!workspaceRoot) {
@@ -79,9 +81,10 @@ export class SessionEnvironmentService {
     const binding = this.store.resolveBinding(sessionKey);
     if (!binding) return undefined;
     const environment = this.store.get(binding.environmentId);
-    this.store.releaseBinding(sessionKey, binding.environmentId);
     if (removeManaged && environment?.kind === 'managed_worktree') {
-      await this.worktrees.remove(environment.id);
+      await this.worktrees.remove(environment.id, { releaseSessionKey: sessionKey });
+    } else {
+      this.store.releaseBinding(sessionKey, binding.environmentId);
     }
     return environment;
   }

@@ -1,9 +1,9 @@
 /**
- * Sandbox type definitions for Phase 1 process-level isolation.
+ * Preflight command/path policy. OS isolation is provided by the command runtime.
  */
 
 /** Controls how strictly the sandbox enforces isolation. */
-export type SandboxMode = 'off' | 'basic' | 'container';
+export type SandboxMode = 'off' | 'basic';
 
 /** Result of path validation against the sandbox policy. */
 export type PathValidationResult = {
@@ -49,6 +49,6 @@ export type SandboxConfig = {
 export const DEFAULT_SANDBOX_CONFIG: SandboxConfig = {
   mode: 'basic',
   allowedRoots: [],
-  maxExecutionTimeMs: 300_000,
+  maxExecutionTimeMs: 4 * 60 * 60_000,
   maxOutputBytes: 50 * 1024,
 };

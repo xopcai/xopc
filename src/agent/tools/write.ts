@@ -56,7 +56,7 @@ export function createWriteFileTool(
         const p = params as WriteFileParams;
         const safety = checkFileSafety('write', p.path);
         if (!safety.allowed) {
-          return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
+          return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: { status: 'failed' } };
         }
 
         const writesProfileFile = Boolean(
@@ -71,12 +71,12 @@ export function createWriteFileTool(
           workspaceRoot,
         });
         if (!pathPolicy.allowed) {
-          return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: {} };
+          return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: { status: 'failed' } };
         }
 
         const contentBytes = Buffer.byteLength(p.content, 'utf-8');
         if (contentBytes > MAX_FILE_SIZE) {
-          return { content: [{ type: 'text', text: `🚫 File too large: ${contentBytes} bytes` }], details: {} };
+          return { content: [{ type: 'text', text: `🚫 File too large: ${contentBytes} bytes` }], details: { status: 'failed' } };
         }
 
         const target = writesProfileFile
@@ -110,7 +110,7 @@ export function createWriteFileTool(
           details: { size: contentBytes, path: target, ...(delivery ? { delivery } : {}) },
         };
       } catch (error) {
-        return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
+        return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: { status: 'failed' } };
       }
     },
   } as any;

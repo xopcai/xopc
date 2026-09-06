@@ -11,6 +11,7 @@ describe('suite loaders', () => {
   afterEach(() => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
     delete process.env.AGENT_EVALS_TEST_REPO;
+    delete process.env.AGENT_EVALS_TEST_MODEL;
   });
 
   it('resolves an environment-backed relative repository path from cwd', async () => {
@@ -68,6 +69,17 @@ cases:
       expect(existsSync(grader.hiddenFiles?.[0]?.source ?? '')).toBe(true);
     }
     expect(suite.contentHash).toHaveLength(64);
+    writeFileSync(join(root, 'hidden.test.ts'), 'throw new Error("changed assertion");\n');
+    expect((await loadSuite(path)).contentHash).not.toBe(suite.contentHash);
+  });
+
+  it('resolves explicit experiment model and endpoint variables', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'agent-evals-model-'));
+    roots.push(root);
+    process.env.AGENT_EVALS_TEST_MODEL = 'provider/fixed-model';
+    const path = join(root, 'experiment.yaml');
+    writeFileSync(path, 'name: fixed\nvariants:\n  - id: candidate\n    adapter: xopc\n    model: ${AGENT_EVALS_TEST_MODEL}\n    config: { baseUrl: "http://localhost:3000" }\n');
+    expect((await loadExperiment(path)).variants[0]?.model).toBe('provider/fixed-model');
   });
 
   it('rejects duplicate variant ids', async () => {

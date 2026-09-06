@@ -19,11 +19,9 @@ import type { ToolErrorTracker } from '../tools/error-tracker.js';
 import type { RequestLimiter } from '../models/request-limiter.js';
 import type { LifecycleManager } from '../lifecycle/index.js';
 import type { ToolChainTracker } from '../tools/chain-tracker.js';
-import type { SelfVerifyMiddleware } from '../middleware/index.js';
 import type { SystemReminder } from '../prompt/system-reminder.js';
 import type { ToolUsageAnalyzer } from '../tools/usage-analyzer.js';
 import type { ErrorPatternMatcher } from '../tools/error-pattern-matcher.js';
-import type { TurnDiffTracker } from '../coding/index.js';
 import { extractTextContent } from '../context/workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -210,71 +208,6 @@ function installSystemReminderListener(bus: SessionEventBus, systemReminder: Sys
   });
 }
 
-function appendTextToToolResult(result: unknown, text: string): unknown {
-  if (!text.trim()) {
-    return result;
-  }
-  if (result && typeof result === 'object') {
-    const res = result as Record<string, unknown>;
-    if (Array.isArray(res.content)) {
-      res.content = [
-        ...res.content,
-        { type: 'text', text: `\n${text}` },
-      ];
-      return res;
-    }
-    if (typeof res.content === 'string') {
-      res.content = `${res.content}\n${text}`;
-      return res;
-    }
-  }
-  return result;
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
-}
-
-function readToolResultDetails(result: unknown): Record<string, unknown> | null {
-  const rec = readRecord(result);
-  if (!rec) return null;
-  return readRecord(rec.details);
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
-
-export function readChangedPathsFromToolEnd(toolName: string, args: unknown, result: unknown): string[] {
-  const name = toolName.toLowerCase();
-  const details = readToolResultDetails(result);
-
-  if (name === 'apply_patch') {
-    const files = readStringArray(details?.files);
-    if (files.length > 0) return files;
-
-    const changes = Array.isArray(details?.changes) ? details.changes : [];
-    return changes.flatMap((change) => {
-      const rec = readRecord(change);
-      if (!rec) return [];
-      return readStringArray([rec.moveTo, rec.path]);
-    });
-  }
-
-  if (name === 'write_file') {
-    if (typeof details?.size !== 'number') return [];
-    const rec = readRecord(args);
-    return typeof rec?.path === 'string' ? [rec.path] : [];
-  }
-
-  if (name.includes('write') || name.includes('edit')) {
-    const rec = readRecord(args);
-    return typeof rec?.path === 'string' ? [rec.path] : [];
-  }
-
-  return [];
-}
-
 function installToolChainListener(bus: SessionEventBus, toolChainTracker: ToolChainTracker): void {
   bus.on('turn_start', (_event, context) => {
     // One chain per LLM turn (pi-agent emits turn_start each round; turn_end clears the chain).
@@ -348,63 +281,6 @@ function installErrorTrackingListener(
   });
 }
 
-function installSelfVerifyListener(bus: SessionEventBus, selfVerifyMiddleware: SelfVerifyMiddleware): void {
-  bus.on('tool_execution_end', (event, context) => {
-    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & { result: unknown };
-    const name = e.toolName?.toLowerCase() ?? '';
-    const args = (e as { args?: unknown }).args;
-
-    if (name === 'exec_command') {
-      selfVerifyMiddleware.recordVerification(e.toolName, args, {
-        isError: e.isError,
-        result: e.result,
-      }, context.sessionKey);
-      return;
-    }
-
-    if (!e.isError) {
-      const changedPaths = readChangedPathsFromToolEnd(e.toolName, args, e.result);
-      for (const path of changedPaths) {
-        selfVerifyMiddleware.recordEdit(
-          path,
-          name.includes('write') ? 'write' : 'edit',
-          context.sessionKey,
-        );
-      }
-      if (changedPaths.length > 0) {
-        e.result = appendTextToToolResult(
-          e.result,
-          selfVerifyMiddleware.consumePostEditReminder(context.sessionKey),
-        );
-        return;
-      }
-      selfVerifyMiddleware.recordVerification(e.toolName, args, {
-        isError: e.isError,
-        result: e.result,
-      }, context.sessionKey);
-    }
-  });
-  bus.on('turn_start', (_event, context) => {
-    selfVerifyMiddleware.onTurnStart(context.sessionKey);
-  });
-}
-
-function installTurnDiffTrackerListener(bus: SessionEventBus, turnDiffTracker: TurnDiffTracker): void {
-  bus.on('tool_execution_end', (event, context) => {
-    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & {
-      args?: unknown;
-      result: unknown;
-    };
-    turnDiffTracker.recordToolResult({
-      sessionKey: context.sessionKey,
-      toolName: e.toolName,
-      args: e.args,
-      result: e.result,
-      isError: e.isError,
-    });
-  });
-}
-
 // ── Public façade ───────────────────────────────────────────────────────────
 
 export interface AgentEventHandlerConfig {
@@ -412,11 +288,9 @@ export interface AgentEventHandlerConfig {
   requestLimiter: RequestLimiter;
   lifecycleManager: LifecycleManager;
   toolChainTracker: ToolChainTracker;
-  selfVerifyMiddleware: SelfVerifyMiddleware;
   systemReminder: SystemReminder;
   toolUsageAnalyzer: ToolUsageAnalyzer;
   errorPatternMatcher: ErrorPatternMatcher;
-  turnDiffTracker?: TurnDiffTracker;
 }
 
 /**
@@ -440,10 +314,6 @@ export class AgentEventHandler {
     });
     installLifecycleHookListener(this.bus, config.lifecycleManager);
     installSystemReminderListener(this.bus, config.systemReminder);
-    if (config.turnDiffTracker) {
-      installTurnDiffTrackerListener(this.bus, config.turnDiffTracker);
-    }
-    installSelfVerifyListener(this.bus, config.selfVerifyMiddleware);
     installToolUsageListener(this.bus, config.toolUsageAnalyzer);
     installToolChainListener(this.bus, config.toolChainTracker);
     installErrorTrackingListener(this.bus, {
