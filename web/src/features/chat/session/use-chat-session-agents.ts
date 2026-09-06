@@ -27,8 +27,9 @@ export function useChatSessionAgents(opts: {
   sessionKey: string | null;
   isNewRoute: boolean;
   locationState: unknown;
+  locationSearch: string;
 }) {
-  const { navigate, sessionKeyRef, sessionKey, isNewRoute, locationState } = opts;
+  const { navigate, sessionKeyRef, sessionKey, isNewRoute, locationState, locationSearch } = opts;
   const token = useGatewayStore((s) => s.token);
   const sessionAgentKey = sessionKey?.trim() ?? '';
 
@@ -99,13 +100,16 @@ export function useChatSessionAgents(opts: {
       const curKey = sessionKeyRef.current;
       const curAgent = curKey ? currentSessionAgentId || preferredAgentIdRef.current : null;
       if (curAgent !== next) {
-        navigate(newChatHrefForProject(currentSession?.projectId), {
+        navigate(isNewRoute ? `/chat/new${locationSearch}` : newChatHrefForProject(currentSession?.projectId), {
           replace: false,
-          state: { agentId: next },
+          state: {
+            ...(isNewRoute && locationState && typeof locationState === 'object' ? locationState : {}),
+            agentId: next,
+          },
         });
       }
     },
-    [currentSession?.projectId, currentSessionAgentId, navigate, sessionKeyRef],
+    [currentSession?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, sessionKeyRef],
   );
 
   useEffect(() => {

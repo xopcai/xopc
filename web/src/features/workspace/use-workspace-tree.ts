@@ -6,6 +6,7 @@ import {
   fetchWorkspaceRootResource,
   listWorkspaceDir,
   type WorkspaceEntry,
+  type WorkspaceEditorRequestOptions,
 } from '@/features/workspace/workspace-api';
 
 /** Convert flat API entries into TreeEntry nodes (children initially empty for dirs). */
@@ -36,7 +37,7 @@ function mergeChildren(
   });
 }
 
-export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
+export function useWorkspaceTree(agentId: string, sessionKey?: string | null, projectId?: string | null) {
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [rootResource, setRootResource] = useState<TreeEntry | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,15 +45,17 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const loadedDirsRef = useRef<Set<string>>(new Set());
   const trimmedAgentId = agentId.trim();
   const trimmedSessionKey = sessionKey?.trim() ?? '';
-  /** List API is session-scoped when sessionKey is set; do not key callbacks on agent id in that case. */
-  const sessionPart = trimmedSessionKey;
-  const agentWhenNoSession = !trimmedSessionKey ? trimmedAgentId : '';
+  /** Project and session scopes must not re-fetch when the selected agent changes. */
+  const projectPart = projectId?.trim() ?? '';
+  const sessionPart = projectPart ? '' : trimmedSessionKey;
+  const agentWhenNoSession = !projectPart && !trimmedSessionKey ? trimmedAgentId : '';
 
-  const editorOpts = useMemo((): { sessionKey: string } | { agentId: string } | undefined => {
+  const editorOpts = useMemo((): WorkspaceEditorRequestOptions | undefined => {
+    if (projectPart) return { projectId: projectPart };
     if (sessionPart) return { sessionKey: sessionPart };
     if (agentWhenNoSession) return { agentId: agentWhenNoSession };
     return undefined;
-  }, [sessionPart, agentWhenNoSession]);
+  }, [projectPart, sessionPart, agentWhenNoSession]);
 
   const loadRoot = useCallback(async () => {
     setLoading(true);

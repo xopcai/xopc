@@ -33,12 +33,15 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
   const pendingRef = useRef<PendingCreation | null>(null);
   const onSendRef = useRef(onSend);
   onSendRef.current = onSend;
-  const mode = selection?.preparation === preparation ? selection.mode : preparation?.project.executionMode ?? 'local_checkout';
   const { data: options, error, isValidating, mutate } = useSWR(
     preparation ? ['project-environment-options', baseUrl, token, preparation.project.id] : null,
     async () => (await fetchJson<{ options: ProjectEnvironmentOptions }>(apiUrl(`/api/projects/${encodeURIComponent(preparation!.project.id)}/environment-options`))).options,
     { keepPreviousData: false, revalidateOnFocus: false, shouldRetryOnError: false },
   );
+  const supportsWorktree = Boolean(options?.localAvailable && options.worktreeUnavailableReason !== 'git_commit_required' && options.worktreeUnavailableReason !== 'workspace_unavailable');
+  const mode: ExecutionMode = supportsWorktree
+    ? selection?.preparation === preparation ? selection.mode : preparation?.project.executionMode ?? 'local_checkout'
+    : 'local_checkout';
   const allowed = Boolean(!error && options?.localAvailable && (mode === 'local_checkout' || !options.worktreeUnavailableReason));
   const finish = useCallback((accepted: boolean) => {
     const current = pendingRef.current;
