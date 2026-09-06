@@ -27,14 +27,13 @@ interface ActiveRun {
 
 function mapEventType(type: string): TraceEventType {
   if (type === 'run_start') return 'run.started';
-  if (type === 'run_end' || type === 'run_complete' || type === 'done') return 'run.completed';
-  if (type === 'llm_request' || type === 'model_request') return 'model.request';
-  if (type === 'llm_response' || type === 'model_response') return 'model.response';
+  if (type === 'run_end') return 'run.completed';
+  if (type === 'assistant_message_start') return 'model.request';
+  if (type === 'assistant_message_end') return 'model.response';
   if (type.includes('tool') && type.includes('start')) return 'tool.started';
   if (type.includes('tool') && (type.includes('end') || type.includes('result'))) {
     return 'tool.finished';
   }
-  if (type.includes('assistant') || type.includes('message')) return 'model.response';
   if (type === 'error') return 'run.failed';
   return 'agent.event';
 }
@@ -165,8 +164,18 @@ export class XopcGatewayAdapter implements AgentAdapter {
         const payload = record(decoded.payload);
         if (rawType === 'assistant_delta' && typeof payload.delta === 'string') finalText += payload.delta;
         if (rawType === 'error') failure = typeof payload.message === 'string' ? payload.message : JSON.stringify(payload);
-        if (payload.usage && typeof payload.usage === 'object') {
-          usage = Object.fromEntries(Object.entries(payload.usage).filter((entry): entry is [string, number] => typeof entry[1] === 'number'));
+        if (rawType === 'run_end' && payload.status !== 'success') {
+          failure = typeof payload.summary === 'string' ? payload.summary : `Run ended with status ${String(payload.status)}`;
+        }
+        if (rawType === 'assistant_message_end' && payload.usage && typeof payload.usage === 'object') {
+          const reported = record(payload.usage);
+          const normalized: Record<string, number> = {};
+          for (const [key, field] of Object.entries({ input: 'inputTokens', output: 'outputTokens', cacheRead: 'cacheReadTokens', cacheWrite: 'cacheWriteTokens', total: 'totalTokens', cost: 'cost' })) {
+            if (typeof reported[field] === 'number') normalized[key] = reported[field];
+          }
+          usage ??= {};
+          for (const [key, value] of Object.entries(normalized)) usage[key] = (usage[key] ?? 0) + value;
+          payload.usage = normalized;
         }
         await trace.emit(mapEventType(rawType), {
           source: 'xopc-realtime', rawType, seq, payload: redactSensitive(payload),
