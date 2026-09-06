@@ -8,9 +8,9 @@ import { fetchProjects } from '@/features/projects/api';
 import { ComposerContextBar, type ComposerContextBarProps } from '../composer-context-bar';
 import { ProjectEnvironmentPicker } from '../project-environment-picker';
 
-const { refreshContext } = vi.hoisted(() => ({ refreshContext: vi.fn() }));
+const { refreshContext, environment } = vi.hoisted(() => ({ refreshContext: vi.fn(), environment: { kind: 'local_checkout', rootPath: '/tmp/workspace', branch: 'feature/context' as string | undefined, available: true } }));
 vi.mock('@/features/chat/context/use-session-context', () => ({
-  useSessionContext: () => ({ data: { environment: { kind: 'local_checkout', rootPath: '/tmp/workspace', branch: 'feature/context', available: true } }, mutate: refreshContext }),
+  useSessionContext: () => ({ data: { environment }, mutate: refreshContext }),
 }));
 vi.mock('@/features/projects/api', () => ({ fetchProjects: vi.fn() }));
 
@@ -29,6 +29,7 @@ describe('ComposerContextBar', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    environment.branch = 'feature/context';
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     cache = new Map();
     container = document.createElement('div');
@@ -72,6 +73,16 @@ describe('ComposerContextBar', () => {
     await render({ ...props, disabled: true });
     expect(remove.disabled).toBe(true);
     expect(container.querySelector<HTMLButtonElement>('[aria-label="Change the project for this chat"]')!.disabled).toBe(true);
+  });
+
+  it('hides Local for a non-Git project and for a projectless working directory', async () => {
+    environment.branch = undefined;
+    await render({ project: { id: 'general', name: 'Documents' } });
+    expect(container.textContent).not.toContain('Local');
+    expect(container.querySelector('[aria-label="New session environment"]')).toBeNull();
+    await render();
+    expect(container.textContent).not.toContain('Local');
+    expect(container.querySelector('[aria-label="Choose folder"]')).not.toBeNull();
   });
 
   it('keeps the original folder and exposes a failed save', async () => {

@@ -44,10 +44,10 @@ import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false }: { elevated?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
   const routeChatSessionKey =
-    pathname.startsWith('/chat') && sessionKeyParam
+    pathname.startsWith('/chat') && sessionKeyParam && sessionKeyParam !== 'new'
       ? decodeURIComponent(sessionKeyParam)
       : null;
   const open = useWorkspacePanelStore((s) => s.open);
@@ -56,6 +56,8 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const widthPx = useWorkspacePanelStore((s) => s.widthPx);
   const setWidthPx = useWorkspacePanelStore((s) => s.setWidthPx);
   const chatSessionKey = sessionKeyOverride ?? routeChatSessionKey;
+  const projectId = !chatSessionKey && pathname.startsWith('/chat')
+    ? new URLSearchParams(search).get('projectId') : null;
   const [widthResizing, setWidthResizing] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
@@ -70,18 +72,19 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const { tree, rootResource, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
     workspaceAgentId,
     chatSessionKey,
+    projectId,
   );
   /** When the tree is session-scoped, agent id from the store is irrelevant — avoid re-fetching on agent sync. */
-  const treeScopeKey = chatSessionKey ?? workspaceAgentId;
+  const treeScopeKey = chatSessionKey ? `session:${chatSessionKey}` : projectId ? `project:${projectId}` : `agent:${workspaceAgentId}`;
 
   const workspaceReadOpts = useMemo(
     () =>
-      chatSessionKey != null
+      projectId ? { projectId } : chatSessionKey != null
         ? { sessionKey: chatSessionKey }
         : workspaceAgentId.trim()
           ? { agentId: workspaceAgentId.trim() }
           : undefined,
-    [chatSessionKey, workspaceAgentId],
+    [chatSessionKey, projectId, workspaceAgentId],
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
   const electron = isElectron();
@@ -92,11 +95,10 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
       writeWorkspaceFileDrag(event.dataTransfer, {
         name: entry.name,
         path: entry.path,
-        ...(chatSessionKey ? { sessionKey: chatSessionKey } : {}),
-        ...(!chatSessionKey && workspaceAgentId.trim() ? { agentId: workspaceAgentId.trim() } : {}),
+        ...workspaceReadOpts,
       });
     },
-    [chatSessionKey, setPreviewPath, workspaceAgentId],
+    [setPreviewPath, workspaceReadOpts],
   );
 
   const {

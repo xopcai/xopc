@@ -19,7 +19,7 @@ export const voiceCall = new VoiceCallController({
   prepare: async (target, signal, recovering) => {
     const assertGateway = () => {
       if (useGatewayStore.getState().activeGatewayId !== target.gatewayId) throw new Error('GATEWAY_CHANGED');
-      signal.throwIfAborted();
+      if (signal.aborted) throw new Error('CANCELLED');
     };
     assertGateway();
     const status = await queryClient.fetchQuery(voiceStatusOptions(target.gatewayId));
@@ -49,7 +49,7 @@ export const voiceCall = new VoiceCallController({
     const gatewayId = useGatewayStore.getState().activeGatewayId;
     if (!gatewayId || !request.sessionKey) throw new Error('GATEWAY_CHANGED');
     const session = await voiceSessionIdentity(gatewayId, request.sessionKey);
-    signal.throwIfAborted();
+    if (signal.aborted) throw new Error('CANCELLED');
     if (session?.sessionId !== identity) throw new Error('SESSION_CHANGED');
     return connection;
   },
