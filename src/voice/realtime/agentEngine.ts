@@ -4,7 +4,7 @@ import { createLogger } from '../../utils/logger.js';
 import { speakStream } from '../tts/speak-core.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
-import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.js';
+import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 
 const log = createLogger('Voice:Agent');
