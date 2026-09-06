@@ -36,6 +36,19 @@ function written(source = sourceFileId): TranscriptStoredRow {
 }
 
 describe('turn outcome projector', () => {
+  it('does not infer passing checks from command names or stale tool evidence', () => {
+    const rows = [
+      { ...toolResult('turn-1', { command: 'echo test', exitCode: 0 }), toolName: 'exec_command' },
+      { type: 'custom', customType: 'coding_verification', turnId: 'turn-1', data: {
+        changed: true, revision: 'new', evidence: [{ kind: 'check', command: 'pnpm test', toolCallId: 'check', revision: 'old', status: 'unverified' }],
+      } },
+    ] as TranscriptStoredRow[];
+    const outcome = projectTurnOutcome({ rows, turnId: 'turn-1' });
+    expect(outcome.status).toBe('partial');
+    expect(outcome.evidence).toHaveLength(1);
+    expect(outcome.evidence[0]?.status).toBe('warning');
+  });
+
   it.each([false, true])('prefers the published file regardless of row order (reversed: %s)', (reversed) => {
     const artifact = published('snapshot');
     const rows = [written(), toolResult('turn-1', { artifacts: [artifact] })];
@@ -176,6 +189,27 @@ describe('turn outcome projector', () => {
       capabilities: ['regenerate'],
     });
     expect(outcome.deliverables[0]).not.toHaveProperty('uri');
+  });
+
+  it('uses the final revision receipt after a failed check is repaired', () => {
+    const result = projectTurnOutcome({ turnId: 'turn-1', rows: [
+      { role: 'toolResult', turnId: 'turn-1', toolName: 'exec_command', isError: true,
+        details: { verification: { kind: 'check', command: 'pnpm test', status: 'failed' } } },
+      { type: 'custom', turnId: 'turn-1', customType: 'coding_verification',
+        data: { changed: true, evidence: [{ kind: 'check', command: 'pnpm test', toolCallId: 'retry', status: 'passed' }] } },
+    ] as TranscriptStoredRow[] });
+    expect(result.status).toBe('succeeded');
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0]?.status).toBe('passed');
+  });
+
+  it('does not certify checks without a final workspace snapshot', () => {
+    const result = projectTurnOutcome({ turnId: 'turn-1', rows: [
+      { role: 'toolResult', turnId: 'turn-1', toolName: 'exec_command',
+        details: { verification: { kind: 'check', command: 'pnpm test', status: 'passed' } } },
+    ] as TranscriptStoredRow[] });
+    expect(result.status).toBe('partial');
+    expect(result.evidence[0]?.status).toBe('warning');
   });
 
   it('inserts a projected outcome immediately after its turn and remains idempotent', () => {

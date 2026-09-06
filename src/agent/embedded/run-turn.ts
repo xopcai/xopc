@@ -34,6 +34,8 @@ import {
 } from '../../providers/prompt-cache-lifecycle.js';
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { markTurnToolResult } from '../memory/turn-provenance.js';
+import { RepositoryInstructions } from '../coding/repository-instructions.js';
+import { RunVerification } from '../coding/run-verification.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -58,12 +60,17 @@ function extractTextFromContent(content: unknown): string {
 }
 
 function extractRecentToolCalls(messages: readonly { role?: string; content?: unknown }[]): RecentToolCall[] {
+  const lastUser = messages.findLastIndex(message => message.role === 'user');
+  messages = messages.slice(Math.max(0, lastUser));
   const resultByToolCallId = new Map<string, string>();
+  const revisionByToolCallId = new Map<string, string>();
   for (const message of messages) {
     if (message.role !== 'toolResult') continue;
     const toolCallId = (message as { toolCallId?: unknown }).toolCallId;
     if (typeof toolCallId !== 'string' || !toolCallId) continue;
-    resultByToolCallId.set(toolCallId, truncateForLog(extractTextFromContent(message.content)));
+    resultByToolCallId.set(toolCallId, extractTextFromContent(message.content));
+    const revision = (message as { details?: { workspaceRevision?: unknown } }).details?.workspaceRevision;
+    if (typeof revision === 'string') revisionByToolCallId.set(toolCallId, revision);
   }
 
   const calls: RecentToolCall[] = [];
@@ -75,6 +82,7 @@ function extractRecentToolCalls(messages: readonly { role?: string; content?: un
         calls.push({
           name: toolCall.name,
           params: toolCall.arguments,
+          ...(toolCall.id && revisionByToolCallId.has(toolCall.id) ? { revision: revisionByToolCallId.get(toolCall.id) } : {}),
           ...(toolCall.id && resultByToolCallId.has(toolCall.id)
             ? { resultPreview: resultByToolCallId.get(toolCall.id) }
             : {}),
@@ -82,7 +90,7 @@ function extractRecentToolCalls(messages: readonly { role?: string; content?: un
       }
     }
   }
-  return calls;
+  return calls.slice(-12);
 }
 
 function getLastUserMessagePreview(messages: readonly { role?: string; content?: unknown }[]): string | undefined {
@@ -200,6 +208,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       sessionId: transcriptRuntime.sessionId,
       runId,
     });
+    const instructions = await RepositoryInstructions.open(workspaceDir);
+    const rootInstructions = await instructions.load('.', true);
     runner = await acquireEmbeddedSessionRunner({
       runtimeId: transcriptRuntime.runtimeId,
       sessionId: transcriptRuntime.sessionId,
@@ -207,7 +217,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       model: resolvedModel,
       modelRef: params.modelRef,
       tools,
-      systemPrompt,
+      systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
       thinkingLevel: thinkingLevel ?? 'medium',
       transcriptRuntime,
     });
@@ -228,22 +238,16 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       params.promptCachePolicy,
     );
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
+      instructions.acknowledge();
       const sourceMessages = [...context.messages];
       const hygienicMessages = tryApplySessionTranscriptHygiene(sourceMessages, streamModel) as typeof sourceMessages;
       const recentToolCalls = extractRecentToolCalls(hygienicMessages);
       const loopGuard = detectToolLoops(recentToolCalls);
 
       let effectiveContext: typeof context = { ...context, messages: hygienicMessages };
-      if (loopGuard.injection || loopGuard.hiddenTools.size > 0) {
-        const messages = loopGuard.injection
-          ? [...hygienicMessages, { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }]
-          : hygienicMessages;
-
-        const contextTools = loopGuard.hiddenTools.size > 0 && context.tools
-          ? context.tools.filter((t) => !loopGuard.hiddenTools.has(t.name))
-          : context.tools;
-
-        effectiveContext = { ...context, messages, tools: contextTools };
+      if (loopGuard.injection) {
+        effectiveContext = { ...effectiveContext, messages: [...hygienicMessages,
+          { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }] };
       }
 
       const projection = projectContextForModel({
@@ -294,7 +298,6 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           toolCount: effectiveContext.tools?.length ?? 0,
           lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
           loopWarningInjected: !!loopGuard.injection,
-          hiddenToolCount: loopGuard.hiddenTools.size,
           promptCache: promptCacheSnapshot,
           promptCacheChanges,
           ...(process.env.XOPC_LOG_LLM_PAYLOAD === 'true'
@@ -314,10 +317,41 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       });
     };
     session.agent.streamFunction = loggingStreamFn;
+    const verification = await RunVerification.open(workspaceDir);
+    const checkpoints = runner.piSm.getBranch?.() ?? [];
+    const lastStart = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_run_started');
+    const lastSummary = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_verification');
+    const checkpoint = checkpoints[params.resumeLastUserMessage && lastSummary >= lastStart ? lastSummary : lastStart];
+    if (checkpoint?.type === 'custom' && (params.resumeLastUserMessage || lastStart > lastSummary)) {
+      verification.restore(checkpoint.data, params.resumeLastUserMessage === true && lastSummary >= lastStart);
+    }
+    runner.piSm.appendCustomEntry('coding_run_started', { runId, workspace: workspaceDir, required: params.verifyChanges ?? sessionKey.startsWith('agent:coder:'), ...await verification.summary() });
+    let policyStopped = false;
     params.turnPolicy?.reset();
-    session.agent.beforeToolCall = params.turnPolicy?.beforeToolCall;
-    session.agent.afterToolCall = params.turnPolicy?.afterToolCall;
-    session.agent.shouldStopAfterTurn = params.turnPolicy?.shouldStopAfterTurn;
+    session.agent.beforeToolCall = async (context, signal) => {
+      const decision = await params.turnPolicy?.beforeToolCall(context, signal);
+      if (decision?.block) {
+        policyStopped ||= decision.terminate === true;
+        return decision;
+      }
+      if (context.toolCall.name !== 'read_file') {
+        const scoped = await instructions.forTool(context.toolCall.name, context.args);
+        if (scoped) return { block: true, reason: `${scoped}\n\nApply these instructions, then retry the operation.` };
+      }
+      await verification.beforeTool(context.toolCall.id, context.toolCall.name);
+      return decision;
+    };
+    session.agent.afterToolCall = async (context) => {
+      const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args) : '';
+      const checked = await verification.afterTool(context);
+      if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
+      await params.turnPolicy?.afterToolCall({ ...context, ...checked });
+      return checked;
+    };
+    session.agent.shouldStopAfterTurn = (context) => {
+      policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
+      return policyStopped;
+    };
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
       if (event.type === 'message_end' && event.message.role === 'assistant') {
@@ -327,7 +361,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         markTurnToolResult(sessionKey, runId, event.toolName);
       }
       onEvent?.({ ...event, runId });
-    });
+    }, params.onAgentEvent);
 
     const abortListener = () => {
       void session.abort();
@@ -359,9 +393,21 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             abortSignal: runAbortSignal,
             onEvent,
           });
+          // One bounded continuation closes accidental early completion without
+          // forcing impossible checks or bypassing user cancellation and budgets.
+          const pending = await verification.pendingContext();
+          if ((params.verifyChanges ?? sessionKey.startsWith('agent:coder:')) && pending && !policyStopped && !runAbortSignal.aborted
+            && !isAssistantTurnFailed(session.agent) && !isAssistantTurnAborted(session.agent)) {
+            await session.sendCustomMessage({
+              customType: 'coding_verification', content: pending, display: false,
+            }, { triggerTurn: true });
+            await session.agent.waitForIdle();
+          }
         },
         timeoutMs,
       );
+
+      runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? sessionKey.startsWith('agent:coder:'), ...await verification.summary() });
 
       if (runAbortSignal.aborted) {
         return { ok: false, errorMessage: 'aborted' };

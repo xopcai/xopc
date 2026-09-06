@@ -196,8 +196,6 @@ export interface AgentManagerConfig {
   installSkillFromMarketplace?: (
     opts: MarketplaceSkillInstallToolOptions,
   ) => Promise<MarketplaceSkillInstallToolResult>;
-  /** Dynamic workspace verification context injected into the system prompt when edits are pending. */
-  getSelfVerifyPromptContext?: (sessionKey: string, agentId?: string) => string;
   /**
    * Runtime trust override. Persistent "do not trust" entries still take precedence.
    */
@@ -216,7 +214,7 @@ export interface AgentInstance {
   /** Capability packs activated by explicit skills or UI entry points in this session. */
   activeCapabilities: Map<string, AgentCapabilitySessionState>;
   activeProjectContext?: string;
-  activeSelfVerifyContext?: string;
+
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
 }
@@ -681,7 +679,6 @@ export class AgentManager implements AgentInstanceGateway {
       thinkingLevel,
       activeProjectContext: this.composeDynamicProjectContext(
         instance.activeProjectContext,
-        instance.activeSelfVerifyContext,
         this.buildActiveCapabilityContext(instance, activeCapabilityNames, registeredToolNames),
       ),
     });
@@ -959,10 +956,7 @@ export class AgentManager implements AgentInstanceGateway {
         instance.effectiveProfile,
       );
       instance.activeProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
-      instance.activeSelfVerifyContext = this.getSelfVerifyPromptContext(
-        instance.sessionKey,
-        instance.effectiveProfile.agentId,
-      );
+
       const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: resolvedWorkspacePath,
@@ -974,10 +968,7 @@ export class AgentManager implements AgentInstanceGateway {
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel: this.config.thinkingLevel ?? 'medium',
-        activeProjectContext: this.composeDynamicProjectContext(
-          instance.activeProjectContext,
-          instance.activeSelfVerifyContext,
-        ),
+        activeProjectContext: instance.activeProjectContext,
       });
       instance.agent.state.systemPrompt = newPrompt;
     }
@@ -1072,10 +1063,7 @@ export class AgentManager implements AgentInstanceGateway {
         instance.effectiveProfile,
       );
       instance.activeProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
-      instance.activeSelfVerifyContext = this.getSelfVerifyPromptContext(
-        instance.sessionKey,
-        instance.effectiveProfile.agentId,
-      );
+
       const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: resolvedWorkspacePath,
@@ -1087,10 +1075,7 @@ export class AgentManager implements AgentInstanceGateway {
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel: this.config.thinkingLevel ?? 'medium',
-        activeProjectContext: this.composeDynamicProjectContext(
-          instance.activeProjectContext,
-          instance.activeSelfVerifyContext,
-        ),
+        activeProjectContext: instance.activeProjectContext,
       });
       instance.agent.state.systemPrompt = newPrompt;
     }
@@ -1127,7 +1112,7 @@ export class AgentManager implements AgentInstanceGateway {
     }
 
     const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
-    const activeSelfVerifyContext = this.getSelfVerifyPromptContext(sessionKey, profile.agentId);
+
     const profileModelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const modelManager = this.config.getModelManager?.();
     const initialModelRef = modelManager?.resolveInitialModelForSession(
@@ -1144,7 +1129,6 @@ export class AgentManager implements AgentInstanceGateway {
         resolvedPath,
         rt,
         activeProjectContext,
-        activeSelfVerifyContext,
       );
     } catch (err) {
       modelManager?.clearSessionProfileDefault(sessionKey);
@@ -1162,7 +1146,6 @@ export class AgentManager implements AgentInstanceGateway {
       registeredToolNames,
       activeCapabilities: new Map<string, AgentCapabilitySessionState>(),
       activeProjectContext,
-      activeSelfVerifyContext,
       skillEnvPassthroughKeys: new Set<string>(),
     });
 
@@ -1247,10 +1230,7 @@ export class AgentManager implements AgentInstanceGateway {
       this.config.thinkingLevel ?? 'medium';
 
     const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
-    const activeSelfVerifyContext = this.getSelfVerifyPromptContext(
-      sessionKey,
-      instance.effectiveProfile.agentId,
-    );
+
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
       workspaceOverride: resolvedWorkspacePath,
@@ -1263,13 +1243,9 @@ export class AgentManager implements AgentInstanceGateway {
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
       extraSystemPrompt: trimmed,
-      activeProjectContext: this.composeDynamicProjectContext(
-        activeProjectContext,
-        activeSelfVerifyContext,
-      ),
+      activeProjectContext,
     });
     instance.activeProjectContext = activeProjectContext;
-    instance.activeSelfVerifyContext = activeSelfVerifyContext;
   }
 
   /**
@@ -1297,6 +1273,7 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.abort();
     }
     this.agents.clear();
+    this.runtimeListeners.clear();
     this.userContext.clear();
     this.sessionWorkspaceOverrides.clear();
     void this.workspaceRuntimes.clearAll();
@@ -1342,10 +1319,6 @@ export class AgentManager implements AgentInstanceGateway {
     return undefined;
   }
 
-  private getSelfVerifyPromptContext(sessionKey: string, agentId?: string): string {
-    return this.config.getSelfVerifyPromptContext?.(sessionKey, agentId).trim() ?? '';
-  }
-
   private composeDynamicProjectContext(...sections: Array<string | undefined>): string | undefined {
     return sections.map((section) => section?.trim())
       .filter((section): section is string => Boolean(section))
@@ -1364,7 +1337,6 @@ export class AgentManager implements AgentInstanceGateway {
     resolvedWorkspacePath: string,
     rt: WorkspaceRuntime,
     activeProjectContext?: string,
-    activeSelfVerifyContext?: string,
   ): { agent: Agent; registeredToolNames: string[] } {
     const model = this.resolveModelStringToModel(modelRef);
     let agent: Agent | undefined;
@@ -1397,10 +1369,7 @@ export class AgentManager implements AgentInstanceGateway {
           modelRef,
           agentId: profile.agentId,
           thinkingLevel,
-          activeProjectContext: this.composeDynamicProjectContext(
-            activeProjectContext,
-            activeSelfVerifyContext,
-          ),
+          activeProjectContext,
         }),
         model,
         thinkingLevel,
@@ -1528,14 +1497,8 @@ export class AgentManager implements AgentInstanceGateway {
 
   private refreshActiveProjectContextIfChanged(instance: AgentInstance): void {
     const nextProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
-    const nextSelfVerifyContext = this.getSelfVerifyPromptContext(
-      instance.sessionKey,
-      instance.effectiveProfile.agentId,
-    );
-    if (
-      nextProjectContext === instance.activeProjectContext &&
-      nextSelfVerifyContext === (instance.activeSelfVerifyContext ?? '')
-    ) {
+
+    if (nextProjectContext === instance.activeProjectContext) {
       return;
     }
     const cfg = this.config.config!;
@@ -1561,13 +1524,9 @@ export class AgentManager implements AgentInstanceGateway {
       modelRef,
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
-      activeProjectContext: this.composeDynamicProjectContext(
-        nextProjectContext,
-        nextSelfVerifyContext,
-      ),
+      activeProjectContext: nextProjectContext,
     });
     instance.activeProjectContext = nextProjectContext;
-    instance.activeSelfVerifyContext = nextSelfVerifyContext;
     log.debug({ sessionKey: instance.sessionKey }, 'Dynamic agent context changed; system prompt refreshed');
   }
 
@@ -1604,10 +1563,7 @@ export class AgentManager implements AgentInstanceGateway {
         'medium';
 
       const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
-      const activeSelfVerifyContext = this.getSelfVerifyPromptContext(
-        sessionKey,
-        instance.effectiveProfile.agentId,
-      );
+
       instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: resolvedWorkspacePath,
@@ -1619,13 +1575,9 @@ export class AgentManager implements AgentInstanceGateway {
         modelRef: modelId,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel,
-        activeProjectContext: this.composeDynamicProjectContext(
-          activeProjectContext,
-          activeSelfVerifyContext,
-        ),
+        activeProjectContext,
       });
       instance.activeProjectContext = activeProjectContext;
-      instance.activeSelfVerifyContext = activeSelfVerifyContext;
 
       log.info({ sessionKey, modelId }, 'Model set for session');
       return true;
@@ -1687,11 +1639,18 @@ export class AgentManager implements AgentInstanceGateway {
    * Subscribe to agent events for a session
    */
   subscribeToSession(sessionKey: string, callback: (event: AgentEvent) => void): (() => void) | null {
-    const instance = this.agents.get(sessionKey);
-    if (!instance) {
-      return null;
-    }
+    const listeners = this.runtimeListeners.get(sessionKey) ?? new Set();
+    listeners.add(callback);
+    this.runtimeListeners.set(sessionKey, listeners);
+    return () => {
+      listeners.delete(callback);
+      if (listeners.size === 0) this.runtimeListeners.delete(sessionKey);
+    };
+  }
 
-    return instance.agent.subscribe(callback);
+  private readonly runtimeListeners = new Map<string, Set<(event: AgentEvent) => void>>();
+
+  emitRuntimeEvent(sessionKey: string, event: AgentEvent): void {
+    for (const listener of this.runtimeListeners.get(sessionKey) ?? []) listener(event);
   }
 }

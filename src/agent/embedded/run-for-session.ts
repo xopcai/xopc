@@ -253,6 +253,7 @@ export async function runEmbeddedTurnForSession(
           turnPolicy,
           abortSignal: supervisor.signal,
           onEvent: params.onEvent,
+          onAgentEvent: (event) => agentManager.emitRuntimeEvent(sessionKey, event),
           resumeLastUserMessage,
         });
 

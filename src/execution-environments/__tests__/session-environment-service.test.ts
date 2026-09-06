@@ -98,7 +98,8 @@ describe('SessionEnvironmentService', () => {
 
     await expect(service.release(SESSION_KEY)).rejects.toThrow();
 
-    expect(service.get(SESSION_KEY)).toBeUndefined();
+    expect(service.get(SESSION_KEY)?.id).toBe(environment.id);
+    expect((await service.attach({ sessionKey: SESSION_KEY, project })).status).toBe('ready');
     expect(existsSync(join(environment.rootPath, 'unfinished.txt'))).toBe(true);
   });
 

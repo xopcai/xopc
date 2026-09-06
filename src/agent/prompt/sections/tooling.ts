@@ -34,7 +34,6 @@ const CORE_TOOL_ORDER = [
   'image',
   'image_generate',
   'create_share',
-  'execute_code',
 ] as const;
 
 const CORE_TOOL_SUMMARIES: Record<string, string> = {
@@ -73,7 +72,6 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   image: 'Analyze an image with the configured vision model',
   image_generate: 'Generate images with the configured image model',
   create_share: 'Create a shareable link for workspace files',
-  execute_code: 'Run code in a sandbox with a restricted tool subset',
 };
 
 export function buildToolingSection(params: {

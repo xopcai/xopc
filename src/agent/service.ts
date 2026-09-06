@@ -29,8 +29,7 @@ import { SystemReminder } from './prompt/system-reminder.js';
 import { ToolUsageAnalyzer } from './tools/usage-analyzer.js';
 import { ToolChainTracker } from './tools/chain-tracker.js';
 import { ErrorPatternMatcher } from './tools/error-pattern-matcher.js';
-import { ContextMiddleware, SelfVerifyMiddleware } from './middleware/index.js';
-import { TurnDiffTracker } from './coding/index.js';
+import { ContextMiddleware } from './middleware/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { resolveCompactionPolicy } from './memory/compaction-policy.js';
 import { runXopcEmbeddedTurn } from './embedded/run-turn.js';
@@ -146,8 +145,6 @@ export class AgentService {
   private toolUsageAnalyzer: ToolUsageAnalyzer;
   private toolChainTracker: ToolChainTracker;
   private errorPatternMatcher: ErrorPatternMatcher;
-  private selfVerifyMiddleware: SelfVerifyMiddleware;
-  private turnDiffTracker: TurnDiffTracker;
   private contextMiddleware: ContextMiddleware;
 
   private messageRouter: MessageRouter;
@@ -300,10 +297,6 @@ export class AgentService {
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),
       installSkillFromMarketplace: (opts) => this.installSkillFromMarketplace(opts),
       isWorkspaceTrusted: config.isWorkspaceTrusted,
-      getSelfVerifyPromptContext: (sessionKey, agentId) => [
-        this.selfVerifyMiddleware.getPendingVerificationContext(sessionKey, agentId),
-        this.turnDiffTracker.buildFinalGuardContext(sessionKey),
-      ].filter(Boolean).join('\n\n'),
     });
 
     this.agentEventHandler = new AgentEventHandler({
@@ -311,11 +304,9 @@ export class AgentService {
       requestLimiter: this.requestLimiter,
       lifecycleManager: this.lifecycleManager,
       toolChainTracker: this.toolChainTracker,
-      selfVerifyMiddleware: this.selfVerifyMiddleware,
       systemReminder: this.systemReminder,
       toolUsageAnalyzer: this.toolUsageAnalyzer,
       errorPatternMatcher: this.errorPatternMatcher,
-      turnDiffTracker: this.turnDiffTracker,
     });
     this.agentEventHandler.registerListener('message_end', (event, context) => {
       const message = (event as Extract<AgentEvent, { type: 'message_end' }>).message;
@@ -557,13 +548,6 @@ export class AgentService {
       resetOnTurnEnd: true,
     });
 
-    this.selfVerifyMiddleware = new SelfVerifyMiddleware({
-      maxEditsPerFile: 5,
-      enablePreCompletionCheck: true,
-      minTurnsForVerification: 4,
-      resetOnVerification: true,
-    });
-    this.turnDiffTracker = new TurnDiffTracker();
 
     this.requestLimiter = new RequestLimiter({
       maxRequestsPerTurn: 50,
@@ -1083,8 +1067,7 @@ export class AgentService {
     }
 
     if (currentContext.sessionKey !== sessionKey) {
-      // Event from a different session — still process with current context where applicable
-      this.agentEventHandler.handle(event, currentContext);
+      // Never attribute another session's runtime events to the active user.
       return;
     }
 

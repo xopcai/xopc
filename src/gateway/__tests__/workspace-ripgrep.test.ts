@@ -1,3 +1,4 @@
+import { runRipgrepListFiles } from '../workspace-ripgrep.js';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,8 +8,7 @@ import {
   isAsarBundledPath,
   isRunnableRipgrepPath,
   resetRipgrepBinaryCacheForTests,
-  runRipgrepListFiles,
-} from '../workspace-ripgrep.js';
+} from '../../infra/ripgrep.js';
 
 describe('workspace-ripgrep', () => {
   afterEach(() => {

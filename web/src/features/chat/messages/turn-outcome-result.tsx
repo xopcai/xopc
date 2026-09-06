@@ -69,7 +69,7 @@ export function TurnOutcomeResult({
     ? t.statusSucceeded
     : outcome.status === 'failed'
       ? t.statusFailed
-      : null;
+      : t.statusPartial;
   const StatusIcon = outcome.status === 'succeeded'
     ? Check
     : CircleX;
@@ -260,14 +260,16 @@ export function TurnOutcomeResult({
           <div className="flex flex-col">
             {outcome.evidence.map((item) => (
               <div key={item.evidenceId} className="flex min-h-11 items-center gap-2.5 border-b border-edge-subtle/60 px-1 py-2 last:border-b-0">
-                <ListChecks className={item.status === 'passed' ? 'size-4 shrink-0 text-success' : 'size-4 shrink-0 text-danger'} strokeWidth={1.75} aria-hidden />
+                <ListChecks className={item.status === 'passed' ? 'size-4 shrink-0 text-success' : item.status === 'failed' ? 'size-4 shrink-0 text-danger' : 'size-4 shrink-0 text-warning'} strokeWidth={1.75} aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xs font-medium text-fg">{item.label}</div>
+                  {item.revision ? <div className="text-xs text-fg-subtle" title={item.revision}>{t.checkedRevision} <code>{item.revision.slice(0, 12)}</code></div> : null}
+                  {item.logPath ? <details className="text-xs text-fg-subtle"><summary className="cursor-pointer">{t.commandLog}</summary><code className="break-all">{item.logPath}</code></details> : null}
                   {item.durationMs !== undefined ? (
                     <div className="text-xs text-fg-subtle">{t.duration.replace('{{ms}}', String(item.durationMs))}</div>
                   ) : null}
                 </div>
-                <span className={item.status === 'passed' ? 'text-xs font-medium text-success' : 'text-xs font-medium text-danger'}>
+                <span className={item.status === 'passed' ? 'text-xs font-medium text-success' : item.status === 'failed' ? 'text-xs font-medium text-danger' : 'text-xs font-medium text-warning'}>
                   {item.status === 'passed' ? t.passed : item.status === 'failed' ? t.failed : t.warning}
                 </span>
               </div>

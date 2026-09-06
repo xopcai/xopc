@@ -1,0 +1,13 @@
+name: Coding core harness baseline
+repetitions: 3
+randomizeVariantOrder: true
+randomSeed: coding-core-v1
+variants:
+  - id: candidate
+    adapter: xopc
+    agentId: coder
+    model: ${XOPC_EVAL_MODEL}
+    reasoning: high
+    config:
+      baseUrl: ${XOPC_EVAL_BASE_URL}
+      cleanupSession: true

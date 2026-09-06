@@ -6,7 +6,6 @@ export { AgentOrchestrator, type AgentOrchestratorConfig } from './agent-orchest
 export {
   AgentEventHandler,
   SessionEventBus,
-  readChangedPathsFromToolEnd,
   type AgentEventHandlerConfig,
   type SessionEventListener,
   type SessionEventTypeFilter,
