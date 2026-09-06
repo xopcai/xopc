@@ -15,7 +15,6 @@ import {
   type CreateVoiceSessionRequest,
   type CreateVoiceSessionResponse,
   type VoiceClientMessage,
-  type VoiceProviderRoute,
 } from '@xopcai/realtime-protocol/voice';
 import type { RawData, WebSocket } from 'ws';
 
@@ -38,7 +37,10 @@ import { createAgentVoiceEngine } from './agentEngine.js';
 import { voiceConversationInstructions, type VoiceConversationContext } from './conversation-context.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import { resolveOmniRoute, type OmniRoute } from './omniRoute.js';
-import { createOmniVoiceEngine, type OmniTranscript } from './omniEngine.js';
+import { createOmniVoiceEngine } from './omniEngine.js';
+import type { ResolvedStreamingStt, ResolvedStreamingTts, VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
+
+export type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 
 const { WebSocket: WebSocketState, WebSocketServer } = createRequire(import.meta.url)('ws') as typeof import('ws');
 const log = createLogger('Voice:Realtime');
@@ -47,40 +49,6 @@ const MAX_OUTSTANDING_TICKETS = 200;
 const MAX_CONNECTIONS = 50;
 const MAX_CONNECTIONS_PER_PRINCIPAL = 2;
 const MAX_CLOCK_SKEW_MS = 60_000;
-
-interface ResolvedStreamingStt {
-  plugin: MediaUnderstandingProvider & Required<Pick<MediaUnderstandingProvider, 'openAudioStream' | 'streamingAudio'>>;
-  model: string;
-  apiKey?: string;
-  baseUrl?: string;
-  headers?: Record<string, string>;
-  language?: string;
-  prompt?: string;
-  route: VoiceProviderRoute;
-}
-
-export interface VoiceTicketClaim {
-  sessionId: string;
-  principalId: string;
-  request: CreateVoiceSessionRequest;
-  inputMode: 'server_vad';
-  idleTimeoutMs: number;
-  maxSessionMs: number;
-  silenceDurationMs: number;
-  stt?: ResolvedStreamingStt;
-  omni?: OmniRoute;
-  conversationSessionId?: string;
-  tts?: ResolvedStreamingTts;
-  config: Config;
-  createdAt: number;
-  expiresAt: number;
-}
-
-interface ResolvedStreamingTts {
-  provider: ResolvedSpeechProvider;
-  config: TTSConfig;
-  route: VoiceProviderRoute;
-}
 
 export type VoiceSessionCreationErrorCode =
   | 'VOICE_DISABLED'
@@ -98,28 +66,6 @@ export class VoiceSessionCreationError extends Error {
     super(message);
     this.name = 'VoiceSessionCreationError';
   }
-}
-
-interface VoiceAgentEvent {
-  type: string;
-  payload?: { delta?: unknown; message?: unknown; status?: unknown; toolCallId?: unknown; toolName?: unknown; requestId?: unknown; question?: unknown; choices?: unknown };
-}
-
-export interface VoiceRealtimeRuntimeOptions {
-  recordOmniTranscript?: (sessionKey: string, callId: string, entry: OmniTranscript, expectedSessionId: string) => Promise<void>;
-  getConversationContext?: (sessionKey: string, expectedSessionId: string) => Promise<VoiceConversationContext>;
-  getSessionIdentity?: (sessionKey: string) => Promise<string | undefined>;
-  getConfig: () => Config;
-  sessionExists: (sessionKey: string) => Promise<boolean>;
-  sessionBusy: (sessionKey: string) => boolean;
-  runAgent: (text: string, sessionKey: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
-  recordInterruption: (entry: {
-    sessionKey: string;
-    responseId: string;
-    reason: 'barge_in' | 'client_cancelled';
-    generatedCharacters: number;
-    interruptedDuring: 'thinking' | 'speaking';
-  }) => Promise<void>;
 }
 
 function ticketKey(ticket: string): string {
