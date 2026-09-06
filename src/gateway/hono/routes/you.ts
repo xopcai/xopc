@@ -267,9 +267,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     return c.json({ objects });
   });
 
-  authenticated.get('/api/you/profile', (c) => {
+  authenticated.get('/api/you/profile', async (c) => {
     const profile = getUserProfile();
-    return c.json({ profile, suggestedCallName: profile.callName || machineCallName() });
+    const avatar = await readUserAvatar();
+    return c.json({ profile, suggestedCallName: profile.callName || machineCallName(), hasAvatar: avatar.ok });
   });
 
   authenticated.patch('/api/you/profile', write, async (c) => {

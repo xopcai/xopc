@@ -304,7 +304,7 @@ export async function updateUserContextSettings(patch: Partial<UserContextSettin
   await revalidateGatewayConfig();
 }
 
-export async function fetchUserProfile(): Promise<{ profile: UserProfile; suggestedCallName?: string }> {
+export async function fetchUserProfile(): Promise<{ profile: UserProfile; suggestedCallName?: string; hasAvatar: boolean }> {
   return fetchJson(apiUrl('/api/you/profile'));
 }
 

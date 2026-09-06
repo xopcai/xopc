@@ -36,9 +36,8 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   const models = registry.data ?? [];
   const selected = models.find((model) => model.id === sessionModel);
   const unavailable = Boolean(sessionModel && registry.data && !selected);
-  const duplicateName = selected && models.some((model) => model.id !== selected.id && model.name === selected.name);
-  const modelLabel = selected?.name || sessionModel.split('/').at(-1) || m.modelConfigure;
-  const title = duplicateName ? `${modelLabel} (${selected.provider})` : modelLabel;
+  const modelLabel = selected?.name || sessionModel.slice(sessionModel.indexOf('/') + 1) || m.modelConfigure;
+  const title = modelLabel.split('/').at(-1) || modelLabel;
   const thinking = selected?.thinking;
   const adjustable = thinking?.mode === 'levels' || thinking?.mode === 'toggle';
   const levelLabel = (level: string) => thinking?.mode === 'toggle' && level !== 'off'
@@ -64,7 +63,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   return (
     <Popover.Root onOpenChange={(open) => { if (!open) { setView('config'); setError(''); setNotice(''); } }}>
       <Popover.Trigger asChild>
-        <button type="button" aria-label={`${m.modelConfigLabel}: ${title}${effort ? ` · ${effort}` : ''}`} title={sessionModel || m.modelConfigure}
+        <button type="button" aria-label={`${m.modelConfigLabel}: ${title}${effort ? ` · ${effort}` : ''}`} title={title}
           className={cn('inline-flex h-8 min-w-0 max-w-[min(18rem,calc(100vw-10rem))] items-center gap-1.5 rounded-lg bg-surface-hover/70 px-2.5 text-[13px] text-fg hover:bg-surface-hover', interaction.focusRingPanel, interaction.transition)}>
           {registry.isLoading || (!sessionModel && models.length > 0) ? <Skeleton className="h-4 w-28" /> : <>
             <span className="min-w-0 truncate font-medium">{title}</span>
