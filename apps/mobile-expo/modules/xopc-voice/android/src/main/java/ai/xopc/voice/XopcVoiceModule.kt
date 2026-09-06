@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.functions.Queues
@@ -71,14 +72,48 @@ class XopcVoiceModule : Module() {
 
   private fun acquireAudioFocus(attributes: AudioAttributes): Boolean {
     for (gain in intArrayOf(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)) {
-      val request = AudioFocusRequest.Builder(gain).setAudioAttributes(attributes)
-        .setOnAudioFocusChangeListener({ change -> if (change < 0) interrupt("interruption") }, handler).build()
-      if (manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-        focus = request
-        return true
+      try {
+        val request = AudioFocusRequest.Builder(gain).setAudioAttributes(attributes)
+          .setOnAudioFocusChangeListener({ change -> if (change < 0) interrupt("interruption") }, handler).build()
+        if (manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+          focus = request
+          return true
+        }
+      } catch (error: RuntimeException) {
+        Log.w("XopcVoice", "Audio focus request failed", error)
       }
     }
     return false
+  }
+
+  private fun configureInputEffects(input: AudioRecord) {
+    try {
+      if (AcousticEchoCanceler.isAvailable()) echo = AcousticEchoCanceler.create(input.audioSessionId)?.apply { enabled = true }
+    } catch (error: RuntimeException) {
+      Log.w("XopcVoice", "Acoustic echo cancellation is unavailable", error)
+    }
+    try {
+      if (NoiseSuppressor.isAvailable()) noise = NoiseSuppressor.create(input.audioSessionId)?.apply { enabled = true }
+    } catch (error: RuntimeException) {
+      Log.w("XopcVoice", "Noise suppression is unavailable", error)
+    }
+  }
+
+  private fun createTrack(): AudioTrack {
+    val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+      .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+    val format = AudioFormat.Builder().setSampleRate(24000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+      .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
+    val player = AudioTrack.Builder().setAudioAttributes(attributes).setAudioFormat(format)
+      .setBufferSizeInBytes(96000).setTransferMode(AudioTrack.MODE_STREAM).build()
+    if (player.state != AudioTrack.STATE_INITIALIZED) {
+      player.release()
+      throw IllegalStateException("PLAYBACK_UNAVAILABLE")
+    }
+    player.play()
+    track = player
+    handler.post(progress)
+    return player
   }
 
   private fun startRecorder(bufferSize: Int): AudioRecord {
@@ -113,19 +148,14 @@ class XopcVoiceModule : Module() {
         VoiceCallService.onStop = { interrupt("ended") }
         context.startForegroundService(Intent(context, VoiceCallService::class.java).putExtra("title", title).putExtra("stopLabel", stopLabel))
       }
-      manager.mode = AudioManager.MODE_IN_COMMUNICATION
-      check(acquireAudioFocus(attributes)) { "AUDIO_FOCUS_UNAVAILABLE" }
+      try { manager.mode = AudioManager.MODE_IN_COMMUNICATION }
+      catch (error: RuntimeException) { Log.w("XopcVoice", "Communication audio mode is unavailable", error) }
+      if (!acquireAudioFocus(attributes)) Log.w("XopcVoice", "Audio focus was not granted; continuing capture")
       val minInput = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
       check(minInput > 0) { "MICROPHONE_FORMAT_UNAVAILABLE" }
       val input = startRecorder(maxOf(minInput, 6400))
       recorder = input
-      if (AcousticEchoCanceler.isAvailable()) echo = AcousticEchoCanceler.create(input.audioSessionId)?.apply { this.enabled = true }
-      if (NoiseSuppressor.isAvailable()) noise = NoiseSuppressor.create(input.audioSessionId)?.apply { this.enabled = true }
-      track = AudioTrack.Builder().setAudioAttributes(attributes)
-        .setAudioFormat(AudioFormat.Builder().setSampleRate(24000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
-        .setBufferSizeInBytes(96000).setTransferMode(AudioTrack.MODE_STREAM).build()
-      check(track?.state == AudioTrack.STATE_INITIALIZED) { "PLAYBACK_UNAVAILABLE" }
-      track?.play()
+      configureInputEffects(input)
       val generation = epoch
       inputThread = Thread({
         val buffer = ByteArray(1280)
@@ -144,14 +174,14 @@ class XopcVoiceModule : Module() {
           if (removed.any { it.isSource || it.isSink }) interrupt("route_lost")
         }
       }
-      manager.registerAudioDeviceCallback(devices, handler)
-      handler.post(progress)
+      try { manager.registerAudioDeviceCallback(devices, handler) }
+      catch (error: RuntimeException) { devices = null; Log.w("XopcVoice", "Audio route monitoring is unavailable", error) }
     } catch (error: SecurityException) { stop(); throw IllegalStateException("PERMISSION_DENIED", error) }
     catch (error: Throwable) { stop(); throw error }
   }
 
   private fun enqueue(id: String, audio: String) {
-    val player = track ?: return
+    val player = track ?: createTrack()
     if (responseId != id) { flush(); responseId = id }
     val bytes = Base64.decode(audio, Base64.NO_WRAP)
     require(bytes.isNotEmpty() && bytes.size % 2 == 0)
