@@ -8,7 +8,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { hapticVoiceCancel, hapticVoiceStart, hapticVoiceZoneChange } from '@/motion/haptics';
 import type { WireAttachment } from './composer.types';
 import {
-  beginRecording, deleteRecordingFile, discardRecording, finishRecording,
+  beginRecording, classifyVoiceTranscriptionFailure, deleteRecordingFile, discardRecording, finishRecording,
   inferRecordingMimeType, MAX_VOICE_RECORDING_MS, meteringToLevel,
   requestMicPermission, type ExpoRecording,
 } from './voiceRecording';
@@ -115,7 +115,12 @@ export function useChatVoiceRecording({ sessionKey, disabled, onRecorded, onTran
             return;
           }
           onRecordingDraft(attachment);
-          onError(m.voiceTranscribeFailed);
+          const failure = classifyVoiceTranscriptionFailure(error);
+          const detail = error instanceof Error ? error.message.trim().slice(0, 240) : '';
+          onError(failure === 'decoder_unavailable' ? m.voiceDecoderUnavailable
+            : failure === 'not_configured' ? m.voiceSttNotConfigured
+            : failure === 'runtime_unavailable' ? m.voiceRuntimeUnavailable
+            : detail ? `${m.voiceTranscribeFailed}\n${detail}` : m.voiceTranscribeFailed);
         }
       } else {
         await onRecorded(attachment);
@@ -129,7 +134,7 @@ export function useChatVoiceRecording({ sessionKey, disabled, onRecorded, onTran
         setStage('idle');
       }
     }
-  }, [m.voiceNoSpeechDetected, m.voiceRecordingFailed, m.voiceTooShort, m.voiceTranscribeFailed, onError, onRecorded, onRecordingDraft, onTranscribed, transcribe]);
+  }, [m.voiceDecoderUnavailable, m.voiceNoSpeechDetected, m.voiceRecordingFailed, m.voiceRuntimeUnavailable, m.voiceSttNotConfigured, m.voiceTooShort, m.voiceTranscribeFailed, onError, onRecorded, onRecordingDraft, onTranscribed, transcribe]);
   finishRef.current = () => { void finish(); };
 
   const start = useCallback(async () => {

@@ -8,7 +8,11 @@ export function voiceErrorMessage(code: string | undefined, m: MessageBundle['vo
   if (/SESSION_CHANGED|NOT_FOUND|context_changed/.test(code)) return m.sessionChanged;
   if (/TIME_LIMIT|max_duration|session_limit|idle_timeout/.test(code)) return m.timeLimit;
   if (/INPUT_DROPPED|audio_backpressure/.test(code)) return m.inputDropped;
-  if (/interruption|route_lost|background/.test(code)) return m.interruption;
+  if (/audio_focus_lost/.test(code)) return m.audioFocusLost;
+  if (/capture_failed/.test(code)) return m.captureFailed;
+  if (/route_lost/.test(code)) return m.routeLost;
+  if (/background/.test(code)) return m.backgroundPaused;
+  if (/interruption/.test(code)) return m.interruption;
   if (/NETWORK|CONNECT_TIMEOUT/.test(code)) return m.network;
   return m.error;
 }

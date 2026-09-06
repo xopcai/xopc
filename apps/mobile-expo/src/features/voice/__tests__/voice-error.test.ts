@@ -5,6 +5,16 @@ import { voiceErrorMessage } from '../voice-error';
 
 describe('voiceErrorMessage', () => {
   it.each([
+    ['audio_focus_lost', en.voice.audioFocusLost],
+    ['capture_failed', en.voice.captureFailed],
+    ['route_lost', en.voice.routeLost],
+    ['background', en.voice.backgroundPaused],
+    ['interruption', en.voice.interruption],
+  ])('distinguishes audio interruption reason %s', (code, message) => {
+    expect(voiceErrorMessage(code, en.voice)).toBe(message);
+  });
+
+  it.each([
     'AUDIO_FOCUS_UNAVAILABLE',
     'MICROPHONE_UNAVAILABLE',
     'MICROPHONE_FORMAT_UNAVAILABLE',

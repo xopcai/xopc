@@ -113,8 +113,9 @@ export async function transcribeVoice(
   mimeType: string,
   options?: { language?: string },
 ): Promise<VoiceTranscribeResult> {
-  const preferredLanguage = usePreferencesStore.getState().language === 'zh' ? 'zh-CN' : 'en-US';
-  const language = options?.language?.trim() || preferredLanguage;
+  const preferredLanguage = usePreferencesStore.getState().language === 'zh' ? 'zh' : 'en';
+  // STT providers expect a language code, not a UI locale such as zh-CN.
+  const language = (options?.language?.trim() || preferredLanguage).toLowerCase().split(/[-_]/)[0];
   const res = await apiUploadFile('/api/voice/transcriptions', {
     uri,
     fieldName: 'audio',
