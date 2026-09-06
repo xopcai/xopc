@@ -29,6 +29,7 @@ import { resolveChatConversationPhase } from '@/features/chat/session/chat-conve
 import { useChatFollowUpClarify } from '@/features/chat/session/use-chat-follow-up-clarify';
 import { useChatSessionAgents } from '@/features/chat/session/use-chat-session-agents';
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
+import { usePreparedSessionModel } from '@/features/chat/session/use-prepared-session-model';
 import { useChatSessionLoad } from '@/features/chat/session/use-chat-session-load';
 import { focusedSessionKeyRef, useChatSessionRoute } from '@/features/chat/session/use-chat-session-route';
 import { useChatSessionStreaming } from '@/features/chat/session/use-chat-session-streaming';
@@ -372,6 +373,13 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     applyAgentConfig,
     patchInitUi,
   });
+  const preparedModel = usePreparedSessionModel(projectPreparation);
+  useEffect(() => {
+    if (projectPreparation && preparedModel.error) {
+      useChatSessionStore.getState().setShellError(preparedModel.error instanceof Error
+        ? preparedModel.error.message : 'Failed to load model configuration');
+    }
+  }, [projectPreparation, preparedModel.error]);
 
   useEffect(() => {
     const onRunStarted = (e: Event) => {
@@ -417,7 +425,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       hasToken: Boolean(token),
     },
     session: {
-      projectPreparation,
+      projectPreparation: preparedModel.preparation,
       sessionKey: focusedSessionKey,
       sessionName,
       decodedKey,
@@ -426,21 +434,21 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       showSessionLoading,
       conversationPhase,
       loading: initLoading,
-      sessionModel,
-      modelConfigReady,
+      sessionModel: projectPreparation ? preparedModel.model : sessionModel,
+      modelConfigReady: projectPreparation ? preparedModel.ready : modelConfigReady,
       modelConfigSaving,
-      thinkingLevel,
-      onSessionThinkingLevelChange,
+      thinkingLevel: projectPreparation ? preparedModel.thinkingLevel : thinkingLevel,
+      onSessionThinkingLevelChange: projectPreparation ? preparedModel.onThinkingChange : onSessionThinkingLevelChange,
       onSessionWorkingDirectoryChange,
       reasoningLevel,
-      modelSupportsThinking,
+      modelSupportsThinking: projectPreparation ? preparedModel.modelSupportsThinking : modelSupportsThinking,
       effectiveWorkspacePath,
       workspaceSource,
       userContextMode: projectPreparation?.temporary ? 'temporary' as const : userContextMode,
       hasMore,
       loadingMore,
       loadMoreMessages,
-      onSessionModelChange,
+      onSessionModelChange: projectPreparation ? preparedModel.onModelChange : onSessionModelChange,
       createNewSession,
       sessionManager: sessionMgrRef.current,
     },
