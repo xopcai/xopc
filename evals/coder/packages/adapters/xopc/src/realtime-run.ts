@@ -1,6 +1,6 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 
-import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 
 export async function runRealtimeInput(input: {
@@ -28,9 +28,9 @@ export async function runRealtimeInput(input: {
     ...identity, publicKey: publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
   });
 
-  let resolveReady!: (origin: { endpointId: string; token: string }) => void;
+  let resolveReady!: (origin: EndpointTurnClaim) => void;
   let rejectReady!: (error: Error) => void;
-  const ready = new Promise<{ endpointId: string; token: string }>((resolve, reject) => {
+  const ready = new Promise<EndpointTurnClaim>((resolve, reject) => {
     resolveReady = resolve; rejectReady = reject;
   });
   let resolveDone!: () => void;
@@ -79,7 +79,7 @@ export async function runRealtimeInput(input: {
       }).toString('base64url');
       return hello;
     },
-    onReady: origin => resolveReady({ endpointId: origin.endpointId, token: origin.turnToken }),
+    onReady: origin => resolveReady({ type: 'endpoint', endpointId: origin.endpointId, token: origin.turnToken }),
     onMessage: () => {},
   });
   const abort = () => fail(new Error('Evaluation aborted'));
