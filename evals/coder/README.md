@@ -40,7 +40,7 @@ Open `http://127.0.0.1:4310` for experiment summaries.
 
 ## xopc adapter
 
-The xopc adapter treats xopc as a black box. For each run it creates a session, binds that session to the run's isolated Git clone through the public agent-config API, calls `POST /api/agent`, and removes the session after trajectory capture. Start an isolated xopc gateway separately, then define a variant:
+The xopc adapter treats xopc as a black box. For each run it creates a session, binds that session to the run's isolated Git clone through the public agent-config API, registers a signed endpoint, submits `POST /api/sessions/:sessionKey/inputs`, and captures the `run:<runId>` realtime replay, and removes the session after trajectory capture. Start an isolated xopc gateway separately, then define a variant:
 
 ```yaml
 name: xopc comparison
@@ -154,7 +154,7 @@ and duration trends. `trend` exposes the same history in a CI-friendly table.
 - Suite and setup commands are trusted code. Run untrusted repositories in a container or VM.
 - The agent workspace never includes suite definitions or hidden grader configuration.
 - Tokens are read from the environment and must not be placed in Suite YAML.
-- The xopc adapter stores normalized SSE payloads; configure artifact retention before using production conversations.
+- The xopc adapter stores normalized realtime payloads; configure artifact retention before using production conversations.
 - The sanitized Git clone hides evaluator sources and history, but it is not a process or security boundary. Use a container or VM for untrusted agents or repositories.
 
 ## Development

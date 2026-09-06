@@ -5,6 +5,8 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@agent-evals/protocol": "workspace:*"
+    "@agent-evals/protocol": "workspace:*",
+    "@xopcai/endpoint-tools-protocol": "workspace:*",
+    "@xopcai/realtime-client": "workspace:*"
   }
 }

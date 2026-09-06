@@ -1,3 +1,5 @@
+import { runRealtimeInput } from './realtime-run.js';
+
 import {
   redactSensitive,
   TraceEmitter,
@@ -23,12 +25,6 @@ interface ActiveRun {
   cleanupSession: boolean;
 }
 
-interface ParsedSseEvent {
-  event: string;
-  data: string;
-  id?: string;
-}
-
 function mapEventType(type: string): TraceEventType {
   if (type === 'run_start') return 'run.started';
   if (type === 'run_end' || type === 'run_complete' || type === 'done') return 'run.completed';
@@ -41,48 +37,6 @@ function mapEventType(type: string): TraceEventType {
   if (type.includes('assistant') || type.includes('message')) return 'model.response';
   if (type === 'error') return 'run.failed';
   return 'agent.event';
-}
-
-export async function* parseSseStream(
-  stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<ParsedSseEvent> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, '\n');
-    let boundary = buffer.indexOf('\n\n');
-    while (boundary >= 0) {
-      const block = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const parsed = parseSseBlock(block);
-      if (parsed) yield parsed;
-      boundary = buffer.indexOf('\n\n');
-    }
-    if (done) break;
-  }
-  if (buffer.trim()) {
-    const parsed = parseSseBlock(buffer);
-    if (parsed) yield parsed;
-  }
-}
-
-function parseSseBlock(block: string): ParsedSseEvent | undefined {
-  let event = 'message';
-  let id: string | undefined;
-  const data: string[] = [];
-  for (const line of block.split('\n')) {
-    if (!line || line.startsWith(':')) continue;
-    const colon = line.indexOf(':');
-    const field = colon >= 0 ? line.slice(0, colon) : line;
-    const value = colon >= 0 ? line.slice(colon + 1).replace(/^ /, '') : '';
-    if (field === 'event') event = value;
-    if (field === 'id') id = value;
-    if (field === 'data') data.push(value);
-  }
-  if (data.length === 0) return undefined;
-  return { event, data: data.join('\n'), ...(id ? { id } : {}) };
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -196,57 +150,29 @@ export class XopcGatewayAdapter implements AgentAdapter {
       });
     }
 
-    const response = await fetch(`${baseUrl}/api/agent`, {
-      method: 'POST',
-      headers: headers(token, 'text/event-stream'),
-      body: JSON.stringify({
-        message: request.evalCase.task,
-        channel: 'webchat',
-        sessionKey,
-        clientCreatedAtMs: Date.now(),
-        ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
-      }),
-      signal,
-    });
-    await requireOk(response, 'agent run');
-    if (!response.body) throw new Error('xopc agent run returned an empty response body');
-
     let finalText = '';
-    let agentRunId: string | undefined;
     let failure: string | undefined;
     let usage: Record<string, number> | undefined;
-    for await (const event of parseSseStream(response.body)) {
-      let decoded: Record<string, unknown>;
-      try {
-        decoded = record(JSON.parse(event.data));
-      } catch {
-        decoded = { data: event.data };
-      }
-      const rawType = typeof decoded.type === 'string' ? decoded.type : event.event;
-      const payload = record(decoded.payload);
-      if (typeof decoded.runId === 'string') {
-        agentRunId = decoded.runId;
+    const agentRunId = await runRealtimeInput({
+      baseUrl, headers: requestHeaders, sessionKey, message: request.evalCase.task, signal,
+      ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
+      onRunId: runId => {
         const active = this.activeRuns.get(request.runId);
-        if (active) active.agentRunId = agentRunId;
-      }
-      const delta = payload.delta;
-      if (rawType === 'assistant_delta' && typeof delta === 'string') finalText += delta;
-      if (rawType === 'error') {
-        failure = typeof payload.message === 'string' ? payload.message : event.data;
-      }
-      if (payload.usage && typeof payload.usage === 'object') {
-        usage = Object.fromEntries(
-          Object.entries(payload.usage).filter((entry): entry is [string, number] =>
-            typeof entry[1] === 'number'),
-        );
-      }
-      await trace.emit(mapEventType(rawType), {
-        source: 'xopc-sse',
-        rawType,
-        sseId: event.id,
-        payload: redactSensitive(payload),
-      });
-    }
+        if (active) active.agentRunId = runId;
+      },
+      onEvent: async (event, decoded, seq) => {
+        const rawType = typeof decoded.type === 'string' ? decoded.type : event;
+        const payload = record(decoded.payload);
+        if (rawType === 'assistant_delta' && typeof payload.delta === 'string') finalText += payload.delta;
+        if (rawType === 'error') failure = typeof payload.message === 'string' ? payload.message : JSON.stringify(payload);
+        if (payload.usage && typeof payload.usage === 'object') {
+          usage = Object.fromEntries(Object.entries(payload.usage).filter((entry): entry is [string, number] => typeof entry[1] === 'number'));
+        }
+        await trace.emit(mapEventType(rawType), {
+          source: 'xopc-realtime', rawType, seq, payload: redactSensitive(payload),
+        });
+      },
+    });
     return {
       status: failure ? 'failed' : 'completed',
       finalText,
