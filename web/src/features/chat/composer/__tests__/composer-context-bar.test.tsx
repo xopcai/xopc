@@ -8,7 +8,20 @@ import { fetchProjects } from '@/features/projects/api';
 import { ComposerContextBar, type ComposerContextBarProps } from '../composer-context-bar';
 import { ProjectEnvironmentPicker } from '../project-environment-picker';
 
-const { refreshContext, environment } = vi.hoisted(() => ({ refreshContext: vi.fn(), environment: { kind: 'local_checkout', rootPath: '/tmp/workspace', branch: 'feature/context' as string | undefined, available: true } }));
+const { refreshContext, environment } = vi.hoisted(() => {
+  const environment: {
+    kind: string;
+    rootPath: string;
+    branch: string | undefined;
+    available: boolean;
+  } = {
+    kind: 'local_checkout',
+    rootPath: '/tmp/workspace',
+    branch: 'feature/context',
+    available: true,
+  };
+  return { refreshContext: vi.fn(), environment };
+});
 vi.mock('@/features/chat/context/use-session-context', () => ({
   useSessionContext: () => ({ data: { environment }, mutate: refreshContext }),
 }));
