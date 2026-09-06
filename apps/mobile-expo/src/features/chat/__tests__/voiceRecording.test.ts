@@ -62,6 +62,7 @@ import {
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
 } from 'expo-audio';
+import { Platform } from 'react-native';
 
 import {
   beginRecording,
@@ -246,6 +247,8 @@ describe('requestMicPermission', () => {
 describe('beginRecording', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    vi.mocked(setAudioModeAsync).mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -267,5 +270,15 @@ describe('beginRecording', () => {
     await finishRecording(recorder);
     await vi.advanceTimersByTimeAsync(200);
     expect(onStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues Android capture when the advisory audio mode change is rejected', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    vi.mocked(setAudioModeAsync).mockRejectedValueOnce(new Error('audio focus denied'));
+
+    const recorder = await beginRecording(vi.fn());
+
+    expect(recorder.isRecording).toBe(true);
+    await finishRecording(recorder);
   });
 });
