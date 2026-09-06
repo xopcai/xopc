@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
 import { queryKeys } from '../keys';
-import { fetchSessionAgentConfig, resolveEffectiveModelId, sessionModelMutationOptions, setSessionModelRef, setSessionWorkingDirectory } from '../models';
+import { chatModelDisplayName, fetchSessionAgentConfig, resolveEffectiveModelId, sessionModelMutationOptions, setSessionModelRef, setSessionWorkingDirectory } from '../models';
 
 vi.mock('../../api/client', () => ({
   apiFetch: vi.fn(),
@@ -11,6 +11,13 @@ vi.mock('../../api/client', () => ({
 }));
 
 const mockedApiFetch = vi.mocked(apiFetch);
+
+describe('chatModelDisplayName', () => {
+  it('keeps provider ids out of model labels', () => {
+    expect(chatModelDisplayName({ id: 'anthropic/claude-sonnet-4-5' })).toBe('claude-sonnet-4-5');
+    expect(chatModelDisplayName({ id: 'openai/gpt-5', name: 'GPT-5' })).toBe('GPT-5');
+  });
+});
 
 describe('fetchSessionAgentConfig', () => {
   beforeEach(() => mockedApiFetch.mockReset());

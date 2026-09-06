@@ -32,6 +32,8 @@ export function GlobalReadAloudPlayer() {
   const pause = useReadAloudStore((state) => state.pause);
   const resume = useReadAloudStore((state) => state.resume);
   const stop = useReadAloudStore((state) => state.stop);
+  const continuousSessionKey = useReadAloudStore((state) => state.continuousSessionKey);
+  const disableContinuous = useReadAloudStore((state) => state.disableContinuous);
   const retry = useReadAloudStore((state) => state.retry);
   const cycleRate = useReadAloudStore((state) => state.cycleRate);
   const visible = Boolean(source) && status !== 'idle' && call.phase === 'idle';
@@ -86,6 +88,7 @@ export function GlobalReadAloudPlayer() {
 
   const endPlayback = () => {
     setPlayerExpanded(false);
+    if (source?.sessionKey && source.sessionKey === continuousSessionKey) disableContinuous();
     stop();
   };
 

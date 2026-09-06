@@ -200,6 +200,7 @@ export const MessageList = memo(function MessageList({
             message={item}
             reasoningLevel={reasoningLevel}
             messageIndex={index}
+            isLatestAssistant={isLastAssistantMessage(messages, index)}
             isStreaming={isStreamRow}
             progress={isStreamRow ? progress : null}
             sessionKey={sessionKey}

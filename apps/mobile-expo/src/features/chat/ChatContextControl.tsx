@@ -342,10 +342,10 @@ function ModeChoice({ label, icon, selected, disabled, onPress }: {
 }
 
 const styles = StyleSheet.create({
-  strip: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
-  chip: { height: 30, maxWidth: 160, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, paddingHorizontal: spacing.sm },
+  strip: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  chip: { minHeight: 44, maxWidth: 160, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingHorizontal: spacing.sm },
   chipText: { ...typography.caption, flexShrink: 1 },
-  contextButton: { height: 30, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs },
+  contextButton: { minHeight: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm },
   contextButtonText: { ...typography.caption },
   sectionTitle: { ...typography.caption, marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: spacing.sm },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },

@@ -313,6 +313,7 @@ export const MessageBubble = memo(function MessageBubble({
   message,
   reasoningLevel = 'on',
   messageIndex,
+  isLatestAssistant = false,
   isStreaming = false,
   progress,
   sessionKey,
@@ -326,6 +327,7 @@ export const MessageBubble = memo(function MessageBubble({
   message: Message;
   reasoningLevel?: ReasoningLevel;
   messageIndex: number;
+  isLatestAssistant?: boolean;
   isStreaming?: boolean;
   progress?: ProgressState | null;
   sessionKey?: string;
@@ -433,6 +435,7 @@ export const MessageBubble = memo(function MessageBubble({
     state.source?.id === readAloudSourceId ? state.status : 'idle'
   ));
   const requestReadAloud = useReadAloudStore((state) => state.requestStart);
+  const enableContinuousReadAloud = useReadAloudStore((state) => state.enableContinuous);
 
   const userActions = useMemo((): MessageAction[] => {
     if (!isUser) return [];
@@ -500,16 +503,19 @@ export const MessageBubble = memo(function MessageBubble({
             : readAloudStatus === 'error'
               ? 'refresh'
               : 'volume-high',
-        onPress: () => requestReadAloud({
-          source: {
-            id: readAloudSourceId,
-            sessionKey,
-            title: m.chat.messageReadAloudTitle,
-            preview: speakableText,
-          },
-          text: speakableText,
-          language: detectSpeechLanguage(speakableText, language),
-        }),
+        onPress: () => {
+          if (isLatestAssistant && sessionKey) enableContinuousReadAloud(sessionKey);
+          requestReadAloud({
+            source: {
+              id: readAloudSourceId,
+              sessionKey,
+              title: m.chat.messageReadAloudTitle,
+              preview: speakableText,
+            },
+            text: speakableText,
+            language: detectSpeechLanguage(speakableText, language),
+          });
+        },
         accessibilityLabel: label,
       });
     }
@@ -545,6 +551,8 @@ export const MessageBubble = memo(function MessageBubble({
     readAloudStatus,
     readAloudSourceId,
     requestReadAloud,
+    enableContinuousReadAloud,
+    isLatestAssistant,
     sessionKey,
     language,
     onAssistantCopy,

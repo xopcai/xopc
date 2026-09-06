@@ -132,14 +132,12 @@ export function advanceAutoReadAloud(
 }
 
 export function useAutoReadAloud({
-  enabled,
   language,
   messages,
   sessionKey,
   streaming,
   title,
 }: {
-  enabled: boolean;
   language: Language;
   messages: Message[];
   sessionKey: string;
@@ -147,6 +145,7 @@ export function useAutoReadAloud({
   title: string;
 }): void {
   const trackerRef = useRef<AutoReadAloudTracker | undefined>(undefined);
+  const enabled = useReadAloudStore((state) => state.continuousSessionKey === sessionKey);
   const requestStart = useReadAloudStore((state) => state.requestStart);
   const activeSourceId = useReadAloudStore((state) => state.source?.id);
   const stop = useReadAloudStore((state) => state.stop);
