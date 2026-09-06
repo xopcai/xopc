@@ -14,14 +14,24 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
   const root = mkdtempSync(join(tmpdir(), 'gateway-adapter-contract-'));
   const repo = fileURLToPath(new URL('../../../', import.meta.url));
   let modelRequests = 0;
+  let sawToolResult = false;
   const provider = createServer(async (req, res) => {
-    for await (const _chunk of req) { /* Consume the model request. */ }
+    const chunks = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
     if (req.url !== '/v1/chat/completions') { res.writeHead(404); res.end(); return; }
-    modelRequests++;
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    sawToolResult ||= body.messages.some(message => message.role === 'tool' && JSON.stringify(message.content).includes('fixture-content'));
+    const isAgentRequest = body.tools?.some(tool => tool.function?.name === 'read_file') === true;
+    if (isAgentRequest) modelRequests++;
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     const chunk = (delta, finish_reason = null, usage) => `data: ${JSON.stringify({ id: 'smoke', object: 'chat.completion.chunk', created: 1, model: 'smoke', choices: [{ index: 0, delta, finish_reason }], ...(usage ? { usage } : {}) })}\n\n`;
-    res.write(chunk({ role: 'assistant', content: 'Gateway smoke passed.' }));
-    res.write(chunk({}, 'stop', { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 }));
+    if (isAgentRequest && modelRequests === 1) {
+      res.write(chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_read_fixture', type: 'function', function: { name: 'read_file', arguments: JSON.stringify({ path: join(workspace, 'probe.txt') }) } }] }));
+      res.write(chunk({}, 'tool_calls', { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 }));
+    } else {
+      res.write(chunk({ role: 'assistant', content: 'Gateway smoke passed.' }));
+      res.write(chunk({}, 'stop', { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 }));
+    }
     res.end('data: [DONE]\n\n');
   });
   await new Promise(resolve => provider.listen(0, '127.0.0.1', resolve));
@@ -31,6 +41,7 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
   await new Promise(resolve => portProbe.close(resolve));
   const workspace = join(root, 'workspace');
   mkdirSync(workspace);
+  writeFileSync(join(workspace, 'probe.txt'), 'fixture-content');
   const configPath = join(root, 'xopc.json');
   const modelsPath = join(root, 'models.json');
   const model = 'eval-fixture/smoke';
@@ -61,8 +72,10 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
       environment: { workspace, sourceCommit: 'head', fixtureCommit: 'fixture', metadata: {} },
     }, event => { events.push(event); }, AbortSignal.timeout(20000));
     expect(result, logs).toMatchObject({ status: 'completed', finalText: 'Gateway smoke passed.' });
-    expect(result.usage).toMatchObject({ input: 10, output: 4, total: 14 });
-    expect(modelRequests).toBeGreaterThan(0);
+    expect(result.usage).toMatchObject({ input: 20, output: 8, total: 28 });
+    expect(modelRequests).toBe(2);
+    expect(sawToolResult).toBe(true);
+    expect(events.some(event => event.type === 'tool.started')).toBe(true);
     expect(events.some(event => event.type === 'model.request'), JSON.stringify(events.map(event => ({ type: event.type, rawType: event.payload.rawType, payload: event.payload.payload })))).toBe(true);
     expect(events.at(-1).type).toBe('run.completed');
   } catch (error) {
