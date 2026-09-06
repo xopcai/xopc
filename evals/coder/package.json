@@ -9,10 +9,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --configLoader native",
     "eval": "tsx apps/cli/src/main.ts",
     "web": "tsx apps/web/src/server.ts",
-    "smoke": "vitest run tests/runner.test.ts tests/xopc-adapter.test.ts tests/sandbox.test.ts",
+    "smoke": "vitest run --configLoader native tests/runner.test.ts tests/xopc-adapter.test.ts tests/sandbox.test.ts",
     "check": "pnpm run typecheck && pnpm test"
   },
   "devDependencies": {

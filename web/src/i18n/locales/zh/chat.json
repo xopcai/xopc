@@ -1098,6 +1098,9 @@
     "attachmentPreviewImage": "预览图片",
     "turnOutcome": {
       "heading": "本轮结果",
+      "statusPartial": "部分完成",
+      "checkedRevision": "检查版本",
+      "commandLog": "命令日志路径",
       "statusSucceeded": "完成",
       "statusFailed": "未完成",
       "deliverables": "交付物",

@@ -1,0 +1,132 @@
+id: coding-core
+version: "1.0.0"
+description: Eight deterministic repair tasks with hidden behavior checks; a local regression suite, not a model leaderboard.
+cases:
+  - id: paginate
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix paginate(items, after, limit): sort ids by JavaScript code-unit order, apply the exclusive cursor, preserve the input array, and accept only nonnegative integer limits. A zero limit returns an empty array. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, edge-cases]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs paginate
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: csv
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix parseCsv(text) for quoted commas, escaped double quotes, quoted newlines, CRLF, empty cells, and empty input. Preserve whitespace in fields, ignore one final line terminator, and reject an unterminated quoted field. Inputs otherwise contain well-formed CSV. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, edge-cases]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs csv
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: cache
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix Cache expiration using its injected clock: entries expire at now >= expiration; a zero TTL expires immediately; overwrite renews TTL. Accept finite nonnegative TTL values only. Preserve cached falsy values. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, edge-cases]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs cache
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: map-limit
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix mapLimit(items, limit, mapper) to bound concurrent calls, preserve input order in results, and supply original indices. Reject invalid limits (positive integers only). After the first mapper rejection do not schedule new items; preserve that error. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, async]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs map-limit
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: path
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix safePath(root, input) to return a normalized absolute lexical path within root (including root itself), rejecting traversal and sibling-prefix escapes. This is a lexical helper, with no filesystem or symlink resolution requirement. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, edge-cases]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs path
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: retry
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix retry(operation, options): validate attempts as a positive integer; never call operation after signal cancellation; cancellation reason takes precedence after a failed attempt. Preserve the final operation error identity when attempts are exhausted. Attempt indices start at zero. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, async]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs retry
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: invoice
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix toCents and invoice together. Prices are nonnegative decimal strings with at most two fraction digits (no signs, exponent or whitespace). Quantities are nonnegative safe integers. Calculate integer cents exactly, rejecting invalid inputs and any unsafe integer subtotal or total. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, edge-cases]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs invoice
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]
+  - id: migrations
+    repo: { source: local, path: "${EVAL_FIXTURE_REPO}", commit: "${EVAL_FIXTURE_COMMIT}" }
+    task: "Fix migrate(db, steps): begin once, apply steps sequentially, commit only on success. On step or commit failure attempt rollback once and rethrow the original error even if rollback fails. If begin fails do not rollback. Preserve step order. Add regression coverage and verify your change."
+    budget: { timeoutMs: 300000, maxModelRequests: 40, maxTokens: 100000 }
+    tags: [repair, async]
+    graders:
+      - type: command
+        command: node .xopc-eval-hidden/check.mjs migrations
+        hiddenFiles:
+          - source: hidden/check.mjs
+            target: .xopc-eval-hidden/check.mjs
+      - type: command
+        category: regression
+        command: node --test test/*.mjs
+      - type: unchanged
+        paths: [package.json, AGENTS.md, src/AGENTS.md, test/smoke.mjs]

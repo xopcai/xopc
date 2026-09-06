@@ -37,7 +37,7 @@ describe('managed_job tool', () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
       current = text(await tool.execute('status', { action: 'status', jobId: started.id }));
     }
-    expect(current).toMatchObject({ status: 'succeeded', exitCode: 0 });
+    expect(current).toMatchObject({ status: 'success', exitCode: 0 });
     expect(current.stdout).toContain('managed-ok');
   });
 
@@ -51,7 +51,7 @@ describe('managed_job tool', () => {
     }));
 
     expect(text(await outsider.execute('status', { action: 'status', jobId: started.id })))
-      .toEqual({ error: 'Managed job not found' });
+      .toMatchObject({ status: 'failed', error: 'Managed job not found' });
     expect(text(await owner.execute('cancel', { action: 'cancel', jobId: started.id })))
       .toMatchObject({ status: 'cancelled' });
   });

@@ -83,6 +83,8 @@ export const TurnOutcomeEvidenceSchema = z.object({
   durationMs: z.number().nonnegative().optional(),
   command: z.string().optional(),
   artifactId: z.string().optional(),
+  revision: z.string().optional(),
+  logPath: z.string().optional(),
 });
 
 export const TurnOutcomeSchema = z.object({

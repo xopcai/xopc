@@ -117,7 +117,7 @@ function invalidApplyPatchEnvelopeResult(error: ApplyPatchEnvelopeError) {
       type: 'text' as const,
       text: `apply_patch input rejected (${error.issue}). Expected: ${error.expected}.${received} ${error.retryHint} Use this exact envelope:\n${APPLY_PATCH_BEGIN_MARKER}\n*** Update File: path\n@@\n-old\n+new\n${APPLY_PATCH_END_MARKER}`,
     }],
-    details: error,
+    details: { ...error, status: 'failed' },
   };
 }
 

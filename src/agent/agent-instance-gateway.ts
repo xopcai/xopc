@@ -19,7 +19,7 @@
  * modules do NOT bypass this interface and depend on `agent-manager.ts`.
  */
 
-import type { Agent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { Agent, AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { AgentTurnPolicy } from './orchestration/agent-turn-policy.js';
 
 export interface AgentInstanceGateway {
@@ -48,6 +48,8 @@ export interface AgentInstanceGateway {
 
   /** Create isolated policy state for one user-visible agent run. */
   createAgentTurnPolicy(sessionKey: string): AgentTurnPolicy;
+  /** Publish events from the actual embedded runtime to session observers. */
+  emitRuntimeEvent(sessionKey: string, event: AgentEvent): void;
 
   // ── Read-through accessors ─────────────────────────────────────────────
   /** Last assistant text from the in-memory agent (empty when no agent / no assistant yet). */

@@ -4,18 +4,16 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
 } from '@earendil-works/pi-agent-core';
-import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 
+import type { CommandIsolation } from '../commands/command-isolation.js';
+import { commandRegistry, commandTimeout, type CommandStatus } from '../commands/command-registry.js';
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { publishArtifactPaths } from './publish-artifacts.js';
 import { formatSize, truncateTail } from './truncate.js';
 
-const MAX_COMMAND_TIMEOUT_MS = 4 * 60 * 60 * 1000;
-const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
-const STREAM_DELTA_MAX_CHARS = 16_000;
 
 const ExecCommandSchema = Type.Object({
   cmd: Type.String({ description: 'Shell command to execute.' }),
@@ -34,6 +32,7 @@ const ExecCommandSchema = Type.Object({
       description: 'Maximum characters returned to the model. UI streaming still receives output deltas.',
     }),
   ),
+  yieldTimeMs: Type.Optional(Type.Number({ minimum: 0, maximum: 60000, description: 'Return a running job after this wait; manage it with managed_job. Omit to wait for completion. Cannot be combined with outputs.' })),
   outputs: Type.Optional(
     Type.Array(Type.String({ minLength: 1 }), {
       maxItems: 50,
@@ -45,7 +44,10 @@ const ExecCommandSchema = Type.Object({
 export interface ExecCommandDetails {
   command: string;
   cwd: string;
-  status: 'success' | 'failed' | 'timed_out' | 'blocked';
+  status: CommandStatus | 'blocked';
+  id?: string;
+  logPath?: string;
+  logTruncated?: boolean;
   exitCode: number | null;
   durationMs: number;
   timedOut: boolean;
@@ -71,76 +73,29 @@ export interface ExecCommandUpdateDetails {
 
 export interface CreateExecCommandToolOptions {
   /** Env var names allowed through prepareSafeToolEnv even if they match secret heuristics. */
+  getCommandIsolation?: () => CommandIsolation | undefined;
+  getSessionKey?: () => string | undefined;
   getSkillPassthroughEnvVarNames?: () => string[];
   prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>;
 }
 
 type ExecCommandParams = {
   cmd?: string;
-  command?: string;
   cwd?: string;
   timeoutMs?: number;
   maxOutputChars?: number;
   outputs?: string[];
+  yieldTimeMs?: number;
 };
-
-function clampTimeoutMs(raw: unknown): number {
-  const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : DEFAULT_TIMEOUT_MS;
-  return Math.min(MAX_COMMAND_TIMEOUT_MS, Math.max(1_000, Math.floor(n)));
-}
 
 function clampMaxOutputChars(raw: unknown): number {
   const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : DEFAULT_MAX_OUTPUT_CHARS;
   return Math.max(1_000, Math.min(500_000, Math.floor(n)));
 }
 
-function commandStatus(exitCode: number | null, timedOut: boolean): ExecCommandDetails['status'] {
-  if (timedOut) return 'timed_out';
-  if (exitCode === 0) return 'success';
-  return 'failed';
-}
-
-function appendBoundedTail(current: string, chunk: string, maxChars: number): {
-  value: string;
-  truncated: boolean;
-} {
-  const combined = current + chunk;
-  if (combined.length <= maxChars) return { value: combined, truncated: false };
-  return { value: combined.slice(-maxChars), truncated: true };
-}
-
-function terminateProcessTree(proc: ReturnType<typeof spawn>): void {
-  if (!proc.pid) return;
-  if (process.platform === 'win32') {
-    const killer = spawn('taskkill', ['/pid', String(proc.pid), '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    killer.once('error', () => {
-      try {
-        proc.kill('SIGKILL');
-      } catch {
-        // Process already exited.
-      }
-    });
-    killer.unref();
-    return;
-  }
-  try {
-    process.kill(-proc.pid, 'SIGKILL');
-    return;
-  } catch {
-    // The process may have exited before its group was signalled.
-  }
-  try {
-    proc.kill('SIGKILL');
-  } catch {
-    // Process already exited.
-  }
-}
-
 function commandFailureHint(details: Pick<ExecCommandDetails, 'status' | 'exitCode' | 'timedOut' | 'stderr' | 'stdout'>): string | undefined {
-  if (details.status === 'success') return undefined;
+  if (details.status === 'success' || details.status === 'running') return undefined;
+  if (details.status === 'cancelled') return 'The command was cancelled. Inspect its partial output before deciding whether to restart.';
   if (details.status === 'timed_out') {
     return 'The command timed out. Re-run a narrower command, increase timeoutMs if the long run is expected, or inspect partial output before retrying.';
   }
@@ -165,7 +120,7 @@ function formatOutputForModel(
     prefix += `Command exited with code ${details.exitCode}\n`;
   }
   if (details.captureTruncated) {
-    prefix += `Earlier command output was discarded after ${formatSize(details.totalOutputBytes)}; showing the latest captured output.\n`;
+    prefix += `Earlier command output was discarded from model context after ${formatSize(details.totalOutputBytes)}; showing the latest captured output.\n`;
   }
 
   const truncation = truncateTail(details.aggregatedOutput, {
@@ -212,7 +167,8 @@ export function createExecCommandTool(
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<ExecCommandUpdateDetails>,
     ): Promise<AgentToolResult<ExecCommandDetails>> {
-      const command = (params.cmd ?? params.command ?? '').trim();
+      const command = (params.cmd ?? '').trim();
+      if (params.yieldTimeMs !== undefined && params.outputs?.length) throw new Error('yieldTimeMs cannot be combined with outputs; publish files after the job completes.');
       if (!command) {
         return {
           content: [{ type: 'text', text: 'Error: cmd is required' }],
@@ -267,147 +223,45 @@ export function createExecCommandTool(
         };
       }
 
-      const timeoutMs = Math.min(clampTimeoutMs(params.timeoutMs), policy.timeoutMs);
+      const timeoutMs = commandTimeout(params.timeoutMs, policy.timeoutMs);
       const maxOutputChars = clampMaxOutputChars(params.maxOutputChars);
-      const startTime = Date.now();
       const runtimeEnv = options?.prepareEnv
         ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
         : policy.sanitizedEnv;
-      let stdout = '';
-      let stderr = '';
-      let aggregatedOutput = '';
-      let totalOutputBytes = 0;
-      let captureTruncated = false;
-      let timedOut = false;
-      let settled = false;
-
-      return new Promise((resolveTool) => {
-        const proc = spawn(command, [], {
-          shell: true,
-          detached: process.platform !== 'win32',
-          cwd: policy.effectiveCwd,
-          env: {
-            ...runtimeEnv,
-            COLUMNS: '200',
-          },
-        });
-
-        const publishDelta = (stream: 'stdout' | 'stderr', raw: Buffer | string) => {
-          const text = raw.toString();
-          if (!text) return;
-          totalOutputBytes += Buffer.byteLength(text);
-          if (stream === 'stdout') {
-            const next = appendBoundedTail(stdout, text, maxOutputChars);
-            stdout = next.value;
-            captureTruncated ||= next.truncated;
-          } else {
-            const next = appendBoundedTail(stderr, text, maxOutputChars);
-            stderr = next.value;
-            captureTruncated ||= next.truncated;
-          }
-          const nextAggregate = appendBoundedTail(aggregatedOutput, text, maxOutputChars);
-          aggregatedOutput = nextAggregate.value;
-          captureTruncated ||= nextAggregate.truncated;
-
-          const delta = text.length > STREAM_DELTA_MAX_CHARS
-            ? `${text.slice(0, STREAM_DELTA_MAX_CHARS)}\n[stream delta truncated]`
-            : text;
-          onUpdate?.({
-            content: [],
-            details: {
-              kind: 'command_output_delta',
-              command,
-              cwd: policy.effectiveCwd,
-              stream,
-              delta,
-            },
-          });
-        };
-
-        const finish = async (
-          exitCode: number | null,
-          errorText?: string,
-        ) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          signal?.removeEventListener('abort', abort);
-          if (errorText) {
-            totalOutputBytes += Buffer.byteLength(errorText);
-            const nextStderr = appendBoundedTail(stderr, errorText, maxOutputChars);
-            stderr = nextStderr.value;
-            const nextAggregate = appendBoundedTail(aggregatedOutput, errorText, maxOutputChars);
-            aggregatedOutput = nextAggregate.value;
-            captureTruncated ||= nextStderr.truncated || nextAggregate.truncated;
-          }
-
-          const durationMs = Date.now() - startTime;
-          const baseDetails: ExecCommandDetails = {
-            command,
-            cwd: policy.effectiveCwd,
-            status: commandStatus(exitCode, timedOut),
-            exitCode,
-            durationMs,
-            timedOut,
-            truncated: false,
-            outputBytes: Buffer.byteLength(aggregatedOutput),
-            totalOutputBytes,
-            captureTruncated,
-            stdout,
-            stderr,
-            aggregatedOutput,
-          };
-          baseDetails.failureHint = commandFailureHint(baseDetails);
-          const formatted = formatOutputForModel(baseDetails, maxOutputChars);
-          const details: ExecCommandDetails = {
-            ...baseDetails,
-            truncated: formatted.truncated,
-            truncatedBy: formatted.truncatedBy,
-            outputBytes: formatted.outputBytes,
-          };
-
-          let resultText = formatted.text;
-          if (details.status === 'success' && params.outputs?.length) {
-            details.artifacts = await publishArtifactPaths({
-              paths: params.outputs,
-              baseDir: policy.effectiveCwd,
-              workspaceRoot: workspaceCwd,
-              toolCallId,
-            });
-            const published = details.artifacts.filter((item) => item.availability === 'available').length;
-            const failed = details.artifacts.length - published;
-            resultText += `\n\nArtifacts: ${published} published${failed > 0 ? `, ${failed} failed` : ''}.`;
-          }
-
-          const result: AgentToolResult<ExecCommandDetails> = {
-            content: [{ type: 'text', text: resultText }],
-            details,
-          };
-
-          resolveTool(result);
-        };
-
-        const abort = () => {
-          timedOut = true;
-          terminateProcessTree(proc);
-        };
-
-        const timeout = setTimeout(() => {
-          timedOut = true;
-          terminateProcessTree(proc);
-        }, timeoutMs);
-
-        if (signal?.aborted) {
-          abort();
-        } else {
-          signal?.addEventListener('abort', abort, { once: true });
-        }
-
-        proc.stdout?.on('data', (data) => publishDelta('stdout', data));
-        proc.stderr?.on('data', (data) => publishDelta('stderr', data));
-        proc.on('error', (err) => void finish(null, `Error: ${err.message}`));
-        proc.on('close', (code) => void finish(code));
+      const owner = options?.getSessionKey?.() ?? workspaceCwd;
+      const registry = commandRegistry();
+      let commandResult = await registry.start({
+        workspace: workspaceCwd, isolation: options?.getCommandIsolation?.(),
+        owner, command, cwd: policy.effectiveCwd, env: { ...runtimeEnv, COLUMNS: '200' },
+        timeoutMs, maxOutputChars, signal,
+        snapshot: true,
+        onOutput: (stream, delta) => onUpdate?.({ content: [],
+          details: { kind: 'command_output_delta', command, cwd: policy.effectiveCwd, stream, delta } }),
       });
+      try {
+        do {
+          commandResult = (await registry.wait(owner, commandResult.id, params.yieldTimeMs ?? 60_000, signal))!;
+        } while (params.yieldTimeMs === undefined && commandResult.status === 'running');
+      } catch (error) {
+        if (!signal?.aborted) throw error;
+        commandResult = (await registry.cancel(owner, commandResult.id))!;
+      }
+      const baseDetails: ExecCommandDetails = {
+        ...commandResult, truncated: false, outputBytes: Buffer.byteLength(commandResult.aggregatedOutput),
+      };
+      baseDetails.failureHint = commandFailureHint(baseDetails);
+      const formatted = formatOutputForModel(baseDetails, maxOutputChars);
+      const details = { ...baseDetails, truncated: formatted.truncated, truncatedBy: formatted.truncatedBy, outputBytes: formatted.outputBytes };
+      let resultText = formatted.text;
+      if (details.status === 'running') resultText += `\n\nCommand is running (jobId: ${details.id}). Use managed_job wait/status/stdin/cancel.`;
+      if (details.logPath) resultText += `\n\nLog: ${details.logPath}${details.logTruncated ? ' (truncated)' : ''}`;
+      if (details.status === 'success' && params.outputs?.length) {
+        details.artifacts = await publishArtifactPaths({ paths: params.outputs, baseDir: policy.effectiveCwd, workspaceRoot: workspaceCwd, toolCallId });
+        const published = details.artifacts.filter(item => item.availability === 'available').length;
+        const failed = details.artifacts.length - published;
+        resultText += `\n\nArtifacts: ${published} published${failed > 0 ? `, ${failed} failed` : ''}.`;
+      }
+      return { content: [{ type: 'text', text: resultText }], details };
     },
   } as any;
 }

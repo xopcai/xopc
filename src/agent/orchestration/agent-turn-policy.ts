@@ -1,5 +1,4 @@
 import type {
-  AgentMessage,
   AfterToolCallContext,
   BeforeToolCallContext,
   BeforeToolCallResult,
@@ -29,19 +28,17 @@ export interface AgentTurnPolicyOptions {
   ) => Promise<BeforeToolCallResult | undefined>;
 }
 
-function assistantMessageCount(messages: readonly AgentMessage[]): number {
-  return messages.filter((message) => message.role === 'assistant').length;
-}
-
 /** One user-visible run policy. A fresh instance is created for every embedded run. */
 export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTurnPolicy {
   const toolCalls = new Map<string, number>();
   let toolFailures = 0;
+  let assistantTurns = 0;
 
   return {
     reset() {
       toolCalls.clear();
       toolFailures = 0;
+      assistantTurns = 0;
     },
 
     async beforeToolCall(context, signal) {
@@ -65,9 +62,10 @@ export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTur
       return undefined;
     },
 
-    shouldStopAfterTurn(context) {
+    shouldStopAfterTurn(_context) {
+      assistantTurns += 1;
       return Boolean(
-        (options.maxTurns && assistantMessageCount(context.newMessages) >= options.maxTurns)
+        (options.maxTurns && assistantTurns >= options.maxTurns)
         || (options.maxToolFailures && toolFailures >= options.maxToolFailures),
       );
     },

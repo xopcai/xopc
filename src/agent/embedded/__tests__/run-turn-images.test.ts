@@ -41,6 +41,7 @@ vi.mock('../session-runner.js', () => ({
       session,
       piSm: {
         flushPendingToolResults: vi.fn(),
+        appendCustomEntry: vi.fn(),
       },
       reused: false,
       release: vi.fn(),
@@ -169,9 +170,18 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
 
     expect(turnPolicy.reset).toHaveBeenCalledOnce();
-    expect(mocks.session.agent.beforeToolCall).toBe(turnPolicy.beforeToolCall);
-    expect(mocks.session.agent.afterToolCall).toBe(turnPolicy.afterToolCall);
-    expect(mocks.session.agent.shouldStopAfterTurn).toBe(turnPolicy.shouldStopAfterTurn);
+    const context = {
+      toolCall: { id: 'check', name: 'exec_command' }, args: { cmd: 'pnpm test' },
+      isError: false, result: { content: [], details: { command: 'pnpm test', exitCode: 1 } },
+    };
+    await mocks.session.agent.beforeToolCall(context);
+    const normalized = await mocks.session.agent.afterToolCall(context);
+    expect(turnPolicy.beforeToolCall).toHaveBeenCalledWith(context, undefined);
+    expect(normalized.isError).toBe(true);
+    expect(turnPolicy.afterToolCall).toHaveBeenCalledWith(expect.objectContaining({ isError: true }));
+    turnPolicy.shouldStopAfterTurn.mockReturnValueOnce(true);
+    expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
+    expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
   });
 
   it('reports external cancellation as a failed run outcome', async () => {

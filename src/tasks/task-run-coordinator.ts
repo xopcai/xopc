@@ -1,4 +1,4 @@
-import type { TaskEvidence, TaskRunReceipt } from '@xopcai/gateway-contract';
+import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
 
 import type { ExecutionContext } from './execution-context.js';
 import { TaskApplicationService } from './task-application-service.js';
@@ -77,16 +77,18 @@ export class TaskRunCoordinator {
     }
   }
 
+  captureOutcome(outcome: TurnOutcome): void {
+    for (const item of outcome.evidence) {
+      if (item.kind !== 'check') continue;
+      this.addEvidence({ kind: 'test', title: item.label,
+        summary: `Final workspace check: ${item.status}`,
+        provenance: 'tool', strength: item.status === 'passed' ? 'verified' : 'observed', observedAt: Date.now() });
+    }
+  }
+
   capturePatch(added: number, removed: number): void {
     this.addEvidence({ kind: 'state', title: 'Changes applied', summary: `${added} additions and ${removed} removals`,
       provenance: 'tool', strength: 'observed', observedAt: Date.now() });
-  }
-
-  captureCommand(command: string, durationMs?: number): void {
-    if (!/(^|\s)(test|vitest|jest|pytest|lint|typecheck|build)(\s|$|:)/i.test(command)) return;
-    this.addEvidence({ kind: 'test', title: command.slice(0, 120),
-      summary: durationMs === undefined ? 'Command completed successfully' : `Command completed successfully in ${durationMs} ms`,
-      provenance: 'tool', strength: 'verified', observedAt: Date.now() });
   }
 
   finalize(input: { status: TaskRunReceipt['status']; summary: string }): void {
@@ -104,7 +106,7 @@ export class TaskRunCoordinator {
         verification: { status: 'unverified', checks: [] },
         remainingWork: [],
         needsUser: false,
-        completionVerdict: input.status === 'succeeded' ? 'achieved' : 'not_achieved',
+        completionVerdict: input.status === 'succeeded' ? 'partial' : 'not_achieved',
         ...(input.status === 'failed' ? { failure: { code: 'agent_run_failed', phase: 'execution', recoveryAction: 'Retry the task run' } } : {}),
       },
     });
