@@ -177,16 +177,20 @@ export async function beginRecording(
   const owner = Symbol('recording');
   if (!claimAudioCapture(owner)) throw new VoiceRecordingError('audio_mode', new Error('Microphone is in use'));
   try {
+    const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
     try {
       await setAudioModeAsync({
         allowsRecording: true,
         playsInSilentMode: true,
       });
     } catch (error) {
-      throw new VoiceRecordingError('audio_mode', error);
+      // Android MediaRecorder can capture without Expo owning audio focus. Some
+      // OEM audio policies reject this advisory mode change even though the
+      // microphone itself is available.
+      if (platform === 'ios') throw new VoiceRecordingError('audio_mode', error);
+      console.warn('[VoiceRecording] Android audio mode unavailable; continuing capture', error);
     }
 
-    const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
     const recorder = new AudioModule.AudioRecorder(
       nativeRecordingOptionsForPlatform(platform, options?.persistent ? 'document' : undefined),
     );
