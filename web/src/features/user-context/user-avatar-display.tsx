@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import useSWR from 'swr';
 
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
@@ -8,6 +9,7 @@ import {
   getUserAvatarCacheRevision,
   USER_AVATAR_UPDATED_EVENT,
 } from './user-avatar-cache';
+import { fetchUserProfile } from './user-context-api';
 
 export function UserAvatarDisplay({
   callName,
@@ -21,17 +23,16 @@ export function UserAvatarDisplay({
   fallback?: ReactNode;
 }) {
   const token = useGatewayStore((state) => state.token);
-  const [cacheTick, setCacheTick] = useState(0);
+  const baseUrl = useGatewayStore((state) => state.baseUrl);
+  const [cacheTick, setCacheTick] = useState(getUserAvatarCacheRevision);
   const [imageFailed, setImageFailed] = useState(false);
-  const [avatarPresence, setAvatarPresence] = useState<boolean | undefined>(undefined);
+  const { data } = useSWR(['user-avatar-profile', baseUrl, token, cacheTick], fetchUserProfile);
   const initial = [...(callName?.trim() || 'You')][0]?.toLocaleUpperCase() ?? 'Y';
 
   useEffect(() => {
-    const onUpdated = (event: Event) => {
-      const { hasAvatar } = (event as CustomEvent<{ hasAvatar?: boolean }>).detail ?? {};
-      setAvatarPresence(hasAvatar);
-      setImageFailed(hasAvatar === false);
-      setCacheTick((value) => value + 1);
+    const onUpdated = () => {
+      setImageFailed(false);
+      setCacheTick(getUserAvatarCacheRevision());
     };
     window.addEventListener(USER_AVATAR_UPDATED_EVENT, onUpdated);
     return () => window.removeEventListener(USER_AVATAR_UPDATED_EVENT, onUpdated);
@@ -48,10 +49,10 @@ export function UserAvatarDisplay({
   }, [cacheTick, token]);
 
   useEffect(() => {
-    if (avatarPresence !== false) setImageFailed(false);
-  }, [avatarPresence, src]);
+    setImageFailed(false);
+  }, [src]);
 
-  if (avatarPresence === false || imageFailed) {
+  if (data?.hasAvatar !== true || imageFailed) {
     if (fallback) {
       return (
         <span

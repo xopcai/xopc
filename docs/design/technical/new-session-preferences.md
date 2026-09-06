@@ -32,6 +32,8 @@ The first send passes `executionMode` through the existing `POST /api/sessions` 
 
 Existing sessions display their actual environment and link to a new conversation in another environment. They are not relocated, rebound, or deleted by this UI. Navigation or credential changes invalidate stale preparation callbacks. No environment schema, remote execution, branch picker, auto-stash, or Git write actions are added.
 
+While a project chat is being prepared, the composer resolves the agent's remembered model or effective default and displays its supported effort. Model and effort changes stay in the draft without allocating a session or resetting the environment choice. First send passes that exact selection as `initialAgentConfig`; successful creation remembers explicit edits. An unavailable selection remains visible and must be replaced before sending.
+
 ## Concrete chat model selection
 
 The chat composer always shows a concrete provider/model and its supported thinking level. There is no default or automatic-model entry. On chat creation (or first idle access to an older chat), the gateway resolves the selection and persists it with `fixed_model = 1`. A remembered model that is no longer available stays selected and visible so the user can replace it explicitly.

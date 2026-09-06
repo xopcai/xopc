@@ -10,6 +10,7 @@ import {
   modelPreferenceForAgent,
   resolveNewSessionSpec,
   type SessionCreateRequest,
+  type SessionInitialAgentConfig,
 } from '@xopcai/gateway-contract';
 
 import { fetchProject, type Project } from '@/features/projects/api';
@@ -32,7 +33,7 @@ export interface ProjectSessionPreparation {
   project: Project;
   agentId: string;
   temporary: boolean;
-  create: (mode: NonNullable<SessionCreateRequest['executionMode']>) => Promise<string>;
+  create: (mode: NonNullable<SessionCreateRequest['executionMode']>, config?: SessionInitialAgentConfig) => Promise<string>;
 }
 
 export function useChatSessionInit(opts: {
@@ -172,7 +173,7 @@ export function useChatSessionInit(opts: {
       if (!isLive()) return;
       if (!request.requestedAgentId && project?.defaultAgentId) spec.agentId = project.defaultAgentId;
       const modelPreference = modelPreferenceForAgent(preferences, spec.agentId);
-      const open = (executionMode?: SessionCreateRequest['executionMode']) => openNewChatHandoff({
+      const open = (executionMode?: SessionCreateRequest['executionMode'], config?: SessionInitialAgentConfig) => openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,
         agentId: spec.agentId,
         currentSessionKey: lastNonNewSessionKeyRef.current,
@@ -181,14 +182,14 @@ export function useChatSessionInit(opts: {
         temporary: spec.temporary,
         projectId: spec.projectId,
         executionMode,
-        initialAgentConfig: modelPreference
+        initialAgentConfig: config ?? (modelPreference
           ? {
               model: modelPreference.modelRef,
               ...(modelPreference.thinkingLevel
                 ? { thinkingLevel: modelPreference.thinkingLevel }
                 : {}),
             }
-          : undefined,
+          : undefined),
         navigateToSession: (...args) => { if (isLive()) runtime.navigateToSession(...args); },
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(request.newRouteLocationSearch),
@@ -201,9 +202,9 @@ export function useChatSessionInit(opts: {
       if (project?.workspaceRoot?.trim()) {
         setPreparation({
           requestKey, token, baseUrl, project, agentId: spec.agentId, temporary: spec.temporary,
-          create: (mode) => {
+          create: (mode, config) => {
             if (!isLive()) return Promise.reject(new Error('New chat request changed'));
-            return open(mode);
+            return open(mode, config);
           },
         });
         return;

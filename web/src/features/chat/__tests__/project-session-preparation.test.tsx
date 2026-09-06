@@ -68,6 +68,14 @@ describe('project session preparation', () => {
     expect(openNewChatHandoff).toHaveBeenCalledTimes(2);
   });
 
+  it('passes the prepared model selection into the initial session configuration', async () => {
+    await act(async () => root.render(<Harness />));
+    await act(async () => preparation!.create('local_checkout', { model: 'cloud/chosen', thinkingLevel: 'high' }));
+    expect(openNewChatHandoff).toHaveBeenCalledWith(expect.objectContaining({
+      initialAgentConfig: { model: 'cloud/chosen', thinkingLevel: 'high' },
+    }));
+  });
+
   it('does not prepare or change an existing conversation environment', async () => {
     await act(async () => root.render(<Harness existing />));
     expect(preparation).toBeNull();

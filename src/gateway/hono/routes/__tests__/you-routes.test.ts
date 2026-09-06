@@ -82,12 +82,14 @@ describe('structured user context routes', () => {
   });
 
   it('stores, serves, validates, and removes the user avatar', async () => {
+    await expect((await app.request('/api/you/profile')).json()).resolves.toMatchObject({ hasAvatar: false });
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
     const uploaded = await app.request('/api/you/avatar', {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ mimeType: 'image/png', base64: png }),
     });
     expect(uploaded.status).toBe(200);
+    await expect((await app.request('/api/you/profile')).json()).resolves.toMatchObject({ hasAvatar: true });
 
     const avatar = await app.request('/api/you/avatar');
     expect(avatar.status).toBe(200);
@@ -102,6 +104,7 @@ describe('structured user context routes', () => {
     expect(invalid.status).toBe(400);
 
     expect((await app.request('/api/you/avatar', { method: 'DELETE' })).status).toBe(200);
+    await expect((await app.request('/api/you/profile')).json()).resolves.toMatchObject({ hasAvatar: false });
     expect((await app.request('/api/you/avatar')).status).toBe(404);
   });
 

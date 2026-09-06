@@ -1,12 +1,30 @@
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import type { RawData } from 'ws';
 
 import type { SpeechSynthesisStreamResult } from '../tts/speech-provider-types.js';
+import { createLogger } from '../../utils/logger.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 const DEFAULT_REALTIME_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime';
+const log = createLogger('TTS:DashScope');
+
+class TtsHandshakeError extends Error {
+  constructor(readonly statusCode: number, readonly retryAfterMs: number | undefined) {
+    super(`Realtime TTS WebSocket handshake failed (HTTP ${statusCode})${retryAfterMs === undefined ? '' : `; retry after ${retryAfterMs} ms`}`);
+    this.name = 'TtsHandshakeError';
+  }
+}
+
+function parseRetryAfter(value: string | undefined): number | undefined {
+  if (!value?.trim()) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : undefined;
+}
 
 interface DashScopeTtsMessage {
   type?: string;
@@ -53,6 +71,27 @@ function event(type: string, extra: Record<string, unknown> = {}): string {
 }
 
 export async function openDashScopeStreamingTts(
+  request: DashScopeStreamingTtsRequest,
+): Promise<SpeechSynthesisStreamResult> {
+  const deadline = Date.now() + request.timeoutMs;
+  for (let attempt = 1; ; attempt += 1) {
+    request.signal.throwIfAborted();
+    try {
+      return await openStreamingTtsAttempt({ ...request, timeoutMs: Math.max(1, deadline - Date.now()) });
+    } catch (error) {
+      if (request.signal.aborted) throw error;
+      // Only rejected handshakes are safe to replay: no text has been sent yet.
+      if (!(error instanceof TtsHandshakeError) || error.statusCode !== 429 || attempt >= 3) throw error;
+      const delayMs = Math.max(error.retryAfterMs ?? 0, 500 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+      if (delayMs > 5_000 || Date.now() + delayMs >= deadline) throw error;
+      log.warn({ model: request.model, statusCode: error.statusCode, attempt, delayMs }, 'Realtime TTS handshake rate limited; retrying');
+      await delay(delayMs, undefined, { signal: request.signal });
+      if (Date.now() >= deadline) throw error;
+    }
+  }
+}
+
+async function openStreamingTtsAttempt(
   request: DashScopeStreamingTtsRequest,
 ): Promise<SpeechSynthesisStreamResult> {
   if (!request.apiKey) throw new Error('DashScope TTS API key is unavailable');
@@ -107,6 +146,11 @@ export async function openDashScopeStreamingTts(
   };
   request.signal.addEventListener('abort', onAbort, { once: true });
 
+  socket.on('unexpected-response', (_request, response) => {
+    const error = new TtsHandshakeError(response.statusCode ?? 0, parseRetryAfter(response.headers['retry-after']));
+    fail(error);
+    response.destroy();
+  });
   socket.on('message', (data, isBinary) => {
     if (streamClosed || request.signal.aborted) return;
     if (isBinary) return;
