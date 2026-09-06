@@ -26,6 +26,7 @@ overrides:
   vite@>=8.0.0 <=8.0.15: 8.0.16
 
 patchedDependencies:
+  app-builder-lib@26.15.3: 33904f2cda5efc2f029b7b8245df2812306f0bf85e54071e3655e0dbed78dfeb
   beautiful-mermaid@1.1.3: bb616de6afec3faef68501736d4d68b09def7bc5b5ed97d57139c46ac8cf68f8
 
 importers:
@@ -16174,7 +16175,7 @@ snapshots:
 
   ansis@4.3.0: {}
 
-  app-builder-lib@26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3):
+  app-builder-lib@26.15.3(patch_hash=33904f2cda5efc2f029b7b8245df2812306f0bf85e54071e3655e0dbed78dfeb)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3):
     dependencies:
       '@electron/asar': 3.4.1
       '@electron/fuses': 1.8.0
@@ -17062,7 +17063,7 @@ snapshots:
 
   dmg-builder@26.15.3(electron-builder-squirrel-windows@26.15.3):
     dependencies:
-      app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
+      app-builder-lib: 26.15.3(patch_hash=33904f2cda5efc2f029b7b8245df2812306f0bf85e54071e3655e0dbed78dfeb)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       builder-util: 26.15.3
       fs-extra: 10.1.0
       js-yaml: 4.3.1
@@ -17171,7 +17172,7 @@ snapshots:
 
   electron-builder-squirrel-windows@26.15.3(dmg-builder@26.15.3):
     dependencies:
-      app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
+      app-builder-lib: 26.15.3(patch_hash=33904f2cda5efc2f029b7b8245df2812306f0bf85e54071e3655e0dbed78dfeb)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       builder-util: 26.15.3
       electron-winstaller: 5.4.0
     transitivePeerDependencies:
@@ -17180,7 +17181,7 @@ snapshots:
 
   electron-builder@26.15.3(electron-builder-squirrel-windows@26.15.3):
     dependencies:
-      app-builder-lib: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
+      app-builder-lib: 26.15.3(patch_hash=33904f2cda5efc2f029b7b8245df2812306f0bf85e54071e3655e0dbed78dfeb)(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       builder-util: 26.15.3
       builder-util-runtime: 9.7.0
       chalk: 4.1.2
