@@ -20,18 +20,20 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
   allowOutsideChat?: boolean;
   sessionKey?: string;
 } = {}) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
   const workspaceSessionKey = useWorkspacePanelStore((s) => s.sessionKeyOverride);
   const previewSessionKey = useWorkspacePreviewStore((s) => s.sessionKey);
   const chatSessionKey = previewSessionKey ?? sessionKeyOverride ?? workspaceSessionKey ?? (
-    pathname.startsWith('/chat') && sessionKeyParam
+    pathname.startsWith('/chat') && sessionKeyParam && sessionKeyParam !== 'new'
       ? decodeURIComponent(sessionKeyParam)
       : undefined
   );
   const path = useWorkspacePreviewStore((s) => s.path);
   const line = useWorkspacePreviewStore((s) => s.line);
-  const projectId = useWorkspacePreviewStore((s) => s.projectId);
+  const previewProjectId = useWorkspacePreviewStore((s) => s.projectId);
+  const projectId = previewProjectId ?? (!chatSessionKey && pathname.startsWith('/chat')
+    ? new URLSearchParams(search).get('projectId') : null);
   const setPath = useWorkspacePreviewStore((s) => s.setPath);
   const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 

@@ -14,10 +14,11 @@ export type WelcomeProjectEntryMode =
 
 export function resolveWelcomeProjectEntryMode(input: {
   contextKind: string;
+  projectId?: string | null;
   projectCount: number;
   workDiscovery: WorkDiscoveryOnboardingState | null;
 }): WelcomeProjectEntryMode {
-  if (input.contextKind !== 'empty') return 'hidden';
+  if (input.projectId || input.contextKind !== 'empty') return 'hidden';
   if (input.projectCount > 0) return 'choose_project';
   if (!input.workDiscovery?.enabled) return 'hidden';
 

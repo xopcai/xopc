@@ -34,9 +34,9 @@ export class VoicePreview {
       view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
       view.setUint32(24, 24000, true); view.setUint32(28, 48000, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
       write(36, 'data'); view.setUint32(40, pcm.length, true); wav.set(pcm, 44);
-      abort.signal.throwIfAborted();
+      if (abort.signal.aborted) throw new Error('CANCELLED');
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      abort.signal.throwIfAborted();
+      if (abort.signal.aborted) throw new Error('CANCELLED');
       if (isAudioCaptureActive()) throw new Error('MICROPHONE_BUSY');
       const file = new File(Paths.cache, `${this.owner}.wav`); file.write(wav); this.file = file;
       const player = createAudioPlayer(file.uri); this.player = player;

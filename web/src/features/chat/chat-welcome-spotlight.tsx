@@ -57,6 +57,7 @@ function CategoryIcon({ name, className }: { name: string; className?: string })
 
 export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   spotlight,
+  projectId,
   onPickPrompt,
   onRetryContext,
   onRefreshExploration,
@@ -64,6 +65,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   compact = false,
 }: {
   spotlight: WelcomeSpotlightModel;
+  projectId?: string | null;
   onPickPrompt: (selection: WelcomeSuggestionSelection) => void;
   onRetryContext?: () => void;
   onRefreshExploration?: () => void;
@@ -82,7 +84,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   const workDiscoveryCopy = messages(language).onboarding.workDiscovery;
 
   useEffect(() => {
-    if (!token || s.contextKind !== 'empty') {
+    if (!token || projectId || s.contextKind !== 'empty') {
       setProjectEntryLoaded(true);
       setProjects([]);
       setWorkDiscovery(null);
@@ -100,7 +102,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
       setProjectEntryLoaded(true);
     });
     return () => { cancelled = true; };
-  }, [s.contextKind, token]);
+  }, [projectId, s.contextKind, token]);
 
   const pick = (selection: Omit<WelcomeSuggestionSelection, 'contextKind'>) => {
     onPickPrompt({ ...selection, contextKind: s.contextKind });
@@ -113,6 +115,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
     .slice(0, 3);
   const projectEntryMode = resolveWelcomeProjectEntryMode({
     contextKind: s.contextKind,
+    projectId,
     projectCount: projects.length,
     workDiscovery,
   });
@@ -180,7 +183,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
             </span>
           ) : null}
         </div>
-        {!projectEntryLoaded && s.contextKind === 'empty' ? (
+        {!projectId && !projectEntryLoaded && s.contextKind === 'empty' ? (
           <Skeleton className="mt-1 h-9 w-36 rounded-lg" />
         ) : projectEntryMode === 'choose_project' && onSelectProject ? (
           <Popover.Root open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>

@@ -84,8 +84,8 @@ export function ComposerContextBar({ sessionKey, project, workspacePath, canChan
             onChange={(id) => { if (id !== (project?.id ?? '')) onProjectChange(id || null); }}
           />
         </div>
-        {environmentPicker}
-        {!environmentPicker && project && environment ? <span className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-surface-hover px-2.5 text-sm text-fg" title={environment.rootPath}>
+        {project ? environmentPicker : null}
+        {!environmentPicker && project && environment && (environment.headSha || environment.branch) ? <span className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-surface-hover px-2.5 text-sm text-fg" title={environment.rootPath}>
           {environment.kind === 'managed_worktree' ? <Shuffle className="size-4 shrink-0" strokeWidth={1.75} aria-hidden /> : <Laptop className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />}
           {environment.kind === 'managed_worktree' ? 'Worktree' : 'Local'}
         </span> : null}

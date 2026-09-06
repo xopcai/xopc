@@ -178,6 +178,40 @@ describe('ChatPageHeaderRegistration', () => {
     });
   });
 
+  it('opens project files before a session is created', () => {
+    useWorkspacePanelStore.setState({ sessionKeyOverride: 'previous-session' });
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/chat/new?projectId=project-1']}>
+          <Routes>
+            <Route path="/chat/:sessionKey" element={(
+              <>
+                <ChatPageHeaderRegistration
+                  chatHeadline="New chat"
+                  chatAgents={[]}
+                  showChatAgentSelector={false}
+                  chatAgentId="main"
+                  onChatAgentChange={() => {}}
+                  chatAgentDisabled={false}
+                  projectId="project-1"
+                  context={{ project: { id: 'project-1', name: 'Project', workspaceRoot: '/repo/project' } }}
+                  onWorkspaceChange={async () => {}}
+                />
+                <HeaderEnd />
+              </>
+            )} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    });
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Project Files: project"]');
+    expect(button).not.toBeNull();
+    expect(button?.disabled).toBe(false);
+    expect(button?.title).toContain('/repo/project');
+    act(() => button!.click());
+    expect(useWorkspacePanelStore.getState()).toMatchObject({ open: true, sessionKeyOverride: null });
+  });
+
   it('keeps project files available while directory selection is locked', () => {
     act(() => {
       root.render(

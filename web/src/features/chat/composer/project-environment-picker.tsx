@@ -12,8 +12,10 @@ export function ProjectEnvironmentPicker({ selection }: { selection: ProjectSess
   const { mode, options, checking, checkFailed, failure, busy, changeMode, retry } = selection;
   const reason = checkFailed ? (zh ? '无法检查运行环境，请重试。' : 'Could not check the environment. Retry.')
     : options?.worktreeUnavailableReason === 'workspace_unavailable' ? (zh ? '项目目录不可用，请在项目设置中检查路径。' : 'Project directory unavailable. Check its path in project settings.')
-      : options?.worktreeUnavailableReason === 'git_commit_required' ? (zh ? 'Worktree 需要可访问且至少有一个提交的 Git 仓库。' : 'Worktree requires an accessible Git repository with at least one commit.')
-        : options?.worktreeUnavailableReason === 'uncommitted_changes' ? (zh ? '仓库有未提交修改，请先提交或选择 Local。' : 'The repository has uncommitted changes. Commit them or choose Local.') : null;
+      : null;
+  if (!checkFailed && options?.worktreeUnavailableReason === 'git_commit_required') return failure
+    ? <p role="alert" className="w-full px-2 py-1 text-xs text-danger">{failure}</p>
+    : null;
   const iconClass = 'size-4 shrink-0';
   const localIcon = <Laptop className={iconClass} strokeWidth={1.75} aria-hidden />;
   const worktreeIcon = <Shuffle className={iconClass} strokeWidth={1.75} aria-hidden />;
@@ -36,7 +38,7 @@ export function ProjectEnvironmentPicker({ selection }: { selection: ProjectSess
       ]}
       onChange={(value) => changeMode(value as typeof mode)}
     />}
-    {reason || failure ? <Button variant="ghost" className="size-8 rounded-full p-0" disabled={busy || checking} onClick={retry} aria-label={zh ? '重新检查环境' : 'Recheck environment'}>
+    {reason || failure || (mode === 'managed_worktree' && options?.worktreeUnavailableReason) ? <Button variant="ghost" className="size-8 rounded-full p-0" disabled={busy || checking} onClick={retry} aria-label={zh ? '重新检查环境' : 'Recheck environment'}>
       <RefreshCw className={'size-3.5 ' + (checking ? 'animate-spin motion-reduce:animate-none' : '')} aria-hidden />
     </Button> : null}
     {reason ? <p role="status" className="w-full px-2 py-1 text-xs leading-5 text-fg-muted">{reason}</p> : null}

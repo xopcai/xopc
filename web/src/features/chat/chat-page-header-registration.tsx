@@ -190,11 +190,11 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             temporary={userContextMode === 'temporary'}
             sessionKey={activeSessionKey ?? null}
           />
-          {activeSessionKey && onWorkspaceChange ? (
+          {(activeSessionKey || projectId) && onWorkspaceChange ? (
             <ChatWorkspaceControl
-              key={`workspace:${activeSessionKey}`}
+              key={`workspace:${activeSessionKey ?? projectId}`}
               sessionKey={activeSessionKey}
-              workspacePath={workspacePath}
+              workspacePath={activeSessionKey ? workspacePath : context?.project?.workspaceRoot}
               available={workspaceAvailable}
               canChangeWorkspace={canChangeWorkspace}
               disabled={workspaceDisabled}
