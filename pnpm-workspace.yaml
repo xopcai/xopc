@@ -74,5 +74,8 @@ auditConfig:
     - GHSA-5p2g-fcmc-qvqq
 
 patchedDependencies:
+  # macOS 26 validates the temporary keychain password used by set-key-partition-list.
+  # Remove once electron-builder ships https://github.com/electron-userland/electron-builder/pull/10067.
+  app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
   # Preserve compact Mermaid edge labels such as -.标签.->.
   beautiful-mermaid@1.1.3: patches/beautiful-mermaid@1.1.3.patch
