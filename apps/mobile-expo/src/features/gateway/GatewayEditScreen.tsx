@@ -3,9 +3,10 @@ import { testWorkComputer } from './test-work-computer';
 import { useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, RadioButton, Text, TextInput } from 'react-native-paper';
 
+import { AppToast } from '@/components/AppToast';
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { useSettingsColors } from '@/features/settings/settings-ui';
 import { useMessages } from '@/i18n/messages';
@@ -32,6 +33,7 @@ export function GatewayEditScreen() {
   const [details, setDetails] = useState(false);
   const test = useMutation({ mutationFn: () => testWorkComputer(id) });
   const [name, setName] = useState(profile?.name ?? '');
+  const [saved, setSaved] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -62,6 +64,13 @@ export function GatewayEditScreen() {
   }, [copy.connectFailed, router]);
   const input = useGatewayPairingInput(connect, isNew && !scannerOpen && !busy);
 
+  const saveName = () => {
+    if (!profile || !name.trim() || name.trim() === profile.name) return;
+    renameProfile(profile.gatewayId, name);
+    Keyboard.dismiss();
+    setSaved(true);
+  };
+
   const confirmDelete = useCallback(() => {
     if (!profile) return;
     Alert.alert(s.deleteGateway, s.deleteGatewayConfirm, [
@@ -80,7 +89,7 @@ export function GatewayEditScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
       <NativeScreenHeader title={isNew ? s.newGateway : s.editGateway} onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {isNew ? (
           <>
             <Text variant="bodyMedium" style={{ color: colors.textMuted }}>{copy.subline}</Text>
@@ -91,8 +100,8 @@ export function GatewayEditScreen() {
           </>
         ) : profile ? (
           <>
-            <TextInput label={s.gatewayName} value={name} onChangeText={setName} mode="outlined" />
-            <Button mode="contained" disabled={!name.trim()} onPress={() => renameProfile(profile.gatewayId, name)}>
+            <TextInput label={s.gatewayName} value={name} onChangeText={(value) => { setName(value); setSaved(false); }} mode="outlined" />
+            <Button mode="contained" disabled={!name.trim() || name.trim() === profile.name} onPress={saveName}>
               {s.save}
             </Button>
             <Button mode="outlined" loading={test.isPending} disabled={test.isPending} onPress={() => test.mutate()}>{copy.flow.test}</Button>
@@ -111,6 +120,7 @@ export function GatewayEditScreen() {
         ) : null}
         {error ? <Text style={{ color: colors.error }}>{error}</Text> : null}
       </ScrollView>
+      <AppToast visible={saved} onDismiss={() => setSaved(false)}>{s.gatewayNameSaved}</AppToast>
       <GatewayQrScannerModal
         visible={scannerOpen}
         onRequestClose={() => setScannerOpen(false)}
