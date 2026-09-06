@@ -37,14 +37,11 @@ export type PreferencesState = {
   clipboardIntakeEnabled: boolean;
   /** Local intent to receive gateway push notifications. System permission is tracked separately. */
   notificationsEnabled: boolean;
-  /** Automatically read new assistant replies aloud. */
-  autoReadAloudEnabled: boolean;
 
   setLanguage: (lang: Language) => void;
   setThemePreference: (pref: ThemePreference) => void;
   setClipboardIntakeEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
-  setAutoReadAloudEnabled: (enabled: boolean) => void;
   setDefaultAgentId: (agentId: string | null) => void;
   rememberSelectedAgent: (gatewayId: string, agentId: string | null) => void;
   rememberAgentModel: (
@@ -121,7 +118,6 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   newSessionPreferencesByGateway: {},
   clipboardIntakeEnabled: false,
   notificationsEnabled: false,
-  autoReadAloudEnabled: false,
 
   setLanguage: (language) => {
     storage.set(KEYS.language, language);
@@ -143,11 +139,6 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   setNotificationsEnabled: (notificationsEnabled) => {
     storage.set(KEYS.notificationsEnabled, notificationsEnabled);
     set({ notificationsEnabled });
-  },
-
-  setAutoReadAloudEnabled: (autoReadAloudEnabled) => {
-    storage.set(KEYS.autoReadAloudEnabled, autoReadAloudEnabled);
-    set({ autoReadAloudEnabled });
   },
 
   setDefaultAgentId: (defaultAgentId) => {
@@ -197,7 +188,6 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
     const agentRaw = storage.getString(KEYS.defaultAgentId);
     const preferencesByGatewayRaw = storage.getString(KEYS.newSessionPreferencesByGateway);
     const notificationsRaw = storage.getString(KEYS.notificationsEnabled);
-    const autoReadAloudRaw = storage.getString(KEYS.autoReadAloudEnabled);
     const language = resolveInitialLanguage(langRaw);
     if (!isValidLanguage(langRaw)) storage.set(KEYS.language, language);
     const themePreference = isValidThemePref(themeRaw) ? themeRaw : 'system';
@@ -205,7 +195,6 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
     const defaultAgentId = agentRaw?.trim().toLowerCase() || null;
     const newSessionPreferencesByGateway = readPreferencesByGateway(preferencesByGatewayRaw);
     const notificationsEnabled = notificationsRaw === 'true';
-    const autoReadAloudEnabled = autoReadAloudRaw === 'true';
     syncAppearance(themePreference);
     set({
       hydrated: true,
@@ -214,7 +203,6 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
       resolvedTheme: resolveTheme(themePreference),
       clipboardIntakeEnabled,
       notificationsEnabled,
-      autoReadAloudEnabled,
       defaultAgentId,
       newSessionPreferencesByGateway,
     });

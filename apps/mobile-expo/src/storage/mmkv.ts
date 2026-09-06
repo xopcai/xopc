@@ -14,7 +14,6 @@ export const KEYS = {
   newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
   endpointId: 'endpointTools.endpointId',
   notificationsEnabled: 'prefs.notificationsEnabled',
-  autoReadAloudEnabled: 'prefs.autoReadAloudEnabled',
   noteTags: 'prefs.noteTags',
   usageEvents: 'product.usageEvents',
   homePinnedFocusId: 'home.pinnedFocusId',

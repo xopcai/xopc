@@ -31,7 +31,6 @@ vi.mock('../../storage/mmkv', () => ({
     defaultAgentId: 'prefs.defaultAgentId',
     newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
     notificationsEnabled: 'prefs.notificationsEnabled',
-    autoReadAloudEnabled: 'prefs.autoReadAloudEnabled',
   },
   storage: {
     getString: (key: string) => memory.get(key),
@@ -59,7 +58,6 @@ function resetStore(): void {
     newSessionPreferencesByGateway: {},
     clipboardIntakeEnabled: true,
     notificationsEnabled: false,
-    autoReadAloudEnabled: false,
   });
 }
 
@@ -133,17 +131,6 @@ describe('usePreferencesStore', () => {
     usePreferencesStore.setState({ notificationsEnabled: false });
     usePreferencesStore.getState().hydrate();
     expect(usePreferencesStore.getState().notificationsEnabled).toBe(true);
-  });
-
-  it('persists automatic read aloud as an opt-in preference', () => {
-    usePreferencesStore.getState().setAutoReadAloudEnabled(true);
-
-    expect(memory.get(KEYS.autoReadAloudEnabled)).toBe('true');
-
-    usePreferencesStore.setState({ autoReadAloudEnabled: false });
-    usePreferencesStore.getState().hydrate();
-
-    expect(usePreferencesStore.getState().autoReadAloudEnabled).toBe(true);
   });
 
   it('keeps new-session model and project preferences isolated by gateway and agent', () => {
