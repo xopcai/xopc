@@ -1,3 +1,4 @@
+import { messageKey } from './message-key';
 import type { ComposerContextRef, WireAttachment } from './composer.types';
 import type { Message, MessageAttachment, MessageContent, TextContent } from './messages.types';
 import { stripRuntimeContextForDisplay, stripUserMessageForDisplay } from './wire-text-scrub';
@@ -65,8 +66,18 @@ export function mergeOptimisticUserMessages(
 
   const merged = [...sessionMessages];
   for (const optimistic of optimisticMessages) {
-    const serverTail = sessionMessages[sessionMessages.length - 1];
-    if (serverTail && serverMessageReplacesOptimistic(serverTail, optimistic)) continue;
+    const tail = sessionMessages[sessionMessages.length - 1];
+    const userIndex = sessionMessages.findLastIndex(isUserMessage);
+    const serverUser = sessionMessages[userIndex];
+    // An optimistic prompt created after the answer belongs to the next turn.
+    const isLaterTurn = tail?.role === 'assistant'
+      && optimistic.timestamp != null && tail.timestamp != null
+      && optimistic.timestamp > tail.timestamp;
+    if (!isLaterTurn && serverUser && serverMessageReplacesOptimistic(serverUser, optimistic)) {
+      const index = merged.indexOf(serverUser);
+      if (index >= 0) merged[index] = { ...serverUser, renderKey: messageKey(optimistic, index) };
+      continue;
+    }
     const nextMessage = optimistic.timestamp == null ? -1 : merged.findIndex(message =>
       message.timestamp != null && message.timestamp > optimistic.timestamp!);
     if (nextMessage < 0) merged.push(optimistic);

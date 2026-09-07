@@ -37,7 +37,7 @@ describe('mergeOptimisticUserMessages', () => {
     const server = textMessage('row-1', 'plan a study session', 10_010);
     const optimistic = textMessage('optimistic-1', 'plan a study session', 10_000);
 
-    expect(mergeOptimisticUserMessages([server], [optimistic])).toEqual([server]);
+    expect(mergeOptimisticUserMessages([server], [optimistic])).toEqual([{ ...server, renderKey: optimistic.id }]);
   });
 
   it('matches a server transcript that expands the optimistic display text', () => {
@@ -50,7 +50,7 @@ describe('mergeOptimisticUserMessages', () => {
       attachments: [{ id: 'local-image', type: 'image' }],
     };
 
-    expect(mergeOptimisticUserMessages([server], [optimistic])).toEqual([server]);
+    expect(mergeOptimisticUserMessages([server], [optimistic])).toEqual([{ ...server, renderKey: optimistic.id }]);
   });
 
   it('keeps an intentionally repeated prompt after a completed assistant turn', () => {
@@ -67,6 +67,15 @@ describe('mergeOptimisticUserMessages', () => {
       previous,
       assistant,
       repeated,
+    ]);
+  });
+
+  it('reconciles the sent prompt even after its assistant response is persisted', () => {
+    const server = textMessage('row-1', 'hello', 10_010);
+    const assistant = textMessage('row-2', 'answer', 10_100, 'assistant');
+    const optimistic = { ...textMessage('local-1', 'hello', 10_000), deliveryState: 'sent' as const };
+    expect(mergeOptimisticUserMessages([server, assistant], [optimistic])).toEqual([
+      { ...server, renderKey: 'local-1' }, assistant,
     ]);
   });
 
@@ -90,7 +99,7 @@ describe('message delivery presentation', () => {
     const failed: Message = { ...buildOptimisticUserMessage('first'), timestamp: 100, deliveryState: 'failed' };
     const sent: Message = { ...buildOptimisticUserMessage('second'), timestamp: 200, deliveryState: 'sent' };
     const server: Message = { ...sent, id: 'server-second', deliveryState: undefined, timestamp: 201 };
-    expect(mergeOptimisticUserMessages([server], [failed, sent])).toEqual([failed, server]);
+    expect(mergeOptimisticUserMessages([server], [failed, sent])).toEqual([failed, { ...server, renderKey: sent.id }]);
   });
 
   it('renders a failed voice message from its retained native file', () => {

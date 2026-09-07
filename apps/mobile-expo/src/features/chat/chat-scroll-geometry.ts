@@ -11,6 +11,18 @@ export function chatListDistanceFromBottom(
   return contentHeight - offsetY - viewportHeight;
 }
 
+/** Ignore short lists and overscroll bounce; show only when there is content below the viewport. */
+export function shouldShowChatScrollToBottom(
+  offsetY: number,
+  contentHeight: number,
+  viewportHeight: number,
+  wasVisible: boolean,
+): boolean {
+  if (viewportHeight <= 0 || contentHeight <= viewportHeight) return false;
+  const distance = chatListDistanceFromBottom(Math.max(0, offsetY), contentHeight, viewportHeight);
+  return distance > (wasVisible ? CHAT_LIST_REPIN_WITHIN_PX : CHAT_LIST_UNPIN_BEYOND_PX);
+}
+
 /** Update pin state with hysteresis to avoid boundary flicker. */
 export function applyPinHysteresis(wasPinned: boolean, distanceFromBottom: number): boolean {
   if (wasPinned) {
