@@ -9,7 +9,7 @@ import {
   type AgentModelsOverride,
 } from '../agent-config/index.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
-import { UserContextConfigSchema } from '../user-context/config.js';
+import { DEFAULT_CONTEXT_COMPACTION_POLICY, UserContextConfigSchema } from '../user-context/config.js';
 import { DEFAULT_MODEL_REF } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
 
@@ -1226,26 +1226,42 @@ export const ConfigSchema = z.object({
   userContext: {
     enabled: true,
     preferences: { responseLanguage: 'auto' },
-    memory: {
-      mode: 'confirmWrite',
-      sources: ['session', 'understanding'],
-      writePolicy: { understanding: 'confirm' },
-    },
-    understanding: {
+    userModel: {
       enabled: true,
+      writePolicy: 'confirm',
+      sensitiveWritePolicy: 'confirm',
       processingPolicy: 'remote_allowed',
-      adaptiveCadence: true,
-      reviewIntervalTurns: 10,
-      maxHistoryMessages: 80,
-      maxDurationMs: 120_000,
+      extraction: {
+        reviewIntervalTurns: 10,
+        maxHistoryMessages: 80,
+        maxDurationMs: 120_000,
+      },
+      maintenance: {
+        enabled: true,
+        temporalSweepMinutes: 60,
+        dailyTime: '03:00',
+        weeklyDay: 'sun',
+        weeklyTime: '04:00',
+        evidenceThreshold: 2,
+        limit: 1_000,
+        staleRetentionDays: 30,
+      },
     },
-    privacy: { sensitiveWritePolicy: 'confirm' },
-    providerRouting: {
+    knowledgeMemory: {
+      enabled: true,
+      writePolicy: 'confirm',
+      sources: ['session', 'workspace'],
       searchStrategy: 'fanout',
       writeStrategy: 'local-first',
       allowExternalWrites: false,
     },
-    dreaming: { mode: 'review', schedule: { time: '03:00' }, minEvidenceSources: 2, limit: 500 },
+    contextPlanning: {
+      enabled: true,
+      maxAssertions: 20,
+      maxKnowledge: 12,
+      maxChars: 6_000,
+      compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
+    },
   },
   agents: {
     default: 'main',

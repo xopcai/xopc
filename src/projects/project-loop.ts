@@ -1,4 +1,4 @@
-import type { MemoryRecord } from '../agent/memory/types.js';
+import type { KnowledgeItem } from '../knowledge-memory/index.js';
 import type { ProjectWithDetails } from './types.js';
 
 export type ProjectWorkflowRunBrief = {
@@ -21,7 +21,7 @@ export type ProjectAttentionItem = {
 
 export type ProjectTimelineItem = {
   id: string;
-  kind: 'session' | 'task' | 'workflow' | 'memory';
+  kind: 'session' | 'task' | 'workflow' | 'knowledge';
   title: string;
   detail?: string;
   timestamp: number;
@@ -78,7 +78,7 @@ export function buildProjectLoopOverview(input: {
   tasks: ProjectTask[];
   recentWorkflowRuns: ProjectWorkflowRunBrief[];
   failedWorkflowRuns?: ProjectWorkflowRunBrief[];
-  memoryRecords?: MemoryRecord[];
+  knowledgeItems?: KnowledgeItem[];
   nowMs?: number;
   staleAfterMs?: number;
 }): ProjectLoopOverview {
@@ -161,12 +161,12 @@ export function buildProjectLoopOverview(input: {
       status: run.status,
       href: `/workflows?run=${encodeURIComponent(run.runId)}`,
     })),
-    ...(input.memoryRecords ?? []).slice(0, 5).map((record) => ({
-      id: `memory:${record.id}`,
-      kind: 'memory' as const,
+    ...(input.knowledgeItems ?? []).slice(0, 5).map((record) => ({
+      id: `knowledge:${record.id}`,
+      kind: 'knowledge' as const,
       title: record.kind,
       detail: compactText(record.content),
-      timestamp: Date.parse(record.updatedAt),
+      timestamp: record.updatedAt,
       status: record.status,
     })),
   ]

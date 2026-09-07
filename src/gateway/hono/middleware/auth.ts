@@ -59,11 +59,10 @@ function extractTokenFromQuery(url: string): string | null {
 }
 
 const AGENT_AVATAR_GET_PATH = /^\/api\/agents\/[^/]+\/avatar$/;
-const USER_AVATAR_GET_PATH = '/api/you/avatar';
 
 /** Exported for gateway security tests. */
 export function isQueryTokenAllowedPath(path: string, method: string): boolean {
-  if (method === 'GET' && (AGENT_AVATAR_GET_PATH.test(path) || path === USER_AVATAR_GET_PATH)) {
+  if (method === 'GET' && AGENT_AVATAR_GET_PATH.test(path)) {
     return true;
   }
   return false;

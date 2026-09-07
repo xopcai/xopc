@@ -68,9 +68,8 @@ function boundedInteger(
 export function normalizeContextCompactionFromConfig(config: unknown): ContextCompactionConfigState {
   const root = isRecord(config) ? config : {};
   const userContext = isRecord(root.userContext) ? root.userContext : {};
-  const memory = isRecord(userContext.memory) ? userContext.memory : {};
-  const retention = isRecord(memory.retention) ? memory.retention : {};
-  const raw = isRecord(retention.compaction) ? retention.compaction : {};
+  const planning = isRecord(userContext.contextPlanning) ? userContext.contextPlanning : {};
+  const raw = isRecord(planning.compaction) ? planning.compaction : {};
   const defaults = DEFAULT_CONTEXT_COMPACTION_CONFIG;
   const model = typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : undefined;
   const postCompactionSections = Array.isArray(raw.postCompactionSections)
@@ -159,10 +158,8 @@ export function buildContextCompactionPatch(state: ContextCompactionConfigState)
   if (!state.model?.trim()) delete compaction.model;
   return {
     userContext: {
-      memory: {
-        retention: {
-          compaction,
-        },
+      contextPlanning: {
+        compaction,
       },
     },
   };

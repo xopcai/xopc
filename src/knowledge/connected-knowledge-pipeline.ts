@@ -1,23 +1,21 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import {
-  attachMemoryEvidence,
+  listKnowledgeItems,
+  setKnowledgeStatus,
+  writeKnowledgeItem,
+} from '../knowledge-memory/index.js';
+import {
   claimKnowledgeSourceItems,
   completeKnowledgeSourceItemSynthesis,
-  deleteMemoryRecord,
-  deleteMemoryEvidenceForRecord,
-  getMemoryRecord,
   listKnowledgeSourceItems,
   pruneBoundedKnowledgeSourceItems,
-  upsertMemoryRecord,
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { KnowledgeSourceItem } from './types.js';
 
 const log = createLogger('ConnectedKnowledge');
 const MAX_ITEM_CHARS = 8_000;
-const MAX_SUMMARY_CHARS = 6_000;
-const MAX_SUMMARY_ITEMS = 24;
 
 export type ConnectedKnowledgePipelineOptions = {
   agentId: string;
@@ -34,44 +32,27 @@ export type KnowledgeSynthesisBatchResult = {
   recordIds: string[];
 };
 
-export type ConnectedKnowledgePruneResult = {
-  rawDeleted: number;
-  derivedDeleted: number;
-};
+export type ConnectedKnowledgePruneResult = { rawDeleted: number; derivedDeleted: number };
 
 function providerId(item: KnowledgeSourceItem): string {
   const connectorId = item.metadata.connectorId;
-  if (typeof connectorId === 'string' && connectorId.trim()) return connectorId.trim();
-  return item.sourceInstanceId.split(':')[0] || 'connected-source';
+  return typeof connectorId === 'string' && connectorId.trim()
+    ? connectorId.trim() : item.sourceInstanceId.split(':')[0] || 'connected-source';
 }
 
 function ownerAgentId(item: KnowledgeSourceItem, fallback: string): string {
-  const agentId = item.metadata.agentId;
-  return typeof agentId === 'string' && agentId.trim() ? agentId.trim() : fallback;
+  const value = item.metadata.agentId;
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
 function ownerWorkspaceId(item: KnowledgeSourceItem, fallback: string): string {
-  const workspaceId = item.metadata.workspaceId;
-  return typeof workspaceId === 'string' && workspaceId.trim() ? workspaceId.trim() : fallback;
-}
-
-function knowledgeRecordId(itemId: string): string {
-  return `knowledge:${itemId}`;
+  const value = item.metadata.workspaceId;
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
 function boundedText(item: KnowledgeSourceItem): string {
-  const text = item.normalizedText?.trim() ?? '';
-  return text.length > MAX_ITEM_CHARS ? `${text.slice(0, MAX_ITEM_CHARS)}\n…` : text;
-}
-
-function dayFor(item: KnowledgeSourceItem): string {
-  const timestamp = item.occurredAt ?? item.sourceUpdatedAt ?? item.updatedAt;
-  return timestamp.slice(0, 10);
-}
-
-function summaryRecordId(sourceInstanceId: string, day: string): string {
-  const key = createHash('sha256').update(`${sourceInstanceId}:${day}`).digest('hex').slice(0, 24);
-  return `knowledge-summary:${key}`;
+  const value = item.normalizedText?.trim() ?? '';
+  return value.length > MAX_ITEM_CHARS ? `${value.slice(0, MAX_ITEM_CHARS)}\n…` : value;
 }
 
 export class ConnectedKnowledgePipeline {
@@ -91,265 +72,78 @@ export class ConnectedKnowledgePipeline {
       limit: this.batchSize,
     });
     const result: KnowledgeSynthesisBatchResult = {
-      claimed: claimed.length,
-      completed: 0,
-      ignored: 0,
-      failed: 0,
-      recordIds: [],
+      claimed: claimed.length, completed: 0, ignored: 0, failed: 0, recordIds: [],
     };
-    const summaryKeys = new Set<string>();
-
     for (const item of claimed) {
       try {
-        const recordId = knowledgeRecordId(item.id);
         const content = boundedText(item);
+        const existing = listKnowledgeItems({ recordClass: 'source_index', limit: 2_000 })
+          .find((entry) => entry.canonicalKey === `source-item:${item.sourceInstanceId}:${item.externalId}`);
         if (item.deletedAt) {
-          const existing = getMemoryRecord(recordId);
-          if (existing) {
-            upsertMemoryRecord({
-              id: existing.id,
-              providerId: 'connected-knowledge',
-              kind: existing.kind,
-              sourceAgentId: existing.provenance.sourceAgentId,
-              workspaceId: existing.scope.workspaceId,
-              content: existing.content,
-              source: existing.source,
-              confidence: existing.confidence,
-              tags: existing.tags,
-              status: 'archived',
-              sensitivity: existing.sensitivity,
-              explicitness: existing.explicitness,
-              durability: existing.durability,
-              importance: existing.importance,
-              disclosurePolicy: existing.disclosurePolicy,
-              evidence: existing.evidence,
-              validFrom: existing.validFrom,
-              validTo: item.deletedAt,
-              reviewAfter: existing.reviewAfter,
-              expiresAt: existing.expiresAt,
-              canonicalKey: existing.canonicalKey,
-              supersedesRecordId: existing.supersedesRecordId,
-              conflictGroupId: existing.conflictGroupId,
-              originClass: existing.provenance.originClass,
-              sessionKind: existing.provenance.sessionKind,
-              observedAt: existing.provenance.observedAt,
-              sourceSessionId: existing.provenance.sourceSessionId,
-              sourceTurnId: existing.provenance.sourceTurnId,
-              supersedesKey: existing.provenance.supersedesKey,
-              derivedFromRecalledContext: existing.provenance.derivedFromRecalledContext,
-            });
-          }
-          completeKnowledgeSourceItemSynthesis({
-            itemId: item.id,
-            workerId: this.workerId,
-            status: 'ignored',
-          });
+          if (existing) setKnowledgeStatus(existing.id, 'archived');
+          completeKnowledgeSourceItemSynthesis({ itemId: item.id, workerId: this.workerId, status: 'ignored' });
           result.ignored += 1;
-          summaryKeys.add(`${item.sourceInstanceId}\u0000${dayFor(item)}`);
           continue;
         }
         if (!content || item.sensitivity === 'secret' || item.sensitivity === 'regulated') {
-          completeKnowledgeSourceItemSynthesis({
-            itemId: item.id,
-            workerId: this.workerId,
-            status: 'ignored',
-          });
+          completeKnowledgeSourceItemSynthesis({ itemId: item.id, workerId: this.workerId, status: 'ignored' });
           result.ignored += 1;
           continue;
         }
-
-        const sourceProvider = providerId(item);
-        const record = upsertMemoryRecord({
-          id: recordId,
-          providerId: 'connected-knowledge',
+        const written = writeKnowledgeItem({
           kind: 'workspace_fact',
-          sourceAgentId: ownerAgentId(item, this.options.agentId),
-          workspaceId: ownerWorkspaceId(item, this.options.workspaceId),
+          scope: { type: 'workspace', id: ownerWorkspaceId(item, this.options.workspaceId) },
           content,
           canonicalKey: `source-item:${item.sourceInstanceId}:${item.externalId}`,
-          source: { provider: sourceProvider, sourceInstanceId: item.sourceInstanceId, path: item.payloadRef },
-          confidence: 0.78,
-          tags: ['connected-source', 'external', sourceProvider, item.itemType],
+          recordClass: 'source_index',
           status: 'active',
-          sensitivity: item.sensitivity,
-          explicitness: 'observed',
-          durability: item.retentionClass === 'durable' ? 'durable' : 'recurring',
-          importance: 0.5,
-          disclosurePolicy: 'referenceable',
-          evidence: [{
-            sourceItemId: item.id,
-            relation: 'derived_from',
-            sourceText: content.slice(0, 1_000),
-            confidence: 0.78,
-            observedAt: item.occurredAt ?? item.sourceUpdatedAt,
-          }],
-          validFrom: item.occurredAt ?? item.sourceUpdatedAt,
-          originClass: 'untrusted',
-          sessionKind: 'background',
-          observedAt: item.occurredAt ?? item.sourceUpdatedAt ?? item.updatedAt,
-          derivedFromRecalledContext: false,
-        });
-        attachMemoryEvidence({
-          recordId: record.id,
-          sourceItemId: item.id,
-          relation: 'derived_from',
-          excerpt: content.slice(0, 1_000),
           confidence: 0.78,
-          observedAt: item.occurredAt ?? item.sourceUpdatedAt,
+          importance: 0.5,
+          validFrom: Date.parse(item.occurredAt ?? item.sourceUpdatedAt ?? item.updatedAt),
+          originClass: 'untrusted',
+          sourceAgentId: ownerAgentId(item, this.options.agentId),
+          source: {
+            provider: providerId(item),
+            sourceInstanceId: item.sourceInstanceId,
+            sourceItemId: item.id,
+            payloadRef: item.payloadRef,
+          },
+          replaceExisting: true,
         });
-        completeKnowledgeSourceItemSynthesis({
-          itemId: item.id,
-          workerId: this.workerId,
-          status: 'completed',
-        });
+        completeKnowledgeSourceItemSynthesis({ itemId: item.id, workerId: this.workerId, status: 'completed' });
         result.completed += 1;
-        result.recordIds.push(record.id);
-        summaryKeys.add(`${item.sourceInstanceId}\u0000${dayFor(item)}`);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        result.recordIds.push(written.item.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         completeKnowledgeSourceItemSynthesis({
-          itemId: item.id,
-          workerId: this.workerId,
-          status: 'failed',
-          error: errorMessage.slice(0, 1_000),
+          itemId: item.id, workerId: this.workerId, status: 'failed', error: message.slice(0, 1_000),
         });
         result.failed += 1;
-        log.warn(
-          { err, itemId: item.id, sourceInstanceId: item.sourceInstanceId },
-          `Connected knowledge synthesis failed: ${errorMessage}`,
-        );
+        log.warn({ err: error, itemId: item.id, sourceInstanceId: item.sourceInstanceId },
+          `Connected knowledge synthesis failed: ${message}`);
       }
-    }
-
-    for (const key of summaryKeys) {
-      const [sourceInstanceId, day] = key.split('\u0000');
-      if (sourceInstanceId && day) this.rebuildDailySummary(sourceInstanceId, day);
     }
     return result;
   }
 
-  /** Remove bounded raw items and every content-bearing memory derived only from them. */
   pruneBoundedRetention(sourceInstanceId: string, olderThanMs: number): ConnectedKnowledgePruneResult {
     const expired: KnowledgeSourceItem[] = [];
     for (let offset = 0; ; offset += 500) {
       const page = listKnowledgeSourceItems({
-        sourceInstanceId,
-        retentionClass: 'bounded',
-        retentionBeforeMs: olderThanMs,
-        includeDeleted: true,
-        limit: 500,
-        offset,
+        sourceInstanceId, retentionClass: 'bounded', retentionBeforeMs: olderThanMs,
+        includeDeleted: true, limit: 500, offset,
       });
       expired.push(...page);
       if (page.length < 500) break;
     }
-    if (!expired.length) return { rawDeleted: 0, derivedDeleted: 0 };
-    const affectedDays = new Set(expired.map(dayFor));
     let derivedDeleted = 0;
-    for (const item of expired) {
-      if (deleteMemoryRecord(knowledgeRecordId(item.id))) derivedDeleted += 1;
+    const expiredIds = new Set(expired.map((item) => item.id));
+    for (const item of listKnowledgeItems({ recordClass: 'source_index', limit: 2_000 })) {
+      if (typeof item.source.sourceItemId === 'string' && expiredIds.has(item.source.sourceItemId)) {
+        if (setKnowledgeStatus(item.id, 'archived')) derivedDeleted += 1;
+      }
     }
     const rawDeleted = pruneBoundedKnowledgeSourceItems(sourceInstanceId, olderThanMs);
-    for (const day of affectedDays) {
-      if (this.rebuildDailySummary(sourceInstanceId, day, true)) derivedDeleted += 1;
-    }
     return { rawDeleted, derivedDeleted };
-  }
-
-  private rebuildDailySummary(sourceInstanceId: string, day: string, deleteWhenEmpty = false): boolean {
-    const items = listKnowledgeSourceItems({ sourceInstanceId, limit: 500 })
-      .filter((item) => dayFor(item) === day && item.synthesisStatus === 'completed')
-      .slice(0, MAX_SUMMARY_ITEMS);
-    if (items.length === 0) {
-      const existing = getMemoryRecord(summaryRecordId(sourceInstanceId, day));
-      if (existing && deleteWhenEmpty) return deleteMemoryRecord(existing.id);
-      if (existing) {
-        upsertMemoryRecord({
-          id: existing.id,
-          providerId: 'connected-knowledge',
-          kind: existing.kind,
-          sourceAgentId: existing.provenance.sourceAgentId,
-          workspaceId: existing.scope.workspaceId,
-          content: existing.content,
-          source: existing.source,
-          confidence: existing.confidence,
-          tags: existing.tags,
-          status: 'archived',
-          sensitivity: existing.sensitivity,
-          explicitness: existing.explicitness,
-          durability: existing.durability,
-          importance: existing.importance,
-          disclosurePolicy: existing.disclosurePolicy,
-          evidence: existing.evidence,
-          validFrom: existing.validFrom,
-          validTo: new Date().toISOString(),
-          reviewAfter: existing.reviewAfter,
-          expiresAt: existing.expiresAt,
-          canonicalKey: existing.canonicalKey,
-          originClass: existing.provenance.originClass,
-          sessionKind: existing.provenance.sessionKind,
-          observedAt: existing.provenance.observedAt,
-          sourceSessionId: existing.provenance.sourceSessionId,
-          sourceTurnId: existing.provenance.sourceTurnId,
-          supersedesKey: existing.provenance.supersedesKey,
-          derivedFromRecalledContext: existing.provenance.derivedFromRecalledContext,
-        });
-      }
-      return false;
-    }
-    const sourceProvider = providerId(items[0]!);
-    const lines = [`# ${sourceProvider} updates for ${day}`, ''];
-    for (const item of items) {
-      const text = boundedText(item).replace(/\s+/g, ' ').trim();
-      if (!text) continue;
-      lines.push(`- ${text.slice(0, 360)}`);
-      if (lines.join('\n').length >= MAX_SUMMARY_CHARS) break;
-    }
-    const content = lines.join('\n').slice(0, MAX_SUMMARY_CHARS);
-    const summary = upsertMemoryRecord({
-      id: summaryRecordId(sourceInstanceId, day),
-      providerId: 'connected-knowledge',
-      kind: 'daily_note',
-      sourceAgentId: ownerAgentId(items[0]!, this.options.agentId),
-      workspaceId: ownerWorkspaceId(items[0]!, this.options.workspaceId),
-      content,
-      canonicalKey: `source-day:${sourceInstanceId}:${day}`,
-      source: { provider: sourceProvider, sourceInstanceId },
-      confidence: 0.72,
-      tags: ['connected-source', 'source-day-summary', sourceProvider],
-      status: 'active',
-      sensitivity: items.some((item) => item.sensitivity === 'personal') ? 'personal' : 'normal',
-      explicitness: 'observed',
-      durability: 'recurring',
-      importance: 0.55,
-      disclosurePolicy: 'referenceable',
-      evidence: items.map((item) => ({
-        sourceItemId: item.id,
-        relation: 'derived_from' as const,
-        sourceText: boundedText(item).slice(0, 500),
-        confidence: 0.72,
-        observedAt: item.occurredAt ?? item.sourceUpdatedAt,
-      })),
-      validFrom: `${day}T00:00:00.000Z`,
-      originClass: 'untrusted',
-      sessionKind: 'background',
-      observedAt: items
-        .map((item) => item.occurredAt ?? item.sourceUpdatedAt ?? item.updatedAt)
-        .sort()
-        .at(-1),
-      derivedFromRecalledContext: false,
-    });
-    deleteMemoryEvidenceForRecord(summary.id, 'derived_from');
-    for (const item of items) {
-      attachMemoryEvidence({
-        recordId: summary.id,
-        sourceItemId: item.id,
-        relation: 'derived_from',
-        excerpt: boundedText(item).slice(0, 500),
-        confidence: 0.72,
-        observedAt: item.occurredAt ?? item.sourceUpdatedAt,
-      });
-    }
-    return false;
   }
 }

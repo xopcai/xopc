@@ -5,13 +5,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
+import { getKnowledgeItem } from '../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
-  getMemoryRecord,
   getKnowledgeSourceCursor,
   listKnowledgeSourceItems,
   listKnowledgeSyncRuns,
-  listMemoryEvidence,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertConnectorConnection,
@@ -85,15 +84,14 @@ describe('connected source ingestion', () => {
     });
     expect(executeWithPolicy).toHaveBeenCalledOnce();
     const [recordId] = result.recordIds;
-    const memory = getMemoryRecord(recordId!);
-    expect(memory).toMatchObject({
+    const knowledge = getKnowledgeItem(recordId!);
+    expect(knowledge).toMatchObject({
       kind: 'workspace_fact',
       status: 'active',
-      sensitivity: 'personal',
+      originClass: 'untrusted',
       source: { provider: 'composio-gmail' },
-      tags: expect.arrayContaining(['connected-source', 'external', 'composio-gmail']),
     });
-    expect(memory?.content).not.toContain('sk-this-must-never-enter-memory');
+    expect(knowledge?.content).not.toContain('sk-this-must-never-enter-memory');
     const [sourceItem] = listKnowledgeSourceItems();
     expect(sourceItem).toMatchObject({
       sourceInstanceId: 'composio:composio-gmail:account:gmail-work',
@@ -106,10 +104,7 @@ describe('connected source ingestion', () => {
         people: ['lead@example.com'],
       },
     });
-    expect(listMemoryEvidence(recordId!)[0]).toMatchObject({
-      sourceItemId: sourceItem?.id,
-      relation: 'derived_from',
-    });
+    expect(knowledge?.source.sourceItemId).toBe(sourceItem?.id);
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({
       sourceInstanceId: 'composio:composio-gmail:account:gmail-work',
       status: 'succeeded',
@@ -134,7 +129,7 @@ describe('connected source ingestion', () => {
     expect(updated.recordIds).toEqual([recordId]);
     expect(listKnowledgeSourceItems()).toHaveLength(1);
     expect(listKnowledgeSyncRuns()[0]).toMatchObject({ itemsCreated: 0, itemsUpdated: 1 });
-    expect(getMemoryRecord(recordId!)?.content).toContain('Quarterly plan approved');
+    expect(getKnowledgeItem(recordId!)?.content).toContain('Quarterly plan approved');
   });
 
   it('follows opaque provider pages before committing the source cursor', async () => {
@@ -455,9 +450,9 @@ describe('connected source ingestion', () => {
       externalId: 'profile.md',
       itemType: 'local_file',
     }));
-    expect(getMemoryRecord(result.recordIds[0]!)).toMatchObject({
+    expect(getKnowledgeItem(result.recordIds[0]!)).toMatchObject({
       status: 'active',
-      sensitivity: 'personal',
+      originClass: 'untrusted',
     });
 
     unlinkSync(join(notesPath, 'profile.md'));
@@ -468,7 +463,7 @@ describe('connected source ingestion', () => {
       synthesisStatus: 'ignored',
       deletedAt: expect.any(String),
     }));
-    expect(getMemoryRecord(result.recordIds[0]!)?.status).toBe('archived');
+    expect(getKnowledgeItem(result.recordIds[0]!)?.status).toBe('archived');
 
     const restoredPath = join(notesPath, 'profile.md');
     writeFileSync(restoredPath, '# Preferences\nThe user prefers concise status updates and weekly summaries.');
@@ -481,6 +476,6 @@ describe('connected source ingestion', () => {
       synthesisStatus: 'completed',
     }));
     expect(listKnowledgeSourceItems()[0]?.deletedAt).toBeUndefined();
-    expect(getMemoryRecord(result.recordIds[0]!)?.status).toBe('active');
+    expect(getKnowledgeItem(result.recordIds[0]!)?.status).toBe('active');
   });
 });

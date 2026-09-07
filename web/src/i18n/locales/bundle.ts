@@ -19,7 +19,6 @@ import enTunnel from './en/tunnel.json' with { type: 'json' };
 import enSkills from './en/skills.json' with { type: 'json' };
 import enWorkflows from './en/workflows.json' with { type: 'json' };
 import enWorkspace from './en/workspace.json' with { type: 'json' };
-import enYou from './en/you.json' with { type: 'json' };
 
 import zhAgents from './zh/agents.json' with { type: 'json' };
 import zhAutomations from './zh/automations.json' with { type: 'json' };
@@ -42,7 +41,6 @@ import zhTunnel from './zh/tunnel.json' with { type: 'json' };
 import zhSkills from './zh/skills.json' with { type: 'json' };
 import zhWorkflows from './zh/workflows.json' with { type: 'json' };
 import zhWorkspace from './zh/workspace.json' with { type: 'json' };
-import zhYou from './zh/you.json' with { type: 'json' };
 
 /** Full English message tree; assembled from `locales/en/*.json` fragments. */
 export const en = {
@@ -67,7 +65,6 @@ export const en = {
   ...enSkills,
   ...enWorkflows,
   ...enWorkspace,
-  ...enYou,
 };
 
 /** Full Chinese message tree; assembled from `locales/zh/*.json` fragments. */
@@ -93,5 +90,4 @@ export const zh = {
   ...zhSkills,
   ...zhWorkflows,
   ...zhWorkspace,
-  ...zhYou,
 };

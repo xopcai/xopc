@@ -82,13 +82,19 @@ describe('openXopcDatabase', () => {
         'context_snapshots',
         'relationship_settings',
         'interaction_states',
-        'user_profiles',
-        'user_understandings',
+        'user_assertion_slots',
+        'user_assertions',
+        'user_assertion_evidence',
+        'user_assertion_status_events',
+        'user_goals',
+        'user_goal_revisions',
+        'user_priority_windows',
+        'knowledge_items',
+        'memory_maintenance_runs',
+        'memory_maintenance_decisions',
+        'execution_context_runs',
+        'execution_context_items',
         'collaboration_rules',
-        'context_runs',
-        'context_run_items',
-        'context_consolidation_runs',
-        'context_consolidation_decisions',
         'execution_environments',
         'execution_environment_bindings',
         'execution_environment_events',
@@ -98,6 +104,9 @@ describe('openXopcDatabase', () => {
     expect(tables).not.toContain('focus_watches');
     expect(tables).not.toContain('compaction_checkpoints');
     expect(tables).not.toContain('checkpoint_entries');
+    expect(tables).not.toContain('user_profiles');
+    expect(tables).not.toContain('user_understandings');
+    expect(tables).not.toContain('memory_records');
     expect(tables).not.toContain('dreaming_runs');
     expect(tables).not.toContain('dreaming_decisions');
   });

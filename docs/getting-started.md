@@ -41,7 +41,7 @@ Help me clarify the outcome and choose the smallest credible next step.
 Do not remember anything long-term unless I can review it.
 ```
 
-When user understanding is enabled, proposed understanding can be reviewed in **You** or **User context**. Confirm only what is accurate and useful; correct, reject, or delete the rest. See [User understanding](./user-understanding.md).
+When the user model is enabled, proposed facts can be reviewed under **User model**. Confirm only what is accurate and useful; correct, reject, or archive the rest. See [User model and memory](./user-understanding.md).
 
 Some desktop releases also offer experimental **Connect recent work** onboarding. It analyzes only folders you select, within a bounded read-only scope, and shows evidence-backed next steps. On macOS it may separately request access to Apple Notes, Calendar, and Reminders. Skip it if you prefer to begin with conversation.
 
@@ -49,7 +49,7 @@ Some desktop releases also offer experimental **Connect recent work** onboarding
 
 | Part | What it is for | Guide |
 | --- | --- | --- |
-| User understanding | Reviewable goals, preferences, relationships, focus, and collaboration rules | [User understanding](./user-understanding.md) |
+| User model | Reviewable assertions, goals, priority windows, collaboration rules, and knowledge | [User model and memory](./user-understanding.md) |
 | Session | A conversation you can return to from any connected client | [Chat and sessions](./session.md) |
 | Agent | A named assistant with its own role, model choices, tools, and workspace | [Agents](./routing-system.md) |
 | Project and Task | Long-running work with an explicit result, status, and next action | [Projects, Tasks, and Notes](./projects-tasks-notes.md) |

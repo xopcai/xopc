@@ -10,11 +10,12 @@ import type {
 } from '../../session/compaction-types.js';
 import type { TranscriptSourceEntry } from '../../storage/sqlite/transcript-repository.js';
 import {
-  getMemoryRecord,
-  setMemoryRecordStatus,
-  upsertMemoryRecord,
-} from '../../storage/sqlite/memory-records-repository.js';
-import type { MemoryKind, MemoryOriginClass } from './types.js';
+  listKnowledgeItems,
+  setKnowledgeStatus,
+  writeKnowledgeItem,
+  type KnowledgeKind,
+  type KnowledgeOriginClass,
+} from '../../knowledge-memory/index.js';
 import { resolveMemorySessionKind } from './turn-provenance.js';
 
 const DURABLE_KINDS = new Set<HandoverItemKind>([
@@ -25,18 +26,18 @@ const DURABLE_KINDS = new Set<HandoverItemKind>([
   'constraint',
   'next_action',
 ]);
-const RECALL_TOOL_RE = /^(?:memory_(?:search|get)|session_(?:search|recall))$/;
+const RECALL_TOOL_RE = /^(?:(?:user_context|knowledge)_(?:search|get)|session_(?:search|recall))$/;
 
-const MEMORY_KIND_BY_HANDOVER_KIND: Record<HandoverItemKind, MemoryKind> = {
-  objective: 'long_term_goal',
-  decision: 'derived_insight',
+const KNOWLEDGE_KIND_BY_HANDOVER_KIND: Record<HandoverItemKind, KnowledgeKind> = {
+  objective: 'commitment',
+  decision: 'decision',
   pending_user_ask: 'open_question',
   todo: 'commitment',
-  constraint: 'project_context',
+  constraint: 'project_fact',
   file_change: 'workspace_fact',
   tool_outcome: 'task_lesson',
   failure: 'task_lesson',
-  current_state: 'current_state',
+  current_state: 'episode',
   next_action: 'commitment',
 };
 
@@ -101,7 +102,7 @@ function classifyItemProvenance(
   sourceById: ReadonlyMap<string, TranscriptSourceEntry>,
   entriesByTurn: ReadonlyMap<string, TranscriptSourceEntry[]>,
   entriesByRound: ReadonlyMap<string, TranscriptSourceEntry[]>,
-): { originClass: MemoryOriginClass; derivedFromRecalledContext: boolean; observedAt: string } {
+): { originClass: KnowledgeOriginClass; derivedFromRecalledContext: boolean; observedAt: string } {
   const directSources = item.sources.flatMap((source) => {
     const entry = sourceById.get(source.entryId);
     return entry ? [entry] : [];
@@ -175,9 +176,8 @@ export function promoteCompactionLedger(
   const sessionKind = resolveMemorySessionKind(input.sessionKey);
 
   for (const item of input.handover.items) {
-    const episodeId = stableId('compaction-episode', input.sessionId, item.id);
     const classified = classifyItemProvenance(item, sourceById, entriesByTurn, entriesByRound);
-    const originClass: MemoryOriginClass = sessionKind === 'automation'
+    const originClass: KnowledgeOriginClass = sessionKind === 'automation'
       || sessionKind === 'workflow'
       || sessionKind === 'background'
       ? 'system'
@@ -185,45 +185,28 @@ export function promoteCompactionLedger(
         ? 'untrusted'
         : classified.originClass;
     const active = item.status === 'active';
-    upsertMemoryRecord({
-      id: episodeId,
-      providerId: 'compaction-ledger',
-      kind: MEMORY_KIND_BY_HANDOVER_KIND[item.kind],
-      sourceAgentId: input.sourceAgentId,
-      workspaceId: input.workspaceId,
-      sessionKey: input.sessionKey,
-      projectId: input.projectId,
+    const episode = writeKnowledgeItem({
+      kind: KNOWLEDGE_KIND_BY_HANDOVER_KIND[item.kind],
+      scope: { type: 'session', id: input.sessionKey },
       content: item.text,
       canonicalKey: `compaction:${input.sessionId}:${item.id}`,
+      confidence: input.audit.status === 'passed' ? 0.82 : 0.65,
+      status: active ? 'candidate' : 'archived',
+      importance: importanceFor(item),
+      originClass,
+      sourceAgentId: input.sourceAgentId,
+      sourceSessionId: input.sessionKey,
+      sourceTurnId: item.sources[0] ? rowTurnId(sourceById.get(item.sources[0].entryId)) : undefined,
+      derivedFromRecalledContext: classified.derivedFromRecalledContext,
       source: {
         provider: 'compaction-ledger',
-        sessionEntryId: item.sources[0]?.entryId,
-      },
-      confidence: input.audit.status === 'passed' ? 0.82 : 0.65,
-      tags: ['compaction', 'episodic', item.kind, item.status],
-      status: active ? 'candidate' : 'archived',
-      sensitivity: 'normal',
-      explicitness: 'inferred',
-      durability: 'ephemeral',
-      importance: importanceFor(item),
-      disclosurePolicy: 'referenceable',
-      evidence: item.sources.map((source) => ({
-        sessionKey: input.sessionKey,
-        turnId: rowTurnId(sourceById.get(source.entryId)),
-        relation: 'derived_from',
-        sourceText: `[transcript:${source.seq}] ${item.text}`,
+        sessionEntryIds: item.sources.map((source) => source.entryId),
         observedAt: classified.observedAt,
-      })),
-      originClass,
-      sessionKind,
-      observedAt: classified.observedAt,
-      sourceSessionId: input.sessionKey,
-      supersedesKey: item.id,
-      derivedFromRecalledContext: classified.derivedFromRecalledContext,
+        handoverKind: item.kind,
+      },
     });
-    result.episodicRecordIds.push(episodeId);
+    result.episodicRecordIds.push(episode.item.id);
 
-    const durableId = stableId('compaction-durable', input.workspaceId, input.projectId ?? '', item.kind, item.text);
     const promotable = active
       && input.audit.status === 'passed'
       && sessionKind === 'interactive'
@@ -231,50 +214,39 @@ export function promoteCompactionLedger(
       && !classified.derivedFromRecalledContext
       && DURABLE_KINDS.has(item.kind);
     if (!promotable) {
-      const existingDurable = !active ? getMemoryRecord(durableId) : null;
-      if (existingDurable?.provenance.sourceSessionId === input.sessionKey) {
-        setMemoryRecordStatus(durableId, 'archived');
+      const existingDurable = !active
+        ? listKnowledgeItems({ limit: 2_000 }).find((entry) => entry.canonicalKey === `durable:${item.kind}:${stableId('fact', item.text)}`)
+        : undefined;
+      if (existingDurable?.sourceSessionId === input.sessionKey) {
+        setKnowledgeStatus(existingDurable.id, 'archived');
       }
-      result.rejectedRecordIds.push(episodeId);
+      result.rejectedRecordIds.push(episode.item.id);
       continue;
     }
 
-    upsertMemoryRecord({
-      id: durableId,
-      providerId: 'compaction-ledger',
-      kind: MEMORY_KIND_BY_HANDOVER_KIND[item.kind],
+    const durable = writeKnowledgeItem({
+      kind: KNOWLEDGE_KIND_BY_HANDOVER_KIND[item.kind],
+      scope: input.projectId
+        ? { type: 'project', id: input.projectId }
+        : { type: 'workspace', id: input.workspaceId },
       sourceAgentId: input.sourceAgentId,
-      workspaceId: input.workspaceId,
-      projectId: input.projectId,
       content: item.text,
       canonicalKey: `durable:${item.kind}:${stableId('fact', item.text)}`,
-      source: { provider: 'compaction-ledger', sessionEntryId: item.sources[0]?.entryId },
       confidence: 0.82,
-      tags: ['compaction', 'durable', item.kind],
       status: 'active',
-      sensitivity: 'normal',
-      explicitness: 'inferred',
-      durability: 'durable',
       importance: importanceFor(item),
-      disclosurePolicy: 'referenceable',
-      evidence: [{
-        sessionKey: input.sessionKey,
-        turnId: item.sources[0]
-          ? rowTurnId(sourceById.get(item.sources[0].entryId))
-          : undefined,
-        relation: 'derived_from',
-        sourceText: item.text,
-        observedAt: classified.observedAt,
-      }],
-      supersedesRecordId: episodeId,
       originClass: 'agent',
-      sessionKind,
-      observedAt: classified.observedAt,
       sourceSessionId: input.sessionKey,
-      supersedesKey: item.id,
+      sourceTurnId: item.sources[0] ? rowTurnId(sourceById.get(item.sources[0].entryId)) : undefined,
       derivedFromRecalledContext: false,
+      source: {
+        provider: 'compaction-ledger',
+        episodeKnowledgeId: episode.item.id,
+        sessionEntryIds: item.sources.map((source) => source.entryId),
+        observedAt: classified.observedAt,
+      },
     });
-    result.durableRecordIds.push(durableId);
+    result.durableRecordIds.push(durable.item.id);
   }
 
   return result;

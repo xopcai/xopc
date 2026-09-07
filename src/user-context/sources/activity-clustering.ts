@@ -1,10 +1,15 @@
-import type { UnderstandingSourceItem, UserFocus } from './types.js';
+import type { UnderstandingSourceItem } from './types.js';
 import { clusterUnderstandingSignals, type UnderstandingSignal } from './signal-clustering.js';
 
-export type ActivityTopic = Pick<UserFocus,
-  'canonicalKey' | 'title' | 'summary' | 'horizon' | 'confidence' | 'evidenceRefs'> & {
-    sourceIds: string[];
-  };
+export interface ActivityTopic {
+  canonicalKey: string;
+  title: string;
+  summary: string;
+  horizon: 'current' | 'ongoing' | 'long_term';
+  confidence: number;
+  evidenceRefs: string[];
+  sourceIds: string[];
+}
 
 function activityTimestamp(item: UnderstandingSourceItem): number {
   return item.modifiedAt ?? item.occurredAt ?? item.startsAt ?? 0;

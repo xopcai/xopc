@@ -8,42 +8,43 @@ import type { Config } from '../../config/schema.js';
 import { getApiKeySync, resolveModel } from '../../providers/index.js';
 import {
   finishContextExtractionRun,
-  getTurnPersonalization,
+  getSessionMetadata,
   loadCompactionSourceSnapshot,
 } from '../../storage/sqlite/index.js';
 import { claimRegisteredExtraction, type ExtractorId } from '../../user-context/extraction/registry.js';
-import { emptyUnderstandingReview, executeUnderstandingInterpretation } from '../../user-context/extraction/executor.js';
 import {
-  parseSemanticUnderstanding,
-  type SemanticEvidence,
-  type SemanticUnderstandingInterpretation,
-} from '../../user-context/extraction/semantic.js';
+  emptyUserModelCaptureResult,
+  executeUserModelInterpretation,
+  parseUserModelInterpretation,
+  type CaptureEvidence,
+  type UserModelCaptureResult,
+  type UserModelInterpretation,
+} from '../../user-model/capture/index.js';
+import { listUserAssertions } from '../../user-model/repository.js';
 import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { extractTextContent } from '../context/workspace.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
-import type { MemoryManager } from '../memory/manager.js';
-import type { UnderstandingReviewResult } from '../memory/understanding/types.js';
 import { runAgentTurnWithTimeout, resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { isAssistantTurnAborted, isAssistantTurnFailed } from '../orchestration/llm-turn-retry.js';
 
 import type { BackgroundReviewSettings } from './settings.js';
-import { buildUnderstandingInterpreterPrompt, UNDERSTANDING_INTERPRETER_SYSTEM_PROMPT } from './prompts.js';
+import { buildUserModelInterpreterPrompt, USER_MODEL_INTERPRETER_SYSTEM_PROMPT } from './prompts.js';
 
-const log = createLogger('UnderstandingInterpreter');
+const log = createLogger('UserModelInterpreter');
 
-type EvidenceMessage = SemanticEvidence & { createdAt: number; message: AgentMessage };
+type EvidenceMessage = CaptureEvidence & { message: AgentMessage };
 
-export interface RunBackgroundReviewParams {
+export interface RunUserModelReviewParams {
   sessionKey: string;
   mainAgent: Agent;
   settings: BackgroundReviewSettings;
-  memoryManager: MemoryManager;
+  workspaceId: string;
   getConfig: () => Config | undefined;
 }
 
-export interface RunTurnUnderstandingParams extends Omit<RunBackgroundReviewParams, 'settings'> {
+export interface RunTurnUserModelCaptureParams extends Omit<RunUserModelReviewParams, 'settings'> {
   turnId: string;
   userText: string;
   maxHistoryMessages?: number;
@@ -112,13 +113,13 @@ function isLocalModel(model: Model<Api>): boolean {
   }
 }
 
-function resolveInterpreterRuntime(params: Pick<RunBackgroundReviewParams, 'sessionKey' | 'mainAgent' | 'getConfig'>): {
+function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'sessionKey' | 'mainAgent' | 'getConfig'>): {
   model: Model<Api>;
   processingPolicy: 'local_only' | 'remote_allowed';
   destination: 'local_model' | 'remote_model';
 } | null {
   const config = params.getConfig();
-  const processingPolicy = config?.userContext.understanding.processingPolicy ?? 'remote_allowed';
+  const processingPolicy = config?.userContext.userModel.processingPolicy ?? 'remote_allowed';
   let model: Model<Api> | undefined;
   if (config) {
     const agentId = extractProfileAgentId(params.sessionKey, config);
@@ -152,10 +153,10 @@ async function interpret(params: {
   availableTargets: Array<{ id: string; statement: string }>;
   timeoutMs: number;
   model: Model<Api>;
-}): Promise<SemanticUnderstandingInterpretation | null> {
+}): Promise<UserModelInterpretation | null> {
   const reviewAgent = new Agent({
     initialState: {
-      systemPrompt: UNDERSTANDING_INTERPRETER_SYSTEM_PROMPT,
+      systemPrompt: USER_MODEL_INTERPRETER_SYSTEM_PROMPT,
       model: params.model,
       thinkingLevel: 'off' as ThinkingLevel,
       tools: [],
@@ -167,9 +168,17 @@ async function interpret(params: {
   reviewAgent.state.messages = params.evidence.map(tagMessage);
   try {
     await runAgentTurnWithTimeout(reviewAgent, async () => {
+      const timezone = params.getConfig()?.userContext.userModel.maintenance.timezone
+        ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+        ?? 'UTC';
       await reviewAgent.prompt({
         role: 'user',
-        content: buildUnderstandingInterpreterPrompt({ mode: params.mode, availableTargets: params.availableTargets }),
+        content: buildUserModelInterpreterPrompt({
+          mode: params.mode,
+          availableTargets: params.availableTargets,
+          evidenceTimestamp: new Date(params.evidence.at(-1)?.createdAt ?? Date.now()).toISOString(),
+          timezone,
+        }),
         timestamp: Date.now(),
       });
       await reviewAgent.waitForIdle();
@@ -181,7 +190,7 @@ async function interpret(params: {
     return null;
   }
   if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return null;
-  return parseSemanticUnderstanding(
+  return parseUserModelInterpretation(
     lastAssistantText(reviewAgent),
     params.evidence,
     params.availableTargets.map((item) => item.id),
@@ -191,7 +200,7 @@ async function interpret(params: {
 async function executeReview(params: {
   sessionKey: string;
   mainAgent: Agent;
-  memoryManager: MemoryManager;
+  workspaceId: string;
   getConfig: () => Config | undefined;
   evidence: EvidenceMessage[];
   mode: 'turn' | 'transcript';
@@ -201,9 +210,9 @@ async function executeReview(params: {
   availableTargets: Array<{ id: string; statement: string }>;
   timeoutMs: number;
   turnId?: string;
-}): Promise<UnderstandingReviewResult> {
+}): Promise<UserModelCaptureResult> {
   const runtime = resolveInterpreterRuntime(params);
-  if (!runtime) return emptyUnderstandingReview();
+  if (!runtime) return emptyUserModelCaptureResult();
   const extraction = claimRegisteredExtraction({
     extractorId: params.extractorId,
     sourceRef: params.sourceRef,
@@ -211,33 +220,43 @@ async function executeReview(params: {
     processingPolicy: runtime.processingPolicy,
     destination: runtime.destination,
   });
-  if (!extraction.shouldExecute) return emptyUnderstandingReview();
+  if (!extraction.shouldExecute) return emptyUserModelCaptureResult();
   const interpretation = await interpret({ ...params, model: runtime.model });
   if (!interpretation) {
     finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_or_schema_failed' });
-    return emptyUnderstandingReview();
+    return emptyUserModelCaptureResult();
   }
   try {
-    const result = await executeUnderstandingInterpretation({
+    const config = params.getConfig();
+    const agentId = config ? extractProfileAgentId(params.sessionKey, config) : 'main';
+    const write = config?.userContext.userModel.writePolicy ?? 'deny';
+    const result = executeUserModelInterpretation({
       interpretation,
       evidence: params.evidence,
       extractionRunId: extraction.run.id,
       extractorId: params.extractorId,
-      sessionKey: params.sessionKey,
+      scopeContext: {
+        sessionId: params.sessionKey,
+        agentId,
+        workspaceId: params.workspaceId,
+        ...(getSessionMetadata(params.sessionKey)?.projectId
+          ? { projectId: getSessionMetadata(params.sessionKey)!.projectId }
+          : {}),
+      },
+      policy: {
+        write,
+        sensitiveWrite: config?.userContext.userModel.sensitiveWritePolicy ?? 'confirm',
+        processing: runtime.processingPolicy,
+      },
       ...(params.turnId ? { turnId: params.turnId } : {}),
-      memoryManager: params.memoryManager,
-      getConfig: params.getConfig,
-      reviewSource: params.mode === 'turn' ? 'turn' : 'background',
-      processingPolicy: runtime.processingPolicy,
     });
     finishContextExtractionRun({
       runId: extraction.run.id,
       status: 'completed',
-      outputs: result.writeOutputs?.map((output) => ({
+      outputs: result.outputs.map((output) => ({
         candidateKey: output.candidateKey,
-        ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
-        ...(output.versionId ? { versionId: output.versionId } : {}),
-        outcome: output.outcome,
+        outcome: output.outcome === 'deduplicated' ? 'deduplicated' as const
+          : output.outcome === 'rejected' ? 'rejected' as const : 'created' as const,
       })),
     });
     return result;
@@ -247,18 +266,17 @@ async function executeReview(params: {
   }
 }
 
-export async function runTurnUnderstandingReview(params: RunTurnUnderstandingParams): Promise<UnderstandingReviewResult> {
+export async function runTurnUserModelCapture(params: RunTurnUserModelCaptureParams): Promise<UserModelCaptureResult> {
   const evidence = loadEvidenceMessages(params.sessionKey, params.maxHistoryMessages ?? 12);
-  if (!evidence.length) return emptyUnderstandingReview();
-  const personalization = getTurnPersonalization(params.turnId);
-  const availableTargets = personalization?.items.flatMap((item) => {
-    if (item.objectType !== 'understanding' || item.decision !== 'selected') return [];
-    return [{ id: item.objectId, statement: item.content }];
-  }) ?? [];
+  if (!evidence.length) return emptyUserModelCaptureResult();
+  const availableTargets = listUserAssertions({ limit: 200 }).map((item) => ({
+    id: item.id,
+    statement: item.statement,
+  }));
   return executeReview({
     sessionKey: params.sessionKey,
     mainAgent: params.mainAgent,
-    memoryManager: params.memoryManager,
+    workspaceId: params.workspaceId,
     getConfig: params.getConfig,
     evidence,
     mode: 'turn',
@@ -271,7 +289,7 @@ export async function runTurnUnderstandingReview(params: RunTurnUnderstandingPar
   });
 }
 
-export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams): Promise<void> {
+export async function runBackgroundUserModelReview(params: RunUserModelReviewParams): Promise<void> {
   const evidence = loadEvidenceMessages(params.sessionKey, params.settings.maxHistoryMessages);
   if (!evidence.length) return;
   const first = evidence[0]!;
@@ -279,7 +297,7 @@ export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams)
   await executeReview({
     sessionKey: params.sessionKey,
     mainAgent: params.mainAgent,
-    memoryManager: params.memoryManager,
+    workspaceId: params.workspaceId,
     getConfig: params.getConfig,
     evidence,
     mode: 'transcript',

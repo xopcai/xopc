@@ -107,7 +107,7 @@ describe('buildSafeWebConfigPayload', () => {
     });
     expect(payload.gateway.skillsMarketplaceProvider).toBe('store');
     expect(payload.gateway.skillsStoreBaseUrl).toBe('https://store.xopc.ai');
-    expect(payload.userContext.memory.retention.compaction).toMatchObject({
+    expect(payload.userContext.contextPlanning.compaction).toMatchObject({
       enabled: true,
       triggerThreshold: 0.8,
       reserveTokens: 8_192,
@@ -121,11 +121,8 @@ describe('buildSafeWebConfigPayload', () => {
         agents: { default: 'main', list: [] },
         channels: {},
         userContext: {
-          memory: {
-            mode: 'readOnly',
-            sources: ['session'],
-            retention: {
-              compaction: {
+          contextPlanning: {
+            compaction: {
                 enabled: false,
                 triggerThreshold: 0.7,
                 reserveTokens: 12_000,
@@ -141,14 +138,13 @@ describe('buildSafeWebConfigPayload', () => {
                 minToolResultKeepChars: 800,
                 maxActiveTranscriptBytes: 3_000_000,
                 postCompactionSections: ['Red Lines'],
-              },
             },
           },
         },
       },
     } as never);
 
-    expect(payload.userContext.memory.retention.compaction).toEqual({
+    expect(payload.userContext.contextPlanning.compaction).toEqual({
       enabled: false,
       triggerThreshold: 0.7,
       reserveTokens: 12_000,

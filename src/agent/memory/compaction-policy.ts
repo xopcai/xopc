@@ -21,7 +21,7 @@ const POLICY_DEFAULTS: ResolvedCompactionPolicy = {
 };
 
 export function resolveCompactionPolicy(config?: Config): ResolvedCompactionPolicy {
-  const configured = config?.userContext.memory.retention?.compaction;
+  const configured = config?.userContext.contextPlanning.compaction;
   if (!configured) return { ...POLICY_DEFAULTS, postCompactionSections: [...POLICY_DEFAULTS.postCompactionSections] };
   return {
     ...POLICY_DEFAULTS,

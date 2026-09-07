@@ -312,11 +312,13 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'you',
-    match: (path) => startsWithAny(path, ['/api/you']),
+    id: 'user-model',
+    match: (path) => startsWithAny(path, [
+      '/api/user-model', '/api/knowledge-memory', '/api/memory-maintenance', '/api/turns',
+    ]),
     load: async () => {
-      const { registerYouRoutes } = await import('./you.js');
-      return { register: registerYouRoutes };
+      const { registerUserModelRoutes } = await import('./user-model.js');
+      return { register: registerUserModelRoutes };
     },
   },
   {

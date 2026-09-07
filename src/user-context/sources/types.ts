@@ -1,5 +1,3 @@
-import type { UserContextScope, UserUnderstanding } from '../domain.js';
-
 export type UnderstandingSourcePlatform = 'darwin' | 'win32' | 'linux' | 'all';
 
 export type UnderstandingSourceCategory =
@@ -86,27 +84,4 @@ export interface UnderstandingSourceRun {
   errorMessage?: string;
   startedAt: number;
   completedAt?: number;
-}
-
-export interface UserFocus {
-  id: string;
-  versionId: string;
-  principalId: string;
-  canonicalKey: string;
-  title: string;
-  summary: string;
-  horizon: 'current' | 'ongoing' | 'long_term';
-  status: 'candidate' | 'active' | 'paused' | 'completed' | 'rejected';
-  confidence: number;
-  scope: UserContextScope;
-  explicitness: UserUnderstanding['explicitness'];
-  sensitivity: UserUnderstanding['sensitivity'];
-  disclosurePolicy: UserUnderstanding['disclosurePolicy'];
-  validFrom?: number;
-  validTo?: number;
-  reviewAt?: number;
-  evidenceRefs: string[];
-  sourceRunId?: string;
-  createdAt: number;
-  updatedAt: number;
 }

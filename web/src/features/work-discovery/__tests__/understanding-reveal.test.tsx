@@ -48,13 +48,11 @@ describe('UnderstandingReveal', () => {
         <UnderstandingReveal
           run={run}
           sourceMemories={[]}
-          focuses={[]}
           activityRunning={false}
           language="en"
           busy={false}
           error={null}
           onReviewMemory={async () => true}
-          onReviewFocus={async () => true}
           onFinish={onFinish}
           onStartConversation={onStartConversation}
         />,
@@ -91,13 +89,11 @@ describe('UnderstandingReveal', () => {
         <UnderstandingReveal
           run={{ ...run, result: { ...run.result!, lowConfidence: true, conversationStarter: 'Explain the current work.' } }}
           sourceMemories={[]}
-          focuses={[]}
           activityRunning={false}
           language="en"
           busy={false}
           error={null}
           onReviewMemory={async () => true}
-          onReviewFocus={async () => true}
           onFinish={async () => true}
           onStartConversation={onStartConversation}
         />,

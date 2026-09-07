@@ -55,8 +55,8 @@ export interface GatewayConfigCoordinatorOptions {
   getExtensionLoader: () => ExtensionLoader | null;
   /** Re-evaluate browser-extension server attachment after agent defaults change. */
   reconcileBrowserExtensionServer: () => Promise<void>;
-  /** Sync the built-in consolidation automation after userContext.dreaming changes. */
-  reconcileDreamingAutomations: () => Promise<void>;
+  /** Sync deterministic user-model maintenance automations after config changes. */
+  reconcileMemoryMaintenanceAutomations: () => Promise<void>;
   /** Latest channel status snapshot for the `channels.status` event. */
   getChannelsStatus: () => unknown;
   /** Realtime emit used for `config.reload` and `channels.status`. */
@@ -268,9 +268,9 @@ export class GatewayConfigCoordinator {
     this.opts.setConfig(newConfig);
     this.opts.getAgentService().applyAgentDefaultsFromConfig(newConfig);
     void this.opts.reconcileBrowserExtensionServer();
-    void this.opts.reconcileDreamingAutomations().catch((err) => {
+    void this.opts.reconcileMemoryMaintenanceAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Dreaming automation refresh failed: ${em}`);
+      log.warn({ err, errorMessage: em }, `Memory maintenance automation refresh failed: ${em}`);
     });
     this.opts.emit('config.reload', { section: 'agents' });
     log.debug('Agent defaults reloaded');
@@ -419,10 +419,9 @@ export class GatewayConfigCoordinator {
     }
     this.opts.getAgentService().applyAgentDefaultsFromConfig(reloaded);
     await this.opts.reconcileBrowserExtensionServer();
-    // Keep the built-in consolidation automation aligned with userContext.dreaming.
-    await this.opts.reconcileDreamingAutomations().catch((err) => {
+    await this.opts.reconcileMemoryMaintenanceAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Dreaming automation refresh after save failed: ${em}`);
+      log.warn({ err, errorMessage: em }, `Memory maintenance automation refresh after save failed: ${em}`);
     });
     // Align watcher baseline before channel hooks run so fs `change` does not
     // re-apply the same diff concurrently.
