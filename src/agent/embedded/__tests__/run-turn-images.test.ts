@@ -3,6 +3,8 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 const mocks = vi.hoisted(() => ({
   connectionSuspended: vi.fn(),
+  connectionResume: vi.fn(),
+  customMessage: vi.fn(),
   prompt: vi.fn(),
   waitForIdle: vi.fn(),
   baseStreamFn: vi.fn(),
@@ -18,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({
   isConnectionSuspended: (...args: unknown[]) => mocks.connectionSuspended(...args),
-  getConnectionResumeInput: () => undefined,
+  getConnectionResumeInput: (...args: unknown[]) => mocks.connectionResume(...args),
 }));
 
 vi.mock('../../../utils/logger.js', () => ({
@@ -34,6 +36,7 @@ vi.mock('../session-runner.js', () => ({
   acquireEmbeddedSessionRunner: vi.fn().mockImplementation(async () => {
     const session = {
       prompt: mocks.prompt,
+      sendCustomMessage: mocks.customMessage,
       agent: {
         streamFunction: mocks.baseStreamFn,
         waitForIdle: mocks.waitForIdle,
@@ -105,6 +108,7 @@ describe('runXopcEmbeddedTurn image input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.connectionSuspended.mockReturnValue(false);
+    mocks.connectionResume.mockReturnValue(undefined);
     mocks.leaseController = new AbortController();
     mocks.acquireRunLease.mockReturnValue({
       signal: mocks.leaseController.signal,
@@ -126,6 +130,22 @@ describe('runXopcEmbeddedTurn image input', () => {
 
   afterEach(() => {
     delete process.env.XOPC_LOG_LLM_PAYLOAD;
+  });
+
+  it('resumes with hidden model context without appending a user prompt', async () => {
+    mocks.connectionResume.mockReturnValue({ content: 'Resume the original Gmail request.' });
+    const result = await runXopcEmbeddedTurn({
+      sessionKey: 'agent:main:test', runId: 'run-resume',
+      userMessage: { role: 'user', content: 'Resume the original Gmail request.', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any,
+      modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    expect(result.ok).toBe(true);
+    expect(mocks.prompt).not.toHaveBeenCalled();
+    expect(mocks.customMessage).toHaveBeenCalledWith({
+      customType: 'connection_resume', content: 'Resume the original Gmail request.', display: false,
+    }, { triggerTurn: true });
   });
 
   it('passes hydrated params.images to session.prompt (not inline content blocks)', async () => {

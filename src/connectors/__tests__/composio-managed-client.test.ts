@@ -11,7 +11,7 @@ describe('ManagedComposioClient', () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer cloud-token');
-      if (url.endsWith('/connectors/composio/toolkits/gmail/tools')) {
+      if (url.endsWith('/connectors/composio/toolkits/gmail/tools?query=latest%20mail')) {
         return json({ result: { toolSchemas: { send: { toolSlug: 'GMAIL_SEND_EMAIL' } } } });
       }
       if (url.endsWith('/connectors/composio/execute')) {
@@ -33,16 +33,16 @@ describe('ManagedComposioClient', () => {
       toolkits: { enable: ['gmail'] },
       connectedAccounts: { gmail: ['account_1'] },
     });
-    await expect(session.search({ query: 'ignored' })).resolves.toMatchObject({ toolSchemas: {} });
+    await expect(session.search({ query: 'latest mail' })).resolves.toMatchObject({ toolSchemas: { send: { toolSlug: 'GMAIL_SEND_EMAIL' } } });
     await expect(session.execute('GMAIL_SEND_EMAIL', { to: 'a@example.test' })).resolves.toEqual({ successful: true });
   });
 
   it('aggregates Gmail and Slack tool catalogs in a managed search session', async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
-      if (String(input).endsWith('/gmail/tools')) {
+      if (String(input).endsWith('/gmail/tools?query=messages')) {
         return json({ result: { toolSchemas: { GMAIL_FETCH_EMAILS: { description: 'Fetch email' } } } });
       }
-      if (String(input).endsWith('/slack/tools')) {
+      if (String(input).endsWith('/slack/tools?query=messages')) {
         return json({ result: { toolSchemas: { SLACK_SEARCH_MESSAGES: { description: 'Search messages' } } } });
       }
       throw new Error(`Unexpected request: ${String(input)}`);
@@ -63,7 +63,7 @@ describe('ManagedComposioClient', () => {
 
   it('preserves managed HTTP errors when one catalog request fails', async () => {
     const client = new ManagedComposioClient({
-      fetchImpl: vi.fn(async (input: string | URL | Request) => String(input).endsWith('/slack/tools')
+      fetchImpl: vi.fn(async (input: string | URL | Request) => String(input).endsWith('/slack/tools?query=messages')
         ? json({ error: { message: 'Slack unavailable', code: 'toolkit_unavailable' } }, 503)
         : json({ result: { toolSchemas: {} } })) as typeof fetch,
       routerUrl: 'https://router.test/v1',

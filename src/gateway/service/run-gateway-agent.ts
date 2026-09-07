@@ -1,4 +1,4 @@
-import { isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
+import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import crypto from 'crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -116,11 +116,13 @@ export async function *runGatewayAgent(
     if (!webchatMetadata) throw new Error('Session metadata is unavailable');
     const parsedSession = parseSessionKey(webchatSessionKey);
     if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
-    updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
-    recordExplicitRelationshipFollowUp({
-      sessionKey: webchatSessionKey,
-      message,
-    });
+    if (!getConnectionResumeInput(webchatSessionKey, runId)) {
+      updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
+      recordExplicitRelationshipFollowUp({
+        sessionKey: webchatSessionKey,
+        message,
+      });
+    }
     const executionContext = resolveExecutionContext({
       runId,
       sessionKey: webchatSessionKey,

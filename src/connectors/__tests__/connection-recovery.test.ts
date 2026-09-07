@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { createExternalToolGatewayTools } from '../../agent/external-tools/gateway-tools.js';
 import { ComposioToolProvider } from '../../agent/external-tools/composio-provider.js';
 import { ConfigSchema, type Config } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
@@ -26,6 +27,7 @@ describe('durable connection recovery', () => {
   let recovery: ConnectionRecoveryService;
   const authorize = vi.fn();
   const syncConnections = vi.fn();
+  const searchCapabilities = vi.fn();
   const drain = vi.fn();
   beforeEach(() => {
     vi.resetAllMocks();
@@ -45,8 +47,9 @@ describe('durable connection recovery', () => {
     claimNextSessionInput(sessionKey, 'run-original');
     syncConnections.mockImplementation(async () => listConnectorConnections({ principalId: 'local-owner' }));
     authorize.mockResolvedValue({ toolkit: 'gmail', connectionId: 'provider-1', connectUrl: 'https://example.test/oauth', status: 'INITIATED' });
+    searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_FETCH_EMAILS: { inputSchema: { type: 'object' } } } });
     recovery = new ConnectionRecoveryService({ getConfig: () => config, saveConfig: vi.fn(async () => ({ saved: true })), drain,
-      adapter: { authorize, syncConnections } as unknown as ComposioSessionsAdapter });
+      adapter: { authorize, syncConnections, createSession: async () => ({ search: searchCapabilities }) } as unknown as ComposioSessionsAdapter });
   });
   afterEach(() => { vi.unstubAllEnvs(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true }); });
 
@@ -62,6 +65,39 @@ describe('durable connection recovery', () => {
     const wait = getActiveConnectionWait(sessionKey)!;
     return { action, waitId: wait.id, expectedSessionId: wait.sessionId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID(), ...extra };
   }
+
+  it('does not advertise schema-less Slack tools and preserves usable contracts across searches', async () => {
+    upsertConnectorInstallation({ id: 'composio-slack-local-owner', connectorId: 'composio-slack', principalId: 'local-owner',
+      enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+    const search = vi.fn().mockResolvedValue({ toolSchemas: {
+      SLACK_SEARCH_ALL: { description: 'Search messages' },
+      SLACK_TEST_AUTH: { inputSchema: { type: 'object', properties: {} } },
+    } });
+    const provider = new ComposioToolProvider({ getConfig: () => config, getCurrentContext: () => ({ sessionKey, channel: 'webchat', chatId: sessionKey }),
+      adapter: { createSession: async () => ({ search }) } as unknown as ComposioSessionsAdapter });
+    expect((await provider.search('slack')).map(hit => hit.title)).toEqual(['SLACK_TEST_AUTH']);
+    const ref = 'composio:composio-slack-local-owner:SLACK_TEST_AUTH';
+    expect(await provider.describe(ref)).toBeTruthy();
+    search.mockResolvedValue({ toolSchemas: { SLACK_TEST_AUTH: {} } });
+    expect(await provider.search('slack')).toEqual([]);
+    expect(await provider.describe(ref)).toBeTruthy();
+  });
+
+  it('does not request OAuth again for the selected account during a continuation', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(sessionKey, action('continue'));
+    finishSessionInputRun(sessionKey, 'run-original', 'suspended');
+    const input = claimNextSessionInput(sessionKey, 'run-resume')!;
+    expect(consumeConnectionResume(input)).toBe(true);
+    const tool = createExternalToolGatewayTools([], () => ({ sessionKey, channel: 'webchat', chatId: sessionKey }))
+      .find(tool => tool.name === 'xopc_require_connection')!;
+    const result = await tool.execute('request-again', {
+      requirements: [{ candidateRef: 'composio-gmail' }], purpose: 'Missing email tools',
+      checkpoint: { completedSteps: [], pendingSteps: ['Read mail'] },
+    });
+    expect(JSON.stringify(result)).toContain('already_connected');
+    expect(getActiveConnectionWait(sessionKey)).toBeUndefined();
+  });
 
   it('merges repeated requirements into one wait without storing authorization URLs', () => {
     const first = requireWait();
@@ -102,6 +138,42 @@ describe('durable connection recovery', () => {
     expect(consumeConnectionResume(input)).toBe(false);
     expect(getActiveConnectionWait(sessionKey)).toBeUndefined();
   });
+  it('keeps an authorized account connected when the required tool contracts are missing', async () => {
+    requireWait(); activeConnection();
+    searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_GET_PROFILE: { inputSchema: { type: 'object' } }, GMAIL_FETCH_EMAILS: {} } });
+    const response = await recovery.act(sessionKey, action('continue'));
+    expect(response.snapshot.wait?.needs[0]).toMatchObject({ phase: 'blocked', unavailable: false, capabilityError: expect.stringContaining('required tools are unavailable') });
+    expect(getActiveConnectionWait(sessionKey)?.intent).toBeUndefined();
+    expect(drain).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    await recovery.poll();
+    expect(searchCapabilities).toHaveBeenCalledTimes(1);
+    searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_FETCH_EMAILS: { inputSchema: { type: 'object' } } } });
+    expect((await recovery.act(sessionKey, action('check'))).snapshot.wait?.phase).toBe('ready');
+    expect(drain).not.toHaveBeenCalled();
+    expect((await recovery.act(sessionKey, action('continue'))).snapshot.wait?.phase).toBe('queued');
+  });
+
+  it('preserves authorization on a tool-check network error', async () => {
+    requireWait(); activeConnection();
+    searchCapabilities.mockRejectedValue(new Error('network unavailable'));
+    const response = await recovery.act(sessionKey, action('continue'));
+    expect(response.snapshot.wait?.needs[0]).toMatchObject({ phase: 'blocked', unavailable: false, capabilityError: expect.stringContaining('could not be checked') });
+    expect(authorize).not.toHaveBeenCalled();
+    expect(drain).not.toHaveBeenCalled();
+  });
+
+  it('rechecks capability availability before consuming a queued continuation', async () => {
+    requireWait(); activeConnection();
+    await recovery.act(sessionKey, action('continue'));
+    finishSessionInputRun(sessionKey, 'run-original', 'suspended');
+    const input = claimNextSessionInput(sessionKey, 'run-resume')!;
+    searchCapabilities.mockResolvedValue({ toolSchemas: {} });
+    expect(await recovery.preflight(input)).toBe(false);
+    expect(getActiveConnectionWait(sessionKey)?.needs[0]?.capabilityError).toBeTruthy();
+    expect(getActiveConnectionWait(sessionKey)?.status).toBe('open');
+  });
+
   it('does not auto-resume when the account was connected in settings', async () => {
     requireWait(); activeConnection();
     await recovery.act(sessionKey, action('check'));
