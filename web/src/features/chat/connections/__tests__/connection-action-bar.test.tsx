@@ -50,6 +50,18 @@ describe('single connection action area', () => {
     await act(async () => confirm.click());
     expect(mocked.state.act).toHaveBeenCalledWith('confirm_scope');
   });
+  it('shows a tool retry instead of authorization when a connected app lacks its capability', async () => {
+    mocked.state.wait!.needs[0] = { ...mocked.state.wait!.needs[0], phase: 'blocked', connectionId: 'account',
+      capabilityError: 'Required message tools unavailable', reason: 'Required message tools unavailable', accounts: [{ id: 'account', label: 'User' }] };
+    await render();
+    expect(container.textContent).toContain('App tools unavailable');
+    await click('Details');
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('without reconnecting');
+    expect([...dialog.querySelectorAll('button')].some(button => button.textContent === 'Connect and continue')).toBe(false);
+    await click('Retry check');
+    expect(mocked.state.act).toHaveBeenCalledExactlyOnceWith('check');
+  });
   it('groups multiple apps behind one action area and keeps closing the dialog separate from cancellation', async () => {
     mocked.state.wait!.needs.push({ key: 'calendar', connectorId: 'composio-googlecalendar', label: 'Google Calendar', capabilities: ['calendar.read'], phase: 'connect', accounts: [] });
     await render(); await click('Details');

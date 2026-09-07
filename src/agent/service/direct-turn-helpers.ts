@@ -8,6 +8,8 @@
 
 import crypto from 'node:crypto';
 
+import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
+
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { AgentSourceContext } from '../source-context/types.js';
@@ -163,6 +165,7 @@ export async function runDirectAgentTurn(
   input: RunDirectAgentTurnInput,
 ): Promise<RunDirectAgentTurnResult> {
   const turnId = input.runId ?? crypto.randomUUID();
+  const isConnectionResume = Boolean(getConnectionResumeInput(input.sessionKey, turnId));
   const userPlain = extractAgentUserPlainText(input.userMessage);
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
@@ -201,13 +204,14 @@ export async function runDirectAgentTurn(
     getConfig: () => deps.config,
     abortSignal: input.abortSignal,
     deadlineAtMs: input.deadlineAtMs,
-    beforeTurn: () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
+    beforeTurn: isConnectionResume ? undefined : () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
     onEvent: input.onEvent,
   });
 
-  const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain, turnId);
-  void understandingReview;
-  if (result.stopReason !== 'connection_required') deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
+  if (!isConnectionResume) {
+    await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain, turnId);
+  }
+  if (!isConnectionResume && result.stopReason !== 'connection_required') deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
   return result;
 }
