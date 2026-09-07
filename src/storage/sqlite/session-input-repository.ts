@@ -1,4 +1,4 @@
-import { readCurrentSessionId } from './session-repository.js';
+import { readCurrentSessionId } from './session-instance-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
