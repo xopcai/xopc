@@ -3,7 +3,7 @@ import type { MessageContent, TextContent } from './messages.types';
 const NARRATION_MAX_LENGTH = 160;
 
 export function isAssistantNarration(block: TextContent): boolean {
-  return block.presentation === 'pending' || block.presentation === 'narration';
+  return block.presentation === 'narration';
 }
 
 /** Keep transient narration useful without letting it become a second answer. */
@@ -45,6 +45,7 @@ export function getAssistantFinalResultText(content: MessageContent[]): string {
     (block, index): block is TextContent =>
       index > lastActivityIndex
       && block.type === 'text'
+      && block.presentation !== 'pending'
       && !isAssistantNarration(block),
   );
   if (candidates.length > 0) {
@@ -53,7 +54,8 @@ export function getAssistantFinalResultText(content: MessageContent[]): string {
 
   if (lastActivityIndex >= 0) return '';
   return content
-    .filter((block): block is TextContent => block.type === 'text' && !isAssistantNarration(block))
+    .filter((block): block is TextContent => block.type === 'text' && block.presentation !== 'pending'
+      && !isAssistantNarration(block))
     .map((block) => block.text)
     .join('\n')
     .trim();

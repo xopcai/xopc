@@ -49,6 +49,20 @@ describe('buildAssistantTurnViewModel', () => {
     expect(normal.activity.expandedByDefault).toBe(false);
   });
 
+  it('shows the streaming answer and closes automatic reasoning expansion before classification', () => {
+    const view = buildAssistantTurnViewModel({
+      message: { role: 'assistant', content: [
+        { type: 'thinking', text: 'working', streaming: false },
+        { type: 'text', text: '第一句。第二句', presentation: 'pending' },
+      ] },
+      isStreaming: true,
+      reasoningLevel: 'stream',
+    });
+    expect(view.answerStarted).toBe(true);
+    expect(view.activity.expandedByDefault).toBe(false);
+    expect(view.showStreamingCursor).toBe(true);
+  });
+
   it('includes turn outcome artifacts in the assistant deliverables projection', () => {
     const view = buildAssistantTurnViewModel({
       message: {

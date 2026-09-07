@@ -574,8 +574,13 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
 // ── Merge helpers ──────────────────────────────────────────
 
 /** Merge two assistant content arrays: dedupe tool_use by id, dedupe adjacent identical thinking. */
-function mergeAssistantContentFragments(left: MessageContent[], right: MessageContent[]): MessageContent[] {
+function mergeAssistantContentFragments(
+  left: MessageContent[],
+  right: MessageContent[],
+  reconcileLiveText = false,
+): MessageContent[] {
   const out: MessageContent[] = left.map((b) => ({ ...b }));
+  const matchedText = new Set<number>();
   const toolIndexById = new Map<string, number>();
   const textIndexBySegmentId = new Map<string, number>();
   for (let i = 0; i < out.length; i++) {
@@ -592,8 +597,25 @@ function mergeAssistantContentFragments(left: MessageContent[], right: MessageCo
     }
     if (b.type === 'text' && b.segmentId && textIndexBySegmentId.has(b.segmentId)) {
       const idx = textIndexBySegmentId.get(b.segmentId)!;
+      matchedText.add(idx);
       out[idx] = { ...b }; // streaming/history overlap for the same model segment
       continue;
+    }
+    if (reconcileLiveText && b.type === 'text' && b.text.trim()) {
+      // Older transcript rows lack segment ids. Do not display their committed
+      // text twice while the corresponding live projection is still mounted.
+      const idx = left.findIndex((block, index) =>
+        !matchedText.has(index) && block.type === 'text'
+        && (!block.segmentId || !b.segmentId) && Boolean(block.text.trim())
+        && (b.text.startsWith(block.text) || block.text.startsWith(b.text)));
+      const stored = left[idx];
+      if (stored?.type === 'text') {
+        matchedText.add(idx);
+        out[idx] = b.text.length >= stored.text.length
+          ? { ...b }
+          : { ...stored, segmentId: b.segmentId ?? stored.segmentId };
+        continue;
+      }
     }
     if (b.type === 'thinking' && out.length > 0) {
       const last = out[out.length - 1];
@@ -628,8 +650,10 @@ export function mergeStreamingAssistantIntoMessages(
       ...last,
       ...streamingMessage,
       id: streamingMessage.id ?? last.id,
+      renderKey: streamingMessage.renderKey ?? streamingMessage.id,
+      persistedId: last.id,
       turnId: streamingMessage.turnId ?? last.turnId,
-      content: mergeAssistantContentFragments(last.content, streamingMessage.content),
+      content: mergeAssistantContentFragments(last.content, streamingMessage.content, true),
       attachments: streamingMessage.attachments ?? last.attachments,
       outcome: streamingMessage.outcome ?? last.outcome,
       usage: streamingMessage.usage ?? last.usage,

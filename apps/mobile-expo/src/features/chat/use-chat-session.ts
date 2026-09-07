@@ -74,7 +74,7 @@ import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
 
-const STREAMING_RENDER_THROTTLE_MS = 100;
+const STREAMING_RENDER_THROTTLE_MS = 50;
 
 export interface UseChatSessionOptions {
   sessionKey: string;
