@@ -73,7 +73,7 @@ describe('buildSystemPrompt prompt modes', () => {
     expect(prompt).toContain('## Tooling');
     expect(prompt).toContain('## Runtime');
     expect(prompt).not.toContain('## Execution Bias');
-    expect(prompt).not.toContain('## Memory Recall');
+    expect(prompt).not.toContain('## Context and memory');
     expect(prompt).not.toContain('## Silent Replies');
     expect(prompt).not.toContain('## Messaging');
     expect(prompt).not.toContain('## Human Collaboration');
@@ -204,28 +204,28 @@ describe('buildSystemPrompt messaging and silent replies', () => {
 describe('buildSystemPrompt memory gating', () => {
   it('includes memory section when memory tools are available', () => {
     const prompt = buildSystemPrompt('/ws', {
-      toolNames: ['memory_search', 'memory_get'],
+      toolNames: ['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get'],
     });
-    expect(prompt).toContain('## Memory Recall');
-    expect(prompt).toContain('memory_search');
+    expect(prompt).toContain('## Context and memory');
+    expect(prompt).toContain('user_context_search');
+    expect(prompt).toContain('knowledge_search');
   });
 
   it('routes exact compacted history lookup to session_recall', () => {
     const prompt = buildSystemPrompt('/ws', {
       toolNames: ['session_recall', 'session_search'],
     });
-    expect(prompt).toContain('authoritative raw transcript');
-    expect(prompt).toContain('Current session');
-    expect(prompt).toContain('Other sessions');
+    expect(prompt).toContain('session_recall` for exact raw content from the current session');
+    expect(prompt).toContain('session_search` for other conversations');
   });
 
   it('does not instruct agents to invent dated memory markdown files', () => {
     const prompt = buildSystemPrompt('/ws', {
-      toolNames: ['memory_search', 'memory_get', 'session_search'],
+      toolNames: ['user_context_search', 'knowledge_search', 'knowledge_get', 'session_search'],
     });
-    expect(prompt).toContain('## Memory Recall');
-    expect(prompt).toContain('structured user understanding');
-    expect(prompt).toContain('cite only record ids returned by `memory_search` / `memory_get`');
+    expect(prompt).toContain('## Context and memory');
+    expect(prompt).toContain('user identity, preferences, routines, and current state');
+    expect(prompt).toContain('project facts, decisions, lessons, commitments, and open questions');
     expect(prompt).not.toContain('memory/YYYY-MM-DD.md');
     expect(prompt).not.toContain('memory/*.md');
     expect(prompt).not.toContain('Daily notes');
@@ -233,10 +233,10 @@ describe('buildSystemPrompt memory gating', () => {
 
   it('suppresses memory section when includeMemorySection is false', () => {
     const prompt = buildSystemPrompt('/ws', {
-      toolNames: ['memory_search'],
+      toolNames: ['user_context_search'],
       includeMemorySection: false,
     });
-    expect(prompt).not.toContain('## Memory Recall');
+    expect(prompt).not.toContain('## Context and memory');
   });
 });
 

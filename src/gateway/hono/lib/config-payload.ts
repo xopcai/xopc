@@ -25,9 +25,9 @@ import { loadModelsJson, getModelsJsonPath } from '../../../config/models-json.j
 import { getAllProviders, isProviderConfigured } from '../../../providers/index.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import {
-  ContextCompactionPolicySchema,
-  UserContextDreamingSchema,
-  UserContextPrivacySchema,
+  ContextPlanningConfigSchema,
+  KnowledgeMemoryConfigSchema,
+  UserModelConfigSchema,
 } from '../../../user-context/config.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
@@ -306,15 +306,9 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     session: resolveSessionConfigForWeb(config),
     userContext: {
       preferences: config.userContext?.preferences ?? { responseLanguage: 'auto' },
-      dreaming: UserContextDreamingSchema.parse(config.userContext?.dreaming),
-      privacy: UserContextPrivacySchema.parse(config.userContext?.privacy),
-      memory: {
-        retention: {
-          compaction: ContextCompactionPolicySchema.parse(
-            config.userContext?.memory.retention?.compaction,
-          ),
-        },
-      },
+      userModel: UserModelConfigSchema.parse(config.userContext?.userModel),
+      knowledgeMemory: KnowledgeMemoryConfigSchema.parse(config.userContext?.knowledgeMemory),
+      contextPlanning: ContextPlanningConfigSchema.parse(config.userContext?.contextPlanning),
     },
     tui: {
       defaultAgent: config.tui?.defaultAgent ?? 'coder',

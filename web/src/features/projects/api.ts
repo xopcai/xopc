@@ -374,14 +374,14 @@ export async function fetchProjectSessions(projectId: string): Promise<ProjectSe
 }
 
 export async function summarizeProjectSession(projectId: string, sessionKey: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionKey)}/summary-memory`), {
+  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionKey)}/summary-knowledge`), {
     method: 'POST',
     body: JSON.stringify({}),
   });
 }
 
 export async function saveProjectDigest(projectId: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/digest-memory`), {
+  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/digest-knowledge`), {
     method: 'POST',
     body: JSON.stringify({}),
   });

@@ -7,7 +7,6 @@ import { AboutDialog } from '@/components/shell/about-dialog';
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { SidebarAppMenu } from '@/components/shell/sidebar-app-menu';
 import { openSupportReport } from '@/features/support/support-report-events';
-import { UserAvatarDisplay } from '@/features/user-context/user-avatar-display';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -54,18 +53,13 @@ export function SidebarFooter({
         {collapsed ? (
           <div className="flex flex-col items-center gap-1.5">
             <Link
-              to="/you"
+              to="/user-model"
               onClick={() => onNavigate?.()}
               className="rounded-full outline-none ring-offset-surface-base transition-transform hover:opacity-95 active:scale-95 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 motion-reduce:active:scale-100"
               title={m.nav.profile}
               aria-label={m.nav.profile}
             >
-              <UserAvatarDisplay
-                callName={language === 'zh' ? '你' : 'You'}
-                size={40}
-                className="size-10"
-                fallback={<BrandLogo className="size-full" alt={m.appBrand} />}
-              />
+              <BrandLogo className="size-10" alt={m.appBrand} />
             </Link>
             <Popover.Trigger asChild>
               <button
@@ -88,7 +82,7 @@ export function SidebarFooter({
         ) : (
           <div className="flex w-full min-w-0 items-center gap-1 rounded-xl p-1">
             <Link
-              to="/you"
+              to="/user-model"
               onClick={() => onNavigate?.()}
               className={cn(
                 'shrink-0 rounded-full p-1 text-left outline-none transition-transform duration-150 ease-out',
@@ -99,12 +93,7 @@ export function SidebarFooter({
               title={m.nav.profile}
               aria-label={m.nav.profile}
             >
-              <UserAvatarDisplay
-                callName={language === 'zh' ? '你' : 'You'}
-                size={32}
-                className="size-8"
-                fallback={<BrandLogo className="size-full" alt={m.appBrand} />}
-              />
+              <BrandLogo className="size-8" alt={m.appBrand} />
             </Link>
             <Popover.Trigger asChild>
               <button

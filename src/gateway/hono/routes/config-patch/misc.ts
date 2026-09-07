@@ -2,7 +2,7 @@
  * `PATCH /api/config` — tail sections that are each <50 lines:
  *   update / session / gateway.{skillsMarketplaceProvider,
  *   skillsStoreBaseUrl} / providers / providersConfig / stt / tts / tools /
- *   userContext.memory.retention.compaction / tunnel / bindings / mcp.
+ *   userContext / tunnel / bindings / mcp.
  *
  * Most of these delegate to a `mergeXxxConfigPatch(config, body) → { ok,
  * message? }` helper that lives next to the schema, so this file is mostly
@@ -29,9 +29,10 @@ import { mergeSttConfigPatch, mergeTtsConfigPatch, mergeRealtimeVoiceConfigPatch
 import { assertGatewayRuntimeConfig } from '../../../runtime-config.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured } from '../../../auth.js';
 import {
-  ContextCompactionPolicySchema,
-  UserContextDreamingSchema,
-  UserContextPrivacySchema,
+  ContextPlanningConfigSchema,
+  KnowledgeMemoryConfigSchema,
+  UserContextConfigSchema,
+  UserModelConfigSchema,
 } from '../../../../user-context/config.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
 
@@ -58,52 +59,83 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
       return patchError('userContext must be an object');
     }
     const userContextPatch = body.userContext as Record<string, unknown>;
-    if (userContextPatch.dreaming !== undefined) {
-      const parsed = UserContextDreamingSchema.safeParse(userContextPatch.dreaming);
+    const unknownKeys = Object.keys(userContextPatch)
+      .filter((key) => !['enabled', 'preferences', 'userModel', 'knowledgeMemory', 'contextPlanning'].includes(key));
+    if (unknownKeys.length) {
+      return patchError(`Unknown userContext settings: ${unknownKeys.join(', ')}`);
+    }
+    if (userContextPatch.enabled !== undefined) {
+      if (typeof userContextPatch.enabled !== 'boolean') return patchError('userContext.enabled must be a boolean');
+      config.userContext = { ...config.userContext, enabled: userContextPatch.enabled };
+    }
+    if (userContextPatch.preferences !== undefined) {
+      const preferences = userContextPatch.preferences;
+      if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) {
+        return patchError('userContext.preferences must be an object');
+      }
+      config.userContext = {
+        ...config.userContext,
+        preferences: { ...config.userContext.preferences, ...preferences },
+      } as Config['userContext'];
+    }
+    if (userContextPatch.userModel !== undefined) {
+      const patch = userContextPatch.userModel;
+      if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+        return patchError('userContext.userModel must be an object');
+      }
+      const raw = patch as Record<string, unknown>;
+      const parsed = UserModelConfigSchema.safeParse({
+        ...config.userContext.userModel,
+        ...raw,
+        ...(raw.extraction && typeof raw.extraction === 'object'
+          ? { extraction: { ...config.userContext.userModel.extraction, ...raw.extraction } }
+          : {}),
+        ...(raw.maintenance && typeof raw.maintenance === 'object'
+          ? { maintenance: { ...config.userContext.userModel.maintenance, ...raw.maintenance } }
+          : {}),
+      });
       if (!parsed.success) {
         return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
       }
-      config.userContext = { ...config.userContext, dreaming: parsed.data };
+      config.userContext = { ...config.userContext, userModel: parsed.data };
     }
-    if (userContextPatch.privacy !== undefined) {
-      const parsed = UserContextPrivacySchema.safeParse(userContextPatch.privacy);
+    if (userContextPatch.knowledgeMemory !== undefined) {
+      const patch = userContextPatch.knowledgeMemory;
+      if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+        return patchError('userContext.knowledgeMemory must be an object');
+      }
+      const parsed = KnowledgeMemoryConfigSchema.safeParse({
+        ...config.userContext.knowledgeMemory,
+        ...patch,
+      });
       if (!parsed.success) {
         return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
       }
-      config.userContext = { ...config.userContext, privacy: parsed.data };
+      config.userContext = { ...config.userContext, knowledgeMemory: parsed.data };
     }
-    if (userContextPatch.memory !== undefined) {
-      if (typeof userContextPatch.memory !== 'object'
-        || userContextPatch.memory === null
-        || Array.isArray(userContextPatch.memory)) {
-        return patchError('userContext.memory must be an object');
+    if (userContextPatch.contextPlanning !== undefined) {
+      const patch = userContextPatch.contextPlanning;
+      if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+        return patchError('userContext.contextPlanning must be an object');
       }
-      const memoryPatch = userContextPatch.memory as Record<string, unknown>;
-      if (memoryPatch.retention !== undefined) {
-        if (typeof memoryPatch.retention !== 'object'
-          || memoryPatch.retention === null
-          || Array.isArray(memoryPatch.retention)) {
-          return patchError('userContext.memory.retention must be an object');
-        }
-        const retentionPatch = memoryPatch.retention as Record<string, unknown>;
-        if (retentionPatch.compaction !== undefined) {
-          const parsed = ContextCompactionPolicySchema.safeParse(retentionPatch.compaction);
-          if (!parsed.success) {
-            return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
-          }
-          config.userContext = {
-            ...config.userContext,
-            memory: {
-              ...config.userContext?.memory,
-              retention: {
-                ...config.userContext?.memory?.retention,
-                compaction: parsed.data,
-              },
-            },
-          };
-        }
+      const raw = patch as Record<string, unknown>;
+      const parsed = ContextPlanningConfigSchema.safeParse({
+        ...config.userContext.contextPlanning,
+        ...raw,
+        ...(raw.compaction && typeof raw.compaction === 'object'
+          ? { compaction: { ...config.userContext.contextPlanning.compaction, ...raw.compaction } }
+          : {}),
+      });
+      if (!parsed.success) {
+        return patchError(parsed.error.issues.map((issue) => issue.message).join('; '));
       }
+      config.userContext = { ...config.userContext, contextPlanning: parsed.data };
     }
+    const parsedUserContext = UserContextConfigSchema.safeParse(config.userContext);
+    if (!parsedUserContext.success) {
+      return patchError(parsedUserContext.error.issues.map((issue) => issue.message).join('; '));
+    }
+    config.userContext = parsedUserContext.data;
   }
 
   if (body.tui !== undefined) {

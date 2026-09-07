@@ -46,13 +46,13 @@ Help me clarify the outcome and identify the smallest credible next step.
 
 Some releases also show experimental **Connect recent work** onboarding. This flow analyzes only folders you select, uses a bounded read-only scope, and shows evidence for its next-step suggestions. On macOS it may separately request access to Apple Notes, Calendar, and Reminders. Each permission is optional; you can skip the flow and begin with conversation.
 
-Review proposed long-term understanding under **You** or **User context**. Confirm what is accurate and useful; correct, reject, or delete the rest. See [User understanding](./user-understanding.md).
+Review proposed facts and time-bounded priorities under **User model**. Confirm what is accurate and useful; correct, reject, or archive the rest. See [User model and memory](./user-understanding.md).
 
 ## Find common features
 
 | You want to… | Open |
 | --- | --- |
-| Review or correct what xopc knows | **You** or **User context** |
+| Review or correct what xopc knows | **User model** |
 | Start or resume a conversation | **Chat** |
 | Create and edit assistants | **Agents** |
 | Organize ongoing work | **Projects** or **Tasks** |

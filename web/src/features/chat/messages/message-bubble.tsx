@@ -412,7 +412,7 @@ export const MessageBubble = memo(function MessageBubble({
     setResponseFeedbackBusy(true);
     setResponseFeedbackLoaded(true);
     setResponseFeedbackError(false);
-    void fetchJson<{ ok: true }>(apiUrl(`/api/you/turns/${encodeURIComponent(message.turnId)}/feedback`), {
+    void fetchJson<{ ok: true }>(apiUrl(`/api/turns/${encodeURIComponent(message.turnId)}/execution-context/feedback`), {
       method: 'POST',
       body: JSON.stringify({
         rating: rating === 'helpful' ? 'helpful' : 'irrelevant',
@@ -436,12 +436,12 @@ export const MessageBubble = memo(function MessageBubble({
   const loadResponseFeedback = useCallback(() => {
     if (!message.turnId || responseFeedbackLoaded || responseFeedbackBusy) return;
     setResponseFeedbackBusy(true);
-    void fetchJson<{ personalization: { items: Array<{ objectType: string; objectId: string; decision: string; content: string; sourceLabel: string; origin: ResponsePersonalContext['origin'] }> } }>(
-      apiUrl(`/api/you/turns/${encodeURIComponent(message.turnId)}/personalization`),
+    void fetchJson<{ resolvedItems: Array<{ objectType: string; objectId: string; included: boolean; content: string; sourceLabel: string; origin: ResponsePersonalContext['origin'] }> }>(
+      apiUrl(`/api/turns/${encodeURIComponent(message.turnId)}/execution-context`),
     )
       .then((result) => {
-        setResponsePersonalContext(result.personalization.items
-          .filter((item) => (item.objectType === 'understanding' || item.objectType === 'focus') && item.decision === 'selected')
+        setResponsePersonalContext(result.resolvedItems
+          .filter((item) => item.included)
           .map((item) => ({ id: `${item.objectType}:${item.objectId}`, statement: item.content, origin: item.origin, sourceName: item.sourceLabel })));
       })
       .catch(() => undefined)

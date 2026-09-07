@@ -1,4 +1,4 @@
-import type { UserFocus } from '../user-context/sources/types.js';
+import type { KnowledgeItem } from '../knowledge-memory/index.js';
 
 export type WorkDiscoveryOnboardingStatus =
   | 'not_started'
@@ -212,12 +212,12 @@ export interface WorkDiscoveryResult {
   };
   workThreadCandidates?: WorkUnderstandingThreadCandidate[];
   workThreads?: WorkUnderstandingThread[];
-  focusCandidates?: UserFocus[];
+  knowledgeCandidates?: KnowledgeItem[];
 }
 
 export interface WorkDiscoveryProfileCandidate {
   id: string;
-  understandingId?: string;
+  assertionId?: string;
   category: 'role' | 'responsibility' | 'preference' | 'routine';
   factKey: string;
   statement: string;

@@ -31,6 +31,7 @@ export type ToolDisplayKind =
   | 'other';
 
 export function classifyToolDisplay(name: string, activity?: ToolActivity): ToolDisplayKind {
+  if (name === 'user_context_search' || name === 'knowledge_search') return 'memorySearch';
   const semantic = activity ?? resolveToolActivity(name, 'running');
   if (semantic.category === 'memory' && semantic.action === 'search') return 'memorySearch';
   if (semantic.category === 'web' && semantic.action === 'search') return 'webSearch';

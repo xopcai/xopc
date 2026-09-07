@@ -5,7 +5,7 @@ import {
 } from '../../projects/workspace.js';
 import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
-import { listMemoryRecords, searchMemoryRecords } from '../../storage/sqlite/index.js';
+import { listKnowledgeItems, searchKnowledgeItems } from '../../knowledge-memory/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
@@ -13,15 +13,15 @@ import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js
 const MAX_TEXT = 1200;
 const MAX_TASKS = 5;
 const MAX_SESSIONS = 5;
-const MAX_RECENT_MEMORY = 5;
-const MAX_RELEVANT_MEMORY = 5;
-const MAX_MEMORY = 8;
+const MAX_RECENT_KNOWLEDGE = 5;
+const MAX_RELEVANT_KNOWLEDGE = 5;
+const MAX_KNOWLEDGE = 8;
 
-interface ProjectMemoryRecord {
+interface ProjectKnowledgeItem {
   id: string;
   kind: string;
   content: string;
-  updatedAt: string;
+  updatedAt: number;
 }
 
 function truncateText(value: string | undefined, max = MAX_TEXT): string | undefined {
@@ -42,21 +42,21 @@ function formatTask(task: ProjectTaskContext): string {
   return parts.join(' | ');
 }
 
-function selectProjectMemoryRecords(input: {
-  recent: ProjectMemoryRecord[];
-  relevant: ProjectMemoryRecord[];
-}): ProjectMemoryRecord[] {
-  const selected = new Map<string, ProjectMemoryRecord>();
+function selectProjectKnowledge(input: {
+  recent: ProjectKnowledgeItem[];
+  relevant: ProjectKnowledgeItem[];
+}): ProjectKnowledgeItem[] {
+  const selected = new Map<string, ProjectKnowledgeItem>();
   for (const record of [...input.relevant, ...input.recent]) {
     if (!selected.has(record.id)) selected.set(record.id, record);
-    if (selected.size >= MAX_MEMORY) break;
+    if (selected.size >= MAX_KNOWLEDGE) break;
   }
   return [...selected.values()];
 }
 
 export function buildActiveProjectContextForPrompt(
   sessionKey: string,
-  options: { memoryQuery?: string } = {},
+  options: { knowledgeQuery?: string } = {},
 ): string | undefined {
   const project = getProjectForSession(sessionKey);
   if (!project) return undefined;
@@ -74,20 +74,22 @@ export function buildActiveProjectContextForPrompt(
         state: `${task.phase}/${new TaskReadModelProjector().project(task).operationalState}`,
       })),
     recentSessions: new ProjectStore().getRecentSessions(project.id, MAX_SESSIONS),
-    memoryRecords: selectProjectMemoryRecords({
-      relevant: options.memoryQuery?.trim()
-        ? searchMemoryRecords({
-            query: options.memoryQuery,
-            projectId: project.id,
-            statuses: ['active'],
-            maxResults: MAX_RELEVANT_MEMORY,
-          }).map((result) => result.record)
+    knowledgeItems: selectProjectKnowledge({
+      relevant: options.knowledgeQuery?.trim()
+        ? searchKnowledgeItems({
+            query: options.knowledgeQuery,
+            context: {
+              agentId: project.defaultAgentId ?? 'main',
+              workspaceId: project.workspaceRoot ?? '',
+              projectId: project.id,
+              sessionId: sessionKey,
+            },
+            limit: MAX_RELEVANT_KNOWLEDGE,
+          })
         : [],
-      recent: listMemoryRecords({
-        projectId: project.id,
-        status: 'active',
-        limit: MAX_RECENT_MEMORY,
-      }),
+      recent: listKnowledgeItems({ statuses: ['active'], limit: 500 })
+        .filter((item) => item.scope.type === 'project' && item.scope.id === project.id)
+        .slice(0, MAX_RECENT_KNOWLEDGE),
     }),
     localApp: localApp ? {
       extensionId: localApp.extensionId,
@@ -113,7 +115,7 @@ export function formatActiveProjectContextForPrompt(input: {
   workspacePath?: string;
   activeTasks: ProjectTaskContext[];
   recentSessions: Array<{ key: string; name?: string; updatedAt: string; agentId: string }>;
-  memoryRecords?: Array<{ kind: string; content: string; updatedAt: string }>;
+  knowledgeItems?: Array<{ kind: string; content: string; updatedAt: number }>;
   localApp?: {
     extensionId: string;
     draftVersion: number;
@@ -196,14 +198,14 @@ export function formatActiveProjectContextForPrompt(input: {
     }
   }
 
-  lines.push('', '## Project Memory');
-  const memoryRecords = input.memoryRecords ?? [];
-  if (memoryRecords.length === 0) {
+  lines.push('', '## Project Knowledge');
+  const knowledgeItems = input.knowledgeItems ?? [];
+  if (knowledgeItems.length === 0) {
     lines.push('- None recorded.');
   } else {
-    for (const record of memoryRecords) {
+    for (const record of knowledgeItems) {
       const content = sanitizeForPromptLiteral(truncateText(record.content, 240) ?? '');
-      lines.push(`- ${sanitizeForPromptLiteral(record.kind)} | updated=${sanitizeForPromptLiteral(record.updatedAt)} | ${content}`);
+      lines.push(`- ${sanitizeForPromptLiteral(record.kind)} | updated=${new Date(record.updatedAt).toISOString()} | ${content}`);
     }
   }
 

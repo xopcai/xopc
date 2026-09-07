@@ -52,7 +52,7 @@ import {
   upsertConnectorSyncPolicy,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { applySourceRevocationChoices, sourceRevocationImpact } from './understanding-sources.js';
+import { markContextSourceAssertionsForReview } from './context-sources.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -214,9 +214,8 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       service.setConnectorLearningPaused(connectionId, true);
       const grant = listUnderstandingSourceGrants().find((item) => item.sourceKey === `connector-account:${account.id}`);
       if (grant) {
-        const impact = sourceRevocationImpact(grant.id);
+        markContextSourceAssertionsForReview(grant.id);
         revokeUnderstandingSourceGrant(grant.id);
-        if (impact) applySourceRevocationChoices(impact, { derived: 'retain', raw: 'retain' });
       }
     } else if (connectionId && previous?.scanEnabled === false) {
       const resumed = service.setConnectorLearningPaused(connectionId, false);
@@ -289,9 +288,8 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       if (connection?.accountId) {
         const grant = listUnderstandingSourceGrants().find((item) => item.sourceKey === `connector-account:${connection.accountId}`);
         if (grant) {
-          const impact = sourceRevocationImpact(grant.id);
+          markContextSourceAssertionsForReview(grant.id);
           revokeUnderstandingSourceGrant(grant.id);
-          if (impact) applySourceRevocationChoices(impact, { derived: 'retain', raw: 'retain' });
         }
       }
       return c.json({ ok: true, payload: { revoked: true } });

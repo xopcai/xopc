@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  attachMemoryEvidence,
   claimKnowledgeSourceItems,
   closeXopcDatabase,
   completeKnowledgeSourceItemSynthesis,
@@ -13,13 +12,11 @@ import {
   getKnowledgeSourceCursor,
   listKnowledgeSourceChanges,
   listKnowledgeSourceItems,
-  listMemoryEvidence,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   setKnowledgeConsumerWatermark,
   setKnowledgeSourceCursor,
   upsertKnowledgeSourceItems,
-  upsertMemoryRecord,
 } from '../index.js';
 
 describe('knowledge repository', () => {
@@ -37,7 +34,7 @@ describe('knowledge repository', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('upserts source items idempotently and persists cursors and evidence', () => {
+  it('upserts source items idempotently and persists independent cursors', () => {
     const input = {
       sourceInstanceId: 'calendar:personal',
       collectionScope: 'events',
@@ -57,31 +54,6 @@ describe('knowledge repository', () => {
     expect(getKnowledgeSourceCursor('calendar:personal', 'events')).toBe('cursor-2');
     expect(getKnowledgeSourceCursor('calendar:personal', 'tasks')).toBe('cursor-3');
 
-    const record = upsertMemoryRecord({
-      providerId: 'local',
-      kind: 'commitment',
-      sourceAgentId: 'main',
-      content: 'Attend the design review.',
-    });
-    const evidence = attachMemoryEvidence({
-      recordId: record.id,
-      sourceItemId: first.items[0]?.id,
-      excerpt: input.normalizedText,
-      confidence: 0.9,
-    });
-    const repeated = attachMemoryEvidence({
-      recordId: record.id,
-      sourceItemId: first.items[0]?.id,
-      excerpt: input.normalizedText,
-      confidence: 0.8,
-    });
-    expect(repeated.evidenceId).toBe(evidence.evidenceId);
-    expect(listMemoryEvidence(record.id)).toHaveLength(1);
-    expect(listMemoryEvidence(record.id)[0]).toMatchObject({
-      sourceItemId: first.items[0]?.id,
-      relation: 'supports',
-      confidence: 0.9,
-    });
   });
 
   it('records ordered source changes and keeps consumer watermarks monotonic', () => {

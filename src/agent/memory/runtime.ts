@@ -1,7 +1,7 @@
 import type { UserContextConfig } from '../../user-context/config.js';
 
-export type MemorySource = 'session' | 'agentProfile' | 'understanding' | 'workspace';
-export type MemoryWriteTarget = 'agentProfile' | 'understanding' | 'workspace';
+export type MemorySource = 'session' | 'workspace' | 'project' | 'connector';
+export type MemoryWriteTarget = 'knowledge';
 export type MemoryWriteDecision = 'allow' | 'confirm' | 'deny';
 
 export interface MemoryCandidate {
@@ -29,28 +29,22 @@ function normalizeConfidence(value: number | undefined): number {
 }
 
 export function buildMemoryRuntime(userContext: UserContextConfig): MemoryRuntime {
-  const memory = userContext.memory;
-  const readableSources = !userContext.enabled || memory.mode === 'off' ? [] : [...memory.sources];
+  const memory = userContext.knowledgeMemory;
+  const readableSources = !userContext.enabled || !memory.enabled ? [] : [...memory.sources];
   const sourceSet = new Set<MemorySource>(readableSources);
   return {
     readableSources,
     canRead: (source) => sourceSet.has(source),
     checkWrite: (candidate) => {
-      if (!userContext.enabled || memory.mode === 'off') return { decision: 'deny', reason: 'memory is disabled' };
-      if (memory.mode === 'readOnly') return { decision: 'deny', reason: 'memory is read-only' };
+      if (!userContext.enabled || !memory.enabled) return { decision: 'deny', reason: 'knowledge memory is disabled' };
       if (!candidate.content.trim()) return { decision: 'deny', reason: 'memory content is empty' };
       if (normalizeConfidence(candidate.confidence) < 0.3) {
         return { decision: 'deny', reason: 'memory confidence is too low' };
       }
-      const sensitivePolicy = userContext.privacy.sensitiveWritePolicy;
-      if (candidate.sensitive && sensitivePolicy !== 'allow') {
-        return { decision: sensitivePolicy, reason: 'memory candidate is sensitive' };
+      if (candidate.sensitive && memory.writePolicy !== 'allow') {
+        return { decision: memory.writePolicy, reason: 'knowledge candidate is sensitive' };
       }
-      const targetPolicy = memory.writePolicy?.[candidate.target] ?? 'deny';
-      if (memory.mode === 'confirmWrite' && targetPolicy === 'allow') {
-        return { decision: 'confirm', reason: 'agent memory mode requires confirmation' };
-      }
-      return { decision: targetPolicy, reason: `target policy is ${targetPolicy}` };
+      return { decision: memory.writePolicy, reason: `knowledge write policy is ${memory.writePolicy}` };
     },
   };
 }

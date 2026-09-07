@@ -7,10 +7,10 @@
 import type { Config } from '../../config/schema.js';
 import {
   getInteractionState,
-  getUserProfile,
   getUserTrustPolicy,
   isXopcDatabaseOpen,
 } from '../../storage/sqlite/index.js';
+import { getUserTimezone } from '../../user-model/index.js';
 import { buildInteractionStatePrompt } from '../../user-context/interaction-state.js';
 import { DEFAULT_USER_TRUST_LEVEL } from '../../user-context/trust-policy.js';
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
@@ -74,7 +74,7 @@ export class SystemPromptBuilder {
       : undefined;
     const interactionPrompt = interactionState ? buildInteractionStatePrompt(interactionState) : '';
     const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
-    const userTimezone = isXopcDatabaseOpen() ? getUserProfile().timezone || undefined : undefined;
+    const userTimezone = isXopcDatabaseOpen() ? getUserTimezone() : undefined;
 
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     const reg = options.registeredToolNames ?? [];
@@ -186,7 +186,7 @@ export class SystemPromptBuilder {
       workspaceDir: ws,
       sessionKey: options?.sessionKey,
       toolNames: options?.registeredToolNames,
-      userTimezone: isXopcDatabaseOpen() ? getUserProfile().timezone || undefined : undefined,
+      userTimezone: isXopcDatabaseOpen() ? getUserTimezone() : undefined,
       externalMemoryInstructions: options?.externalMemoryInstructions,
       heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
     });

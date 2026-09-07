@@ -1,4 +1,4 @@
-import { listUnderstandings } from '../../storage/sqlite/user-context-repository.js';
+import { getAssertionSlot, listUserAssertions } from '../../user-model/index.js';
 import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
 import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -168,39 +168,39 @@ export class InternalObjectContextProvider implements ContextProvider {
   }
 }
 
-export class UserUnderstandingContextProvider implements ContextProvider {
-  readonly id = 'user_understanding';
+export class UserModelContextProvider implements ContextProvider {
+  readonly id = 'user_model';
   supports(): boolean { return true; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const scope = eventRows(input.eventIds).at(-1);
     if (!scope) return emptyContext();
-    const records = listUnderstandings(['active']).filter((record) => {
+    const records = listUserAssertions({ statuses: ['active'], limit: 500 }).filter((record) => {
       const now = Date.now();
-      const scopeMatches = record.scope.type === 'global'
-        || (record.scope.type === 'workspace' && record.scope.id === scope.workspace_id)
-        || (record.scope.type === 'project' && record.scope.id === scope.project_id);
+      const assertionScope = getAssertionSlot(record.slotId)?.scope;
+      const scopeMatches = assertionScope?.type === 'global'
+        || (assertionScope?.type === 'workspace' && assertionScope.id === scope.workspace_id)
+        || (assertionScope?.type === 'project' && assertionScope.id === scope.project_id)
+        || (assertionScope?.type === 'agent' && assertionScope.id === scope.agent_id);
       return record.disclosurePolicy === 'referenceable'
         && record.sensitivity !== 'secret'
         && record.sensitivity !== 'regulated'
         && scopeMatches
         && (!record.validFrom || record.validFrom <= now)
         && (!record.validTo || record.validTo >= now)
-        && (!record.expiresAt || record.expiresAt >= now)
-        && !record.conflictGroupId
-        && (record.explicitness === 'explicit' || record.confidence >= 0.7);
+        && (record.authority === 'user_explicit' || record.confidence >= 0.7);
     }).slice(0, 20);
     return {
       content: {
         records: records.map((record) => ({
-          evidenceId: `understanding:${record.id}`,
+          evidenceId: `assertion:${record.id}`,
           kind: record.kind,
           content: boundedText(record.statement, 1_000),
           confidence: record.confidence,
-          updatedAt: record.updatedAt,
+          recordedAt: record.recordedAt,
         })),
       },
-      evidenceIds: records.map((record) => `understanding:${record.id}`),
+      evidenceIds: records.map((record) => `assertion:${record.id}`),
     };
   }
 }
@@ -313,7 +313,7 @@ export class ContextProviderRegistry {
     new EventBatchContextProvider(),
     new ConnectedSourceContextProvider(),
     new InternalObjectContextProvider(),
-    new UserUnderstandingContextProvider(),
+    new UserModelContextProvider(),
     new MeetingWorkspaceContextProvider(),
     new ProjectStateContextProvider(),
     new AutomationStateContextProvider(),

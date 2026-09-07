@@ -6,7 +6,7 @@ import { TaskWorkflowCoordinator } from '../../tasks/task-workflow-coordinator.j
 import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
-import { upsertMemoryRecord } from '../../storage/sqlite/index.js';
+import { writeKnowledgeItem } from '../../knowledge-memory/index.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 
@@ -207,28 +207,23 @@ export class WorkflowSessionBridge {
       view.run.status === 'succeeded',
       { showResultPreviews: true },
     );
-    upsertMemoryRecord({
-      id: `workflow-run:${view.run.id}`,
-      providerId: 'workflow-run',
+    writeKnowledgeItem({
       kind: 'task_lesson',
+      scope: { type: 'project', id: projectId },
       sourceAgentId: agentId,
-      workspaceId: getProjectWorkspacePathForSession(sessionKey) ?? this.gateway.currentWorkspacePath,
-      sessionKey,
-      projectId,
+      sourceSessionId: sessionKey,
       content: [
         `Workflow ${view.run.definitionId} finished with status ${view.run.status}.`,
         view.run.goal ? `Goal: ${view.run.goal}` : undefined,
         compactMemoryLine(resultText),
       ].filter((line): line is string => Boolean(line)).join('\n'),
+      canonicalKey: `workflow-run:${view.run.id}`,
       source: { provider: 'workflow-run' },
       confidence: view.run.status === 'succeeded' ? 0.7 : 0.82,
-      tags: ['project', 'workflow', view.run.definitionId, view.run.status],
+      importance: 0.65,
       status: view.run.status === 'succeeded' ? 'active' : 'needs_review',
-      sensitivity: 'normal',
-      evidence: [{
-        sessionKey,
-        sourceText: `workflow:${view.run.id}`,
-      }],
+      originClass: 'agent',
+      replaceExisting: true,
     });
   }
 }

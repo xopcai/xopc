@@ -80,7 +80,7 @@ Store durable decisions under `docs/adr/`. Both directories are excluded from th
 | Previous Gateway API page | `design/technical/gateway-api-legacy.md`; the public page now covers running and accessing the Gateway |
 | Previous model catalog dump | `design/technical/models-reference-legacy.md`; the public page points to the live catalog |
 | Previous progress event design | `design/technical/progress-feedback-legacy.md`; the public page explains visible states |
-| Previous structured context schema | `design/technical/user-understanding-legacy.md`; the public page explains review and privacy |
+| Memory and user model internals | `design/technical/memory-architecture.md`; the public page explains review and privacy |
 | Previous image API reference | `design/technical/image-multimodal-legacy.md`; the public page explains setup and safe use |
 | Previous desktop pet manifest | `design/technical/desktop-pets-authoring-legacy.md`; the public page explains selection and guided creation |
 | Previous tunnel implementation notes | `design/technical/tunnel-security-implementation-legacy.md`; the public page keeps only risk and operating guidance |

@@ -47,7 +47,6 @@ describe('UnderstandingStatusButton', () => {
       itemCounts: {},
       memories: [],
       threads: [],
-      focuses: [],
       error: undefined,
     });
     container = document.createElement('div');
@@ -61,7 +60,7 @@ describe('UnderstandingStatusButton', () => {
     useUnderstandingActivityStore.getState().finish();
   });
 
-  it('stays hidden outside the You page', () => {
+  it('stays hidden outside the user-model page', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat']}>
@@ -76,7 +75,7 @@ describe('UnderstandingStatusButton', () => {
   it('reviews a completed directory run in place instead of navigating back to onboarding', async () => {
     act(() => {
       root.render(
-        <MemoryRouter initialEntries={['/you']}>
+        <MemoryRouter initialEntries={['/user-model']}>
           <UnderstandingStatusButton persistent />
           <LocationProbe />
         </MemoryRouter>,
@@ -88,6 +87,6 @@ describe('UnderstandingStatusButton', () => {
 
     expect(document.body.textContent).toContain('Here is what I understand so far');
     expect(document.body.textContent).not.toContain('Review and confirm');
-    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/you');
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/user-model');
   });
 });

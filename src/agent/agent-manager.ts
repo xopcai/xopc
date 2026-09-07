@@ -79,11 +79,11 @@ import {
   isMemorySubsystemEnabled,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
-import { UserContextCoordinator } from './memory/user-context-coordinator.js';
-import type { UserContextPlan } from './memory/context/types.js';
+import { ExecutionContextCoordinator, type ExecutionContextPlan } from './context/coordinator.js';
+import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
-import { runTurnUnderstandingReview } from './background-review/run-background-review.js';
+import { runTurnUserModelCapture } from './background-review/run-background-review.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { mcpToolPolicyId } from './mcp/bundle-mcp-policy.js';
@@ -283,7 +283,7 @@ export class AgentManager implements AgentInstanceGateway {
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
   private workspaceRuntimes: WorkspaceRuntimeRegistry;
-  private userContext: UserContextCoordinator;
+  private executionContext: ExecutionContextCoordinator;
   private backgroundReview: BackgroundReviewCoordinator;
   private skillFilesystemWatcher: SkillFilesystemWatcher;
   private skillDiskRefreshInProgress = false;
@@ -311,13 +311,11 @@ export class AgentManager implements AgentInstanceGateway {
         this.skillFilesystemWatcher.watchWorkspace(resolvedPath);
       },
     });
-    this.userContext = new UserContextCoordinator({
+    this.executionContext = new ExecutionContextCoordinator({
       getConfig: () => this.config.config,
       isEnabledForSession: (sessionKey) => this.isUserContextEnabledForSession(sessionKey),
       getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
       getProjectIdForSession: (sk) => getSessionMetadata(sk)?.projectId,
-      getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
-      getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
     });
     this.backgroundReview = new BackgroundReviewCoordinator({
       getConfig: () => this.mergedConfig(),
@@ -337,7 +335,7 @@ export class AgentManager implements AgentInstanceGateway {
     const mode = getSessionConfig(sessionKey)?.userContextMode;
     return Boolean(
       this.config.config?.userContext.enabled
-      && this.config.config.userContext.understanding.enabled
+      && this.config.config.userContext.userModel.enabled
       && (mode === undefined || mode === 'enabled'),
     );
   }
@@ -505,27 +503,26 @@ export class AgentManager implements AgentInstanceGateway {
     userMessage: AgentMessage,
     sessionKey: string,
     turnId: string,
-  ): Promise<UserContextPlan> {
-    return this.userContext.prepare(userMessage, sessionKey, turnId);
+  ): Promise<ExecutionContextPlan> {
+    return this.executionContext.prepare(userMessage, sessionKey, turnId);
   }
 
   /**
    * After a completed turn: sync external providers and queue next-turn prefetch.
    * Delegates to {@link UserContextCoordinator}.
    */
-  async afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('./memory/understanding/types.js').UnderstandingReviewResult | undefined> {
-    await this.userContext.afterTurn(sessionKey, userPlainText);
+  async afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined> {
     if (!this.isUserContextEnabledForSession(sessionKey)) return undefined;
     const parsed = parseSessionKey(sessionKey);
     if (parsed && parsed.peerKind !== 'direct') return undefined;
     const instance = this.agents.get(sessionKey);
     if (!instance) return undefined;
-    return runTurnUnderstandingReview({
+    return runTurnUserModelCapture({
       sessionKey,
       turnId,
       userText: userPlainText,
       mainAgent: instance.agent,
-      memoryManager: this.getMemoryManagerForSession(sessionKey),
+      workspaceId: this.getResolvedWorkspaceForSession(sessionKey),
       getConfig: () => this.mergedConfig(),
     });
   }
@@ -551,7 +548,7 @@ export class AgentManager implements AgentInstanceGateway {
       sessionKey,
       agent: inst.agent,
       lastAssistantText: this.getLastAssistantContent(sessionKey),
-      workspaceRuntime: this.getWorkspaceRuntimeForSession(sessionKey),
+      workspaceId: this.getResolvedWorkspaceForSession(sessionKey),
     });
   }
 
@@ -1185,7 +1182,7 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.abort();
       evictEmbeddedSessionRunner(sessionKey, 'agent_removed');
       this.agents.delete(sessionKey);
-      this.userContext.forgetSession(sessionKey);
+      this.executionContext.forgetSession(sessionKey);
       clearBootstrapSnapshot(sessionKey);
       this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
       log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
@@ -1274,7 +1271,7 @@ export class AgentManager implements AgentInstanceGateway {
     }
     this.agents.clear();
     this.runtimeListeners.clear();
-    this.userContext.clear();
+    this.executionContext.clear();
     this.sessionWorkspaceOverrides.clear();
     void this.workspaceRuntimes.clearAll();
     log.debug('All agent instances disposed');
@@ -1403,6 +1400,21 @@ export class AgentManager implements AgentInstanceGateway {
       },
       authorizeToolCall: async ({ toolCall, args }) => {
         const toolName = toolCall.name;
+        const operation = ({
+          message: 'external_send',
+          send_media: 'external_send',
+          exec_command: 'command_execute',
+          write_file: 'filesystem_write',
+          apply_patch: 'filesystem_write',
+          xopc_tool_execute: 'external_tool',
+        } as Record<string, string>)[toolName] ?? toolName;
+        const executionGate = this.executionContext.getCurrent(sessionKey);
+        if (executionGate) {
+          const decision = evaluateToolGate(executionGate, operation);
+          if (!decision.allowed) {
+            return { block: true, terminate: true, reason: decision.reason ?? 'Blocked by collaboration rule.' };
+          }
+        }
         const policy = this.resolveToolPolicy(profile, toolName, args);
         const detail = JSON.stringify(args ?? {});
         if (policy?.mode === 'ask') {

@@ -28,10 +28,7 @@ import {
   hydrateUserTurnForLlm,
   setPendingTranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
-import {
-  runContextConsolidation,
-  USER_CONTEXT_CONSOLIDATION_TOKEN,
-} from '../../user-context/consolidation.js';
+import { parseMaintenanceInstruction, runMemoryMaintenance } from '../../memory-maintenance/index.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -105,13 +102,20 @@ export class AgentOrchestrator {
         context.channel === 'automation'
       )
     ) {
-      if (msg.content.includes(USER_CONTEXT_CONSOLIDATION_TOKEN)) {
+      const maintenanceJob = parseMaintenanceInstruction(msg.content);
+      if (maintenanceJob) {
         const cfg = this.getConfig?.();
         if (!cfg) {
-          log.warn({ sessionKey }, 'User context review skipped: config unavailable');
+          log.warn({ sessionKey }, 'Memory maintenance skipped: config unavailable');
           return;
         }
-        await runContextConsolidation({ config: cfg, triggerKind: 'schedule' });
+        const maintenance = cfg.userContext.userModel.maintenance;
+        runMemoryMaintenance({
+          jobType: maintenanceJob,
+          limit: maintenance.limit,
+          staleRetentionDays: maintenance.staleRetentionDays,
+          evidenceThreshold: maintenance.evidenceThreshold,
+        });
         return;
       }
     }
@@ -184,12 +188,7 @@ export class AgentOrchestrator {
       })();
 
       const understandingReview = await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory, turnId);
-      if (understandingReview?.createdRecords.length) {
-        const captured = understandingReview.createdRecords.filter((record) => record.status === 'active');
-        const candidates = understandingReview.createdRecords.filter((record) => record.status === 'candidate');
-        if (captured.length) this.onEmbeddedStreamEvent?.(sessionKey, { type: 'memory_captured', runId: turnId, records: captured });
-        if (candidates.length) this.onEmbeddedStreamEvent?.(sessionKey, { type: 'memory_candidate', runId: turnId, records: candidates });
-      }
+      void understandingReview;
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
 
       if (turnResult.ok) {

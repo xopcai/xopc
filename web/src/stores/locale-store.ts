@@ -59,9 +59,19 @@ async function drainGatewayLanguageSync(): Promise<void> {
         method: 'POST',
         body: JSON.stringify({ language: target.language }),
       }),
-      fetchJson(apiUrl('/api/you/profile'), {
-        method: 'PATCH',
-        body: JSON.stringify({ locale: target.language === 'zh' ? 'zh-CN' : 'en' }),
+      fetchJson(apiUrl('/api/user-model/assertions'), {
+        method: 'POST',
+        body: JSON.stringify({
+          scope: { type: 'global' },
+          subject: { type: 'user', id: 'self' },
+          predicate: 'preference.locale',
+          cardinality: 'single',
+          kind: 'preference',
+          value: target.language === 'zh' ? 'zh-CN' : 'en',
+          statement: target.language === 'zh' ? 'The user prefers Chinese.' : 'The user prefers English.',
+          volatility: 'slow',
+          declaredImportance: 0.8,
+        }),
       }),
     ]);
 

@@ -47,7 +47,7 @@ export function gatewayConfig(model, workspace, port, token) {
     },
     browser: { enabled: false },
     runtimeTools: { enabled: false },
-    userContext: { enabled: false, understanding: { enabled: false }, dreaming: { mode: 'off' } },
+    userContext: { enabled: false },
     channels: {},
     update: { checkOnStart: false },
   };

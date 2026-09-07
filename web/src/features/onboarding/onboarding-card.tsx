@@ -20,7 +20,7 @@ import {
   detectBrowserTimezone,
   fetchUserProfile,
   updateUserProfile,
-} from '@/features/user-context/user-context-api';
+} from '@/features/user-model/user-model-api';
 import { fetchGlobalDefaults, updateGlobalDefaults } from '@/features/settings/global-defaults-api';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';

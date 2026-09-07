@@ -4,20 +4,21 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MemoryManager } from '../../agent/memory/manager.js';
 import { ConfigSchema } from '../../config/schema.js';
+import { listKnowledgeItems } from '../../knowledge-memory/index.js';
 import type { KnowledgeSourceItem } from '../../knowledge/types.js';
 import {
   closeXopcDatabase,
+  getSqliteDatabase,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
 } from '../../storage/sqlite/index.js';
 import {
   createUnderstandingSourceRun,
-  listUserFocuses,
   upsertUnderstandingSourceGrant,
 } from '../../user-context/sources/repository.js';
+import { listUserAssertions } from '../../user-model/index.js';
 import {
   connectedItemsForUnderstanding,
   deriveConnectedSourceUnderstanding,
@@ -25,26 +26,18 @@ import {
 
 function item(overrides: Partial<KnowledgeSourceItem>): KnowledgeSourceItem {
   return {
-    id: 'item-1',
-    sourceInstanceId: 'composio:gmail:account-1',
-    collectionScope: 'messages',
-    externalId: 'mail-1',
-    itemType: 'email',
-    contentHash: 'hash',
-    normalizedText: JSON.stringify({ subject: 'Atlas launch', content: 'Prepare the September launch review.' }),
+    id: 'item-1', sourceInstanceId: 'composio:gmail:account-1', collectionScope: 'messages',
+    externalId: 'mail-1', itemType: 'email', contentHash: 'hash',
+    normalizedText: JSON.stringify({ subject: 'Atlas launch', content: 'Prepare the launch review.' }),
     metadata: { toolkit: 'gmail', agentId: 'main', actorAttributed: false },
-    sensitivity: 'personal',
-    retentionClass: 'bounded',
-    synthesisPipeline: 'connected_knowledge',
-    synthesisStatus: 'pending',
-    synthesisAttempts: 0,
-    createdAt: '2026-08-30T00:00:00.000Z',
-    updatedAt: '2026-08-30T00:00:00.000Z',
+    sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge',
+    synthesisStatus: 'pending', synthesisAttempts: 0,
+    createdAt: '2026-08-30T00:00:00.000Z', updatedAt: '2026-08-30T00:00:00.000Z',
     ...overrides,
   };
 }
 
-describe('connected source understanding input', () => {
+describe('connected source understanding', () => {
   let stateDirectory: string;
 
   beforeEach(() => {
@@ -59,192 +52,90 @@ describe('connected source understanding input', () => {
     rmSync(stateDirectory, { recursive: true, force: true });
   });
 
-  it('keeps rich source text and exact evidence references', () => {
-    expect(connectedItemsForUnderstanding([item({})])).toEqual([expect.objectContaining({
-      sourceId: 'connected-work',
-      type: 'mail',
-      title: 'Atlas launch',
-      text: expect.stringContaining('Prepare the September launch review.'),
-      ownerAttribution: 'shared',
-      evidenceRef: 'knowledge-source://item-1',
-    })]);
-  });
-
-  it('prioritizes explicitly read content and preserves user attribution only when proven', () => {
+  it('prioritizes explicitly read content and preserves attribution', () => {
     const values = connectedItemsForUnderstanding([
       item({ id: 'metadata', normalizedText: JSON.stringify({ subject: 'Metadata only' }) }),
-      item({
-        id: 'content',
-        itemType: 'connected_content',
+      item({ id: 'content', itemType: 'connected_content',
         normalizedText: JSON.stringify({ title: 'Detailed brief', content: 'Full brief body' }),
-        metadata: { toolkit: 'googledrive', agentId: 'main', actorAttributed: true },
-      }),
+        metadata: { toolkit: 'drive', agentId: 'main', actorAttributed: true } }),
     ]);
-
     expect(values.map((value) => value.id)).toEqual(['content', 'metadata']);
-    expect(values[0]?.ownerAttribution).toBe('user');
+    expect(values[0]).toMatchObject({ ownerAttribution: 'user', evidenceRef: 'knowledge-source://content' });
   });
 
-  it('keeps connected responsibilities in current work instead of the durable portrait', async () => {
-    const sourceInstanceId = 'composio:gmail:account-1';
-    const grant = upsertUnderstandingSourceGrant({
-      sourceKey: 'connector-account:account-1',
-      adapterId: 'connector:composio-gmail',
-      category: 'mail',
-      platform: 'all',
-      displayName: 'Gmail',
-      accessMode: 'continuous',
-      retentionPolicy: 'bounded_raw',
-      processingPolicy: 'remote_allowed',
-      config: { sourceInstanceId },
-    });
-    const sourceRun = createUnderstandingSourceRun({
-      grantId: grant.id,
-      kind: 'bootstrap',
-    });
-    upsertKnowledgeSourceItems([{
-      sourceInstanceId,
-      collectionScope: 'messages',
-      externalId: 'mail-1',
-      itemType: 'email',
-      contentHash: 'hash',
-      normalizedText: JSON.stringify({ subject: 'Atlas launch', content: 'Prepare the September launch review.' }),
-      metadata: { toolkit: 'gmail', agentId: 'main', actorAttributed: false },
-      sensitivity: 'personal',
-      retentionClass: 'bounded',
-      synthesisPipeline: 'connected_knowledge',
-      synthesisStatus: 'pending',
-    }]);
-    const applyUnderstandingCandidates = vi.fn(async () => ({
-      proposed: 1, created: 1, deduplicated: 0, rejected: 0, createdRecords: [],
-    }));
-
+  it('keeps current responsibilities in knowledge instead of the durable user model', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
+    upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, false)]);
     const result = await deriveConnectedSourceUnderstanding({
-      config: ConfigSchema.parse({}),
-      agentId: 'main',
-      sourceInstanceId,
-      sourceRunId: sourceRun.id,
-      processingPolicy: grant.processingPolicy,
-      memoryManager: { applyUnderstandingCandidates } as unknown as MemoryManager,
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceRunId, processingPolicy,
       analyze: vi.fn(async ({ items }) => ({
-        modelRef: 'test/model',
-        profileCandidates: [{
-          id: 'candidate-1', category: 'responsibility', factKey: 'responsibility:atlas-launch',
-          statement: 'Owns the Atlas launch review.',
-          confidence: 'high', evidence: ['The source directly assigns the launch review to the user.'],
+        modelRef: 'test/model', profileCandidates: [{
+          id: 'responsibility', category: 'responsibility', factKey: 'atlas',
+          statement: 'Owns the Atlas launch review.', confidence: 'high', evidence: ['assigned'],
           evidenceRefs: [items[0]!.evidenceRef], status: 'pending',
         }],
-        workThreadCandidates: [{
-          topicKey: 'atlas-launch', title: 'Atlas launch', summary: 'A September review is currently being prepared for Atlas.',
-          horizon: 'current', status: 'active', confidence: 'high', evidenceRefs: [items[0]!.evidenceRef],
-        }],
+        workThreadCandidates: [{ topicKey: 'atlas', title: 'Atlas launch', summary: 'Review in progress.',
+          horizon: 'current', status: 'active', confidence: 'high', evidenceRefs: [items[0]!.evidenceRef] }],
         sourceStatuses: [{ sourceId: 'connected-work', status: 'completed' }],
       })),
     });
-
-    expect(result).toEqual({ created: 0, focusCount: 1, status: 'completed' });
-    expect(applyUnderstandingCandidates).not.toHaveBeenCalled();
-    expect(listUserFocuses()).toEqual([expect.objectContaining({
-      canonicalKey: 'connected-focus:atlas-launch',
-      sourceRunId: sourceRun.id,
-    })]);
+    expect(result).toEqual({ created: 0, knowledgeCount: 1, status: 'completed' });
+    expect(listUserAssertions()).toEqual([]);
+    expect(listKnowledgeItems()).toEqual([expect.objectContaining({ content: 'Atlas launch: Review in progress.' })]);
   });
 
-  it('writes only strongly repeated user-owned preferences and binds each candidate to its own evidence', async () => {
-    const sourceInstanceId = 'composio:slack:account-1';
-    const grant = upsertUnderstandingSourceGrant({
-      sourceKey: 'connector-account:account-1', adapterId: 'connector:composio-slack', category: 'files',
-      platform: 'all', displayName: 'Slack', accessMode: 'continuous', retentionPolicy: 'bounded_raw',
-      processingPolicy: 'remote_allowed', config: { sourceInstanceId },
-    });
-    const sourceRun = createUnderstandingSourceRun({ grantId: grant.id, kind: 'bootstrap' });
-    const stored = upsertKnowledgeSourceItems([1, 2, 3].map((index) => ({
-      sourceInstanceId,
-      collectionScope: 'messages',
-      externalId: `message-${index}`,
-      itemType: 'connected_content' as const,
-      occurredAt: `2026-08-${20 + index}T09:00:00.000Z`,
-      contentHash: `hash-${index}`,
-      normalizedText: JSON.stringify({ title: `Planning ${index}`, content: `Planning evidence ${index}` }),
-      metadata: { toolkit: 'slack', agentId: 'main', actorAttributed: true },
-      sensitivity: 'personal' as const,
-      retentionClass: 'bounded' as const,
-      synthesisPipeline: 'connected_knowledge' as const,
-      synthesisStatus: 'pending' as const,
-    }))).items;
-    const applyUnderstandingCandidates = vi.fn(async (candidates: Array<{ canonicalKey?: string }>) => ({
-      proposed: 1, created: 1, deduplicated: 0, rejected: 0, createdRecords: [],
-      writeOutputs: [{ candidateKey: candidates[0]!.canonicalKey!, outcome: 'created' as const }],
-    }));
-
+  it('creates only repeated owner-backed durable assertions with separate evidence', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('slack');
+    upsertKnowledgeSourceItems([1, 2, 3].map((index) => sourceRow(sourceInstanceId, index, true)));
     const result = await deriveConnectedSourceUnderstanding({
-      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceRunId: sourceRun.id,
-      processingPolicy: grant.processingPolicy,
-      memoryManager: { applyUnderstandingCandidates } as unknown as MemoryManager,
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceRunId, processingPolicy,
       analyze: vi.fn(async ({ items }) => ({
         modelRef: 'test/model',
-        profileCandidates: [
-          {
-            id: 'preference', category: 'preference', factKey: 'communication:async-updates',
-            statement: 'Prefers asynchronous progress updates.', confidence: 'high', evidence: ['Repeated twice.'],
-            evidenceRefs: items.slice(0, 2).map((value) => value.evidenceRef), status: 'pending',
-          },
-          {
-            id: 'routine', category: 'routine', factKey: 'routine:weekly-planning',
-            statement: 'Plans work weekly.', confidence: 'high', evidence: ['Repeated three times.'],
-            evidenceRefs: items.map((value) => value.evidenceRef), status: 'pending',
-          },
-          {
-            id: 'weak', category: 'preference', factKey: 'communication:brief',
-            statement: 'May prefer brief updates.', confidence: 'medium', evidence: ['Weak signal.'],
-            evidenceRefs: items.slice(0, 2).map((value) => value.evidenceRef), status: 'pending',
-          },
-        ],
+        profileCandidates: [{
+          id: 'routine', category: 'routine', factKey: 'weekly-planning', statement: 'Plans work weekly.',
+          confidence: 'high', evidence: ['repeated'], evidenceRefs: items.map((value) => value.evidenceRef),
+          status: 'pending',
+        }],
         workThreadCandidates: [], sourceStatuses: [{ sourceId: 'connected-work', status: 'completed' }],
       })),
     });
-
-    expect(result).toEqual({ created: 2, focusCount: 0, status: 'completed' });
-    expect(applyUnderstandingCandidates).toHaveBeenCalledTimes(2);
-    expect(applyUnderstandingCandidates.mock.calls[0]?.[0][0]).toMatchObject({
-      canonicalKey: 'understanding:preference:communication:async-updates',
-    });
-    const preferenceEvidence = applyUnderstandingCandidates.mock.calls[0]?.[1].sourceItemIds;
-    const routineEvidence = applyUnderstandingCandidates.mock.calls[1]?.[1].sourceItemIds;
-    expect(preferenceEvidence).toHaveLength(2);
-    expect(routineEvidence).toHaveLength(3);
-    expect(routineEvidence).toEqual(expect.arrayContaining(preferenceEvidence));
-    expect(routineEvidence).toEqual(expect.arrayContaining(stored.map((value) => value.id)));
+    expect(result).toEqual({ created: 1, knowledgeCount: 0, status: 'completed' });
+    const [assertion] = listUserAssertions();
+    expect(assertion).toMatchObject({ statement: 'Plans work weekly.', authority: 'user_observed' });
+    expect(getSqliteDatabase().prepare(
+      'SELECT COUNT(*) AS count FROM user_assertion_evidence WHERE assertion_id = ?',
+    ).get(assertion!.id)).toEqual({ count: 3 });
   });
 
   it('does not send local-only source content to semantic analysis', async () => {
     const analyze = vi.fn();
-    const sourceInstanceId = 'local:notes';
-    upsertKnowledgeSourceItems([{
-      sourceInstanceId,
-      collectionScope: 'notes',
-      externalId: 'note-1',
-      itemType: 'document',
-      contentHash: 'hash-local',
-      normalizedText: JSON.stringify({ title: 'Private note', content: 'Never upload this.' }),
-      metadata: { agentId: 'main' },
-      sensitivity: 'personal',
-      retentionClass: 'bounded',
-      synthesisPipeline: 'connected_knowledge',
-      synthesisStatus: 'pending',
-    }]);
-
-    const result = await deriveConnectedSourceUnderstanding({
-      config: ConfigSchema.parse({}),
-      agentId: 'main',
-      sourceInstanceId,
-      sourceRunId: 'run-local',
-      processingPolicy: 'local_only',
-      memoryManager: {} as MemoryManager,
-      analyze,
-    });
-
-    expect(result).toEqual({ created: 0, focusCount: 0, status: 'completed' });
+    upsertKnowledgeSourceItems([sourceRow('local:notes', 1, true)]);
+    expect(await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId: 'local:notes',
+      sourceRunId: 'run-local', processingPolicy: 'local_only', analyze,
+    })).toEqual({ created: 0, knowledgeCount: 0, status: 'completed' });
     expect(analyze).not.toHaveBeenCalled();
   });
 });
+
+function sourceContext(kind: string) {
+  const sourceInstanceId = `composio:${kind}:account-1`;
+  const grant = upsertUnderstandingSourceGrant({
+    sourceKey: `connector-account:${kind}`, adapterId: `connector:${kind}`, category: 'files',
+    platform: 'all', displayName: kind, accessMode: 'continuous', retentionPolicy: 'bounded_raw',
+    processingPolicy: 'remote_allowed', config: { sourceInstanceId },
+  });
+  const run = createUnderstandingSourceRun({ grantId: grant.id, kind: 'bootstrap' });
+  return { sourceInstanceId, sourceRunId: run.id, processingPolicy: grant.processingPolicy };
+}
+
+function sourceRow(sourceInstanceId: string, index: number, owner: boolean) {
+  return {
+    sourceInstanceId, collectionScope: 'messages', externalId: `message-${index}`,
+    itemType: 'connected_content' as const, occurredAt: `2026-08-${20 + index}T09:00:00.000Z`,
+    contentHash: `hash-${index}`, normalizedText: JSON.stringify({ title: `Planning ${index}` }),
+    metadata: { toolkit: 'source', agentId: 'main', actorAttributed: owner },
+    sensitivity: 'personal' as const, retentionClass: 'bounded' as const,
+    synthesisPipeline: 'connected_knowledge' as const, synthesisStatus: 'pending' as const,
+  };
+}

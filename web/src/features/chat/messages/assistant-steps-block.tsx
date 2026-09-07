@@ -661,10 +661,10 @@ function StepRow({
           <div className="space-y-1 text-xs text-fg-muted">
             <p>{memoryActivity.purpose}</p>
             <div className="flex flex-wrap gap-x-3 gap-y-1">
-              <Link className="font-medium text-accent-fg hover:underline" to="/you?tab=understanding">
+              <Link className="font-medium text-accent-fg hover:underline" to="/user-model">
                 {stepLabels.memoryActivity.manage}
               </Link>
-              <Link className="font-medium text-accent-fg hover:underline" to="/you?tab=privacy">
+              <Link className="font-medium text-accent-fg hover:underline" to="/user-model">
                 {stepLabels.memoryActivity.privacy}
               </Link>
             </div>

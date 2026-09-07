@@ -4,31 +4,29 @@ import { ConfigSchema } from '../../../../../config/schema.js';
 import { applyMiscPatch } from '../misc.js';
 
 describe('applyMiscPatch user context settings', () => {
-  it('updates structured consolidation and privacy settings', async () => {
+  it('updates user-model maintenance and privacy settings', async () => {
     const config = ConfigSchema.parse({});
     const result = await applyMiscPatch(config, {
       userContext: {
-        dreaming: {
-          mode: 'review', timezone: 'Asia/Shanghai', schedule: { time: '02:30' },
-          minEvidenceSources: 3, limit: 250,
+        userModel: {
+          sensitiveWritePolicy: 'deny',
+          maintenance: { timezone: 'Asia/Shanghai', dailyTime: '02:30', limit: 250 },
         },
-        privacy: { sensitiveWritePolicy: 'deny' },
       },
     });
     expect(result.ok).toBe(true);
-    expect(config.userContext.dreaming).toMatchObject({
-      mode: 'review', timezone: 'Asia/Shanghai', schedule: { time: '02:30' },
-      minEvidenceSources: 3, limit: 250,
+    expect(config.userContext.userModel).toMatchObject({
+      sensitiveWritePolicy: 'deny',
+      maintenance: { timezone: 'Asia/Shanghai', dailyTime: '02:30', limit: 250 },
     });
-    expect(config.userContext.privacy).toEqual({ sensitiveWritePolicy: 'deny' });
   });
 
-  it('rejects invalid schedules and privacy policies', async () => {
+  it('rejects invalid and removed settings', async () => {
     await expect(applyMiscPatch(ConfigSchema.parse({}), {
-      userContext: { dreaming: { mode: 'review', schedule: { time: '25:00' } } },
+      userContext: { userModel: { maintenance: { dailyTime: '25:00' } } },
     })).resolves.toMatchObject({ ok: false });
     await expect(applyMiscPatch(ConfigSchema.parse({}), {
-      userContext: { privacy: { sensitiveWritePolicy: 'sometimes' } },
+      userContext: { dreaming: { mode: 'review' } },
     })).resolves.toMatchObject({ ok: false });
   });
 });

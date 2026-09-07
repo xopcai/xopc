@@ -11,9 +11,8 @@ describe('normalizeContextCompactionFromConfig', () => {
   it('reads every strict compaction field', () => {
     const result = normalizeContextCompactionFromConfig({
       userContext: {
-        memory: {
-          retention: {
-            compaction: {
+        contextPlanning: {
+          compaction: {
               enabled: false,
               triggerThreshold: 0.72,
               reserveTokens: 12_000,
@@ -30,7 +29,6 @@ describe('normalizeContextCompactionFromConfig', () => {
               minToolResultKeepChars: 2_000,
               maxActiveTranscriptBytes: 4_000_000,
               postCompactionSections: ['Session Startup', 'Safety'],
-            },
           },
         },
       },
@@ -59,7 +57,7 @@ describe('normalizeContextCompactionFromConfig', () => {
   it('uses current defaults when the object is absent or uses a legacy scalar', () => {
     expect(normalizeContextCompactionFromConfig({})).toEqual(DEFAULT_CONTEXT_COMPACTION_CONFIG);
     expect(normalizeContextCompactionFromConfig({
-      userContext: { memory: { retention: { compaction: true } } },
+      userContext: { contextPlanning: { compaction: true } },
     })).toEqual(DEFAULT_CONTEXT_COMPACTION_CONFIG);
   });
 });
@@ -73,10 +71,8 @@ describe('buildContextCompactionPatch', () => {
 
     expect(patch).toEqual({
       userContext: {
-        memory: {
-          retention: {
-            compaction: DEFAULT_CONTEXT_COMPACTION_CONFIG,
-          },
+        contextPlanning: {
+          compaction: DEFAULT_CONTEXT_COMPACTION_CONFIG,
         },
       },
     });

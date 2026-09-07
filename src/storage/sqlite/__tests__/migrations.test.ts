@@ -430,7 +430,10 @@ describe('SQLite migrations', () => {
     try {
       ensureXopcDatabaseSchema(db);
       expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-      for (const name of ['understanding_source_grants', 'understanding_source_runs', 'user_focuses']) {
+      for (const name of [
+        'understanding_source_grants', 'understanding_source_runs', 'user_assertions',
+        'user_goals', 'user_priority_windows', 'knowledge_items', 'execution_context_runs',
+      ]) {
         expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
           .toEqual({ name });
       }
@@ -438,8 +441,10 @@ describe('SQLite migrations', () => {
         expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
           .toBeUndefined();
       }
-      const profileColumns = db.prepare('PRAGMA table_info(user_profiles)').all() as Array<{ name: string }>;
-      expect(profileColumns.map((column) => column.name)).toEqual(expect.arrayContaining(['role', 'primary_goal']));
+      for (const name of ['user_profiles', 'user_understandings', 'user_focuses', 'memory_records']) {
+        expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
+          .toBeUndefined();
+      }
       expect(db.prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_captures'`,
       ).get()).toEqual({ name: 'discussion_captures' });
@@ -543,6 +548,54 @@ describe('SQLite migrations', () => {
       type: 'completion_hook.started',
       message: 'Completion webhook started',
     });
+  });
+
+  it('cuts legacy user context over to the typed user model without data loss', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+    applyPendingMigrations(db, { targetVersion: 147 });
+
+    db.exec(`
+      BEGIN;
+      INSERT INTO user_profiles (
+        principal_id, call_name, pronouns, timezone, locale, accessibility_json,
+        role, primary_goal, created_at, updated_at
+      ) VALUES ('owner', 'Mic', '', 'Asia/Shanghai', 'zh-CN', '{}', 'builder', '', 10, 20);
+      INSERT INTO user_understandings (
+        understanding_id, principal_id, kind, canonical_key, status, scope_type,
+        explicitness, durability, sensitivity, disclosure_policy, confidence,
+        current_version_id, created_at, updated_at
+      ) VALUES (
+        'old-pref', 'owner', 'preference', 'response-style', 'active', 'global',
+        'explicit', 'durable', 'normal', 'referenceable', 0.95,
+        'old-pref-v1', 10, 20
+      );
+      INSERT INTO user_understanding_versions (
+        version_id, understanding_id, statement, payload_json, created_by,
+        change_reason, created_at
+      ) VALUES (
+        'old-pref-v1', 'old-pref', 'Prefer concise answers.', '{}', 'user',
+        'User stated preference', 10
+      );
+      COMMIT;
+    `);
+
+    expect(applyPendingMigrations(db, { targetVersion: 148 })).toBe(148);
+    expect(db.prepare(`SELECT statement, authority, status FROM user_assertions WHERE assertion_id = ?`)
+      .get('old-pref')).toEqual({
+      statement: 'Prefer concise answers.',
+      authority: 'user_explicit',
+      status: 'active',
+    });
+    expect(db.prepare(`SELECT statement FROM user_assertions WHERE assertion_id = ?`)
+      .get('profile-call-name-owner')).toEqual({ statement: 'Mic' });
+    expect(db.prepare(`SELECT statement FROM user_assertions WHERE assertion_id = ?`)
+      .get('profile-role-owner')).toEqual({ statement: 'builder' });
+    expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user_understandings'`)
+      .get()).toBeUndefined();
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 
   it('backfills project ownership for existing automation sessions from v121', () => {
@@ -1066,58 +1119,6 @@ describe('SQLite migrations', () => {
     expect(tables).toEqual([]);
   });
 
-  it('repairs confirmed user understanding provider ownership at v108', () => {
-    const db = openEmptyDb();
-    ensureXopcDatabaseSchema(db);
-    db.exec(`
-      INSERT INTO memory_records (
-        record_id, provider_id, kind, user_id, source_agent_id, content,
-        source_json, confidence, tags_json, status, sensitivity,
-        explicitness, durability, importance, disclosure_policy, created_at, updated_at
-      ) VALUES (
-        'profile-memory', 'personal-context', 'preference', 'local-owner', 'main',
-        'The user prefers local-first products.',
-        '{"provider":"personal-context"}', 0.9, '["user-understanding"]',
-        'active', 'normal', 'inferred', 'durable', 0.7, 'referenceable', 1, 1
-      ), (
-        'connected-memory', 'connected-understanding', 'user_profile', 'local-owner', 'main',
-        'The user works on xopc.',
-        '{"provider":"connected-sources"}', 0.9, '["user-understanding"]',
-        'active', 'normal', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
-      ), (
-        'external-memory', 'external-provider', 'preference', 'local-owner', 'main',
-        'An external provider owns this record.',
-        '{"provider":"external-provider"}', 0.9, '["user-understanding"]',
-        'active', 'normal', 'explicit', 'durable', 0.8, 'referenceable', 1, 1
-      );
-      INSERT INTO memory_records_fts (
-        content, record_id, provider_id, kind, user_id, source_agent_id, workspace_id
-      ) VALUES (
-        'The user prefers local-first products.', 'profile-memory', 'personal-context',
-        'preference', 'local-owner', 'main', NULL
-      ), (
-        'The user works on xopc.', 'connected-memory', 'connected-understanding',
-        'user_profile', 'local-owner', 'main', NULL
-      ), (
-        'An external provider owns this record.', 'external-memory', 'external-provider',
-        'preference', 'local-owner', 'main', NULL
-      );
-    `);
-    setSchemaVersion(db, 107);
-
-    expect(applyPendingMigrations(db, { targetVersion: 108 })).toBe(108);
-    expect(db.prepare(`SELECT provider_id FROM memory_records WHERE record_id = 'profile-memory'`).get())
-      .toEqual({ provider_id: 'local' });
-    expect(db.prepare(`SELECT provider_id FROM memory_records_fts WHERE record_id = 'profile-memory'`).get())
-      .toEqual({ provider_id: 'local' });
-    expect(db.prepare(`SELECT provider_id FROM memory_records WHERE record_id = 'connected-memory'`).get())
-      .toEqual({ provider_id: 'local' });
-    expect(db.prepare(`SELECT provider_id FROM memory_records WHERE record_id = 'external-memory'`).get())
-      .toEqual({ provider_id: 'external-provider' });
-    expect(db.prepare(`SELECT provider_id FROM memory_records_fts WHERE record_id = 'external-memory'`).get())
-      .toEqual({ provider_id: 'external-provider' });
-  });
-
   it('backfills normalized evidence attribution before dropping legacy JSON', () => {
     const db = openEmptyDb();
     db.exec(`
@@ -1230,6 +1231,38 @@ describe('SQLite migrations', () => {
     expect(JSON.parse(blockedScenario.event_types_json)).toEqual([
       'task.attention_required.v2',
     ]);
+  });
+
+  it('separates connector source records from work memory and removes daily raw summaries', () => {
+    const db = openEmptyDb();
+    try {
+      ensureSchemaMetaTable(db);
+      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 148 });
+      const insert = db.prepare(`INSERT INTO knowledge_items (
+        knowledge_id, principal_id, kind, scope_type, scope_id, content, canonical_key,
+        status, confidence, importance, origin_class, derived_from_recalled_context,
+        source_json, created_at, updated_at
+      ) VALUES (?, 'local-owner', ?, 'global', NULL, ?, ?, 'active', 0.8, 0.5,
+        'untrusted', 0, '{}', 1, 1)`);
+      insert.run('source-1', 'workspace_fact', '{"subject":"Build failed"}', 'source-item:gmail:message-1');
+      insert.run('summary-1', 'note', '# gmail updates', 'source-day:gmail:2026-09-07');
+      insert.run('memory-1', 'decision', 'Release after CI passes.', 'decision:release');
+      db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
+        .run('# gmail updates', 'summary-1');
+
+      expect(applyPendingMigrations(db)).toBe(149);
+      expect(db.prepare('SELECT canonical_key, record_class FROM knowledge_items ORDER BY knowledge_id').all())
+        .toEqual([
+          { canonical_key: 'decision:release', record_class: 'memory' },
+          { canonical_key: 'source-item:gmail:message-1', record_class: 'source_index' },
+        ]);
+      expect(db.prepare('SELECT knowledge_id FROM knowledge_items_fts WHERE knowledge_id = ?').get('summary-1'))
+        .toBeUndefined();
+    } finally {
+      db.close();
+    }
   });
 
 });

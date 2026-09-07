@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 
 import type { ElectronUnderstandingSourceCollectionResult } from '@/types/electron';
-import { updateUnderstanding, updateUserFocus, type UserFocus } from '@/features/user-context/user-context-api';
+import { correctAssertion } from '@/features/user-model/user-model-api';
 
 import {
   fetchWorkDiscoveryRun,
   importUnderstandingSources,
-  reviewUnderstandingSourceProfile,
+  reviewSourceAssertions,
   type WorkDiscoveryProfileCandidate,
   type WorkDiscoveryProcessingPolicy,
   type WorkDiscoveryRun,
@@ -25,7 +25,6 @@ type UnderstandingActivityState = {
   itemCounts: Record<string, number>;
   memories: WorkDiscoveryProfileCandidate[];
   threads: WorkUnderstandingThread[];
-  focuses: UserFocus[];
   error?: string;
   setDrawerOpen: (open: boolean) => void;
   finish: () => void;
@@ -35,8 +34,7 @@ type UnderstandingActivityState = {
     selectedSources: string[],
     processingPolicy: WorkDiscoveryProcessingPolicy,
   ) => Promise<void>;
-  reviewMemory: (understandingId: string, accepted: boolean, statement?: string) => Promise<void>;
-  reviewFocus: (focusId: string, accepted: boolean) => Promise<void>;
+  reviewMemory: (assertionId: string, accepted: boolean, statement?: string) => Promise<void>;
 };
 
 function selectedMap(sourceIds: string[], status: SourceStatus): Record<string, SourceStatus> {
@@ -73,7 +71,6 @@ const reset = {
   itemCounts: {},
   memories: [],
   threads: [],
-  focuses: [],
   error: undefined,
 };
 
@@ -90,12 +87,11 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
     const sourcesDone = Object.values(get().sources).every((status) => status !== 'running' && status !== 'idle');
     const sourceFailed = Object.values(get().sources).some((status) => status === 'denied' || status === 'failed' || status === 'partial');
     const hasPendingMemory = get().memories.some((memory) => memory.status === 'pending');
-    const hasPendingFocus = get().focuses.some((focus) => focus.status === 'candidate');
     set({
       directoryStatus,
       directoryRun: run,
       status: directoryStatus === 'completed' && sourcesDone
-        ? !run.feedback?.recognitionDecision || hasPendingMemory || hasPendingFocus
+        ? !run.feedback?.recognitionDecision || hasPendingMemory
           ? 'review_ready'
           : sourceFailed ? 'partial' : 'completed'
         : directoryStatus === 'failed' && sourcesDone ? 'partial' : 'running',
@@ -108,7 +104,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       status: 'running',
       sources: selectedMap(selectedSources, 'running'),
       itemCounts: Object.fromEntries(selectedSources.map((sourceId) => [sourceId, 0])),
-      memories: [], threads: [], focuses: [], error: undefined,
+      memories: [], threads: [], error: undefined,
     });
     try {
       const results = await collect(selectedSources);
@@ -123,20 +119,19 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       if (items.length) await waitForDirectoryUnderstanding(workDiscoveryRunId);
       const understanding = items.length
         ? await importUnderstandingSources(items, workDiscoveryRunId, processingPolicy, sourceCheckpoints)
-        : { profileCandidates: [], workThreads: [], focuses: [], sourceStatuses: [] };
+        : { profileCandidates: [], workThreads: [], knowledgeCandidates: [], sourceStatuses: [] };
       for (const sourceStatus of understanding.sourceStatuses) {
         sources[sourceStatus.sourceId] = sourceStatus.status;
       }
       const memories = understanding.profileCandidates;
-      const focuses = understanding.focuses;
       const hasFailure = Object.values(sources).some((status) => status === 'denied' || status === 'failed' || status === 'partial');
       const analysisErrors = understanding.sourceStatuses.flatMap((item) => item.error ? [item.error] : []);
       const directoryDone = !workDiscoveryRunId || get().directoryStatus === 'completed';
       set({
-        sources, itemCounts, memories, threads: understanding.workThreads, focuses,
+        sources, itemCounts, memories, threads: understanding.workThreads,
         ...(analysisErrors.length ? { error: analysisErrors.join('; ') } : {}),
         status: !directoryDone ? 'running'
-          : memories.some((memory) => memory.status === 'pending') || focuses.some((focus) => focus.status === 'candidate') ? 'review_ready'
+          : memories.some((memory) => memory.status === 'pending') ? 'review_ready'
             : hasFailure ? 'partial' : 'completed',
       });
     } catch (error) {
@@ -149,36 +144,16 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       }));
     }
   },
-  reviewMemory: async (understandingId, accepted, statement) => {
+  reviewMemory: async (assertionId, accepted, statement) => {
     try {
-      if (statement) await updateUnderstanding(understandingId, { statement, status: 'active' });
-      else await reviewUnderstandingSourceProfile([{ understandingId, status: accepted ? 'accepted' : 'rejected' }]);
+      if (statement) await correctAssertion(assertionId, statement);
+      else await reviewSourceAssertions([{ assertionId, status: accepted ? 'accepted' : 'rejected' }]);
       set((state) => {
-        const memories = state.memories.map((memory) => memory.understandingId === understandingId
+        const memories = state.memories.map((memory) => memory.assertionId === assertionId
           ? { ...memory, ...(statement ? { statement } : {}), status: statement ? 'edited' as const : accepted ? 'accepted' as const : 'rejected' as const } : memory);
         return {
           memories,
-          status: memories.some((memory) => memory.status === 'pending') || state.focuses.some((focus) => focus.status === 'candidate') ? 'review_ready'
-            : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed' || source === 'partial') ? 'partial' : 'completed',
-          error: undefined,
-        };
-      });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
-      throw error;
-    }
-  },
-  reviewFocus: async (focusId, accepted) => {
-    try {
-      await updateUserFocus(focusId, { status: accepted ? 'active' : 'rejected' });
-      set((state) => {
-        const focuses = state.focuses.map((focus) => focus.id === focusId
-          ? { ...focus, status: accepted ? 'active' as const : 'rejected' as const } : focus);
-        const reviewReady = state.memories.some((memory) => memory.status === 'pending')
-          || focuses.some((focus) => focus.status === 'candidate');
-        return {
-          focuses,
-          status: reviewReady ? 'review_ready'
+          status: memories.some((memory) => memory.status === 'pending') ? 'review_ready'
             : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed' || source === 'partial') ? 'partial' : 'completed',
           error: undefined,
         };

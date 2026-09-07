@@ -32,8 +32,8 @@ bus, and the agent runtime persists all session state through SQLite.
 | Agent runtime | `src/agent/service.ts`, `src/agent/embedded/`, `src/agent/orchestration/` | Builds per-session agents, prompts, tools, memory, skills, MCP tools, model selection, streaming events, compaction, and direct/webchat turn dispatch. |
 | Channels | `src/channels/`, `extensions/telegram`, `extensions/weixin`, `extensions/feishu` | Channel plugins receive external messages, normalize routing/session keys, publish inbound bus messages, and send outbound replies. |
 | Extension runtime | `src/extensions/`, `extensions/*` | Loads extension manifests and code by activation plan, then registers hooks, tools, channel plugins, gateway methods, and extension UI assets. |
-| State and storage | `src/storage/sqlite/`, `src/session/`, `src/config/` | SQLite database, session metadata/transcripts/FTS, compaction checkpoints, notes and memory records, JSON config, agent profiles, workspace files, media, logs, and extension state. |
-| User understanding | `src/knowledge/`, `src/agent/memory/understanding/`, `src/agent/memory/context/` | Evidence ingestion, governed synthesis, deduplicated understanding records, and bounded per-turn context planning. See [User understanding](./user-understanding.md). |
+| State and storage | `src/storage/sqlite/`, `src/session/`, `src/config/` | SQLite database, session metadata/transcripts/FTS, notes, user-model assertions, knowledge items, JSON config, agent profiles, workspace files, media, logs, and extension state. |
+| User model and memory | `src/user-model/`, `src/knowledge-memory/`, `src/agent/context/`, `src/memory-maintenance/` | Evidence-backed user assertions, goals, priority windows, collaboration rules, scoped knowledge, bounded per-turn planning, and deterministic maintenance. See [User model and memory](../../user-understanding.md). |
 | External integrations | `src/providers/`, `src/agent/mcp/`, `src/mcp/`, `src/browser/`, `src/remote-access/` | LLM providers through `@earendil-works/pi-ai`, outbound MCP tools over stdio/HTTP, inbound channel MCP bridge, browser extension WebSocket bridge, and optional Tailscale/FRP/SSH exposure. |
 
 ## Main Data Flows
@@ -100,7 +100,7 @@ to repositories under `src/storage/sqlite/`.
 Important boundaries:
 
 - `~/.xopc/xopc.json` remains the primary configuration file, with environment variables for secrets and overrides.
-- Agent profile Markdown, skills, shared user memory, extension state, logs, media, and workspaces live under the state directory, usually `~/.xopc`.
+- Agent profile Markdown, skills, the shared user model, knowledge memory, extension state, logs, media, and workspaces live under the state directory, usually `~/.xopc`.
 - The Markdown workspace is not the transcript store. Model input is loaded from SQLite through `SessionStore.loadMessages`, which applies transcript hygiene before sending history to the LLM.
 
 ## Channels and Extensions
@@ -140,7 +140,7 @@ Core authenticated routes are registered first:
 - status and health,
 - agent streaming,
 - sessions,
-- memory,
+- user model and knowledge memory,
 - projects,
 - search.
 

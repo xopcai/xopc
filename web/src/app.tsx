@@ -33,7 +33,7 @@ import {
   loadSharePreviewPage,
   loadSessionsPage,
   loadSkillsPage,
-  loadUserContextPage,
+  loadUserModelPage,
   loadWorkflowsPage,
   loadLocalAppsPage,
   loadLocalAppWorkbenchPage,
@@ -59,7 +59,7 @@ const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default
 const WorkflowEditorPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowEditorPage })));
 const WorkflowRunPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowRunPage })));
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
-const UserContextPage = lazy(() => loadUserContextPage().then((m) => ({ default: m.UserContextPage })));
+const UserModelPage = lazy(() => loadUserModelPage().then((m) => ({ default: m.UserModelPage })));
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
 const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
@@ -206,10 +206,10 @@ const router = createHashRouter([
         ),
       },
       {
-        path: 'you',
+        path: 'user-model',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
-            <UserContextPage />
+            <UserModelPage />
           </Suspense>
         ),
       },

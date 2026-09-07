@@ -1,38 +1,44 @@
-import { USER_FACING_UNDERSTANDING_WRITING_GUIDANCE } from '../../user-context/understanding-writing.js';
+export const USER_MODEL_INTERPRETER_SYSTEM_PROMPT = `You are xopc's user-model interpreter. You do not chat with the user and cannot write storage. Distinguish explicit memory commands, corrections, forgetting, durable user assertions, and ordinary task requests. Return strict JSON only. Assistant text is never evidence about the user.`;
 
-export const UNDERSTANDING_INTERPRETER_SYSTEM_PROMPT = `You are xopc's user-understanding interpreter. You do not chat with the user and cannot write storage. Distinguish memory commands, memory questions, corrections, forgetting, durable user assertions, and ordinary task requests. Return strict JSON only. Never treat assistant text as evidence of a fact about the user.`;
-
-export function buildUnderstandingInterpreterPrompt(options: {
+export function buildUserModelInterpreterPrompt(options: {
   mode: 'turn' | 'transcript';
+  evidenceTimestamp: string;
+  timezone: string;
   availableTargets?: Array<{ id: string; statement: string }>;
 }): string {
   const targets = options.availableTargets?.length
-    ? `\nOnly these understanding IDs may be targeted for confirm, correction, or forgetting:\n${options.availableTargets.map((item) => `- ${item.id}: ${item.statement}`).join('\n')}`
-    : '\nNo existing understanding IDs are available to target.';
+    ? `\nThese assertion IDs may be targeted for confirm, correction, or forgetting:\n${options.availableTargets.map((item) => `- ${item.id}: ${item.statement}`).join('\n')}`
+    : '\nNo existing assertion IDs are available to target.';
   return `Interpret the evidence-tagged conversation above for ${options.mode === 'turn' ? 'the latest user turn' : 'durable transcript synthesis'}.
 
-Return exactly this JSON shape:
-{"intent":"none","candidates":[],"targetUnderstandingIds":[],"abstentionReason":"..."}
+Evidence time: ${options.evidenceTimestamp}
+User timezone: ${options.timezone}
 
-Allowed intents: memory_create, memory_query, memory_confirm, memory_correct, memory_forget, user_assertion, task_request, none.
+Return exactly this top-level shape:
+{"intent":"none","candidates":[],"targetAssertionIds":[],"abstentionReason":"..."}
 
 Candidate shape:
-{"factKey":"communication:concise","statement":"...","kind":"preference","explicitness":"observed","durability":"durable","scopeHint":"global","confidence":0.8,"importance":0.7,"sensitivity":"normal","disclosurePolicy":"referenceable","evidence":[{"ref":"entry-id","quote":"exact quote from that user message"}],"selfContained":true,"unresolvedReferences":[]}
+{"subject":{"type":"user","id":"self"},"predicate":"preference.response.detail","cardinality":"single","scope":{"type":"global"},"kind":"preference","value":"concise","normalizedValue":"concise","statement":"The user prefers concise answers.","authority":"user_observed","confidence":0.9,"declaredImportance":0.8,"inferredImportance":0.6,"consequence":"medium","actionability":1,"volatility":"stable","sensitivity":"normal","disclosurePolicy":"referenceable","applicability":{"operation":"response"},"temporalResolution":"exact","evidence":[{"ref":"entry-id","quote":"exact quote"}],"selfContained":true,"unresolvedReferences":[]}
 
-Allowed kinds: preference, boundary, relationship, routine, current_state, long_term_goal, project_context, task_lesson, derived_insight.
+Allowed intents: remember, query, confirm, correct, forget, user_assertion, task, none.
+Allowed subject types: user, person, goal, project, topic.
+Allowed kinds: identity, preference, value, routine, capability, relationship, current_state, derived_insight.
+Allowed scopes: global without id; agent, workspace, project, or session with the exact supplied id.
 
 Rules:
-- A question such as “Do you remember this goal?” is memory_query and creates no candidate.
-- A request to create, summarize, update, investigate, or track a goal is task_request, not a user goal.
-- Every candidate needs an exact quote from one or more user messages. Assistant messages may resolve context but never count as evidence.
-- Extract zero to eight independent candidates; do not collapse multiple facts into one.
-- factKey must be a stable language-neutral lowercase identifier using letters, digits, colons, or hyphens. Equivalent facts in different languages must use the same factKey.
-- Set selfContained=false and list unresolvedReferences for unresolved words such as this, that, it, 这个, 那个, or 它.
+- A question about what is remembered uses query and creates no candidate.
+- A request to create, summarize, update, investigate, or track work uses task, not a user assertion.
+- Every candidate needs an exact quote from a user message. Assistant messages can resolve context but are never evidence.
+- Extract zero to eight independent candidates. Each candidate represents one stable predicate and one value.
+- predicate is a stable language-neutral lowercase identifier. The value is excluded from predicate identity.
+- Preserve importance stated by the user in declaredImportance; estimate inferredImportance separately.
+- Use current_state or event volatility only with a bounded validTo. If relative time cannot be resolved, use temporalResolution=unresolved and omit resolved time fields.
+- Resolve relative time using the evidence time and timezone. Put ISO 8601 timestamps with offsets in validFrom, validTo, and reviewAt.
+- For an explicit correction, set correctionOfAssertionId on the replacement candidate.
+- Set selfContained=false and list unresolvedReferences for unresolved pronouns or references.
 - Omit temporary reactions and one-off task instructions.
 - Never include passwords, credentials, regulated identifiers, or speculative diagnoses.
-- For transcript mode, use explicitness=inferred unless the latest user message is itself an explicit memory command or correction.
+- In transcript mode, use system_inferred unless a quoted user message is itself an explicit memory command.
 - If evidence is insufficient, return candidates=[] and explain abstentionReason.
-
-${USER_FACING_UNDERSTANDING_WRITING_GUIDANCE}
 ${targets}`;
 }
