@@ -17,6 +17,7 @@ public final class XopcVoiceModule: Module {
   private var responseId = ""
   private var submitted = 0
   private var played = 0
+  private var configurationRestarts: [TimeInterval] = []
   private let output = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
 
   public func definition() -> ModuleDefinition {
@@ -50,37 +51,7 @@ public final class XopcVoiceModule: Module {
     backgroundEnabled = background
     do {
       try engine.inputNode.setVoiceProcessingEnabled(true)
-      let input = engine.inputNode.outputFormat(forBus: 0)
-      guard input.sampleRate > 0,
-        let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true),
-        let converter = AVAudioConverter(from: input, to: target) else {
-        throw NSError(domain: "XopcVoice", code: 1, userInfo: [NSLocalizedDescriptionKey: "Microphone format unavailable"])
-      }
-      let currentEpoch = epoch
-      engine.inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(input.sampleRate * 0.04), format: input) { [weak self] buffer, _ in
-        guard let self else { return }
-        let capture = self.captureLock.withLock { (self.captureEnabled, self.captureId) }
-        guard capture.0 else { return }
-        let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000 / input.sampleRate) + 32)
-        guard let converted = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
-        var supplied = false
-        var error: NSError?
-        converter.convert(to: converted, error: &error) { _, status in
-          if supplied { status.pointee = .noDataNow; return nil }
-          supplied = true
-          status.pointee = .haveData
-          return buffer
-        }
-        guard error == nil, let samples = converted.int16ChannelData, converted.frameLength > 0 else { return }
-        let audio = Data(bytes: samples[0], count: Int(converted.frameLength) * 2).base64EncodedString()
-        DispatchQueue.main.async { [weak self] in
-          guard let self, self.epoch == currentEpoch else { return }
-          let valid = self.captureLock.withLock { self.captureEnabled && self.captureId == capture.1 }
-          guard valid else { return }
-          self.sendEvent("pcm", ["audio": audio, "captureId": capture.1])
-        }
-      }
-      tapInstalled = true
+      try installCaptureTap(on: engine)
       let player = AVAudioPlayerNode()
       engine.attach(player)
       engine.connect(player, to: engine.mainMixerNode, format: output)
@@ -96,8 +67,12 @@ public final class XopcVoiceModule: Module {
         MPRemoteCommandCenter.shared().stopCommand.isEnabled = true
       }
       observers = [
-        NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
-          self?.interrupt("route_lost")
+        NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self, weak engine] _ in
+          // Never tear down the engine on its internal notification queue.
+          DispatchQueue.main.async { [weak self, weak engine] in
+            guard let engine else { return }
+            self?.restoreConfiguration(of: engine)
+          }
         },
         NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: .main) { [weak self] notification in
           if let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
@@ -109,6 +84,64 @@ public final class XopcVoiceModule: Module {
         }
       ]
     } catch { stop(); throw error }
+  }
+
+  private func installCaptureTap(on engine: AVAudioEngine) throws {
+    let input = engine.inputNode.outputFormat(forBus: 0)
+    guard input.sampleRate > 0,
+      let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true),
+      let converter = AVAudioConverter(from: input, to: target) else {
+      throw NSError(domain: "XopcVoice", code: 1, userInfo: [NSLocalizedDescriptionKey: "Microphone format unavailable"])
+    }
+    let currentEpoch = epoch
+    engine.inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(input.sampleRate * 0.04), format: input) { [weak self] buffer, _ in
+      guard let self else { return }
+      let capture = self.captureLock.withLock { (self.captureEnabled, self.captureId) }
+      guard capture.0 else { return }
+      let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000 / input.sampleRate) + 32)
+      guard let converted = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
+      var supplied = false
+      var error: NSError?
+      converter.convert(to: converted, error: &error) { _, status in
+        if supplied { status.pointee = .noDataNow; return nil }
+        supplied = true
+        status.pointee = .haveData
+        return buffer
+      }
+      guard error == nil, let samples = converted.int16ChannelData, converted.frameLength > 0 else { return }
+      let audio = Data(bytes: samples[0], count: Int(converted.frameLength) * 2).base64EncodedString()
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.epoch == currentEpoch else { return }
+        let valid = self.captureLock.withLock { self.captureEnabled && self.captureId == capture.1 }
+        guard valid else { return }
+        self.sendEvent("pcm", ["audio": audio, "captureId": capture.1])
+      }
+    }
+    tapInstalled = true
+  }
+
+  private func restoreConfiguration(of engine: AVAudioEngine) {
+    guard self.engine === engine, !engine.isRunning else { return }
+    let now = ProcessInfo.processInfo.systemUptime
+    configurationRestarts.removeAll { now - $0 > 1 }
+    // Rebuild for negotiated hardware formats, but never acknowledge discarded speech.
+    guard submitted == played, configurationRestarts.count < 3,
+      !AVAudioSession.sharedInstance().currentRoute.inputs.isEmpty,
+      !AVAudioSession.sharedInstance().currentRoute.outputs.isEmpty else {
+      interrupt("route_lost")
+      return
+    }
+    configurationRestarts.append(now)
+    epoch += 1
+    playbackEpoch += 1
+    player?.stop()
+    if tapInstalled { engine.inputNode.removeTap(onBus: 0) }
+    tapInstalled = false
+    do {
+      try installCaptureTap(on: engine)
+      try engine.start()
+      player?.play()
+    } catch { interrupt("route_lost") }
   }
 
   private func enqueue(id: String, audio: String) throws {
@@ -131,7 +164,8 @@ public final class XopcVoiceModule: Module {
     let generation = playbackEpoch
     player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
       DispatchQueue.main.async {
-        guard let self, self.playbackEpoch == generation, self.responseId == id else { return }
+        guard let self, self.playbackEpoch == generation, self.responseId == id,
+          self.engine?.isRunning == true else { return }
         self.played = max(self.played, end)
         self.sendEvent("played", ["responseId": id, "playedBytes": self.played])
       }
@@ -170,6 +204,7 @@ public final class XopcVoiceModule: Module {
     engine = nil
     player = nil
     backgroundEnabled = false
+    configurationRestarts = []
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 }

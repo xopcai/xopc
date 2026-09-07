@@ -1,8 +1,8 @@
-# Android native voice regression probe
+# Native voice regression probe
 
-Build and install the current Android development app, start Metro, and keep the app in
+Build and install the current iOS or Android development app, start Metro, and keep the app in
 the foreground. Grant microphone permission when prompted. Stop any active voice call
-first. The probe runs the production `NativeAudioSession` and Kotlin module through
+first. The probe runs the production `NativeAudioSession` and Swift/Kotlin module through
 Hermes, with generated PCM tones; it does not connect to a gateway or upload recordings.
 
 From the repository root, using `agent-device` 0.20.10:
@@ -22,7 +22,9 @@ pnpm dlx agent-device@0.20.10 cdp runtime eval --expr '__voiceNativeProbe.cases.
 Pass criteria: `stage` is `passed`, captured frames are nonzero, `stopped` is `true`,
 and each case's played bytes match expected bytes. Cases cover a half-second reply,
 10 ms of audio, the full two-second window, resuming the same response after starvation,
-and a new short response after interruption/flush. This checks native playback-head
+and a new short response after interruption/flush, speaker/system output selection, and
+capture/playback in a second call. Capture waits up to two seconds for a native frame,
+failing immediately on an interruption. This checks native playback
 acknowledgements, not sound quality or speech recognition.
 
 On an API 35 emulator, the original player accepted a 24,000-byte half-second reply
@@ -34,3 +36,65 @@ See [AudioTrack buffer sizing](https://developer.android.com/reference/android/m
 
 An end-to-end speech/AI test additionally requires normal device pairing with the target
 gateway and a speech source. Passing this probe alone does not prove a cloud call works.
+
+## iOS verification — 2026-09-07
+
+Environment: Xcode 26.4.1, iPhone 17 Pro simulator, iOS 26.4, current-source Debug build
+with normal simulator signing. The generated local project's marketing version is older
+than the package version; this is a source-build test, not validation of a distributed IPA.
+
+```sh
+xcodebuild -workspace apps/mobile-expo/ios/xopc.xcworkspace -scheme xopc \
+  -configuration Debug -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath /tmp/xopc-ios-voice-build \
+  CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES build
+```
+
+Use `--session ios-voice` before `cdp` and select the iPhone target when both platforms
+are running. Do not disable signing: SecureStore requires the simulator entitlements.
+
+Before the fix, the engine stopped on its initial hardware format negotiation; both the
+probe and a cloud call paused with `route_lost` and no microphone frames. Retrying the
+call repeated the failure. iOS also resolved the first microphone permission request
+while AppState was still `inactive`, causing a separate `background` startup failure.
+
+After the fix, resetting microphone permission and accepting the system prompt passed:
+
+| Native playback case | Expected / acknowledged PCM bytes |
+| --- | --- |
+| Short reply | 24,000 / 24,000 |
+| 10 ms reply | 480 / 480 |
+| Full two-second window | 96,000 / 96,000 |
+| Stream before gap | 4,800 / 4,800 |
+| Stream after gap, cumulative | 9,600 / 9,600 |
+| New response after flush | 24,000 / 24,000 |
+| Speaker output | 24,000 / 24,000 |
+| System output | 24,000 / 24,000 |
+| Second call | 24,000 / 24,000 |
+
+All four capture checks received native PCM; no interruption occurred and the probe
+released the audio session. The first cloud regression against `https://xl.xopc.ai`
+returned the test phrase transcription and an AI response, with 211,200 received bytes
+and 211,200 native playback-acknowledged bytes. Cloud recognition used synthetic speech
+PCM injected at the production call transport, not a recording of a person speaking
+into the simulator microphone. No credentials or raw recordings are stored here.
+The final rebuilt native module plus the permission fix passed another cloud call:
+`response.done` received, 76,800 / 76,800 bytes, transcription present, and AI text
+`I can hear you clearly.` visible in the call screen. The production call controller
+was started from Hermes for these isolated diagnostic sessions; cloud responses and
+native audio were not mocked.
+
+The expanded call was visible above the native settings sheet, and tapping the compact
+bar reopened it without dropping the connection. The iOS window overlay replaces the
+root Modal presentation that UIKit rejected while a native-stack modal was present.
+Automated checks: 722 mobile tests (132 files), mobile typecheck and lint passed.
+
+Limits: these checks do not establish physical iPhone microphone quality, Bluetooth
+route behavior, acoustic echo cancellation quality, or TestFlight/release-build behavior.
+Real device removal and interruption still pause capture. A format change with
+unacknowledged output also pauses rather than falsely acknowledging discarded speech.
+
+References: [Apple audio engine configuration notification](https://developer.apple.com/documentation/foundation/nsnotification/name-swift.struct/avaudioengineconfigurationchange),
+[Expo SDK 56 audio](https://docs.expo.dev/versions/v56.0.0/sdk/audio/),
+[react-native-screens FullWindowOverlay](https://github.com/software-mansion/react-native-screens#fullwindowoverlay).

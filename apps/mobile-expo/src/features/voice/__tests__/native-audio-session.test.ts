@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   permission: vi.fn(async () => ({ granted: true })),
   getPermission: vi.fn(async () => ({ granted: true })),
   appState: { currentState: 'active' },
+  appListeners: new Set<(state: string) => void>(),
 }));
 vi.mock('expo', () => ({ requireOptionalNativeModule: () => ({
   start: mocks.start, stop: mocks.stop, setCaptureEnabled: mocks.capture,
@@ -15,13 +16,23 @@ vi.mock('expo', () => ({ requireOptionalNativeModule: () => ({
   },
 }) }));
 vi.mock('expo-audio', () => ({ getRecordingPermissionsAsync: mocks.getPermission, requestRecordingPermissionsAsync: mocks.permission }));
-vi.mock('react-native', () => ({ AppState: mocks.appState }));
+vi.mock('react-native', () => ({ AppState: Object.assign(mocks.appState, {
+  addEventListener: (_event: string, fn: (state: string) => void) => {
+    mocks.appListeners.add(fn);
+    return { remove: () => mocks.appListeners.delete(fn) };
+  },
+}) }));
 
 import { NativeAudioSession } from '../native-audio-session';
 import { isAudioCaptureActive } from '../audio-playback-coordinator';
 const labels = { title: 'Call', end: 'End' };
 const callbacks = () => ({ pcm: vi.fn(), played: vi.fn(), interrupted: vi.fn() });
-afterEach(() => { vi.clearAllMocks(); mocks.appState.currentState = 'active'; });
+afterEach(() => { vi.clearAllMocks(); vi.useRealTimers(); mocks.appState.currentState = 'active'; mocks.appListeners.clear(); });
+
+function appState(state: string) {
+  mocks.appState.currentState = state;
+  for (const listener of mocks.appListeners) listener(state);
+}
 
 describe('native capture ownership', () => {
   it('discards bridge frames queued before mute or stop, including after unmute', async () => {
@@ -86,6 +97,46 @@ describe('native capture ownership', () => {
     await expect(audio.start(false, labels, callbacks())).rejects.toThrow('background');
     expect(audio.permissionPromptActive).toBe(false);
     expect(mocks.start).not.toHaveBeenCalled();
+    expect(isAudioCaptureActive()).toBe(false);
+  });
+  it('waits for the iOS permission sheet to restore the active state', async () => {
+    mocks.getPermission.mockResolvedValueOnce({ granted: false });
+    mocks.permission.mockImplementationOnce(async () => {
+      appState('inactive');
+      return { granted: true };
+    });
+    const audio = new NativeAudioSession();
+    const starting = audio.start(false, labels, callbacks());
+    await vi.waitFor(() => expect(mocks.appListeners.size).toBe(1));
+    expect(audio.permissionPromptActive).toBe(true);
+    expect(mocks.start).not.toHaveBeenCalled();
+    appState('active');
+    await starting;
+    expect(mocks.start).toHaveBeenCalledOnce();
+    expect(mocks.appListeners.size).toBe(0);
+    expect(audio.permissionPromptActive).toBe(false);
+    await audio.stop();
+  });
+  it.each(['cancel', 'background', 'timeout'])('cleans up a permission foreground wait on %s', async reason => {
+    vi.useFakeTimers();
+    mocks.getPermission.mockResolvedValueOnce({ granted: false });
+    mocks.permission.mockImplementationOnce(async () => {
+      appState('inactive');
+      return { granted: true };
+    });
+    const audio = new NativeAudioSession();
+    const starting = audio.start(false, labels, callbacks());
+    const rejected = expect(starting).rejects.toThrow(reason === 'cancel' ? 'CANCELLED' : 'background');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.appListeners.size).toBe(1);
+    if (reason === 'cancel') await audio.stop();
+    else if (reason === 'background') appState('background');
+    else await vi.advanceTimersByTimeAsync(1500);
+    await rejected;
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(mocks.appListeners.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(audio.permissionPromptActive).toBe(false);
     expect(isAudioCaptureActive()).toBe(false);
   });
 });
