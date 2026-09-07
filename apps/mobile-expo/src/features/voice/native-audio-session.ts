@@ -36,6 +36,26 @@ export class NativeAudioSession {
   private epoch = 0;
   private captureId = 0;
   private capturing = false;
+  private cancelPermissionWait?: () => void;
+
+  private waitForPermissionForeground(): Promise<void> {
+    if (AppState.currentState !== 'inactive') return Promise.resolve();
+    return new Promise(resolve => {
+      const finish = () => {
+        clearTimeout(timeout);
+        subscription.remove();
+        this.cancelPermissionWait = undefined;
+        resolve();
+      };
+      const subscription = AppState.addEventListener('change', state => {
+        if (state !== 'inactive') finish();
+      });
+      const timeout = setTimeout(finish, 1500);
+      this.cancelPermissionWait = finish;
+      if (AppState.currentState !== 'inactive') finish();
+    });
+  }
+
   async start(background: boolean, labels: { title: string; end: string }, callbacks: {
     pcm: (bytes: Uint8Array) => void;
     played: (id: string, bytes: number) => void;
@@ -50,7 +70,11 @@ export class NativeAudioSession {
       if (epoch !== this.epoch) throw new Error('CANCELLED');
       if (!permission.granted) {
         this.permissionPromptActive = true;
-        try { permission = await requestRecordingPermissionsAsync(); }
+        try {
+          permission = await requestRecordingPermissionsAsync();
+          // iOS resolves permission before the system sheet restores the active app state.
+          if (permission.granted && epoch === this.epoch && !background) await this.waitForPermissionForeground();
+        }
         finally { this.permissionPromptActive = false; }
       }
       if (!permission.granted) throw new Error('PERMISSION_DENIED');
@@ -76,6 +100,7 @@ export class NativeAudioSession {
   speaker(enabled: boolean): Promise<void> { return native?.setSpeaker(enabled) ?? Promise.resolve(); }
   async stop(): Promise<void> {
     ++this.epoch;
+    this.cancelPermissionWait?.();
     this.capture(false);
     this.subscriptions.forEach(s => s.remove());
     this.subscriptions = [];
