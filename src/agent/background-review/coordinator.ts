@@ -17,10 +17,7 @@ import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
 } from '../orchestration/llm-turn-retry.js';
-import {
-  resolveBackgroundReviewSettings,
-  type BackgroundReviewSettings,
-} from './settings.js';
+import { resolveBackgroundReviewSettings } from './settings.js';
 import { runBackgroundUserModelReview } from './run-background-review.js';
 
 const log = createLogger('BackgroundReviewCoordinator');

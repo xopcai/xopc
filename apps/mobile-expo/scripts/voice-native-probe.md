@@ -98,3 +98,37 @@ unacknowledged output also pauses rather than falsely acknowledging discarded sp
 References: [Apple audio engine configuration notification](https://developer.apple.com/documentation/foundation/nsnotification/name-swift.struct/avaudioengineconfigurationchange),
 [Expo SDK 56 audio](https://docs.expo.dev/versions/v56.0.0/sdk/audio/),
 [react-native-screens FullWindowOverlay](https://github.com/software-mansion/react-native-screens#fullwindowoverlay).
+
+## Android output volume — 2026-09-07
+
+Android now explicitly selects the built-in speaker for automatic output when no external
+output is connected, matching iOS's existing `defaultToSpeaker` behavior. Wired/USB/Bluetooth
+outputs remain system-selected unless the user explicitly selects Speaker. Device additions
+release the automatic speaker override; explicit Speaker selection persists until disabled.
+The activity's volume keys target `STREAM_VOICE_CALL` throughout a call, including listening
+gaps. Stop/failure restores the prior activity volume-key stream and audio mode. The older
+Android speakerphone API also restores its prior state. No PCM gain, stream-volume write,
+media-stream substitution, or echo-cancellation bypass is introduced.
+
+Verification used the API 35 Pixel 7 emulator and a rebuilt Debug APK:
+
+- Before: the call registered no preferred communication device. This emulator nevertheless
+  defaulted to its speaker, so it did **not** reproduce a physical handset's low earpiece volume.
+- After: `dumpsys audio` showed the app's speaker route client and both preferred and active
+  communication output as `speaker`, even with no reply playing.
+- A volume-up key changed voice-call volume 3 → 4 while media volume stayed at 5. The test
+  restored the original voice-call volume afterward.
+- All nine native PCM playback cases passed, all four capture checks received frames, and
+  the probe stopped cleanly. No microphone frames were uploaded to a gateway.
+- All 11 Kotlin tests passed (including three new output-policy cases), as did 733 mobile
+  tests, mobile typecheck and lint. The APK build passed using the installed JDK 17 and the
+  existing Gradle 9.3.1 wrapper. JDK 21 triggered an unrelated Foojay toolchain download error;
+  no project dependency or wrapper version was changed to work around it.
+
+Physical HarmonyOS/Android loudness, connected-headset routing, and Android API <31 still
+require device acceptance. This change only modifies Android; iOS already defaults to the
+speaker and no iOS amplification change was made without evidence of attenuation. Native
+changes require a rebuilt Android app, not a gateway update or a JS-only update.
+
+References: [Android output and volume controls](https://developer.android.com/media/platform/output),
+[communication-device selection](https://developer.android.com/reference/android/media/AudioManager#setCommunicationDevice(android.media.AudioDeviceInfo)).
