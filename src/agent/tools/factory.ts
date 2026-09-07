@@ -65,6 +65,7 @@ import {
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import type { MemoryManager } from '../memory/manager.js';
+import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import type { SessionStore } from '../../session/store.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
@@ -99,6 +100,7 @@ import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
 import { sortToolsForPromptCache } from './cache-stability.js';
 import {
+  getSessionMetadata,
   getSessionTaskPlan,
   isXopcDatabaseOpen,
   setSessionTaskPlan,
@@ -173,6 +175,7 @@ export interface CreateCoreToolsOptions {
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
   agentId?: string;
+  sessionKey?: string;
   /** When set, registers local skill tools plus marketplace discovery for this workspace. */
   getSkillManager?: () => SkillManager;
 }
@@ -320,6 +323,13 @@ export class AgentToolsFactory {
     });
     const agentId = options?.agentId;
     const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main');
+    const currentSessionKey = () => options?.sessionKey ?? this.deps.getCurrentContext?.()?.sessionKey;
+    const currentAccess = () => resolveUserContextSessionAccess(this.deps.getConfig?.(), currentSessionKey());
+    const knowledgeWritePolicy = () => this.deps.getConfig?.()?.userContext.knowledgeMemory.writePolicy ?? 'deny';
+    const currentProjectId = () => {
+      const key = currentSessionKey();
+      return key ? getSessionMetadata(key)?.projectId : undefined;
+    };
     const getCommandIsolation = () => {
       const config = this.deps.getConfig?.();
       return config ? resolveEffectiveAgentConfigForSession(config, this.deps.getCurrentContext()?.sessionKey ?? `agent:${agentId ?? 'main'}:internal`).config.runtime.commandIsolation : undefined;
@@ -336,6 +346,7 @@ export class AgentToolsFactory {
       hookRunner: this.deps.hookRunner,
       toolExecutorConfig: this.deps.toolExecutorConfig,
       getMemoryManager: getMemMgr,
+      canAccessMemory: () => currentAccess().knowledge,
     });
     const optionalTools = [imageTool, imageGenerateTool].filter((t) => t != null) as any[];
 
@@ -459,27 +470,46 @@ export class AgentToolsFactory {
       createUserContextSearchTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+        getSessionId: currentSessionKey,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().userModel,
       }),
       createUserContextGetTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+        getSessionId: currentSessionKey,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().userModel,
       }),
       createKnowledgeSearchTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+        getSessionId: currentSessionKey,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().knowledge,
+        canWrite: () => currentAccess().knowledge,
+        getWritePolicy: knowledgeWritePolicy,
+        getSources: () => currentAccess().knowledgeSources,
       }),
       createKnowledgeGetTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+        getSessionId: currentSessionKey,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().knowledge,
+        canWrite: () => currentAccess().knowledge,
+        getWritePolicy: knowledgeWritePolicy,
+        getSources: () => currentAccess().knowledgeSources,
       }),
       createKnowledgeWriteTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+        getSessionId: currentSessionKey,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().knowledge,
+        canWrite: () => currentAccess().knowledge,
+        getWritePolicy: knowledgeWritePolicy,
+        getSources: () => currentAccess().knowledgeSources,
       }),
       ...(this.deps.getSessionStore
         ? [
@@ -495,6 +525,7 @@ export class AgentToolsFactory {
               getSessionStore: this.deps.getSessionStore,
               getPrimaryModel: getPrimary,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              canAccess: () => currentAccess().crossSessionHistory,
             }),
           ]
         : []),

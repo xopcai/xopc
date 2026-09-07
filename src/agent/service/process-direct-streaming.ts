@@ -468,8 +468,8 @@ export async function* runProcessDirectStreaming(
           timestamp: userMessage.timestamp ?? Date.now(),
           content: readAgentMessageContent(userMessage),
           media: userMessage.media,
-          metadata: turnSourceContexts.length > 0
-            ? { sourceContexts: turnSourceContexts.map(summarizeSourceContext) }
+          metadata: sourceContexts.length > 0
+            ? { sourceContexts: sourceContexts.map(summarizeSourceContext) }
             : undefined,
         });
         if (textForAgent.trim()) {
@@ -477,8 +477,8 @@ export async function* runProcessDirectStreaming(
         }
       }
 
-      const pendingUserMessage = (turnSourceContexts.length > 0
-        ? injectSourceContextsIntoUserMessage(userMessage, turnSourceContexts)
+      const pendingUserMessage = (sourceContexts.length > 0
+        ? injectSourceContextsIntoUserMessage(userMessage, sourceContexts)
         : userMessage) as TranscriptUserMessage;
       if (!isConnectionResume) setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
 

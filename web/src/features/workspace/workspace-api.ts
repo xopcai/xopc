@@ -221,6 +221,29 @@ export async function writeWorkspaceFile(
   return { path: updated.relativePath, mtimeMs: updated.modifiedAt, revision: updated.revision };
 }
 
+export async function uploadWorkspaceFile(
+  file: File,
+  directory = '',
+  options?: WorkspaceEditorRequestOptions,
+): Promise<WorkspaceEntry> {
+  const space = await resolveSpace(options);
+  const form = new FormData();
+  form.set('directory', directory);
+  form.set('file', file);
+  const response = await apiFetch(apiUrl(`/api/files/spaces/${encodeURIComponent(space.id)}/upload`), {
+    method: 'POST',
+    body: form,
+  });
+  if (!response.ok) throw await readApiError(response);
+  const body = FileResourceResponseSchema.parse(await response.json());
+  return toEntry(body.resource);
+}
+
+export async function deleteWorkspaceFile(fileId: string): Promise<void> {
+  const response = await apiFetch(apiUrl(`/api/files/${encodeURIComponent(fileId)}`), { method: 'DELETE' });
+  if (!response.ok) throw await readApiError(response);
+}
+
 export function downloadTextFile(fileName: string, content: string): void {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);

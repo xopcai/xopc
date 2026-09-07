@@ -1,10 +1,12 @@
 import { getAssertionSlot, listUserAssertions } from '../../user-model/index.js';
+import { getDiscussionCapture, getLatestDiscussionOrganization } from '../../discussions/repository.js';
 import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
 import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { wrapExternalContent } from '../../gateway/security/external-content.js';
 
 import type { ContextProvider, ResolvedContext } from './types.js';
+import type { ScenarioDefinition } from '../scenarios/types.js';
 
 type EventRow = {
   event_id: string;
@@ -58,7 +60,6 @@ function authorizedConnectedSourceItem(event: EventRow, scenarioKey: string) {
 
 export class EventBatchContextProvider implements ContextProvider {
   readonly id = 'event_batch';
-  supports(): boolean { return true; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const rows = eventRows(input.eventIds).filter((row) => (
@@ -80,7 +81,6 @@ export class EventBatchContextProvider implements ContextProvider {
 
 export class ConnectedSourceContextProvider implements ContextProvider {
   readonly id = 'connected_source';
-  supports(): boolean { return true; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const items: Record<string, unknown>[] = [];
@@ -127,7 +127,6 @@ export class ConnectedSourceContextProvider implements ContextProvider {
 
 export class InternalObjectContextProvider implements ContextProvider {
   readonly id = 'internal_objects';
-  supports(): boolean { return true; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const db = getSqliteDatabase();
@@ -170,7 +169,6 @@ export class InternalObjectContextProvider implements ContextProvider {
 
 export class UserModelContextProvider implements ContextProvider {
   readonly id = 'user_model';
-  supports(): boolean { return true; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const scope = eventRows(input.eventIds).at(-1);
@@ -207,7 +205,6 @@ export class UserModelContextProvider implements ContextProvider {
 
 export class MeetingWorkspaceContextProvider implements ContextProvider {
   readonly id = 'meeting_workspace';
-  supports(scenarioKey: string): boolean { return scenarioKey === 'meeting_preparation'; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const scope = eventRows(input.eventIds).at(-1);
@@ -257,7 +254,6 @@ export class MeetingWorkspaceContextProvider implements ContextProvider {
 
 export class ProjectStateContextProvider implements ContextProvider {
   readonly id = 'project_state';
-  supports(scenarioKey: string): boolean { return scenarioKey === 'project_delivery_risk' || scenarioKey === 'blocked_work'; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     if (!input.eventIds.length) return emptyContext();
@@ -266,7 +262,21 @@ export class ProjectStateContextProvider implements ContextProvider {
       .get(...input.eventIds) as Record<string, unknown> | undefined;
     if (!project) return emptyContext();
     const tasks = getSqliteDatabase().prepare(`SELECT task.task_id, task.title, task.body,
-      task.phase, task.resolution, task.priority, task.due_at, task.updated_at
+      task.phase, task.resolution, task.priority, task.due_at, task.updated_at,
+      (SELECT wait.kind FROM task_waits wait
+        WHERE wait.task_id = task.task_id AND wait.status = 'active'
+        ORDER BY wait.created_at DESC LIMIT 1) AS wait_kind,
+      (SELECT wait.reason FROM task_waits wait
+        WHERE wait.task_id = task.task_id AND wait.status = 'active'
+        ORDER BY wait.created_at DESC LIMIT 1) AS wait_reason,
+      (SELECT json_group_array(json_object(
+        'taskId', dependency.depends_on_task_id,
+        'title', upstream.title,
+        'phase', upstream.phase,
+        'resolution', upstream.resolution
+      )) FROM task_dependencies dependency
+        JOIN tasks upstream ON upstream.task_id = dependency.depends_on_task_id
+        WHERE dependency.task_id = task.task_id) AS dependencies_json
       FROM tasks task
       WHERE task.project_id = ? AND task.phase <> 'closed'
       ORDER BY CASE WHEN EXISTS (
@@ -279,9 +289,14 @@ export class ProjectStateContextProvider implements ContextProvider {
     return {
       content: {
         project: { evidenceId: projectEvidenceId, ...project },
-        activeTasks: (tasks as Array<Record<string, unknown>>).map((task, index) => ({
-          evidenceId: taskEvidenceIds[index], ...task,
-        })),
+        activeTasks: (tasks as Array<Record<string, unknown>>).map((task, index) => {
+          const { dependencies_json: dependenciesJson, ...fields } = task;
+          return {
+            evidenceId: taskEvidenceIds[index],
+            ...fields,
+            dependencies: dependenciesJson ? JSON.parse(String(dependenciesJson)) : [],
+          };
+        }),
       },
       evidenceIds: [projectEvidenceId, ...taskEvidenceIds],
     };
@@ -290,7 +305,6 @@ export class ProjectStateContextProvider implements ContextProvider {
 
 export class AutomationStateContextProvider implements ContextProvider {
   readonly id = 'automation_state';
-  supports(scenarioKey: string): boolean { return scenarioKey === 'automation_failure_impact'; }
 
   async collect(input: ContextInput): Promise<ResolvedContext> {
     if (!input.eventIds.length) return emptyContext();
@@ -300,10 +314,57 @@ export class AutomationStateContextProvider implements ContextProvider {
     if (!run) return emptyContext();
     const automation = getSqliteDatabase().prepare(`SELECT automation_id, name, description, enabled, reliability_json, state_json, project_id
       FROM automations WHERE automation_id = ?`).get(String(run.automation_id));
+    const recentRuns = getSqliteDatabase().prepare(`SELECT run_id, status, summary, error, duration_ms, started_at, ended_at
+      FROM automation_runs WHERE automation_id = ? AND run_id <> ?
+      ORDER BY started_at DESC LIMIT 5`).all(String(run.automation_id), String(run.run_id));
     const runEvidenceId = `automation-run:${String(run.run_id)}`;
     return {
-      content: { automation, failedRun: { evidenceId: runEvidenceId, ...run } },
+      content: { automation, failedRun: { evidenceId: runEvidenceId, ...run }, recentRuns },
       evidenceIds: [runEvidenceId],
+    };
+  }
+}
+
+export class DiscussionContextProvider implements ContextProvider {
+  readonly id = 'discussion';
+
+  async collect(input: ContextInput): Promise<ResolvedContext> {
+    const event = eventRows(input.eventIds)
+      .findLast((row) => row.subject_kind === 'discussion');
+    if (!event) return emptyContext();
+    const discussion = getDiscussionCapture(event.subject_id);
+    if (!discussion || discussion.status !== 'completed') return emptyContext();
+    const organization = getLatestDiscussionOrganization(discussion.id);
+    const discussionEvidenceId = `discussion:${discussion.id}`;
+    const noteEvidenceId = `note:${discussion.noteId}`;
+    return {
+      content: {
+        discussion: {
+          evidenceId: discussionEvidenceId,
+          id: discussion.id,
+          noteId: discussion.noteId,
+          noteEvidenceId,
+          projectId: discussion.projectId,
+          title: discussion.generatedTitle,
+          transcript: boundedText(discussion.canonicalTranscript, 6_000),
+          organization: organization?.organization,
+          completedAt: discussion.completedAt,
+        },
+      },
+      snapshotContent: {
+        discussion: {
+          evidenceId: discussionEvidenceId,
+          id: discussion.id,
+          noteId: discussion.noteId,
+          noteEvidenceId,
+          projectId: discussion.projectId,
+          transcriptSha256: discussion.canonicalTranscriptSha256,
+          organizationRevision: organization?.revision,
+          organization: organization?.organization,
+          completedAt: discussion.completedAt,
+        },
+      },
+      evidenceIds: [discussionEvidenceId, noteEvidenceId],
     };
   }
 }
@@ -317,14 +378,21 @@ export class ContextProviderRegistry {
     new MeetingWorkspaceContextProvider(),
     new ProjectStateContextProvider(),
     new AutomationStateContextProvider(),
+    new DiscussionContextProvider(),
   ]) {}
 
   async collect(
-    scenarioKey: string,
+    scenario: ScenarioDefinition,
     input: { batchId: string; eventIds: string[]; subscriptionId: string },
   ): Promise<ResolvedContext> {
-    const entries = await Promise.all(this.providers.filter((provider) => provider.supports(scenarioKey))
-      .map(async (provider) => [provider.id, await provider.collect({ ...input, scenarioKey })] as const));
+    const providers = new Map(this.providers.map((provider) => [provider.id, provider]));
+    const selected = scenario.contextProviderIds.map((id) => {
+      const provider = providers.get(id);
+      if (!provider) throw new Error(`Unknown context provider: ${id}`);
+      return provider;
+    });
+    const entries = await Promise.all(selected
+      .map(async (provider) => [provider.id, await provider.collect({ ...input, scenarioKey: scenario.key })] as const));
     return {
       content: Object.fromEntries(entries.map(([id, result]) => [id, result.content])),
       snapshotContent: Object.fromEntries(entries.map(([id, result]) => [

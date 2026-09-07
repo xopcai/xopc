@@ -11,6 +11,11 @@ type Row = Record<string, unknown>;
 const s = (row: Row, key: string) => String(row[key]);
 
 function itemFromRow(row: Row): InboxItem {
+  const attentionKind = row.action_status === 'completed'
+    ? 'receipt'
+    : row.decision_json || row.action_status === 'approval_required'
+      ? 'decision'
+      : 'information';
   return {
     id: s(row, 'inbox_item_id'), insightId: s(row, 'insight_id'), status: s(row, 'status') as InboxStatus,
     ...(row.snoozed_until ? { snoozedUntil: s(row, 'snoozed_until') } : {}),
@@ -26,7 +31,8 @@ function itemFromRow(row: Row): InboxItem {
       ...(row.action_result_json ? { actionResult: JSON.parse(s(row, 'action_result_json')) as Record<string, unknown> } : {}),
       ...(row.action_error ? { actionError: s(row, 'action_error') } : {}),
       urgency: s(row, 'urgency') as InboxItem['insight']['urgency'], confidence: Number(row.confidence),
-      valueScore: Number(row.value_score), evidenceIds: JSON.parse(s(row, 'evidence_ids_json')) as string[] },
+      valueScore: Number(row.value_score), evidenceIds: JSON.parse(s(row, 'evidence_ids_json')) as string[],
+      attentionKind },
   };
 }
 
@@ -130,9 +136,14 @@ export function transitionInboxItem(id: string, input: { status: InboxStatus; sn
 export function recordDecision(id: string, choice: string, note = '', now = new Date()): InboxItem {
   if (!choice.trim()) throw new Error('choice is required');
   runSqliteWriteTransaction((db) => {
-    const row = db.prepare(`SELECT x.decision_json FROM proactive_inbox_items i
-      JOIN proactive_insights x ON x.insight_id = i.insight_id WHERE i.inbox_item_id = ?`).get(id) as { decision_json?: string } | undefined;
+    const row = db.prepare(`SELECT i.status, x.decision_json, x.action_status FROM proactive_inbox_items i
+      JOIN proactive_insights x ON x.insight_id = i.insight_id WHERE i.inbox_item_id = ?`).get(id) as {
+        status: InboxStatus;
+        decision_json: string | null;
+        action_status: string | null;
+      } | undefined;
     if (!row) throw new Error('Inbox item not found');
+    if (row.status === 'resolved') throw new Error('Inbox item is already resolved');
     if (!row.decision_json) throw new Error('Inbox item does not require a decision');
     const decision = JSON.parse(row.decision_json) as NonNullable<InboxItem['insight']['decision']>;
     if (!decision.options.some((option) => option.id === choice.trim())) throw new Error('choice is not a valid decision option');
@@ -140,6 +151,12 @@ export function recordDecision(id: string, choice: string, note = '', now = new 
       .run(randomUUID(), id, choice.trim().slice(0, 200), note.trim().slice(0, 2000), now.toISOString());
     db.prepare("UPDATE proactive_inbox_items SET status = 'resolved', resolution = ?, updated_at = ? WHERE inbox_item_id = ?")
       .run(choice.trim().slice(0, 200), now.toISOString(), id);
+    if (row.action_status === 'approval_required') {
+      db.prepare(`UPDATE proactive_insights SET action_status = ?, action_updated_at = ?
+        WHERE insight_id = (SELECT insight_id FROM proactive_inbox_items WHERE inbox_item_id = ?)
+        AND action_status = 'approval_required'`)
+        .run(choice === 'approve' ? 'pending' : 'rejected', now.toISOString(), id);
+    }
   });
   return getInboxItem(id)!;
 }

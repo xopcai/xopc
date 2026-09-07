@@ -1,9 +1,10 @@
-import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Search, Share2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Search, Share2, Sparkles, Trash2 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { DiscussionNoteSections } from '@/features/discussions/discussion-note-sections';
@@ -17,6 +18,7 @@ import { detectSpeechLanguage } from '@/features/voice/read-aloud-text';
 
 import {
   catalyzeNote,
+  deleteNote,
   getNote,
   getNoteSnapshot,
   listNoteThreads,
@@ -174,6 +176,8 @@ function NoteDetailPanelInner({
   const [actionError, setActionError] = useState<string | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareNote, setShareNote] = useState<Note | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const titleInitRef = useRef(false);
   const titleComposingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -402,6 +406,30 @@ function NoteDetailPanelInner({
     setShareDialogOpen(true);
   }, [flushPendingSave]);
 
+  const handleDelete = useCallback(async () => {
+    if (deleting || saving) return;
+    setDeleteConfirmOpen(false);
+    setDeleting(true);
+    setActionError(null);
+    stopNoteReading();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+    debounceRef.current = null;
+    titleDebounceRef.current = null;
+    pendingMarkdownRef.current = null;
+    pendingTitleRef.current = null;
+    try {
+      await deleteNote(noteId);
+      window.dispatchEvent(new CustomEvent('note-deleted', { detail: { noteId } }));
+      onSaved?.();
+      onBack();
+    } catch (err) {
+      setActionError(`${n.deleteFailed}: ${err instanceof Error ? err.message : n.quickCaptureFailedHint}`);
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleting, n.deleteFailed, n.quickCaptureFailedHint, noteId, onBack, onSaved, saving, stopNoteReading]);
+
   const headerEnd = useMemo(
     () => (
       <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
@@ -479,6 +507,16 @@ function NoteDetailPanelInner({
         >
           <History className="size-4" aria-hidden />
         </button>
+        <button
+          type="button"
+          onClick={() => setDeleteConfirmOpen(true)}
+          disabled={deleting || saving}
+          aria-label={n.delete}
+          title={n.delete}
+          className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Trash2 className="size-4" aria-hidden />
+        </button>
       </div>
     ),
     [
@@ -503,7 +541,11 @@ function NoteDetailPanelInner({
       handleModeChange,
       getNoteReadAloudInput,
       handleShare,
+      deleting,
+      saving,
       language,
+      n.delete,
+      setDeleteConfirmOpen,
     ],
   );
 
@@ -866,6 +908,16 @@ function NoteDetailPanelInner({
       </div>
     </div>
     {shareNote ? <NoteShareDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={shareNote} /> : null}
+    <ConfirmDialog
+      open={deleteConfirmOpen}
+      title={n.deleteConfirmTitle}
+      description={n.deleteConfirmDescription.replace('{{title}}', note.title || n.titlePlaceholder)}
+      confirmLabel={n.deleteConfirmLabel}
+      cancelLabel={n.deleteCancelLabel}
+      destructive
+      onConfirm={() => void handleDelete()}
+      onCancel={() => setDeleteConfirmOpen(false)}
+    />
     </>
   );
 }

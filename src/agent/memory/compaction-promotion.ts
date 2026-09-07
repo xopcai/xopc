@@ -50,6 +50,7 @@ export interface PromoteCompactionLedgerInput {
   handover: CompactionHandover;
   audit: CompactionAudit;
   sourceEntries: readonly TranscriptSourceEntry[];
+  writePolicy: 'deny' | 'confirm' | 'allow';
 }
 
 export interface PromoteCompactionLedgerResult {
@@ -144,6 +145,9 @@ function importanceFor(item: CompactionHandoverItem): number {
 export function promoteCompactionLedger(
   input: PromoteCompactionLedgerInput,
 ): PromoteCompactionLedgerResult {
+  if (input.writePolicy === 'deny') {
+    return { episodicRecordIds: [], durableRecordIds: [], rejectedRecordIds: [] };
+  }
   const sourceById = new Map(input.sourceEntries.map((entry) => [entry.entryId, entry]));
   const entriesByTurn = new Map<string, TranscriptSourceEntry[]>();
   const entriesByRound = new Map<string, TranscriptSourceEntry[]>();
@@ -191,7 +195,9 @@ export function promoteCompactionLedger(
       content: item.text,
       canonicalKey: `compaction:${input.sessionId}:${item.id}`,
       confidence: input.audit.status === 'passed' ? 0.82 : 0.65,
-      status: active ? 'candidate' : 'archived',
+      status: active
+        ? (input.writePolicy === 'allow' && originClass !== 'untrusted' ? 'active' : 'candidate')
+        : 'archived',
       importance: importanceFor(item),
       originClass,
       sourceAgentId: input.sourceAgentId,
@@ -233,7 +239,7 @@ export function promoteCompactionLedger(
       content: item.text,
       canonicalKey: `durable:${item.kind}:${stableId('fact', item.text)}`,
       confidence: 0.82,
-      status: 'active',
+      status: input.writePolicy === 'allow' ? 'active' : 'candidate',
       importance: importanceFor(item),
       originClass: 'agent',
       sourceSessionId: input.sessionKey,

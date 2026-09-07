@@ -86,6 +86,7 @@ describe('compaction ledger promotion', () => {
       handover: handover(),
       audit: { status: 'passed', mode: 'full', missingItemsFound: 0, repaired: false },
       sourceEntries: sources,
+      writePolicy: 'allow',
     });
 
     expect(result.episodicRecordIds).toHaveLength(3);
@@ -116,6 +117,7 @@ describe('compaction ledger promotion', () => {
       sourceEntries: [
         source('assistant-clean', 2, { role: 'assistant', content: 'Decision recorded.', turnId: 'turn-clean' } as never),
       ],
+      writePolicy: 'allow',
     });
     const result = promoteCompactionLedger({
       sessionKey: 'agent:main:cron:nightly',
@@ -127,8 +129,39 @@ describe('compaction ledger promotion', () => {
       sourceEntries: [
         source('assistant-clean', 2, { role: 'assistant', content: 'Decision recorded.', turnId: 'turn-clean' } as never),
       ],
+      writePolicy: 'allow',
     });
     expect(result.durableRecordIds).toEqual([]);
     expect(getKnowledgeItem(interactive.durableRecordIds[0]!)?.status).toBe('active');
+  });
+
+  it('stages durable knowledge for confirmation and performs no writes when denied', () => {
+    const input = {
+      sessionKey: 'agent:main:main',
+      sourceAgentId: 'main',
+      workspaceId: stateDir,
+      handover: handover(),
+      audit: { status: 'passed' as const, mode: 'full' as const, missingItemsFound: 0, repaired: false },
+      sourceEntries: [
+        source('assistant-clean', 2, { role: 'assistant', content: 'Decision recorded.', turnId: 'turn-clean' } as never),
+      ],
+    };
+    const confirmed = promoteCompactionLedger({
+      ...input,
+      sessionId: 'session-confirm',
+      writePolicy: 'confirm',
+    });
+    expect(getKnowledgeItem(confirmed.durableRecordIds[0]!)?.status).toBe('candidate');
+
+    const denied = promoteCompactionLedger({
+      ...input,
+      sessionId: 'session-deny',
+      writePolicy: 'deny',
+    });
+    expect(denied).toEqual({
+      episodicRecordIds: [],
+      durableRecordIds: [],
+      rejectedRecordIds: [],
+    });
   });
 });

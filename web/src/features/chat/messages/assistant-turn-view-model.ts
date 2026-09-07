@@ -20,6 +20,8 @@ import {
   extractSearchSources,
   type SearchSource,
 } from '@/features/chat/tool-results/search-source-utils';
+import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
+import type { ProductDeliveryEnvelope } from '@xopcai/gateway-contract';
 
 export type AssistantTurnLifecycleState =
   | 'starting'
@@ -42,6 +44,7 @@ export interface AssistantTurnViewModel {
     activeTool?: ToolUseContent;
   };
   outcome: Message['outcome'];
+  delivery: ProductDeliveryEnvelope | null;
   attachments?: MessageAttachment[];
   sources: SearchSource[];
 }
@@ -87,6 +90,15 @@ export function buildAssistantTurnViewModel({
   const failedToolCount = toolBlocks.filter(
     (tool) => tool.status === 'error' || tool.activity?.status === 'failed',
   ).length;
+  const delivery = [...toolBlocks]
+    .reverse()
+    .map(extractProductDelivery)
+    .find((candidate) => candidate !== null
+      && candidate.primary?.kind !== 'workflow_run'
+      && candidate.primary?.kind !== 'file'
+      && (candidate.primary?.kind !== 'note'
+        || candidate.operation === 'created'
+        || candidate.operation === 'updated')) ?? null;
   const activityActive = isStreaming && allActivityBlocks.length > 0;
   const activityEndedAt = !isStreaming
     ? message.completedAt ?? message.timestamp
@@ -148,6 +160,7 @@ export function buildAssistantTurnViewModel({
       activeTool: state === 'using_tool' ? runningTool : undefined,
     },
     outcome: message.outcome,
+    delivery,
     attachments: standaloneAttachments,
     sources: extractSearchSources(toolBlocks),
   };

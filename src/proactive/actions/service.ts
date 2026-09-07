@@ -73,14 +73,3 @@ export function executePendingProactiveActions(now = new Date()): number {
     executed += 1;
   }
 }
-
-export function resolveProactiveActionDecision(inboxItemId: string, choice: string, now = new Date()): void {
-  const row = getSqliteDatabase().prepare(`SELECT x.insight_id, x.action_status
-    FROM proactive_inbox_items i JOIN proactive_insights x ON x.insight_id = i.insight_id
-    WHERE i.inbox_item_id = ?`).get(inboxItemId) as { insight_id: string; action_status: string | null } | undefined;
-  if (!row || row.action_status !== 'approval_required') return;
-  getSqliteDatabase().prepare(`UPDATE proactive_insights SET action_status = ?, action_updated_at = ?
-    WHERE insight_id = ? AND action_status = 'approval_required'`)
-    .run(choice === 'approve' ? 'pending' : 'rejected', now.toISOString(), row.insight_id);
-  if (choice === 'approve') executePendingProactiveActions(now);
-}

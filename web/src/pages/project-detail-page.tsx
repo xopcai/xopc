@@ -57,10 +57,12 @@ import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/ag
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { detectPreviewFileType, getPreviewFileName, readModeForPreviewType } from '@/features/preview-runtime';
 import {
+  deleteWorkspaceFile,
   downloadBinaryFile,
   downloadTextFile,
   fetchWorkspaceFileBlob,
   readWorkspaceFile,
+  uploadWorkspaceFile,
 } from '@/features/workspace/workspace-api';
 import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
@@ -673,6 +675,7 @@ export function ProjectDetailPage() {
   const loadedProjectFileDirsRef = useRef<Set<string>>(new Set());
   const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
   const [pendingTrashFile, setPendingTrashFile] = useState<TreeEntry | null>(null);
+  const [pendingDeleteFile, setPendingDeleteFile] = useState<TreeEntry | null>(null);
   const [projectFilesPanelWidth, setProjectFilesPanelWidth] = useState(readProjectFilesPanelWidth);
   const [projectFilesPanelResizing, setProjectFilesPanelResizing] = useState(false);
   const [projectFileSearchOpen, setProjectFileSearchOpen] = useState(false);
@@ -1067,6 +1070,18 @@ export function ProjectDetailPage() {
     [project],
   );
 
+  const refreshProjectFileDirectory = useCallback(async (dirPath: string) => {
+    if (!project?.effectiveWorkspaceRoot?.trim()) return;
+    const result = await fetchProjectFiles(project.id, dirPath);
+    const entries = projectFileEntriesToTreeEntries(result.entries);
+    if (dirPath) {
+      setProjectFileTree((current) => mergeProjectFileChildren(current, dirPath, entries));
+    } else {
+      setProjectFileTree(entries);
+    }
+    loadedProjectFileDirsRef.current.add(dirPath);
+  }, [project]);
+
   useEffect(() => {
     if (tab !== 'files') return;
     void refreshProjectFiles();
@@ -1405,6 +1420,9 @@ export function ProjectDetailPage() {
         case 'trash':
           setPendingTrashFile(entry);
           break;
+        case 'delete':
+          if (!entry.isDirectory) setPendingDeleteFile(entry);
+          break;
         default:
           break;
       }
@@ -1431,6 +1449,49 @@ export function ProjectDetailPage() {
     await refreshProjectFiles();
     showComposerNotification('success', msg.workspace.trashSuccess, undefined, { duration: 2500 });
   }, [msg.workspace.trashFailed, msg.workspace.trashSuccess, pendingTrashFile, previewFilePath, refreshProjectFiles]);
+
+  const uploadProjectFiles = useCallback(async (files: File[], directory: string) => {
+    const pid = project?.id;
+    if (!pid) return;
+    try {
+      await Promise.all(files.map((file) => uploadWorkspaceFile(file, directory, { projectId: pid })));
+      await refreshProjectFileDirectory(directory).catch(() => undefined);
+      showComposerNotification(
+        'success',
+        msg.workspace.uploadSuccess.replace('{{count}}', String(files.length)),
+        undefined,
+        { duration: 2500 },
+      );
+    } catch (err) {
+      await refreshProjectFileDirectory(directory).catch(() => undefined);
+      showComposerNotification(
+        'warning',
+        `${msg.workspace.uploadFailed}: ${err instanceof Error ? err.message : String(err)}`,
+        undefined,
+        { duration: 4000 },
+      );
+    }
+  }, [msg.workspace.uploadFailed, msg.workspace.uploadSuccess, project?.id, refreshProjectFileDirectory]);
+
+  const confirmDeleteProjectFile = useCallback(async () => {
+    const entry = pendingDeleteFile;
+    if (!entry) return;
+    try {
+      await deleteWorkspaceFile(entry.fileId);
+      if (previewFilePath === entry.path) setPreviewFilePath(null);
+      setPendingDeleteFile(null);
+      const separator = entry.path.lastIndexOf('/');
+      await refreshProjectFileDirectory(separator < 0 ? '' : entry.path.slice(0, separator)).catch(() => undefined);
+      showComposerNotification('success', msg.workspace.deleteSuccess, undefined, { duration: 2500 });
+    } catch (err) {
+      showComposerNotification(
+        'warning',
+        `${msg.workspace.deleteFailed}: ${err instanceof Error ? err.message : String(err)}`,
+        undefined,
+        { duration: 4000 },
+      );
+    }
+  }, [msg.workspace.deleteFailed, msg.workspace.deleteSuccess, pendingDeleteFile, previewFilePath, refreshProjectFileDirectory]);
 
   const handleProjectFilesResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!window.matchMedia('(min-width: 1024px)').matches) return;
@@ -1969,6 +2030,8 @@ export function ProjectDetailPage() {
                       onSelectEntry={handleProjectFileEntrySelect}
                       onExpandDir={(dirPath) => void loadProjectFileChildren(dirPath)}
                       onAction={handleProjectFileAction}
+                      onUploadFiles={(files, directory) => void uploadProjectFiles(files, directory)}
+                      uploadDropHint={msg.workspace.dropToUpload}
                       actionLabels={{
                         preview: msg.workspace.preview,
                         download: msg.workspace.download,
@@ -1978,6 +2041,7 @@ export function ProjectDetailPage() {
                         openWith: msg.workspace.openWith,
                         revealInFolder: msg.workspace.revealInFolder,
                         trash: msg.workspace.moveToTrash,
+                        delete: msg.workspace.deleteFile,
                         recommendedApps: msg.workspace.recommendedApps,
                         desktopUpdateRequired: msg.workspace.desktopUpdateRequired,
                       }}
@@ -2419,6 +2483,17 @@ export function ProjectDetailPage() {
         destructive
         onConfirm={() => void confirmTrashProjectFile()}
         onCancel={() => setPendingTrashFile(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteFile)}
+        title={msg.workspace.deleteConfirmTitle}
+        description={msg.workspace.deleteConfirmDescription.replace('{{name}}', pendingDeleteFile?.name ?? '')}
+        confirmLabel={msg.workspace.deleteFile}
+        cancelLabel={msg.workspace.cancel}
+        destructive
+        onConfirm={() => void confirmDeleteProjectFile()}
+        onCancel={() => setPendingDeleteFile(null)}
       />
 
       <Dialog.Root

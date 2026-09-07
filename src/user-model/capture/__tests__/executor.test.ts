@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  listCollaborationRules,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import { getUserAssertion } from '../../repository.js';
+import { listUserGoals } from '../../goals.js';
 import { executeUserModelInterpretation } from '../executor.js';
 import type { CaptureEvidence, UserModelInterpretation } from '../semantic.js';
 
@@ -112,5 +114,34 @@ describe('user model capture admission', () => {
     const result = executeUserModelInterpretation({ ...executionBase, interpretation: replacement });
     expect(result.outputs[0]).toMatchObject({ outcome: 'superseded' });
     expect(getUserAssertion(result.createdAssertions[0]!.id)?.supersedesAssertionId).toBe(first.id);
+  });
+
+  it('stages inferred goals and rules for confirmation without duplicates', () => {
+    const structured = interpretation({
+      intent: 'user_assertion',
+      candidates: [],
+      goals: [{
+        title: 'Ship Atlas',
+        desiredOutcome: 'Atlas is released safely.',
+        scope: { type: 'project', id: 'project-1' },
+        evidenceRefs: [source.ref],
+      }],
+      collaborationRules: [{
+        category: 'communication',
+        priority: 10,
+        scope: { type: 'global' },
+        conditions: { enforcementLevel: 'prompt' },
+        statement: 'Keep answers concise.',
+        evidenceRefs: [source.ref],
+      }],
+    });
+
+    const first = executeUserModelInterpretation({ ...executionBase, interpretation: structured });
+    const second = executeUserModelInterpretation({ ...executionBase, interpretation: structured });
+
+    expect(first).toMatchObject({ created: 2, createdGoals: [{ status: 'proposed' }], createdRules: [{ status: 'disabled' }] });
+    expect(listUserGoals()).toHaveLength(1);
+    expect(listCollaborationRules()).toHaveLength(1);
+    expect(second).toMatchObject({ created: 0, deduplicated: 2 });
   });
 });

@@ -1,5 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
+import { stripRuntimeUserMessageEnvelope } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
@@ -224,7 +225,15 @@ function pendingMatchesMessage(pending: TranscriptUserMessage, message: AgentMes
   if (!actualText) {
     return false;
   }
-  return actualText.includes(pendingText) || pendingText.includes(actualText);
+  if (actualText.includes(pendingText) || pendingText.includes(actualText)) {
+    return true;
+  }
+  const pendingUserText = stripRuntimeUserMessageEnvelope(pendingText).trim();
+  const actualUserText = stripRuntimeUserMessageEnvelope(actualText).trim();
+  return Boolean(pendingUserText)
+    && (actualUserText === pendingUserText
+      || actualUserText.includes(pendingUserText)
+      || pendingUserText.includes(actualUserText));
 }
 
 export function setPendingTranscriptUserMessage(sessionKey: string, message: TranscriptUserMessage): void {

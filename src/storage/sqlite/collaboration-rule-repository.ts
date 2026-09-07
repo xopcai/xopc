@@ -45,7 +45,9 @@ export function listCollaborationRules(principalId = USER_MODEL_PRINCIPAL_ID): C
 }
 
 export function createCollaborationRule(
-  input: Pick<CollaborationRule, 'category' | 'priority' | 'scope' | 'conditions' | 'statement'>,
+  input: Pick<CollaborationRule, 'category' | 'priority' | 'scope' | 'conditions' | 'statement'> & {
+    status?: CollaborationRule['status'];
+  },
 ): CollaborationRule {
   if (!input.statement.trim()) throw new Error('Collaboration rule statement is required.');
   if (input.scope.type === 'agent') throw new Error('Agent-scoped collaboration rules are not supported.');
@@ -56,8 +58,8 @@ export function createCollaborationRule(
     db.prepare(`INSERT INTO collaboration_rules (
       rule_id, principal_id, category, status, priority, scope_type, scope_id,
       conditions_json, current_revision_id, created_at, updated_at
-    ) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, USER_MODEL_PRINCIPAL_ID, input.category, input.priority, input.scope.type,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, USER_MODEL_PRINCIPAL_ID, input.category, input.status ?? 'active', input.priority, input.scope.type,
       input.scope.id ?? null, JSON.stringify(input.conditions), revisionId, now, now,
     );
     db.prepare(`INSERT INTO collaboration_rule_revisions (
