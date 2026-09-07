@@ -78,6 +78,41 @@ describe('prepareAutomationAgentSession', () => {
     expect(projects.listSessionKeys(project.id)).toContain(sessionKey);
   });
 
+  it('hides new automation shells until a user message is persisted without changing existing sessions', async () => {
+    const sessionKey = 'agent:main:automation:default:dm:new-run';
+    const input = {
+      sessionKey, agentId: 'main', peerId: 'new-run',
+      automationId: 'automation-1', runId: 'run-1', automationName: 'Daily brief',
+    };
+    await prepareAutomationAgentSession(store, projects, input);
+    expect(await store.getMetadata(sessionKey)).toMatchObject({
+      hiddenFromSessionList: true, name: 'Daily brief', messageCount: 0,
+    });
+    expect((await store.list()).items.map((s) => s.key)).not.toContain(sessionKey);
+    await store.appendTranscriptMessage(sessionKey, {
+      role: 'user', content: 'Summarize today', timestamp: Date.now(),
+    });
+    await store.updateMetadata(sessionKey, { name: 'My title' });
+    await prepareAutomationAgentSession(store, projects, input);
+    expect(await store.getMetadata(sessionKey)).toMatchObject({
+      hiddenFromSessionList: false, name: 'My title', messageCount: 1,
+    });
+    expect((await store.list()).items.map((s) => s.key)).toContain(sessionKey);
+  });
+
+  it('leaves historical empty sessions visible and unnamed', async () => {
+    const sessionKey = 'agent:main:automation:default:dm:legacy';
+    await store.resolveTranscriptPath(sessionKey);
+    await prepareAutomationAgentSession(store, projects, {
+      sessionKey, agentId: 'main', peerId: 'legacy', automationId: 'old', runId: 'new',
+      automationName: 'Daily brief',
+    });
+    const metadata = await store.getMetadata(sessionKey);
+    expect(metadata?.hiddenFromSessionList).toBe(false);
+    expect(metadata?.name).toBeUndefined();
+    expect(metadata?.messageCount).toBe(0);
+  });
+
   it('keeps continuous sessions synchronized when the automation project changes', async () => {
     const first = projects.create({ name: 'First Project' });
     const second = projects.create({ name: 'Second Project' });

@@ -1,5 +1,3 @@
-import crypto from 'node:crypto';
-
 import { DEFAULT_AGENT_ID, normalizeAgentId } from '../../agent/agent-scope.js';
 import { buildSessionKey } from '../../routing/session-key.js';
 import { createLogger } from '../../utils/logger.js';
@@ -235,7 +233,7 @@ export class AutomationActionExecutor {
     );
     const peerId = automation.conversationMode === 'continuous'
       ? automation.id
-      : `${automation.id}-${crypto.randomUUID().slice(0, 8)}`;
+      : `${automation.id}-${run.id}`;
     const sessionKey = buildSessionKey({
       agentId,
       source: 'automation',
@@ -246,6 +244,7 @@ export class AutomationActionExecutor {
 
     await hooks.onRunPatch?.({ sessionKey, currentPhase: 'action' });
     await this.deps.prepareAgentSession?.({
+      automationName: automation.name,
       sessionKey,
       projectId: automation.projectId,
       agentId,

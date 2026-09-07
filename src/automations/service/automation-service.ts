@@ -493,7 +493,7 @@ export class AutomationService {
         {
           summary: task.summary,
           error: task.error,
-          sessionKey: task.sessionKey,
+          sessionKey: task.sessionKey ?? run.sessionKey,
           workflowRunId: task.workflowRunId,
           model: task.model,
         },
@@ -503,7 +503,7 @@ export class AutomationService {
         status,
         summary: task.summary,
         error,
-        sessionKey: task.sessionKey,
+        sessionKey: task.sessionKey ?? run.sessionKey,
         workflowRunId: task.workflowRunId,
         model: task.model,
         deadlineAtMs: task.deadlineAtMs ?? run.deadlineAtMs,

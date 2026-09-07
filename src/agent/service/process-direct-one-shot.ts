@@ -111,6 +111,10 @@ export async function runProcessDirect(
             ? { metadata: slash.metadata }
             : {}),
         } as AgentMessage);
+        if (input.origin.type === 'system' && input.origin.source === 'automation') {
+          await deps.sessionStore.updateMetadata(input.sessionKey, { hiddenFromSessionList: false });
+        }
+        deps.onTurnComplete?.(input.sessionKey, trimmed);
       }
       return slash.aggregatedText ?? '';
     }
@@ -151,8 +155,9 @@ export async function runProcessDirect(
       }
     })();
 
-    if (result.lastAssistantText) {
-      deps.onTurnComplete?.(input.sessionKey, result.lastAssistantText);
+    deps.onTurnComplete?.(input.sessionKey, result.lastAssistantText);
+    if (!result.ok) {
+      throw new Error(result.errorMessage ?? 'Agent turn failed');
     }
 
     return result.lastAssistantText ?? '';
