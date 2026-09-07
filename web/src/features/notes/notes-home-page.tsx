@@ -29,7 +29,7 @@ export function NotesHomePage() {
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname, search: routeSearch } = useLocation();
   const [params, setParams] = useSearchParams();
   const projectId = params.get('projectId') || '';
   const view = params.get('view') || 'all';
@@ -81,11 +81,11 @@ export function NotesHomePage() {
   }, [refresh]);
 
   const openNote = useCallback((id: string, edit = false) => {
-    const returnTo = `${location.pathname}${location.search}`;
+    const returnTo = `${pathname}${routeSearch}`;
     const next = new URLSearchParams({ returnTo });
     if (edit) next.set('edit', '1');
     navigate(`/notes/${encodeURIComponent(id)}?${next}`);
-  }, [location.pathname, location.search, navigate]);
+  }, [pathname, routeSearch, navigate]);
 
   const createBlank = useCallback(async () => {
     if (blankBusy.current || !token) return;
@@ -182,7 +182,7 @@ export function NotesHomePage() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-panel">
-      <aside className="hidden w-44 shrink-0 flex-col gap-1 overflow-y-auto border-r border-edge bg-surface-base px-3 py-6 xl:flex" aria-label={h.homeNav}>
+      <aside className="hidden w-44 shrink-0 flex-col gap-1 overflow-y-auto px-3 py-6 xl:flex" aria-label={h.homeNav}>
         {navigation.map(({ id, label, Icon }) => <button key={id} type="button" onClick={() => chooseScope('', id)}
           aria-current={!projectId && (id === 'unassigned' ? unassigned : !unassigned && view === id) ? 'page' : undefined}
           className={cn(quietButton, 'justify-start px-2 text-left text-xs', !projectId && (id === 'unassigned' ? unassigned : !unassigned && view === id) && 'bg-surface-hover font-medium text-fg')}>
