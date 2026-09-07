@@ -26,7 +26,7 @@ describe('Agent voice interruption cleanup', () => {
     engine = createAgentVoiceEngine({
       claim: {
         sessionId: 'call', request: { purpose: 'conversation', engine: 'agent', sessionKey: 'chat' },
-        config: { voice: { realtime: { bargeIn } } }, tts: { config: {} },
+        config: { voice: { realtime: { bargeIn } } }, silenceDurationMs: 1200, tts: { config: {} },
         stt: { model: 'test', route: { provider: 'test' }, plugin: { openAudioStream: async (request: { onEvent: typeof emit }) => {
           emit = request.onEvent;
           return { abort: vi.fn(), appendAudio: vi.fn() };
@@ -66,6 +66,59 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.send.mock.calls.filter(([type, payload]) => type === 'response.text.done' && payload.responseId === firstId)).toEqual([]);
     expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toHaveLength(1);
     expect(test.send.mock.calls.filter(([type]) => type === 'session.error')).toEqual([]);
+  });
+
+  it('submits a single combined turn after a slow speaker finishes', async () => {
+    const runAgent = vi.fn(async function* () { yield { type: 'assistant_delta' as const, payload: { delta: '好的。' } }; });
+    const test = await setup(runAgent);
+    test.emit({ type: 'speech_started', utteranceId: 'first' });
+    test.emit({ type: 'transcript_final', utteranceId: 'first', revision: 1, text: '帮我查一下。' });
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(runAgent).not.toHaveBeenCalled();
+    test.emit({ type: 'speech_started', utteranceId: 'second' });
+    test.emit({ type: 'transcript_final', utteranceId: 'second', revision: 1, text: '明天下午去上海的高铁。' });
+    await vi.waitFor(() => expect(runAgent).toHaveBeenCalledOnce());
+    expect(runAgent).toHaveBeenCalledWith('帮我查一下。 明天下午去上海的高铁。', 'chat', expect.any(AbortSignal));
+  });
+
+  it('does not launch a settled queued fragment while the user resumes speaking', async () => {
+    let release!: () => void;
+    const cleanup = new Promise<void>((resolve) => { release = resolve; });
+    cleanups.push(() => release());
+    const calls: string[] = [];
+    const test = await setup(async function* (text, _key, signal) {
+      calls.push(text);
+      if (text === 'first') {
+        yield { type: 'assistant_delta', payload: { delta: 'Hello!' } };
+        await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+        await cleanup;
+      }
+    });
+    test.final('first');
+    await vi.waitFor(() => expect(calls).toEqual(['first']));
+    test.emit({ type: 'speech_started', utteranceId: 'second' });
+    test.emit({ type: 'transcript_final', utteranceId: 'second', revision: 1, text: '明天' });
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    test.emit({ type: 'speech_started', utteranceId: 'third' });
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(calls).toEqual(['first']);
+    test.emit({ type: 'transcript_final', utteranceId: 'third', revision: 1, text: '去上海' });
+    await vi.waitFor(() => expect(calls).toEqual(['first', '明天 去上海']));
+  });
+
+  it('does not answer an unfinished turn after mute or close', async () => {
+    const runAgent = vi.fn(async function* () {});
+    const test = await setup(runAgent);
+    test.emit({ type: 'transcript_final', utteranceId: 'first', revision: 1, text: '因为' });
+    await engine.setInputMuted(true);
+    await engine.setInputMuted(false);
+    await new Promise((resolve) => setTimeout(resolve, 1900));
+    expect(runAgent).not.toHaveBeenCalled();
+    test.currentEmit()({ type: 'transcript_final', utteranceId: 'second', revision: 1, text: '因为' });
+    await engine.close();
+    await new Promise((resolve) => setTimeout(resolve, 1900));
+    expect(runAgent).not.toHaveBeenCalled();
   });
 
   it('manual stop discards queued and unfinished speech while allowing a fresh utterance', async () => {

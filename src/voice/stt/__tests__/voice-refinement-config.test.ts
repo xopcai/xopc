@@ -14,7 +14,7 @@ describe('VoiceConfigSchema', () => {
     expect(parsed?.realtime).toEqual({
       enabled: false,
       defaultEngine: 'agent',
-      silenceDurationMs: 700,
+      silenceDurationMs: 1200,
       idleTimeoutMs: 60_000,
       maxDictationMs: 600_000,
       maxConversationMs: 3_600_000,

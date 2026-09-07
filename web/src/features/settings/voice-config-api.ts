@@ -235,7 +235,7 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
       realtime: {
         enabled: realtime.enabled === true,
         defaultEngine: realtime.defaultEngine === 'omni' ? 'omni' : 'agent',
-        silenceDurationMs: typeof realtime.silenceDurationMs === 'number' ? realtime.silenceDurationMs : 700,
+        silenceDurationMs: typeof realtime.silenceDurationMs === 'number' ? realtime.silenceDurationMs : 1200,
         idleTimeoutMs: typeof realtime.idleTimeoutMs === 'number' ? realtime.idleTimeoutMs : 60_000,
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,
         maxConversationMs: typeof realtime.maxConversationMs === 'number' ? realtime.maxConversationMs : 3_600_000,

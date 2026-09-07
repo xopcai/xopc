@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 
 import { createLogger } from '../../utils/logger.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
+import { ConversationTurn } from './conversationTurn.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import type { OmniRoute } from './omniRoute.js';
 
@@ -45,6 +46,9 @@ interface ResponseState {
   abort: AbortController;
   playback: AudioPlaybackWindow;
   tail: Promise<void>;
+  published: boolean;
+  release: () => void;
+  settled: Promise<void>;
 }
 
 export function createOmniVoiceEngine(options: {
@@ -78,6 +82,20 @@ export function createOmniVoiceEngine(options: {
   let queuedInputBytes = 0;
   let uploadingBytes = 0;
   let uploadTimer: ReturnType<typeof setTimeout> | undefined;
+  let turnSettled = false;
+  const speaking = new Set<string>();
+  const turn = new ConversationTurn(options.silenceDurationMs, () => {
+    if (closed || failed || muted || inputBlocked) return;
+    turnSettled = true;
+    if (active) publish(active);
+  });
+  function publish(response: ResponseState) {
+    if (response.published || active !== response) return;
+    response.published = true;
+    options.send('response.created', { responseId: response.id });
+    if (response.text) options.send('response.text.delta', { responseId: response.id, delta: response.text });
+    response.release();
+  }
   const send = (type: string, fields: Record<string, unknown> = {}) => {
     if (closed || socket?.readyState !== WebSocket.OPEN) throw new Error('Omni connection is closed');
     socket.send(JSON.stringify({ type, event_id: crypto.randomUUID(), ...fields }));
@@ -118,16 +136,22 @@ export function createOmniVoiceEngine(options: {
     if (!response) return false;
     active = undefined;
     response.abort.abort(reason);
-    save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: true });
-    options.send('response.cancelled', { responseId: response.id, reason });
+    response.release();
+    if (response.published) {
+      save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: true });
+      options.send('response.cancelled', { responseId: response.id, reason });
+    }
     // VAD may already have cancelled generation; do not send duplicate cancellations.
-    if (reason === 'client_cancelled' && response.generating && socket?.readyState === WebSocket.OPEN) {
+    if ((reason === 'client_cancelled' || (reason === 'barge_in' && !options.bargeIn)) && response.generating && socket?.readyState === WebSocket.OPEN) {
       cancellationPending = true;
       send('response.cancel');
     }
     return true;
   };
   const finish = async (response: ResponseState) => {
+    await response.settled;
+    if (active !== response || closed) return;
+    options.send('response.text.done', { responseId: response.id });
     await response.tail;
     if (active !== response || closed) return;
     await response.playback.drain(response.abort.signal);
@@ -146,6 +170,7 @@ export function createOmniVoiceEngine(options: {
   function fail(code: string, details: { closeCode?: number; upstreamStatus?: number } = {}) {
     if (closed || failed) return;
     failed = true;
+    turn.reset();
     log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code,
       provider: options.route.route.provider, upstreamHost: new URL(options.route.url).hostname,
       queuedInputBytes, uploadingBytes, bufferedAmount: socket?.bufferedAmount, ...details }, `Native voice conversation failed: ${code}`);
@@ -155,6 +180,10 @@ export function createOmniVoiceEngine(options: {
     void options.onClose('omni_error', true);
   }
   function discardInput() {
+    turn.reset();
+    speaking.clear();
+    turnSettled = false;
+    if (active && !active.published) cancel('client_cancelled');
     inputQueue = [];
     queuedInputBytes = 0;
     inputBlocked = true;
@@ -208,21 +237,34 @@ export function createOmniVoiceEngine(options: {
               clearTimeout(clearTimer);
             } else if (event.type === 'input_audio_buffer.speech_started') {
               if (muted || clearingInput) { discardedInputs.add(String(event.item_id)); return; }
+              if (recorded.has(String(event.item_id)) || pendingInputs.has(String(event.item_id))) return;
               inputBlocked = false;
               pendingInputs.add(String(event.item_id));
-              if (options.bargeIn) cancel('barge_in');
+              turnSettled = false;
+              speaking.add(String(event.item_id));
+              turn.start(String(event.item_id));
+              if (options.bargeIn || (active && !active.published)) cancel('barge_in');
               options.send('input.speech_started', { utteranceId: String(event.item_id) });
             } else if (event.type === 'input_audio_buffer.speech_stopped') {
-              if (muted || inputBlocked || discardedInputs.has(String(event.item_id))) return;
+              if (muted || inputBlocked || discardedInputs.has(String(event.item_id)) || recorded.has(String(event.item_id))) return;
+              speaking.delete(String(event.item_id));
+              turn.stop(String(event.item_id));
               options.send('input.speech_stopped', { utteranceId: String(event.item_id) });
             } else if (event.type === 'conversation.item.input_audio_transcription.completed') {
               if (typeof event.transcript !== 'string' || event.transcript.length > 32_000 || typeof event.item_id !== 'string') { fail('OMNI_INVALID_TRANSCRIPT'); return; }
               if (muted || inputBlocked || discardedInputs.has(event.item_id) || recorded.has(event.item_id)) return;
               pendingInputs.delete(event.item_id);
+              speaking.delete(event.item_id);
+              turn.final(event.item_id, event.transcript);
               save({ itemId: event.item_id, role: 'user', text: event.transcript, interrupted: false });
               options.send('input.transcript.final', { utteranceId: event.item_id, revision: 1, text: event.transcript });
+            } else if (event.type === 'conversation.item.input_audio_transcription.failed') {
+              if (muted || inputBlocked || discardedInputs.has(String(event.item_id))) return;
+              // An endpoint cannot be certified without its transcript. Discard this turn, not the call.
+              discardInput();
+              options.send('session.error', { code: 'INPUT_DROPPED', message: 'Could not transcribe this voice turn. Please repeat it.', recoverable: true });
             } else if (event.type === 'response.created') {
-              if (muted || inputBlocked) {
+              if (muted || inputBlocked || speaking.size > 0) {
                 cancellationPending = true;
                 send('response.cancel');
                 return;
@@ -231,12 +273,14 @@ export function createOmniVoiceEngine(options: {
               if (active) cancel('barge_in');
               const id = event.response?.id;
               if (typeof id !== 'string' || !id.length || id.length > 160) throw new Error('Invalid response ID');
-              active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve() };
-              options.send('response.created', { responseId: id });
+              let release!: () => void;
+              const settled = new Promise<void>((resolve) => { release = resolve; });
+              active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve(), published: false, settled, release };
+              if (turnSettled) publish(active);
             } else if (active && event.response_id === active.id && event.type === 'response.audio_transcript.delta') {
               if (typeof event.delta !== 'string' || active.text.length + event.delta.length > 32_000) { fail('OMNI_TRANSCRIPT_LIMIT'); return; }
               active.text += event.delta;
-              options.send('response.text.delta', { responseId: active.id, delta: event.delta });
+              if (active.published) options.send('response.text.delta', { responseId: active.id, delta: event.delta });
             } else if (active && event.response_id === active.id && event.type === 'response.audio.delta') {
               if (typeof event.delta !== 'string' || !/^[A-Za-z0-9+/]*={0,2}$/.test(event.delta)) { fail('OMNI_INVALID_AUDIO'); return; }
               const audio = Buffer.from(event.delta, 'base64');
@@ -245,6 +289,7 @@ export function createOmniVoiceEngine(options: {
               if (response.queuedBytes + audio.length > MAX_QUEUED_AUDIO_BYTES) { stopReply(response, 'OMNI_OUTPUT_BACKPRESSURE'); return; }
               response.queuedBytes += audio.length;
               response.tail = response.tail.then(async () => {
+                await response.settled;
                 for (let offset = 0; offset < audio.length; offset += 24_000) {
                   if (closed || active !== response) return;
                   const chunk = audio.subarray(offset, offset + 24_000);
@@ -260,7 +305,6 @@ export function createOmniVoiceEngine(options: {
               else if (event.response.status !== 'completed') fail('OMNI_RESPONSE_FAILED');
               else {
                 const response = active;
-                options.send('response.text.done', { responseId: response.id });
                 void finish(response).catch(() => { if (!response.abort.signal.aborted) stopReply(response, 'OMNI_PLAYBACK_FAILED'); });
               }
             }
@@ -300,6 +344,7 @@ export function createOmniVoiceEngine(options: {
     close() {
       if (closed) return writes;
       closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer); clearTimeout(uploadTimer);
+      turn.reset(); speaking.clear();
       inputQueue = []; queuedInputBytes = 0;
       rejectStart?.(new Error('Omni connection closed')); rejectStart = undefined;
       socket?.terminate();

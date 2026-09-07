@@ -115,7 +115,7 @@ export const ChatContextControl = memo(function ChatContextControl({
     const environment = environmentLabel(summary?.environment);
     if (environment) items.push({ key: 'environment', icon: summary?.environment?.kind === 'managed_worktree' ? 'source-branch' : 'laptop', label: environment });
     const sourceCount = (summary?.sources.length ?? 0) + draftRefs.length;
-    if (sourceCount) items.push({ key: 'sources', icon: 'notebook-outline', label: `${copy.sources} ${sourceCount}${summary?.sourcesHasMore ? '+' : ''}` });
+    if (sourceCount) items.push({ key: 'sources', icon: 'notebook-outline', label: sourceCount === 1 && summary?.sources[0]?.title ? summary.sources[0].title : `${copy.sources} ${sourceCount}${summary?.sourcesHasMore ? '+' : ''}` });
     return items;
   }, [copy.sources, draftRefs.length, summary]);
 
