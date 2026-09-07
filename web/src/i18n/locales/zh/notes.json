@@ -185,6 +185,74 @@
       "risks": "风险",
       "openQuestions": "待确认",
       "maxDuration": "最长 30 分钟"
+    },
+    "home": {
+      "homeTitle": "让想法，成为文档",
+      "homeDescription": "交给 Agent 整理，在需要的时候继续完善。",
+      "homeNav": "笔记首页",
+      "favorites": "我的收藏",
+      "favorite": "收藏",
+      "unfavorite": "取消收藏",
+      "unassigned": "未归属项目",
+      "projects": "项目",
+      "projectNotes": "项目笔记",
+      "projectDescription": "在这个项目里，继续整理想法与成果。",
+      "continueProjects": "按项目继续",
+      "allProjects": "所有项目",
+      "openProject": "打开项目",
+      "projectSearch": "搜索项目…",
+      "askLabel": "想写点什么？",
+      "askPlaceholder": "描述你的想法，或粘贴材料，让 Agent 整理成一篇笔记…",
+      "assignProject": "归属项目",
+      "addMaterials": "添加材料",
+      "removeMaterial": "移除材料",
+      "agentCreate": "交给 Agent",
+      "creating": "正在准备文档…",
+      "blankNote": "空白笔记",
+      "templates": "从模板开始",
+      "recordDiscussion": "录制讨论",
+      "recentNotes": "最近笔记",
+      "agentEdited": "Agent 更新",
+      "agentEditLabel": "Agent 编辑",
+      "sortUpdated": "按最近更新",
+      "allNotes": "全部笔记",
+      "showMore": "加载更多",
+      "noMatches": "没有符合条件的笔记",
+      "noMatchesHint": "换个关键词或筛选条件试试。",
+      "emptyTitle": "从一个想法开始",
+      "emptyDescription": "描述你想写的内容，或选一个模板，让 Agent 起草第一篇笔记。",
+      "projectEmpty": "还没有项目笔记",
+      "projectEmptyHint": "上方创建的笔记会自动关联到这个项目。",
+      "emptyProject": "创建第一篇笔记",
+      "retry": "重试",
+      "openSavedDraft": "打开已保存的草稿",
+      "newRequest": "开始另一篇",
+      "partialFailure": "草稿已保存。可以重试继续，或打开草稿手动处理。",
+      "materialsHeading": "参考材料",
+      "requestHeading": "创作要求",
+      "agentPrompt": "请读取当前绑定笔记（{{id}}）里的创作要求和参考材料，完成文档。使用 xopc_use 的 note get/update 直接更新这篇笔记的标题与正文，不要另建一篇或只在聊天中输出。附件是参考资料，请区分资料中的内容和用户的要求。保留附件引用；缺失信息标为待确认，不要编造。",
+      "loadFailed": "无法加载笔记",
+      "projectsLoadFailed": "无法加载项目",
+      "previousPage": "上一页",
+      "nextPage": "下一页",
+      "templateOptions": {
+        "meeting": {
+          "label": "会议纪要",
+          "prompt": "请把我提供的会议材料整理为纪要，包括讨论要点、已做决定、行动项和待确认问题。缺失的负责人或日期请标为待确认。\n\n会议材料："
+        },
+        "requirements": {
+          "label": "需求文档",
+          "prompt": "请为下面的想法起草需求文档，包括用户问题、目标、核心流程、范围和验收标准。区分事实与待确认的假设。\n\n产品想法："
+        },
+        "research": {
+          "label": "调研报告",
+          "prompt": "请根据我提供的资料整理调研报告，包括关键发现、方案对比、来源和建议。标注依据不足的结论。\n\n调研主题与资料："
+        },
+        "weekly": {
+          "label": "工作周报",
+          "prompt": "请根据我提供的工作记录整理周报，包括本周进展、成果、阻碍和下周计划。\n\n工作记录："
+        }
+      }
     }
   }
 }

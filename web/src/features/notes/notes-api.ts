@@ -122,6 +122,20 @@ export interface NoteIndexEntry {
   voiceAttachmentId?: string;
   voiceDurationSec?: number;
   attachmentNames?: string[];
+  projects?: Array<{ id: string; name: string }>;
+  lastEditTrigger?: SnapshotTrigger;
+}
+
+export interface NoteProjectSummary {
+  id: string;
+  name: string;
+  description?: string;
+  noteCount: number;
+  updatedAt?: number;
+}
+
+export async function listNoteProjects(): Promise<{ items: NoteProjectSummary[] }> {
+  return fetchJson(apiUrl('/api/notes/project-summaries'));
 }
 
 export interface NotesListQuery {
@@ -129,6 +143,8 @@ export interface NotesListQuery {
   kind?: NoteKind;
   tag?: string;
   projectId?: string;
+  unassigned?: boolean;
+  agentEdited?: boolean;
   pinned?: boolean;
   search?: string;
   limit?: number;
@@ -143,6 +159,8 @@ export async function listNotes(query: NotesListQuery = {}): Promise<{ items: No
   if (query.kind) params.set('kind', query.kind);
   if (query.tag) params.set('tag', query.tag);
   if (query.projectId) params.set('projectId', query.projectId);
+  if (query.unassigned) params.set('unassigned', 'true');
+  if (query.agentEdited) params.set('agentEdited', 'true');
   if (query.pinned !== undefined) params.set('pinned', String(query.pinned));
   if (query.search) params.set('search', query.search);
   if (query.limit) params.set('limit', String(query.limit));
@@ -170,9 +188,10 @@ export async function createNote(input: {
   projectId?: string;
   pinned?: boolean;
   channel?: string;
-}): Promise<Note> {
+}, idempotencyKey?: string): Promise<Note> {
   const result = await fetchJson<{ note: Note }>(apiUrl('/api/notes'), {
     method: 'POST',
+    ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
     body: JSON.stringify({
       markdown: input.markdown,
       title: input.title,
@@ -308,13 +327,13 @@ export interface NoteSourceBinding {
 
 export async function openNoteChat(
   id: string,
-  opts: { forceNew?: boolean } = {},
+  opts: { forceNew?: boolean; projectId?: string } = {},
 ): Promise<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }> {
   return fetchJson<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }>(
     apiUrl(`/api/notes/${encodeURIComponent(id)}/chat`),
     {
       method: 'POST',
-      body: JSON.stringify(opts.forceNew ? { forceNew: true } : {}),
+      body: JSON.stringify(opts),
     },
   );
 }
@@ -361,12 +380,13 @@ export async function createTaskNote(
   return result.note;
 }
 
-export async function uploadNoteMedia(noteId: string, file: File): Promise<NoteAttachment> {
+export async function uploadNoteMedia(noteId: string, file: File, idempotencyKey?: string): Promise<NoteAttachment> {
   const form = new FormData();
   form.append('file', file);
   const result = await postNoteFormData<{ attachment: NoteAttachment }>(
     apiUrl(`/api/notes/${encodeURIComponent(noteId)}/media`),
     form,
+    idempotencyKey,
   );
   return result.attachment;
 }
