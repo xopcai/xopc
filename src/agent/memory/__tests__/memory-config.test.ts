@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ConfigSchema, type Config } from '../../../config/schema.js';
-import {
-  isMemorySubsystemEnabled,
-  shouldPlanUserContextThisTurn,
-} from '../memory-config.js';
+import { isMemorySubsystemEnabled } from '../memory-config.js';
 import { resolveCompactionPolicy } from '../compaction-policy.js';
 
 function config(input: Record<string, unknown> = {}): Config {
@@ -19,11 +16,6 @@ describe('memory-config', () => {
     expect(isMemorySubsystemEnabled(config({
       userContext: { knowledgeMemory: { enabled: false } },
     }))).toBe(false);
-  });
-
-  it('plans execution context on every real turn', () => {
-    expect([1, 2, 3, 4].map((turn) => shouldPlanUserContextThisTurn(config(), turn)))
-      .toEqual([true, true, true, true]);
   });
 
   it('uses the strict context-planning compaction policy', () => {

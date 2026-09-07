@@ -5,7 +5,7 @@ const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ apiFetch }));
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 
-import { resolveWorkspaceFileReference } from '../workspace-api';
+import { deleteWorkspaceFile, resolveWorkspaceFileReference, uploadWorkspaceFile } from '../workspace-api';
 
 const space = {
   id: 'space-1', title: 'Project', kind: 'workspace', bindings: [{ kind: 'project', id: 'project one' }], writable: true,
@@ -57,5 +57,27 @@ describe('resolveWorkspaceFileReference', () => {
   it('returns no managed reference when the path is unavailable', async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Not found' } }), { status: 404 }));
     await expect(resolveWorkspaceFileReference('missing.html', { sessionKey: 'session' })).resolves.toBeNull();
+  });
+
+  it('uploads a file into the requested subdirectory', async () => {
+    apiFetch
+      .mockResolvedValueOnce(new Response(JSON.stringify({ space })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ resource }), { status: 201 }));
+    const file = new File(['hello'], 'file.html', { type: 'text/html' });
+
+    await expect(uploadWorkspaceFile(file, 'nested', { projectId: 'project one' }))
+      .resolves.toMatchObject({ id: 'file-1', path: 'nested/file.html' });
+    const request = apiFetch.mock.calls[1] as [string, RequestInit];
+    expect(request[0]).toBe('/api/files/spaces/space-1/upload');
+    expect(request[1].method).toBe('POST');
+    expect(request[1].body).toBeInstanceOf(FormData);
+    expect((request[1].body as FormData).get('directory')).toBe('nested');
+    expect((request[1].body as FormData).get('file')).toBe(file);
+  });
+
+  it('deletes a managed file by its opaque resource id', async () => {
+    apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })));
+    await expect(deleteWorkspaceFile('space/file one')).resolves.toBeUndefined();
+    expect(apiFetch).toHaveBeenCalledWith('/api/files/space%2Ffile%20one', { method: 'DELETE' });
   });
 });

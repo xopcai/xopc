@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import { parseSessionKey } from '../../routing/session-key.js';
+import type { KnowledgeSource } from '../../knowledge-memory/index.js';
 import { assembleTaskContext } from '../../tasks/task-context-assembler.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { recordExecutionContext } from './audit.js';
@@ -9,7 +9,7 @@ import { prependAgentContext } from './prepend.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import {
   buildExecutionContext,
-  renderExecutionContext,
+  fitExecutionContextToChars,
   type ExecutionContext,
 } from './execution-context.js';
 
@@ -24,14 +24,13 @@ export interface ExecutionContextPlan {
 
 export interface ExecutionContextCoordinatorOptions {
   getConfig: () => Config | undefined;
-  isEnabledForSession: (sessionKey: string) => boolean;
+  getAccessForSession: (sessionKey: string) => {
+    userModel: boolean;
+    knowledge: boolean;
+    knowledgeSources: readonly KnowledgeSource[];
+  };
   getWorkspaceIdForSession: (sessionKey: string) => string;
   getProjectIdForSession: (sessionKey: string) => string | undefined;
-}
-
-function isPrivateSession(sessionKey: string): boolean {
-  const parsed = parseSessionKey(sessionKey);
-  return !parsed || parsed.peerKind === 'direct';
 }
 
 export class ExecutionContextCoordinator {
@@ -64,8 +63,9 @@ export class ExecutionContextCoordinator {
       contextItemCount: 0,
     });
     const config = this.options.getConfig();
+    const access = this.options.getAccessForSession(sessionKey);
     if (!config || !config.userContext.contextPlanning.enabled
-      || !this.options.isEnabledForSession(sessionKey) || !isPrivateSession(sessionKey)) return empty();
+      || (!access.userModel && !access.knowledge)) return empty();
 
     const task = assembleTaskContext(sessionKey, extractAgentUserPlainText(userMessage));
     const context = buildExecutionContext({
@@ -76,23 +76,26 @@ export class ExecutionContextCoordinator {
       sessionId: sessionKey,
       maxAssertions: Math.min(config.userContext.contextPlanning.maxAssertions, task.allocation.maxResults),
       maxKnowledge: Math.min(config.userContext.contextPlanning.maxKnowledge, task.allocation.maxResults),
+      includeUserModel: access.userModel,
+      includeKnowledge: access.knowledge,
+      knowledgeSources: access.knowledgeSources,
     });
     this.currentBySession.set(sessionKey, context);
-    const rendered = renderExecutionContext(context).slice(
-      0,
-      Math.min(config.userContext.contextPlanning.maxChars, task.allocation.maxChars),
-    );
-    const contextItemCount = context.rules.length + context.assertions.length
-      + context.goals.length + context.priorities.length + context.knowledge.length;
+    const maxChars = Math.min(config.userContext.contextPlanning.maxChars, task.allocation.maxChars);
+    const fitted = fitExecutionContextToChars(context, maxChars);
+    const rendered = fitted.rendered;
+    const contextItemCount = fitted.context.rules.length + fitted.context.assertions.length
+      + fitted.context.goals.length + fitted.context.priorities.length + fitted.context.knowledge.length;
     recordExecutionContext(context, {
       turnId,
       sessionId: sessionKey,
       budget: {
         maxAssertions: Math.min(config.userContext.contextPlanning.maxAssertions, task.allocation.maxResults),
         maxKnowledge: Math.min(config.userContext.contextPlanning.maxKnowledge, task.allocation.maxResults),
-        maxChars: Math.min(config.userContext.contextPlanning.maxChars, task.allocation.maxChars),
+        maxChars,
       },
       renderedChars: rendered.length,
+      includedContext: fitted.context,
     });
     return {
       traceId: context.traceId,

@@ -440,7 +440,9 @@ export class HomeQueryService {
         kind: 'agent_judgment',
         title: item.insight.title,
         detail: item.insight.summary,
-        reason: item.insight.disposition === 'request_approval' ? 'approval_required' : 'decision_needed',
+        reason: item.insight.disposition === 'request_approval'
+          ? 'approval_required'
+          : item.insight.attentionKind === 'decision' ? 'decision_needed' : 'insight_available',
         urgency: item.insight.urgency === 'critical' || item.insight.urgency === 'high' ? 'now' : 'soon',
         href: `/?judgment=${encodeURIComponent(item.id)}`,
         updatedAt: Date.parse(item.updatedAt),
@@ -452,6 +454,8 @@ export class HomeQueryService {
           recommendation: item.insight.recommendation,
           confidence: item.insight.confidence,
           valueScore: item.insight.valueScore,
+          evidenceIds: item.insight.evidenceIds,
+          attentionKind: item.insight.attentionKind,
           disposition: item.insight.disposition,
           dispositionReason: item.insight.dispositionReason,
           ...(item.insight.actionStatus ? { actionStatus: item.insight.actionStatus } : {}),
@@ -526,6 +530,12 @@ export class HomeQueryService {
     });
     const decisions = governed.decisions;
     const attention = governed.attention;
+    const interactiveDecisions = decisions.filter(
+      (item) => item.kind !== 'agent_judgment' || item.judgment?.attentionKind === 'decision',
+    );
+    const proactiveInformation = decisions.filter(
+      (item) => item.kind === 'agent_judgment' && item.judgment?.attentionKind !== 'decision',
+    );
 
     const runningTasks = tasks.filter((task) => {
       const state = this.#projector.project(task).operationalState;
@@ -533,16 +543,35 @@ export class HomeQueryService {
     });
     const workbench = buildHomeWorkbench({
       locale,
-      decisions,
+      decisions: interactiveDecisions,
       attention,
       activeWorkflowRuns,
       runningTasks,
       scheduled: upcomingAutomations,
       nowMs,
     });
+    const informationItems: HomeWorkbenchItem[] = proactiveInformation.map((item) => ({
+      id: item.id,
+      kind: 'insight',
+      title: item.title,
+      summary: item.detail ?? item.judgment!.recommendation,
+      recommendation: item.judgment!.recommendation,
+      updatedAt: item.updatedAt,
+      openAction: {
+        type: 'review_judgment',
+        label: locale?.startsWith('zh') ? '查看' : 'Review',
+        itemId: item.judgment!.inboxItemId,
+      },
+      secondaryActions: [],
+    }));
+    const background = [...informationItems, ...workbench.background]
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 3);
 
     return {
       ...workbench,
+      background,
+      backgroundCount: workbench.backgroundCount + informationItems.length,
       runningConversations,
       decisions,
       attentionPolicy: governed.policy,

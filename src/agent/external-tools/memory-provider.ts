@@ -15,6 +15,7 @@ export interface MemoryToolProviderDeps {
   getMemoryManager?: () => MemoryManager;
   disabledTools?: Set<string>;
   getSessionKey: () => string | undefined;
+  canAccess: () => boolean;
   hookRunner?: ExtensionHookRunner;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
 }
@@ -80,6 +81,7 @@ export class MemoryToolProvider implements ExternalToolProvider {
   }
 
   private entries(): Array<{ providerId: string; tool: AgentTool }> {
+    if (!this.deps.canAccess()) return [];
     return (this.deps.getMemoryManager?.().getExternalToolEntries() ?? [])
       .filter(({ tool }) => !this.deps.disabledTools?.has(tool.name));
   }

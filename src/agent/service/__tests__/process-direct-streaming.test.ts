@@ -80,4 +80,52 @@ describe('direct stream input visibility', () => {
     expect(mocks.pending).toHaveBeenCalledOnce();
     expect(mocks.clearPending).toHaveBeenCalledOnce();
   });
+
+  it('exposes a session-bound note as visible and persisted turn context', async () => {
+    const { deps } = setup();
+    const sourceContext = {
+      kind: 'note' as const,
+      sourceId: 'note-1',
+      version: '2',
+      title: 'Bound note',
+      text: '# Bound note\n\nSource content',
+    };
+    deps.sourceContextResolver = vi.fn(async () => sourceContext);
+    deps.sessionStore = {
+      getMetadata: vi.fn(async () => ({
+        customData: {
+          sourceBinding: {
+            kind: 'note', sourceId: 'note-1', version: '1', attachedAt: 1,
+          },
+        },
+      })),
+    } as never;
+
+    const events = [];
+    for await (const event of runProcessDirectStreaming(deps, {
+      content: 'Update this note', sessionKey: 'agent:main:note', runId: 'note-run',
+      origin: { type: 'system', source: 'internal' },
+    })) events.push(event);
+
+    expect(events[0]).toEqual(expect.objectContaining({
+      type: 'user_message',
+      metadata: {
+        sourceContexts: [expect.objectContaining({
+          kind: 'note', sourceId: 'note-1', version: '2', title: 'Bound note',
+        })],
+      },
+    }));
+    expect(mocks.pending).toHaveBeenCalledWith(
+      'agent:main:note',
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          sourceContexts: [expect.objectContaining({ sourceId: 'note-1', version: '2' })],
+        }),
+      }),
+    );
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sourceContexts: [sourceContext] }),
+    );
+  });
 });

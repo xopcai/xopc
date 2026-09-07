@@ -23,6 +23,7 @@ export interface InboxItem {
     actionError?: string;
     urgency: 'low' | 'medium' | 'high' | 'critical'; confidence: number;
     valueScore: number; evidenceIds: string[];
+    attentionKind: 'information' | 'decision' | 'receipt';
   };
 }
 

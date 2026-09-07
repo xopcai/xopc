@@ -1,10 +1,12 @@
-import { Archive, ArrowLeft, ArrowRight, AudioLines, Bookmark, FileText, Folder, Inbox, Loader2, NotebookText, Plus, Search, Sparkles, Star } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Archive, ArrowLeft, ArrowRight, AudioLines, Bookmark, FileText, Folder, Inbox, Loader2, MoreHorizontal, NotebookText, Plus, Search, Sparkles, Star, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebounce } from 'use-debounce';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { messages } from '@/i18n/messages';
@@ -14,7 +16,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-import { createNote, listNoteProjects, listNotes, updateNote } from './notes-api';
+import { createNote, deleteNote, listNoteProjects, listNotes, updateNote, type NoteIndexEntry } from './notes-api';
 import { NotesHomeComposer } from './notes-home-composer';
 import { noteHomePreview, notesHomeQuery, NOTES_HOME_PAGE_SIZE } from './notes-home-model';
 import { formatRelativeTime, type NoteTimeLabels } from './note-time';
@@ -41,6 +43,8 @@ export function NotesHomePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [creatingBlank, setCreatingBlank] = useState(false);
   const [pinning, setPinning] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<NoteIndexEntry | null>(null);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const pinningRef = useRef(new Set<string>());
   const blankRequest = useRef<{ key: string; projectId?: string } | null>(null);
   const blankBusy = useRef(false);
@@ -136,6 +140,23 @@ export function NotesHomePage() {
     try { await updateNote(id, { pinned }); refresh(); }
     catch (err) { setActionError(`${n.actionFailed}: ${err instanceof Error ? err.message : n.quickCaptureFailedHint}`); }
     finally { pinningRef.current.delete(id); setPinning(new Set(pinningRef.current)); }
+  }
+
+  async function confirmDeleteNote() {
+    const target = deleteTarget;
+    if (!target || deletingNoteId) return;
+    setDeleteTarget(null);
+    setDeletingNoteId(target.id);
+    setActionError(null);
+    try {
+      await deleteNote(target.id);
+      window.dispatchEvent(new CustomEvent('note-deleted', { detail: { noteId: target.id } }));
+      refresh();
+    } catch (err) {
+      setActionError(`${n.deleteFailed}: ${err instanceof Error ? err.message : n.quickCaptureFailedHint}`);
+    } finally {
+      setDeletingNoteId(null);
+    }
   }
 
   useLayoutEffect(() => {
@@ -274,6 +295,31 @@ export function NotesHomePage() {
                       className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent">
                       <Star className={cn('size-4', note.pinned && 'fill-current text-fg')} aria-hidden />
                     </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          type="button"
+                          disabled={deletingNoteId === note.id}
+                          aria-label={`${n.noteActions}: ${note.title || n.titlePlaceholder}`}
+                          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
+                        >
+                          {deletingNoteId === note.id
+                            ? <Loader2 className="size-4 animate-spin" aria-hidden />
+                            : <MoreHorizontal className="size-4" aria-hidden />}
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-36 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
+                          <DropdownMenu.Item
+                            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-danger-soft focus:bg-danger-soft"
+                            onSelect={() => setDeleteTarget(note)}
+                          >
+                            <Trash2 className="size-4" aria-hidden />
+                            {n.delete}
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
                   </li>;
                 })}
               </ul>
@@ -289,6 +335,19 @@ export function NotesHomePage() {
           </section>
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={n.deleteConfirmTitle}
+        description={n.deleteConfirmDescription.replace(
+          '{{title}}',
+          deleteTarget?.title || n.titlePlaceholder,
+        )}
+        confirmLabel={n.deleteConfirmLabel}
+        cancelLabel={n.deleteCancelLabel}
+        destructive
+        onConfirm={() => void confirmDeleteNote()}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

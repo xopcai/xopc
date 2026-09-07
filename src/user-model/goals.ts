@@ -75,6 +75,10 @@ export function createUserGoal(input: {
   scope: UserModelScope;
   declaredImportance?: number;
   targetAt?: number;
+  status?: Extract<UserGoalStatus, 'proposed' | 'active'>;
+  authority?: AssertionAuthority;
+  confidence?: number;
+  createdBy?: 'user' | 'runtime';
   now?: number;
 }): UserGoal {
   validateScope(input.scope);
@@ -84,20 +88,24 @@ export function createUserGoal(input: {
     throw new Error('Goal declared importance must be between 0 and 1.');
   }
   const now = input.now ?? Date.now();
+  const confidence = input.confidence ?? 1;
+  if (confidence < 0 || confidence > 1) throw new Error('Goal confidence must be between 0 and 1.');
   const goalId = randomUUID();
   const revisionId = randomUUID();
   runSqliteWriteTransaction((db) => {
     db.prepare(`INSERT INTO user_goals (
       goal_id, principal_id, status, scope_type, scope_id, declared_importance,
       confidence, authority, target_at, current_revision_id, created_at, updated_at
-    ) VALUES (?, ?, 'active', ?, ?, ?, 1, 'user_explicit', ?, ?, ?, ?)`).run(
-      goalId, USER_MODEL_PRINCIPAL_ID, input.scope.type, input.scope.id ?? null,
-      input.declaredImportance ?? null, input.targetAt ?? null, revisionId, now, now,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      goalId, USER_MODEL_PRINCIPAL_ID, input.status ?? 'active', input.scope.type, input.scope.id ?? null,
+      input.declaredImportance ?? null, confidence, input.authority ?? 'user_explicit',
+      input.targetAt ?? null, revisionId, now, now,
     );
     db.prepare(`INSERT INTO user_goal_revisions (
       revision_id, goal_id, title, desired_outcome, created_by, change_reason, created_at
-    ) VALUES (?, ?, ?, ?, 'user', 'Goal created by user.', ?)`).run(
-      revisionId, goalId, input.title.trim(), input.desiredOutcome.trim(), now,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+      revisionId, goalId, input.title.trim(), input.desiredOutcome.trim(), input.createdBy ?? 'user',
+      input.createdBy === 'runtime' ? 'Goal extracted from user evidence.' : 'Goal created by user.', now,
     );
   });
   return listUserGoals().find((goal) => goal.id === goalId)!;

@@ -1,4 +1,4 @@
-import { resolveProactiveActionDecision } from '../actions/service.js';
+import { executePendingProactiveActions } from '../actions/service.js';
 import { publishInstructionFeedback } from '../scenarios/repository.js';
 
 import { getInboxItem, getInboxSubscriptionId, listInbox, projectInsightsToInbox, recordDecision, recordFeedback, transitionInboxItem, wakeSnoozedItems } from './repository.js';
@@ -12,7 +12,7 @@ export class ProactiveInboxService {
 
   decide(id: string, choice: string, note = '') {
     const item = recordDecision(id, choice, note);
-    resolveProactiveActionDecision(id, choice);
+    if (choice === 'approve') executePendingProactiveActions();
     return getInboxItem(id) ?? item;
   }
 

@@ -15,6 +15,7 @@ const labels = {
   openWith: 'Choose app',
   recommendedApps: 'Recommended',
   desktopUpdateRequired: 'Update desktop app',
+  delete: 'Delete permanently',
 };
 
 const tree = [
@@ -95,5 +96,51 @@ describe('FileTree managed desktop actions', () => {
     const updateItem = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
       .find((button) => button.textContent === labels.desktopUpdateRequired);
     expect(updateItem?.disabled).toBe(true);
+  });
+
+  it('offers permanent deletion for files but not directories', () => {
+    const onAction = renderTree();
+
+    act(() => container.querySelectorAll<HTMLButtonElement>('[aria-label="More"]')[0].click());
+    expect(Array.from(container.querySelectorAll('[role="menuitem"]')).some(
+      (item) => item.textContent === labels.delete,
+    )).toBe(false);
+    act(() => document.body.querySelector<HTMLButtonElement>('.fixed.inset-0')?.click());
+
+    act(() => container.querySelectorAll<HTMLButtonElement>('[aria-label="More"]')[1].click());
+    const deleteButton = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((button) => button.textContent === labels.delete);
+    act(() => deleteButton!.click());
+    expect(onAction).toHaveBeenCalledWith('delete', tree[1], undefined);
+  });
+
+  it('uploads external drops to the root or the targeted subfolder', () => {
+    const onUploadFiles = vi.fn();
+    act(() => {
+      root.render(
+        <FileTree
+          tree={tree}
+          selectedPath={null}
+          onSelectFile={() => {}}
+          onUploadFiles={onUploadFiles}
+          uploadDropHint="Drop to upload"
+          emptyHint="Empty"
+        />,
+      );
+    });
+    const file = new File(['report'], 'report.txt', { type: 'text/plain' });
+    const drop = (element: Element) => {
+      const event = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'dataTransfer', {
+        value: { types: ['Files'], files: [file], dropEffect: 'none' },
+      });
+      act(() => element.dispatchEvent(event));
+    };
+
+    drop(container.querySelector('[data-file-drop-directory="folder"]')!);
+    expect(onUploadFiles).toHaveBeenLastCalledWith([file], 'folder');
+
+    drop(container.querySelector('[data-file-drop-directory=""]')!);
+    expect(onUploadFiles).toHaveBeenLastCalledWith([file], '');
   });
 });

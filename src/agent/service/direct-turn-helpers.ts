@@ -157,8 +157,8 @@ export interface RunDirectAgentTurnResult {
 }
 
 /**
- * Convert a user message into an embedded turn, including the standard memory
- * prefetch + background-review nudge wiring used by every direct entry point.
+ * Convert a user message into an embedded turn, including structured context
+ * planning and background-review wiring used by every direct entry point.
  */
 export async function runDirectAgentTurn(
   deps: RunDirectAgentTurnDeps,

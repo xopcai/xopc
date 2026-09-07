@@ -16,6 +16,7 @@ type FileTreeActionLabels = {
   openWith?: string;
   revealInFolder?: string;
   trash?: string;
+  delete?: string;
   recommendedApps?: string;
   desktopUpdateRequired?: string;
 };
@@ -100,6 +101,7 @@ function ActionMenu({
         { action: 'download', label: labels.download },
         ...(labels.share ? [{ action: 'share' as const, label: labels.share }] : []),
         { action: 'copyPath', label: labels.copyPath },
+        ...(labels.delete ? [{ action: 'delete' as const, label: labels.delete }] : []),
       ];
 
   return (
@@ -198,7 +200,7 @@ function ActionMenu({
                 role="menuitem"
                 className={cn(
                   'block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
-                  action === 'trash' && 'text-danger hover:bg-danger/10 hover:text-danger',
+                  (action === 'trash' || action === 'delete') && 'text-danger hover:bg-danger/10 hover:text-danger',
                 )}
                 title={appPath}
                 onClick={() => {
@@ -216,6 +218,15 @@ function ActionMenu({
   );
 }
 
+function isFileUploadDrag(event: DragEvent<HTMLElement>): boolean {
+  return Array.from(event.dataTransfer.types).includes('Files');
+}
+
+function parentDirectory(path: string): string {
+  const separator = path.lastIndexOf('/');
+  return separator < 0 ? '' : path.slice(0, separator);
+}
+
 function TreeRow({
   entry,
   depth,
@@ -226,6 +237,8 @@ function TreeRow({
   onAction,
   actionLabels,
   onFileDragStart,
+  onUploadFiles,
+  onUploadTargetEnter,
 }: {
   entry: TreeEntry;
   depth: number;
@@ -236,9 +249,12 @@ function TreeRow({
   onAction?: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
   actionLabels?: FileTreeActionLabels;
   onFileDragStart?: (event: DragEvent<HTMLButtonElement>, entry: TreeEntry) => void;
+  onUploadFiles?: (files: File[], directory: string) => void;
+  onUploadTargetEnter?: () => void;
 }) {
   /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
   const [open, setOpen] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
   const visibleOpen = forceOpen || open;
   const isSel = selectedPath === entry.path;
 
@@ -249,10 +265,12 @@ function TreeRow({
           <button
             type="button"
             aria-expanded={visibleOpen}
+            data-file-drop-directory={entry.path}
             className={cn(
               'flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pr-2 text-left text-sm',
               'hover:bg-surface-hover',
               isSel && 'bg-accent-soft text-accent-fg',
+              dropActive && 'bg-accent-soft text-accent-fg ring-1 ring-inset ring-accent',
             )}
             style={{ paddingLeft: 8 + depth * 12 }}
             onClick={() => {
@@ -261,6 +279,32 @@ function TreeRow({
               if (next) onExpandDir?.(entry.path);
               onSelect(entry.path, true);
             }}
+            onDragEnter={onUploadFiles ? (event) => {
+              if (!isFileUploadDrag(event)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              onUploadTargetEnter?.();
+              setDropActive(true);
+            } : undefined}
+            onDragOver={onUploadFiles ? (event) => {
+              if (!isFileUploadDrag(event)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = 'copy';
+              setDropActive(true);
+            } : undefined}
+            onDragLeave={onUploadFiles ? (event) => {
+              event.stopPropagation();
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false);
+            } : undefined}
+            onDrop={onUploadFiles ? (event) => {
+              if (!isFileUploadDrag(event)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setDropActive(false);
+              const files = Array.from(event.dataTransfer.files);
+              if (files.length) onUploadFiles(files, entry.path);
+            } : undefined}
           >
             <ChevronRight
               className={cn('size-3.5 shrink-0 transition-transform', visibleOpen && 'rotate-90')}
@@ -287,6 +331,8 @@ function TreeRow({
                 onAction={onAction}
                 actionLabels={actionLabels}
                 onFileDragStart={onFileDragStart}
+                onUploadFiles={onUploadFiles}
+                onUploadTargetEnter={onUploadTargetEnter}
               />
             ))}
           </div>
@@ -305,10 +351,37 @@ function TreeRow({
           'hover:bg-surface-hover',
           onFileDragStart && 'cursor-grab active:cursor-grabbing',
           isSel && 'bg-accent-soft text-accent-fg',
+          dropActive && 'bg-accent-soft text-accent-fg ring-1 ring-inset ring-accent',
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
         onClick={() => onSelect(entry.path, false)}
         onDragStart={onFileDragStart ? (event) => onFileDragStart(event, entry) : undefined}
+        onDragEnter={onUploadFiles ? (event) => {
+          if (!isFileUploadDrag(event)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onUploadTargetEnter?.();
+          setDropActive(true);
+        } : undefined}
+        onDragOver={onUploadFiles ? (event) => {
+          if (!isFileUploadDrag(event)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = 'copy';
+          setDropActive(true);
+        } : undefined}
+        onDragLeave={onUploadFiles ? (event) => {
+          event.stopPropagation();
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropActive(false);
+        } : undefined}
+        onDrop={onUploadFiles ? (event) => {
+          if (!isFileUploadDrag(event)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          setDropActive(false);
+          const files = Array.from(event.dataTransfer.files);
+          if (files.length) onUploadFiles(files, parentDirectory(entry.path));
+        } : undefined}
       >
         <FileText className={cn('size-3.5 shrink-0', fileExtColor(entry.name))} aria-hidden />
         <span className="truncate">{entry.name}</span>
@@ -350,6 +423,8 @@ export function FileTree({
   searchQuery,
   emptySearchHint,
   onFileDragStart,
+  onUploadFiles,
+  uploadDropHint,
 }: {
   tree: TreeEntry[];
   selectedPath: string | null;
@@ -363,7 +438,10 @@ export function FileTree({
   searchQuery?: string;
   emptySearchHint?: string;
   onFileDragStart?: (event: DragEvent<HTMLButtonElement>, entry: TreeEntry) => void;
+  onUploadFiles?: (files: File[], directory: string) => void;
+  uploadDropHint?: string;
 }) {
+  const [rootDropActive, setRootDropActive] = useState(false);
   const normalizedSearchQuery = (searchQuery ?? '').trim().toLocaleLowerCase();
   const visibleTree = useMemo(
     () => filterTreeEntries(tree, normalizedSearchQuery),
@@ -374,29 +452,59 @@ export function FileTree({
     if (!isDir) onSelectFile(path);
   };
 
-  if (!tree.length) {
-    return <p className="text-fg-muted px-3 py-2 text-xs">{emptyHint}</p>;
-  }
-
-  if (!visibleTree.length) {
-    return <p className="px-3 py-2 text-xs text-fg-muted">{emptySearchHint ?? emptyHint}</p>;
-  }
-
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto py-2">
-      {visibleTree.map((e) => (
-        <TreeRow
-          key={e.path}
-          entry={e}
-          depth={0}
-          selectedPath={selectedPath}
-          forceOpen={Boolean(normalizedSearchQuery)}
-          onSelect={handleSelect}
-          onExpandDir={onExpandDir}
-          onAction={onAction}
-          actionLabels={actionLabels}
-          onFileDragStart={onFileDragStart}
-        />
+    <div
+      className={cn(
+        'relative min-h-0 flex-1 overflow-y-auto py-2',
+        rootDropActive && 'bg-accent-soft/60 ring-1 ring-inset ring-accent',
+      )}
+      data-file-drop-directory=""
+      onDragEnter={onUploadFiles ? (event) => {
+        if (!isFileUploadDrag(event)) return;
+        event.preventDefault();
+        setRootDropActive(true);
+      } : undefined}
+      onDragOver={onUploadFiles ? (event) => {
+        if (!isFileUploadDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        setRootDropActive(true);
+      } : undefined}
+      onDragLeave={onUploadFiles ? (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setRootDropActive(false);
+      } : undefined}
+      onDrop={onUploadFiles ? (event) => {
+        if (!isFileUploadDrag(event)) return;
+        event.preventDefault();
+        setRootDropActive(false);
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length) onUploadFiles(files, '');
+      } : undefined}
+    >
+      {rootDropActive && uploadDropHint ? (
+        <div className="pointer-events-none sticky top-0 z-20 mx-2 mb-1 rounded-md border border-accent bg-surface-panel/95 px-3 py-2 text-center text-xs font-medium text-accent-fg shadow-sm">
+          {uploadDropHint}
+        </div>
+      ) : null}
+      {!tree.length ? (
+        <p className="px-3 py-2 text-xs text-fg-muted">{emptyHint}</p>
+      ) : !visibleTree.length ? (
+        <p className="px-3 py-2 text-xs text-fg-muted">{emptySearchHint ?? emptyHint}</p>
+      ) : visibleTree.map((e) => (
+          <TreeRow
+            key={e.path}
+            entry={e}
+            depth={0}
+            selectedPath={selectedPath}
+            forceOpen={Boolean(normalizedSearchQuery)}
+            onSelect={handleSelect}
+            onExpandDir={onExpandDir}
+            onAction={onAction}
+            actionLabels={actionLabels}
+            onFileDragStart={onFileDragStart}
+            onUploadFiles={onUploadFiles}
+            onUploadTargetEnter={() => setRootDropActive(false)}
+          />
       ))}
     </div>
   );

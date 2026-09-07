@@ -22,15 +22,19 @@ describe('proactive inbox', () => {
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     inbox = new ProactiveInboxService();
     const db = getSqliteDatabase();
+    db.prepare(`INSERT INTO proactive_scenario_subscriptions
+      (subscription_id, scenario_key, workspace_id, scope_kind, scope_id, enabled, created_at, updated_at)
+      VALUES ('test-blocked-work', 'blocked_work', 'default', 'project', 'project-1', 1,
+        '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:00.000Z')`).run();
     db.prepare(`INSERT INTO proactive_signal_batches
       (batch_id, subscription_id, scenario_key, scenario_version, aggregation_key, window_started_at, window_ends_at, ready_at, status, event_count, created_at, updated_at)
-      VALUES ('batch', 'default-blocked-work', 'blocked_work', 1, 'workspace:default', '2026-08-13T00:00:00.000Z', '2026-08-13T00:01:00.000Z', '2026-08-13T00:01:00.000Z', 'processed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:00.000Z')`).run();
+      VALUES ('batch', 'test-blocked-work', 'blocked_work', 1, 'workspace:default', '2026-08-13T00:00:00.000Z', '2026-08-13T00:01:00.000Z', '2026-08-13T00:01:00.000Z', 'processed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:00.000Z')`).run();
     db.prepare(`INSERT INTO proactive_runs
       (run_id, batch_id, subscription_id, scenario_key, scenario_version, status, attempt, started_at, completed_at, updated_at)
-      VALUES ('run', 'batch', 'default-blocked-work', 'blocked_work', 1, 'completed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:01.000Z', '2026-08-13T00:00:01.000Z')`).run();
+      VALUES ('run', 'batch', 'test-blocked-work', 'blocked_work', 1, 'completed', 1, '2026-08-13T00:00:00.000Z', '2026-08-13T00:00:01.000Z', '2026-08-13T00:00:01.000Z')`).run();
     db.prepare(`INSERT INTO proactive_insights
       (insight_id, run_id, subscription_id, scenario_key, title, summary, why_now, impact, recommendation, decision_json, urgency, confidence, value_score, evidence_ids_json, created_at)
-      VALUES ('insight', 'run', 'default-blocked-work', 'blocked_work', 'Needs a decision', 'Blocked', 'Changed now', 'Delivery risk', 'Choose owner',
+      VALUES ('insight', 'run', 'test-blocked-work', 'blocked_work', 'Needs a decision', 'Blocked', 'Changed now', 'Delivery risk', 'Choose owner',
         '{"question":"Who should own this?","options":[{"id":"assign-alice","label":"Assign Alice","consequence":"Alice owns the blocker"},{"id":"assign-bob","label":"Assign Bob","consequence":"Bob owns the blocker"}]}',
         'high', .9, .85, '["event"]', '2026-08-13T00:00:01.000Z')`).run();
   });
@@ -53,6 +57,7 @@ describe('proactive inbox', () => {
       .get(instruction.revisionId)).toMatchObject({ status: 'published', user_instructions: expect.stringContaining('Only notify me') });
     expect(() => inbox.decide(item.id, 'unknown')).toThrow('valid decision option');
     expect(inbox.decide(item.id, 'assign-alice', 'Owner agreed').status).toBe('resolved');
+    expect(() => inbox.decide(item.id, 'assign-alice')).toThrow('already resolved');
     inbox.feedback(item.id, 'useful');
   });
 
@@ -102,7 +107,11 @@ describe('proactive inbox', () => {
     expect(inbox.project()).toBe(1);
     expect(executePendingProactiveActions()).toBe(1);
     expect(new TaskRepository().listByProject(project.id).map((task) => task.title)).toEqual(['Resolve launch blocker']);
-    expect(inbox.list()[0]?.insight).toMatchObject({ disposition: 'auto_execute', actionStatus: 'completed' });
+    expect(inbox.list()[0]?.insight).toMatchObject({
+      disposition: 'auto_execute',
+      actionStatus: 'completed',
+      attentionKind: 'receipt',
+    });
   });
 
   it('requires approval before executing a proposed action', () => {
@@ -117,7 +126,11 @@ describe('proactive inbox', () => {
 
     inbox.project();
     const item = inbox.list()[0]!;
-    expect(item.insight).toMatchObject({ disposition: 'request_approval', actionStatus: 'approval_required' });
+    expect(item.insight).toMatchObject({
+      disposition: 'request_approval',
+      actionStatus: 'approval_required',
+      attentionKind: 'decision',
+    });
     expect(new TaskRepository().listByProject(project.id)).toHaveLength(0);
     expect(inbox.decide(item.id, 'approve').insight.actionStatus).toBe('completed');
     expect(new TaskRepository().listByProject(project.id)).toHaveLength(1);

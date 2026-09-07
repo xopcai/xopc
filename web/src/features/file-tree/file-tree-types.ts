@@ -16,4 +16,5 @@ export type FileTreeAction =
   | 'openWith'
   | 'openWithApp'
   | 'revealInFolder'
-  | 'trash';
+  | 'trash'
+  | 'delete';

@@ -1,12 +1,19 @@
 import { randomUUID } from 'node:crypto';
 
-import { searchKnowledgeItems, type KnowledgeItem, type KnowledgeVisibilityContext } from '../../knowledge-memory/index.js';
+import {
+  searchKnowledgeItems,
+  type KnowledgeItem,
+  type KnowledgeSource,
+  type KnowledgeVisibilityContext,
+} from '../../knowledge-memory/index.js';
 import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { listCollaborationRules } from '../../storage/sqlite/collaboration-rule-repository.js';
 import { calculateExecutionValue } from '../../user-model/importance.js';
 import { listUserAssertions } from '../../user-model/repository.js';
 import type { UserAssertion, UserModelScope } from '../../user-model/domain.js';
+import { buildUserContextBlock } from '../memory/context-fence.js';
+import { getExecutionContextFeedbackScores } from './audit.js';
 
 export type RuleEnforcementLevel = 'prompt' | 'planner' | 'tool_gate';
 
@@ -58,6 +65,9 @@ export interface ExecutionContextRequest extends KnowledgeVisibilityContext {
   asOf?: number;
   maxAssertions?: number;
   maxKnowledge?: number;
+  includeUserModel?: boolean;
+  includeKnowledge?: boolean;
+  knowledgeSources?: readonly KnowledgeSource[];
 }
 
 function scopeVisible(scope: UserModelScope, context: ExecutionContextRequest): boolean {
@@ -70,6 +80,29 @@ function scopeVisible(scope: UserModelScope, context: ExecutionContextRequest): 
   })[scope.type];
 }
 
+function applicabilityVisible(
+  applicability: Record<string, unknown>,
+  context: ExecutionContextRequest,
+): boolean {
+  const operation = applicability.operation;
+  if (typeof operation === 'string' && operation !== 'response') return false;
+  if (Array.isArray(operation)
+    && !operation.some((value) => value === 'response')) return false;
+
+  for (const [key, actual] of [
+    ['agentId', context.agentId],
+    ['workspaceId', context.workspaceId],
+    ['projectId', context.projectId],
+    ['sessionId', context.sessionId],
+  ] as const) {
+    const expected = applicability[key];
+    if (typeof expected === 'string' && expected !== actual) return false;
+    if (Array.isArray(expected)
+      && !expected.some((value) => typeof value === 'string' && value === actual)) return false;
+  }
+  return true;
+}
+
 function urgency(assertion: UserAssertion, asOf: number): number {
   const deadline = assertion.validTo ?? assertion.reviewAt;
   if (deadline === undefined) return 0;
@@ -78,7 +111,12 @@ function urgency(assertion: UserAssertion, asOf: number): number {
   return Math.max(0, 1 - remaining / (30 * 24 * 60 * 60 * 1_000));
 }
 
-function rankAssertion(assertion: UserAssertion, query: string, asOf: number): RankedExecutionAssertion {
+function rankAssertion(
+  assertion: UserAssertion,
+  query: string,
+  asOf: number,
+  feedbackScore: number,
+): RankedExecutionAssertion {
   const taskRelevance = retrievalLexicalSimilarity(query, `${assertion.statement} ${assertion.normalizedValue}`);
   const score = calculateExecutionValue({
     declaredImportance: assertion.declaredImportance,
@@ -87,11 +125,13 @@ function rankAssertion(assertion: UserAssertion, query: string, asOf: number): R
     actionability: assertion.actionability,
     taskRelevance,
     urgency: urgency(assertion, asOf),
-  });
+  }) + feedbackScore;
   const reasons = [taskRelevance >= 0.35 ? 'task_relevant' : '',
     assertion.declaredImportance !== undefined ? 'user_declared_importance' : '',
     assertion.consequence === 'critical' || assertion.consequence === 'high' ? 'high_consequence' : '',
     assertion.kind === 'identity' || assertion.kind === 'preference' ? 'stable_personalization' : '',
+    feedbackScore > 0 ? 'historically_helpful' : '',
+    feedbackScore < 0 ? 'historically_irrelevant' : '',
   ].filter(Boolean);
   return { assertion, score, reasons };
 }
@@ -164,30 +204,54 @@ function loadPriorities(context: ExecutionContextRequest, asOf: number): Executi
 
 export function buildExecutionContext(request: ExecutionContextRequest): ExecutionContext {
   const asOf = request.asOf ?? Date.now();
-  const assertions = listUserAssertions({ statuses: ['active'], limit: 1_000 })
+  const includeUserModel = request.includeUserModel !== false;
+  const feedbackScores = getExecutionContextFeedbackScores();
+  const assertions = includeUserModel ? listUserAssertions({ statuses: ['active'], limit: 1_000 })
     .filter((item) => scopeVisible(getAssertionScope(item.slotId), request))
+    .filter((item) => applicabilityVisible(item.applicability, request))
     .filter((item) => (item.validFrom === undefined || item.validFrom <= asOf)
       && (item.validTo === undefined || item.validTo >= asOf))
+    .filter((item) => item.authority !== 'external_untrusted')
     .filter((item) => item.sensitivity !== 'secret' && item.sensitivity !== 'regulated'
       && item.disclosurePolicy !== 'ask_before_reference')
-    .map((item) => rankAssertion(item, request.query, asOf))
+    .map((item) => rankAssertion(
+      item,
+      request.query,
+      asOf,
+      feedbackScores.get(`assertion:${item.id}`) ?? 0,
+    ))
     .filter((item) => item.score >= 0.12 || item.reasons.includes('high_consequence'))
     .sort((left, right) => right.score - left.score)
-    .slice(0, Math.max(1, Math.min(100, request.maxAssertions ?? 20)));
+    .slice(0, Math.max(1, Math.min(100, request.maxAssertions ?? 20))) : [];
+  const maxKnowledge = Math.max(0, Math.min(100, request.maxKnowledge ?? 12));
+  const knowledge = request.includeKnowledge === false || maxKnowledge === 0
+    ? []
+    : searchKnowledgeItems({
+        query: request.query,
+        context: request,
+        asOf,
+        trustedOnly: true,
+        sources: request.knowledgeSources,
+        limit: Math.min(100, maxKnowledge * 2),
+      })
+      .map((item) => ({
+        item,
+        score: retrievalLexicalSimilarity(request.query, item.content) * 0.7
+          + item.importance * 0.3
+          + (feedbackScores.get(`knowledge:${item.id}`) ?? 0),
+      }))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, maxKnowledge)
+      .map(({ item }) => item);
   return {
     traceId: randomUUID(),
     asOf,
     query: request.query,
-    rules: loadRules(request),
+    rules: includeUserModel ? loadRules(request) : [],
     assertions,
-    goals: loadGoals(request, asOf),
-    priorities: loadPriorities(request, asOf),
-    knowledge: searchKnowledgeItems({
-      query: request.query,
-      context: request,
-      asOf,
-      limit: request.maxKnowledge ?? 12,
-    }),
+    goals: includeUserModel ? loadGoals(request, asOf) : [],
+    priorities: includeUserModel ? loadPriorities(request, asOf) : [],
+    knowledge,
   };
 }
 
@@ -215,6 +279,45 @@ export function renderExecutionContext(context: ExecutionContext): string {
     sections.push(`Relevant knowledge:\n${context.knowledge.map((item) => `- ${item.content}`).join('\n')}`);
   }
   return sections.join('\n\n');
+}
+
+export function fitExecutionContextToChars(
+  context: ExecutionContext,
+  maxChars: number,
+): { context: ExecutionContext; rendered: string } {
+  const selected: ExecutionContext = {
+    ...context,
+    rules: [],
+    assertions: [],
+    goals: [],
+    priorities: [],
+    knowledge: [],
+  };
+  const fits = () => buildUserContextBlock(renderExecutionContext(selected)).length <= maxChars;
+  for (const item of context.rules) {
+    selected.rules.push(item);
+    if (!fits()) selected.rules.pop();
+  }
+  for (const item of context.assertions) {
+    selected.assertions.push(item);
+    if (!fits()) selected.assertions.pop();
+  }
+  for (const item of context.goals) {
+    selected.goals.push(item);
+    if (!fits()) selected.goals.pop();
+  }
+  for (const item of context.priorities) {
+    selected.priorities.push(item);
+    if (!fits()) selected.priorities.pop();
+  }
+  for (const item of context.knowledge) {
+    selected.knowledge.push(item);
+    if (!fits()) selected.knowledge.pop();
+  }
+  return {
+    context: selected,
+    rendered: buildUserContextBlock(renderExecutionContext(selected)),
+  };
 }
 
 export function evaluateToolGate(

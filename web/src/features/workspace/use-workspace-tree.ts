@@ -92,6 +92,17 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null, pr
     [editorOpts],
   );
 
+  const refreshDirectory = useCallback(
+    async (dirPath: string) => {
+      const entries = await listWorkspaceDir(dirPath, editorOpts);
+      const children = toTreeEntries(entries);
+      if (dirPath) setTree((prev) => mergeChildren(prev, dirPath, children));
+      else setTree(children);
+      loadedDirsRef.current.add(dirPath);
+    },
+    [editorOpts],
+  );
+
   const reset = useCallback(() => {
     setTree([]);
     setRootResource(null);
@@ -99,5 +110,5 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null, pr
     loadedDirsRef.current.clear();
   }, []);
 
-  return { tree, rootResource, loading, error, loadRoot, loadChildren, reset };
+  return { tree, rootResource, loading, error, loadRoot, loadChildren, refreshDirectory, reset };
 }

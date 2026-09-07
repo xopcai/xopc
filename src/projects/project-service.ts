@@ -29,7 +29,11 @@ export type ProjectSuggestion = {
 };
 
 export class ProjectService {
-  constructor(private readonly store = new ProjectStore(), private readonly signals?: ProactiveSignalPublisher) {}
+  constructor(
+    private readonly store = new ProjectStore(),
+    private readonly signals?: ProactiveSignalPublisher,
+    private readonly workspaceId = 'default',
+  ) {}
 
   private listAllProjects(): Project[] {
     const items: Project[] = [];
@@ -190,7 +194,7 @@ export class ProjectService {
       this.signals?.publish({
         type: 'project.updated.v1', schemaVersion: 1,
         source: { kind: 'projects', id: 'local' }, subject: { kind: 'project', id: project.id }, actor: { kind: 'system' },
-        scope: { workspaceId: 'default', projectId: project.id }, occurredAt: new Date(project.updatedAt).toISOString(),
+        scope: { workspaceId: this.workspaceId, projectId: project.id }, occurredAt: new Date(project.updatedAt).toISOString(),
         dedupeKey: `project:${project.id}:${project.updatedAt}:${createHash('sha256').update(JSON.stringify(patch)).digest('hex')}`,
         sensitivity: 'personal', payload: { before, after: project, changes },
       });

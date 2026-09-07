@@ -40,7 +40,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const taskRateLimit = deps.taskRateLimitMiddleware ?? deps.strictRateLimitMiddleware;
   const application = new TaskApplicationService();
   const operatingViews = new ProjectOperatingViewService(deps.service.projects);
-  const monitoring = new ProjectMonitoringService();
+  const monitoring = new ProjectMonitoringService(deps.service.currentWorkspacePath);
   const metrics = new TaskValueMetricsService();
   const tasks = new TaskRepository();
   const runs = new TaskRunRepository();

@@ -60,7 +60,12 @@ import type { AutomationService } from '../automations/index.js';
 import type { SessionStore } from '../session/store.js';
 import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
-import { getSessionConfig, getSessionMetadata } from '../storage/sqlite/index.js';
+import {
+  getInteractionState,
+  getSessionConfig,
+  getSessionMetadata,
+  isXopcDatabaseOpen,
+} from '../storage/sqlite/index.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import { sortToolsForPromptCache } from './tools/cache-stability.js';
 import type { SessionContext } from './session/session-context.js';
@@ -80,6 +85,7 @@ import {
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
 import { ExecutionContextCoordinator, type ExecutionContextPlan } from './context/coordinator.js';
+import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
@@ -214,6 +220,8 @@ export interface AgentInstance {
   /** Capability packs activated by explicit skills or UI entry points in this session. */
   activeCapabilities: Map<string, AgentCapabilitySessionState>;
   activeProjectContext?: string;
+  interactionStateVersion?: number;
+  userContextAccessVersion: string;
 
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
@@ -313,7 +321,7 @@ export class AgentManager implements AgentInstanceGateway {
     });
     this.executionContext = new ExecutionContextCoordinator({
       getConfig: () => this.config.config,
-      isEnabledForSession: (sessionKey) => this.isUserContextEnabledForSession(sessionKey),
+      getAccessForSession: (sessionKey) => resolveUserContextSessionAccess(this.config.config, sessionKey),
       getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
       getProjectIdForSession: (sk) => getSessionMetadata(sk)?.projectId,
     });
@@ -332,12 +340,7 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private isUserContextEnabledForSession(sessionKey: string): boolean {
-    const mode = getSessionConfig(sessionKey)?.userContextMode;
-    return Boolean(
-      this.config.config?.userContext.enabled
-      && this.config.config.userContext.userModel.enabled
-      && (mode === undefined || mode === 'enabled'),
-    );
+    return resolveUserContextSessionAccess(this.config.config, sessionKey).userModel;
   }
 
   private computeBaseWorkspacePath(): string {
@@ -507,10 +510,7 @@ export class AgentManager implements AgentInstanceGateway {
     return this.executionContext.prepare(userMessage, sessionKey, turnId);
   }
 
-  /**
-   * After a completed turn: sync external providers and queue next-turn prefetch.
-   * Delegates to {@link UserContextCoordinator}.
-   */
+  /** Capture durable structured user context after a completed turn. */
   async afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined> {
     if (!this.isUserContextEnabledForSession(sessionKey)) return undefined;
     const parsed = parseSessionKey(sessionKey);
@@ -537,10 +537,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.backgroundReview.beginUserTurn(sessionKey);
   }
 
-  /**
-   * After a successful main turn (after memory sync via `afterAgentTurn`), may run a quiet follow-up for memory/skills.
-   * Delegates to {@link BackgroundReviewCoordinator}.
-   */
+  /** After a successful main turn, may run a quiet follow-up for context review and skills. */
   scheduleBackgroundReviewAfterUserTurn(sessionKey: string): void {
     const inst = this.agents.get(sessionKey);
     if (!inst || !this.isUserContextEnabledForSession(sessionKey)) return;
@@ -664,7 +661,7 @@ export class AgentManager implements AgentInstanceGateway {
       this.config.thinkingLevel ??
       'medium';
     return rt.systemPromptBuilder.build(contextFiles, {
-      externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+      externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
@@ -952,10 +949,10 @@ export class AgentManager implements AgentInstanceGateway {
         instance.sessionKey,
         instance.effectiveProfile,
       );
-      instance.activeProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
+      instance.activeProjectContext = this.buildExecutionScopeContext(instance.sessionKey);
 
       const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
-        externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+        externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
@@ -1059,10 +1056,10 @@ export class AgentManager implements AgentInstanceGateway {
         instance.sessionKey,
         instance.effectiveProfile,
       );
-      instance.activeProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
+      instance.activeProjectContext = this.buildExecutionScopeContext(instance.sessionKey);
 
       const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
-        externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+        externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
@@ -1090,7 +1087,7 @@ export class AgentManager implements AgentInstanceGateway {
       if (existing.resolvedWorkspacePath !== targetPath) {
         this.removeAgent(sessionKey);
       } else {
-        this.refreshActiveProjectContextIfChanged(existing);
+        this.refreshDynamicContextIfChanged(existing);
         existing.lastUsedAt = Date.now();
         log.debug({ sessionKey }, 'Reusing existing agent instance');
         return existing.agent;
@@ -1108,7 +1105,7 @@ export class AgentManager implements AgentInstanceGateway {
         .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
     }
 
-    const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
+    const activeProjectContext = this.buildExecutionScopeContext(sessionKey);
 
     const profileModelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const modelManager = this.config.getModelManager?.();
@@ -1143,6 +1140,8 @@ export class AgentManager implements AgentInstanceGateway {
       registeredToolNames,
       activeCapabilities: new Map<string, AgentCapabilitySessionState>(),
       activeProjectContext,
+      interactionStateVersion: this.getInteractionStateVersion(sessionKey),
+      userContextAccessVersion: this.getUserContextAccessVersion(sessionKey),
       skillEnvPassthroughKeys: new Set<string>(),
     });
 
@@ -1226,10 +1225,10 @@ export class AgentManager implements AgentInstanceGateway {
     const thinkingLevel =
       this.config.thinkingLevel ?? 'medium';
 
-    const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
+    const activeProjectContext = this.buildExecutionScopeContext(sessionKey);
 
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
-      externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+      externalMemoryInstructions: this.buildExternalMemoryInstructions(sessionKey, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
@@ -1322,6 +1321,28 @@ export class AgentManager implements AgentInstanceGateway {
       .join('\n\n') || undefined;
   }
 
+  private buildExecutionScopeContext(sessionKey: string): string | undefined {
+    const access = resolveUserContextSessionAccess(this.config.config, sessionKey);
+    return buildExecutionScopeContextForPrompt(sessionKey, {
+      includeKnowledge: access.knowledge,
+      knowledgeSources: access.knowledgeSources,
+    });
+  }
+
+  private getInteractionStateVersion(sessionKey: string): number | undefined {
+    return isXopcDatabaseOpen() ? getInteractionState(sessionKey)?.updatedAt : undefined;
+  }
+
+  private getUserContextAccessVersion(sessionKey: string): string {
+    return JSON.stringify(resolveUserContextSessionAccess(this.config.config, sessionKey));
+  }
+
+  private buildExternalMemoryInstructions(sessionKey: string, rt: WorkspaceRuntime): string {
+    return resolveUserContextSessionAccess(this.config.config, sessionKey).knowledge
+      ? rt.memoryManager.buildExternalSystemPrompt()
+      : '';
+  }
+
   getCapabilityCatalogForSession(sessionKey?: string): AgentCapabilityCatalogEntry[] {
     const inst = sessionKey?.trim() ? this.agents.get(sessionKey.trim()) : undefined;
     return this.resolveCapabilityCatalogForInstance(inst);
@@ -1343,6 +1364,7 @@ export class AgentManager implements AgentInstanceGateway {
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
       agentId: profile.agentId,
+      sessionKey,
       disabledTools: profile.tools.denied,
       getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
       getMemoryManager: () => rt.memoryManager,
@@ -1356,7 +1378,7 @@ export class AgentManager implements AgentInstanceGateway {
     agent = new Agent({
       initialState: {
         systemPrompt: rt.systemPromptBuilder.build(contextFiles, {
-          externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+          externalMemoryInstructions: this.buildExternalMemoryInstructions(sessionKey, rt),
           workspaceOverride: resolvedWorkspacePath,
           profileMarkdownPathRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
           customInstructions: profile.customInstructions,
@@ -1508,10 +1530,14 @@ export class AgentManager implements AgentInstanceGateway {
     return answer === 'Allow once';
   }
 
-  private refreshActiveProjectContextIfChanged(instance: AgentInstance): void {
-    const nextProjectContext = buildExecutionScopeContextForPrompt(instance.sessionKey);
+  private refreshDynamicContextIfChanged(instance: AgentInstance): void {
+    const nextProjectContext = this.buildExecutionScopeContext(instance.sessionKey);
+    const interactionStateVersion = this.getInteractionStateVersion(instance.sessionKey);
+    const userContextAccessVersion = this.getUserContextAccessVersion(instance.sessionKey);
 
-    if (nextProjectContext === instance.activeProjectContext) {
+    if (nextProjectContext === instance.activeProjectContext
+      && interactionStateVersion === instance.interactionStateVersion
+      && userContextAccessVersion === instance.userContextAccessVersion) {
       return;
     }
     const cfg = this.config.config!;
@@ -1527,7 +1553,7 @@ export class AgentManager implements AgentInstanceGateway {
       this.config.thinkingLevel ??
       'medium';
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
-      externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+      externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
@@ -1540,6 +1566,8 @@ export class AgentManager implements AgentInstanceGateway {
       activeProjectContext: nextProjectContext,
     });
     instance.activeProjectContext = nextProjectContext;
+    instance.interactionStateVersion = interactionStateVersion;
+    instance.userContextAccessVersion = userContextAccessVersion;
     log.debug({ sessionKey: instance.sessionKey }, 'Dynamic agent context changed; system prompt refreshed');
   }
 
@@ -1575,10 +1603,10 @@ export class AgentManager implements AgentInstanceGateway {
         this.config.thinkingLevel ??
         'medium';
 
-      const activeProjectContext = buildExecutionScopeContextForPrompt(sessionKey);
+      const activeProjectContext = this.buildExecutionScopeContext(sessionKey);
 
       instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
-        externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+        externalMemoryInstructions: this.buildExternalMemoryInstructions(sessionKey, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
