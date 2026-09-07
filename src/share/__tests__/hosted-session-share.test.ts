@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -46,6 +47,8 @@ function metadata(): SessionMetadata {
     cwd: '/private/workspace',
   };
 }
+
+useTestDatabase();
 
 describe('hosted session sharing', () => {
   let snapshot: CompactionSourceSnapshot;

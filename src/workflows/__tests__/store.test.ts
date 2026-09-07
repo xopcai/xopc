@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,7 +8,6 @@ import type { Config } from '../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import type { WorkflowRun } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
-import { resolveWorkflowRunEventsPath } from '../store/paths.js';
 import { WorkflowRunStore } from '../store/run-store.js';
 
 function createRun(runId: string, createdAtMs: number, projectId?: string): WorkflowRun {
@@ -69,7 +68,7 @@ describe('WorkflowEventStore and WorkflowRunStore', () => {
     await rm(stateDir, { recursive: true, force: true });
   });
 
-  it('appends events as JSONL and reads them in sequence order', async () => {
+  it('appends events transactionally and reads them in sequence order', async () => {
     const eventStore = new WorkflowEventStore(config, agentId);
 
     await eventStore.append({
@@ -86,11 +85,11 @@ describe('WorkflowEventStore and WorkflowRunStore', () => {
     });
 
     const events = await eventStore.readRunEvents('run-1');
-    const eventsPath = resolveWorkflowRunEventsPath(config, agentId, 'run-1');
-    const fileContent = await readFile(eventsPath, 'utf8');
+    expect(events.map(event => event.sequence)).toEqual([1, 2]);
+    closeXopcDatabase();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    expect(await new WorkflowEventStore(config, agentId).readRunEvents('run-1')).toEqual(events);
 
-    expect(events.map((event) => event.sequence)).toEqual([1, 2]);
-    expect(fileContent.trim().split('\n')).toHaveLength(2);
   });
 
   it('rebuilds and lists projected run views', async () => {

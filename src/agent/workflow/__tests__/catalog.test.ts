@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../../storage/sqlite/__tests__/test-database.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,8 @@ const graph = {
   edges: [{ id: 'edge', source: 'input', target: 'output' }],
 };
 
+useTestDatabase();
+
 describe('visual workflow catalog', () => {
   let dir: string;
 
@@ -26,15 +29,14 @@ describe('visual workflow catalog', () => {
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('lists and loads graph-based built-ins', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+    const catalog = createWorkflowCatalog();
     expect(catalog.list().map((entry) => entry.name)).toContain('research');
     expect(catalog.load('research').graph.nodes.length).toBeGreaterThan(3);
   });
 
-  it('saves JSON definitions and increments revisions', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+  it('saves definitions and increments revisions', () => {
+    const catalog = createWorkflowCatalog();
     const first = catalog.save({ name: 'my_workflow', graph, manifest: { title: 'My workflow' }, expectedRevision: 0 });
-    expect(first.path).toBe(join(dir, 'my_workflow.json'));
     expect(first.definition.revision).toBe(1);
     const second = catalog.save({ name: 'my_workflow', graph, expectedRevision: 1 });
     expect(second.definition.revision).toBe(2);
@@ -42,13 +44,13 @@ describe('visual workflow catalog', () => {
   });
 
   it('rejects stale saves', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+    const catalog = createWorkflowCatalog();
     catalog.save({ name: 'my_workflow', graph, expectedRevision: 0 });
     expect(() => catalog.save({ name: 'my_workflow', graph, expectedRevision: 0 })).toThrow(WorkflowRevisionConflictError);
   });
 
   it('distinguishes a duplicate create from a stale update', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+    const catalog = createWorkflowCatalog();
     catalog.save({ name: 'my_workflow', graph, expectedRevision: 0, intent: 'create' });
     expect(() => catalog.save({
       name: 'my_workflow',
@@ -59,7 +61,7 @@ describe('visual workflow catalog', () => {
   });
 
   it('does not create a user workflow over a builtin in create mode', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+    const catalog = createWorkflowCatalog();
     expect(() => catalog.save({
       name: 'research',
       graph,
@@ -69,7 +71,7 @@ describe('visual workflow catalog', () => {
   });
 
   it('keeps revision history and restores a snapshot as a new revision', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+    const catalog = createWorkflowCatalog();
     catalog.save({ name: 'my_workflow', graph, manifest: { title: 'First' }, expectedRevision: 0 });
     catalog.save({ name: 'my_workflow', graph, manifest: { title: 'Second' }, expectedRevision: 1 });
     expect(catalog.listRevisions('my_workflow').map((item) => item.revision)).toEqual([2, 1]);
@@ -79,7 +81,7 @@ describe('visual workflow catalog', () => {
   });
 
   it('lets a user definition override a builtin without mutating the builtin', () => {
-    const catalog = createWorkflowCatalog({ userDir: dir });
+    const catalog = createWorkflowCatalog();
     catalog.save({ name: 'research', graph, manifest: { title: 'Custom research' } });
     expect(catalog.load('research').title).toBe('Custom research');
     expect(catalog.remove('research')).toBe(true);

@@ -1,3 +1,4 @@
+import { deleteGetUpdatesBuf } from '../storage/sync-buf.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -133,10 +134,10 @@ export function saveWeixinAccount(
 }
 
 export function clearWeixinAccount(accountId: string): void {
+  deleteGetUpdatesBuf(accountId);
   const dir = resolveAccountsDir();
   const accountFiles = [
     `${accountId}.json`,
-    `${accountId}.sync.json`,
     `${accountId}.context-tokens.json`,
   ];
   for (const file of accountFiles) {

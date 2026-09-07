@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { resolveStateDir } from '../config/paths-state.js';
 import { join } from 'node:path';
 
 import type { TuiModelChoice } from './tui-backend.js';
 
-const STORE_PATH = join(homedir(), '.xopc', 'tui-scoped-models.json');
+function storePath(): string { return join(resolveStateDir(), 'tui-scoped-models.json'); }
 
 type ScopedModelsFile = {
   /** `null` = all models enabled for Ctrl+P cycle. */
@@ -17,8 +17,8 @@ function normalizeWorkspaceKey(cwd: string): string {
 
 function readStore(): ScopedModelsFile {
   try {
-    if (!existsSync(STORE_PATH)) return {};
-    const raw = readFileSync(STORE_PATH, 'utf8');
+    if (!existsSync(storePath())) return {};
+    const raw = readFileSync(storePath(), 'utf8');
     const parsed = JSON.parse(raw) as ScopedModelsFile;
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
@@ -27,11 +27,11 @@ function readStore(): ScopedModelsFile {
 }
 
 function writeStore(data: ScopedModelsFile): void {
-  const dir = join(homedir(), '.xopc');
+  const dir = resolveStateDir();
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
-  writeFileSync(STORE_PATH, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  writeFileSync(storePath(), `${JSON.stringify(data, null, 2)}\n`, 'utf8');
 }
 
 /** Load scoped model refs for Ctrl+P cycling (`null` = all models). */

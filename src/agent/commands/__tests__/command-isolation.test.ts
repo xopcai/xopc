@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../../storage/sqlite/__tests__/test-database.js';
 import { mkdtemp, mkdir, rm, symlink, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,3 +21,4 @@ it('rejects a symlink cwd escape and never falls back when Docker cannot run', a
     await expect(access(join(workspace, 'escaped.txt'))).rejects.toThrow();
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 20_000);
+useTestDatabase();
