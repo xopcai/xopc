@@ -11,7 +11,8 @@ import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } f
 import { resolveConnectionCandidate } from './connection-candidates.js';
 import { getConnectorDefinition } from './catalog.js';
 import { installConnector } from './install.js';
-import { getConnectorInstance } from './instances.js';
+import { listConnectorInstances } from './instances.js';
+import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { getConfiguredComposioAuthConfigs, scopeForComposioAction, isComposioActionAllowedByCatalog } from './composio.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
@@ -70,21 +71,32 @@ export class ConnectionRecoveryService {
 
   private view(wait: ConnectionWait, verifiedIds?: Set<string>): ConnectionWaitView {
     const needs: ConnectionNeedView[] = wait.needs.map(need => {
-      const instance = getConnectorInstance(this.deps.getConfig(), need.connectorId);
+      const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === need.connectorId);
       const installation = getConnectorInstallation(`${need.connectorId}-${wait.principalId}`);
       const requiredScope = Math.max(1, ...need.capabilities.filter(capability => /^[A-Z]+_/.test(capability)).map(capability => SCOPE_ORDER[scopeForComposioAction(capability).scope]));
       const scopeBlocked = requiredScope > SCOPE_ORDER[installation?.maxScope ?? 'read'];
       const blocked = scopeBlocked || instance?.enabled === false || installation?.enabled === false
         || Boolean(installation?.allowedAgentIds.length && !installation.allowedAgentIds.includes(wait.agentId));
       const all = listConnectorConnections({ principalId: wait.principalId, connectorId: need.connectorId });
-      const active = all.filter(connection => connection.status === 'active'
+      const eligible = all.filter(connection => connection.status === 'active'
         && (!verifiedIds || verifiedIds.has(connection.id))
         && (!need.accountId || connection.accountId === need.accountId)
         && (!installation?.selectedConnectionIds.length || installation.selectedConnectionIds.includes(connection.id)));
+      const byAccount = new Map<string, (typeof eligible)[number]>();
+      for (const connection of eligible) {
+        const key = connection.accountId ?? connection.id;
+        const previous = byAccount.get(key);
+        const preferredId = need.connectionId
+          ?? eligible.find(item => item.providerConnectionId === need.attempt?.connectionId)?.id
+          ?? (connection.accountId ? getConnectorAccount(connection.accountId)?.currentConnectionId : undefined);
+        if (!previous || connection.id === preferredId
+          || (previous.id !== preferredId && connection.updatedAt > previous.updatedAt)) byAccount.set(key, connection);
+      }
+      const active = [...byAccount.values()];
       const selected = !verifiedIds && need.unavailable ? undefined : need.attempt ? active.find(connection => connection.providerConnectionId === need.attempt?.connectionId)
         : need.connectionId ? active.find(connection => connection.id === need.connectionId)
           : active.length === 1 && !need.accountSelector ? active[0] : undefined;
-      const phase = blocked || (selected && need.capabilityError) ? 'blocked' : selected && instance ? 'ready'
+      const phase = blocked || (selected && need.capabilityError) ? 'blocked' : selected ? 'ready'
         : active.length > 1 || (need.accountSelector && active.length > 0 && !need.connectionId) ? 'choose_account'
           : need.attempt && need.attempt.expiresAt > Date.now() ? 'authorizing'
             : need.unavailable || all.some(connection => ['expired', 'revoked', 'failed'].includes(connection.status)) ? 'reconnect' : 'connect';
@@ -104,11 +116,28 @@ export class ConnectionRecoveryService {
     return { ...visible, needs, timeRange: wait.checkpoint.timeRange, phase: wait.status === 'queued' ? 'queued' : ready ? review ? 'review_scope' : 'ready' : 'needs_connection' };
   }
 
+  private async ensureInstallation(wait: ConnectionWait, connectorId: string): Promise<void> {
+    const config = this.deps.getConfig();
+    const instance = listConnectorInstances(config).find(item => item.connectorId === connectorId);
+    const installationId = `${connectorId}-${wait.principalId}`;
+    const installation = getConnectorInstallation(installationId);
+    if (instance?.enabled === false || installation?.enabled === false
+      || (installation?.allowedAgentIds.length && !installation.allowedAgentIds.includes(wait.agentId))) {
+      throw new Error('Connector policy blocks this connection.');
+    }
+    if (!instance) await persistConfigMutation({ config, mutate: () => installConnector(config, connectorId, {}), save: () => this.deps.saveConfig(config) });
+    if (!installation) upsertConnectorInstallation({
+      id: installationId, connectorId, principalId: wait.principalId, enabled: true,
+      allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [],
+    });
+  }
+
   private async checkCapabilities(wait: ConnectionWait, verified: Set<string>): Promise<ConnectionWait['needs']> {
     const views = this.view({ ...wait, needs: wait.needs.map(need => ({ ...need, capabilityError: undefined })) }, verified).needs;
     return Promise.all(wait.needs.map(async need => {
       if (views.find(view => view.key === need.key)?.phase !== 'ready') return { ...need, capabilityError: undefined };
       try {
+        if (!listConnectorInstances(this.deps.getConfig()).some(instance => instance.connectorId === need.connectorId && instance.enabled)) throw new Error('Connector setup is unavailable');
         const definition = getConnectorDefinition(need.connectorId);
         if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') throw new Error('Unsupported connector');
         const toolkit = definition.runtime.toolkit;
@@ -196,14 +225,8 @@ export class ConnectionRecoveryService {
         }, wait.version);
         publishConnectionWait(sessionKey);
         const config = this.deps.getConfig();
-        if (!getConnectorInstance(config, need.connectorId)) {
-          await persistConfigMutation({ config, mutate: () => installConnector(config, need.connectorId, {}), save: () => this.deps.saveConfig(config) });
-        }
+        await this.ensureInstallation(wait, need.connectorId);
         const installationId = `${need.connectorId}-${wait.principalId}`;
-        if (!getConnectorInstallation(installationId)) upsertConnectorInstallation({
-          id: installationId, connectorId: need.connectorId, principalId: wait.principalId,
-          enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [],
-        });
         const auth = await this.adapter.authorize({ principalId: wait.principalId, toolkit: definition.runtime.toolkit,
           installationId, authConfigId: getConfiguredComposioAuthConfigs(config, [definition.runtime.toolkit])?.[definition.runtime.toolkit] });
         const latest = getConnectionWait(wait.id);
@@ -230,7 +253,12 @@ export class ConnectionRecoveryService {
           const need = needs.find(item => item.key === action.needKey);
           const connection = fresh.find(item => item.id === action.accountId && item.connectorId === need?.connectorId && item.status === 'active');
           if (!need || !connection || !this.view(wait, verified).needs.find(item => item.key === need.key)?.accounts.some(item => item.id === connection.id)) throw new Error('Account is unavailable.');
-          needs = needs.map(item => item.key === need.key ? { ...item, connectionId: connection.id, accountId: connection.accountId, unavailable: false } : item);
+          needs = needs.map(item => item.key === need.key ? { ...item, connectionId: connection.id, accountId: connection.accountId, unavailable: false, attempt: undefined } : item);
+        }
+        for (const selected of this.view({ ...wait, needs }, verified).needs) {
+          if (selected.phase === 'ready' || (selected.capabilityError && selected.connectionId)) {
+            await this.ensureInstallation(wait, selected.connectorId);
+          }
         }
         needs = await this.checkCapabilities({ ...wait, needs }, verified);
         if (getConnectionWait(wait.id)?.version !== wait.version) throw new Error('WAIT_CHANGED');
