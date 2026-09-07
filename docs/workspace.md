@@ -9,7 +9,7 @@ The default state directory is `~/.xopc/`.
 | Path | Contains | Handle as |
 | --- | --- | --- |
 | `~/.xopc/xopc.json` | Main configuration | Private; may reference credentials and network settings |
-| `~/.xopc/xopc.db` | Sessions, user context, Automations, and other local records | Private and important to back up |
+| `~/.xopc/xopc.db` | Sessions, notes and note history, Workflows, queues, sharing records, user context, Automations, and other local records | Private and important to back up |
 | `~/.xopc/credentials/` | API, OAuth, channel, and pairing credentials | Secret |
 | `~/.xopc/agents/<id>/profile/` | Agent identity and instruction Markdown | User-editable, usually private |
 | `~/.xopc/workspace/<id>/` | Files and artifacts used by an Agent | User data |
@@ -51,6 +51,10 @@ For a consistent full backup:
 The backup contains credentials and private conversations. Encrypt it, restrict access, and define a retention period.
 
 Before restoring, keep a copy of the current state, use a compatible xopc version, and make sure file ownership is correct. Do not merge SQLite files manually.
+
+SQLite is the authority for structured application state, including Workflow events, note versions, message queues, share records, extension UI storage and channel cursors. Attachments, share artifacts, Agent profiles and workspaces remain files. A database-only backup is not a complete recovery set. Client-local unsent drafts and offline operations are not included in Gateway backups.
+
+Run the Gateway and its SQLite database on the same host with local persistent storage. A NAS can host the Gateway or receive backup artifacts; do not open the live database through SMB/NFS. See [Durable storage boundaries](./design/storage-architecture.md) for ownership, transaction and recovery rules.
 
 ## Safe manual editing
 

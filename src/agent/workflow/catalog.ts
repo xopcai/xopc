@@ -1,11 +1,10 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { DurableState } from '../../storage/sqlite/durable-state.js';
+import { requireXopcDatabase } from '../../storage/sqlite/connection.js';
+import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 
 import type { WorkflowDefinition, WorkflowDefinitionManifest, WorkflowGraph } from '../../workflows/domain/definition.js';
 import { buildWorkflowDefinition } from '../../workflows/domain/definition-utils.js';
 import { validateWorkflowGraph } from '../../workflows/domain/validation.js';
-import { resolveStateDir } from '../../config/paths-state.js';
 
 import { BUILTIN_WORKFLOWS } from './builtins/index.js';
 
@@ -14,7 +13,6 @@ export type WorkflowSource = 'user' | 'builtin';
 export interface CatalogEntry {
   name: string;
   source: WorkflowSource;
-  path: string | null;
   description: string;
   title: string;
   version: string;
@@ -42,41 +40,24 @@ export interface WorkflowRevisionSummary {
 export interface WorkflowCatalog {
   list(): CatalogEntry[];
   load(name: string): WorkflowDefinition;
-  save(input: SaveWorkflowInput): { path: string; definition: WorkflowDefinition };
+  save(input: SaveWorkflowInput): { definition: WorkflowDefinition };
   listRevisions(name: string): WorkflowRevisionSummary[];
   loadRevision(name: string, revision: number): WorkflowDefinition;
-  restore(name: string, revision: number, expectedRevision: number): { path: string; definition: WorkflowDefinition };
+  restore(name: string, revision: number, expectedRevision: number): { definition: WorkflowDefinition };
   remove(name: string): boolean;
-  userDir: string;
 }
 
 const NAME_RE = /^[a-z][a-z0-9_-]*$/;
 
-export function createWorkflowCatalog(opts: { userDir?: string } = {}): WorkflowCatalog {
-  const userDir = opts.userDir ?? defaultUserDir();
-
-  const loadUser = (name: string): WorkflowDefinition | null => {
-    const path = join(userDir, `${name}.json`);
-    if (!existsSync(path)) return null;
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as WorkflowDefinition;
-    assertStoredDefinition(parsed, name, path);
-    return parsed;
-  };
+export function createWorkflowCatalog(): WorkflowCatalog {
+  const definitions = new DurableState<WorkflowDefinition>('workflow-definitions');
+  const revisions = (name: string) => new DurableState<WorkflowDefinition>('workflow-revisions', name);
+  const loadUser = (name: string): WorkflowDefinition | null => definitions.get(name) ?? null;
 
   const list = (): CatalogEntry[] => {
-    const definitions = new Map<string, { definition: WorkflowDefinition; path: string | null }>();
-    for (const definition of BUILTIN_WORKFLOWS) definitions.set(definition.name, { definition, path: null });
-    for (const name of listUserNames(userDir)) {
-      try {
-        const definition = loadUser(name);
-        if (definition) definitions.set(name, { definition, path: join(userDir, `${name}.json`) });
-      } catch {
-        // Invalid files are not addressable workflows.
-      }
-    }
-    return [...definitions.values()]
-      .map(({ definition, path }) => toCatalogEntry(definition, path))
-      .sort((left, right) => left.name.localeCompare(right.name));
+    const items = new Map(BUILTIN_WORKFLOWS.map(definition => [definition.name, definition]));
+    for (const definition of definitions.values()) items.set(definition.name, definition);
+    return [...items.values()].map(toCatalogEntry).sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const load = (name: string): WorkflowDefinition => {
@@ -88,63 +69,49 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
     throw new Error(`workflow not found: ${name}`);
   };
 
-  const save = (input: SaveWorkflowInput): { path: string; definition: WorkflowDefinition } => {
+  const save = (input: SaveWorkflowInput): { definition: WorkflowDefinition } => {
     const name = input.name.trim();
     requireValidName(name);
     const validation = validateWorkflowGraph(input.graph);
     if (!validation.valid) throw new Error(validation.errors.map((issue) => issue.message).join(' '));
-    const existing = loadUser(name);
-    const builtin = BUILTIN_WORKFLOWS.find((definition) => definition.name === name);
-    if (input.intent === 'create' && (existing || builtin)) {
-      throw new WorkflowNameConflictError(name, existing?.revision ?? builtin?.revision ?? 0);
-    }
-    if (input.expectedRevision !== undefined && input.expectedRevision !== (existing?.revision ?? 0)) {
-      throw new WorkflowRevisionConflictError(existing?.revision ?? 0);
-    }
-    const definition = buildWorkflowDefinition({
-      name,
-      source: 'user',
-      graph: input.graph,
-      manifest: input.manifest,
-      revision: (existing?.revision ?? 0) + 1,
-      createdAtMs: existing?.metadata.createdAtMs,
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const existing = loadUser(name);
+      const builtin = BUILTIN_WORKFLOWS.find((definition) => definition.name === name);
+      if (input.intent === 'create' && (existing || builtin)) {
+        throw new WorkflowNameConflictError(name, existing?.revision ?? builtin?.revision ?? 0);
+      }
+      if (input.expectedRevision !== undefined && input.expectedRevision !== (existing?.revision ?? 0)) {
+        throw new WorkflowRevisionConflictError(existing?.revision ?? 0);
+      }
+      const definition = buildWorkflowDefinition({
+        name,
+        source: 'user',
+        graph: input.graph,
+        manifest: input.manifest,
+        revision: (existing?.revision ?? 0) + 1,
+        createdAtMs: existing?.metadata.createdAtMs,
     });
-    if (!existsSync(userDir)) mkdirSync(userDir, { recursive: true });
-    const path = join(userDir, `${name}.json`);
-    const revisionsDir = join(userDir, '.revisions', name);
-    mkdirSync(revisionsDir, { recursive: true });
-    writeJsonAtomic(join(revisionsDir, `${definition.revision}.json`), definition);
-    writeJsonAtomic(path, definition);
-    return { path, definition };
+    revisions(name).set(String(definition.revision), definition);
+    definitions.set(name, definition);
+    return { definition };
+    });
   };
 
   const listRevisions = (name: string): WorkflowRevisionSummary[] => {
     requireValidName(name);
-    const dir = join(userDir, '.revisions', name);
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir)
-      .filter((file) => /^\d+\.json$/.test(file))
-      .map((file): WorkflowRevisionSummary | null => {
-        try {
-          const definition = JSON.parse(readFileSync(join(dir, file), 'utf-8')) as WorkflowDefinition;
-          assertStoredDefinition(definition, name, join(dir, file));
-          return { revision: definition.revision, title: definition.title, contentHash: definition.contentHash, createdAtMs: definition.metadata.updatedAtMs };
-        } catch {
-          return null;
-        }
-      })
-      .filter((item): item is WorkflowRevisionSummary => item !== null)
-      .sort((left, right) => right.revision - left.revision);
+    return revisions(name).values().map(definition => ({
+      revision: definition.revision, title: definition.title,
+      contentHash: definition.contentHash, createdAtMs: definition.metadata.updatedAtMs,
+    })).sort((a, b) => b.revision - a.revision);
   };
 
   const loadRevision = (name: string, revision: number): WorkflowDefinition => {
     requireValidName(name);
     if (!Number.isSafeInteger(revision) || revision < 1) throw new Error('invalid workflow revision');
-    const path = join(userDir, '.revisions', name, `${revision}.json`);
-    if (!existsSync(path)) throw new Error(`workflow revision not found: ${name}@${revision}`);
-    const definition = JSON.parse(readFileSync(path, 'utf-8')) as WorkflowDefinition;
-    assertStoredDefinition(definition, name, path);
-    return structuredClone(definition);
+    const definition = revisions(name).get(String(revision));
+    if (!definition) throw new Error(`workflow revision not found: ${name}@${revision}`);
+    return definition;
   };
 
   const restore = (name: string, revision: number, expectedRevision: number) => {
@@ -154,15 +121,15 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
 
   const remove = (name: string): boolean => {
     requireValidName(name);
-    const path = join(userDir, `${name}.json`);
-    if (!existsSync(path)) return false;
-    unlinkSync(path);
-    const revisionsDir = join(userDir, '.revisions', name);
-    if (existsSync(revisionsDir)) rmSync(revisionsDir, { recursive: true, force: true });
-    return true;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const deleted = definitions.delete(name);
+      for (const [key] of revisions(name).entries()) revisions(name).delete(key);
+      return deleted;
+    });
   };
 
-  return { list, load, save, listRevisions, loadRevision, restore, remove, userDir };
+  return { list, load, save, listRevisions, loadRevision, restore, remove };
 }
 
 export class WorkflowRevisionConflictError extends Error {
@@ -179,35 +146,10 @@ export class WorkflowNameConflictError extends Error {
   }
 }
 
-export function defaultUserDir(): string {
-  return join(resolveStateDir(), 'workflows');
-}
-
-function listUserNames(dir: string): string[] {
-  try {
-    if (!existsSync(dir) || !statSync(dir).isDirectory()) return [];
-    return readdirSync(dir)
-      .filter((file) => file.endsWith('.json'))
-      .map((file) => file.slice(0, -5))
-      .filter((name) => NAME_RE.test(name));
-  } catch {
-    return [];
-  }
-}
-
-function assertStoredDefinition(value: WorkflowDefinition, name: string, path: string): void {
-  if (!value || typeof value !== 'object' || value.name !== name || value.metadata?.source !== 'user') {
-    throw new Error(`invalid workflow definition: ${path}`);
-  }
-  const validation = validateWorkflowGraph(value.graph);
-  if (!validation.valid) throw new Error(`invalid workflow graph: ${path}`);
-}
-
-function toCatalogEntry(definition: WorkflowDefinition, path: string | null): CatalogEntry {
+function toCatalogEntry(definition: WorkflowDefinition): CatalogEntry {
   return {
     name: definition.name,
     source: definition.metadata.source,
-    path,
     description: definition.description,
     title: definition.title,
     version: definition.version,
@@ -220,12 +162,6 @@ function toCatalogEntry(definition: WorkflowDefinition, path: string | null): Ca
 
 function requireValidName(name: string): void {
   if (!NAME_RE.test(name)) throw new Error(`invalid workflow name "${name}"; use lowercase letters, numbers, underscores, or hyphens`);
-}
-
-function writeJsonAtomic(path: string, value: unknown): void {
-  const temporaryPath = `${path}.${randomUUID()}.tmp`;
-  writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf-8');
-  renameSync(temporaryPath, path);
 }
 
 function definitionToManifest(definition: WorkflowDefinition): WorkflowDefinitionManifest {

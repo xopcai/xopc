@@ -298,14 +298,14 @@ export async function sweepOrphanedStagingDirs(
  *
  * Safe to call multiple times; idempotent. Best invoked from gateway.start().
  */
-export async function runStagingSweep(): Promise<void> {
+export async function runStagingSweep(workspaceRoots: readonly string[] = []): Promise<void> {
   // Lazy import to keep this module dependency-light for tests that only
   // exercise the pure decision helpers above.
   const { getSiteShareStore } = await import('./site-share-store.js');
   const store = getSiteShareStore();
   const records = store.getActiveShares();
 
-  const liveByWorkspace = new Map<string, Set<string>>();
+  const liveByWorkspace = new Map<string, Set<string>>(workspaceRoots.map(root => [root, new Set<string>()]));
   for (const rec of records) {
     if (rec.source.kind !== 'static') continue;
     const ws = rec.source.workspaceRoot;

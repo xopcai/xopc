@@ -136,10 +136,7 @@ export interface CreateShareParams {
   maxDepth?: number;
 }
 
-export interface ShareStoreData {
-  version: 1 | 2;
-  shares: ShareRecord[];
-}
+
 
 export type ShareReachability = 'public' | 'lan' | 'local-only';
 

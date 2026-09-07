@@ -1,11 +1,12 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { basename } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
 
 import { CredentialResolver } from '../auth/credentials.js';
-import { resolveStateDir } from '../config/paths.js';
-import { writeTextAtomic } from '../infra/write-file-atomic.js';
+import { DurableState } from '../storage/sqlite/durable-state.js';
+import { requireXopcDatabase } from '../storage/sqlite/connection.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { resolveMediaReference } from '../media/media-reference.js';
 import type { SessionMetadata } from '../session/types.js';
 import type { CompactionSourceSnapshot } from '../storage/sqlite/index.js';
@@ -274,63 +275,28 @@ export interface HostedShareBinding extends HostedShareResult {
   revoked: boolean;
 }
 
-type BindingFile = { version: 1; items: HostedShareBinding[] };
-
 export class HostedShareBindingStore {
-  private readonly path = join(resolveStateDir(), 'hosted-share-bindings.json');
-  private pending: Promise<unknown> = Promise.resolve();
+  private readonly state = new DurableState<HostedShareBinding>('hosted-share-bindings');
 
   async list(sessionId: string): Promise<HostedShareBinding[]> {
-    const file = await this.read();
-    return file.items.filter((item) => item.sessionId === sessionId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.state.values().filter(item => item.sessionId === sessionId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  async upsert(binding: HostedShareBinding): Promise<void> {
-    await this.mutate((file) => {
-      const index = file.items.findIndex((item) => item.id === binding.id);
-      if (index === -1) file.items.push(binding);
-      else file.items[index] = binding;
-    });
-  }
+  async upsert(binding: HostedShareBinding): Promise<void> { this.state.set(binding.id, binding); }
 
   async reconcile(remote: OwnerShare[]): Promise<void> {
-    const byId = new Map(remote.map((item) => [item.id, item]));
-    await this.mutate((file) => {
-      file.items = file.items.map((binding) => {
+    const byId = new Map(remote.map(item => [item.id, item]));
+    requireXopcDatabase();
+    runSqliteWriteTransaction(() => {
+      for (const binding of this.state.values()) {
         const item = byId.get(binding.id);
-        return item ? {
-          ...binding,
-          expiresAt: item.expiresAt,
-          maxViews: item.maxViews,
-          viewCount: item.viewCount,
-          snapshotRevision: item.revision ?? binding.snapshotRevision,
-          title: item.title,
-          description: item.description,
-          updatedAt: item.updatedAt,
-          revoked: item.status === 'revoked',
-        } : binding;
-      });
+        if (item) this.state.set(binding.id, {
+          ...binding, expiresAt: item.expiresAt, maxViews: item.maxViews, viewCount: item.viewCount,
+          snapshotRevision: item.revision ?? binding.snapshotRevision, title: item.title,
+          description: item.description, updatedAt: item.updatedAt, revoked: item.status === 'revoked',
+        });
+      }
     });
-  }
-
-  private async mutate(update: (file: BindingFile) => void): Promise<void> {
-    const operation = this.pending.then(async () => {
-      const file = await this.read();
-      update(file);
-      await mkdir(dirname(this.path), { recursive: true });
-      await writeTextAtomic(this.path, `${JSON.stringify(file, null, 2)}\n`);
-    });
-    this.pending = operation.catch(() => undefined);
-    await operation;
-  }
-
-  private async read(): Promise<BindingFile> {
-    try {
-      const parsed = JSON.parse(await readFile(this.path, 'utf8')) as Partial<BindingFile>;
-      return parsed.version === 1 && Array.isArray(parsed.items) ? { version: 1, items: parsed.items as HostedShareBinding[] } : { version: 1, items: [] };
-    } catch {
-      return { version: 1, items: [] };
-    }
   }
 }
 

@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { requireXopcDatabase } from '../storage/sqlite/connection.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 import { stat, readdir, lstat, realpath } from 'node:fs/promises';
-import { join, relative as relPathPosix, resolve as resolvePath } from 'node:path';
+import { relative as relPathPosix, resolve as resolvePath } from 'node:path';
 
-import { resolveStateDir } from '../config/paths.js';
 import { isPathUnderWorkspace } from '../gateway/workspace-editor-path.js';
 import { createLogger } from '../utils/logger.js';
 import {
@@ -11,38 +12,34 @@ import {
   type CreateSiteShareParams,
   type SiteShareConfig,
   type SiteShareRecord,
-  type SiteShareStoreData,
   type SiteSource,
 } from './site-share-types.js';
 
 const log = createLogger('SiteShareStore');
 
-const SITE_SHARES_FILE = 'site-shares.json';
 const CLEANUP_INTERVAL_MS = 10 * 60_000;
 const EXPIRED_RETENTION_MS = 24 * 60 * 60_000;
-const MAX_STORED = 200;
-const REQUEST_COUNT_DEBOUNCE_MS = 5_000;
 const SUBDOMAIN_PATTERN = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
 
-function resolveStorePath(): string {
-  return join(resolveStateDir(), SITE_SHARES_FILE);
-}
 
 export class SiteShareStore {
-  private shares = new Map<string, SiteShareRecord>();
-  private byToken = new Map<string, string>();
-  private bySubdomain = new Map<string, string>();
+  private shares = new DurableState<SiteShareRecord>('site-shares');
   private config: SiteShareConfig;
-  private dirty = false;
-  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   /** Optional cleanup hook invoked when a record is dropped (e.g. delete staging dir). */
   private onCleanup: ((record: SiteShareRecord) => void) | null = null;
 
   constructor(config?: Partial<SiteShareConfig>) {
     this.config = { ...SITE_SHARE_CONFIG_DEFAULTS, ...config };
-    this.load();
     this.startCleanupTimer();
+  }
+
+  private saveNew(record: SiteShareRecord): void {
+    requireXopcDatabase();
+    runSqliteWriteTransaction(() => {
+      if (this.getActiveShares().length >= this.config.maxActiveSites) throw new Error('Maximum active shares reached');
+      this.shares.set(record.id, record);
+    });
   }
 
   updateConfig(config: Partial<SiteShareConfig>): void {
@@ -98,10 +95,7 @@ export class SiteShareStore {
       maxRequests: params.maxRequests ?? null,
     };
 
-    this.shares.set(id, record);
-    this.byToken.set(token, id);
-    if (subdomain) this.bySubdomain.set(subdomain, id);
-    this.persistSync();
+    this.saveNew(record);
 
     log.info(
       { id, tokenPrefix: token.slice(0, 8), subdomain, kind: source.kind },
@@ -164,7 +158,7 @@ export class SiteShareStore {
     if (!SUBDOMAIN_PATTERN.test(lower)) {
       throw new Error('Subdomain must match /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/');
     }
-    if (this.bySubdomain.has(lower)) {
+    if (this.hasSubdomain(lower)) {
       throw new Error(`Subdomain '${lower}' already in use`);
     }
     return lower;
@@ -175,13 +169,11 @@ export class SiteShareStore {
   }
 
   getByToken(token: string): SiteShareRecord | null {
-    const id = this.byToken.get(token);
-    return id ? this.shares.get(id) ?? null : null;
+    return this.shares.values().find(record => record.token === token) ?? null;
   }
 
   getBySubdomain(subdomain: string): SiteShareRecord | null {
-    const id = this.bySubdomain.get(subdomain.toLowerCase());
-    return id ? this.shares.get(id) ?? null : null;
+    return this.shares.values().find(record => record.subdomain === subdomain.toLowerCase()) ?? null;
   }
 
   /**
@@ -214,146 +206,104 @@ export class SiteShareStore {
     return { valid: true };
   }
 
-  /** Increment counters when a request lands. Debounced persist. */
+  /** Increment counters when a request lands. Persisted before returning. */
   recordRequest(id: string, clientIp: string): void {
-    const record = this.shares.get(id);
-    if (!record) return;
-    record.requestCount++;
-    const recent = (record.recentClientIps ??= []);
-    if (!recent.includes(clientIp)) {
-      recent.unshift(clientIp);
-      if (recent.length > 200) recent.length = 200;
-      record.uniqueClientCount = recent.length;
-    }
-    this.scheduleDebouncedPersist();
+    this.shares.update(id, record => {
+      if (record) {
+        record.requestCount++;
+        const recent = (record.recentClientIps ??= []);
+        if (!recent.includes(clientIp)) {
+          recent.unshift(clientIp);
+          if (recent.length > 200) recent.length = 200;
+          record.uniqueClientCount = recent.length;
+        }
+      }
+      return { value: record, result: undefined };
+    });
   }
 
   setThumbnailStatus(id: string, status: 'pending' | 'ready' | 'failed'): void {
-    const record = this.shares.get(id);
-    if (!record) return;
-    record.thumbnailStatus = status;
-    if (status === 'ready') record.thumbnailGeneratedAt = new Date().toISOString();
-    if (status === 'failed') record.thumbnailFailedAt = new Date().toISOString();
-    this.persistSync();
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record) return;
+      record.thumbnailStatus = status;
+      if (status === 'ready') record.thumbnailGeneratedAt = new Date().toISOString();
+      if (status === 'failed') record.thumbnailFailedAt = new Date().toISOString();
+      this.shares.set(record.id, record);
+    });
   }
 
   revoke(id: string): boolean {
-    const record = this.shares.get(id);
-    if (!record) return false;
-    record.revoked = true;
-    this.persistSync();
-    if (this.onCleanup) {
-      try {
-        this.onCleanup(record);
-      } catch (err) {
-        log.warn({ err, id }, 'Site share cleanup hook threw on revoke');
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record) return false;
+      record.revoked = true;
+      this.shares.set(record.id, record);
+      if (this.onCleanup) {
+        try {
+          this.onCleanup(record);
+        } catch (err) {
+          log.warn({ err, id }, 'Site share cleanup hook threw on revoke');
+        }
       }
-    }
-    log.info({ id, tokenPrefix: record.token.slice(0, 8) }, 'Site share revoked');
-    return true;
+      log.info({ id, tokenPrefix: record.token.slice(0, 8) }, 'Site share revoked');
+      return true;
+    });
   }
 
   revokeMany(ids: string[]): number {
-    let count = 0;
-    for (const id of ids) {
-      const record = this.shares.get(id);
-      if (record && !record.revoked) {
-        record.revoked = true;
-        count++;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      let count = 0;
+      for (const id of ids) {
+        const record = this.shares.get(id);
+        if (record && !record.revoked) {
+          record.revoked = true;
+          this.shares.set(record.id, record);
+          count++;
+        }
       }
-    }
-    if (count > 0) this.persistSync();
-    return count;
+
+      return count;
+    });
   }
 
   revokeExpired(): number {
-    const now = Date.now();
-    let count = 0;
-    for (const record of this.shares.values()) {
-      if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
-        record.revoked = true;
-        count++;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const now = Date.now();
+      let count = 0;
+      for (const record of this.shares.values()) {
+        if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
+          record.revoked = true;
+          this.shares.set(record.id, record);
+          count++;
+        }
       }
-    }
-    if (count > 0) this.persistSync();
-    return count;
+
+      return count;
+    });
   }
 
   update(id: string, patch: { extendTtlMs?: number; maxRequests?: number | null }): SiteShareRecord | null {
-    const record = this.shares.get(id);
-    if (!record) return null;
-    if (patch.extendTtlMs !== undefined) {
-      record.expiresAt = new Date(Date.now() + patch.extendTtlMs).toISOString();
-    }
-    if (patch.maxRequests !== undefined) {
-      record.maxRequests = patch.maxRequests;
-    }
-    this.persistSync();
-    return record;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record) return null;
+      if (patch.extendTtlMs !== undefined) {
+        record.expiresAt = new Date(Date.now() + patch.extendTtlMs).toISOString();
+      }
+      if (patch.maxRequests !== undefined) {
+        record.maxRequests = patch.maxRequests;
+      }
+      this.shares.set(record.id, record);
+      return record;
+    });
   }
 
-  // ── Persistence ─────────────────────────────────────────────────────────────
-
-  private load(): void {
-    const path = resolveStorePath();
-    if (!existsSync(path)) return;
-    try {
-      const raw = readFileSync(path, 'utf8');
-      const data = JSON.parse(raw) as SiteShareStoreData;
-      if (data.version !== 1 || !Array.isArray(data.shares)) return;
-      const now = Date.now();
-      let cleaned = 0;
-      for (const record of data.shares) {
-        const expiredMs = now - new Date(record.expiresAt).getTime();
-        if (expiredMs > EXPIRED_RETENTION_MS) {
-          cleaned++;
-          continue;
-        }
-        this.shares.set(record.id, record);
-        this.byToken.set(record.token, record.id);
-        if (record.subdomain) this.bySubdomain.set(record.subdomain, record.id);
-      }
-      if (cleaned > 0) {
-        log.info({ cleaned }, `Cleaned ${cleaned} expired site-share records on load`);
-        this.persistSync();
-      }
-    } catch (err) {
-      log.warn({ err }, 'Failed to load site-shares.json');
-    }
-  }
-
-  private persistSync(): void {
-    const path = resolveStorePath();
-    mkdirSync(resolveStateDir(), { recursive: true });
-    let records = [...this.shares.values()];
-    if (records.length > MAX_STORED) {
-      records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      records = records.slice(0, MAX_STORED);
-      this.shares.clear();
-      this.byToken.clear();
-      this.bySubdomain.clear();
-      for (const r of records) {
-        this.shares.set(r.id, r);
-        this.byToken.set(r.token, r.id);
-        if (r.subdomain) this.bySubdomain.set(r.subdomain, r.id);
-      }
-    }
-    const data: SiteShareStoreData = { version: 1, shares: records };
-    writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  }
-
-  private scheduleDebouncedPersist(): void {
-    this.dirty = true;
-    if (this.debounceTimer) return;
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null;
-      if (this.dirty) {
-        this.dirty = false;
-        this.persistSync();
-      }
-    }, REQUEST_COUNT_DEBOUNCE_MS);
-    this.debounceTimer.unref?.();
-  }
+  private hasSubdomain(subdomain: string): boolean { return this.getBySubdomain(subdomain) !== null; }
 
   private startCleanupTimer(): void {
     this.cleanupTimer = setInterval(() => {
@@ -363,8 +313,6 @@ export class SiteShareStore {
         const expiredMs = now - new Date(record.expiresAt).getTime();
         if (expiredMs > EXPIRED_RETENTION_MS) {
           this.shares.delete(id);
-          this.byToken.delete(record.token);
-          if (record.subdomain) this.bySubdomain.delete(record.subdomain);
           if (this.onCleanup) {
             try {
               this.onCleanup(record);
@@ -376,7 +324,6 @@ export class SiteShareStore {
         }
       }
       if (removed > 0) {
-        this.persistSync();
         log.debug({ removed }, `Cleaned ${removed} expired site shares`);
       }
     }, CLEANUP_INTERVAL_MS);
@@ -388,14 +335,7 @@ export class SiteShareStore {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-    if (this.dirty) {
-      this.dirty = false;
-      this.persistSync();
-    }
+
   }
 }
 

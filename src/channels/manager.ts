@@ -83,8 +83,8 @@ export class ChannelManager {
     this.sessionModelHooks = hooks;
   }
 
-  enableOutboundPersistence(agentDir: string): void {
-    this.outbound.enablePersistence(agentDir);
+  enableOutboundPersistence(agentId: string): void {
+    this.outbound.enablePersistence(agentId);
   }
 
   // ── Plugin registry pass-throughs ──────────────────────────────────────

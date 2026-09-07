@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -24,6 +25,8 @@ function createTestFile(name: string, content = 'test content'): string {
   writeFileSync(filePath, content);
   return filePath;
 }
+
+useTestDatabase();
 
 describe('ShareStore', () => {
   let store: ShareStore;
