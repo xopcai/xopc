@@ -73,9 +73,21 @@ describe('shared understanding model', () => {
       }),
     ]);
 
-    expect(relations.map((relation) => relation.understanding.id)).toEqual(['project', 'global', 'topic']);
+    expect(relations.map((relation) => relation.understanding.id)).toEqual(['project', 'topic']);
     expect(relations[0]?.reasons).toContain('project_scope');
     expect(relations.find((relation) => relation.understanding.id === 'topic')?.reasons).toContain('topic_overlap');
-    expect(relations.find((relation) => relation.understanding.id === 'global')?.reasons).toContain('global_context');
+    expect(relations.some((relation) => relation.understanding.id === 'global')).toBe(false);
   });
+});
+
+it('excludes inactive, expired, general and explicitly unrelated understanding', () => {
+  const base = understanding({ kind: 'project_context', scope: { type: 'project', id: 'p' } });
+  const items = [
+    { ...base, id: 'active' },
+    { ...base, id: 'candidate', status: 'candidate' as const },
+    { ...base, id: 'stale', status: 'stale' as const },
+    { ...base, id: 'expired', validTo: 1 },
+    { ...base, id: 'excluded', excludedFocusIds: ['focus-1'] },
+  ];
+  expect(rankUnderstandingRelations(focus({ scope: { type: 'project', id: 'p' } }), items).map((item) => item.understanding.id)).toEqual(['active']);
 });

@@ -23,13 +23,14 @@ import {
   patchUserRelationship,
 } from '../../../user-context/relationships/service.js';
 import { USER_PERSON_KINDS, type UserPersonKind } from '../../../user-context/relationships/types.js';
-import { listUserFocuses, updateUserFocus } from '../../../user-context/sources/repository.js';
+import { getUserFocus, listUserFocuses, updateUserFocus } from '../../../user-context/sources/repository.js';
 import { canonicalUnderstandingKey, findDuplicateUnderstanding } from '../../../user-context/understanding.js';
 import {
   deleteUserAvatar,
   readUserAvatar,
   writeUserAvatar,
 } from '../../../user-context/user-avatar.js';
+import { listUnderstandingFocusExclusions, setUnderstandingFocusExclusion } from '../../../storage/sqlite/understanding-focus-exclusions.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const UNDERSTANDING_KIND_SET = new Set<UnderstandingKind>(UNDERSTANDING_KINDS);
@@ -128,7 +129,10 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
 
   authenticated.get('/api/you', (c) => c.json({
     profile: getUserProfile(),
-    understandings: listUnderstandings(),
+    understandings: (() => {
+      const byUnderstanding = listUnderstandingFocusExclusions();
+      return listUnderstandings().map((item) => ({ ...item, excludedFocusIds: byUnderstanding.get(item.id) ?? [] }));
+    })(),
     focuses: listUserFocuses(),
     rules: listCollaborationRules(),
     consolidation: { lastRun: listContextConsolidationRuns(1)[0] ?? null },
@@ -319,6 +323,14 @@ export function registerYouRoutes(authenticated: Hono, deps: AuthenticatedRouteD
       confidence: 1, statement, createdBy: 'user', changeReason: 'Created by user',
     });
     return c.json({ understanding }, 201);
+  });
+
+  authenticated.on(['PUT', 'DELETE'], '/api/you/understandings/:id/focus-exclusions/:focusId', write, (c) => {
+    const id = c.req.param('id');
+    const focusId = c.req.param('focusId');
+    if (!getUnderstanding(id) || !getUserFocus(focusId)) return c.json({ error: 'Context object not found' }, 404);
+    setUnderstandingFocusExclusion(id, focusId, c.req.method === 'PUT');
+    return c.json({ ok: true });
   });
 
   authenticated.get('/api/you/understandings/:id/evidence', (c) => {
