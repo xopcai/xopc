@@ -100,6 +100,7 @@ describe('durable connection recovery', () => {
   });
 
   it('finishes local setup after selecting an existing Gmail account without another OAuth flow', async () => {
+    vi.stubEnv('XOPC_COMPOSIO_API_KEY', 'test-composio-api-key');
     config.connectors.instances = {};
     requireWait(); activeConnection('connection-1'); activeConnection('connection-2');
     expect(recovery.snapshot(sessionKey).wait?.needs[0].phase).toBe('choose_account');
@@ -126,6 +127,7 @@ describe('durable connection recovery', () => {
   });
 
   it('continues with a single existing account when local setup is missing', async () => {
+    vi.stubEnv('XOPC_COMPOSIO_API_KEY', 'test-composio-api-key');
     config.connectors.instances = {};
     requireWait(); activeConnection();
     expect(recovery.snapshot(sessionKey).wait?.phase).toBe('ready');
