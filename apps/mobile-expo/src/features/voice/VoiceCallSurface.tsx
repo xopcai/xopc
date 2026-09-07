@@ -10,7 +10,8 @@ import { MarkdownView } from '../chat/MarkdownView';
 import { useMessages } from '../../i18n/messages';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, useTheme, spacing, typography } from '../../theme';
-import { setCallSpeaker, useVoiceCall, voiceCall } from './voice-call';
+import { isCallPermissionPromptActive, setCallSpeaker, useVoiceCall, voiceCall } from './voice-call';
+import { shouldPauseVoiceForBackground } from './voice-call-controller';
 import { voiceApprovalsOptions, respondVoiceApproval } from '../../query/voice';
 import { useVoicePreferences } from './voice-preferences';
 import { voiceErrorMessage } from './voice-error';
@@ -49,7 +50,7 @@ export function VoiceCallSurface() {
     const consent = DeviceEventEmitter.addListener('voice-consent-revoked', () => void voiceCall.end());
     const app = AppState.addEventListener('change', status => {
       const current = voiceCall.getSnapshot();
-      if (status === 'background' && !current.target?.background && current.phase !== 'idle') void voiceCall.pause('background');
+      if (status === 'background' && shouldPauseVoiceForBackground(current, isCallPermissionPromptActive())) void voiceCall.pause('background');
     });
     const gateway = useGatewayStore.subscribe((next, previous) => {
       if (next.activeGatewayId !== previous.activeGatewayId || next.unauthorized) void voiceCall.end();
