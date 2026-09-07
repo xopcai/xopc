@@ -3,54 +3,55 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema, type Config } from '../../../config/schema.js';
 import type { UserContextConfig } from '../../../user-context/config.js';
-import type { WorkspaceRuntime } from '../../workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from '../coordinator.js';
 
-const runBackgroundReviewTurn = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const runBackgroundUserModelReview = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
-vi.mock('../run-background-review.js', () => ({ runBackgroundReviewTurn }));
+vi.mock('../run-background-review.js', () => ({ runBackgroundUserModelReview }));
 
-function config(memory: UserContextConfig['memory'], understanding?: Partial<UserContextConfig['understanding']>): Config {
+function config(userModel?: Partial<UserContextConfig['userModel']>): Config {
   const base = ConfigSchema.parse({});
   return ConfigSchema.parse({
     ...base,
-    userContext: { ...base.userContext, memory, understanding: { ...base.userContext.understanding, ...understanding } },
+    userContext: {
+      ...base.userContext,
+      userModel: {
+        ...base.userContext.userModel,
+        ...userModel,
+        extraction: { ...base.userContext.userModel.extraction, ...userModel?.extraction },
+      },
+    },
   });
 }
 
 describe('BackgroundReviewCoordinator', () => {
   it('schedules understanding by cadence without a storage mutation tool dependency', async () => {
-    const cfg = config({
-      mode: 'confirmWrite',
-      sources: ['session'],
-    }, { reviewIntervalTurns: 2 });
+    const cfg = config({ extraction: { ...ConfigSchema.parse({}).userContext.userModel.extraction, reviewIntervalTurns: 2 } });
     const coordinator = new BackgroundReviewCoordinator({ getConfig: () => cfg });
     const agent = {
       state: {
         messages: [{ role: 'assistant', content: 'Done.', stopReason: 'stop' }],
       },
     } as unknown as Agent;
-    const workspaceRuntime = {
-      memoryManager: { applyUnderstandingCandidates: vi.fn() },
-    } as unknown as WorkspaceRuntime;
+    const workspaceId = '/workspace';
 
     coordinator.beginUserTurn('main:test');
     coordinator.scheduleAfterUserTurn({
       sessionKey: 'main:test',
       agent,
       lastAssistantText: 'Done.',
-      workspaceRuntime,
+      workspaceId,
     });
     await Promise.resolve();
-    expect(runBackgroundReviewTurn).not.toHaveBeenCalled();
+    expect(runBackgroundUserModelReview).not.toHaveBeenCalled();
 
     coordinator.beginUserTurn('main:test');
     coordinator.scheduleAfterUserTurn({
       sessionKey: 'main:test',
       agent,
       lastAssistantText: 'Done.',
-      workspaceRuntime,
+      workspaceId,
     });
-    await vi.waitFor(() => expect(runBackgroundReviewTurn).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(runBackgroundUserModelReview).toHaveBeenCalledTimes(1));
   });
 });

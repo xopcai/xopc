@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
-  createUnderstanding,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertConnectorConnection,
   upsertConnectorSyncPolicy,
   upsertKnowledgeSourceItems,
 } from '../../storage/sqlite/index.js';
+import { reconcileAssertion } from '../../user-model/index.js';
 import { ContextProviderRegistry } from '../execution/context.js';
 import { ProactiveEventService } from '../service.js';
 import { defineTaskContract, TaskApplicationService } from '../../tasks/index.js';
@@ -150,19 +150,25 @@ describe('proactive context resolver', () => {
       ['guarded', 'ask_before_reference', 'Do not reveal this.'],
     ] as const;
     for (const [id, disclosurePolicy, statement] of understandings) {
-      createUnderstanding({
+      reconcileAssertion({
+        subject: { type: 'user', id: 'self' },
+        predicate: `preference.proactive.${id}`,
+        cardinality: 'single',
         kind: 'preference',
-        canonicalKey: `preference:${id}`,
-        status: 'active',
         scope: { type: 'workspace', id: '/workspace' },
         sensitivity: 'normal',
-        explicitness: 'explicit',
-        durability: 'durable',
         disclosurePolicy,
-        confidence: 0.9,
+        authority: 'user_explicit',
+        confidence: 1,
+        inferredImportance: 0.8,
+        consequence: 'medium',
+        actionability: 0.8,
+        volatility: 'stable',
+        value: statement,
+        normalizedValue: statement.toLocaleLowerCase(),
         statement,
         createdBy: 'user',
-        changeReason: 'test',
+        observedAt: Date.now(),
       });
     }
     const events = new ProactiveEventService(() => []);
@@ -190,9 +196,9 @@ describe('proactive context resolver', () => {
         title: 'Ship the proactive foundation',
       })],
     });
-    const record = (resolved.content.user_understanding as { records: Array<{ evidenceId: string; content: string }> }).records[0]!;
+    const record = (resolved.content.user_model as { records: Array<{ evidenceId: string; content: string }> }).records[0]!;
     expect(record).toMatchObject({ content: 'Prefer concise risk summaries.' });
-    expect(record.evidenceId).toMatch(/^understanding:/);
+    expect(record.evidenceId).toMatch(/^assertion:/);
     expect(JSON.stringify(resolved.content)).not.toContain('Do not reveal this.');
     expect(resolved.evidenceIds).toEqual(expect.arrayContaining([
       event.id,

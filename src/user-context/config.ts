@@ -2,8 +2,6 @@ import { z } from 'zod';
 
 import { ResponseLanguageSchema } from '../i18n/response-language.js';
 
-export const UserMemoryModeSchema = z.enum(['off', 'readOnly', 'confirmWrite', 'auto']);
-
 export const DEFAULT_CONTEXT_COMPACTION_POLICY = {
   enabled: true,
   triggerThreshold: 0.8,
@@ -44,61 +42,83 @@ export const ContextCompactionPolicySchema = z
   .strict()
   .default(DEFAULT_CONTEXT_COMPACTION_POLICY);
 
-export const UserMemoryConfigSchema = z
-  .object({
-    mode: UserMemoryModeSchema.default('off'),
-    sources: z
-      .array(z.enum(['session', 'agentProfile', 'understanding', 'workspace']))
-      .default(['session']),
-    writePolicy: z
-      .object({
-        agentProfile: z.enum(['deny', 'confirm', 'allow']).optional(),
-        understanding: z.enum(['deny', 'confirm', 'allow']).optional(),
-        workspace: z.enum(['deny', 'confirm', 'allow']).optional(),
-      })
-      .strict()
-      .optional(),
-    retention: z
-      .object({
-        compaction: ContextCompactionPolicySchema,
-        maxAgeDays: z.number().int().positive().optional(),
-        maxItems: z.number().int().positive().optional(),
-        maxChars: z.number().int().positive().optional(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict()
-  .default({ mode: 'off', sources: ['session'] });
+const WritePolicySchema = z.enum(['deny', 'confirm', 'allow']);
+const MaintenanceTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected time in HH:mm format');
 
-export const UserUnderstandingConfigSchema = z
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const UserModelConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
+    writePolicy: WritePolicySchema.default('confirm'),
+    sensitiveWritePolicy: WritePolicySchema.default('confirm'),
     processingPolicy: z.enum(['local_only', 'remote_allowed']).default('remote_allowed'),
-    adaptiveCadence: z.boolean().default(true),
-    reviewIntervalTurns: z.number().int().min(1).max(1_000).default(10),
-    maxHistoryMessages: z.number().int().min(1).max(200).default(80),
-    maxDurationMs: z.number().int().min(1_000).max(600_000).default(120_000),
+    extraction: z.object({
+      reviewIntervalTurns: z.number().int().min(1).max(1_000).default(10),
+      maxHistoryMessages: z.number().int().min(1).max(200).default(80),
+      maxDurationMs: z.number().int().min(1_000).max(600_000).default(120_000),
+    }).strict().default({
+      reviewIntervalTurns: 10,
+      maxHistoryMessages: 80,
+      maxDurationMs: 120_000,
+    }),
+    maintenance: z.object({
+      enabled: z.boolean().default(true),
+      timezone: z.string().min(1).refine(isValidTimeZone, 'Invalid IANA timezone').optional(),
+      temporalSweepMinutes: z.number().int().min(15).max(60)
+        .refine((value) => 60 % value === 0, 'Must divide one hour evenly').default(60),
+      dailyTime: MaintenanceTimeSchema.default('03:00'),
+      weeklyDay: z.enum(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']).default('sun'),
+      weeklyTime: MaintenanceTimeSchema.default('04:00'),
+      evidenceThreshold: z.number().int().min(2).max(10).default(2),
+      limit: z.number().int().positive().max(10_000).default(1_000),
+      staleRetentionDays: z.number().int().min(1).max(3_650).default(30),
+    }).strict().default({
+      enabled: true,
+      temporalSweepMinutes: 60,
+      dailyTime: '03:00',
+      weeklyDay: 'sun',
+      weeklyTime: '04:00',
+      evidenceThreshold: 2,
+      limit: 1_000,
+      staleRetentionDays: 30,
+    }),
   })
   .strict()
   .default({
     enabled: true,
+    writePolicy: 'confirm',
+    sensitiveWritePolicy: 'confirm',
     processingPolicy: 'remote_allowed',
-    adaptiveCadence: true,
-    reviewIntervalTurns: 10,
-    maxHistoryMessages: 80,
-    maxDurationMs: 120_000,
+    extraction: {
+      reviewIntervalTurns: 10,
+      maxHistoryMessages: 80,
+      maxDurationMs: 120_000,
+    },
+    maintenance: {
+      enabled: true,
+      temporalSweepMinutes: 60,
+      dailyTime: '03:00',
+      weeklyDay: 'sun',
+      weeklyTime: '04:00',
+      evidenceThreshold: 2,
+      limit: 1_000,
+      staleRetentionDays: 30,
+    },
   });
 
-export const UserContextPrivacySchema = z
+export const KnowledgeMemoryConfigSchema = z
   .object({
-    sensitiveWritePolicy: z.enum(['deny', 'confirm', 'allow']).default('confirm'),
-  })
-  .strict()
-  .default({ sensitiveWritePolicy: 'confirm' });
-
-export const UserContextProviderRoutingSchema = z
-  .object({
+    enabled: z.boolean().default(true),
+    writePolicy: WritePolicySchema.default('confirm'),
+    sources: z.array(z.enum(['session', 'workspace', 'project', 'connector'])).default(['session', 'workspace']),
     searchStrategy: z
       .enum(['local-first', 'external-first', 'fanout', 'local-only', 'external-only'])
       .default('fanout'),
@@ -111,32 +131,30 @@ export const UserContextProviderRoutingSchema = z
   })
   .strict()
   .default({
+    enabled: true,
+    writePolicy: 'confirm',
+    sources: ['session', 'workspace'],
     searchStrategy: 'fanout',
     writeStrategy: 'local-first',
     allowExternalWrites: false,
   });
 
-const DreamingTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected time in HH:mm format');
-
-function isValidTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: value }).format();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export const UserContextDreamingSchema = z
+export const ContextPlanningConfigSchema = z
   .object({
-    mode: z.enum(['off', 'review']).default('review'),
-    timezone: z.string().min(1).refine(isValidTimeZone, 'Invalid IANA timezone').optional(),
-    schedule: z.object({ time: DreamingTimeSchema.default('03:00') }).strict().default({ time: '03:00' }),
-    minEvidenceSources: z.number().int().min(2).max(10).default(2),
-    limit: z.number().int().positive().max(2_000).default(500),
+    enabled: z.boolean().default(true),
+    maxAssertions: z.number().int().min(1).max(100).default(20),
+    maxKnowledge: z.number().int().min(0).max(100).default(12),
+    maxChars: z.number().int().min(500).max(50_000).default(6_000),
+    compaction: ContextCompactionPolicySchema,
   })
   .strict()
-  .default({ mode: 'review', schedule: { time: '03:00' }, minEvidenceSources: 2, limit: 500 });
+  .default({
+    enabled: true,
+    maxAssertions: 20,
+    maxKnowledge: 12,
+    maxChars: 6_000,
+    compaction: DEFAULT_CONTEXT_COMPACTION_POLICY,
+  });
 
 export const UserContextConfigSchema = z
   .object({
@@ -147,33 +165,20 @@ export const UserContextConfigSchema = z
       })
       .strict()
       .default({ responseLanguage: 'auto' }),
-    memory: UserMemoryConfigSchema,
-    understanding: UserUnderstandingConfigSchema,
-    privacy: UserContextPrivacySchema,
-    providerRouting: UserContextProviderRoutingSchema,
-    dreaming: UserContextDreamingSchema,
+    userModel: UserModelConfigSchema,
+    knowledgeMemory: KnowledgeMemoryConfigSchema,
+    contextPlanning: ContextPlanningConfigSchema,
   })
   .strict()
   .default({
     enabled: true,
     preferences: { responseLanguage: 'auto' },
-    memory: { mode: 'confirmWrite', sources: ['session', 'understanding'], writePolicy: { understanding: 'confirm' } },
-    understanding: {
-      enabled: true,
-      processingPolicy: 'remote_allowed',
-      adaptiveCadence: true,
-      reviewIntervalTurns: 10,
-      maxHistoryMessages: 80,
-      maxDurationMs: 120_000,
-    },
-    privacy: { sensitiveWritePolicy: 'confirm' },
-    providerRouting: {
-      searchStrategy: 'fanout',
-      writeStrategy: 'local-first',
-      allowExternalWrites: false,
-    },
-    dreaming: { mode: 'review', schedule: { time: '03:00' }, minEvidenceSources: 2, limit: 500 },
+    userModel: UserModelConfigSchema.parse({}),
+    knowledgeMemory: KnowledgeMemoryConfigSchema.parse({}),
+    contextPlanning: ContextPlanningConfigSchema.parse({}),
   });
 
 export type UserContextConfig = z.infer<typeof UserContextConfigSchema>;
-export type UserContextDreaming = z.infer<typeof UserContextDreamingSchema>;
+export type UserModelConfig = z.infer<typeof UserModelConfigSchema>;
+export type KnowledgeMemoryConfig = z.infer<typeof KnowledgeMemoryConfigSchema>;
+export type ContextPlanningConfig = z.infer<typeof ContextPlanningConfigSchema>;

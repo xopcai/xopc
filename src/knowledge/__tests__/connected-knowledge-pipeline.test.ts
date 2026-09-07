@@ -4,13 +4,10 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getKnowledgeItem, listKnowledgeItems } from '../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
-  getMemoryRecord,
-  listKnowledgeSourceChanges,
   listKnowledgeSourceItems,
-  listMemoryEvidence,
-  listMemoryRecords,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
@@ -26,9 +23,7 @@ describe('ConnectedKnowledgePipeline', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     pipeline = new ConnectedKnowledgePipeline({
-      agentId: 'main',
-      workspaceId: '/workspace',
-      workerId: 'test-worker',
+      agentId: 'main', workspaceId: '/workspace', workerId: 'test-worker',
     });
   });
 
@@ -38,162 +33,58 @@ describe('ConnectedKnowledgePipeline', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('turns normalized source items into active, cited knowledge and daily summaries', async () => {
-    const [item] = upsertKnowledgeSourceItems([{
-      sourceInstanceId: 'composio:composio-gmail:gmail-work',
-      collectionScope: 'messages',
-      externalId: 'message-1',
-      itemType: 'gmail:message',
-      occurredAt: '2026-07-20T08:30:00.000Z',
-      contentHash: 'hash-1',
+  it('turns bounded source content into a scoped, traceable source index', async () => {
+    const [source] = upsertKnowledgeSourceItems([{
+      sourceInstanceId: 'composio:gmail:work', collectionScope: 'messages', externalId: 'message-1',
+      itemType: 'gmail:message', occurredAt: '2026-07-20T08:30:00.000Z', contentHash: 'hash-1',
       normalizedText: 'Quarterly planning review is on Tuesday at 10:00.',
-      metadata: {
-        connectorId: 'composio-gmail',
-        agentId: 'main',
-        workspaceId: '/workspace',
-      },
-      sensitivity: 'personal',
-      synthesisPipeline: 'connected_knowledge',
+      metadata: { connectorId: 'gmail', agentId: 'main', workspaceId: '/workspace' },
+      sensitivity: 'personal', synthesisPipeline: 'connected_knowledge',
     }]).items;
 
-    const result = await pipeline.processPending('composio:composio-gmail:gmail-work');
-
+    const result = await pipeline.processPending('composio:gmail:work');
     expect(result).toMatchObject({ claimed: 1, completed: 1, ignored: 0, failed: 0 });
-    const record = getMemoryRecord(result.recordIds[0]!);
-    expect(record).toMatchObject({
-      id: `knowledge:${item!.id}`,
-      kind: 'workspace_fact',
-      status: 'active',
-      sensitivity: 'personal',
-      source: { provider: 'composio-gmail' },
-      scope: { userId: 'local-owner', workspaceId: '/workspace' },
-      provenance: {
-        sourceAgentId: 'main',
-        originClass: 'untrusted',
-        sessionKind: 'background',
-        observedAt: '2026-07-20T08:30:00.000Z',
-        derivedFromRecalledContext: false,
-      },
-      evidence: [expect.objectContaining({ sourceItemId: item!.id, relation: 'derived_from' })],
+    expect(getKnowledgeItem(result.recordIds[0]!)).toMatchObject({
+      kind: 'workspace_fact', status: 'active', scope: { type: 'workspace', id: '/workspace' },
+      recordClass: 'source_index', originClass: 'untrusted',
+      source: { provider: 'gmail', sourceItemId: source!.id },
     });
-    expect(listMemoryEvidence(record!.id)).toEqual([
-      expect.objectContaining({ sourceItemId: item!.id, relation: 'derived_from' }),
-    ]);
-    const [summary] = listMemoryRecords({ providerId: 'connected-knowledge', kind: 'daily_note' });
-    expect(summary).toMatchObject({ status: 'active', sensitivity: 'personal' });
-    expect(summary?.evidence).toEqual([
-      expect.objectContaining({ sourceItemId: item!.id, relation: 'derived_from' }),
-    ]);
-    expect(summary?.content).toContain('Quarterly planning review');
-    expect(listMemoryEvidence(summary!.id)[0]).toMatchObject({
-      sourceItemId: item!.id,
-      relation: 'derived_from',
-    });
-    expect(listKnowledgeSourceItems()[0]).toMatchObject({
-      synthesisStatus: 'completed',
-      synthesisAttempts: 1,
-    });
+    expect(listKnowledgeItems().some((item) => item.canonicalKey.startsWith('source-day:'))).toBe(false);
   });
 
-  it('updates stable records, ignores restricted content, and archives deleted knowledge', async () => {
-    const sourceInstanceId = 'composio:composio-notion:notion-personal';
-    const [item] = upsertKnowledgeSourceItems([{
-      sourceInstanceId,
-      collectionScope: 'pages',
-      externalId: 'page-1',
-      itemType: 'notion:page',
-      occurredAt: '2026-07-19T12:00:00.000Z',
-      contentHash: 'hash-1',
-      normalizedText: 'The launch checklist is ready.',
-      metadata: { connectorId: 'composio-notion' },
-      synthesisPipeline: 'connected_knowledge',
-    }, {
-      sourceInstanceId,
-      collectionScope: 'pages',
-      externalId: 'secret-1',
-      itemType: 'notion:page',
-      contentHash: 'secret-hash',
-      normalizedText: 'credential material',
-      metadata: { connectorId: 'composio-notion' },
-      synthesisPipeline: 'connected_knowledge',
-      sensitivity: 'secret',
-    }]).items;
-    const first = await pipeline.processPending(sourceInstanceId);
-    expect(first).toMatchObject({ completed: 1, ignored: 1 });
-    const recordId = `knowledge:${item!.id}`;
+  it('updates stable knowledge and archives it when the source is deleted', async () => {
+    const base = {
+      sourceInstanceId: 'composio:notion:personal', collectionScope: 'pages', externalId: 'page-1',
+      itemType: 'notion:page', occurredAt: '2026-07-19T12:00:00.000Z',
+      metadata: { connectorId: 'notion' }, synthesisPipeline: 'connected_knowledge' as const,
+    };
+    upsertKnowledgeSourceItems([{ ...base, contentHash: 'hash-1', normalizedText: 'Checklist is ready.' }]);
+    const first = await pipeline.processPending(base.sourceInstanceId);
+    const knowledgeId = first.recordIds[0]!;
+    upsertKnowledgeSourceItems([{ ...base, contentHash: 'hash-2', normalizedText: 'Checklist is approved.' }]);
+    await pipeline.processPending(base.sourceInstanceId);
+    expect(getKnowledgeItem(knowledgeId)?.content).toBe('Checklist is approved.');
 
     upsertKnowledgeSourceItems([{
-      sourceInstanceId,
-      collectionScope: 'pages',
-      externalId: 'page-1',
-      itemType: 'notion:page',
-      occurredAt: '2026-07-19T12:00:00.000Z',
-      contentHash: 'hash-2',
-      normalizedText: 'The launch checklist is ready and approved.',
-      metadata: { connectorId: 'composio-notion' },
-      synthesisPipeline: 'connected_knowledge',
-    }]);
-    await pipeline.processPending(sourceInstanceId);
-    expect(getMemoryRecord(recordId)).toMatchObject({
-      id: recordId,
-      content: 'The launch checklist is ready and approved.',
-      status: 'active',
-    });
-    expect(listMemoryEvidence(recordId)).toHaveLength(1);
-
-    upsertKnowledgeSourceItems([{
-      sourceInstanceId,
-      collectionScope: 'pages',
-      externalId: 'page-1',
-      itemType: 'notion:page',
-      occurredAt: '2026-07-19T12:00:00.000Z',
-      contentHash: 'hash-2',
-      normalizedText: 'The launch checklist is ready and approved.',
-      metadata: { connectorId: 'composio-notion' },
-      synthesisPipeline: 'connected_knowledge',
+      ...base, contentHash: 'hash-2', normalizedText: 'Checklist is approved.',
       deletedAt: '2026-07-20T09:00:00.000Z',
     }]);
-    await pipeline.processPending(sourceInstanceId);
-
-    expect(getMemoryRecord(recordId)?.status).toBe('archived');
-    expect(listKnowledgeSourceChanges({ sourceInstanceId }).map((change) => change.kind))
-      .toEqual(['added', 'added', 'modified', 'deleted']);
-    expect(listMemoryRecords({ providerId: 'connected-knowledge', kind: 'daily_note' })[0]?.status)
-      .toBe('archived');
+    await pipeline.processPending(base.sourceInstanceId);
+    expect(getKnowledgeItem(knowledgeId)?.status).toBe('archived');
   });
 
-  it('deletes expired bounded raw items, item memories, and empty daily summaries together', async () => {
-    const sourceInstanceId = 'composio:composio-gmail:gmail-retention';
-    const items = upsertKnowledgeSourceItems([{
-      sourceInstanceId,
-      collectionScope: 'messages',
-      externalId: 'old-message',
-      itemType: 'gmail:message',
-      occurredAt: '2026-06-01T08:00:00.000Z',
-      contentHash: 'old-hash',
-      normalizedText: 'Old content that must expire with the bounded source item.',
-      metadata: { connectorId: 'composio-gmail' },
+  it('prunes expired bounded source rows and archives derived knowledge', async () => {
+    const sourceInstanceId = 'composio:gmail:retention';
+    upsertKnowledgeSourceItems([{
+      sourceInstanceId, collectionScope: 'messages', externalId: 'old-message', itemType: 'gmail:message',
+      occurredAt: '2026-06-01T08:00:00.000Z', contentHash: 'old-hash',
+      normalizedText: 'Old bounded content.', metadata: { connectorId: 'gmail' },
       synthesisPipeline: 'connected_knowledge',
-    }, {
-      sourceInstanceId,
-      collectionScope: 'messages',
-      externalId: 'new-message',
-      itemType: 'gmail:message',
-      occurredAt: '2026-08-01T08:00:00.000Z',
-      contentHash: 'new-hash',
-      normalizedText: 'Recent content remains available.',
-      metadata: { connectorId: 'composio-gmail' },
-      synthesisPipeline: 'connected_knowledge',
-    }]).items;
-    await pipeline.processPending(sourceInstanceId);
-
+    }]);
+    const processed = await pipeline.processPending(sourceInstanceId);
     const result = pipeline.pruneBoundedRetention(sourceInstanceId, Date.parse('2026-07-01T00:00:00.000Z'));
-
-    expect(result).toEqual({ rawDeleted: 1, derivedDeleted: 2 });
-    expect(listKnowledgeSourceItems({ sourceInstanceId }).map((item) => item.externalId)).toEqual(['new-message']);
-    expect(getMemoryRecord(`knowledge:${items[0]!.id}`)).toBeNull();
-    expect(getMemoryRecord(`knowledge:${items[1]!.id}`)).not.toBeNull();
-    expect(listMemoryRecords({ providerId: 'connected-knowledge', kind: 'daily_note' }))
-      .toEqual([expect.objectContaining({ content: expect.stringContaining('Recent content') })]);
+    expect(result).toEqual({ rawDeleted: 1, derivedDeleted: 1 });
+    expect(listKnowledgeSourceItems({ sourceInstanceId })).toEqual([]);
+    expect(getKnowledgeItem(processed.recordIds[0]!)?.status).toBe('archived');
   });
 });

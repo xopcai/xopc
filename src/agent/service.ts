@@ -94,7 +94,7 @@ import {
 import {
   extractProfileAgentId,
 } from '../config/agent-profile.js';
-import { getUserProfile } from '../storage/sqlite/user-context-repository.js';
+import { getUserTimezone } from '../user-model/index.js';
 import { getProjectForSession } from '../projects/workspace.js';
 import {
   persistInboundAttachments,
@@ -1033,7 +1033,7 @@ export class AgentService {
     try {
       const cfg = this.effectiveAppConfig();
       if (!cfg) return undefined;
-      return getUserProfile().timezone || undefined;
+      return getUserTimezone();
     } catch {
       return undefined;
     }

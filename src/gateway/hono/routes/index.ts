@@ -19,7 +19,7 @@ import { registerRealtimeRoutes } from './realtime.js';
 import { registerDeviceRoutes } from './devices.js';
 import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
-import { registerUnderstandingSourceRoutes } from './understanding-sources.js';
+import { registerContextSourceRoutes } from './context-sources.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerProactiveRoutes } from './proactive.js';
 import { registerMobilePrivacyRoutes } from './mobile-privacy.js';
@@ -45,7 +45,7 @@ export function registerCoreAuthenticatedRoutes(
   registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);
   registerWorkDiscoveryRoutes(authenticated, deps);
-  registerUnderstandingSourceRoutes(authenticated, deps);
+  registerContextSourceRoutes(authenticated, deps);
   registerTaskRoutes(authenticated, deps);
   registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);

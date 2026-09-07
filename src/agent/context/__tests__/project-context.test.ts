@@ -7,12 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ProjectTaskContext } from '../project-context.js';
 import { ProjectService } from '../../../projects/index.js';
 import type { Project } from '../../../projects/types.js';
+import { writeKnowledgeItem } from '../../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
-  upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import {
   buildActiveProjectContextForPrompt,
@@ -60,11 +60,11 @@ describe('formatActiveProjectContextForPrompt', () => {
           agentId: 'main',
         },
       ],
-      memoryRecords: [
+      knowledgeItems: [
         {
           kind: 'session_summary',
           content: 'Decided to keep Project separate from Agent and Model.',
-          updatedAt: '2026-07-06T01:00:00.000Z',
+          updatedAt: Date.parse('2026-07-06T01:00:00.000Z'),
         },
       ],
     });
@@ -88,7 +88,7 @@ describe('formatActiveProjectContextForPrompt', () => {
 
     expect(text).toContain('## Active Tasks\n- None recorded.');
     expect(text).toContain('## Recent Project Sessions\n- None recorded.');
-    expect(text).toContain('## Project Memory\n- None recorded.');
+    expect(text).toContain('## Project Knowledge\n- None recorded.');
   });
 
   it('tells coder sessions which local-app release is stable', () => {
@@ -137,35 +137,31 @@ describe('buildActiveProjectContextForPrompt', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('keeps objective-relevant project memory alongside recent memory', () => {
+  it('keeps objective-relevant project knowledge alongside recent knowledge', () => {
     const projects = new ProjectService();
     const scopedProject = projects.create({ name: 'Memory Scope Project' });
     const sessionKey = 'agent:main:webchat:default:direct:project-memory';
     ensureSessionRecord(sessionKey, process.cwd());
     projects.attachSession(sessionKey, scopedProject.id);
-    upsertMemoryRecord({
-      id: 'relevant-memory',
-      providerId: 'test',
+    writeKnowledgeItem({
       kind: 'task_lesson',
-      sourceAgentId: 'main',
-      projectId: scopedProject.id,
+      scope: { type: 'project', id: scopedProject.id },
       content: 'Needlearchitecture uses a single execution scope resolver.',
-      nowMs: 1_000,
+      canonicalKey: 'relevant-knowledge', confidence: 1, importance: 0.8,
+      originClass: 'owner', now: 1_000,
     });
     for (let index = 0; index < 6; index += 1) {
-      upsertMemoryRecord({
-        id: `recent-memory-${index}`,
-        providerId: 'test',
-        kind: 'session_summary',
-        sourceAgentId: 'main',
-        projectId: scopedProject.id,
+      writeKnowledgeItem({
+        kind: 'episode',
+        scope: { type: 'project', id: scopedProject.id },
         content: `Recent unrelated project note ${index}.`,
-        nowMs: 2_000 + index,
+        canonicalKey: `recent-knowledge-${index}`, confidence: 1, importance: 0.5,
+        originClass: 'owner', now: 2_000 + index,
       });
     }
 
     const text = buildActiveProjectContextForPrompt(sessionKey, {
-      memoryQuery: 'Implement needlearchitecture safely',
+      knowledgeQuery: 'Implement needlearchitecture safely',
     });
 
     expect(text).toContain('Needlearchitecture uses a single execution scope resolver.');

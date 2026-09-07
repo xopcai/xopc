@@ -96,9 +96,8 @@ function createMockModelManager() {
 function configWithCompaction(enabled: boolean) {
   return {
     userContext: {
-      memory: {
-        retention: {
-          compaction: {
+      contextPlanning: {
+        compaction: {
             enabled,
             triggerThreshold: 0.8,
             reserveTokens: 8_192,
@@ -113,7 +112,6 @@ function configWithCompaction(enabled: boolean) {
             minToolResultKeepChars: 1_000,
             maxActiveTranscriptBytes: 2_000_000,
             postCompactionSections: ['Session Startup', 'Red Lines'],
-          },
         },
       },
     },
@@ -300,7 +298,7 @@ describe('pre-turn auto-compaction', () => {
       { role: 'assistant', content: 'ok' },
     ] as AgentMessage[]);
     const config = configWithCompaction(true);
-    config.userContext.memory.retention.compaction.maxActiveTranscriptBytes = 64_000;
+    config.userContext.contextPlanning.compaction.maxActiveTranscriptBytes = 64_000;
 
     await runEmbeddedTurnForSession({
       sessionKey: 'agent:main:test-session',
@@ -541,7 +539,7 @@ describe('pre-turn auto-compaction', () => {
     );
   });
 
-  it('respects memory.retention.compaction.enabled=false config', async () => {
+  it('respects contextPlanning.compaction.enabled=false config', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: true });
     const agentManager = createMockAgentManager();
     const modelManager = createMockModelManager();

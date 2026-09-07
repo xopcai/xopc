@@ -30,10 +30,9 @@ import {
 import {
   getSqliteDatabase,
   getSessionMetadata,
-  listMemoryRecords,
   loadTranscriptRowsForSession,
-  upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
+import { listKnowledgeItems, writeKnowledgeItem } from '../../../knowledge-memory/index.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -154,7 +153,7 @@ function textFromTranscriptContent(content: unknown): string {
     .join('\n');
 }
 
-function buildSessionSummaryMemoryContent(sessionKey: string, explicitSummary?: string): string {
+function buildSessionSummaryKnowledgeContent(sessionKey: string, explicitSummary?: string): string {
   const summary = explicitSummary?.trim();
   if (summary) return summary;
   const rows = loadTranscriptRowsForSession(sessionKey)
@@ -206,7 +205,7 @@ function listFailedProjectWorkflowRuns(projectId: string, limit = 5): ProjectWor
   }));
 }
 
-function buildProjectDigestMemoryContent(input: ReturnType<typeof buildProjectLoopOverview> & { projectName: string }): string {
+function buildProjectDigestKnowledgeContent(input: ReturnType<typeof buildProjectLoopOverview> & { projectName: string }): string {
   const lines = [
     `Project digest: ${input.projectName}`,
     `Status: ${input.digest.summary}`,
@@ -225,10 +224,6 @@ function buildProjectDigestMemoryContent(input: ReturnType<typeof buildProjectLo
     }
   }
   return lines.join('\n');
-}
-
-function projectDigestMemoryRecordId(projectId: string): string {
-  return `project-digest:${projectId}`;
 }
 
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -402,7 +397,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, ...result });
   });
 
- authenticated.post('/api/projects/:id/digest-memory', async (c) => {
+ authenticated.post('/api/projects/:id/digest-knowledge', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
     const projectTasks = new TaskRepository().listByProject(project.id, 100)
@@ -423,29 +418,30 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       tasks: projectTasks,
       recentWorkflowRuns: project.recentWorkflowRuns,
       failedWorkflowRuns: listFailedProjectWorkflowRuns(project.id),
-      memoryRecords: listMemoryRecords({ projectId: project.id, status: 'active', limit: 5 }),
+      knowledgeItems: listKnowledgeItems({ statuses: ['active'], limit: 500 })
+        .filter((item) => item.scope.type === 'project' && item.scope.id === project.id)
+        .slice(0, 5),
     });
-    const record = upsertMemoryRecord({
-      id: projectDigestMemoryRecordId(project.id),
-      providerId: 'local',
-      kind: 'daily_note',
+    const record = writeKnowledgeItem({
+      kind: 'note',
+      scope: { type: 'project', id: project.id },
       sourceAgentId: resolveProjectAgentId({
         config: service.currentConfig,
         projects: service.projects,
         projectId: project.id,
       }),
-      workspaceId: project.workspaceRoot,
-      projectId: project.id,
-      content: buildProjectDigestMemoryContent({ ...loop, projectName: project.name }),
+      content: buildProjectDigestKnowledgeContent({ ...loop, projectName: project.name }),
+      canonicalKey: `project-digest:${project.id}`,
       source: {
         provider: 'project-digest',
       },
       confidence: 0.75,
-      tags: ['project', 'project-digest', project.slug],
+      importance: 0.7,
       status: 'active',
-      sensitivity: 'normal',
+      originClass: 'system',
+      replaceExisting: true,
     });
-    return c.json({ ok: true, record }, 201);
+    return c.json({ ok: true, knowledge: record.item }, 201);
   });
 
   authenticated.post('/api/projects/:id/blockers', async (c) => {
@@ -695,7 +691,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
-  authenticated.post('/api/projects/:id/sessions/:sessionKey/summary-memory', async (c) => {
+  authenticated.post('/api/projects/:id/sessions/:sessionKey/summary-knowledge', async (c) => {
     const projectId = c.req.param('id');
     const sessionKey = c.req.param('sessionKey');
     const project = service.projects.get(projectId);
@@ -706,29 +702,28 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ ok: false, error: 'Session is not attached to this project' }, 409);
     }
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-    const content = buildSessionSummaryMemoryContent(
+    const content = buildSessionSummaryKnowledgeContent(
       sessionKey,
       typeof body.summary === 'string' ? body.summary : undefined,
     );
-    const record = upsertMemoryRecord({
-      providerId: 'local',
-      kind: 'session_summary',
+    const record = writeKnowledgeItem({
+      kind: 'episode',
+      scope: { type: 'project', id: projectId },
       sourceAgentId: session.routing?.agentId ?? 'main',
-      workspaceId: session.cwd,
-      sessionKey,
-      projectId,
+      sourceSessionId: sessionKey,
       content,
+      canonicalKey: `project-session-summary:${projectId}:${sessionKey}`,
       source: {
         provider: 'project-summary',
         sessionEntryId: sessionKey,
       },
       confidence: typeof body.confidence === 'number' ? body.confidence : 0.7,
-      tags: ['project', 'session-summary', project.slug],
+      importance: 0.6,
       status: 'active',
-      sensitivity: 'normal',
-      evidence: [{ sessionKey }],
+      originClass: 'agent',
+      replaceExisting: true,
     });
-    return c.json({ ok: true, record }, 201);
+    return c.json({ ok: true, knowledge: record.item }, 201);
   });
 
 }

@@ -135,7 +135,7 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
 export function buildExecutionScopeContextForPrompt(sessionKey: string): string | undefined {
   const scope = resolveExecutionScope(sessionKey);
   const sections = [
-    buildActiveProjectContextForPrompt(sessionKey, { memoryQuery: scope.objective?.objective }),
+    buildActiveProjectContextForPrompt(sessionKey, { knowledgeQuery: scope.objective?.objective }),
     formatCurrentWorkForPrompt(scope),
   ].filter((section): section is string => Boolean(section?.trim()));
   return sections.join('\n\n') || undefined;

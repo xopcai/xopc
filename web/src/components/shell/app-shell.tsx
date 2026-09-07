@@ -106,7 +106,7 @@ function AppShellContent() {
   const sideChatOpen = useSideChatStore((s) => (
     parentSessionKey ? s.panes[parentSessionKey]?.open === true : false
   ));
-  const showWorkDiscoveryOverlay = pathname === '/you' && isWorkDiscoveryOverlaySearch(search);
+  const showWorkDiscoveryOverlay = pathname === '/user-model' && isWorkDiscoveryOverlaySearch(search);
   const taskModalId = pathname.startsWith('/tasks/')
     ? null
     : new URLSearchParams(search).get(TASK_DETAIL_MODAL_PARAM);

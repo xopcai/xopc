@@ -28,7 +28,7 @@ The following project context files have been loaded:
 Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed order (see [Workspace](workspace.md)):
 
 - Per-file and total character budgets are runtime constants unless exposed by a future manifest runtime field.
-- Subagent and automation-run sessions use a minimal agent profile allowlist (AGENTS, TOOLS, SOUL, IDENTITY) while memory remains supplied by the shared user-context runtime.
+- Subagent and automation-run sessions use a minimal agent profile allowlist (AGENTS, TOOLS, SOUL, IDENTITY) while relevant assertions and knowledge come from the shared execution-context planner.
 - Profile context injection follows the selected manifest/runtime policy and session state.
 
 Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-prompt.ts`.
@@ -53,7 +53,7 @@ Set `agents.defaults.runtime.promptCache` once, or override `agents.list[].runti
 
 | Location | In prompt? | Access |
 |----------|------------|--------|
-| Structured User Context | Relevant subset only | Per-turn planner with scope, sensitivity, consent, and budget checks |
+| Execution Context | Relevant subset only | Per-turn planner with scope, validity, sensitivity, authority, and budget checks |
 | Session history | No | `session_search` when available |
 
 ## Related

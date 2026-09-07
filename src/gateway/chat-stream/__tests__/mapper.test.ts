@@ -448,32 +448,6 @@ describe('ChatStreamMapper', () => {
     });
   });
 
-  it('maps quiet memory consent and capture events', () => {
-    const m = mapper();
-    const [consent] = m.map({
-      type: 'memory_consent_required',
-      requests: [{ id: 'consent-1', recordId: 'memory-1', statement: 'Prefer concise answers.', purpose: 'Draft a reply' }],
-    });
-    const [captured] = m.map({
-      type: 'memory_captured',
-      records: [{ id: 'memory-2', content: 'Use pnpm.', kind: 'tool_preference' }],
-    });
-    expect(consent).toMatchObject({ type: 'memory_consent_required', payload: { requests: [{ id: 'consent-1' }] } });
-    expect(captured).toMatchObject({ type: 'memory_captured', payload: { records: [{ id: 'memory-2' }] } });
-  });
-
-  it('maps memory candidates without activating them', () => {
-    const m = mapper();
-    const [candidate] = m.map({
-      type: 'memory_candidate',
-      records: [{ id: 'memory-3', content: 'Prefer concise updates.', kind: 'preference' }],
-    });
-    expect(candidate).toMatchObject({
-      type: 'memory_candidate',
-      payload: { records: [{ id: 'memory-3', content: 'Prefer concise updates.', kind: 'preference' }] },
-    });
-  });
-
   it('maps tool lifecycle', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });

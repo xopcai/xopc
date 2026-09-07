@@ -741,39 +741,6 @@ export class MessageSender {
         }
         break;
       }
-      case 'memory_consent_required': {
-        const requests = Array.isArray(payload.requests)
-          ? payload.requests.filter((request): request is Record<string, unknown> => Boolean(request) && typeof request === 'object')
-          : [];
-        if (requests.length > 0 && this._chatId) {
-          window.dispatchEvent(new CustomEvent('memory-consent-required', {
-            detail: { sessionKey: this._chatId, requests },
-          }));
-        }
-        break;
-      }
-      case 'memory_captured': {
-        const records = Array.isArray(payload.records)
-          ? payload.records.filter((record): record is Record<string, unknown> => Boolean(record) && typeof record === 'object')
-          : [];
-        if (records.length > 0 && this._chatId) {
-          window.dispatchEvent(new CustomEvent('memory-captured', {
-            detail: { sessionKey: this._chatId, records },
-          }));
-        }
-        break;
-      }
-      case 'memory_candidate': {
-        const records = Array.isArray(payload.records)
-          ? payload.records.filter((record): record is Record<string, unknown> => Boolean(record) && typeof record === 'object')
-          : [];
-        if (records.length > 0 && this._chatId) {
-          window.dispatchEvent(new CustomEvent('memory-candidate', {
-            detail: { sessionKey: this._chatId, records },
-          }));
-        }
-        break;
-      }
       case 'workflow_run_started': {
         const workflowRun = payload.workflowRun as Record<string, unknown> | undefined;
         if (workflowRun?.ok === true) {

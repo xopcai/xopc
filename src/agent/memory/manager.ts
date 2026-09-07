@@ -1,12 +1,9 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import { appendMemoryTraceEvent, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
 import { retrievalQueryAuditValue } from '../../retrieval/audit.js';
 import { createLogger } from '../../utils/logger.js';
 import type { MemoryRuntime, MemorySource } from './runtime.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
-import { UserUnderstandingService } from './understanding/service.js';
-import type { UnderstandingCandidate } from './understanding/types.js';
 import type {
   MemoryDeleteRequest,
   MemoryListRequest,
@@ -55,7 +52,6 @@ export class MemoryManager {
   private readonly writePolicy: Required<Pick<MemoryWritePolicy, 'allowExternalWrites'>> &
     Omit<MemoryWritePolicy, 'allowExternalWrites'>;
   private pluginProvidersLoaded = false;
-  private readonly understanding: UserUnderstandingService;
   private readonly memoryRuntime?: MemoryRuntime;
   private readonly sessionContexts = new Map<string, MemoryProviderInitOptions>();
 
@@ -72,7 +68,6 @@ export class MemoryManager {
       allowedProviderIds: options.writePolicy?.allowedProviderIds,
       autoWriteKinds: options.writePolicy?.autoWriteKinds,
     };
-    this.understanding = new UserUnderstandingService();
   }
 
   addProvider(provider: MemoryProvider): void {
@@ -174,37 +169,6 @@ export class MemoryManager {
         log.warn({ err, id: p.id }, 'memory sync failed');
       }
     }
-  }
-
-  async applyUnderstandingCandidates(
-    candidates: UnderstandingCandidate[],
-    context: {
-      agentId?: string;
-      sessionKey?: string;
-      workspaceId?: string;
-      projectId?: string;
-      sourceItemId?: string;
-      sourceItemIds?: string[];
-      evidenceIds?: string[];
-      sourceText?: string;
-      source?: MemoryRecord['source'];
-      reviewSource?: 'turn' | 'background';
-      extractionRunId?: string;
-      supersedesRecordIds?: string[];
-    } = {},
-  ): Promise<import('./understanding/types.js').UnderstandingReviewResult> {
-    const sessionContext = context.sessionKey ? this.sessionContexts.get(context.sessionKey) : undefined;
-    const sourceItemId = context.sourceItemId;
-    const result = await this.understanding.applyCandidates(candidates, {
-      ...context,
-      workspaceId: context.workspaceId ?? sessionContext?.workspace ?? sessionContext?.agentWorkspace,
-      sourceItemId,
-    });
-    const sourceItemIds = [...new Set([...(sourceItemId ? [sourceItemId] : []), ...(context.sourceItemIds ?? [])])];
-    if (sourceItemIds.length) {
-      setKnowledgeSourceItemSynthesisStatus(sourceItemIds, 'completed');
-    }
-    return { ...result, ...(sourceItemId ? { sourceItemId } : {}) };
   }
 
   getExternalToolEntries(): Array<{ providerId: string; tool: AgentTool }> {
@@ -577,30 +541,19 @@ export class MemoryManager {
       durationMs?: number;
     } = {},
   ): void {
-    try {
-      appendMemoryTraceEvent({
-        phase,
-        providerId,
-        request: sanitizeTraceRequest(request),
-        ...meta,
-      });
-    } catch (err) {
-      log.debug({ err, providerId, phase }, 'memory trace append failed');
-    }
+    log.debug({ phase, providerId, request: sanitizeTraceRequest(request), ...meta }, 'External memory provider operation');
   }
 }
 
 function memorySourceForRecord(record: MemoryRecord): MemorySource {
-  if (record.source.provider === 'agent-profile') return 'agentProfile';
+  if (record.source.provider !== 'builtin') return 'connector';
   if (record.scope.sessionKey) return 'session';
-  if (record.scope.workspaceId || record.kind === 'workspace_fact' || record.kind === 'project_context' || record.kind === 'task_lesson') return 'workspace';
-  return 'understanding';
+  if (record.scope.projectId) return 'project';
+  return 'workspace';
 }
 
-function writeTargetForRecord(request: MemoryWriteRequest): 'understanding' | 'workspace' {
-  return request.scope?.workspaceId || request.kind === 'workspace_fact' || request.kind === 'project_context' || request.kind === 'task_lesson'
-    ? 'workspace'
-    : 'understanding';
+function writeTargetForRecord(_request: MemoryWriteRequest): 'knowledge' {
+  return 'knowledge';
 }
 
 function sanitizeTraceRequest(request: unknown): unknown {

@@ -1,12 +1,7 @@
 import { createHash } from 'node:crypto';
 
-import {
-  createContextEvidence,
-  createUnderstanding,
-  linkUnderstandingEvidence,
-  listUnderstandings,
-} from '../storage/sqlite/index.js';
-import type { UserUnderstanding } from './domain.js';
+import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
+import { reconcileAssertion, type UserAssertion } from '../user-model/index.js';
 
 export interface RelationshipFollowUpRequest {
   subject: string;
@@ -45,27 +40,40 @@ export function recordExplicitRelationshipFollowUp(input: {
   sessionKey: string;
   message: string;
   nowMs?: number;
-}): UserUnderstanding | null {
-  const request = extractExplicitRelationshipFollowUp(input.message, input.nowMs);
+}): UserAssertion | null {
+  const now = input.nowMs ?? Date.now();
+  const request = extractExplicitRelationshipFollowUp(input.message, now);
   if (!request) return null;
-  const canonicalKey = `relationship-follow-up:${hash(request.subject.toLocaleLowerCase())}`;
-  const existing = listUnderstandings().find((item) =>
-    item.canonicalKey === canonicalKey && item.scope.type === 'global'
-    && item.status !== 'rejected' && item.status !== 'archived');
-  if (existing) return existing;
-  const understanding = createUnderstanding({
-    kind: 'relationship', canonicalKey, status: 'active', scope: { type: 'global' },
-    explicitness: 'explicit', durability: 'recurring', sensitivity: 'normal',
-    disclosurePolicy: 'referenceable', confidence: 1, statement: request.subject,
-    ...(request.validFrom ? { validFrom: request.validFrom } : {}),
-    createdBy: 'user', changeReason: 'Explicit follow-up request',
-  });
+  const key = hash(request.subject.toLocaleLowerCase());
   const evidence = createContextEvidence({
     sourceType: 'conversation',
     sourceRef: `session:${input.sessionKey}:follow-up:${hash(input.message)}`,
-    redactedExcerpt: input.message.slice(0, 600), trustLevel: 'owner',
-    observedAt: input.nowMs ?? Date.now(),
+    redactedExcerpt: input.message.slice(0, 600),
+    trustLevel: 'owner',
+    observedAt: now,
   });
-  linkUnderstandingEvidence(understanding.versionId, evidence.id, 'supports', 1);
-  return understanding;
+  return reconcileAssertion({
+    subject: { type: 'topic', id: key },
+    predicate: `relationship.follow_up.${key}`,
+    cardinality: 'single',
+    scope: { type: 'global' },
+    kind: 'relationship',
+    value: request.subject,
+    normalizedValue: request.subject.toLocaleLowerCase(),
+    statement: request.subject,
+    authority: 'user_explicit',
+    confidence: 1,
+    declaredImportance: 0.8,
+    inferredImportance: 0.8,
+    consequence: 'medium',
+    actionability: 1,
+    volatility: 'slow',
+    sensitivity: 'normal',
+    disclosurePolicy: 'referenceable',
+    ...(request.validFrom ? { validFrom: request.validFrom } : {}),
+    observedAt: now,
+    createdBy: 'user',
+    evidenceId: evidence.id,
+    evidenceConfidence: 1,
+  }, now).assertion;
 }

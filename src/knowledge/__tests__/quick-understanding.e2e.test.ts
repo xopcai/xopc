@@ -4,9 +4,9 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { listUserAssertions } from '../../user-model/index.js';
 import {
   closeXopcDatabase,
-  listUnderstandings,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
@@ -74,6 +74,6 @@ describe('quick understanding end to end', () => {
     expect((await knowledge.processPending()).completed).toBe(3);
 
     expect(stored).toHaveLength(3);
-    expect(listUnderstandings()).toEqual([]);
+    expect(listUserAssertions()).toEqual([]);
   });
 });

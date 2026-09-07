@@ -84,7 +84,7 @@ function mergeAccountSourceData(
   `).run(targetId, sourceId);
   db.prepare('DELETE FROM knowledge_consumer_watermarks WHERE source_instance_id = ?').run(sourceId);
   db.prepare(`
-    UPDATE memory_records
+    UPDATE knowledge_items
     SET source_json = json_set(source_json, '$.sourceInstanceId', ?)
     WHERE json_extract(source_json, '$.sourceInstanceId') = ?
   `).run(targetId, sourceId);

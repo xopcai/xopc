@@ -28,10 +28,16 @@ export {
 
 // Memory tools
 export {
-  createMemorySearchTool,
-  createMemoryGetTool,
-  type MemoryToolOptions,
-} from './memory-tool.js';
+  createUserContextSearchTool,
+  createUserContextGetTool,
+  type UserContextToolOptions,
+} from './user-context-tool.js';
+export {
+  createKnowledgeSearchTool,
+  createKnowledgeGetTool,
+  createKnowledgeWriteTool,
+  type KnowledgeToolOptions,
+} from './knowledge-memory-tool.js';
 export { createSessionSearchTool } from './session-search-tool.js';
 export { createSessionRecallTool, type SessionRecallToolDeps } from './session-recall-tool.js';
 
@@ -78,7 +84,7 @@ export {
   type TurnPlanStep,
 } from './update-plan-tool.js';
 export { createSessionStatusTool } from './session-status-tool.js';
-export { createDreamingTool, type DreamingToolDeps } from './dreaming-tool.js';
+export { createMemoryMaintenanceTool, type MemoryMaintenanceToolDeps } from './memory-maintenance-tool.js';
 export {
   createClarifyTool,
   type ClarifyRequestPayload,

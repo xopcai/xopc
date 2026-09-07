@@ -72,7 +72,6 @@ export class TaskContextRepository {
     query: string;
     selectedItems?: unknown[];
     rejectedItems?: unknown[];
-    consentRequests?: unknown[];
     relationshipPolicy?: Record<string, unknown>;
     authorizationSnapshot?: Record<string, unknown>;
     sessionKey?: string;
@@ -99,7 +98,7 @@ export class TaskContextRepository {
       input.query,
       JSON.stringify(input.selectedItems ?? []),
       JSON.stringify(input.rejectedItems ?? []),
-      JSON.stringify(input.consentRequests ?? []),
+      '[]',
       JSON.stringify(input.relationshipPolicy ?? {}),
       input.estimatedTokens ?? 0,
       input.allocation ? JSON.stringify(input.allocation) : null,

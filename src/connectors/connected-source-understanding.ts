@@ -1,14 +1,15 @@
-import type { MemoryManager } from '../agent/memory/manager.js';
-import type { UnderstandingCandidate } from '../agent/memory/understanding/types.js';
 import type { Config } from '../config/schema.js';
+import { writeKnowledgeItem } from '../knowledge-memory/index.js';
 import type { KnowledgeSourceItem } from '../knowledge/types.js';
-import { listKnowledgeSourceItems } from '../storage/sqlite/index.js';
-import { finishContextExtractionRun } from '../storage/sqlite/index.js';
+import {
+  finishContextExtractionRun,
+  listKnowledgeSourceItems,
+} from '../storage/sqlite/index.js';
+import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
+import { reconcileAssertion } from '../user-model/index.js';
 import { claimRegisteredExtraction } from '../user-context/extraction/registry.js';
-import { focusLifecycle } from '../user-context/focus-lifecycle.js';
 import type { UnderstandingSourceItem } from '../user-context/sources/types.js';
 import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
-import { upsertUserFocus } from '../user-context/sources/repository.js';
 import { analyzeUnderstandingSources } from '../work-discovery/analyzer.js';
 import type { WorkDiscoveryProfileCandidate } from '../work-discovery/types.js';
 
@@ -28,11 +29,11 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function itemType(itemType: string): UnderstandingSourceItem['type'] {
-  if (itemType === 'email') return 'mail';
-  if (itemType === 'calendar_event') return 'calendar_event';
-  if (itemType === 'external_task') return 'task';
-  if (itemType === 'development_activity' || itemType === 'repository') return 'code_activity';
+function itemType(value: string): UnderstandingSourceItem['type'] {
+  if (value === 'email') return 'mail';
+  if (value === 'calendar_event') return 'calendar_event';
+  if (value === 'external_task') return 'task';
+  if (value === 'development_activity' || value === 'repository') return 'code_activity';
   return 'document';
 }
 
@@ -42,84 +43,45 @@ function timestamp(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function contentPriority(item: KnowledgeSourceItem): number {
-  const value = normalizedValue(item);
-  if (item.itemType === 'connected_content') return 3;
-  if (text(value.content)) return 2;
-  return 1;
-}
-
 export function connectedItemsForUnderstanding(items: KnowledgeSourceItem[]): UnderstandingSourceItem[] {
   return [...items]
-    .sort((left, right) => contentPriority(right) - contentPriority(left))
-    .slice(0, MAX_CONNECTED_ITEMS)
-    .flatMap((item) => {
-      const value = normalizedValue(item);
-      const title = text(value.title)
-        ?? text(value.subject)
-        ?? text(value.fullName)
-        ?? text(value.repository)
-        ?? `${text(item.metadata.toolkit) ?? 'Connected source'} ${item.itemType}`;
-      const normalizedText = item.normalizedText?.trim();
-      if (!title && !normalizedText) return [];
-      return [{
-        id: item.id,
-        sourceId: 'connected-work',
-        type: itemType(item.itemType),
-        title,
-        ...(normalizedText ? { text: normalizedText.slice(0, 24_000) } : {}),
-        ...(text(item.metadata.toolkit) ? { group: text(item.metadata.toolkit) } : {}),
-        ...(timestamp(item.occurredAt) ? { occurredAt: timestamp(item.occurredAt) } : {}),
-        ...(timestamp(item.sourceUpdatedAt) ? { modifiedAt: timestamp(item.sourceUpdatedAt) } : {}),
-        ownerAttribution: item.metadata.actorAttributed === true ? 'user' : 'shared',
-        sensitivity: item.sensitivity,
-        evidenceRef: `knowledge-source://${item.id}`,
-      } satisfies UnderstandingSourceItem];
+    .sort((left, right) => Number(right.itemType === 'connected_content') - Number(left.itemType === 'connected_content'))
+    .slice(0, MAX_CONNECTED_ITEMS).flatMap((item) => {
+    const value = normalizedValue(item);
+    const title = text(value.title) ?? text(value.subject) ?? text(value.fullName)
+      ?? text(value.repository) ?? `${text(item.metadata.toolkit) ?? 'Connected source'} ${item.itemType}`;
+    const normalizedText = item.normalizedText?.trim();
+    if (!title && !normalizedText) return [];
+    return [{
+      id: item.id,
+      sourceId: 'connected-work',
+      type: itemType(item.itemType),
+      title,
+      ...(normalizedText ? { text: normalizedText.slice(0, 24_000) } : {}),
+      ...(text(item.metadata.toolkit) ? { group: text(item.metadata.toolkit) } : {}),
+      ...(timestamp(item.occurredAt) ? { occurredAt: timestamp(item.occurredAt) } : {}),
+      ...(timestamp(item.sourceUpdatedAt) ? { modifiedAt: timestamp(item.sourceUpdatedAt) } : {}),
+      ownerAttribution: item.metadata.actorAttributed === true ? 'user' : 'shared',
+      sensitivity: item.sensitivity,
+      evidenceRef: `knowledge-source://${item.id}`,
+    } satisfies UnderstandingSourceItem];
     });
 }
 
-type ConnectedPortraitCandidate = WorkDiscoveryProfileCandidate & { category: 'preference' | 'routine' };
+type PortraitCandidate = WorkDiscoveryProfileCandidate & { category: 'preference' | 'routine' };
 
-function isConnectedPortraitCandidate(candidate: WorkDiscoveryProfileCandidate): candidate is ConnectedPortraitCandidate {
+function isPortraitCandidate(candidate: WorkDiscoveryProfileCandidate): candidate is PortraitCandidate {
   return candidate.category === 'preference' || candidate.category === 'routine';
 }
 
-function understandingCandidate(candidate: ConnectedPortraitCandidate): UnderstandingCandidate {
-  return {
-    kind: candidate.category,
-    content: candidate.statement,
-    canonicalKey: `understanding:${candidate.category}:${candidate.factKey}`,
-    confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
-    importance: 0.68,
-    explicitness: 'inferred',
-    durability: candidate.category === 'routine' ? 'recurring' : 'durable',
-    sensitivity: 'personal',
-    disclosurePolicy: 'referenceable',
-  };
-}
-
-function hasLongVerbatimOverlap(value: string, sourceTexts: string[], minimumLength = 32): boolean {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (normalized.length < minimumLength) return false;
-  return sourceTexts.some((source) => source.replace(/\s+/g, ' ').includes(normalized));
-}
-
-function evidenceDate(item: UnderstandingSourceItem): string | undefined {
-  const timestamp = item.occurredAt ?? item.modifiedAt;
-  return timestamp == null ? undefined : new Date(timestamp).toISOString().slice(0, 10);
-}
-
-function durableConnectedEvidence(
-  candidate: ConnectedPortraitCandidate,
-  itemsByRef: Map<string, UnderstandingSourceItem>,
-): UnderstandingSourceItem[] {
-  if (candidate.confidence !== 'high') return [];
-  const items = [...new Set(candidate.evidenceRefs ?? [])]
-    .flatMap((ref) => itemsByRef.get(ref) ?? []);
-  if (items.some((item) => item.ownerAttribution !== 'user')) return [];
+function durableEvidence(candidate: PortraitCandidate, items: Map<string, UnderstandingSourceItem>) {
+  const evidence = [...new Set(candidate.evidenceRefs ?? [])].flatMap((ref) => items.get(ref) ?? []);
   const required = candidate.category === 'routine' ? 3 : 2;
-  const dates = new Set(items.map(evidenceDate).filter((value): value is string => Boolean(value)));
-  return items.length >= required && dates.size >= required ? items : [];
+  const dates = new Set(evidence.map((item) => item.occurredAt ?? item.modifiedAt)
+    .filter((value): value is number => value !== undefined)
+    .map((value) => new Date(value).toISOString().slice(0, 10)));
+  return candidate.confidence === 'high' && evidence.every((item) => item.ownerAttribution === 'user')
+    && evidence.length >= required && dates.size >= required ? evidence : [];
 }
 
 export async function deriveConnectedSourceUnderstanding(input: {
@@ -128,89 +90,92 @@ export async function deriveConnectedSourceUnderstanding(input: {
   sourceInstanceId: string;
   sourceRunId: string;
   processingPolicy: 'local_only' | 'remote_allowed';
-  memoryManager: MemoryManager;
   analyze?: typeof analyzeUnderstandingSources;
 }): Promise<{
   created: number;
-  focusCount: number;
+  knowledgeCount: number;
   status: 'completed' | 'partial' | 'failed';
   error?: string;
 }> {
-  const knowledgeItems = listKnowledgeSourceItems({
+  const sourceItems = listKnowledgeSourceItems({
     agentId: input.agentId,
     sourceInstanceId: input.sourceInstanceId,
     includeDeleted: false,
     limit: MAX_CONNECTED_ITEMS,
   });
-  const items = connectedItemsForUnderstanding(knowledgeItems);
-  if (!items.length) return { created: 0, focusCount: 0, status: 'completed' };
+  const items = connectedItemsForUnderstanding(sourceItems);
+  if (!items.length) return { created: 0, knowledgeCount: 0, status: 'completed' };
   const extraction = claimRegisteredExtraction({
-    extractorId: 'connector-semantic', sourceRef: `understanding-source-run:${input.sourceRunId}`,
-    contentForHash: knowledgeItems.map((item) => `${item.id}:${item.sourceUpdatedAt ?? ''}`).join('\n'),
-    processingPolicy: input.processingPolicy, destination: 'remote_model',
+    extractorId: 'connector-semantic',
+    sourceRef: `understanding-source-run:${input.sourceRunId}`,
+    contentForHash: sourceItems.map((item) => `${item.id}:${item.sourceUpdatedAt ?? ''}`).join('\n'),
+    processingPolicy: input.processingPolicy,
+    destination: 'remote_model',
   });
   if (!allowsRemoteSourceProcessing([input.processingPolicy]) || !extraction.shouldExecute) {
-    return { created: 0, focusCount: 0, status: 'completed' };
+    return { created: 0, knowledgeCount: 0, status: 'completed' };
   }
   try {
     const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
-    const rawTexts = items.flatMap((item) => item.text ? [item.text] : []);
-    const itemsByRef = new Map(items.map((item) => [item.evidenceRef, item]));
-    const profileCandidates = analysis.profileCandidates
-      .filter(isConnectedPortraitCandidate)
-      .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawTexts)
-        && durableConnectedEvidence(candidate, itemsByRef).length > 0);
-    const reviewed = { created: 0, writeOutputs: [] as Array<{
-      candidateKey: string; objectId?: string; versionId?: string; outcome: 'created' | 'deduplicated' | 'rejected';
-    }> };
-    for (const candidate of profileCandidates) {
-      const evidenceItems = durableConnectedEvidence(candidate, itemsByRef);
-      const applied = await input.memoryManager.applyUnderstandingCandidates(
-        [understandingCandidate(candidate)],
-        {
-          agentId: input.agentId,
-          sourceItemIds: evidenceItems.map((item) => item.id).slice(0, 20),
-          sourceText: 'Bounded semantic synthesis from explicitly connected work sources.',
-          source: { provider: 'connected-sources', sourceInstanceId: input.sourceInstanceId },
-          reviewSource: 'background',
-          extractionRunId: extraction.run.id,
-        },
-      );
-      reviewed.created += applied.created;
-      reviewed.writeOutputs.push(...(applied.writeOutputs ?? []));
+    const byRef = new Map(items.map((item) => [item.evidenceRef, item]));
+    let created = 0;
+    for (const candidate of analysis.profileCandidates.filter(isPortraitCandidate)) {
+      const evidenceItems = durableEvidence(candidate, byRef);
+      if (!evidenceItems.length) continue;
+      for (const [index, evidenceItem] of evidenceItems.entries()) {
+        const evidence = createContextEvidence({
+          sourceType: 'connector',
+          sourceInstanceId: input.sourceInstanceId,
+          sourceRef: evidenceItem.evidenceRef,
+          redactedExcerpt: evidenceItem.title.slice(0, 600),
+          trustLevel: 'owner',
+          observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? Date.now(),
+        });
+        const result = reconcileAssertion({
+          subject: { type: 'user', id: 'self' },
+          predicate: `${candidate.category}.connected.${candidate.factKey}`,
+          cardinality: 'single',
+          scope: { type: 'agent', id: input.agentId },
+          kind: candidate.category,
+          value: candidate.statement,
+          normalizedValue: candidate.statement.toLocaleLowerCase(),
+          statement: candidate.statement,
+          authority: 'user_observed',
+          confidence: candidate.confidence === 'high' ? 0.9 : 0.7,
+          inferredImportance: 0.65,
+          consequence: 'medium',
+          actionability: 0.6,
+          volatility: candidate.category === 'routine' ? 'slow' : 'stable',
+          sensitivity: 'personal',
+          disclosurePolicy: 'referenceable',
+          observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? Date.now(),
+          createdBy: 'connector',
+          evidenceId: evidence.id,
+          evidenceConfidence: 0.9,
+        });
+        if (index === 0 && result.action === 'created') created += 1;
+      }
     }
-    const focuses = analysis.workThreadCandidates
-    .filter((candidate) => !hasLongVerbatimOverlap(candidate.title, rawTexts)
-      && !hasLongVerbatimOverlap(candidate.summary, rawTexts))
-    .map((candidate) => upsertUserFocus({
-      canonicalKey: `connected-focus:${candidate.topicKey}`,
-      title: candidate.title,
-      summary: candidate.summary,
-      horizon: candidate.horizon,
-      status: 'candidate',
-      confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
-      evidenceRefs: candidate.evidenceRefs,
-      sourceRunId: input.sourceRunId,
-      ...focusLifecycle(candidate.horizon),
-    }));
-    finishContextExtractionRun({
-      runId: extraction.run.id, status: 'completed',
-      outputs: [
-        ...(reviewed.writeOutputs ?? []).map((output) => ({
-          candidateKey: output.candidateKey,
-          ...(output.objectId ? { objectType: 'understanding' as const, objectId: output.objectId } : {}),
-          ...(output.versionId ? { versionId: output.versionId } : {}), outcome: output.outcome,
-        })),
-        ...focuses.map((focus) => ({
-          candidateKey: focus.canonicalKey, objectType: 'focus' as const, objectId: focus.id,
-          versionId: focus.versionId, outcome: 'created' as const,
-        })),
-      ],
-    });
+    let knowledgeCount = 0;
+    for (const thread of analysis.workThreadCandidates) {
+      const result = writeKnowledgeItem({
+        kind: 'project_fact',
+        scope: { type: 'agent', id: input.agentId },
+        content: `${thread.title}: ${thread.summary}`,
+        canonicalKey: `connected-thread:${input.sourceInstanceId}:${thread.topicKey}`,
+        confidence: thread.confidence === 'high' ? 0.9 : thread.confidence === 'medium' ? 0.72 : 0.55,
+        importance: thread.horizon === 'current' ? 0.75 : 0.5,
+        originClass: 'untrusted',
+        sourceAgentId: input.agentId,
+        source: { sourceRunId: input.sourceRunId, evidenceRefs: thread.evidenceRefs },
+      });
+      if (result.created) knowledgeCount += 1;
+    }
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'completed' });
     const sourceStatus = analysis.sourceStatuses.find((item) => item.sourceId === 'connected-work');
     return {
-      created: reviewed.created,
-      focusCount: focuses.length,
+      created,
+      knowledgeCount,
       status: sourceStatus?.status ?? 'failed',
       ...(sourceStatus?.error ? { error: sourceStatus.error } : {}),
     };

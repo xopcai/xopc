@@ -28,7 +28,7 @@ import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
 import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
-import { prependAgentContext } from '../../user-context/planner.js';
+import { prependAgentContext } from '../context/prepend.js';
 
 export interface HydratePerTurnStateDeps {
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
@@ -178,14 +178,6 @@ export async function runDirectAgentTurn(
     sourceEnrichedMessage,
     buildTaskExecutionDirective(input.sessionKey),
   );
-  if (userContext.consentRequests.length > 0) {
-    input.onEvent?.({
-      type: 'memory_consent_required',
-      runId: turnId,
-      requests: userContext.consentRequests,
-    });
-  }
-
   const modelRef = deps.modelManager.getModelForSession(input.sessionKey);
   const llmTurn = await hydrateUserTurnForLlm({
     message: input.userMessage as TranscriptUserMessage,
@@ -214,12 +206,7 @@ export async function runDirectAgentTurn(
   });
 
   const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain, turnId);
-  if (understandingReview?.createdRecords.length) {
-    const captured = understandingReview.createdRecords.filter((record) => record.status === 'active');
-    const candidates = understandingReview.createdRecords.filter((record) => record.status === 'candidate');
-    if (captured.length) input.onEvent?.({ type: 'memory_captured', runId: turnId, records: captured });
-    if (candidates.length) input.onEvent?.({ type: 'memory_candidate', runId: turnId, records: candidates });
-  }
+  void understandingReview;
   deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
   return result;

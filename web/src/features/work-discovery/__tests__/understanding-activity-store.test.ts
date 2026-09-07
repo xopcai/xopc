@@ -4,16 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../api', () => ({
   fetchWorkDiscoveryRun: vi.fn(),
   importUnderstandingSources: vi.fn().mockRejectedValue(new Error('Analysis failed')),
-  reviewUnderstandingSourceProfile: vi.fn(),
+  reviewSourceAssertions: vi.fn(),
 }));
 
-vi.mock('../../user-context/user-context-api', () => ({
-  updateUnderstanding: vi.fn(),
-  updateUserFocus: vi.fn(),
+vi.mock('../../user-model/user-model-api', () => ({
+  correctAssertion: vi.fn(),
 }));
 
 import type { ElectronAPI } from '@/types/electron';
-import { updateUnderstanding } from '@/features/user-context/user-context-api';
+import { correctAssertion } from '@/features/user-model/user-model-api';
 
 import { useUnderstandingActivityStore } from '../understanding-activity-store';
 
@@ -63,7 +62,7 @@ describe('understanding activity store', () => {
       status: 'review_ready',
       memories: [{
         id: 'candidate-1',
-        understandingId: 'understanding-1',
+        assertionId: 'assertion-1',
         category: 'preference',
         factKey: 'preference:original-wording',
         statement: 'Original wording',
@@ -73,12 +72,9 @@ describe('understanding activity store', () => {
       }],
     });
 
-    await useUnderstandingActivityStore.getState().reviewMemory('understanding-1', true, 'Edited wording');
+    await useUnderstandingActivityStore.getState().reviewMemory('assertion-1', true, 'Edited wording');
 
-    expect(updateUnderstanding).toHaveBeenCalledWith('understanding-1', {
-      statement: 'Edited wording',
-      status: 'active',
-    });
+    expect(correctAssertion).toHaveBeenCalledWith('assertion-1', 'Edited wording');
     expect(useUnderstandingActivityStore.getState().memories[0]).toMatchObject({
       statement: 'Edited wording',
       status: 'edited',

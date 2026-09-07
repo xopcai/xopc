@@ -1,5 +1,4 @@
 import type { Config } from '../../config/schema.js';
-import { BuiltinMemoryProvider } from './builtin-provider.js';
 import { isMemorySubsystemEnabled } from './memory-config.js';
 import { MemoryManager, type MemoryManagerOptions } from './manager.js';
 import type { MemoryKind } from './types.js';
@@ -18,8 +17,6 @@ export function createMemoryManagerFromConfig(
     ...(config ? { memoryRuntime: buildMemoryRuntime(config.userContext) } : {}),
     ...(enabled ? { loadProviders: () => loadMemoryPluginProviders({ config }) } : {}),
   });
-  mgr.addProvider(new BuiltinMemoryProvider());
-
   if (!enabled) {
     return mgr;
   }
@@ -31,7 +28,7 @@ function resolveMemoryManagerOptions(
   config: Config | undefined,
 ): Omit<MemoryManagerOptions, 'loadProviders'> {
   if (!config) return {};
-  const providerRouting = config.userContext.providerRouting;
+  const providerRouting = config.userContext.knowledgeMemory;
   return {
     searchStrategy: providerRouting.searchStrategy,
     writeStrategy: providerRouting.writeStrategy,

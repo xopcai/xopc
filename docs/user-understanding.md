@@ -1,100 +1,53 @@
-# User understanding
+# Understanding and memory
 
-xopc can maintain a reviewable model of the person it assists. This model is intended to make collaboration more continuous without pretending that every observation is true forever or that every message deserves to become memory.
+xopc keeps a reviewable user model and a separate knowledge memory. This separation prevents project details, temporary activity, and model guesses from silently becoming permanent claims about the user.
 
-User understanding is shared across enabled Agents. It is separate from a conversation transcript, a workspace file, and an Agent profile.
+Open **You** in the Gateway console to see the Agent's current understanding in three views:
 
-## What may be useful to understand
+- **Your portrait** presents explicit profile fields such as call name, role, pronouns, language, and time zone as directly editable UI. These fields are not mixed into the understanding feed.
+- **Shared understanding** groups preferences and rhythm, relationships, current context, and derived insights. Every item can be confirmed, corrected, or retired.
+- **Work memory** presents distilled project facts, decisions, lessons, commitments, and open questions. Raw mail, calendar, and document records remain in the source index for retrieval and provenance instead of appearing as memory cards.
 
-Useful items can include:
+The interface describes provenance, confidence, and time horizon in plain language. Storage status names and raw scoring remain implementation details.
 
-- profile facts such as name, time zone, and preferred language;
-- goals and longer-running directions;
-- important people and relationships;
-- active Projects and recurring responsibilities;
-- preferences and working habits;
-- decisions and their reasons;
-- commitments that may need follow-up;
-- current focus, pressure, or blockers;
-- explicit rules for how xopc should collaborate.
+## Five kinds of context
 
-The goal is not maximum collection. xopc should retain only context that is useful, appropriately scoped, and still current.
-
-## Facts, inferences, and rules
-
-xopc should keep three ideas distinct:
-
-| Kind | Meaning | Example |
+| Domain | Purpose | Typical lifetime |
 | --- | --- | --- |
-| **Observed or stated fact** | Something the user said directly or an authorized source showed | “The project deadline is October 12.” |
-| **Inference** | A conclusion formed from one or more pieces of evidence | “This project may currently be the user's highest priority.” |
-| **Collaboration rule** | Explicit instruction governing assistant behavior | “Ask before sending a message to an external recipient.” |
+| User assertions | Identity, preferences, routines, relationships, capabilities, and current state | Stable, slowly changing, dynamic, or event-bound |
+| Goals | Desired outcomes and success criteria | Until achieved, paused, or abandoned |
+| Priority windows | What matters now, with explicit start, end, urgency, and review time | Hours to weeks |
+| Collaboration rules | Explicit communication, execution, boundary, routine, and proactive rules | Until disabled or replaced |
+| Knowledge memory | Project facts, decisions, task lessons, commitments, questions, episodes, and notes | Scope- and retention-dependent |
 
-An inference is not an authoritative fact. Evidence, scope, confidence, and age all matter. Explicit collaboration rules take priority over inferred preferences.
+Each assertion records authority, confidence, importance, actionability, volatility, sensitivity, applicability, validity time, and review time. Confidence describes whether a claim is likely true; importance describes the cost of omitting it. They are intentionally independent.
 
-## Review what xopc knows
+## Evidence and correction
 
-Open **You** or **User context** in the Gateway console. Depending on the current release, you can review:
+Direct user statements have the highest authority. Authorized observations may propose candidates. System inference stays distinguishable from user-confirmed facts, and untrusted external content cannot become an authoritative user claim.
 
-- profile facts you entered directly;
-- inferred understandings waiting for review;
-- active understandings;
-- explicit collaboration rules;
-- connected sources and their permissions;
-- source evidence and derivation information;
-- background-review and privacy settings.
+Corrections create a new assertion that supersedes the old one while keeping the audit history. Conflicting current claims move to review; the runtime abstains when it cannot resolve them safely.
 
-Use **Confirm** only when an item is accurate, useful, and scoped appropriately. Use **Correct**, **Reject**, or **Delete** when it is wrong, too broad, outdated, or should not be retained.
+## Time and maintenance
 
-Correction is part of the product, not an exceptional failure. A corrected item should take precedence over later inference from older evidence.
+Maintenance is enabled by default and registered as deterministic system automations:
 
-## Understanding lifecycle
+- an hourly temporal sweep marks expired assertions and knowledge stale and closes expired priority windows;
+- a daily reconciliation checks review dates, contradictions, evidence thresholds, and missing search-index rows;
+- a weekly knowledge job archives stale knowledge after the configured retention period.
 
-A useful understanding system must decide more than what to remember:
+Defaults are 03:00 daily and Sunday at 04:00 weekly in the configured maintenance time zone, or the host time zone when none is set. Runs are idempotent, bounded, recorded in SQLite, and do not use a model to make hidden semantic changes.
 
-```text
-Evidence appears
-→ propose an understanding
-→ user or policy reviews it
-→ activate, correct, reject, or keep pending
-→ use only when relevant
-→ review for conflict or age
-→ refresh, mark stale, or delete
-```
+## Context sent to an Agent
 
-Direct statements can still become outdated. Time-bounded focus should expire instead of silently becoming a permanent identity claim. Contradictory items should return to review rather than being resolved invisibly.
+Every turn builds a bounded execution context from current rules, relevant assertions, active goals and priorities, and task-relevant knowledge. Scope, validity, sensitivity, disclosure policy, authority, relevance, importance, urgency, and token budget all affect selection. The full user model is never attached to every prompt.
 
-## Sources and permissions
+Each selection is audited by turn so the console can explain which items influenced an answer. Helpful or irrelevant feedback is stored against that execution-context run.
 
-Sources are independent. Connecting one does not authorize another.
+## Sources and privacy
 
-- Conversations can provide direct statements and corrections.
-- Explicitly selected work folders can provide bounded project evidence.
-- Connectors can provide source-specific mail, calendar, task, or document context when configured and authorized.
-- On supported macOS desktop builds, experimental Work Discovery can separately request read-only access to Apple Notes, Calendar, and Reminders.
+Conversations, selected work folders, and configured connectors are independent sources. Revoking one stops future reads from that source. Sensitive writes use their own policy, and local-only source content is not sent to a remote extraction model.
 
-Work Discovery uses bounded reads and visible scope. Its native macOS scan holds raw source content only for the model call and does not store that raw content in the xopc database. Derived understanding remains reviewable. Exact source availability varies by release.
+Do not store passwords, API keys, recovery codes, payment details, or regulated records as user-model facts. Local storage also does not guarantee local processing: context selected for a request may be sent to the configured model provider unless its processing policy requires local handling.
 
-Revoking a source should stop future reads. Review derived understanding separately: a user-confirmed conclusion may remain useful after a source is disconnected, while untrusted or unwanted derived items should be removed.
-
-## What should not be remembered
-
-Do not ask xopc to retain passwords, API keys, recovery codes, payment details, government identifiers, health records, or other highly sensitive secrets. Store those in an appropriate password manager or system of record.
-
-Workspace files and Agent profile Markdown are separate from user understanding. Putting information there may make it available to an Agent, but it does not make it a reviewed understanding item.
-
-## Model-provider privacy
-
-Local storage does not mean every model request stays local. The relevant subset of user understanding, conversation content, and authorized source excerpts may be sent to the configured cloud model for a request.
-
-Use a local model when context must remain on-device. Before connecting a cloud provider or a personal source, review the provider's data practices and the xopc settings that control personalization and source access.
-
-xopc should send only context relevant to the current request; it should not attach the entire user model to every prompt.
-
-## Background review
-
-When enabled, background review can identify outdated or contradictory items and place them in a review queue. It should not silently turn an unconfirmed inference into an authoritative profile fact.
-
-Review the queue periodically and disable background processing if you do not want it. Proactive review should prefer a small number of useful decisions over repeated notifications.
-
-For the broader trust model, see [Product philosophy](./product.md). For backup and deletion of the local database, see [Data and file locations](./workspace.md).
+The authoritative implementation is described in [Memory architecture](./design/technical/memory-architecture.md). Backup and deletion are covered in [Data and file locations](./workspace.md).

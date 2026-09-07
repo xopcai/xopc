@@ -1,6 +1,5 @@
 import type { Config } from '../config/schema.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
-import type { MemoryManager } from '../agent/memory/manager.js';
 import {
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
@@ -97,13 +96,12 @@ export type ConnectorLearningCoordinator = {
 
 function learningEnabled(config: Config): boolean {
   return config.userContext.enabled
-    && config.userContext.understanding.enabled;
+    && config.userContext.userModel.enabled;
 }
 
 export function startConnectorLearningCoordinator(options: {
   getConfig: () => Config;
   resolveAgentId: () => string;
-  getMemoryManager: () => MemoryManager;
   emit?: (type: string, payload: unknown) => void;
   intervalMs?: number;
   initialDelayMs?: number;
@@ -270,7 +268,7 @@ export function startConnectorLearningCoordinator(options: {
     publish(updateConnectorLearningJob(job.id, { phase: 'deriving' }));
     let semantic: Awaited<ReturnType<typeof deriveConnectedSourceUnderstanding>> = {
       created: 0,
-      focusCount: 0,
+      knowledgeCount: 0,
       status: 'completed',
     };
     try {
@@ -280,14 +278,13 @@ export function startConnectorLearningCoordinator(options: {
         sourceInstanceId: job.sourceInstanceId,
         sourceRunId: sourceRun.id,
         processingPolicy: getUnderstandingSourceGrant(sourceRun.grantId)?.processingPolicy ?? 'local_only',
-        memoryManager: options.getMemoryManager(),
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      semantic = { created: 0, focusCount: 0, status: 'failed', error: CONNECTED_SOURCE_ANALYSIS_FAILED };
+      semantic = { created: 0, knowledgeCount: 0, status: 'failed', error: CONNECTED_SOURCE_ANALYSIS_FAILED };
       log.warn({ err: error, jobId: job.id, connectorId: job.connectorId }, `Connected source semantic analysis failed: ${errorMessage}`);
     }
-    const candidatesCreated = semantic.created + semantic.focusCount;
+    const candidatesCreated = semantic.created + semantic.knowledgeCount;
     const incomplete = enrichmentErrors.length > 0 || semantic.status !== 'completed';
     const completed = updateConnectorLearningJob(job.id, {
       status: 'completed',

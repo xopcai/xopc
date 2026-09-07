@@ -5,9 +5,9 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { listKnowledgeItems } from '../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
-  getMemoryRecord,
   getKnowledgeSourceItem,
   listKnowledgeSourceItems,
   openXopcDatabase,
@@ -101,7 +101,8 @@ describe('connected content enrichment', () => {
     expect(contentItem.metadata).toMatchObject({ explicitContentRead: true, sourceMetadataItemId: sourceItem.id });
     expect(contentItem.normalizedText).toContain('Atlas launches in September');
     expect(contentItem.normalizedText).not.toContain('sk-secretvalue123');
-    expect(getMemoryRecord(`knowledge:${contentItem.id}`)?.content).toContain('Atlas launches in September');
+    expect(listKnowledgeItems().find((item) => item.source.sourceItemId === contentItem.id)?.content)
+      .toContain('Atlas launches in September');
     expect(listConnectedContentCandidates({ agentId: 'main' })).toEqual([]);
   });
 

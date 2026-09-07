@@ -102,7 +102,7 @@ import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
-import { reconcileDreamingAutomations as reconcileDreamingAutomationRecords } from './dreaming-automation-reconciler.js';
+import { reconcileMemoryMaintenanceAutomations } from './memory-maintenance-automation-reconciler.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
   GatewayChannelStartupPhase2Metrics,
@@ -563,7 +563,7 @@ export class GatewayService {
       getHeartbeatService: () => this.heartbeatService,
       getExtensionLoader: () => this.extensionLoader,
       reconcileBrowserExtensionServer: () => this.reconcileBrowserExtensionServer(),
-      reconcileDreamingAutomations: () => this.reconcileDreamingAutomations(),
+      reconcileMemoryMaintenanceAutomations: () => this.reconcileMemoryMaintenanceAutomations(),
       getChannelsStatus: () => this.getChannelsStatus(),
       emit: (type, payload) => this.emit(type, payload),
     });
@@ -1172,7 +1172,7 @@ export class GatewayService {
     });
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
-    await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
+    await trace.measure('memoryMaintenance.reconcile', () => this.reconcileMemoryMaintenanceAutomations());
 
     await this.notesService.initialize();
     this.discussionLiveWorker.start();
@@ -1188,7 +1188,6 @@ export class GatewayService {
     this.connectorLearningCoordinator = startConnectorLearningCoordinator({
       getConfig: () => this.config,
       resolveAgentId: () => resolveDefaultAgentId(this.config),
-      getMemoryManager: () => this.agentService.getMemoryManager(),
       emit: (type, payload) => this.emit(type, payload),
     });
     this.managedComposioEventPoller = new ManagedComposioEventPoller({
@@ -1891,8 +1890,8 @@ export class GatewayService {
     return this.automationService;
   }
 
-  private async reconcileDreamingAutomations(): Promise<void> {
-    await reconcileDreamingAutomationRecords({
+  private async reconcileMemoryMaintenanceAutomations(): Promise<void> {
+    await reconcileMemoryMaintenanceAutomations({
       config: this.config,
       automationService: this.automationService,
     });

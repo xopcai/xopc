@@ -16,7 +16,7 @@ export {
   InternalObjectContextProvider,
   MeetingWorkspaceContextProvider,
   ProjectStateContextProvider,
-  UserUnderstandingContextProvider,
+  UserModelContextProvider,
 } from './execution/context.js';
 export { ReadonlyProactiveAgentExecutor } from './execution/agent-executor.js';
 export { listInsights } from './execution/repository.js';

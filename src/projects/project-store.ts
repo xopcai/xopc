@@ -491,7 +491,8 @@ export class ProjectStore {
       db.prepare(`UPDATE tasks SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE workflow_runs SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE automations SET project_id = NULL WHERE project_id = ?`).run(id);
-      db.prepare(`UPDATE memory_records SET project_id = NULL WHERE project_id = ?`).run(id);
+      db.prepare(`UPDATE knowledge_items SET status = 'archived', updated_at = ?
+        WHERE scope_type = 'project' AND scope_id = ?`).run(Date.now(), id);
       db.prepare(`DELETE FROM projects_fts WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM projects WHERE project_id = ?`).run(id);
     });

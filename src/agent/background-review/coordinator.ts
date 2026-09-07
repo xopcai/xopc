@@ -12,27 +12,22 @@
 import type { Agent } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import { summarizeUserUnderstandingQuality } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
-import { resolveAdaptiveUnderstandingCadence } from '../memory/understanding/quality.js';
 import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
 } from '../orchestration/llm-turn-retry.js';
-import type { WorkspaceRuntime } from '../workspace-runtime/registry.js';
 import {
   resolveBackgroundReviewSettings,
   type BackgroundReviewSettings,
 } from './settings.js';
-import { runBackgroundReviewTurn } from './run-background-review.js';
+import { runBackgroundUserModelReview } from './run-background-review.js';
 
 const log = createLogger('BackgroundReviewCoordinator');
 
 interface NudgeState {
   turnsSinceReview: number;
   pendingReview: boolean;
-  adaptiveIntervalTurns?: number;
-  adaptiveIntervalExpiresAt?: number;
 }
 
 export interface BackgroundReviewCoordinatorOptions {
@@ -45,7 +40,7 @@ export interface ScheduleReviewContext {
   agent: Agent;
   /** Last assistant text — review is skipped when empty. */
   lastAssistantText: string | null;
-  workspaceRuntime: WorkspaceRuntime;
+  workspaceId: string;
 }
 
 export class BackgroundReviewCoordinator {
@@ -65,7 +60,7 @@ export class BackgroundReviewCoordinator {
     if (!cfg.enabled) return;
 
     const state = this.ensureState(sessionKey);
-    const intervalTurns = this.resolveReviewInterval(cfg, state);
+    const intervalTurns = cfg.reviewIntervalTurns;
     state.turnsSinceReview += 1;
     if (state.turnsSinceReview >= intervalTurns) {
       state.pendingReview = true;
@@ -76,7 +71,7 @@ export class BackgroundReviewCoordinator {
   /**
    * Fire-and-forget review after the main user turn. Decides whether to run a
    * understanding sweep based on the counter state + last assistant text,
-   * and delegates the actual review to {@link runBackgroundReviewTurn}.
+   * and delegates the actual review to {@link runBackgroundUserModelReview}.
    */
   scheduleAfterUserTurn(ctx: ScheduleReviewContext): void {
     void this.runReviewIfNeeded(ctx).catch((err) => {
@@ -105,33 +100,6 @@ export class BackgroundReviewCoordinator {
     return state;
   }
 
-  private resolveReviewInterval(settings: BackgroundReviewSettings, state: NudgeState): number {
-    if (!settings.adaptiveCadence) return settings.reviewIntervalTurns;
-    const now = Date.now();
-    if (
-      state.adaptiveIntervalTurns != null
-      && (state.adaptiveIntervalExpiresAt ?? 0) > now
-    ) {
-      return state.adaptiveIntervalTurns;
-    }
-    try {
-      const metrics = summarizeUserUnderstandingQuality({ windowDays: 30, nowMs: now });
-      const decision = resolveAdaptiveUnderstandingCadence(settings.reviewIntervalTurns, metrics);
-      state.adaptiveIntervalTurns = decision.effectiveIntervalTurns;
-      state.adaptiveIntervalExpiresAt = now + 5 * 60_000;
-      if (decision.slowed) {
-        log.debug({
-          baseIntervalTurns: decision.baseIntervalTurns,
-          effectiveIntervalTurns: decision.effectiveIntervalTurns,
-          reasons: decision.reasons,
-        }, 'User-understanding review cadence slowed by quality signals');
-      }
-      return decision.effectiveIntervalTurns;
-    } catch {
-      return settings.reviewIntervalTurns;
-    }
-  }
-
   private async runReviewIfNeeded(ctx: ScheduleReviewContext): Promise<void> {
     const state = this.states.get(ctx.sessionKey);
     if (!state) return;
@@ -144,11 +112,11 @@ export class BackgroundReviewCoordinator {
     state.pendingReview = false;
     if (!shouldReview) return;
 
-    await runBackgroundReviewTurn({
+    await runBackgroundUserModelReview({
       sessionKey: ctx.sessionKey,
       mainAgent: ctx.agent,
       settings,
-      memoryManager: ctx.workspaceRuntime.memoryManager,
+      workspaceId: ctx.workspaceId,
       getConfig: () => this.opts.getConfig(),
     });
   }

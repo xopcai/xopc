@@ -91,10 +91,8 @@ describe('Gateway Security Fixes', () => {
   describe('query token path policy', () => {
     it('allows query tokens only for avatar GET requests', () => {
       expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'GET')).toBe(true);
-      expect(isQueryTokenAllowedPath('/api/you/avatar', 'GET')).toBe(true);
       expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'GET')).toBe(false);
       expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'PUT')).toBe(false);
-      expect(isQueryTokenAllowedPath('/api/you/avatar', 'PUT')).toBe(false);
       expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'POST')).toBe(false);
       expect(isQueryTokenAllowedPath('/api/config', 'GET')).toBe(false);
     });
@@ -725,9 +723,6 @@ describe('Gateway Security Fixes', () => {
 
       const res = await app.request('/api/agents/main/avatar?token=test');
       expect(res.status).not.toBe(401);
-
-      const userAvatar = await app.request('/api/you/avatar?token=test');
-      expect(userAvatar.status).not.toBe(401);
 
       const rejected = await app.request('/api/config?token=test');
       expect(rejected.status).toBe(401);
