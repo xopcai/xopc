@@ -61,4 +61,5 @@ export const voiceCall = new VoiceCallController({
   },
 });
 export const setCallSpeaker = (enabled: boolean) => audio.speaker(enabled);
+export const isCallPermissionPromptActive = () => audio.permissionPromptActive;
 export function useVoiceCall() { return useSyncExternalStore(voiceCall.subscribe, voiceCall.getSnapshot); }

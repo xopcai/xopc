@@ -24,6 +24,12 @@ export type CallDependencies = {
 };
 const initial = (): CallState => ({ phase: 'idle', name: '', expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '' });
 
+export function shouldPauseVoiceForBackground(state: CallState, permissionPromptActive: boolean): boolean {
+  if (state.target?.background || !['connecting', 'recovering', 'connected'].includes(state.phase)) return false;
+  // Android's permission activity temporarily pauses the app before capture starts.
+  return !(permissionPromptActive && (state.phase === 'connecting' || state.phase === 'recovering'));
+}
+
 export class VoiceCallController {
   private state = initial();
   private listeners = new Set<() => void>();
