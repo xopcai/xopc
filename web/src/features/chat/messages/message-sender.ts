@@ -758,7 +758,7 @@ export class MessageSender {
         if (
           typeof parsed.runId === 'string'
           && typeof parsed.sessionKey === 'string'
-          && (payload.status === 'success' || payload.status === 'error' || payload.status === 'cancelled')
+          && (payload.status === 'success' || payload.status === 'error' || payload.status === 'cancelled' || payload.status === 'suspended')
         ) {
           cb?.onResult({
             runId: parsed.runId,

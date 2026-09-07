@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 const mocks = vi.hoisted(() => ({
+  connectionSuspended: vi.fn(),
   prompt: vi.fn(),
   waitForIdle: vi.fn(),
   baseStreamFn: vi.fn(),
@@ -13,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   debug: vi.fn(),
   session: undefined as any,
   leaseController: undefined as AbortController | undefined,
+}));
+
+vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({
+  isConnectionSuspended: (...args: unknown[]) => mocks.connectionSuspended(...args),
+  getConnectionResumeInput: () => undefined,
 }));
 
 vi.mock('../../../utils/logger.js', () => ({
@@ -98,6 +104,7 @@ import { EmbeddedRunConflictError } from '../runs.js';
 describe('runXopcEmbeddedTurn image input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.connectionSuspended.mockReturnValue(false);
     mocks.leaseController = new AbortController();
     mocks.acquireRunLease.mockReturnValue({
       signal: mocks.leaseController.signal,
@@ -350,4 +357,22 @@ describe('runXopcEmbeddedTurn image input', () => {
       'Sending messages to AI',
     );
   });
+  it('suspends after a durable connection request without aborting or retrying the model', async () => {
+    mocks.prompt.mockImplementationOnce(async () => {
+      mocks.connectionSuspended.mockReturnValue(true);
+      await mocks.session.agent.afterToolCall({ toolCall: { id: 'connect', name: 'xopc_require_connection' }, args: {},
+        isError: false, result: { content: [{ type: 'text', text: 'connection_required' }], details: {} } });
+      expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
+    });
+    const result = await runXopcEmbeddedTurn({
+      sessionKey: 'agent:main:test', runId: 'connection-run',
+      userMessage: { role: 'user', content: 'Summarize Gmail', timestamp: 1 } as AgentMessage,
+      model: { id: 'gpt-4o', provider: 'openai' } as any, modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    expect(result).toMatchObject({ ok: true, stopReason: 'connection_required' });
+    expect(mocks.retryTurn).not.toHaveBeenCalled();
+    expect(mocks.session.abort).not.toHaveBeenCalled();
+  });
+
 });

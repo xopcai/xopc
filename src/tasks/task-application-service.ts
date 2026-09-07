@@ -249,6 +249,8 @@ export class TaskApplicationService {
           const wait = this.#runs.getWait(input.command.waitId);
           if (!wait || wait.taskId !== task.id) {
             result = { ok: false, reason: 'not_found', model };
+          } else if (wait.condition.type === 'connection') {
+            result = { ok: false, reason: 'invalid_transition', model };
           } else {
             this.#runs.resolveWait({
               waitId: wait.id,

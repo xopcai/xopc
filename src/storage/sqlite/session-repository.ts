@@ -1,3 +1,4 @@
+import { cancelConnectionObjective } from './connection-wait-repository.js';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -419,6 +420,7 @@ export function resetSessionRecord(
       return null;
     }
 
+    cancelConnectionObjective(sessionKey);
     const previousSessionId = existing.session_id;
     const now = Date.now();
     db.prepare(
@@ -461,6 +463,7 @@ export function deleteSessionRecord(sessionKey: string): boolean {
        WHERE session_id = ?`,
     ).run(now, existing.session_id);
 
+    cancelConnectionObjective(sessionKey);
     db.prepare(`DELETE FROM sessions WHERE session_key = ?`).run(sessionKey);
     return true;
   });

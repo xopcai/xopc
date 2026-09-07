@@ -207,7 +207,7 @@ export async function runDirectAgentTurn(
 
   const understandingReview = await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain, turnId);
   void understandingReview;
-  deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
+  if (result.stopReason !== 'connection_required') deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
   return result;
 }

@@ -591,6 +591,8 @@ export class AgentToolsFactory {
                     EXTERNAL_TOOL_NAMES.search,
                     EXTERNAL_TOOL_NAMES.describe,
                     EXTERNAL_TOOL_NAMES.execute,
+                    EXTERNAL_TOOL_NAMES.requireConnection,
+                    EXTERNAL_TOOL_NAMES.updateConnectionObjective,
                   ]),
                 });
               },

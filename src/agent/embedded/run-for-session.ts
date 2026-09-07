@@ -57,6 +57,7 @@ export async function runEmbeddedTurnForSession(
     parentSignal: params.abortSignal,
   });
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
+    if (result.stopReason === 'connection_required') return result;
     try {
       const rows = await sessionStore.loadTranscriptRows(sessionKey);
       const hasTurn = rows.some((source) => {
