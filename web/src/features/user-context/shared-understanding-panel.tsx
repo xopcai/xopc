@@ -1,9 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Check, ChevronDown, ChevronRight, ChevronUp, Eye, History, Layers3, Network, Pencil, Plus, RefreshCw, Sparkles, Target, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import {
   batchReviewContextObjects,
@@ -17,7 +19,7 @@ import {
   type UserFocus,
   type UserUnderstanding,
 } from './user-context-api';
-import { SharedUnderstandingMap } from './shared-understanding-map';
+import { UnderstandingBrowser } from './understanding-browser';
 import {
   buildSharedUnderstandingModel,
   type SharedUnderstandingReviewItem,
@@ -25,13 +27,13 @@ import {
 } from './shared-understanding-model';
 import { UNDERSTANDING_KIND_LABELS } from './understanding-kind-labels';
 
-type SharedView = 'portrait' | 'map' | 'changes' | 'review';
+type SharedView = 'portrait' | 'relations' | 'changes' | 'review';
 type PortraitSelection = { type: 'focus'; item: UserFocus } | { type: 'understanding'; item: UserUnderstanding };
 
 const COPY = {
   en: {
     eyebrow: 'YOU, NOW', intro: 'A living, correctable portrait of what matters now and what remains true over time.',
-    add: 'Add understanding', portrait: 'Now', map: 'Relationships', changes: 'Recent changes', review: 'Review',
+    add: 'Add understanding', portrait: 'Now', relations: 'Relationships', changes: 'Recent changes', review: 'Review',
     portraitHint: 'This is the context xopc will use when helping you now.', importantNow: 'Important now',
     lastingPortrait: 'What continues to shape the portrait', lastingHint: 'Confirmed context that can travel across conversations.',
     noFocus: 'No active focus yet. Tell xopc what matters now, or confirm a suggested focus.',
@@ -56,7 +58,7 @@ const COPY = {
   },
   zh: {
     eyebrow: '此刻的你', intro: '一份会随时间生长、可以随时纠正的画像：既看此刻重要的事，也保留长期成立的理解。',
-    add: '添加理解', portrait: '此刻', map: '关系', changes: '最近变化', review: '待确认',
+    add: '添加理解', portrait: '此刻', relations: '关系', changes: '最近变化', review: '待确认',
     portraitHint: '这是 xopc 此刻帮助你时会使用的上下文。', importantNow: '此刻重要',
     lastingPortrait: '持续构成画像的理解', lastingHint: '已经确认、可以跨对话使用的上下文。',
     noFocus: '还没有进行中的关注。你可以告诉 xopc 此刻什么最重要，或确认一条候选关注。',
@@ -93,7 +95,14 @@ export function SharedUnderstandingPanel({ focuses, understandings, language, on
 }) {
   const t = COPY[language];
   const model = useMemo(() => buildSharedUnderstandingModel(focuses, understandings), [focuses, understandings]);
-  const [view, setView] = useState<SharedView>('portrait');
+  const [params, setParams] = useSearchParams();
+  const requestedView = params.get('contextView');
+  const view: SharedView = requestedView === 'relations' || requestedView === 'changes' || requestedView === 'review' ? requestedView : 'portrait';
+  const setView = (value: SharedView) => setParams((current) => {
+    const next = new URLSearchParams(current);
+    next.set('contextView', value);
+    return next;
+  });
   const [creating, setCreating] = useState(false);
 
   return <div className="space-y-5">
@@ -107,13 +116,13 @@ export function SharedUnderstandingPanel({ focuses, understandings, language, on
 
     <div className="flex gap-1 overflow-x-auto border-b border-edge" role="tablist" aria-label={language === 'zh' ? '共同理解视图' : 'Shared understanding views'}>
       <ViewTab selected={view === 'portrait'} onClick={() => setView('portrait')} icon={<Target className="size-3.5" />} label={t.portrait} />
-      <ViewTab selected={view === 'map'} onClick={() => setView('map')} icon={<Network className="size-3.5" />} label={t.map} />
+      <ViewTab selected={view === 'relations'} onClick={() => setView('relations')} icon={<Network className="size-3.5" />} label={t.relations} />
       <ViewTab selected={view === 'changes'} onClick={() => setView('changes')} icon={<History className="size-3.5" />} label={t.changes} />
       <ViewTab selected={view === 'review'} onClick={() => setView('review')} icon={<Sparkles className="size-3.5" />} label={t.review} emphasize={model.reviewQueue.length > 0} />
     </div>
 
     {view === 'portrait' ? <PortraitView focuses={model.currentFocuses} understandings={model.activeUnderstandings} language={language} t={t} onRefresh={onRefresh} /> : null}
-    {view === 'map' ? <SharedUnderstandingMap focuses={model.currentFocuses} understandings={understandings} language={language} onRefresh={onRefresh} onOpenReview={() => setView('review')} /> : null}
+    {view === 'relations' ? <UnderstandingBrowser focuses={model.currentFocuses} understandings={understandings} language={language} onRefresh={onRefresh} onOpenReview={() => setView('review')} renderDetail={(selection) => <PortraitDetail key={`${selection.type}:${selection.item.id}`} selection={selection} language={language} t={t} onRefresh={onRefresh} />} /> : null}
     {view === 'changes' ? <ChangesTimeline items={model.timeline} language={language} t={t} /> : null}
     {view === 'review' ? <ReviewQueue items={model.reviewQueue} language={language} t={t} onRefresh={onRefresh} /> : null}
 
@@ -350,7 +359,7 @@ function PortraitDetail({ selection, language, t, onRefresh }: {
         <button type="button" onClick={() => void loadEvidence()} className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"><Eye className="size-3.5" />{t.evidence}</button>
         {evidenceState !== 'idle' ? <div className="mt-2 rounded-xl bg-surface-muted p-3">
           <p className="text-xs font-medium text-fg-muted">{t.evidenceTitle}</p>
-          {evidenceState === 'loading' ? <p className="mt-2 text-xs text-fg-subtle">{t.evidenceLoading}</p> : null}
+          {evidenceState === 'loading' ? <Skeleton className="mt-2 h-16 w-full" /> : null}
           {evidenceState === 'error' ? <p className="mt-2 text-xs text-danger">{t.evidenceError}</p> : null}
           {evidenceState === 'loaded' && !evidence.length ? <p className="mt-2 text-xs text-fg-subtle">{t.evidenceEmpty}</p> : null}
           {evidence.length ? <div className="mt-2 space-y-2">{evidence.slice(0, 4).map((entry) => <EvidenceItem key={entry.id} evidence={entry} language={language} />)}</div> : null}

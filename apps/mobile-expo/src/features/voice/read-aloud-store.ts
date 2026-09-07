@@ -26,6 +26,7 @@ export type ReadAloudInput = {
   source: {
     id: string;
     sessionKey?: string;
+    noteId?: string;
     title: string;
     preview?: string;
   };

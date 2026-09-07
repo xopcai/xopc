@@ -5,6 +5,7 @@ import { ActivityIndicator, Button, Icon, Portal, Text } from 'react-native-pape
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
+import { openNoteDetail } from '../../lib/navigation';
 import { useMessages } from '../../i18n/messages';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { useVoiceCall } from './voice-call';
@@ -22,7 +23,7 @@ export function GlobalReadAloudPlayer() {
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { chat: m } = useMessages();
+  const { chat: m, notesPage: nm } = useMessages();
   const source = useReadAloudStore((state) => state.source);
   const status = useReadAloudStore((state) => state.status);
   const error = useReadAloudStore((state) => state.error);
@@ -80,10 +81,10 @@ export function GlobalReadAloudPlayer() {
     if (!visible) setPlayerExpanded(false);
   }, [visible]);
 
-  const openSourceChat = () => {
-    if (!source?.sessionKey) return;
+  const openSource = () => {
     setPlayerExpanded(false);
-    router.push(`/chat/${encodeURIComponent(source.sessionKey)}`);
+    if (source?.noteId) openNoteDetail(router, source.noteId);
+    else if (source?.sessionKey) router.push(`/chat/${encodeURIComponent(source.sessionKey)}`);
   };
 
   const endPlayback = () => {
@@ -217,14 +218,14 @@ export function GlobalReadAloudPlayer() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={m.messageReadAloudBackToChat}
-              disabled={!source?.sessionKey}
-              onPress={openSourceChat}
-              style={[styles.secondaryControl, !source?.sessionKey && styles.controlDisabled]}
+              accessibilityLabel={source?.noteId ? nm.readAloudBackToNote : m.messageReadAloudBackToChat}
+              disabled={!source?.sessionKey && !source?.noteId}
+              onPress={openSource}
+              style={[styles.secondaryControl, !source?.sessionKey && !source?.noteId && styles.controlDisabled]}
             >
-              <Icon source="message-text-outline" size={21} color={colors.text.secondary} />
+              <Icon source={source?.noteId ? 'note-text-outline' : 'message-text-outline'} size={21} color={colors.text.secondary} />
               <Text style={[styles.controlLabel, { color: colors.text.secondary }]}>
-                {m.messageReadAloudBackToChat}
+                {source?.noteId ? nm.readAloudBackToNote : m.messageReadAloudBackToChat}
               </Text>
             </Pressable>
           </View>

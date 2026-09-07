@@ -1570,6 +1570,8 @@ export const zh: MessageBundle = {
   },
 
   notesPage: {
+    readAloud: '朗读全文',
+    readAloudBackToNote: '返回笔记',
     deletingNote: '正在删除笔记…',
     shareLinkDescription: '创建 24 小时有效的只读快照，含正文中引用的附件。获得链接的人无需登录即可查看；后续编辑不会自动更新快照。',
     createShareLink: '生成分享链接',

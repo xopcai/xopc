@@ -27,6 +27,7 @@ export type UnderstandingStatus = 'candidate' | 'active' | 'needs_review' | 'sta
 
 export type UserUnderstanding = {
   id: string;
+  excludedFocusIds?: string[];
   canonicalKey?: string;
   kind: UnderstandingKind;
   status: UnderstandingStatus;
@@ -453,5 +454,11 @@ export function batchReviewContextObjects(decisions: ContextReviewDecision[]): P
   return fetchJson(apiUrl('/api/you/context-objects/batch-review'), {
     method: 'POST',
     body: JSON.stringify({ decisions }),
+  });
+}
+
+export async function setUnderstandingFocusExcluded(id: string, focusId: string, excluded: boolean): Promise<void> {
+  await fetchJson(apiUrl(`/api/you/understandings/${encodeURIComponent(id)}/focus-exclusions/${encodeURIComponent(focusId)}`), {
+    method: excluded ? 'PUT' : 'DELETE',
   });
 }

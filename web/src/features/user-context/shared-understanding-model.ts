@@ -21,7 +21,7 @@ export type SharedUnderstandingTimelineItem =
   | { type: 'focus'; id: string; updatedAt: number; focus: UserFocus }
   | { type: 'understanding'; id: string; updatedAt: number; understanding: UserUnderstanding };
 
-export type UnderstandingRelationReason = 'project_scope' | 'topic_overlap' | 'global_context';
+export type UnderstandingRelationReason = 'project_scope' | 'topic_overlap';
 
 export type UnderstandingRelation = {
   understanding: UserUnderstanding;
@@ -126,8 +126,7 @@ function tokens(value: string): Set<string> {
   return result;
 }
 
-function topicOverlap(left: string, right: string): number {
-  const leftTokens = tokens(left);
+function topicOverlap(leftTokens: Set<string>, right: string): number {
   const rightTokens = tokens(right);
   if (!leftTokens.size || !rightTokens.size) return 0;
   let shared = 0;
@@ -140,9 +139,15 @@ export function rankUnderstandingRelations(
   understandings: UserUnderstanding[],
   limit = 6,
 ): UnderstandingRelation[] {
-  const focusText = `${focus.title} ${focus.summary}`;
+  const focusTokens = tokens(`${focus.title} ${focus.summary}`);
+  const now = Date.now();
   return understandings
-    .filter((understanding) => ['active', 'candidate', 'needs_review', 'stale'].includes(understanding.status))
+    .filter((understanding) => understanding.status === 'active'
+      && !(understanding.validTo !== undefined && understanding.validTo <= now)
+      && !(understanding.expiresAt !== undefined && understanding.expiresAt <= now)
+      && !(understanding.validFrom !== undefined && understanding.validFrom > now)
+      && !understanding.excludedFocusIds?.includes(focus.id)
+      && !isGeneralUnderstanding(understanding))
     .map((understanding): UnderstandingRelation | null => {
       const reasons: UnderstandingRelationReason[] = [];
       let score = 0;
@@ -151,16 +156,10 @@ export function rankUnderstandingRelations(
         reasons.push('project_scope');
         score += 0.75;
       }
-      const overlap = topicOverlap(focusText, understanding.statement);
+      const overlap = topicOverlap(focusTokens, understanding.statement);
       if (overlap >= 0.12) {
         reasons.push('topic_overlap');
         score += Math.min(0.65, 0.18 + overlap * 0.55);
-      }
-      if (understanding.status === 'active'
-        && understanding.scope.type === 'global'
-        && GLOBAL_CONTEXT_KINDS.has(understanding.kind)) {
-        reasons.push('global_context');
-        score += 0.16;
       }
       if (!reasons.length) return null;
       return { understanding, reasons, score: Math.min(1, score) };
@@ -169,4 +168,8 @@ export function rankUnderstandingRelations(
     .sort((left, right) => right.score - left.score
       || right.understanding.updatedAt - left.understanding.updatedAt)
     .slice(0, Math.max(0, limit));
+}
+
+export function isGeneralUnderstanding(understanding: UserUnderstanding): boolean {
+  return understanding.scope.type === 'global' && GLOBAL_CONTEXT_KINDS.has(understanding.kind);
 }

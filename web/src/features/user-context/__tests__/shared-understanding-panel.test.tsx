@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, type ComponentProps } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,13 +12,15 @@ vi.mock('../user-context-api', async (importOriginal) => {
     batchReviewContextObjects: vi.fn().mockResolvedValue({ objects: [] }),
     createUnderstanding: vi.fn(),
     fetchUnderstandingEvidence: vi.fn().mockResolvedValue({ evidence: [] }),
+    setUnderstandingFocusExcluded: vi.fn().mockResolvedValue(undefined),
     updateUnderstanding: vi.fn().mockResolvedValue({ understanding: {} }),
     updateUserFocus: vi.fn().mockResolvedValue({ focus: {} }),
   };
 });
 
-import { batchReviewContextObjects, updateUnderstanding, type UserFocus, type UserUnderstanding } from '../user-context-api';
-import { SharedUnderstandingPanel } from '../shared-understanding-panel';
+import { batchReviewContextObjects, setUnderstandingFocusExcluded, updateUnderstanding, type UserFocus, type UserUnderstanding } from '../user-context-api';
+import { SharedUnderstandingPanel as Panel } from '../shared-understanding-panel';
+function SharedUnderstandingPanel(props: ComponentProps<typeof Panel>) { return <MemoryRouter><Panel {...props} /></MemoryRouter>; }
 
 const activeFocus: UserFocus = {
   id: 'active', versionId: 'active-v1', principalId: 'local-owner', title: '发布 XOPC 1.0', summary: '完成发布前验证', horizon: 'current', status: 'active',
@@ -84,7 +87,7 @@ describe('SharedUnderstandingPanel', () => {
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
-  it('shows the whole network and keeps node actions in the selected detail', async () => {
+  it('shows related understanding on demand and separates general background', async () => {
     const onRefresh = vi.fn().mockResolvedValue(undefined);
     const secondFocus: UserFocus = {
       ...activeFocus,
@@ -112,22 +115,53 @@ describe('SharedUnderstandingPanel', () => {
     const mapTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
       .find((button) => button.textContent?.includes('关系'));
     await act(async () => mapTab?.click());
-    expect(container.textContent).toContain('整体关系网');
+    expect(container.textContent).toContain('选择一项关注');
+    expect(container.querySelector('.react-flow')).toBeNull();
     expect(container.textContent).toContain('发布 XOPC 1.0');
     expect(container.textContent).toContain('完善发布自动化');
-    expect(container.textContent).toContain('数据库迁移必须使用事务');
+    expect(container.textContent).not.toContain('数据库迁移必须使用事务');
     expect(container.textContent).not.toContain('图中关注');
 
-    const contextNode = container.querySelector<HTMLElement>('[data-id="understanding:preference"]');
+    const general = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '通用背景');
+    await act(async () => general?.click());
+    const contextNode = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.includes(preference.statement));
     await act(async () => contextNode?.click());
 
-    expect(container.textContent).toContain('为什么展示这条关系');
-    expect(container.textContent).toContain('主题信号');
+    expect(container.textContent).toContain('选中的理解');
+    expect(container.textContent).toContain('与这项关注无关');
     const incorrect = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent === '不正确');
     await act(async () => incorrect?.click());
     expect(updateUnderstanding).toHaveBeenCalledWith('preference', { status: 'rejected' });
     expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it('opens a deep-linked understanding and excludes only its relationship', async () => {
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    await act(async () => root.render(<MemoryRouter initialEntries={['/?contextView=relations&contextFocus=active&contextUnderstanding=preference']}>
+      <Panel focuses={[activeFocus]} understandings={[preference]} language="zh" onRefresh={onRefresh} />
+    </MemoryRouter>));
+    expect(container.textContent).toContain('选中的理解');
+    const unrelated = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '与这项关注无关');
+    await act(async () => unrelated?.click());
+    expect(setUnderstandingFocusExcluded).toHaveBeenCalledWith('preference', 'active', true);
+    expect(updateUnderstanding).not.toHaveBeenCalled();
+    expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it('browses understanding without a focus with bounded pages and no pending content', async () => {
+    const entries = Array.from({ length: 100 }, (_, index) => ({ ...preference, id: `entry-${index}`, statement: `Understanding ${index}` }));
+    await act(async () => root.render(<SharedUnderstandingPanel focuses={[]} understandings={[...entries, { ...preference, id: 'pending', status: 'needs_review', statement: 'Pending secret' }]} language="en" onRefresh={vi.fn()} />));
+    const relationships = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((button) => button.textContent === 'Relationships');
+    await act(async () => relationships?.click());
+    expect(container.querySelectorAll('article')).toHaveLength(12);
+    expect(container.textContent).not.toContain('Pending secret');
+    expect(container.textContent).not.toContain('Understanding 12');
+    const next = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Next');
+    await act(async () => next?.click());
+    expect(container.querySelectorAll('article')).toHaveLength(12);
+    expect(container.textContent).toContain('Understanding 12');
+    expect(container.textContent).not.toContain('Understanding 0');
   });
 
   it('keeps the portrait hero balanced when many active focuses exist', async () => {
