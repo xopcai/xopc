@@ -54,10 +54,7 @@ export interface SiteShareRecord {
   thumbnailFailedAt?: string;
 }
 
-export interface SiteShareStoreData {
-  version: 1;
-  shares: SiteShareRecord[];
-}
+
 
 export interface CreateSiteShareParams {
   /** 'static' uses workspace path; 'proxy' uses upstreamUrl. */

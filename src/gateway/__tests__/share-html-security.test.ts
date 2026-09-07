@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,8 @@ import { ConfigSchema } from '../../config/schema.js';
 import { getShareStore, resetShareStoreForTests } from '../../share/share-store.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
+
+useTestDatabase();
 
 describe('shared HTML through the gateway security middleware', () => {
   let root: string;

@@ -556,7 +556,6 @@ export class NotesService {
     return this.store.updateNote(noteId, { title: snapshot.title, markdown: snapshot.markdown, tags: snapshot.tags, kind: snapshot.kind, status: snapshot.status });
   }
 
-  async flush(): Promise<void> { await this.store.flush(); }
   async moveToGroup(noteId: string, groupId: string | null): Promise<Note | null> { return this.updateNote(noteId, { groupId: groupId ?? undefined }); }
 
   async createTask(title: string, source: CaptureSource, opts: { dueAt?: number; priority?: 'high' | 'medium' | 'low'; sourceSessionKey?: string; sourceNoteId?: string; groupId?: string } = {}): Promise<Note> {

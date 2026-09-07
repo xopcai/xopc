@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -14,6 +15,8 @@ const TEST_STATE_DIR = join(TEST_ROOT, 'state');
 const TEST_MEDIA_DIR = join(TEST_ROOT, 'media');
 
 vi.mock('../../config/paths.js', () => ({ resolveStateDir: () => TEST_STATE_DIR }));
+
+useTestDatabase();
 
 describe('NoteShareService', () => {
   let store: ShareStore;

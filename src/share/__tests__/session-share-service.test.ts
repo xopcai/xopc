@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -41,6 +42,8 @@ function metadata(sessionId: string): SessionMetadata {
     cwd: '/private/workspace',
   };
 }
+
+useTestDatabase();
 
 describe('SessionShareService', () => {
   let store: ShareStore;

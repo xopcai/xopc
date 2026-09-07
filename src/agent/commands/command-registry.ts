@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { resolveGlobalSingleton } from '../../utils/global-singleton.js';
 import { isolatedCommand, removeCommandContainer, type CommandIsolation } from './command-isolation.js';
@@ -66,10 +67,9 @@ export class CommandRegistry {
     return join(this.root, createHash('sha256').update(owner).digest('hex'));
   }
   private persist(owner: string, result: CommandResult): void {
-    const file = join(this.directory(owner), `${result.id}.json`);
-    writeFileSync(`${file}.tmp`, JSON.stringify(result), { mode: 0o600 });
-    renameSync(`${file}.tmp`, file);
+    this.receipts(owner).set(result.id, result);
   }
+  private receipts(owner: string): DurableState<CommandResult> { return new DurableState('command-receipts', owner); }
 
   async start(input: {
     owner: string; command: string; cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number;
@@ -155,15 +155,16 @@ export class CommandRegistry {
     if (!/^[\da-f-]{36}$/.test(id)) return undefined;
     const current = this.running.get(id);
     if (current) return current.owner === owner ? { ...current.result, durationMs: Date.now() - current.result.createdAtMs } : undefined;
-    try {
-      const result = JSON.parse(readFileSync(join(this.directory(owner), `${id}.json`), 'utf8')) as CommandResult;
+    {
+      const result = this.receipts(owner).get(id);
+      if (!result) return undefined;
       if (result.status === 'running') {
         result.status = 'interrupted';
         result.stderr += '\nRuntime ownership was lost. Process/container state is unknown; inspect before restarting.';
         this.persist(owner, result);
       }
       return result;
-    } catch { return undefined; }
+    }
   }
 
   async wait(owner: string, id: string, waitMs = 30_000, signal?: AbortSignal): Promise<CommandResult | undefined> {
@@ -201,25 +202,21 @@ export class CommandRegistry {
     if (Date.now() - (this.prunedAt.get(owner) ?? 0) < 60_000) return;
     this.prunedAt.set(owner, Date.now());
     const directory = this.directory(owner);
-    const completed = readdirSync(directory).filter(file => file.endsWith('.json')).flatMap(file => {
-      try {
-        const job = JSON.parse(readFileSync(join(directory, file), 'utf8')) as CommandResult;
-        return this.running.has(job.id) || job.status === 'running' ? [] : [job];
-      } catch { return []; }
-    }).sort((a, b) => b.createdAtMs - a.createdAtMs);
+    const completed = this.receipts(owner).values().filter(job => !this.running.has(job.id) && job.status !== 'running')
+      .sort((a, b) => b.createdAtMs - a.createdAtMs);
     for (const [index, job] of completed.entries()) {
       if (index < 500 && Date.now() - job.createdAtMs < 7 * 24 * 60 * 60_000) continue;
       if (!/^[\da-f-]{36}$/.test(job.id)) continue;
-      rmSync(join(directory, `${job.id}.json`), { force: true });
+      this.receipts(owner).delete(job.id);
       rmSync(join(directory, `${job.id}.log`), { force: true });
     }
   }
   list(owner: string): CommandResult[] {
-    try {
-      return readdirSync(this.directory(owner)).filter(file => file.endsWith('.json'))
-        .map(file => this.get(owner, file.slice(0, -5))).filter((job): job is CommandResult => !!job)
+    {
+      return this.receipts(owner).entries()
+        .map(([id]) => this.get(owner, id)).filter((job): job is CommandResult => !!job)
         .sort((a, b) => b.createdAtMs - a.createdAtMs).slice(0, 50);
-    } catch { return []; }
+    }
   }
 }
 

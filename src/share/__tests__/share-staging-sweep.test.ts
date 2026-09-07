@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -68,30 +69,31 @@ afterEach(() => {
   // Hard reset: revoke all + drop persisted state dir.
   for (const rec of store.getAllShares()) store.revoke(rec.id);
   store.shutdown();
-  // The singleton holds in-memory state; reset by deleting + recreating the
-  // store-backed JSON and clearing the staging registry.
+  // Clear the staging registry; the test database is isolated per test.
   resetStagedSiteRegistryForTests();
   if (existsSync(TEST_DIR)) rmSync(TEST_DIR, { recursive: true, force: true });
 });
+
+useTestDatabase();
 
 describe('runStagingSweep', () => {
   it('keeps staging dirs that have a live record', async () => {
     const { stagingDir } = await createStagedSiteShare('keep.html');
     expect(existsSync(stagingDir)).toBe(true);
 
-    await runStagingSweep();
+    await runStagingSweep([TEST_WORKSPACE]);
 
     expect(existsSync(stagingDir)).toBe(true);
   });
 
-  it('removes orphan staging dirs (no matching record on disk)', async () => {
+  it('removes orphan staging dirs (no matching database record)', async () => {
     // Manually create an "orphan" dir that no SiteShareRecord knows about.
     const orphan = join(stagingRoot(), 'manual-orphan-uuid');
     mkdirSync(orphan, { recursive: true });
     writeFileSync(join(orphan, 'index.html'), '<h1>orphan</h1>');
     expect(existsSync(orphan)).toBe(true);
 
-    await runStagingSweep();
+    await runStagingSweep([TEST_WORKSPACE]);
 
     expect(existsSync(orphan)).toBe(false);
   });
@@ -101,7 +103,7 @@ describe('runStagingSweep', () => {
     const orphan = join(stagingRoot(), 'manual-orphan-2');
     mkdirSync(orphan, { recursive: true });
 
-    await runStagingSweep();
+    await runStagingSweep([TEST_WORKSPACE]);
 
     expect(existsSync(stagingDir)).toBe(true);
     expect(existsSync(orphan)).toBe(false);
@@ -118,7 +120,7 @@ describe('runStagingSweep', () => {
     resetStagedSiteRegistryForTests();
     expect(forgetStagedSite(id)).toBeUndefined(); // registry is empty
 
-    await runStagingSweep();
+    await runStagingSweep([TEST_WORKSPACE]);
 
     // After sweep, the registry should know about the staging dir again.
     expect(forgetStagedSite(id)).toBe(stagingDir);

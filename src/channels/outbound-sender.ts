@@ -63,8 +63,8 @@ export class ChannelOutboundSender {
     this.hooks = hooks;
   }
 
-  enablePersistence(agentDir: string): void {
-    this.persistStore = new OutboundPersistStore(agentDir);
+  enablePersistence(agentId: string): void {
+    this.persistStore = new OutboundPersistStore(agentId);
   }
 
   /**

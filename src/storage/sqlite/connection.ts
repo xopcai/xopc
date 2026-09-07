@@ -33,8 +33,7 @@ export type SqliteConnectionPragmaOptions = {
   checkpointMode?: SqliteWalCheckpointMode;
   busyTimeoutMs?: number;
   foreignKeys?: boolean;
-  synchronous?: 'NORMAL';
-  databasePath?: string;
+  synchronous?: 'NORMAL' | 'FULL';
   onCheckpointError?: (error: unknown) => void;
 };
 
@@ -46,7 +45,7 @@ function normalizeNonNegativeInteger(value: number, label: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// NFS detection — refuse WAL on NFS-backed volumes (openclaw parity)
+// Network filesystem detection
 // ---------------------------------------------------------------------------
 
 function findExistingVolumePath(targetPath: string): string | null {
@@ -128,51 +127,34 @@ function isPathWithinMount(targetPath: string, mountPoint: string): boolean {
   );
 }
 
-function isNfsMountType(fsType: string): boolean {
-  return fsType.toLowerCase().startsWith('nfs');
+function isNetworkMountType(fsType: string): boolean {
+  const type = fsType.toLowerCase();
+  return type.startsWith('nfs') || ['cifs', 'smbfs', 'smb3', 'fuse.sshfs'].includes(type);
 }
 
-function isNfsMountEntryPath(targetPath: string): boolean {
+function isNetworkMountEntryPath(targetPath: string): boolean {
   const mountEntry = readMountEntries()
     .filter((entry) => isPathWithinMount(targetPath, entry.mountPoint))
     .toSorted((a, b) => b.mountPoint.length - a.mountPoint.length)[0];
-  return mountEntry ? isNfsMountType(mountEntry.fsType) : false;
+  return mountEntry ? isNetworkMountType(mountEntry.fsType) : false;
 }
 
-function isNfsBackedPath(targetPath: string): boolean {
+function isNetworkBackedPath(targetPath: string): boolean {
   if (typeof fs.statfsSync !== 'function') {
-    return isNfsMountEntryPath(targetPath);
+    return isNetworkMountEntryPath(targetPath);
   }
   const checkedPath = findExistingVolumePath(targetPath);
   if (!checkedPath) return false;
   try {
-    if (fs.statfsSync(checkedPath).type === LINUX_NFS_SUPER_MAGIC) return true;
+    if ([LINUX_NFS_SUPER_MAGIC, 0xff534d42, 0xfe534d42, 0x517b].includes(fs.statfsSync(checkedPath).type >>> 0)) return true;
   } catch {
-    return isNfsMountEntryPath(checkedPath);
+    return isNetworkMountEntryPath(checkedPath);
   }
-  return isNfsMountEntryPath(checkedPath);
-}
-
-function readJournalModeResult(row: unknown): string | null {
-  if (!row || typeof row !== 'object') return null;
-  const record = row as Record<string, unknown>;
-  const value = record.journal_mode ?? Object.values(record)[0];
-  return typeof value === 'string' ? value.toLowerCase() : null;
-}
-
-function requireRollbackJournalMode(db: DatabaseSync, dbPath: string): void {
-  const row = db.prepare('PRAGMA journal_mode = DELETE;').get();
-  const mode = readJournalModeResult(row);
-  if (mode !== 'delete') {
-    throw new Error(
-      `xopc.db at ${dbPath} is on an NFS-backed volume but SQLite kept journal_mode=${mode ?? 'unknown'}. ` +
-        `WAL mode is unsafe on NFS. Move ~/.xopc to a local filesystem, or set XOPC_STATE_DIR to a local path.`,
-    );
-  }
+  return isNetworkMountEntryPath(checkedPath);
 }
 
 // ---------------------------------------------------------------------------
-// Unified PRAGMA + WAL configuration (openclaw parity)
+// Connection durability and WAL maintenance
 // ---------------------------------------------------------------------------
 
 function configureSqliteConnectionPragmas(
@@ -183,12 +165,6 @@ function configureSqliteConnectionPragmas(
   const busyTimeoutMs = options.busyTimeoutMs ?? XOPC_SQLITE_BUSY_TIMEOUT_MS;
   db.exec(`PRAGMA busy_timeout = ${normalizeNonNegativeInteger(busyTimeoutMs, 'busyTimeoutMs')};`);
 
-  // NFS detection: refuse WAL, force DELETE mode
-  if (options.databasePath && isNfsBackedPath(options.databasePath)) {
-    requireRollbackJournalMode(db, options.databasePath);
-    // No WAL checkpoint timer needed on DELETE mode
-    return { checkpoint: () => true, close: () => true };
-  }
 
   // WAL setup
   db.exec('PRAGMA journal_mode = WAL;');
@@ -212,8 +188,8 @@ function configureSqliteConnectionPragmas(
 
   const runCheckpoint = (mode: SqliteWalCheckpointMode): boolean => {
     try {
-      db.exec(`PRAGMA wal_checkpoint(${mode});`);
-      return true;
+      const row = db.prepare(`PRAGMA wal_checkpoint(${mode});`).get() as { busy: number };
+      return row.busy === 0;
     } catch (error) {
       options.onCheckpointError?.(error);
       return false;
@@ -268,27 +244,35 @@ function ensureDatabasePermissions(pathname: string): void {
 
 function openDatabaseAtPath(pathname: string): XopcDatabase {
   installSqliteTransientRejectionHandler();
+  if (pathname !== ':memory:' && isNetworkBackedPath(pathname)) {
+    throw new Error('SQLite requires a local filesystem; run the Gateway on the NAS instead of opening a network-mounted database.');
+  }
   ensureDatabasePermissions(pathname);
 
   const { DatabaseSync } = requireNodeSqlite();
   const db = new DatabaseSync(pathname);
 
-  // Single call: busy_timeout (30s) → WAL/NFS detection → synchronous → foreign_keys → checkpoint timer
-  const walMaintenance = configureSqliteConnectionPragmas(db, {
-    databasePath: pathname,
-    synchronous: 'NORMAL',
-    foreignKeys: true,
-    onCheckpointError: (error) => {
-      const em = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error instanceof Error ? error : undefined, errorMessage: em }, `SQLite WAL checkpoint failed: ${em}`);
-    },
-  });
+  // Single call: Configure durability before exposing the connection.
+  let walMaintenance: SqliteWalMaintenance | undefined;
+  try {
+    walMaintenance = configureSqliteConnectionPragmas(db, {
+      synchronous: 'FULL',
+      foreignKeys: true,
+      onCheckpointError: (error) => {
+        const em = error instanceof Error ? error.message : String(error);
+        log.warn({ err: error instanceof Error ? error : undefined, errorMessage: em }, `SQLite WAL checkpoint failed: ${em}`);
+      },
+    });
 
-  ensureXopcDatabaseSchema(db, { databasePath: pathname });
-  ensureDatabasePermissions(pathname);
+    ensureXopcDatabaseSchema(db, { databasePath: pathname });
+    ensureDatabasePermissions(pathname);
 
-  log.info({ path: pathname }, 'Opened xopc SQLite database');
-  return { db, path: pathname, walMaintenance };
+    log.info({ path: pathname }, 'Opened xopc SQLite database');
+    return { db, path: pathname, walMaintenance };
+  } catch (error) {
+    try { walMaintenance?.close(); } finally { db.close(); }
+    throw error;
+  }
 }
 
 export function openXopcDatabase(options: OpenXopcDatabaseOptions = {}): XopcDatabase {

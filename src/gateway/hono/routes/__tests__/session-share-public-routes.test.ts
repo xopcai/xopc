@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -19,6 +20,8 @@ vi.mock('../../../../tunnel/tunnel-state.js', () => ({ loadTunnelState: () => nu
 vi.mock('../../../../media/media-reference.js', () => ({
   resolveMediaReference: async (uri: string) => ({ bucket: 'inbound', id: 'shared.png', uri, path: TEST_MEDIA }),
 }));
+
+useTestDatabase();
 
 describe('public Session share routes', () => {
   beforeEach(() => {

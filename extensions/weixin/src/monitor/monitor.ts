@@ -6,7 +6,7 @@ import { WeixinConfigManager } from '../api/config-cache.js';
 import { SESSION_EXPIRED_ERRCODE, pauseSession, getRemainingPauseMs } from '../api/session-guard.js';
 import { processWeixinInboundMessage } from '../messaging/process-message.js';
 import { setWeixinTypingTicket } from '../messaging/typing-ticket-store.js';
-import { getSyncBufFilePath, loadGetUpdatesBuf, saveGetUpdatesBuf } from '../storage/sync-buf.js';
+import { loadGetUpdatesBuf, saveGetUpdatesBuf } from '../storage/sync-buf.js';
 import { logger } from '../util/logger.js';
 import { redactBody } from '../util/redact.js';
 import type { ResolvedWeixinAccount } from '../auth/accounts.js';
@@ -37,10 +37,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
 
   const aLog = logger;
 
-  const syncFilePath = getSyncBufFilePath(accountId);
-  aLog.debug(`syncFilePath: ${syncFilePath}`);
-
-  const previousGetUpdatesBuf = loadGetUpdatesBuf(syncFilePath);
+  const previousGetUpdatesBuf = loadGetUpdatesBuf(accountId);
   let getUpdatesBuf = previousGetUpdatesBuf ?? '';
 
   if (previousGetUpdatesBuf) {
@@ -118,7 +115,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
       }
       consecutiveFailures = 0;
       if (resp.get_updates_buf != null && resp.get_updates_buf !== '') {
-        saveGetUpdatesBuf(syncFilePath, resp.get_updates_buf);
+        saveGetUpdatesBuf(accountId, resp.get_updates_buf);
         getUpdatesBuf = resp.get_updates_buf;
         aLog.debug(`Saved new get_updates_buf (${getUpdatesBuf.length} bytes)`);
       }

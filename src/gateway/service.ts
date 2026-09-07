@@ -5,7 +5,7 @@ import { voiceMemoryBudget } from '../voice/realtime/conversation-context.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
-import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../agent/agent-scope.js';
+import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
 import { getEmbeddedExecutionSession } from '../agent/embedded/execution-context.js';
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
@@ -61,7 +61,6 @@ import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js'
 import { subscribeToLogs } from '../utils/logger/log-stream.js';
 import {
   resolveConfigPath,
-  resolveAgentDir,
   resolveExtensionsDir,
 } from '../config/paths.js';
 import type { ClarifyStreamEvent } from './clarify-bridge.js';
@@ -1046,7 +1045,7 @@ export class GatewayService {
       runMessageSent: (to, content, success, error, channel) =>
         this.agentService.outboundCoordinator.invokeOutboundMessageSent(to, content, success, error, channel),
     });
-    this.channelManager.enableOutboundPersistence(resolveAgentDir(this.config, getDefaultAgentId(this.config)));
+    this.channelManager.enableOutboundPersistence(getDefaultAgentId(this.config));
 
     if (this.extensionLoader) {
       this.extensionLoader.setRuntimeContext({
@@ -1246,7 +1245,10 @@ export class GatewayService {
     // process death between create and cleanup. Re-registers live ones into
     // the in-process map so post-restart revoke/expire still cleans them.
     void import('../share/share-auto.js')
-      .then(({ runStagingSweep }) => runStagingSweep())
+      .then(({ runStagingSweep }) => runStagingSweep(
+        [...new Set([getDefaultAgentId(this.config), ...listAgentEntries(this.config).map(entry => entry.id)])]
+          .map(agentId => resolveAgentWorkspaceDir(this.config, agentId)),
+      ))
       .catch((err) => log.warn({ err }, 'Share staging sweep failed'));
 
     if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
@@ -1470,7 +1472,6 @@ export class GatewayService {
     this.stopSessionTranscriptAutomationEvents = null;
 
     // Flush notes to disk
-    await this.notesService.flush();
 
     // Tear down rate-limit cleanup timers so the process can exit cleanly.
     buckets.destroyAll();

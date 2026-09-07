@@ -1,198 +1,71 @@
-import { readFile, readdir, rename, mkdir } from 'fs/promises';
-import { writeTextAtomic } from '../../infra/write-file-atomic.js';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { watch, type FSWatcher } from 'fs';
-import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
-import { resolveAgentDir } from '../../config/paths.js';
+import { DurableQueue } from '../../storage/sqlite/durable-queue.js';
+import { createLogger } from '../../utils/logger.js';
 import type { AgentIPCMessage } from './types.js';
 
 const log = createLogger('AgentInbox');
+const LEASE_MS = 30_000;
 
-// ============================================
-// Agent Inbox (File-based IPC)
-// ============================================
-
+/** SQLite queue with acknowledgement after processing and renewable claims. */
 export class AgentInbox {
-  private readonly pendingDir: string;
-  private readonly processedDir: string;
-  private watcher?: FSWatcher;
+  private readonly queue: DurableQueue<AgentIPCMessage>;
+  private timer?: ReturnType<typeof setInterval>;
+  private processing = false;
+  private stopped = true;
 
-  constructor(agentDir: string) {
-    this.pendingDir = join(agentDir, 'inbox', 'pending');
-    this.processedDir = join(agentDir, 'inbox', 'processed');
-  }
+  constructor(agentId: string) { this.queue = new DurableQueue('agent-ipc', agentId); }
 
-  /**
-   * Static factory using agent ID (paths from config).
-   */
-  static forAgent(config: Config, agentId: string): AgentInbox {
-    return new AgentInbox(resolveAgentDir(config, agentId));
-  }
+  static forAgent(_config: Config, agentId: string): AgentInbox { return new AgentInbox(agentId); }
 
-  /**
-   * Enqueue a message
-   */
-  async enqueue(message: AgentIPCMessage): Promise<void> {
-    await mkdir(this.pendingDir, { recursive: true });
+  async enqueue(message: AgentIPCMessage): Promise<void> { this.queue.enqueue(message.id, message); }
+  async peek(limit = 10): Promise<AgentIPCMessage[]> { return this.queue.pending(limit); }
+  async count(): Promise<number> { return this.queue.pending().length; }
+  async clearProcessed(olderThanMs?: number): Promise<number> { return this.queue.clearProcessed(olderThanMs); }
 
-    const filePath = join(this.pendingDir, `${message.id}.json`);
-    await writeTextAtomic(filePath, JSON.stringify(message, null, 2));
-
-    log.debug({ messageId: message.id, to: message.to }, 'Enqueued message');
-  }
-
-  /**
-   * Dequeue the oldest pending message
-   */
-  async dequeue(): Promise<AgentIPCMessage | null> {
-    await mkdir(this.pendingDir, { recursive: true });
-    await mkdir(this.processedDir, { recursive: true });
-
-    const files = await readdir(this.pendingDir).catch(() => [] as string[]);
-    if (files.length === 0) return null;
-
-    // Sort by filename (timestamp-based IDs)
-    const sorted = files.filter((f) => f.endsWith('.json')).sort();
-    if (sorted.length === 0) return null;
-
-    const fileName = sorted[0];
-    const filePath = join(this.pendingDir, fileName);
-
-    try {
-      const content = await readFile(filePath, 'utf-8');
-      const message = JSON.parse(content) as AgentIPCMessage;
-
-      // Move to processed
-      const processedPath = join(this.processedDir, fileName);
-      await rename(filePath, processedPath);
-
-      log.debug({ messageId: message.id, from: message.from }, 'Dequeued message');
-      return message;
-    } catch (error) {
-      log.warn({ fileName, error }, 'Failed to dequeue message');
-      return null;
-    }
-  }
-
-  /**
-   * Peek at pending messages without removing them
-   */
-  async peek(limit: number = 10): Promise<AgentIPCMessage[]> {
-    await mkdir(this.pendingDir, { recursive: true });
-
-    const files = await readdir(this.pendingDir).catch(() => [] as string[]);
-    const jsonFiles = files.filter((f) => f.endsWith('.json')).sort();
-
-    const messages: AgentIPCMessage[] = [];
-
-    for (const fileName of jsonFiles.slice(0, limit)) {
-      try {
-        const filePath = join(this.pendingDir, fileName);
-        const content = await readFile(filePath, 'utf-8');
-        const message = JSON.parse(content) as AgentIPCMessage;
-        messages.push(message);
-      } catch (error) {
-        log.warn({ fileName, error }, 'Failed to read message');
-      }
-    }
-
-    return messages;
-  }
-
-  /**
-   * Count pending messages
-   */
-  async count(): Promise<number> {
-    if (!existsSync(this.pendingDir)) return 0;
-
-    const files = await readdir(this.pendingDir).catch(() => [] as string[]);
-    return files.filter((f) => f.endsWith('.json')).length;
-  }
-
-  /**
-   * Watch for new messages
-   */
   async watch(handler: (msg: AgentIPCMessage) => Promise<void>): Promise<() => void> {
-    await mkdir(this.pendingDir, { recursive: true });
-
-    // Initial processing of any existing messages
-    await this.processPending(handler);
-
-    // Set up watcher
-    this.watcher = watch(this.pendingDir, async (eventType, filename) => {
-      if (eventType === 'rename' && filename?.endsWith('.json')) {
-        await this.processPending(handler);
-      }
+    this.stopWatching();
+    this.stopped = false;
+    const poll = () => this.processPending(handler).catch(err => {
+      log.error({ err }, 'IPC queue processing failed');
     });
-
-    // Return cleanup function
-    return () => {
-      this.watcher?.close();
-      this.watcher = undefined;
-    };
+    await poll();
+    if (!this.stopped) {
+      this.timer = setInterval(() => { void poll(); }, 250);
+      this.timer.unref();
+    }
+    return () => this.stopWatching();
   }
 
-  /**
-   * Stop watching
-   */
   stopWatching(): void {
-    this.watcher?.close();
-    this.watcher = undefined;
+    this.stopped = true;
+    clearInterval(this.timer);
+    this.timer = undefined;
   }
 
-  /**
-   * Clear all processed messages
-   */
-  async clearProcessed(olderThanMs?: number): Promise<number> {
-    if (!existsSync(this.processedDir)) return 0;
-
-    const files = await readdir(this.processedDir).catch(() => [] as string[]);
-    const cutoff = olderThanMs ? Date.now() - olderThanMs : 0;
-
-    let cleared = 0;
-
-    for (const fileName of files) {
-      if (!fileName.endsWith('.json')) continue;
-
-      const filePath = join(this.processedDir, fileName);
-
-      try {
-        if (olderThanMs) {
-          const stats = await import('fs/promises').then((fs) => fs.stat(filePath));
-          if (stats.mtimeMs < cutoff) {
-            await import('fs/promises').then((fs) => fs.unlink(filePath));
-            cleared++;
-          }
-        } else {
-          await import('fs/promises').then((fs) => fs.unlink(filePath));
-          cleared++;
+  private async processPending(handler: (msg: AgentIPCMessage) => Promise<void>): Promise<void> {
+    if (this.processing || this.stopped) return;
+    this.processing = true;
+    try {
+      while (!this.stopped) {
+        const claim = this.queue.claim(LEASE_MS);
+        if (!claim) break;
+        const renewal = setInterval(() => {
+          try { this.queue.renew(claim.id, claim.token, LEASE_MS); }
+          catch (err) { log.error({ err, messageId: claim.id }, 'IPC lease renewal failed'); }
+        }, LEASE_MS / 3);
+        renewal.unref();
+        let succeeded = false;
+        try {
+          await handler(claim.payload);
+          succeeded = true;
+        } catch (err) {
+          log.error({ err, messageId: claim.id }, 'IPC handler failed; message remains pending');
+        } finally {
+          clearInterval(renewal);
+          this.queue.finish(claim.id, claim.token, succeeded);
         }
-      } catch (error) {
-        log.warn({ fileName, error }, 'Failed to clear processed message');
+        if (!succeeded) break;
       }
-    }
-
-    return cleared;
-  }
-
-  // ============================================
-  // Private Methods
-  // ============================================
-
-  private async processPending(
-    handler: (msg: AgentIPCMessage) => Promise<void>
-  ): Promise<void> {
-    while (true) {
-      const msg = await this.dequeue();
-      if (!msg) break;
-
-      try {
-        await handler(msg);
-      } catch (error) {
-        log.error({ messageId: msg.id, error }, 'Error processing message');
-      }
-    }
+    } finally { this.processing = false; }
   }
 }

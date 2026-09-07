@@ -15,14 +15,6 @@ export function resolveWorkflowRunDir(config: Config, agentId: string, runId: st
   return join(resolveWorkflowRunsDir(config, agentId), runId);
 }
 
-export function resolveWorkflowRunEventsPath(config: Config, agentId: string, runId: string): string {
-  return join(resolveWorkflowRunDir(config, agentId, runId), 'events.jsonl');
-}
-
-export function resolveWorkflowRunViewPath(config: Config, agentId: string, runId: string): string {
-  return join(resolveWorkflowRunDir(config, agentId, runId), 'view.json');
-}
-
 export function resolveWorkflowRunArtifactsDir(config: Config, agentId: string, runId: string): string {
   return join(resolveWorkflowRunDir(config, agentId, runId), 'artifacts');
 }

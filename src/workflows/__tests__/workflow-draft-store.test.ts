@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../storage/sqlite/__tests__/test-database.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,13 +16,15 @@ const graph = {
   edges: [{ id: 'edge', source: 'input', target: 'output' }],
 };
 
+useTestDatabase();
+
 describe('WorkflowDraftStore', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'xopc-wf-drafts-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('persists and updates an authoring draft', () => {
-    const store = new WorkflowDraftStore({ userDir: dir });
+    const store = new WorkflowDraftStore();
     const first = store.save({ workflowName: 'demo', graph, baseRevision: 2 });
     const second = store.save({ id: first.id, workflowName: 'demo', graph, expectedUpdatedAtMs: first.updatedAtMs });
     expect(second.createdAtMs).toBe(first.createdAtMs);
@@ -30,7 +33,7 @@ describe('WorkflowDraftStore', () => {
   });
 
   it('rejects stale autosaves and removes drafts', () => {
-    const store = new WorkflowDraftStore({ userDir: dir });
+    const store = new WorkflowDraftStore();
     const draft = store.save({ workflowName: 'demo', graph });
     expect(() => store.save({ id: draft.id, workflowName: 'demo', graph, expectedUpdatedAtMs: draft.updatedAtMs - 1 })).toThrow(WorkflowDraftConflictError);
     expect(store.remove(draft.id)).toBe(true);

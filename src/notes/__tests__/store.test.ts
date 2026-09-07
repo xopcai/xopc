@@ -1,4 +1,4 @@
-import { access, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,7 +7,6 @@ import {
   closeXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { resolveNoteHistoryDir } from '../paths.js';
 import { buildNoteAttachmentRef } from '../attachment-ref.js';
 import { NotesStore } from '../store.js';
 import type { Note } from '../types.js';
@@ -48,10 +47,8 @@ describe('NotesStore deleteNote', () => {
     };
 
     await store.addNote(note);
-    await store.flush();
 
     const deleted = await store.deleteNote(note.id);
-    await store.flush();
 
     expect(deleted).toBe(true);
     expect(await store.getNote(note.id)).toBeNull();
@@ -109,7 +106,6 @@ describe('NotesStore deleteNote', () => {
     };
 
     await store.addNote(note);
-    await store.flush();
 
     const listed = await store.listNotes();
     expect(listed.items[0]).toMatchObject({
@@ -163,10 +159,8 @@ describe('NotesStore deleteNote', () => {
     await mkdir(mediaDir, { recursive: true });
     await writeFile(join(mediaDir, 'keep.jpg'), Buffer.from('keep'));
     await writeFile(join(mediaDir, 'orphan.jpg'), Buffer.from('orphan'));
-    await store.flush();
 
     await service.updateNote('note-prune', { markdown: 'Plain text only' });
-    await store.flush();
 
     const updated = await store.getNote('note-prune');
     expect(updated?.attachments ?? []).toEqual([]);
@@ -206,7 +200,6 @@ describe('NotesStore deleteNote', () => {
     };
 
     await store.addNote(note);
-    await store.flush();
 
     const match = await store.listNotes({ search: 'receipt-2024' });
     expect(match.items.map((item) => item.id)).toEqual(['note-search-file']);
@@ -227,7 +220,6 @@ describe('NotesStore deleteNote', () => {
     };
 
     await store.addNote(note);
-    await store.flush();
 
     const match = await store.listNotes({ search: 'deep-body-keyword' });
     expect(match.items.map((item) => item.id)).toEqual(['note-search-body']);
@@ -244,7 +236,6 @@ describe('NotesStore deleteNote', () => {
       updatedAt: 5,
       capturedVia: { channel: 'web' },
     });
-    await store.flush();
 
     const match = await store.listNotes({ search: '2' });
     expect(match.items.map((item) => item.id)).toEqual(['note-search-number']);
@@ -334,17 +325,14 @@ describe('NotesStore snapshots', () => {
     expect(entries[2].snippet).toBe('v2');
   });
 
-  it('deleteAllSnapshots removes the history directory', async () => {
+  it('deleteAllSnapshots removes stored versions', async () => {
     const note = makeNote('snap-del', 'text');
     await store.addNote(note);
     await store.saveSnapshot(note, 'edit');
 
-    const historyDir = resolveNoteHistoryDir('snap-del');
-    const filesBefore = await readdir(historyDir);
-    expect(filesBefore.length).toBeGreaterThan(0);
-
+    expect(await store.listSnapshots('snap-del')).toHaveLength(1);
     await store.deleteAllSnapshots('snap-del');
-    await expect(access(historyDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await store.listSnapshots('snap-del')).toEqual([]);
   });
 
   it('returns null for non-existent snapshot', async () => {

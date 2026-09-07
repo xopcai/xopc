@@ -1,5 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { requireXopcDatabase } from '../storage/sqlite/connection.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 import { join, relative as relPathPosix, resolve as resolvePath } from 'node:path';
 import { stat, lstat, realpath, readdir, rm } from 'node:fs/promises';
 
@@ -9,7 +11,6 @@ import { createLogger } from '../utils/logger.js';
 import { logShareAudit } from './share-audit.js';
 import type {
   ShareRecord,
-  ShareStoreData,
   ShareConfig,
   CreateShareParams,
   WorkspaceShareKind,
@@ -23,16 +24,9 @@ import { SHARE_CONFIG_DEFAULTS } from './share-types.js';
 
 const log = createLogger('ShareStore');
 
-const SHARES_FILE = 'shares.json';
 const CLEANUP_INTERVAL_MS = 10 * 60_000;
 const EXPIRED_RETENTION_MS = 24 * 60 * 60_000;
-const MAX_STORED_RECORDS = 500;
-const TRUNCATE_TO = 200;
-const COUNTER_DEBOUNCE_MS = 2_000;
 
-function resolveSharesPath(): string {
-  return join(resolveStateDir(), SHARES_FILE);
-}
 
 export interface DirectoryListingEntry {
   name: string;
@@ -57,10 +51,7 @@ interface DirectoryScanSummary {
 }
 
 export class ShareStore {
-  private shares = new Map<string, ShareRecord>();
-  private tokenIndex = new Map<string, string>();
-  private dirty = false;
-  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private shares = new DurableState<ShareRecord>('shares');
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private config: ShareConfig;
   private listingCache = new Map<string, { listing: DirectoryListing; expiresAt: number }>();
@@ -69,8 +60,15 @@ export class ShareStore {
 
   constructor(config?: Partial<ShareConfig>) {
     this.config = { ...SHARE_CONFIG_DEFAULTS, ...config };
-    this.load();
     this.startCleanupTimer();
+  }
+
+  private saveNew(record: ShareRecord): void {
+    requireXopcDatabase();
+    runSqliteWriteTransaction(() => {
+      if (this.getActiveShares().length >= this.config.maxActiveShares) throw new Error('Maximum active shares reached');
+      this.shares.set(record.id, record);
+    });
   }
 
   updateConfig(config: Partial<ShareConfig>): void {
@@ -307,8 +305,7 @@ export class ShareStore {
       ? { ...common, kind: 'directory', directory: input.directory! }
       : { ...common, kind: 'file' };
 
-    this.shares.set(id, record);
-    this.tokenIndex.set(token, id);
+    this.saveNew(record);
     return record;
   }
 
@@ -362,8 +359,7 @@ export class ShareStore {
       createdByTokenHash: input.gatewayTokenHash,
       description: input.description,
     };
-    this.shares.set(record.id, record);
-    this.tokenIndex.set(record.token, record.id);
+    this.saveNew(record);
     this.persistAndAudit(record, 'share.create', `Note share created: ${record.fileName}`, {
       noteId: record.sourceNoteId,
       sourceVersion: record.sourceVersion,
@@ -379,20 +375,23 @@ export class ShareStore {
     attachmentCount: number;
     fileName: string;
   }): NoteShareRecord | null {
-    const record = this.shares.get(id);
-    if (!record || record.kind !== 'note') return null;
-    record.sourceVersion = patch.sourceVersion;
-    record.fileSize = patch.artifactSize;
-    record.attachmentCount = patch.attachmentCount;
-    record.fileName = patch.fileName;
-    record.snapshotRevision += 1;
-    this.persistSync();
-    logShareAudit(
-      'share.update',
-      { shareId: id, noteId: record.sourceNoteId, snapshotRevision: record.snapshotRevision },
-      `Note share snapshot updated: ${record.fileName}`,
-    );
-    return record;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record || record.kind !== 'note') return null;
+      record.sourceVersion = patch.sourceVersion;
+      record.fileSize = patch.artifactSize;
+      record.attachmentCount = patch.attachmentCount;
+      record.fileName = patch.fileName;
+      record.snapshotRevision += 1;
+      this.shares.set(record.id, record);
+      logShareAudit(
+        'share.update',
+        { shareId: id, noteId: record.sourceNoteId, snapshotRevision: record.snapshotRevision },
+        `Note share snapshot updated: ${record.fileName}`,
+      );
+      return record;
+    });
   }
 
   getNoteShares(noteId: string): NoteShareRecord[] {
@@ -453,8 +452,7 @@ export class ShareStore {
       createdByTokenHash: input.gatewayTokenHash,
       description: input.description,
     };
-    this.shares.set(record.id, record);
-    this.tokenIndex.set(record.token, record.id);
+    this.saveNew(record);
     this.persistAndAudit(record, 'share.create', `Session share created: ${record.fileName}`, {
       sourceSessionId: record.sourceSessionId,
       cutoffSeq: record.cutoffSeq,
@@ -478,22 +476,25 @@ export class ShareStore {
     includeToolActivities: boolean;
     fileName: string;
   }): SessionShareRecord | null {
-    const record = this.shares.get(id);
-    if (!record || record.kind !== 'session') return null;
-    record.cutoffSeq = patch.cutoffSeq;
-    record.fileSize = patch.artifactSize;
-    record.messageCount = patch.messageCount;
-    record.attachmentCount = patch.attachmentCount;
-    record.includeToolActivities = patch.includeToolActivities;
-    record.fileName = patch.fileName;
-    record.snapshotRevision += 1;
-    this.persistSync();
-    logShareAudit(
-      'share.update',
-      { shareId: id, sourceSessionId: record.sourceSessionId, cutoffSeq: record.cutoffSeq, snapshotRevision: record.snapshotRevision },
-      `Session share snapshot updated: ${record.fileName}`,
-    );
-    return record;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record || record.kind !== 'session') return null;
+      record.cutoffSeq = patch.cutoffSeq;
+      record.fileSize = patch.artifactSize;
+      record.messageCount = patch.messageCount;
+      record.attachmentCount = patch.attachmentCount;
+      record.includeToolActivities = patch.includeToolActivities;
+      record.fileName = patch.fileName;
+      record.snapshotRevision += 1;
+      this.shares.set(record.id, record);
+      logShareAudit(
+        'share.update',
+        { shareId: id, sourceSessionId: record.sourceSessionId, cutoffSeq: record.cutoffSeq, snapshotRevision: record.snapshotRevision },
+        `Session share snapshot updated: ${record.fileName}`,
+      );
+      return record;
+    });
   }
 
   private persistAndAudit(
@@ -502,7 +503,7 @@ export class ShareStore {
     message: string,
     extra: Record<string, unknown>,
   ): void {
-    this.persistSync();
+    this.shares.set(record.id, record);
     logShareAudit(event, { shareId: record.id, tokenPrefix: record.token.slice(0, 8), ...extra }, message);
   }
 
@@ -511,9 +512,7 @@ export class ShareStore {
   }
 
   getByToken(token: string): ShareRecord | null {
-    const id = this.tokenIndex.get(token);
-    if (!id) return null;
-    return this.shares.get(id) ?? null;
+    return this.shares.values().find(record => record.token === token) ?? null;
   }
 
   /** Validate a share is still accessible for download. Returns null reason if valid. */
@@ -526,23 +525,23 @@ export class ShareStore {
     return { valid: true };
   }
 
-  /** Increment download counter (used by directory & file downloads). Debounced persist. */
+  /** Increment download counter (used by directory & file downloads). Persisted before returning. */
   incrementDownloadCount(id: string): void {
-    const record = this.shares.get(id);
-    if (!record) return;
-    record.downloadCount++;
-    this.scheduleDebouncedPersist();
+    this.shares.update(id, record => {
+      if (record) record.downloadCount++;
+      return { value: record, result: undefined };
+    });
   }
 
   /** Atomically validate and consume one access in the single-threaded store. */
   consumeAccess(id: string): { valid: true } | { valid: false; reason: string } {
-    const record = this.shares.get(id);
-    if (!record) return { valid: false, reason: 'not_found' };
-    const validation = this.validateAccess(record);
-    if (!validation.valid) return { valid: false, reason: validation.reason ?? 'access_denied' };
-    record.downloadCount++;
-    this.scheduleDebouncedPersist();
-    return { valid: true };
+    return this.shares.update<{ valid: true } | { valid: false; reason: string }>(id, record => {
+      if (!record) return { value: undefined, result: { valid: false, reason: 'not_found' } };
+      const validation = this.validateAccess(record);
+      if (!validation.valid) return { value: record, result: { valid: false, reason: validation.reason ?? 'access_denied' } };
+      record.downloadCount++;
+      return { value: record, result: { valid: true } };
+    });
   }
 
   /** Check if the file still exists and inode matches. */
@@ -673,12 +672,15 @@ export class ShareStore {
 
   /** Update thumbnail status. Persists immediately so generator restart is safe. */
   setThumbnailStatus(id: string, status: 'pending' | 'ready' | 'failed'): void {
-    const record = this.shares.get(id);
-    if (!record) return;
-    record.thumbnailStatus = status;
-    if (status === 'ready') record.thumbnailGeneratedAt = new Date().toISOString();
-    if (status === 'failed') record.thumbnailFailedAt = new Date().toISOString();
-    this.persistSync();
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record) return;
+      record.thumbnailStatus = status;
+      if (status === 'ready') record.thumbnailGeneratedAt = new Date().toISOString();
+      if (status === 'failed') record.thumbnailFailedAt = new Date().toISOString();
+      this.shares.set(record.id, record);
+    });
   }
 
   /** Drop the listing cache for a share (used on revoke/update). */
@@ -689,74 +691,88 @@ export class ShareStore {
   }
 
   revoke(id: string): boolean {
-    const record = this.shares.get(id);
-    if (!record) return false;
-    record.revoked = true;
-    this.cleanupStateArtifact(record);
-    this.invalidateListingCache(id);
-    this.persistSync();
-    logShareAudit(
-      'share.revoke',
-      { shareId: id, tokenPrefix: record.token.slice(0, 8), fileName: record.fileName },
-      `Share revoked: ${record.fileName}`,
-    );
-    return true;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record) return false;
+      record.revoked = true;
+      this.cleanupStateArtifact(record);
+      this.invalidateListingCache(id);
+      this.shares.set(record.id, record);
+      logShareAudit(
+        'share.revoke',
+        { shareId: id, tokenPrefix: record.token.slice(0, 8), fileName: record.fileName },
+        `Share revoked: ${record.fileName}`,
+      );
+      return true;
+    });
   }
 
   revokeMany(ids: string[]): number {
-    let count = 0;
-    for (const id of ids) {
-      const record = this.shares.get(id);
-      if (record && !record.revoked) {
-        record.revoked = true;
-        this.cleanupStateArtifact(record);
-        this.invalidateListingCache(id);
-        count++;
-        logShareAudit(
-          'share.revoke',
-          { shareId: id, tokenPrefix: record.token.slice(0, 8), fileName: record.fileName },
-          `Share revoked (batch): ${record.fileName}`,
-        );
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      let count = 0;
+      for (const id of ids) {
+        const record = this.shares.get(id);
+        if (record && !record.revoked) {
+          record.revoked = true;
+          this.shares.set(record.id, record);
+          this.cleanupStateArtifact(record);
+          this.invalidateListingCache(id);
+          count++;
+          logShareAudit(
+            'share.revoke',
+            { shareId: id, tokenPrefix: record.token.slice(0, 8), fileName: record.fileName },
+            `Share revoked (batch): ${record.fileName}`,
+          );
+        }
       }
-    }
-    if (count > 0) this.persistSync();
-    return count;
+
+      return count;
+    });
   }
 
   revokeExpired(): number {
-    const now = Date.now();
-    let count = 0;
-    for (const record of this.shares.values()) {
-      if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
-        record.revoked = true;
-        this.cleanupStateArtifact(record);
-        this.invalidateListingCache(record.id);
-        count++;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const now = Date.now();
+      let count = 0;
+      for (const record of this.shares.values()) {
+        if (!record.revoked && now >= new Date(record.expiresAt).getTime()) {
+          record.revoked = true;
+          this.shares.set(record.id, record);
+          this.cleanupStateArtifact(record);
+          this.invalidateListingCache(record.id);
+          count++;
+        }
       }
-    }
-    if (count > 0) this.persistSync();
-    return count;
+
+      return count;
+    });
   }
 
   update(id: string, patch: { extendTtlMs?: number; maxViews?: number | null }): ShareRecord | null {
-    const record = this.shares.get(id);
-    if (!record) return null;
+    requireXopcDatabase();
+    return runSqliteWriteTransaction(() => {
+      const record = this.shares.get(id);
+      if (!record) return null;
 
-    if (patch.extendTtlMs !== undefined) {
-      const newExpiry = new Date(Date.now() + patch.extendTtlMs);
-      record.expiresAt = newExpiry.toISOString();
-    }
-    if (patch.maxViews !== undefined) {
-      record.maxViews = patch.maxViews;
-    }
+      if (patch.extendTtlMs !== undefined) {
+        const newExpiry = new Date(Date.now() + patch.extendTtlMs);
+        record.expiresAt = newExpiry.toISOString();
+      }
+      if (patch.maxViews !== undefined) {
+        record.maxViews = patch.maxViews;
+      }
 
-    this.persistSync();
-    logShareAudit(
-      'share.update',
-      { shareId: id, tokenPrefix: record.token.slice(0, 8), patch },
-      `Share updated: ${record.fileName}`,
-    );
-    return record;
+      this.shares.set(record.id, record);
+      logShareAudit(
+        'share.update',
+        { shareId: id, tokenPrefix: record.token.slice(0, 8), patch },
+        `Share updated: ${record.fileName}`,
+      );
+      return record;
+    });
   }
 
   getActiveShares(): ShareRecord[] {
@@ -770,71 +786,6 @@ export class ShareStore {
     return [...this.shares.values()].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }
-
-  // ── Persistence ─────────────────────────────────────────────────────────────
-
-  private load(): void {
-    const path = resolveSharesPath();
-    if (!existsSync(path)) return;
-    try {
-      const raw = readFileSync(path, 'utf8');
-      const data = JSON.parse(raw) as ShareStoreData;
-      if ((data.version !== 1 && data.version !== 2) || !Array.isArray(data.shares)) return;
-
-      const now = Date.now();
-      let cleaned = 0;
-      for (const record of data.shares) {
-        const expiredMs = now - new Date(record.expiresAt).getTime();
-        if (expiredMs > EXPIRED_RETENTION_MS) {
-          cleaned++;
-          continue;
-        }
-        this.shares.set(record.id, record);
-        this.tokenIndex.set(record.token, record.id);
-      }
-      if (cleaned > 0) {
-        log.info({ cleaned }, `Cleaned ${cleaned} expired share records on load`);
-        this.persistSync();
-      }
-    } catch (err) {
-      log.warn({ err }, 'Failed to load shares.json');
-    }
-  }
-
-  private persistSync(): void {
-    const path = resolveSharesPath();
-    mkdirSync(resolveStateDir(), { recursive: true });
-
-    let records = [...this.shares.values()];
-    if (records.length > MAX_STORED_RECORDS) {
-      records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      const active = records.filter((r) => !r.revoked && Date.now() < new Date(r.expiresAt).getTime());
-      records = active.slice(0, TRUNCATE_TO);
-
-      this.shares.clear();
-      this.tokenIndex.clear();
-      for (const r of records) {
-        this.shares.set(r.id, r);
-        this.tokenIndex.set(r.token, r.id);
-      }
-    }
-
-    const data: ShareStoreData = { version: 2, shares: records };
-    writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  }
-
-  private scheduleDebouncedPersist(): void {
-    this.dirty = true;
-    if (this.debounceTimer) return;
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null;
-      if (this.dirty) {
-        this.dirty = false;
-        this.persistSync();
-      }
-    }, COUNTER_DEBOUNCE_MS);
-    this.debounceTimer.unref?.();
   }
 
   // ── Cleanup ─────────────────────────────────────────────────────────────────
@@ -854,7 +805,6 @@ export class ShareStore {
       if (expiredMs >= 0) this.cleanupStateArtifact(record);
       if (expiredMs > EXPIRED_RETENTION_MS) {
         this.shares.delete(id);
-        this.tokenIndex.delete(record.token);
         this.invalidateListingCache(id);
         if (this.onCleanup) {
           try {
@@ -867,7 +817,6 @@ export class ShareStore {
       }
     }
     if (removed > 0) {
-      this.persistSync();
       log.debug({ removed }, `Cleaned ${removed} expired shares`);
     }
   }
@@ -876,14 +825,6 @@ export class ShareStore {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
-    }
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-    if (this.dirty) {
-      this.dirty = false;
-      this.persistSync();
     }
     this.listingCache.clear();
   }

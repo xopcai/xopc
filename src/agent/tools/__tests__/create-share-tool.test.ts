@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../../storage/sqlite/__tests__/test-database.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -48,6 +49,8 @@ function write(rel: string, body = 'x'): void {
   mkdirSync(dir, { recursive: true });
   writeFileSync(p, body);
 }
+
+useTestDatabase();
 
 describe('create_share tool', () => {
   it('exposes the expected name + schema fields', () => {

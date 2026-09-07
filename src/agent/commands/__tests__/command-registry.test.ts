@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../../storage/sqlite/__tests__/test-database.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,3 +23,4 @@ it('shares wait/stdin/cancel ownership and recovers durable terminal receipts', 
     await expect(registry.start({ owner: 'a', command: 'echo forbidden', cwd: root, env: {}, timeoutMs: 1000, signal: controller.signal })).rejects.toThrow();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+useTestDatabase();

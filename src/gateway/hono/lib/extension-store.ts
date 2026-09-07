@@ -1,35 +1,17 @@
-import { readFile } from 'node:fs/promises';
-import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { DurableState } from '../../../storage/sqlite/durable-state.js';
 
-/** Extension UI: write-through JSON KV per namespace under ~/.xopc/extensions/{namespace}/storage.json */
-const extensionStoreCache = new Map<string, Record<string, unknown>>();
+const state = new DurableState<Record<string, unknown>>('extension-ui');
 
-function getExtensionStorePath(namespace: string): string {
-  const safeNamespace = namespace.replace(/[^a-zA-Z0-9_-]/g, '_');
-  return join(homedir(), '.xopc', 'extensions', safeNamespace, 'storage.json');
+function validateNamespace(namespace: string): void {
+  if (!namespace.trim()) throw new Error('Extension namespace is required');
 }
 
 export async function loadExtensionStore(namespace: string): Promise<Record<string, unknown>> {
-  const cached = extensionStoreCache.get(namespace);
-  if (cached) return cached;
-
-  const filePath = getExtensionStorePath(namespace);
-  try {
-    const raw = await readFile(filePath, 'utf-8');
-    const data = JSON.parse(raw) as Record<string, unknown>;
-    extensionStoreCache.set(namespace, data);
-    return data;
-  } catch {
-    const empty: Record<string, unknown> = {};
-    extensionStoreCache.set(namespace, empty);
-    return empty;
-  }
+  validateNamespace(namespace);
+  return state.get(namespace) ?? {};
 }
 
 export async function saveExtensionStore(namespace: string, data: Record<string, unknown>): Promise<void> {
-  const filePath = getExtensionStorePath(namespace);
-  await writeTextAtomic(filePath, JSON.stringify(data, null, 2));
-  extensionStoreCache.set(namespace, data);
+  validateNamespace(namespace);
+  state.set(namespace, data);
 }
