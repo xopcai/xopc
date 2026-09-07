@@ -1,6 +1,6 @@
 # Persistent voice technical design
 
-Updated: 2026-09-05. See [product contract](./realtime-voice-prd.md) and [protocol v2](./realtime-voice-websocket-protocol.md).
+Updated: 2026-09-07. See [product contract](./realtime-voice-prd.md) and [protocol v2](./realtime-voice-websocket-protocol.md).
 
 ## Ownership
 
@@ -20,6 +20,19 @@ The transport's `sessionId` is a call connection identifier. It must not be used
 Microphone mute disables input tracks, gates capture callbacks and discards partial encoder frames. A bounded synthetic silence tail closes an in-flight server-VAD utterance; no muted microphone samples are uploaded. Playback remains enabled. Audio output acknowledgements and response IDs retain the existing interruption/backpressure protocol.
 
 Manual response cancellation invalidates queued Agent voice turns and unfinished STT utterances observed before the stop. It resets pending-turn capacity while keeping the existing cleanup chain intact. Fresh speech after the stop can start a new turn; stale recognition results cannot advance the queue. Automatic barge-in retains the new spoken turn.
+
+## Conversation endpoints and continuation
+
+Provider `speech_stopped` and final transcription events mark an ASR segment, not necessarily a completed user turn. `ConversationTurn` waits for every started segment to finish transcription, joins segments in speech-start order and cancels the pending endpoint whenever speech resumes. Dictation retains its explicit commit behavior.
+
+The default provider silence window is 1,200 ms; the pacing choices are 800/1,200/2,000 ms. Existing explicit values remain explicit values. Conversation completion also has a 1,200 ms minimum silence target and at least a 350 ms transcription-settling window. Conservative Chinese/English continuation hints (for example, “帮我查一下”, “因为”, “could you”, and ellipses) extend the post-provider-endpoint hold to 1,800 ms. This is a bounded lexical heuristic, **not** model-level semantic VAD. No silence timeout releases a turn while a started segment is still being spoken or awaits its final transcript.
+
+- Agent mode starts one Agent request with the combined text after the endpoint settles. If Agent cleanup is still blocking that request and the user resumes, the queued text is restored into the unfinished turn.
+- Native mode retains the certified Qwen3 server-VAD protocol. A response may be generated upstream, but its `response.created`, text, audio and completion are withheld until the turn settles. Continuation discards an unpublished reply without showing it or writing an assistant transcript. User segments retain their provider item IDs and remain in upstream conversation context. Existing audio queue limits still apply while output is withheld.
+- Barge-in of an already published reply stays immediate when enabled; it does not inherit the longer endpoint delay. An unpublished reply is discarded on continuation even with barge-in disabled. This does not add semantic noise/backchannel classification.
+- Mute, manual stop, congestion reset and close invalidate pending endpoints and release discarded output waiters. A native transcription failure discards the uncertain input and reports a recoverable error rather than leaving the reply waiting indefinitely.
+
+Do not switch the current certified Qwen3 model to Qwen3.5-only semantic VAD or depend on `create_response: false` without separately certifying the model and relay. The configured hosted route acknowledged the existing automatic-response configuration during testing, but did not acknowledge the manual-response configuration. No protocol fallback or model migration is included here. Unheard generated native content may still exist inside the current provider session; deleting/truncating that provider-side history is not certified.
 
 ## Shared conversation context
 
@@ -46,3 +59,5 @@ No automatic engine fallback, old hook alias, second transcript writer, new memo
 ## Verification limits
 
 See [delivery review](./persistent-voice-delivery.md) for executed checks. Synthetic browser audio and local mocked WebSockets cannot establish real microphone permissions in packaged Electron, echo cancellation, perceived latency, paid-provider availability or platform billing correctness. This change does not modify or deploy xopc-platform.
+
+On 2026-09-07 the updated native engine was also exercised against the configured XOPC hosted Qwen3 route using 16 kHz mono synthetic PCM, the existing 700 ms setting, and a 1.1-second inserted pause. “Could you” followed by “tell me what two plus two is?” and “帮我查一下” followed by “明天下午去上海的高铁” each produced two final user segments but only one published assistant reply, after continuation finished. Neither test published early text/audio or reported a session error. The harness received and acknowledged 526,080 / 1,032,960 PCM output bytes respectively. Acknowledgements here are synthetic, not evidence of phone speaker playback. These checks did not deploy the gateway at `xl.xopc.ai`, use a physical microphone, or repeat the iOS/Android simulator suite.

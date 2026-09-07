@@ -52,6 +52,87 @@ describe('Omni voice engine', () => {
     return callbacks;
   }
 
+  it('withholds premature text and audio and discards both when the user continues', async () => {
+    const test = await setup();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'first' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'first' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'first', transcript: '帮我查一下。' });
+    test.emit({ type: 'response.created', response: { id: 'premature' } });
+    test.emit({ type: 'response.audio_transcript.delta', response_id: 'premature', delta: 'Premature answer' });
+    test.emit({ type: 'response.audio.delta', response_id: 'premature', delta: Buffer.alloc(24000, 1).toString('base64') });
+    test.emit({ type: 'response.done', response: { id: 'premature', status: 'completed' } });
+    await vi.waitFor(() => expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ itemId: 'first' })));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(test.sendAudio).not.toHaveBeenCalled();
+    expect(test.send.mock.calls.filter(([type]) => type.startsWith('response.'))).toEqual([]);
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'second' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'second' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'second', transcript: '明天下午去上海的高铁。' });
+    test.emit({ type: 'response.created', response: { id: 'complete' } });
+    test.emit({ type: 'response.audio_transcript.delta', response_id: 'complete', delta: 'Complete answer' });
+    test.emit({ type: 'response.audio.delta', response_id: 'complete', delta: Buffer.alloc(24000, 2).toString('base64') });
+    test.emit({ type: 'response.done', response: { id: 'complete', status: 'completed' } });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    expect(test.sendAudio.mock.calls[0]![0]).toBe('complete');
+    engine.acknowledge('complete', 24000);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'complete' })));
+    expect(test.send.mock.calls.filter(([type, payload]) => type.startsWith('response.') && payload.responseId === 'premature')).toEqual([]);
+    expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'premature')).toBe(false);
+  });
+
+  it.each(['mute', 'close'] as const)('does not leak buffered speech after %s', async (action) => {
+    const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: '因为' });
+    test.emit({ type: 'response.created', response: { id: 'pending' } });
+    test.emit({ type: 'response.audio.delta', response_id: 'pending', delta: Buffer.alloc(24000).toString('base64') });
+    test.emit({ type: 'response.done', response: { id: 'pending', status: 'completed' } });
+    await vi.waitFor(() => expect(test.record).toHaveBeenCalledOnce());
+    if (action === 'mute') engine.setInputMuted(true);
+    else await engine.close();
+    await new Promise((resolve) => setTimeout(resolve, 1900));
+    expect(test.sendAudio).not.toHaveBeenCalled();
+    expect(test.send.mock.calls.filter(([type]) => type.startsWith('response.'))).toEqual([]);
+  });
+
+  it('discards an unpublished reply on continuation even when barge-in is disabled', async () => {
+    const test = await setup(undefined, false);
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: '因为' });
+    test.emit({ type: 'response.created', response: { id: 'pending' } });
+    test.emit({ type: 'response.audio.delta', response_id: 'pending', delta: Buffer.alloc(24000).toString('base64') });
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'u2' });
+    await vi.waitFor(() => expect(test.received.some((event) => event.type === 'response.cancel')).toBe(true));
+    expect(test.sendAudio).not.toHaveBeenCalled();
+    expect(test.send.mock.calls.filter(([type]) => type.startsWith('response.'))).toEqual([]);
+  });
+
+  it('recovers from a failed transcript instead of leaving a reply gated forever', async () => {
+    const test = await setup();
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'failed' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'failed' });
+    test.emit({ type: 'response.created', response: { id: 'pending' } });
+    test.emit({ type: 'response.audio.delta', response_id: 'pending', delta: Buffer.alloc(24000).toString('base64') });
+    test.emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'failed' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'INPUT_DROPPED', recoverable: true })));
+    expect(test.sendAudio).not.toHaveBeenCalled();
+    test.emit({ type: 'input_audio_buffer.cleared' });
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'fresh' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'fresh', transcript: '你好' });
+    test.emit({ type: 'response.created', response: { id: 'fresh-reply' } });
+    test.emit({ type: 'response.done', response: { id: 'fresh-reply', status: 'completed' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'fresh-reply' })));
+    expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'pending')).toBe(false);
+  });
+
+  it('ignores duplicate start and late stop events after a final transcript', async () => {
+    const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: '你好' });
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'u1' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'u1' });
+    test.emit({ type: 'response.created', response: { id: 'reply' } });
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'completed' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'reply' })));
+  });
+
   it('waits for upload completion and preserves PCM order across a brief stall', async () => {
     const test = await setup();
     const callbacks = delayUploadCompletion();
@@ -141,6 +222,7 @@ describe('Omni voice engine', () => {
 
   it('waits for playback and stops late audio after a tail interruption', async () => {
     const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'r1' } });
     test.emit({ type: 'response.audio_transcript.delta', response_id: 'r1', delta: 'Hello' });
     test.emit({ type: 'response.audio.delta', response_id: 'r1', delta: Buffer.alloc(24000).toString('base64') });
@@ -157,6 +239,7 @@ describe('Omni voice engine', () => {
 
   it('cancels generation only once and records completed playback', async () => {
     const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'r1' } });
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.created', { responseId: 'r1' }));
     engine.cancel('r1', 'client_cancelled'); engine.cancel('r1', 'client_cancelled');
@@ -164,6 +247,7 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'error', error: { type: 'invalid_request_error', message: 'Conversation has none active response' } });
     test.emit({ type: 'input_audio_buffer.cleared' });
     test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'fresh-r2' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'fresh-r2', transcript: 'Next question' });
     test.emit({ type: 'response.created', response: { id: 'r2' } });
     test.emit({ type: 'response.audio_transcript.delta', response_id: 'r2', delta: 'Second' });
     test.emit({ type: 'response.audio.delta', response_id: 'r2', delta: Buffer.alloc(24000).toString('base64') });
@@ -176,7 +260,9 @@ describe('Omni voice engine', () => {
   });
   it('discards pre-mute input and late replies while preserving current playback', async () => {
     const test = await setup(undefined, false);
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'current' } });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.created', { responseId: 'current' }));
     test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'partial' });
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', { utteranceId: 'partial' }));
     engine.setInputMuted(true);
@@ -189,6 +275,7 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'fresh', transcript: 'Hello' });
     await vi.waitFor(() => expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ itemId: 'fresh' })));
     expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'partial')).toBe(false);
+    expect(test.send.mock.calls.some(([type]) => type === 'response.cancelled')).toBe(false);
     expect(test.send.mock.calls.some(([type, payload]) => type === 'response.created' && payload.responseId === 'late')).toBe(false);
   });
 
@@ -209,6 +296,7 @@ describe('Omni voice engine', () => {
 
   it('buffers a fast ten-second reply while waiting for actual playback', async () => {
     const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'long-reply' } });
     for (let index = 0; index < 20; index++) {
       test.emit({ type: 'response.audio.delta', response_id: 'long-reply', delta: Buffer.alloc(24_000, index).toString('base64') });
@@ -231,6 +319,7 @@ describe('Omni voice engine', () => {
 
   it('interrupts queued speech without closing the call or playing stale audio', async () => {
     const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'old' } });
     for (let index = 0; index < 20; index++) test.emit({ type: 'response.audio.delta', response_id: 'old', delta: Buffer.alloc(24_000).toString('base64') });
     await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(4));
@@ -239,6 +328,7 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'response.audio.delta', response_id: 'old', delta: Buffer.alloc(24_000).toString('base64') });
     test.emit({ type: 'input_audio_buffer.cleared' });
     test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'fresh-new' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'fresh-new', transcript: 'Next question' });
     test.emit({ type: 'response.created', response: { id: 'new' } });
     test.emit({ type: 'response.audio.delta', response_id: 'new', delta: Buffer.alloc(24_000).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'new', status: 'completed' } });
@@ -251,6 +341,7 @@ describe('Omni voice engine', () => {
 
   it('bounds excessive output by stopping only the reply and accepts the next turn', async () => {
     const test = await setup();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'excessive' } });
     for (let index = 0; index < 130; index++) test.emit({ type: 'response.audio.delta', response_id: 'excessive', delta: Buffer.alloc(24_000).toString('base64') });
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'RESPONSE_FAILED', recoverable: true })));
@@ -277,6 +368,7 @@ describe('Omni voice engine', () => {
   it('keeps the call connected when playback acknowledgements stall', async () => {
     const test = await setup();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'stalled' } });
     test.emit({ type: 'response.audio.delta', response_id: 'stalled', delta: Buffer.alloc(24_000).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'stalled', status: 'completed' } });

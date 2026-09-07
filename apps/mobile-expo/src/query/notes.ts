@@ -123,10 +123,11 @@ export interface ApiError extends Error {
 }
 
 async function readError(res: Response): Promise<Error> {
-  const data = await res.json().catch(() => ({})) as { code?: string; error?: string; message?: string };
-  const error = new Error(data.error || data.message || `HTTP ${res.status}`) as ApiError;
+  const data = await res.json().catch(() => ({})) as { code?: string; error?: string | { message?: string; code?: string }; message?: string };
+  const detail = typeof data.error === 'object' ? data.error : undefined;
+  const error = new Error(detail?.message || (typeof data.error === 'string' ? data.error : undefined) || data.message || `HTTP ${res.status}`) as ApiError;
   error.status = res.status;
-  error.code = data.code;
+  error.code = detail?.code ?? data.code;
   return error;
 }
 
@@ -382,4 +383,22 @@ export async function moveNoteToGroup(noteId: string, groupId: string | null): P
   const res = await apiFetch(`/api/notes/${encodeURIComponent(noteId)}/move`, { method: 'POST', body: JSON.stringify({ groupId }) });
   if (!res.ok) throw await readError(res);
   return res.json() as Promise<{ note: Note }>;
+}
+
+export interface NoteShareLink {
+  id: string;
+  shareUrl: string;
+  expiresAt: number;
+  sourceVersion: number;
+  reachabilityHint?: string;
+}
+
+export async function createNoteShare(note: Note): Promise<NoteShareLink> {
+  const res = await apiFetch(`/api/notes/${encodeURIComponent(note.id)}/shares`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedNoteVersion: note.updatedAt, ttlMs: 86_400_000 }),
+  });
+  if (!res.ok) throw await readError(res);
+  const data = await res.json() as { payload: NoteShareLink };
+  return data.payload;
 }
