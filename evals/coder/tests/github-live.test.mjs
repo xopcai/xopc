@@ -28,8 +28,8 @@ describe('manual live evaluation', () => {
     expect(config.gateway.auth).toMatchObject({ mode: 'token', token: 'local-token' });
     expect(config.gateway.heartbeat.enabled).toBe(false);
     expect(config.userContext.enabled).toBe(false);
-    expect(config.userContext.understanding.enabled).toBe(false);
-    expect(config.userContext.dreaming.mode).toBe('off');
+    expect(config.userContext.userModel.enabled).toBe(true);
+    expect(config.userContext.contextPlanning.enabled).toBe(true);
   });
 
   it('waits for readiness and an authenticated runtime endpoint', async () => {

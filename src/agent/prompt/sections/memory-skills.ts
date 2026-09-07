@@ -6,83 +6,44 @@ export function buildMemorySection(params: {
   hasProfileMemory?: boolean;
   includeMemorySection?: boolean;
 }): string {
-  if (params.includeMemorySection === false) {
-    return '';
-  }
-  const hasMemoryTools =
-    params.availableTools.has('memory_search') ||
-    params.availableTools.has('memory_get') ||
-    params.availableTools.has('session_recall') ||
-    params.availableTools.has('session_search');
-  if (!hasMemoryTools && !params.hasProfileMemory) {
-    return '';
-  }
+  if (params.includeMemorySection === false) return '';
+  const names = params.availableTools;
+  const hasRecall = ['user_context_search', 'user_context_get', 'knowledge_search', 'knowledge_get',
+    'session_recall', 'session_search'].some((name) => names.has(name));
+  if (!hasRecall && !params.hasProfileMemory) return '';
 
-  const citationsMode = params.citationsMode ?? 'on';
-  const citationInstruction =
-    citationsMode === 'off'
-      ? 'Citations are disabled: do not mention file paths or line numbers in replies.'
-      : citationsMode === 'source-only'
-        ? 'Citations: mention the memory record id when it helps.'
-        : 'Citations: include the memory record id when it helps the user verify recalled context.';
-
-  const toolLines: string[] = [];
-  if (params.availableTools.has('memory_search')) {
-    toolLines.push('1. Run `memory_search` to search workspace and connected-source memory records');
+  const lines = [
+    '## Context and memory',
+    '',
+    'Relevant user facts, goals, priorities, collaboration rules, and task knowledge are selected for each turn.',
+    'When exact or additional context is needed:',
+  ];
+  if (names.has('user_context_search')) {
+    lines.push('- Use `user_context_search` for user identity, preferences, routines, and current state.');
   }
-  if (params.availableTools.has('session_search')) {
-    toolLines.push(
-      `${toolLines.length + 1}. For **other chat sessions** / cross-session history, use \`session_search\` with keywords (or omit \`query\` to list recent sessions)`,
-    );
+  if (names.has('knowledge_search')) {
+    lines.push('- Use `knowledge_search` for project facts, decisions, lessons, commitments, and open questions.');
   }
-  if (params.availableTools.has('session_recall')) {
-    toolLines.push(
-      `${toolLines.length + 1}. When the current session summary lacks an exact fact, path, ID, date, decision, or tool result, use session_recall to search its authoritative raw transcript`,
-    );
+  if (names.has('session_recall')) lines.push('- Use `session_recall` for exact raw content from the current session.');
+  if (names.has('session_search')) lines.push('- Use `session_search` for other conversations.');
+  if (names.has('knowledge_write')) {
+    lines.push('- Use `knowledge_write` for reusable task knowledge; it is stored as a reviewable candidate with provenance.');
   }
-  if (params.availableTools.has('memory_get')) {
-    toolLines.push(`${toolLines.length + 1}. Use \`memory_get\` only for record ids returned by \`memory_search\``);
-  }
-  toolLines.push(`${toolLines.length + 1}. If low confidence after search, say you checked`);
-
-  return [
-    '## Memory Recall',
+  lines.push(
     '',
-    citationInstruction,
-    '',
-    'Relevant user understanding is selected separately and injected above.',
-    '',
-    'Before answering anything about prior work, decisions, dates, people, preferences, or todos:',
-    ...toolLines,
-    '',
-    '### Memory Sources',
-    '',
-    '- **Current session:** use `session_recall` for exact raw turns, including history older than compaction.',
-    '- **Other sessions:** use `session_search` for cross-session history.',
-    '- **Workspace memory:** cite only record ids returned by `memory_search` / `memory_get`.',
-    '',
-    '### Writing to Memory',
-    '',
-    '- **Declarative vs procedural:** user preferences belong to structured user understanding; reusable task procedures belong to skills.',
-    '- Explicit "remember this" statements are captured as durable structured understanding after the turn.',
-    '- Do not invent, cite, or promise memory record ids that were not returned by a memory tool.',
-    '- **Text > Brain**',
-  ].join('\n');
+    'User facts are declarative. Reusable procedures belong in skills.',
+    'Do not infer importance from confidence: confidence measures truth likelihood; importance measures execution value.',
+  );
+  return lines.join('\n');
 }
 
 export function buildExternalMemorySection(text: string | undefined): string {
-  const t = text?.trim();
-  if (!t) {
-    return '';
-  }
-  return `## External memory provider\n\n${t}`;
+  const value = text?.trim();
+  return value ? `## External knowledge provider\n\n${value}` : '';
 }
 
 export function buildSkillsSection(hasSkillTools: boolean): string {
-  if (!hasSkillTools) {
-    return '';
-  }
-
+  if (!hasSkillTools) return '';
   return [
     '## Skills (mandatory)',
     'Before replying: scan <available_skills> <description> entries.',
@@ -92,6 +53,6 @@ export function buildSkillsSection(hasSkillTools: boolean): string {
     'Constraints: never load more than one skill up front; only load after selecting.',
     '- When a skill drives external API writes, assume rate limits: prefer fewer larger writes, avoid tight one-item loops, serialize bursts when possible, and respect 429/Retry-After.',
     '',
-    '**Division of labor with memory:** Skills = **procedural** workflows; structured memory = **declarative** facts and preferences.',
+    '**Division of labor:** Skills contain procedures; user context and knowledge contain declarative facts.',
   ].join('\n');
 }

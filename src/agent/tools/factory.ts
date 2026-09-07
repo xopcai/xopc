@@ -39,13 +39,16 @@ import {
   createReadMediaTool,
   createCreateShareTool,
   isShareToolAvailable,
-  createMemorySearchTool,
-  createMemoryGetTool,
+  createUserContextSearchTool,
+  createUserContextGetTool,
+  createKnowledgeSearchTool,
+  createKnowledgeGetTool,
+  createKnowledgeWriteTool,
   createSessionRecallTool,
   createTodoTool,
   createUpdatePlanTool,
   createSessionStatusTool,
-  createDreamingTool,
+  createMemoryMaintenanceTool,
   createClarifyTool,
   createToolManualTool,
   createAutomationTool,
@@ -315,6 +318,7 @@ export class AgentToolsFactory {
       agentId: options?.agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main'),
     });
     const agentId = options?.agentId;
+    const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main');
     const getCommandIsolation = () => {
       const config = this.deps.getConfig?.();
       return config ? resolveEffectiveAgentConfigForSession(config, this.deps.getCurrentContext()?.sessionKey ?? `agent:${agentId ?? 'main'}:internal`).config.runtime.commandIsolation : undefined;
@@ -347,7 +351,7 @@ export class AgentToolsFactory {
 
     const core: AgentTool<any, any>[] = [
       createSessionStatusTool(),
-      createDreamingTool({
+      createMemoryMaintenanceTool({
         getConfig: () => this.deps.getConfig?.(),
       }),
       createToolManualTool(),
@@ -449,30 +453,31 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(getMemMgr
-        ? [
-            createMemorySearchTool({
-              getMemoryManager: () => getMemMgr(),
-              getScope: () => ({
-                ...(options?.agentId ? { agentId: options.agentId } : {}),
-                workspaceId: workspace,
-                ...(this.deps.getCurrentContext?.()?.sessionKey
-                  ? { sessionKey: this.deps.getCurrentContext!()!.sessionKey }
-                  : {}),
-              }),
-            }),
-            createMemoryGetTool({
-              getMemoryManager: () => getMemMgr(),
-              getScope: () => ({
-                ...(options?.agentId ? { agentId: options.agentId } : {}),
-                workspaceId: workspace,
-                ...(this.deps.getCurrentContext?.()?.sessionKey
-                  ? { sessionKey: this.deps.getCurrentContext!()!.sessionKey }
-                  : {}),
-              }),
-            }),
-          ]
-        : []),
+      createUserContextSearchTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+      }),
+      createUserContextGetTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+      }),
+      createKnowledgeSearchTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+      }),
+      createKnowledgeGetTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+      }),
+      createKnowledgeWriteTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: () => this.deps.getCurrentContext?.()?.sessionKey,
+      }),
       ...(this.deps.getSessionStore
         ? [
             createSessionRecallTool({

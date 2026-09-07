@@ -125,7 +125,7 @@ function uniqueConnectors(connectors: ConnectorDefinition[]): ConnectorDefinitio
 }
 
 function safeReturnPath(value: string | null): string {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/you?tab=sources';
+  return value?.startsWith('/') && !value.startsWith('//') ? value : '/user-model';
 }
 
 export function ConnectorsPage() {
@@ -574,7 +574,7 @@ export function ConnectorsPage() {
                   <h2 className="text-sm font-semibold text-fg">{cs.relationshipsEntryTitle}</h2>
                   <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.relationshipsEntryHint}</p>
                 </div>
-                <Button type="button" className="shrink-0" onClick={() => navigate('/you?tab=relationships')}>{cs.relationshipsEntryAction}</Button>
+                <Button type="button" className="shrink-0" onClick={() => navigate('/user-model')}>{cs.relationshipsEntryAction}</Button>
               </section>
 
               {state.loading ? (

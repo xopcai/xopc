@@ -92,7 +92,6 @@ export function WorkDiscoveryPage({
   const [connectedSignals, setConnectedSignals] = useState<UnderstandingSignal[]>([]);
   const stopBatchRef = useRef(false);
   const understandingMemories = useUnderstandingActivityStore((state) => state.memories);
-  const understandingFocuses = useUnderstandingActivityStore((state) => state.focuses);
   const understandingActivityStatus = useUnderstandingActivityStore((state) => state.status);
 
   const signalKindByCategory: Partial<Record<ElectronUnderstandingSourceDefinition['category'], UnderstandingSignalKind>> = {
@@ -493,33 +492,19 @@ export function WorkDiscoveryPage({
     setError(null);
     try {
       const runCandidate = run.result?.profileCandidates?.find((item) => (
-        item.id === candidate.id || Boolean(item.understandingId && item.understandingId === candidate.understandingId)
+        item.id === candidate.id || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
       ));
       const sourceCandidate = understandingMemories.find((item) => (
-        item.id === candidate.id || Boolean(item.understandingId && item.understandingId === candidate.understandingId)
+        item.id === candidate.id || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
       ));
       if (runCandidate) {
         const next = await updateWorkDiscoveryProfile(run.id, [{ id: runCandidate.id, status, ...(statement ? { statement } : {}) }]);
         setRun(next);
         replaceBatchRun(next);
       }
-      if (sourceCandidate?.understandingId) {
-        await useUnderstandingActivityStore.getState().reviewMemory(sourceCandidate.understandingId, status === 'accepted', statement);
+      if (sourceCandidate?.assertionId) {
+        await useUnderstandingActivityStore.getState().reviewMemory(sourceCandidate.assertionId, status === 'accepted', statement);
       }
-      return true;
-    } catch (cause) {
-      setError(errorText(cause));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const reviewFocus = async (focusId: string, accepted: boolean) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await useUnderstandingActivityStore.getState().reviewFocus(focusId, accepted);
       return true;
     } catch (cause) {
       setError(errorText(cause));
@@ -928,13 +913,11 @@ export function WorkDiscoveryPage({
             key={run.id}
             run={run}
             sourceMemories={understandingMemories}
-            focuses={[...(run.result.focusCandidates ?? []), ...understandingFocuses]}
             activityRunning={understandingActivityStatus === 'running'}
             language={language}
             busy={busy}
             error={error}
             onReviewMemory={reviewMemory}
-            onReviewFocus={(focus, accepted) => reviewFocus(focus.id, accepted)}
             onFinish={completeUnderstandingReveal}
             onStartConversation={startConversationFromUnderstanding}
           />

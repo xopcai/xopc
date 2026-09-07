@@ -10,14 +10,11 @@ import type { SessionIndex } from '../../session/manager.js';
 import {
   closeXopcDatabase,
   createContextEvidence,
-  createUnderstanding,
-  getUnderstanding,
-  linkUnderstandingEvidence,
   openXopcDatabase,
   requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { listUserFocuses, upsertUserFocus } from '../../user-context/sources/repository.js';
+import { getUserAssertion, reconcileAssertion } from '../../user-model/index.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
   recordWorkDiscoverySourceRefresh,
@@ -93,16 +90,17 @@ describe('work discovery repository', () => {
   });
 
   it('activates only accepted work-discovery profile candidates', () => {
-    const record = createUnderstanding({
-      kind: 'project_context', canonicalKey: 'work-discovery:technology:test', scope: { type: 'project', id: 'project-1' },
-      status: 'candidate',
-      explicitness: 'inferred',
-      durability: 'durable',
-      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.9,
-      statement: 'The user works mainly with TypeScript.', createdBy: 'runtime', changeReason: 'test',
-    });
     const evidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'work-discovery:run-2:candidate-1', trustLevel: 'trusted', observedAt: 1 });
-    linkUnderstandingEvidence(record.versionId, evidence.id, 'supports', 0.9);
+    const assertion = reconcileAssertion({
+      subject: { type: 'user', id: 'self' },
+      predicate: 'identity.work_discovery.role:typescript-builder',
+      cardinality: 'single', scope: { type: 'project', id: 'project-1' }, kind: 'identity',
+      value: 'The user works mainly with TypeScript.', normalizedValue: 'typescript builder',
+      statement: 'The user works mainly with TypeScript.', authority: 'system_inferred',
+      confidence: 0.9, inferredImportance: 0.6, consequence: 'low', actionability: 0.5,
+      volatility: 'stable', sensitivity: 'normal', disclosurePolicy: 'referenceable',
+      observedAt: 1, createdBy: 'runtime', evidenceId: evidence.id,
+    }, 1).assertion;
     createWorkDiscoveryRun({
       id: 'run-2',
       idempotencyKey: 'key-2',
@@ -122,10 +120,10 @@ describe('work discovery repository', () => {
         suggestions: [],
         profileCandidates: [{
           id: 'candidate-1',
-          understandingId: record.id,
+          assertionId: assertion.id,
           category: 'role',
           factKey: 'role:typescript-builder',
-          statement: record.statement,
+          statement: assertion.statement,
           confidence: 'high',
           evidence: ['package.json'],
           status: 'pending',
@@ -150,54 +148,12 @@ describe('work discovery repository', () => {
       status: 'edited',
       statement: 'I primarily build TypeScript products.',
     });
-    expect(getUnderstanding(record.id)).toMatchObject({
+    const updatedAssertion = getUserAssertion(updated!.result!.profileCandidates![0]!.assertionId!);
+    expect(updatedAssertion).toMatchObject({
       status: 'active',
       statement: 'I primarily build TypeScript products.',
+      supersedesAssertionId: assertion.id,
     });
-  });
-
-  it('does not activate unreviewed focuses when the summary is confirmed', async () => {
-    createWorkDiscoveryRun({
-      id: 'run-focus-review',
-      idempotencyKey: 'key-focus-review',
-      source: 'manual_selected_directory',
-      status: 'completed',
-      stage: 'next_steps',
-      rootPath: '/workspace',
-      projectId: 'project-1',
-      sessionKey: 'session-1',
-      agentId: 'main',
-      modelRef: 'provider/model',
-      scanPolicyVersion: 1,
-      result: {
-        projectSummary: 'A focused project.',
-        currentState: 'Active.',
-        uncertainties: [],
-        suggestions: [],
-      },
-      createdAt: 1,
-      completedAt: 2,
-    });
-    const focus = upsertUserFocus({
-      canonicalKey: 'work-focus:pending-review',
-      title: 'Pending focus',
-      summary: 'This still needs an explicit decision.',
-      horizon: 'current',
-      status: 'candidate',
-      confidence: 0.9,
-      projectId: 'project-1',
-      evidenceRefs: [],
-    });
-    const service = new WorkDiscoveryService({
-      projects: new ProjectService(),
-      sessions: { appendTranscriptContextEntry: async () => {} } as unknown as SessionIndex,
-      getConfig: () => ({}) as Config,
-      emit: () => {},
-    });
-
-    await service.submitRecognitionFeedback({ runId: 'run-focus-review', decision: 'confirmed' });
-
-    expect(listUserFocuses().find((item) => item.id === focus.id)?.status).toBe('candidate');
   });
 
   it('persists and revokes read-only directory sources', () => {
@@ -275,40 +231,4 @@ describe('work discovery repository', () => {
     })).toBeNull();
   });
 
-  it('activates only understanding candidates produced by connected sources', () => {
-    const notesRecord = createUnderstanding({
-      kind: 'routine', canonicalKey: 'work-discovery:workflow:notes', scope: { type: 'global' },
-      status: 'candidate',
-      explicitness: 'inferred',
-      durability: 'recurring',
-      sensitivity: 'normal', disclosurePolicy: 'referenceable', confidence: 0.8,
-      statement: 'The user regularly plans product work in notes.', createdBy: 'runtime', changeReason: 'test',
-    });
-    const notesEvidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'understanding-source:onboarding:notes', trustLevel: 'trusted', observedAt: 1 });
-    linkUnderstandingEvidence(notesRecord.versionId, notesEvidence.id, 'supports', 0.8);
-    const unrelatedRecord = createUnderstanding({
-      kind: 'derived_insight', canonicalKey: 'work-discovery:other', scope: { type: 'global' },
-      status: 'candidate',
-      explicitness: 'inferred', durability: 'durable', sensitivity: 'normal',
-      disclosurePolicy: 'referenceable', confidence: 0.8,
-      statement: 'Unrelated candidate.', createdBy: 'runtime', changeReason: 'test',
-    });
-    const otherEvidence = createContextEvidence({ sourceType: 'runtime', sourceRef: 'work-discovery:run:other', trustLevel: 'trusted', observedAt: 1 });
-    linkUnderstandingEvidence(unrelatedRecord.versionId, otherEvidence.id, 'supports', 0.8);
-    const service = new WorkDiscoveryService({
-      projects: new ProjectService(),
-      sessions: {} as SessionIndex,
-      getConfig: () => ({}) as Config,
-      emit: () => {},
-    });
-
-    const decisions = service.updateUnderstandingSourceProfile({ decisions: [
-      { understandingId: notesRecord.id, status: 'accepted' },
-      { understandingId: unrelatedRecord.id, status: 'accepted' },
-    ] });
-
-    expect(decisions).toHaveLength(1);
-    expect(getUnderstanding(notesRecord.id)?.status).toBe('active');
-    expect(getUnderstanding(unrelatedRecord.id)?.status).toBe('candidate');
-  });
 });

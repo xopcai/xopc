@@ -166,7 +166,7 @@ export interface MemoryWriteRequest {
   /** Agent that produced this record. This is request data, never provider state. */
   sourceAgentId?: string;
   provenance?: Partial<Omit<MemoryProvenance, 'sourceAgentId'>>;
-  writeTarget?: 'agentProfile' | 'understanding' | 'workspace';
+  writeTarget?: 'knowledge';
   confirmed?: boolean;
   tags?: string[];
   source?: MemoryRecord['source'];

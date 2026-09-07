@@ -1,11 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Check, FileText, Loader2, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Check, FileText, Loader2, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
-import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { loadWorkDiscoveryOverlay, preloadRouteForPath } from '@/lib/route-preload';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -34,16 +33,15 @@ export function UnderstandingStatusButton({
   const [reviewError, setReviewError] = useState<string | null>(null);
   const zh = language === 'zh';
   const pendingCount = state.memories.filter((memory) => memory.status === 'pending').length
-    + state.focuses.filter((focus) => focus.status === 'candidate').length
     + (state.directoryRun?.status === 'completed' && !state.directoryRun.feedback?.recognitionDecision ? 1 : 0);
 
   useEffect(() => {
-    if (pathname !== '/you' || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
+    if (pathname !== '/user-model' || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
     const timer = window.setTimeout(state.finish, 800);
     return () => window.clearTimeout(timer);
   }, [pathname, pendingCount, state.drawerOpen, state.finish, state.status]);
 
-  if (pathname !== '/you') return null;
+  if (pathname !== '/user-model') return null;
 
   const preloadWorkDiscovery = () => {
     if (persistent) void loadWorkDiscoveryOverlay();
@@ -59,7 +57,7 @@ export function UnderstandingStatusButton({
 
   if (state.status === 'idle') {
     if (!persistent) return null;
-    const label = messages(language).you.relearn;
+    const label = language === 'zh' ? '重新理解工作上下文' : 'Refresh work context';
     return (
       <Button
         type="button"
@@ -83,8 +81,7 @@ export function UnderstandingStatusButton({
   }
 
   const running = state.status === 'running';
-  const pendingMemory = state.memories.find((memory) => memory.status === 'pending' && memory.understandingId);
-  const pendingFocus = state.focuses.find((focus) => focus.status === 'candidate');
+  const pendingMemory = state.memories.find((memory) => memory.status === 'pending' && memory.assertionId);
   const directoryReady = state.directoryRun?.status === 'completed'
     && state.directoryRun.result != null
     && !state.directoryRun.feedback?.recognitionDecision;
@@ -93,16 +90,9 @@ export function UnderstandingStatusButton({
   const unavailableSources = sourceStatuses.filter((status) => status === 'failed' || status === 'denied' || status === 'partial').length;
 
   const reviewMemory = async (accepted: boolean) => {
-    if (!pendingMemory?.understandingId) return;
+    if (!pendingMemory?.assertionId) return;
     setReviewing(true);
-    await state.reviewMemory(pendingMemory.understandingId, accepted);
-    setReviewing(false);
-  };
-
-  const reviewFocus = async (accepted: boolean) => {
-    if (!pendingFocus) return;
-    setReviewing(true);
-    await state.reviewFocus(pendingFocus.id, accepted);
+    await state.reviewMemory(pendingMemory.assertionId, accepted);
     setReviewing(false);
   };
 
@@ -118,11 +108,11 @@ export function UnderstandingStatusButton({
     try {
       const runCandidate = currentRun.result?.profileCandidates?.find((item) => (
         item.id === candidate.id
-        || Boolean(item.understandingId && item.understandingId === candidate.understandingId)
+        || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
       ));
       const sourceCandidate = state.memories.find((item) => (
         item.id === candidate.id
-        || Boolean(item.understandingId && item.understandingId === candidate.understandingId)
+        || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
       ));
       if (runCandidate) {
         const next = await updateWorkDiscoveryProfile(currentRun.id, [{
@@ -132,27 +122,13 @@ export function UnderstandingStatusButton({
         }]);
         useUnderstandingActivityStore.getState().updateDirectoryRun(next);
       }
-      if (sourceCandidate?.understandingId) {
+      if (sourceCandidate?.assertionId) {
         await useUnderstandingActivityStore.getState().reviewMemory(
-          sourceCandidate.understandingId,
+          sourceCandidate.assertionId,
           status === 'accepted',
           statement,
         );
       }
-      return true;
-    } catch (cause) {
-      setReviewError(cause instanceof Error ? cause.message : String(cause));
-      return false;
-    } finally {
-      setReviewing(false);
-    }
-  };
-
-  const reviewRunFocus = async (focusId: string, accepted: boolean) => {
-    setReviewing(true);
-    setReviewError(null);
-    try {
-      await useUnderstandingActivityStore.getState().reviewFocus(focusId, accepted);
       return true;
     } catch (cause) {
       setReviewError(cause instanceof Error ? cause.message : String(cause));
@@ -249,13 +225,11 @@ export function UnderstandingStatusButton({
               <UnderstandingReveal
                 run={state.directoryRun}
                 sourceMemories={state.memories}
-                focuses={[...(state.directoryRun.result.focusCandidates ?? []), ...state.focuses]}
                 activityRunning={false}
                 language={language}
                 busy={reviewing}
                 error={reviewError}
                 onReviewMemory={reviewRunMemory}
-                onReviewFocus={(focus, accepted) => reviewRunFocus(focus.id, accepted)}
                 onFinish={finishRunReview}
                 onStartConversation={startRunConversation}
               />
@@ -274,22 +248,6 @@ export function UnderstandingStatusButton({
                   <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
                     <Button variant="primary" disabled={reviewing} onClick={() => void reviewMemory(true)}>{reviewing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{zh ? '记住' : 'Remember it'}</Button>
                     <Button variant="secondary" disabled={reviewing} onClick={() => void reviewMemory(false)}>{zh ? '只用于这次' : 'This time only'}</Button>
-                  </div>
-                </article>
-              </section>
-            ) : pendingFocus ? (
-              <section className="xopc-reveal-scene mx-auto flex min-h-full max-w-xl flex-col justify-center text-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{zh ? '当前关注' : 'Current focus'}</p>
-                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-fg">{zh ? '要让我持续关注这个方向吗？' : 'Should I keep this direction in focus?'}</h2>
-                <article className="mt-7 rounded-[1.5rem] border border-edge/80 bg-surface-base/80 p-6 text-left shadow-surface">
-                  <div className="flex items-start gap-4">
-                    <span className="mt-2 size-3 shrink-0 rounded-full bg-accent" />
-                    <div><p className="text-lg font-semibold text-fg">{pendingFocus.title}</p><p className="mt-2 text-sm leading-6 text-fg-muted">{pendingFocus.summary}</p></div>
-                  </div>
-                  <p className="mt-5 flex gap-2 rounded-xl bg-surface-muted px-3 py-2.5 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />{zh ? '关注只影响优先级和提醒，不代表执行授权。' : 'Focus affects priority and reminders, never authorization to act.'}</p>
-                  <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
-                    <Button variant="primary" disabled={reviewing} onClick={() => void reviewFocus(true)}>{reviewing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{zh ? '加入关注' : 'Add to focus'}</Button>
-                    <Button variant="secondary" disabled={reviewing} onClick={() => void reviewFocus(false)}>{zh ? '暂时不用' : 'Not now'}</Button>
                   </div>
                 </article>
               </section>

@@ -1,6 +1,5 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import type { UserFocus } from '@/features/user-context/user-context-api';
 
 export type WorkDiscoveryStatus = 'queued' | 'probing' | 'analyzing' | 'completed' | 'failed' | 'canceled';
 export type WorkDiscoveryStage = 'folder_structure' | 'recent_progress' | 'next_steps';
@@ -29,7 +28,7 @@ export type WorkDiscoverySuggestion = {
 
 export type WorkDiscoveryProfileCandidate = {
   id: string;
-  understandingId?: string;
+  assertionId?: string;
   category: 'role' | 'responsibility' | 'preference' | 'routine';
   factKey: string;
   statement: string;
@@ -68,7 +67,7 @@ export type WorkDiscoveryResult = {
   }>;
   profileCandidates?: WorkDiscoveryProfileCandidate[];
   workThreads?: WorkUnderstandingThread[];
-  focusCandidates?: UserFocus[];
+  knowledgeCandidates?: Array<{ id: string; content: string; status: string }>;
   primarySuggestionId?: string;
   lowConfidence?: boolean;
   contextQuestion?: string;
@@ -196,7 +195,7 @@ export async function grantUnderstandingWorkFolder(
   rootPath: string,
   processingPolicy: WorkDiscoveryProcessingPolicy,
 ): Promise<WorkDiscoveryDirectorySource> {
-  const response = await fetchJson<{ source: WorkDiscoveryDirectorySource }>(apiUrl('/api/understanding/sources/work-folders'), {
+  const response = await fetchJson<{ source: WorkDiscoveryDirectorySource }>(apiUrl('/api/context-sources/work-folders'), {
     method: 'POST',
     body: JSON.stringify({ rootPath, processingPolicy }),
   });
@@ -223,16 +222,16 @@ processingPolicy: WorkDiscoveryProcessingPolicy,
 sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>): Promise<{
   profileCandidates: WorkDiscoveryProfileCandidate[];
   workThreads: WorkUnderstandingThread[];
-  focuses: import('../user-context/user-context-api').UserFocus[];
+  knowledgeCandidates: Array<{ id: string; content: string; status: string }>;
   sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
 }> {
   return fetchJson<{
     profileCandidates: WorkDiscoveryProfileCandidate[];
     workThreads: WorkUnderstandingThread[];
-    focuses: import('../user-context/user-context-api').UserFocus[];
+    knowledgeCandidates: Array<{ id: string; content: string; status: string }>;
     sourceStatuses: Array<{ sourceId: string; status: 'completed' | 'partial' | 'failed'; error?: string }>;
   }>(
-    apiUrl('/api/understanding/bootstrap'),
+    apiUrl('/api/context-sources/bootstrap'),
     {
       method: 'POST',
       body: JSON.stringify({
@@ -245,13 +244,13 @@ sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>
   );
 }
 
-export async function reviewUnderstandingSourceProfile(
-  decisions: Array<{ understandingId: string; status: 'accepted' | 'rejected' }>,
+export async function reviewSourceAssertions(
+  decisions: Array<{ assertionId: string; status: 'accepted' | 'rejected' }>,
 ): Promise<void> {
-  await fetchJson(apiUrl('/api/understanding/review'), {
-    method: 'POST',
-    body: JSON.stringify({ decisions }),
-  });
+  await Promise.all(decisions.map((decision) => fetchJson(
+    apiUrl(`/api/user-model/assertions/${encodeURIComponent(decision.assertionId)}/status`),
+    { method: 'PATCH', body: JSON.stringify({ status: decision.status === 'accepted' ? 'active' : 'rejected' }) },
+  )));
 }
 
 export async function startWorkDiscoveryRun(rootPath: string): Promise<WorkDiscoveryRun> {

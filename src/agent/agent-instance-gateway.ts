@@ -61,10 +61,10 @@ export interface AgentInstanceGateway {
     userMessage: AgentMessage,
     sessionKey: string,
     turnId: string,
-  ): Promise<import('./memory/context/types.js').UserContextPlan>;
+  ): Promise<import('./context/coordinator.js').ExecutionContextPlan>;
 
   /** Post-turn: sync external memory providers, queue next prefetch. */
-  afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('./memory/understanding/types.js').UnderstandingReviewResult | undefined>;
+  afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined>;
 
   /** Bump the per-session "turns since memory review" counter. */
   beginBackgroundReviewUserTurn(sessionKey: string): void;

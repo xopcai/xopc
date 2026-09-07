@@ -1,21 +1,20 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+
+import { buildExecutionContext } from '../../agent/context/execution-context.js';
 import type { Config } from '../../config/schema.js';
+import { getKnowledgeItem } from '../../knowledge-memory/index.js';
 import { parseAgentSessionKey, parseSessionKey } from '../../routing/session-key.js';
-import { getUserProfile, getUnderstanding } from '../../storage/sqlite/user-context-repository.js';
 import { getSessionConfig } from '../../storage/sqlite/config-repository.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { getUserAssertion } from '../../user-model/index.js';
 import { stripRuntimeContextFromUserMessage } from '../../session/user-message-display.js';
-import { remoteContextEligibleIds } from '../../storage/sqlite/remote-context-repository.js';
-import { selectAutomaticContext, type AutomaticContextSelection } from '../../user-context/automatic-context.js';
-import { onUserContextChange } from '../../user-context/changes.js';
-import { getUserFocus } from '../../user-context/sources/repository.js';
-import { allowsAutomaticDisclosure, focusRejectionReason, rejectionReason } from '../../user-context/selection-policy.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('Voice:Memory');
-const policyVersion = (config: Config) => JSON.stringify({ userContext: config.userContext, agents: config.agents });
 
-export interface VoiceMemorySnapshot extends AutomaticContextSelection {
+export interface VoiceMemorySnapshot {
+  block: string;
+  references: Array<{ kind: 'assertion' | 'knowledge'; id: string; updatedAt: number }>;
   isCurrent: () => boolean;
   subscribe: (invalidate: () => void) => () => void;
 }
@@ -30,8 +29,8 @@ export function voiceMemoryEnabled(config: Config, sessionKey: string): boolean 
       || (parts[1] === 'direct' && parts.length >= 3)
       || (parts[2] === 'direct' && parts.length >= 4)));
   const user = config.userContext;
-  if (!parsed || !explicitlyPrivate || parsed.peerKind !== 'direct' || !user.enabled || !user.understanding.enabled
-    || user.memory.mode === 'off' || !user.memory.sources.includes('understanding')) return false;
+  if (!parsed || !explicitlyPrivate || parsed.peerKind !== 'direct' || !user.enabled
+    || !user.userModel.enabled || !user.contextPlanning.enabled) return false;
   const mode = getSessionConfig(sessionKey)?.userContextMode;
   return mode === undefined || mode === 'enabled';
 }
@@ -54,52 +53,48 @@ export function buildVoiceMemoryContext(input: {
 }): VoiceMemorySnapshot | undefined {
   const started = performance.now();
   try {
-    if (!voiceMemoryEnabled(input.getConfig(), input.sessionKey) || input.maxChars < 128) return;
-    const policy = policyVersion(input.getConfig());
-    const workspace = getSessionConfig(input.sessionKey)?.workingDirectoryOverride;
-    const sessionId = getSessionMetadata(input.sessionKey)?.sessionId;
-    const selection = selectAutomaticContext({ ...input, query: voiceMemoryQuery(input.history), deadline: started + 150 });
-    if (!selection.block) return;
-    let invalid = false;
+    const config = input.getConfig();
+    if (!voiceMemoryEnabled(config, input.sessionKey) || input.maxChars < 128) return;
+    const session = getSessionMetadata(input.sessionKey);
+    const context = buildExecutionContext({
+      query: voiceMemoryQuery(input.history),
+      agentId: session?.routing?.agentId ?? 'main',
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      sessionId: input.sessionKey,
+      maxAssertions: 6,
+      maxKnowledge: 3,
+    });
+    const block = JSON.stringify({
+      backgroundMemory: {
+        userFacts: context.assertions.map((item) => item.assertion.statement),
+        priorities: context.priorities.map((item) => `${item.rank}: ${item.targetType}/${item.targetId}`),
+        knowledge: context.knowledge.map((item) => item.content),
+      },
+    });
+    if (block.length > input.maxChars || block === '{"backgroundMemory":{"userFacts":[],"priorities":[],"knowledge":[]}}') return;
+    const references: VoiceMemorySnapshot['references'] = [
+      ...context.assertions.map((item) => ({
+        kind: 'assertion' as const,
+        id: item.assertion.id,
+        updatedAt: item.assertion.recordedAt,
+      })),
+      ...context.knowledge.map((item) => ({ kind: 'knowledge' as const, id: item.id, updatedAt: item.updatedAt })),
+    ];
+    const configVersion = JSON.stringify(config.userContext);
     const isCurrent = () => {
-      try {
-        if (invalid || !voiceMemoryEnabled(input.getConfig(), input.sessionKey)
-          || policy !== policyVersion(input.getConfig())
-          || workspace !== getSessionConfig(input.sessionKey)?.workingDirectoryOverride) return false;
-        const session = getSessionMetadata(input.sessionKey);
-        if (session?.sessionId !== sessionId || session?.projectId !== input.projectId) return false;
-        const understandingIds = selection.references.filter((r) => r.kind === 'understanding').map((r) => r.id);
-        const focusIds = selection.references.filter((r) => r.kind === 'focus').map((r) => r.id);
-        const allowed = new Set([...remoteContextEligibleIds('understanding', understandingIds), ...remoteContextEligibleIds('focus', focusIds)]);
-        return selection.references.every((ref) => {
-          if (ref.kind === 'profile') return ref.version === JSON.stringify(getUserProfile());
-          if (!allowed.has(ref.id)) return false;
-          if (ref.kind === 'focus') {
-            const item = getUserFocus(ref.id);
-            return !!item && item.versionId === ref.version && allowsAutomaticDisclosure(item)
-              && !focusRejectionReason(item, input, Date.now());
-          }
-          const item = getUnderstanding(ref.id);
-          return !!item && item.status === 'active' && item.versionId === ref.version
-            && allowsAutomaticDisclosure(item)
-            && !rejectionReason(item, input, Date.now(), []);
-        });
-      } catch { return false; }
+      if (!voiceMemoryEnabled(input.getConfig(), input.sessionKey)
+        || JSON.stringify(input.getConfig().userContext) !== configVersion) return false;
+      return references.every((reference) => reference.kind === 'assertion'
+        ? getUserAssertion(reference.id)?.recordedAt === reference.updatedAt
+        : getKnowledgeItem(reference.id)?.updatedAt === reference.updatedAt);
     };
-    log.debug({ sessionKey: input.sessionKey, selectedCount: selection.references.length,
-      contextChars: selection.block.length, durationMs: performance.now() - started }, 'Native voice memory selected');
-    return { ...selection, isCurrent, subscribe: (invalidate) => onUserContextChange((change) => {
-      if (change.kind === 'policy'
-        || (change.kind === 'session' && change.id === input.sessionKey && !isCurrent())
-        || selection.references.some((ref) => ref.kind === change.kind && ref.id === change.id)) {
-        if (!isCurrent()) {
-          invalid = true;
-          invalidate();
-        }
-      }
-    }) };
+    log.debug({ sessionKey: input.sessionKey, selectedCount: references.length,
+      contextChars: block.length, durationMs: performance.now() - started }, 'Native voice memory selected');
+    return { block, references, isCurrent, subscribe: () => () => {} };
   } catch {
-    log.warn({ sessionKey: input.sessionKey, durationMs: performance.now() - started }, 'Native voice memory unavailable; continuing with chat history');
+    log.warn({ sessionKey: input.sessionKey, durationMs: performance.now() - started },
+      'Native voice memory unavailable; continuing with chat history');
     return;
   }
 }

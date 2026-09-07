@@ -10,10 +10,10 @@ import { ActivityService } from '../../../../activity/index.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { ExecutionEnvironmentStore } from '../../../../execution-environments/store.js';
 import { ProjectService } from '../../../../projects/index.js';
+import { listKnowledgeItems } from '../../../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
-  listMemoryRecords,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
@@ -756,21 +756,21 @@ describe('project association routes', () => {
       } as unknown as GatewayService['sessions'],
     });
 
-    const first = await app.request(`/api/projects/${project.id}/digest-memory`, { method: 'POST' });
+    const first = await app.request(`/api/projects/${project.id}/digest-knowledge`, { method: 'POST' });
     expect(first.status).toBe(201);
-    const firstBody = (await first.json()) as { record: { id: string; content: string } };
-    expect(firstBody.record.id).toBe(`project-digest:${project.id}`);
-    expect(firstBody.record.content).toContain('Ship the digest flow');
+    const firstBody = (await first.json()) as { knowledge: { id: string; content: string } };
+    expect(firstBody.knowledge.content).toContain('Ship the digest flow');
 
     capture('Review the updated digest');
-    const second = await app.request(`/api/projects/${project.id}/digest-memory`, { method: 'POST' });
+    const second = await app.request(`/api/projects/${project.id}/digest-knowledge`, { method: 'POST' });
     expect(second.status).toBe(201);
-    const secondBody = (await second.json()) as { record: { id: string; content: string } };
-    expect(secondBody.record.id).toBe(firstBody.record.id);
+    const secondBody = (await second.json()) as { knowledge: { id: string; content: string } };
+    expect(secondBody.knowledge.id).toBe(firstBody.knowledge.id);
 
-    const records = listMemoryRecords({ projectId: project.id, kind: 'daily_note', status: 'active', limit: 10 });
+    const records = listKnowledgeItems({ statuses: ['active'], limit: 10 })
+      .filter((item) => item.scope.type === 'project' && item.scope.id === project.id);
     expect(records).toHaveLength(1);
-    expect(records[0]?.id).toBe(`project-digest:${project.id}`);
+    expect(records[0]?.canonicalKey).toBe(`project-digest:${project.id}`);
     expect(records[0]?.content).toContain('Review the updated digest');
   });
 

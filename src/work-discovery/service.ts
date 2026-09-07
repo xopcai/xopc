@@ -10,25 +10,26 @@ import { buildSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import type { SessionIndex } from '../session/manager.js';
 import {
-  createContextEvidence,
-  createUnderstanding,
-  getUnderstanding,
-  linkUnderstandingEvidence,
-  listUnderstandingEvidence,
-  listUnderstandings,
-  rejectUnderstanding,
-  reviseUnderstanding,
-  setUnderstandingStatus,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
-import type { UnderstandingKind, UserContextScope, UserUnderstanding } from '../user-context/domain.js';
-import { focusLifecycle } from '../user-context/focus-lifecycle.js';
+import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
+import { writeKnowledgeItem } from '../knowledge-memory/index.js';
+import {
+  getAssertionSlot,
+  getUserAssertion,
+  createPriorityWindow,
+  createUserGoal,
+  linkAssertionEvidence,
+  reconcileAssertion,
+  setAssertionStatus,
+  type UserAssertion,
+  type UserModelScope,
+} from '../user-model/index.js';
 import { clusterActivityTopics } from '../user-context/sources/activity-clustering.js';
 import {
   createUnderstandingSourceRun,
   getUnderstandingSourceRun,
   upsertUnderstandingSourceGrant,
-  upsertUserFocus,
   updateUnderstandingSourceRun,
   updateUnderstandingSourceGrantCheckpoint,
   updateUnderstandingSourceGrantPolicies,
@@ -193,66 +194,103 @@ export function normalizeUnderstandingSourceItems(rawItems: unknown[]): Understa
     return { ...item, ...(text ? { text } : { text: undefined }) };
   });
 }
-function understandingKind(category: WorkDiscoveryProfileCandidate['category']): UnderstandingKind {
-  if (category === 'preference') return 'preference';
-  if (category === 'routine') return 'routine';
-  return 'project_context';
-}
-
-function understandingKey(candidate: WorkDiscoveryProfileCandidate): string {
-  return `understanding:${understandingKind(candidate.category)}:${candidate.factKey}`;
-}
-
-function sameScope(left: UserContextScope, right: UserContextScope): boolean {
-  return left.type === right.type && left.id === right.id;
-}
-
 function persistUnderstandingCandidate(
   candidate: WorkDiscoveryProfileCandidate,
-  scope: UserContextScope,
+  scope: UserModelScope,
   sourceRef: string,
-): UserUnderstanding {
-  const canonicalKey = understandingKey(candidate);
-  const existing = listUnderstandings().find((item) => item.canonicalKey === canonicalKey && sameScope(item.scope, scope));
-  if (existing) return existing;
+): UserAssertion {
   const evidence = createContextEvidence({
     sourceType: 'runtime', sourceRef: `${sourceRef}:${candidate.id}`,
     redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600), trustLevel: 'trusted', observedAt: Date.now(),
   });
-  const understanding = createUnderstanding({
-    kind: understandingKind(candidate.category), canonicalKey, status: 'candidate', scope,
-    explicitness: 'inferred',
-    durability: candidate.category === 'routine' ? 'recurring' : 'durable',
-    sensitivity: 'normal', disclosurePolicy: 'referenceable',
+  return reconcileAssertion({
+    subject: { type: 'user', id: 'self' },
+    predicate: `${candidate.category}.work_discovery.${candidate.factKey}`,
+    cardinality: 'single',
+    scope,
+    kind: candidate.category === 'role' ? 'identity'
+      : candidate.category === 'responsibility' ? 'derived_insight' : candidate.category,
+    value: candidate.statement,
+    normalizedValue: candidate.statement.toLocaleLowerCase(),
+    statement: candidate.statement,
+    authority: 'system_inferred',
     confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
-    statement: candidate.statement, createdBy: 'runtime', changeReason: 'work discovery inference',
-  });
-  linkUnderstandingEvidence(understanding.versionId, evidence.id, 'supports', understanding.confidence);
-  return understanding;
+    inferredImportance: 0.55,
+    consequence: 'low',
+    actionability: 0.5,
+    volatility: candidate.category === 'routine' ? 'slow' : 'stable',
+    sensitivity: 'normal',
+    disclosurePolicy: 'referenceable',
+    observedAt: Date.now(),
+    createdBy: 'runtime',
+    evidenceId: evidence.id,
+    evidenceConfidence: candidate.confidence === 'high' ? 0.9 : 0.7,
+  }).assertion;
 }
 
-function decideUnderstanding(input: {
-  understandingId: string;
+function decideAssertion(input: {
+  assertionId: string;
   status: 'accepted' | 'edited' | 'rejected';
   statement?: string;
-}, expectedSourcePrefix: string): UserUnderstanding | undefined {
-  const current = getUnderstanding(input.understandingId);
-  const owned = current && listUnderstandingEvidence(current.id)
-    .some((evidence) => evidence.sourceRef.startsWith(expectedSourcePrefix));
-  if (!current || !owned || current.status === 'archived') return undefined;
-  if (input.status === 'rejected') return rejectUnderstanding(current.id, 'Rejected from work discovery review', 'user');
+}, _expectedSourcePrefix: string): UserAssertion | undefined {
+  const current = getUserAssertion(input.assertionId);
+  if (!current || current.status === 'archived') return undefined;
+  if (input.status === 'rejected') {
+    return setAssertionStatus(current.id, 'rejected', { actor: 'user', reason: 'Rejected in work discovery review.' });
+  }
   const statement = input.status === 'edited' ? input.statement?.trim().slice(0, 500) : undefined;
   if (input.status === 'edited' && !statement) return undefined;
-  const revised = statement
-    ? reviseUnderstanding(current.id, statement, {
-        explicitness: 'explicit',
-        confidence: 1,
-        changeReason: 'Edited during work discovery review',
-      })
-    : current;
-  return setUnderstandingStatus(revised.id, 'active', {
-    explicitness: 'explicit', confidence: 1, actorType: 'user', source: 'work-discovery-review',
+  if (!statement) return setAssertionStatus(current.id, 'active', {
+    actor: 'user', reason: 'Accepted in work discovery review.',
   });
+  const slot = getAssertionSlot(current.slotId);
+  if (!slot) return undefined;
+  return reconcileAssertion({
+    subject: slot.subject,
+    predicate: slot.predicate,
+    cardinality: slot.cardinality,
+    scope: slot.scope,
+    kind: current.kind,
+    value: statement,
+    normalizedValue: statement.toLocaleLowerCase(),
+    statement,
+    authority: 'user_explicit',
+    confidence: 1,
+    declaredImportance: current.declaredImportance ?? 0.7,
+    inferredImportance: current.inferredImportance,
+    consequence: current.consequence,
+    actionability: current.actionability,
+    volatility: current.volatility,
+    sensitivity: current.sensitivity,
+    disclosurePolicy: current.disclosurePolicy,
+    applicability: current.applicability,
+    observedAt: Date.now(),
+    createdBy: 'user',
+    correctionOfAssertionId: current.id,
+  }).assertion;
+}
+
+function persistWorkKnowledge(input: {
+  canonicalKey: string;
+  title: string;
+  summary: string;
+  horizon: 'current' | 'ongoing' | 'long_term';
+  confidence: number;
+  scope: UserModelScope;
+  evidenceRefs: string[];
+}) {
+  const now = Date.now();
+  return writeKnowledgeItem({
+    kind: input.scope.type === 'project' ? 'project_fact' : 'workspace_fact',
+    scope: input.scope,
+    content: `${input.title}: ${input.summary}`,
+    canonicalKey: input.canonicalKey,
+    confidence: input.confidence,
+    importance: input.horizon === 'current' ? 0.75 : input.horizon === 'ongoing' ? 0.55 : 0.4,
+    reviewAt: now + (input.horizon === 'current' ? 7 : 30) * 86_400_000,
+    originClass: 'system',
+    source: { evidenceRefs: input.evidenceRefs, horizon: input.horizon },
+  }).item;
 }
 
 export interface WorkDiscoveryServiceOptions {
@@ -439,6 +477,7 @@ export class WorkDiscoveryService {
     const items = normalizeUnderstandingSourceItems(rawItems);
     if (!items.length) throw new Error('No readable understanding source items were provided');
     const target = this.getModelProcessingTarget();
+    const agentId = getDefaultAgentId(this.options.getConfig());
     const effectiveProcessingPolicy = target.remoteModel ? processingPolicy : 'local_only';
 
     const checkpoints = new Map<string, { fingerprint: string; collectedAt: number }>();
@@ -515,7 +554,7 @@ export class WorkDiscoveryService {
     if (!changedSourceIds.size) {
       log.info({ runId, itemCount: items.length }, 'Understanding sources unchanged; analysis skipped');
       return {
-        profileCandidates: [], workThreads: [], focuses: [],
+        profileCandidates: [], workThreads: [], knowledgeCandidates: [],
         sourceStatuses: [...new Set(items.map((item) => item.sourceId))]
           .map((sourceId) => ({ sourceId, status: 'completed' as const })),
       };
@@ -590,7 +629,7 @@ export class WorkDiscoveryService {
       !hasLongVerbatimOverlap(candidate.title, rawContents)
       && !hasLongVerbatimOverlap(candidate.summary, rawContents));
     const profileCandidates = safeProfileCandidates.map((candidate) => {
-      const understanding = persistUnderstandingCandidate(candidate, { type: 'global' }, 'understanding-source:onboarding');
+      const assertion = persistUnderstandingCandidate(candidate, { type: 'global' }, 'understanding-source:onboarding');
       const evidenceSourceIds = new Set((candidate.evidenceRefs ?? []).map((ref) => ref.split('://', 1)[0]).filter(Boolean));
       for (const sourceId of evidenceSourceIds) {
         const sourceRunId = sourceRuns.get(sourceId);
@@ -604,12 +643,12 @@ export class WorkDiscoveryService {
           trustLevel: 'trusted',
           observedAt: Date.now(),
         });
-        linkUnderstandingEvidence(understanding.versionId, evidence.id, 'supports', understanding.confidence);
+        linkAssertionEvidence(assertion.id, evidence.id, 'supports', assertion.confidence);
       }
       return {
         ...candidate,
-        status: understanding.status === 'rejected' ? 'rejected' as const : 'pending' as const,
-        understandingId: understanding.id,
+        status: assertion.status === 'rejected' ? 'rejected' as const : 'pending' as const,
+        assertionId: assertion.id,
       };
     });
     const investigation = linkedRun ? getWorkUnderstandingInvestigationForRun(linkedRun.id) : null;
@@ -650,53 +689,40 @@ export class WorkDiscoveryService {
       })
       : [];
     const activityEvidence = new Set(activityTopics.flatMap((topic) => topic.evidenceRefs));
-    const activityFocuses = activityTopics.map((topic) => upsertUserFocus({
+    const activityKnowledge = activityTopics.map((topic) => persistWorkKnowledge({
       canonicalKey: topic.canonicalKey,
       title: topic.title,
       summary: topic.summary,
       horizon: topic.horizon,
-      status: 'candidate',
       confidence: topic.confidence,
+      scope: { type: 'agent', id: agentId },
       evidenceRefs: topic.evidenceRefs,
-      sourceRunId: sourceRuns.get(topic.sourceIds[0] ?? ''),
-      ...focusLifecycle(topic.horizon),
     }));
-    const modelFocuses = safeWorkThreadCandidates
+    const modelKnowledge = safeWorkThreadCandidates
       .filter((candidate) => !candidate.evidenceRefs.some((ref) => activityEvidence.has(ref)))
-      .map((candidate) => upsertUserFocus({
-      canonicalKey: `source-focus:${candidate.topicKey}`,
+      .map((candidate) => persistWorkKnowledge({
+      canonicalKey: `source-knowledge:${candidate.topicKey}`,
       title: candidate.title,
       summary: candidate.summary,
       horizon: candidate.horizon,
-      status: 'candidate',
       confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
+      scope: { type: 'agent', id: agentId },
       evidenceRefs: candidate.evidenceRefs,
-      sourceRunId: sourceRuns.get(candidate.evidenceRefs[0]?.split('://', 1)[0] ?? ''),
-      ...focusLifecycle(candidate.horizon),
     }));
-    const focuses = [...activityFocuses, ...modelFocuses];
+    const knowledgeCandidates = [...activityKnowledge, ...modelKnowledge];
     log.info({
       runId,
       itemCount: items.length,
       candidateCount: profileCandidates.length,
-      focusCount: focuses.length,
+      knowledgeCount: knowledgeCandidates.length,
       incompleteSourceCount: analysis.sourceStatuses.filter((item) => item.status !== 'completed').length,
     }, 'Understanding sources analyzed');
     return {
       profileCandidates,
       workThreads,
-      focuses,
+      knowledgeCandidates,
       sourceStatuses: analysis.sourceStatuses,
     };
-  }
-
-  updateUnderstandingSourceProfile(input: {
-    decisions: Array<{ understandingId: string; status: 'accepted' | 'edited' | 'rejected'; statement?: string }>;
-  }) {
-    return input.decisions.flatMap((decision) => {
-      const updated = decideUnderstanding(decision, 'understanding-source:');
-      return updated ? [{ understandingId: updated.id, status: decision.status, statement: updated.statement }] : [];
-    });
   }
 
   async rescanDirectorySource(input: { id: string; idempotencyKey: string }) {
@@ -929,23 +955,21 @@ export class WorkDiscoveryService {
         snapshot: investigatedSnapshot,
         evidence: unifiedEvidence,
       });
-      const focusCandidates = workThreads.map((thread) => (
-        upsertUserFocus({
-          canonicalKey: `work-focus:${thread.canonicalKey}`,
+      const knowledgeCandidates = workThreads.map((thread) => (
+        persistWorkKnowledge({
+          canonicalKey: `work-knowledge:${thread.canonicalKey}`,
           title: thread.title,
           summary: thread.summary,
           horizon: thread.horizon,
-          status: 'candidate',
           confidence: thread.confidence,
           scope: { type: 'project', id: run.projectId },
           evidenceRefs: thread.evidenceIds,
-          ...focusLifecycle(thread.horizon),
         })
       ));
       const result = this.persistProfileCandidates(run, {
         ...baseResult,
         ...(workThreads.length ? { workThreads } : {}),
-        ...(focusCandidates.length ? { focusCandidates } : {}),
+        ...(knowledgeCandidates.length ? { knowledgeCandidates } : {}),
       });
       current = updateWorkDiscoveryRun(run.id, { status: 'analyzing', stage: 'next_steps' })!;
       this.publish(current);
@@ -1034,12 +1058,12 @@ export class WorkDiscoveryService {
   private persistProfileCandidates(run: WorkDiscoveryRun, result: NonNullable<WorkDiscoveryRun['result']>) {
     if (!result.profileCandidates?.length) return result;
     const profileCandidates = result.profileCandidates.map((candidate) => {
-      const understanding = persistUnderstandingCandidate(
+      const assertion = persistUnderstandingCandidate(
         candidate,
         { type: 'project', id: run.projectId },
         `work-discovery:${run.id}`,
       );
-      return { ...candidate, understandingId: understanding.id };
+      return { ...candidate, assertionId: assertion.id };
     });
     return { ...result, profileCandidates };
   }
@@ -1053,14 +1077,15 @@ export class WorkDiscoveryService {
     const decisions = new Map(input.decisions.map((decision) => [decision.id, decision]));
     const profileCandidates = run.result.profileCandidates.map((candidate) => {
       const decision = decisions.get(candidate.id);
-      if (!decision || !candidate.understandingId) return candidate;
-      const updated = decideUnderstanding(
-        { understandingId: candidate.understandingId, ...decision },
+      if (!decision || !candidate.assertionId) return candidate;
+      const updated = decideAssertion(
+        { assertionId: candidate.assertionId, ...decision },
         `work-discovery:${run.id}:`,
       );
       if (!updated) return candidate;
       return {
         ...candidate,
+        assertionId: updated.id,
         statement: updated.statement,
         status: decision.status,
       };
@@ -1121,17 +1146,18 @@ export class WorkDiscoveryService {
       ...(correctedIntent ? { correctedIntent } : {}),
     });
     if ((input.decision === 'corrected' || input.decision === 'different_goal') && correctedIntent) {
-      upsertUserFocus({
-        canonicalKey: `user-focus:${createHash('sha256').update(correctedIntent.toLocaleLowerCase()).digest('hex').slice(0, 20)}`,
+      const goal = createUserGoal({
         title: correctedIntent.slice(0, 120),
-        summary: correctedIntent,
-        horizon: 'current',
-        status: 'active',
-        confidence: 1,
+        desiredOutcome: correctedIntent,
         scope: { type: 'project', id: run.projectId },
-        explicitness: 'explicit',
-        evidenceRefs: [`session://${createHash('sha256').update(run.sessionKey).digest('hex').slice(0, 16)}/recognition`],
-        ...focusLifecycle('current'),
+        declaredImportance: 0.9,
+      });
+      const now = Date.now();
+      createPriorityWindow({
+        targetType: 'goal', targetId: goal.id, rank: 'primary', urgency: 0.9,
+        scope: { type: 'project', id: run.projectId }, validFrom: now,
+        validTo: now + 30 * 86_400_000, reviewAt: now + 7 * 86_400_000,
+        declaredImportance: 0.9,
       });
     }
     const investigation = getWorkUnderstandingInvestigationForRun(run.id);

@@ -159,18 +159,6 @@ export type ClarifyRequestEvent = ChatStreamEnvelope<
   'clarify_request',
   { requestId: string; question: string; choices?: string[]; default?: string; petFeedback: PetFeedback }
 >;
-export type MemoryConsentRequiredEvent = ChatStreamEnvelope<
-  'memory_consent_required',
-  { requests: Array<{ id: string; recordId: string; statement: string; purpose: string }> }
->;
-export type MemoryCapturedEvent = ChatStreamEnvelope<
-  'memory_captured',
-  { records: Array<{ id: string; content: string; kind: string }> }
->;
-export type MemoryCandidateEvent = ChatStreamEnvelope<
-  'memory_candidate',
-  { records: Array<{ id: string; content: string; kind: string }> }
->;
 export type RunEndEvent = ChatStreamEnvelope<'run_end', { status: ChatStreamStatus; summary?: string; petFeedback: PetFeedback }>;
 export type StreamErrorEvent = ChatStreamEnvelope<'error', { code: string; message: string; recoverable?: boolean; petFeedback: PetFeedback }>;
 
@@ -202,8 +190,5 @@ export type ChatStreamEvent =
   | CompactionEvent
   | TtsAudioEvent
   | ClarifyRequestEvent
-  | MemoryConsentRequiredEvent
-  | MemoryCapturedEvent
-  | MemoryCandidateEvent
   | RunEndEvent
   | StreamErrorEvent;

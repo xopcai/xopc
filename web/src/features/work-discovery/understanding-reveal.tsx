@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, GitBranch, Loader2, Pencil, ShieldCheck, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, GitBranch, Loader2, Pencil, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import type { UserFocus } from '@/features/user-context/user-context-api';
 import { cn } from '@/lib/cn';
 
 import type { WorkDiscoveryProfileCandidate, WorkDiscoveryRun } from './api';
 import { understandingConversationStarter } from './understanding-conversation-starter';
 
-type RevealStep = 'summary' | 'memory' | 'focus';
+type RevealStep = 'summary' | 'memory';
 type RecognitionDecision = 'confirmed' | 'corrected';
 
 type UnderstandingRevealProps = {
   run: WorkDiscoveryRun;
   sourceMemories: WorkDiscoveryProfileCandidate[];
-  focuses: UserFocus[];
   activityRunning: boolean;
   language: 'en' | 'zh';
   busy: boolean;
@@ -24,7 +22,6 @@ type UnderstandingRevealProps = {
     status: 'accepted' | 'edited' | 'rejected',
     statement?: string,
   ) => Promise<boolean>;
-  onReviewFocus: (focus: UserFocus, accepted: boolean) => Promise<boolean>;
   onFinish: (decision: RecognitionDecision, correction?: string) => Promise<boolean>;
   onStartConversation: (starter: string, decision: RecognitionDecision) => Promise<boolean>;
 };
@@ -103,13 +100,11 @@ const confidenceRank = { high: 3, medium: 2, low: 1 } as const;
 export function UnderstandingReveal({
   run,
   sourceMemories,
-  focuses,
   activityRunning,
   language,
   busy,
   error,
   onReviewMemory,
-  onReviewFocus,
   onFinish,
   onStartConversation,
 }: UnderstandingRevealProps) {
@@ -132,13 +127,10 @@ export function UnderstandingReveal({
   const memoryCandidate = useMemo(() => {
     const unique = new Map<string, WorkDiscoveryProfileCandidate>();
     for (const candidate of [...(run.result?.profileCandidates ?? []), ...sourceMemories]) {
-      if (candidate.status === 'pending') unique.set(candidate.understandingId ?? candidate.id, candidate);
+      if (candidate.status === 'pending') unique.set(candidate.assertionId ?? candidate.id, candidate);
     }
     return [...unique.values()].sort((a, b) => confidenceRank[b.confidence] - confidenceRank[a.confidence])[0];
   }, [run.result?.profileCandidates, sourceMemories]);
-  const focusCandidate = useMemo(() => (
-    focuses.filter((focus) => focus.status === 'candidate').sort((a, b) => b.confidence - a.confidence)[0]
-  ), [focuses]);
   const workThreads = run.result?.workThreads?.slice(0, 3) ?? [];
   const primarySuggestion = run.result?.suggestions.find((suggestion) => suggestion.id === run.result?.primarySuggestionId)
     ?? run.result?.suggestions[0];
@@ -157,7 +149,6 @@ export function UnderstandingReveal({
     setSummaryConfirmed(true);
     if (activityRunning) return;
     if (memoryCandidate) setStep('memory');
-    else if (focusCandidate) setStep('focus');
     else await finish(nextDecision, correction.trim());
   };
 
@@ -172,22 +163,14 @@ export function UnderstandingReveal({
   useEffect(() => {
     if (!summaryConfirmed || activityRunning || step !== 'summary') return;
     if (memoryCandidate) setStep('memory');
-    else if (focusCandidate) setStep('focus');
     else void finish();
-  }, [activityRunning, focusCandidate, memoryCandidate, step, summaryConfirmed]);
+  }, [activityRunning, memoryCandidate, step, summaryConfirmed]);
 
   const reviewMemory = async (status: 'accepted' | 'edited' | 'rejected', statement?: string) => {
     if (!memoryCandidate) return;
     const completed = await onReviewMemory(memoryCandidate, status, statement);
     if (!completed) return;
-    if (focusCandidate) setStep('focus');
-    else await finish();
-  };
-
-  const reviewFocus = async (accepted: boolean) => {
-    if (!focusCandidate) return;
-    const completed = await onReviewFocus(focusCandidate, accepted);
-    if (completed) await finish();
+    await finish();
   };
 
   return (
@@ -259,18 +242,6 @@ export function UnderstandingReveal({
         </div>
       ) : null}
 
-      {step === 'focus' && focusCandidate ? (
-        <div className="xopc-reveal-scene mx-auto flex w-full max-w-[38rem] flex-1 flex-col justify-center py-10 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.focusEyebrow}</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-fg">{t.focusTitle}</h1>
-          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-edge bg-surface-panel p-7 text-left shadow-elevated sm:p-9">
-            <div className="flex items-start gap-4"><span className="mt-2 size-3 shrink-0 rounded-full bg-accent" /><div><p className="text-xl font-semibold tracking-tight text-fg">{focusCandidate.title}</p><p className="mt-3 text-sm leading-6 text-fg-muted">{focusCandidate.summary}</p><p className="mt-5 flex items-start gap-2 rounded-xl bg-surface-muted/80 px-3 py-2.5 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />{t.focusHint}</p></div></div>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse"><Button variant="primary" disabled={busy} onClick={() => void reviewFocus(true)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{t.activateFocus}</Button><Button variant="secondary" disabled={busy} onClick={() => void reviewFocus(false)}>{t.notNow}</Button></div>
-          </article>
-          <p className="mt-5 text-xs leading-5 text-fg-muted">{t.trustNote}</p>
-          {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
-        </div>
-      ) : null}
     </section>
   );
 }

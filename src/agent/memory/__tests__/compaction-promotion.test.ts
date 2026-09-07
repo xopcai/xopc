@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
-  getMemoryRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
+import { getKnowledgeItem } from '../../../knowledge-memory/index.js';
 import type { TranscriptSourceEntry } from '../../../storage/sqlite/transcript-repository.js';
 import type { CompactionHandover } from '../../../session/compaction-types.js';
 import { promoteCompactionLedger } from '../compaction-promotion.js';
@@ -90,19 +90,18 @@ describe('compaction ledger promotion', () => {
 
     expect(result.episodicRecordIds).toHaveLength(3);
     expect(result.durableRecordIds).toHaveLength(1);
-    expect(getMemoryRecord(result.durableRecordIds[0]!)).toMatchObject({
+    expect(getKnowledgeItem(result.durableRecordIds[0]!)).toMatchObject({
       content: 'Use SQLite as the durable memory authority.',
       status: 'active',
-      durability: 'durable',
-      provenance: { originClass: 'agent', derivedFromRecalledContext: false },
+      originClass: 'agent',
+      derivedFromRecalledContext: false,
     });
     const taintedEpisode = result.episodicRecordIds
-      .map((id) => getMemoryRecord(id))
+      .map((id) => getKnowledgeItem(id))
       .find((record) => record?.content.includes('fetched policy'));
     expect(taintedEpisode).toMatchObject({
       status: 'candidate',
-      durability: 'ephemeral',
-      provenance: { originClass: 'untrusted' },
+      originClass: 'untrusted',
     });
   });
 
@@ -130,6 +129,6 @@ describe('compaction ledger promotion', () => {
       ],
     });
     expect(result.durableRecordIds).toEqual([]);
-    expect(getMemoryRecord(interactive.durableRecordIds[0]!)?.status).toBe('active');
+    expect(getKnowledgeItem(interactive.durableRecordIds[0]!)?.status).toBe('active');
   });
 });
