@@ -20,6 +20,87 @@ function harness() {
 afterEach(() => vi.useRealTimers());
 
 describe('mobile persistent voice controller', () => {
+  it('captures audio progress and preserves diagnostics after hanging up', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.event('response.text.delta', { responseId: 'answer', delta: 'Hello' });
+    h.connection().audio('answer', new Uint8Array([1, 0, 2, 0]));
+    await Promise.resolve();
+    h.audio().played('answer', 4);
+    h.event('response.done', { responseId: 'answer', audio: true, finishReason: 'completed' });
+    await h.controller.end();
+    expect(h.controller.getDiagnostics()).toMatchObject({ phase: 'idle', finding: 'played', responses: [
+      { textCharacters: 5, receivedBytes: 4, queuedBytes: 4, playedBytes: 4, peakAmplitude: 2, finishReason: 'completed' },
+    ] });
+  });
+  it('distinguishes generation, received audio, and native playback progress', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    expect(h.controller.getSnapshot().responseStage).toBe('thinking');
+    h.connection().audio('answer', new Uint8Array(4800));
+    expect(h.controller.getSnapshot().responseStage).toBe('buffering');
+    h.audio().played('answer', 2400);
+    expect(h.controller.getSnapshot().responseStage).toBe('speaking');
+    h.event('response.done', { responseId: 'answer', audio: true });
+    h.audio().played('answer', 4800);
+    expect(h.controller.getSnapshot().responseStage).toBeUndefined();
+    await h.controller.end();
+  });
+
+  it('pauses with a playback error when arriving audio makes no native progress', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.connection().audio('answer', new Uint8Array(4800));
+    await vi.advanceTimersByTimeAsync(3000);
+    h.connection().audio('answer', new Uint8Array(4800));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'paused', error: 'PLAYBACK_STALLED' });
+    expect(h.deps.audio.stop).toHaveBeenCalled();
+    await h.controller.end();
+  });
+
+  it('allows long generation gaps once all received audio has played', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.connection().audio('answer', new Uint8Array(4800));
+    h.audio().played('answer', 4800);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(h.controller.getSnapshot().phase).toBe('connected');
+    expect(h.controller.getSnapshot().responseStage).toBe('thinking');
+    h.connection().audio('answer', new Uint8Array(4800));
+    expect(h.controller.getSnapshot().responseStage).toBe('buffering');
+    await vi.advanceTimersByTimeAsync(4000);
+    h.audio().played('answer', 7200);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(h.controller.getSnapshot().phase).toBe('connected');
+    await h.controller.stopReply();
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(h.controller.getSnapshot().error).toBeUndefined();
+    await h.controller.end();
+  });
+
+  it('reports text-only replies and clears the old failure on a new response', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.event('response.text.delta', { responseId: 'answer', delta: 'Hello' });
+    h.event('response.done', { responseId: 'answer', audio: false });
+    expect(h.controller.getSnapshot().error).toBe('NO_RESPONSE_AUDIO');
+    h.event('response.created', { responseId: 'next' });
+    expect(h.controller.getSnapshot().error).toBeUndefined();
+    await h.controller.end();
+  });
+
+  it('keeps a generation failure instead of replacing it with a text-only warning', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.event('response.text.delta', { responseId: 'answer', delta: 'Hello' });
+    h.event('session.error', { code: 'RESPONSE_FAILED', recoverable: true });
+    h.event('response.done', { responseId: 'answer', audio: false });
+    expect(h.controller.getSnapshot().error).toBe('RESPONSE_FAILED');
+    await h.controller.end();
+  });
   it('stops locally without sending an input or accepting late audio', async () => {
     const h = harness(); await h.controller.start(target);
     h.event('response.created', { responseId: 'old' });
