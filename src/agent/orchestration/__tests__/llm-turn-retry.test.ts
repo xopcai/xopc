@@ -20,6 +20,9 @@ describe('llm-turn-retry', () => {
   it('classifies retry and recovery decisions', () => {
     expect(classifyLlmFailure('TypeError: fetch failed')).toBe('transient_network');
     expect(classifyLlmFailure('maximum context length exceeded')).toBe('context_overflow');
+    expect(classifyLlmFailure(
+      'Codex error: Your input exceeds the context window of this model. Please adjust your input and try again.',
+    )).toBe('context_overflow');
     expect(classifyLlmFailure('AbortError')).toBe('aborted');
     expect(classifyLlmFailure('Invalid API key')).toBe('permanent');
   });

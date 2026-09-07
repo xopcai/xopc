@@ -259,10 +259,17 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(retryOptions.signal?.aborted).toBe(true);
   });
 
-  it('passes the run-lease signal to context overflow compaction', async () => {
-    mocks.assistantError.mockReturnValueOnce('maximum context length exceeded');
+  it.each([
+    'maximum context length exceeded',
+    'Codex error: Your input exceeds the context window of this model. Please adjust your input and try again.',
+  ])('compacts and resumes with the run-lease signal after overflow: %s', async (errorMessage) => {
+    mocks.assistantError.mockReturnValueOnce(errorMessage);
+    const compactedMessages: AgentMessage[] = [
+      { role: 'user', content: 'Preserved pending request', timestamp: 1 },
+    ];
+    mocks.loadMessages.mockResolvedValueOnce(compactedMessages);
 
-    await runXopcEmbeddedTurn({
+    const result = await runXopcEmbeddedTurn({
       sessionKey: 'agent:main:test',
       runId: 'run-overflow',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
@@ -282,6 +289,12 @@ describe('runXopcEmbeddedTurn image input', () => {
       true,
       { signal: mocks.leaseController?.signal },
     );
+    expect(mocks.compact).toHaveBeenCalledOnce();
+    expect(mocks.loadMessages).toHaveBeenCalledOnce();
+    expect(mocks.session.agent.state.messages).toEqual(compactedMessages);
+    expect(mocks.session.agent.continue).toHaveBeenCalledOnce();
+    expect(mocks.waitForIdle).toHaveBeenCalledTimes(2);
+    expect(result.ok).toBe(true);
   });
 
   it('marks run ownership conflicts as non-retryable harness failures', async () => {

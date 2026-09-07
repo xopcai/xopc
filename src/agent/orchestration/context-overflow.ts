@@ -1,5 +1,6 @@
 const CONTEXT_OVERFLOW_PATTERNS = [
   /context(?:_|\s|-)*(?:length|window).*(?:exceed|limit|maximum|too (?:large|long))/i,
+  /\bexceed(?:s|ed)?\s+(?:the\s+)?context(?:_|\s|-)*(?:length|window)\b/i,
   /maximum context length/i,
   /max(?:imum)? tokens?.*(?:exceed|limit)/i,
   /too many tokens/i,
