@@ -107,6 +107,7 @@ export type NoteDetailPanelProps = {
   clearHeaderOnCleanup?: boolean;
   onOpenSearch?: () => void;
   autoFocus?: boolean;
+  initialMode?: EditorMode;
   onAutoFocusConsumed?: () => void;
 };
 
@@ -119,6 +120,7 @@ export function NoteDetailPanel({
   clearHeaderOnCleanup = true,
   onOpenSearch,
   autoFocus = false,
+  initialMode,
   onAutoFocusConsumed,
 }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
@@ -135,6 +137,7 @@ export function NoteDetailPanel({
         clearHeaderOnCleanup={clearHeaderOnCleanup}
         onOpenSearch={onOpenSearch}
         autoFocus={autoFocus}
+        initialMode={initialMode}
         onAutoFocusConsumed={onAutoFocusConsumed}
       />
     </NoteImageLightboxProvider>
@@ -150,6 +153,7 @@ function NoteDetailPanelInner({
   clearHeaderOnCleanup = true,
   onOpenSearch,
   autoFocus = false,
+  initialMode = 'wysiwyg',
   onAutoFocusConsumed,
 }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
@@ -158,7 +162,7 @@ function NoteDetailPanelInner({
   const navigate = useNavigate();
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
   const { openImage } = useNoteImageLightbox();
-  const [mode, setMode] = useState<EditorMode>('wysiwyg');
+  const [mode, setMode] = useState<EditorMode>(initialMode);
   const [activeSidePanel, setActiveSidePanel] = useState<'history' | 'breakdown' | null>(null);
   const [previewSnapshot, setPreviewSnapshot] = useState<NoteSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
@@ -184,7 +188,7 @@ function NoteDetailPanelInner({
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
-  const { data: note, mutate } = useSWR(
+  const { data: note, mutate, error: loadError } = useSWR(
     noteId ? ['note-detail', noteId] : null,
     () => getNote(noteId),
   );
@@ -587,10 +591,15 @@ function NoteDetailPanelInner({
   }, [noteId]);
 
   if (note === undefined) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+    if (loadError) return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center" role="alert">
+        <p className="text-sm text-danger">{n.home.loadFailed}</p>
+        <button type="button" onClick={() => void mutate().catch(showRefreshError)} className="rounded-lg border border-edge px-3 py-2 text-sm text-fg hover:bg-surface-hover">{n.home.retry}</button>
+        <button type="button" onClick={onBack} className="text-sm text-fg-muted hover:text-fg">{n.back}</button>
       </div>
+    );
+    return (
+      <EditorFallback />
     );
   }
 

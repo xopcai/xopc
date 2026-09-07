@@ -98,6 +98,8 @@ export interface Note {
   status: NoteStatus;
   /** Canonical note body. Markdown is the only content truth. */
   markdown: string;
+  /** Provenance of the latest content edit, independent of snapshot throttling. */
+  lastEditTrigger?: SnapshotTrigger;
   attachments?: NoteAttachment[];
   createdAt: number;
   updatedAt: number;
@@ -135,6 +137,16 @@ export interface NoteIndexEntry {
   taskCount?: number;
   uncheckedTaskCount?: number;
   linkCount?: number;
+  projects?: Array<{ id: string; name: string }>;
+  lastEditTrigger?: SnapshotTrigger;
+}
+
+export interface NoteProjectSummary {
+  id: string;
+  name: string;
+  description?: string;
+  noteCount: number;
+  updatedAt?: number;
 }
 
 export interface NotesIndexFile {
@@ -166,6 +178,8 @@ export interface NotesListQuery {
   kind?: NoteKind;
   tag?: string;
   projectId?: string;
+  unassigned?: boolean;
+  agentEdited?: boolean;
   pinned?: boolean;
   search?: string;
   limit?: number;

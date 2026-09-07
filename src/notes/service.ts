@@ -13,6 +13,7 @@ import { partitionAttachmentsByReference } from './note-attachment-sync.js';
 import { parseNoteMarkdown } from './note-markdown.js';
 import { buildNoteAgentContextArtifact, getCachedNoteAgentContextArtifact } from './agent-context.js';
 import { NotesStore } from './store.js';
+import { listNoteProjectSummaries } from '../storage/sqlite/notes-repository.js';
 import type {
   CaptureSource,
   CreateNoteParams,
@@ -308,6 +309,7 @@ export class NotesService {
     if (contentTouched) await this.maybeSaveSnapshot(existing, trigger);
 
     const normalizedPatch: Partial<Note> = { ...patch };
+    if (contentTouched) normalizedPatch.lastEditTrigger = trigger;
     if (patch.markdown !== undefined) {
       normalizedPatch.kind = patch.kind ?? inferKind(patch.markdown, Boolean(existing.attachments?.length), existing.attachments);
     }
@@ -476,6 +478,10 @@ export class NotesService {
     return this.store.listNotes(query);
   }
 
+  listProjectSummaries() {
+    return listNoteProjectSummaries();
+  }
+
   async addAttachment(noteId: string, file: {
     name: string;
     buffer: Buffer;
@@ -553,7 +559,7 @@ export class NotesService {
     await this.maybeSaveSnapshot(existing, 'restore');
     this.lastSnapshotAt.set(noteId, Date.now());
     await this.store.pruneSnapshots(noteId, MAX_SNAPSHOTS_PER_NOTE);
-    return this.store.updateNote(noteId, { title: snapshot.title, markdown: snapshot.markdown, tags: snapshot.tags, kind: snapshot.kind, status: snapshot.status });
+    return this.store.updateNote(noteId, { title: snapshot.title, markdown: snapshot.markdown, tags: snapshot.tags, kind: snapshot.kind, status: snapshot.status, lastEditTrigger: 'restore' });
   }
 
   async moveToGroup(noteId: string, groupId: string | null): Promise<Note | null> { return this.updateNote(noteId, { groupId: groupId ?? undefined }); }

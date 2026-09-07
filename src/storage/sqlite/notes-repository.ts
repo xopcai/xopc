@@ -1,4 +1,4 @@
-import type { Note, NoteIndexEntry, NotesListQuery } from '../../notes/types.js';
+import type { Note, NoteIndexEntry, NoteProjectSummary, NotesListQuery } from '../../notes/types.js';
 import { buildNoteIndexMeta, extractAttachmentFileNames, notePlainText } from '../../notes/note-index-meta.js';
 import { escapeFts5Query } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
@@ -26,6 +26,8 @@ type NoteRow = {
   task_count: number | null;
   unchecked_task_count: number | null;
   link_count: number | null;
+  projects_json?: string;
+  last_edit_trigger?: Note['lastEditTrigger'];
 };
 
 function parseTags(json: string): string[] {
@@ -70,6 +72,8 @@ function rowToIndexEntry(row: NoteRow): NoteIndexEntry {
     taskCount: row.task_count ?? undefined,
     uncheckedTaskCount: row.unchecked_task_count ?? undefined,
     linkCount: row.link_count ?? undefined,
+    projects: row.projects_json ? JSON.parse(row.projects_json) : [],
+    lastEditTrigger: row.last_edit_trigger ?? undefined,
   };
 }
 
@@ -268,6 +272,16 @@ export function listNoteRecords(
     );
     params.push(query.projectId);
   }
+  if (query.unassigned) {
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM object_links l JOIN projects p ON p.project_id = l.to_id
+      WHERE l.relation = 'belongs_to' AND l.from_kind = 'note'
+        AND l.from_id = notes.note_id AND l.to_kind = 'project'
+    )`);
+  }
+  if (query.agentEdited) {
+    conditions.push(`json_extract(payload_json, '$.lastEditTrigger') = 'ai_edit'`);
+  }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const rows = db
@@ -275,7 +289,15 @@ export function listNoteRecords(
       `SELECT note_id, title, kind, status, payload_json, created_at, updated_at,
               pinned, tags_json, snippet, cover_attachment_id, voice_attachment_id,
               voice_duration_sec, attachment_names_json, group_id, last_opened_at,
-              task_done, task_due_at, heading_count, task_count, unchecked_task_count, link_count
+              task_done, task_due_at, heading_count, task_count, unchecked_task_count, link_count,
+              json_extract(payload_json, '$.lastEditTrigger') AS last_edit_trigger,
+              (SELECT json_group_array(json_object('id', project_id, 'name', name)) FROM (
+                SELECT DISTINCT p.project_id, p.name FROM object_links l
+                JOIN projects p ON p.project_id = l.to_id
+                WHERE l.from_kind = 'note' AND l.from_id = notes.note_id
+                  AND l.to_kind = 'project' AND l.relation = 'belongs_to'
+                ORDER BY p.name, p.project_id
+              )) AS projects_json
        FROM notes ${where}`,
     )
     .all(...params) as NoteRow[];
@@ -323,4 +345,24 @@ export function listNoteRecords(
   const hasMore = offset + items.length < total;
 
   return { items, total, limit, offset, hasMore };
+}
+
+export function listNoteProjectSummaries(): NoteProjectSummary[] {
+  const rows = getSqliteDatabase().prepare(`
+    SELECT p.project_id, p.name, p.description,
+      COUNT(DISTINCT n.note_id) AS note_count, MAX(n.updated_at) AS note_updated_at
+    FROM projects p
+    LEFT JOIN object_links l ON l.to_kind = 'project' AND l.to_id = p.project_id
+      AND l.from_kind = 'note' AND l.relation = 'belongs_to'
+    LEFT JOIN notes n ON n.note_id = l.from_id AND n.status != 'trashed'
+    GROUP BY p.project_id
+    ORDER BY (p.pinned_at IS NOT NULL) DESC, MAX(n.updated_at) DESC, p.updated_at DESC, p.project_id
+  `).all() as Array<{
+    project_id: string; name: string; description: string | null;
+    note_count: number; note_updated_at: number | null;
+  }>;
+  return rows.map((row) => ({
+    id: row.project_id, name: row.name, description: row.description ?? undefined,
+    noteCount: row.note_count, updatedAt: row.note_updated_at ?? undefined,
+  }));
 }

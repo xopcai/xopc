@@ -126,6 +126,8 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       kind: kind && VALID_KINDS.has(kind) ? kind : undefined,
       tag: tag || undefined,
       projectId: projectId || undefined,
+      unassigned: c.req.query('unassigned') === 'true' || undefined,
+      agentEdited: c.req.query('agentEdited') === 'true' || undefined,
       search: search || undefined,
       pinned: pinnedRaw === 'true' ? true : pinnedRaw === 'false' ? false : undefined,
       limit: limitRaw ? parseInt(limitRaw, 10) : undefined,
@@ -134,6 +136,10 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : undefined,
     });
     return c.json(result);
+  });
+
+  authenticated.get('/api/notes/project-summaries', (c) => {
+    return c.json({ items: service.notesServiceInstance.listProjectSummaries() });
   });
 
   // POST /api/notes — full create (JSON or multipart)
@@ -278,10 +284,13 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     const body = await c.req.json().catch(() => ({}));
     const routingCfg = service.currentConfig;
+    const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : undefined;
+    const project = projectId ? service.projects.get(projectId) : undefined;
+    if (projectId && !project) return c.json({ error: 'Project not found' }, 400);
     let agentId =
       typeof body.agentId === 'string' && body.agentId.trim()
         ? body.agentId.trim().toLowerCase()
-        : getDefaultAgentId(routingCfg);
+        : project?.defaultAgentId ?? getDefaultAgentId(routingCfg);
     if (!agentExists(agentId, routingCfg)) {
       agentId = getDefaultAgentId(routingCfg);
     }
@@ -299,6 +308,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       if (existingSession) {
         const meta = await service.sessionIndexInstance.getSessionMetadata(existingKey);
         await service.sessionIndexInstance.updateSessionMetadata(existingKey, {
+          ...(projectId ? { projectId } : {}),
           customData: {
             ...(meta?.customData ?? {}),
             genericNewChatShell: false,
@@ -320,6 +330,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     await service.sessionIndexInstance.saveMessages(sessionKey, [], {
       metadata: {
+        ...(projectId ? { projectId } : {}),
         sourceChannel: 'webchat',
         sourceChatId: `default:direct:${peerId}`,
         sessionType: 'chat',
@@ -336,6 +347,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     const meta = await service.sessionIndexInstance.getSessionMetadata(sessionKey);
     await service.sessionIndexInstance.updateSessionMetadata(sessionKey, {
+      ...(projectId ? { projectId } : {}),
       name: noteThreadName(note),
       tags: Array.from(new Set([...(meta?.tags ?? []), 'note'])),
       customData: {
@@ -609,6 +621,10 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   // POST /api/notes/:id/media — upload attachment to existing note
   authenticated.post('/api/notes/:id/media', async (c) => {
     const noteId = c.req.param('id');
+    const idempotencyKey = readIdempotencyKey(c.req.header('idempotency-key'));
+    if (idempotencyKey && idempotencyKey.length > 200) {
+      return c.json({ error: 'Idempotency-Key is too long' }, 400);
+    }
     let body: Record<string, unknown>;
     try {
       body = await c.req.parseBody({ all: true });
@@ -643,7 +659,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       buffer: buf,
       mimeType,
       duration: Number.isFinite(duration) ? duration : undefined,
-    });
+    }, idempotencyKey);
 
     if (!attachment) {
       return c.json(noteNotFound(), 404);
