@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { AppState, DeviceEventEmitter, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Icon, Portal, Text } from 'react-native-paper';
+import { AppState, DeviceEventEmitter, Keyboard, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -15,6 +15,7 @@ import { shouldPauseVoiceForBackground } from './voice-call-controller';
 import { voiceApprovalsOptions, respondVoiceApproval } from '../../query/voice';
 import { useVoicePreferences } from './voice-preferences';
 import { voiceErrorMessage } from './voice-error';
+import { VoiceCallOverlay } from './VoiceCallOverlay';
 
 function approvalValue(value: unknown): string {
   if (value == null) return '';
@@ -63,6 +64,9 @@ export function VoiceCallSurface() {
     const interval = setInterval(() => tick(x => x + 1), 1000);
     return () => clearInterval(interval);
   }, [state.phase]);
+  useEffect(() => {
+    if (state.phase !== 'idle' && state.expanded) Keyboard.dismiss();
+  }, [state.expanded, state.phase]);
   if (state.phase === 'idle') return null;
   const status = state.phase === 'connected'
     ? (state.clarification || pendingApprovals.length > 0) ? m.waiting : state.activity ? m.working : state.responseId ? m.replying : m.connected
@@ -74,8 +78,8 @@ export function VoiceCallSurface() {
     voiceCall.expand(false);
     if (state.target) router.push(`/chat/${encodeURIComponent(state.target.sessionKey)}`);
   };
-  return <>
-    {!state.expanded && <Portal>
+  return <VoiceCallOverlay expanded={state.expanded} onClose={() => voiceCall.expand(false)}>
+    {!state.expanded ?
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
         <View style={[styles.miniBar, { top: insets.top + spacing.sm, backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
           <Pressable style={styles.miniBody} accessibilityRole="button" accessibilityLabel={m.expand} onPress={() => voiceCall.expand()}>
@@ -92,8 +96,7 @@ export function VoiceCallSurface() {
           </Pressable>
         </View>
       </View>
-    </Portal>}
-    <Modal visible={state.expanded} animationType="slide" onRequestClose={() => voiceCall.expand(false)}>
+    :
       <View style={[styles.screen, { backgroundColor: colors.surface.base, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <Pressable style={styles.headerButton} accessibilityRole="button" accessibilityLabel={m.minimize} onPress={() => voiceCall.expand(false)}>
@@ -155,8 +158,8 @@ export function VoiceCallSurface() {
           </Pressable>
         </View>
       </View>
-    </Modal>
-  </>;
+    }
+  </VoiceCallOverlay>;
 }
 const styles = StyleSheet.create({
   screen: { flex: 1 }, grow: { flex: 1 },
