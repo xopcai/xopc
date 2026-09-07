@@ -14,7 +14,10 @@ export type SideChatView = {
   status: 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'closing';
   createdAt: string;
   lastActiveAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
+  serverNow?: string;
+  runId?: string;
+  clarification?: { requestId: string; question: string; choices?: string[] };
   messageCount: number;
   context: {
     parentSessionKey: string;
@@ -32,6 +35,8 @@ export type SideChatTab = {
   parentSessionKey: string;
   title: string;
   runId?: string;
+  ended?: 'idle' | 'waiting' | 'unavailable';
+  fresh?: boolean;
 };
 
 export type SideChatConversation = {

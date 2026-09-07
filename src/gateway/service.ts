@@ -525,7 +525,12 @@ export class GatewayService {
       getDefaultModelRef: (sessionKey) => this.ensureAgentService().getModelForSession(sessionKey),
       getWorkspacePath: (metadata) => metadata.cwd || this.currentWorkspacePath,
       onBeforeDispose: (sideChatId, clientInstanceId) =>
-        sideChatRuns?.abort(sideChatId, clientInstanceId).then(() => undefined),
+        sideChatRuns?.cancelRun(sideChatId, clientInstanceId).then(() => undefined),
+      onExpired: (sideChatId, clientInstanceId, reason) => {
+        const topic = `side-chat:${clientInstanceId}:${sideChatId}`;
+        this.realtime.broker.publish(topic, 'expired', { reason });
+        this.realtime.completeTopic(topic);
+      },
     });
     this.sideChatRuns = sideChatRuns = new SideChatRunService({
       manager: this.sideChats,

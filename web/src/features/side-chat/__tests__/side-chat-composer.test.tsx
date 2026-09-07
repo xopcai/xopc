@@ -2,6 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideC
   realtime: {
     onEvent: null as null | ((event: { event: string; data?: unknown }) => void),
     onGap: null as null | (() => void),
+    onExpiry: null as null | ((event: { event: string; data?: unknown }) => void),
   },
   sendSideChatInput: vi.fn(async () => 'run-1'),
   sideChatSelections: { current: [] as Array<{ id: string; type: 'text'; text: string; label?: string }> },
@@ -32,7 +34,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
     status: 'idle',
     createdAt: new Date(0).toISOString(),
     lastActiveAt: new Date(0).toISOString(),
-    expiresAt: new Date(1).toISOString(),
+    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     messageCount: 0,
     context: {
       parentSessionKey: 'parent',
@@ -46,6 +48,8 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
   })),
   getSideChatMessages,
   heartbeatSideChat: vi.fn(),
+  extendSideChat: vi.fn(),
+  getSideChatClientInstanceId: () => 'tab-1',
   sendSideChatInput,
 }));
 
@@ -54,6 +58,7 @@ vi.mock('@/features/gateway/gateway-realtime', () => ({
     onEvent: (event: { event: string; data?: unknown }) => void;
     onGap: () => void;
   }) => {
+    if (_topic.startsWith('side-chat:')) { realtime.onExpiry = handlers.onEvent; return () => {}; }
     realtime.onEvent = handlers.onEvent;
     realtime.onGap = handlers.onGap;
     return () => {};
@@ -74,6 +79,7 @@ vi.mock('@/features/chat/messages/message-list', () => ({
   ),
 }));
 
+import { getSideChat, heartbeatSideChat, extendSideChat } from '../side-chat-api';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { SideChatColumn, SideChatConversation } from '../side-chat-column';
@@ -95,6 +101,7 @@ describe('SideChatConversation composer', () => {
     getSideChatMessages.mockResolvedValue([]);
     realtime.onEvent = null;
     realtime.onGap = null;
+    realtime.onExpiry = null;
     resizeCallback = null;
     resizeObserver = null;
     class ResizeObserverMock implements ResizeObserver {
@@ -118,7 +125,7 @@ describe('SideChatConversation composer', () => {
         <SideChatConversation
           sideChatId="side-1"
           onRunIdChange={() => {}}
-          onMissing={() => {}}
+          parentSessionKey="parent"
         />,
       );
     });
@@ -126,7 +133,7 @@ describe('SideChatConversation composer', () => {
 
   afterEach(() => {
     act(() => root.unmount());
-    useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null });
+    useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null, drafts: {}, readings: {} });
     useLocaleStore.setState({ language: 'en' });
     container.remove();
     localStorage.removeItem('xopc:side-chat-close-confirm-disabled:v1');
@@ -281,16 +288,17 @@ describe('SideChatConversation composer', () => {
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<SideChatColumn parentSessionKey="parent" />);
+      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
     });
 
     expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('侧边对话');
     expect(container.querySelector('button')?.textContent).toBe('侧边对话');
     expect(container.querySelector('button[aria-label="新建侧边对话"]')).not.toBeNull();
-    expect(container.querySelector('button[aria-label="关闭侧边对话面板"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="收起侧栏"]')).not.toBeNull();
   });
 
   it('confirms before permanently closing a side chat', async () => {
+    getSideChatMessages.mockResolvedValue([{ role: 'user', content: 'keep me', timestamp: 1 }]);
     useLocaleStore.setState({ language: 'zh' });
     useSideChatStore.setState({
       panes: { parent: { open: true, activeId: 'side-1' } },
@@ -298,14 +306,14 @@ describe('SideChatConversation composer', () => {
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<SideChatColumn parentSessionKey="parent" />);
+      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
     });
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="关闭侧边对话"]')?.click();
     });
 
-    expect(document.body.textContent).toContain('关闭侧边对话？');
+    expect(document.body.textContent).toContain('结束这段临时对话？');
     expect(document.body.textContent).toContain('无法恢复');
     expect(useSideChatStore.getState().tabs).toHaveLength(1);
     expect(deleteSideChat).not.toHaveBeenCalled();
@@ -319,13 +327,14 @@ describe('SideChatConversation composer', () => {
   });
 
   it('can remember not to ask before closing another side chat', async () => {
+    getSideChatMessages.mockResolvedValue([{ role: 'user', content: 'keep me', timestamp: 1 }]);
     useSideChatStore.setState({
       panes: { parent: { open: true, activeId: 'side-1' } },
       tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<SideChatColumn parentSessionKey="parent" />);
+      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
     });
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Close side chat"]')?.click();
@@ -358,7 +367,7 @@ describe('SideChatConversation composer', () => {
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<SideChatColumn parentSessionKey="parent" />);
+      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
     });
 
     const create = container.querySelector<HTMLButtonElement>('button[aria-label="New side chat"]');
@@ -371,4 +380,125 @@ describe('SideChatConversation composer', () => {
     expect(createSideChat).toHaveBeenCalledWith('parent', []);
     expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['side-1', 'side-2']);
   });
+  async function renderColumn() {
+    useSideChatStore.getState().addTab({ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' });
+    await act(async () => { root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>); });
+  }
+
+  it('retains reading content and the draft on expiry, replacing the tab only after a successful new chat', async () => {
+    getSideChatMessages.mockResolvedValue([{ role: 'assistant', content: [{ type: 'text', text: 'useful answer' }], timestamp: 1 }]);
+    await renderColumn();
+    await typeDraft('keep my question');
+    await act(async () => realtime.onExpiry?.({ event: 'expired', data: { reason: 'idle' } }));
+    expect(container.textContent).toContain('Temporary chat ended');
+    expect(container.textContent).toContain('useful answer');
+    expect(container.querySelector('textarea')?.value).toBe('keep my question');
+    expect(useSideChatStore.getState().tabs).toHaveLength(1);
+    expect(sendSideChatInput).not.toHaveBeenCalled();
+    const create = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'New chat with draft');
+    createSideChat.mockRejectedValueOnce(new Error('try later'));
+    await act(async () => create?.click());
+    expect(container.querySelector('textarea')?.value).toBe('keep my question');
+    expect(useSideChatStore.getState().tabs[0].id).toBe('side-1');
+    await act(async () => create?.click());
+    expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['side-2']);
+    expect(container.querySelector('textarea')?.value).toBe('keep my question');
+    expect(sendSideChatInput).not.toHaveBeenCalled();
+  });
+
+  it('restores the exact unsent draft when a send loses the expiry race', async () => {
+    await renderConversation();
+    const textarea = await typeDraft('  unfinished question  ');
+    sendSideChatInput.mockRejectedValueOnce(Object.assign(new Error('expired'), { status: 410, body: { code: 'EXPIRED', reason: 'idle' } }));
+    await act(async () => { textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); });
+    expect(container.textContent).toContain('Temporary chat ended');
+    expect(container.querySelector('textarea')?.value).toBe('  unfinished question  ');
+    expect(container.querySelector('[data-testid="message-thread"]')?.textContent ?? '').not.toContain('unfinished question');
+  });
+
+  it('keeps the ending warning after a failed extension and hides it after success', async () => {
+    const view = await getSideChat('side-1');
+    vi.mocked(getSideChat).mockResolvedValueOnce({ ...view, expiresAt: new Date(Date.now() + 4 * 60_000).toISOString() });
+    vi.mocked(extendSideChat).mockRejectedValueOnce(new Error('offline'));
+    await renderConversation();
+    const extend = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Keep open');
+    expect(extend).toBeDefined();
+    await act(async () => extend?.click());
+    expect(container.textContent).toContain('Please retry');
+    expect(container.textContent).toContain('Keep open');
+    vi.mocked(extendSideChat).mockResolvedValueOnce({ ...view, expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() });
+    await act(async () => extend?.click());
+    expect(container.textContent).toContain('Kept open for another 30 minutes');
+    expect(container.textContent).not.toContain('Keep open');
+  });
+
+  it('distinguishes an unavailable chat from a temporary connection failure', async () => {
+    vi.mocked(getSideChat).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await renderColumn();
+    await typeDraft('draft while offline');
+    expect(container.textContent).toContain('Reconnecting');
+    expect(useSideChatStore.getState().tabs[0].ended).toBeUndefined();
+    vi.mocked(getSideChat).mockRejectedValueOnce(Object.assign(new Error('gone'), { status: 404 }));
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    expect(container.textContent).toContain('This temporary chat is no longer available');
+    expect(container.querySelector('textarea')?.value).toBe('draft while offline');
+    expect(useSideChatStore.getState().tabs).toHaveLength(1);
+  });
+
+  it('recovers waiting questions on reload and does not delete when the page is hidden', async () => {
+    const view = await getSideChat('side-1');
+    vi.mocked(getSideChat).mockResolvedValueOnce({ ...view, status: 'waiting-input', runId: 'run-waiting', clarification: { requestId: 'question-1', question: 'Which option?', choices: ['A', 'B'] } });
+    await renderColumn();
+    expect(container.textContent).toContain('Which option?');
+    await act(async () => { window.dispatchEvent(new Event('pagehide')); });
+    expect(deleteSideChat).not.toHaveBeenCalled();
+    expect(useSideChatStore.getState().tabs[0].runId).toBe('run-waiting');
+  });
+
+  it('retains the draft when collapsing and reopening the sidebar', async () => {
+    await renderColumn();
+    await typeDraft('read this later');
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Collapse sidebar"]')?.click());
+    expect(deleteSideChat).not.toHaveBeenCalled();
+    await act(async () => useSideChatStore.getState().setOpen('parent', true));
+    expect(container.querySelector('textarea')?.value).toBe('read this later');
+  });
+
+  it('shows the ended state when a heartbeat finds an expired session and stops polling', async () => {
+    vi.useFakeTimers();
+    try {
+      await renderColumn();
+      vi.mocked(heartbeatSideChat).mockRejectedValueOnce(Object.assign(new Error('expired'), { status: 410, body: { code: 'EXPIRED', reason: 'waiting' } }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      expect(container.textContent).toContain('ended while waiting');
+      const calls = vi.mocked(heartbeatSideChat).mock.calls.length;
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+      expect(vi.mocked(heartbeatSideChat).mock.calls.length).toBe(calls);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('restores a failed send even if the user collapsed the sidebar while it was in flight', async () => {
+    let reject!: (error: Error) => void;
+    sendSideChatInput.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    await renderColumn();
+    const textarea = await typeDraft('do not lose this');
+    await act(async () => textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    await act(async () => root.render(null));
+    await act(async () => reject(new Error('network failed')));
+    expect(useSideChatStore.getState().drafts['side-1']).toBe('do not lose this');
+    expect(useSideChatStore.getState().readings['side-1'].messages).toEqual([]);
+  });
+
+  it('removes an unaccepted optimistic message when expiry arrives before the send response', async () => {
+    let reject!: (error: Error) => void;
+    sendSideChatInput.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+    await renderColumn();
+    const textarea = await typeDraft('pending question');
+    await act(async () => textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    await act(async () => realtime.onExpiry?.({ event: 'expired', data: { reason: 'idle' } }));
+    await act(async () => reject(Object.assign(new Error('expired'), { status: 410 })));
+    expect(container.querySelector('textarea')?.value).toBe('pending question');
+    expect(container.querySelector('[data-testid="message-thread"]')?.textContent ?? '').not.toContain('pending question');
+  });
+
 });

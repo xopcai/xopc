@@ -16,6 +16,7 @@ import type { CreateSideChatInput, SideChatConfig, SideChatStatus, SideChatView 
 const DEFAULT_IDLE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_PER_CLIENT = 5;
 const DEFAULT_MAX_TOTAL = 50;
+const MAX_EXPIRED_RECORDS = 500;
 const log = createLogger('Gateway:SideChat');
 
 interface SideChatEntry extends SideChatView {
@@ -25,7 +26,8 @@ interface SideChatEntry extends SideChatView {
 export class SideChatError extends Error {
   constructor(
     message: string,
-    readonly code: 'INVALID_REQUEST' | 'NOT_FOUND' | 'LIMIT_REACHED' | 'CONFLICT',
+    readonly code: 'INVALID_REQUEST' | 'NOT_FOUND' | 'PARENT_NOT_FOUND' | 'LIMIT_REACHED' | 'CAPACITY_REACHED' | 'CONFLICT' | 'EXPIRED',
+    readonly reason?: 'idle' | 'waiting',
   ) {
     super(message);
   }
@@ -42,10 +44,15 @@ export interface EphemeralSideChatManagerOptions {
   now?: () => number;
   startSweepTimer?: boolean;
   onBeforeDispose?: (sideChatId: string, clientInstanceId: string) => void | Promise<void>;
+  onExpired?: (sideChatId: string, clientInstanceId: string, reason: 'idle' | 'waiting') => void;
 }
 
 export class EphemeralSideChatManager {
   private readonly entries = new Map<string, SideChatEntry>();
+  private readonly reservations = new Map<string, number>();
+  private readonly expired = new Map<string, { clientInstanceId: string; reason: 'idle' | 'waiting'; removeAt: number }>();
+  private readonly disposals = new Map<string, { clientInstanceId: string; promise: Promise<boolean> }>();
+  private stopped = false;
   private readonly now: () => number;
   private readonly idleTtlMs: number;
   private readonly maxPerClient: number;
@@ -73,17 +80,31 @@ export class EphemeralSideChatManager {
     if (!parentSessionKey || !clientInstanceId) {
       throw new SideChatError('parentSessionKey and clientInstanceId are required', 'INVALID_REQUEST');
     }
-    if (this.entries.size >= this.maxTotal) {
-      throw new SideChatError('The side chat capacity has been reached', 'LIMIT_REACHED');
+    await this.sweepExpired();
+    if (this.stopped || this.entries.size + [...this.reservations.values()].reduce((a, b) => a + b, 0) >= this.maxTotal) {
+      throw new SideChatError('The side chat capacity has been reached', 'CAPACITY_REACHED');
     }
     const activeForClient = [...this.entries.values()].filter((entry) => entry.clientInstanceId === clientInstanceId);
-    if (activeForClient.length >= this.maxPerClient) {
+    if (activeForClient.length + (this.reservations.get(clientInstanceId) ?? 0) >= this.maxPerClient) {
       throw new SideChatError(`A client can have at most ${this.maxPerClient} side chats`, 'LIMIT_REACHED');
     }
 
+    this.reservations.set(clientInstanceId, (this.reservations.get(clientInstanceId) ?? 0) + 1);
+    try {
+      return await this.createEntry({ ...input, parentSessionKey, clientInstanceId });
+    } finally {
+      const remaining = (this.reservations.get(clientInstanceId) ?? 1) - 1;
+      if (remaining) this.reservations.set(clientInstanceId, remaining);
+      else this.reservations.delete(clientInstanceId);
+    }
+  }
+
+  private async createEntry(input: CreateSideChatInput): Promise<SideChatView> {
+    const { parentSessionKey, clientInstanceId } = input;
     const metadata = await this.options.getParentMetadata(parentSessionKey);
-    if (!metadata || !metadata.sessionId) throw new SideChatError('Parent session not found', 'NOT_FOUND');
+    if (!metadata || !metadata.sessionId) throw new SideChatError('Parent session not found', 'PARENT_NOT_FOUND');
     const parentMessages = await this.options.loadParentMessages(parentSessionKey);
+    if (this.stopped) throw new SideChatError('Gateway is stopping', 'CAPACITY_REACHED');
     let selections;
     try {
       selections = validateSideChatSelections(input.selections);
@@ -118,6 +139,7 @@ export class EphemeralSideChatManager {
       status: 'idle',
       createdAt,
       lastActiveAt: createdAt,
+      lastSeenAt: createdAt,
       expiresAt: new Date(now + this.idleTtlMs).toISOString(),
       messageCount: 0,
       context: createSideChatContextSnapshot({
@@ -131,11 +153,11 @@ export class EphemeralSideChatManager {
       runtime,
     };
     this.entries.set(id, entry);
-    return toView(entry);
+    return this.toView(entry);
   }
 
   get(id: string, clientInstanceId: string): SideChatView {
-    return toView(this.requireEntry(id, clientInstanceId));
+    return this.toView(this.requireEntry(id, clientInstanceId));
   }
 
   getRuntime(id: string, clientInstanceId: string): InMemoryTranscriptRuntime {
@@ -151,38 +173,63 @@ export class EphemeralSideChatManager {
 
   updateConfig(id: string, clientInstanceId: string, patch: Partial<SideChatConfig>): SideChatView {
     const entry = this.requireEntry(id, clientInstanceId);
-    if (entry.status === 'running') throw new SideChatError('Cannot change config while a run is active', 'CONFLICT');
+    if (entry.status !== 'idle') throw new SideChatError('Cannot change config while a run is active', 'CONFLICT');
     const modelRef = patch.modelRef === undefined ? entry.config.modelRef : normalizeOptionalString(patch.modelRef);
     if (!modelRef) throw new SideChatError('modelRef cannot be empty', 'INVALID_REQUEST');
     entry.config = {
       modelRef,
       thinkingLevel: patch.thinkingLevel === undefined ? entry.config.thinkingLevel : patch.thinkingLevel,
     };
-    this.touchEntry(entry);
-    return toView(entry);
+    return this.toView(entry);
   }
 
   heartbeat(id: string, clientInstanceId: string): SideChatView {
     const entry = this.requireEntry(id, clientInstanceId);
-    this.touchEntry(entry);
-    return toView(entry);
+    entry.lastSeenAt = new Date(this.now()).toISOString();
+    return this.toView(entry);
   }
 
-  setStatus(id: string, clientInstanceId: string, status: SideChatStatus): SideChatView {
+  extend(id: string, clientInstanceId: string): SideChatView {
+    const entry = this.requireEntry(id, clientInstanceId);
+    this.touchEntry(entry);
+    return this.toView(entry);
+  }
+
+  setStatus(id: string, clientInstanceId: string, status: SideChatStatus, runId?: string): SideChatView {
     const entry = this.requireEntry(id, clientInstanceId);
     entry.status = status;
+    if (runId) entry.runId = runId;
+    if (status === 'idle') entry.runId = undefined;
+    if (status === 'idle' || status === 'running') entry.clarification = undefined;
     this.touchEntry(entry);
-    return toView(entry);
+    return this.toView(entry);
+  }
+
+  waitForInput(id: string, clientInstanceId: string, clarification: NonNullable<SideChatView['clarification']>, status: 'waiting-input' | 'waiting-approval' = 'waiting-input'): void {
+    this.setStatus(id, clientInstanceId, status);
+    this.requireEntry(id, clientInstanceId).clarification = clarification;
   }
 
   async dispose(id: string, clientInstanceId: string): Promise<boolean> {
     const entry = this.entries.get(id);
-    if (!entry || entry.clientInstanceId !== clientInstanceId) return false;
+    if (!entry) {
+      const pending = this.disposals.get(id);
+      return pending?.clientInstanceId === clientInstanceId ? pending.promise : false;
+    }
+    if (entry.clientInstanceId !== clientInstanceId) return false;
     entry.status = 'closing';
-    await this.runBeforeDispose(id, clientInstanceId);
     this.entries.delete(id);
-    await evictEmbeddedSessionRunner(entry.runtime.runtimeId, 'side_chat_dispose');
-    return true;
+    const cleanup = (async () => {
+      try {
+        await this.runBeforeDispose(id, clientInstanceId);
+        await evictEmbeddedSessionRunner(entry.runtime.runtimeId, 'side_chat_dispose');
+        return true;
+      } finally {
+        this.disposals.delete(id);
+      }
+    })();
+    this.disposals.set(id, { clientInstanceId, promise: cleanup });
+    return cleanup;
   }
 
   async disposeClient(clientInstanceId: string): Promise<number> {
@@ -194,29 +241,64 @@ export class EphemeralSideChatManager {
   }
 
   async sweepExpired(at = this.now()): Promise<number> {
-    const expired = [...this.entries.values()].filter((entry) => Date.parse(entry.expiresAt) <= at);
-    await Promise.all(expired.map((entry) => this.dispose(entry.id, entry.clientInstanceId)));
+    this.pruneExpiredRecords(at);
+    const expired = [...this.entries.values()].filter((entry) => this.isExpired(entry, at));
+    await Promise.all(expired.map((entry) => this.expireEntry(entry)));
     return expired.length;
   }
 
   async disposeAll(): Promise<void> {
     if (this.sweepTimer) clearInterval(this.sweepTimer);
+    this.stopped = true;
     const entries = [...this.entries.values()];
-    await Promise.all(entries.map((entry) => this.runBeforeDispose(entry.id, entry.clientInstanceId)));
-    this.entries.clear();
-    await Promise.all(entries.map((entry) => evictEmbeddedSessionRunner(entry.runtime.runtimeId, 'side_chat_shutdown')));
+    await Promise.all(entries.map((entry) => this.dispose(entry.id, entry.clientInstanceId)));
+    await Promise.all([...this.disposals.values()].map((entry) => entry.promise));
+    this.expired.clear();
   }
 
   private requireEntry(id: string, clientInstanceId: string): SideChatEntry {
     const entry = this.entries.get(id);
-    if (!entry || entry.clientInstanceId !== clientInstanceId) throw new SideChatError('Side chat not found', 'NOT_FOUND');
-    return entry;
+    if (entry && entry.clientInstanceId !== clientInstanceId) throw new SideChatError('Side chat not found', 'NOT_FOUND');
+    if (entry && this.isExpired(entry, this.now())) {
+      void this.expireEntry(entry).catch((err) => log.warn({ err, sideChatId: id }, 'Side chat expiry cleanup failed'));
+    } else if (entry) return entry;
+    this.pruneExpiredRecords(this.now());
+    const expired = this.expired.get(id);
+    if (expired?.clientInstanceId === clientInstanceId) throw new SideChatError('Side chat expired', 'EXPIRED', expired.reason);
+    throw new SideChatError('Side chat not found', 'NOT_FOUND');
+  }
+
+  private isExpired(entry: SideChatEntry, at: number): boolean {
+    return entry.status !== 'running' && entry.expiresAt !== null && Date.parse(entry.expiresAt) <= at;
+  }
+
+  private expireEntry(entry: SideChatEntry): Promise<boolean> {
+    const reason = entry.status.startsWith('waiting-') ? 'waiting' : 'idle';
+    this.expired.set(entry.id, { clientInstanceId: entry.clientInstanceId, reason, removeAt: this.now() + DEFAULT_IDLE_TTL_MS });
+    this.pruneExpiredRecords(this.now());
+    const cleanup = this.dispose(entry.id, entry.clientInstanceId);
+    try {
+      this.options.onExpired?.(entry.id, entry.clientInstanceId, reason);
+    } catch (err) {
+      log.warn({ err, sideChatId: entry.id }, 'Side chat expiry notification failed');
+    }
+    return cleanup;
+  }
+
+  private pruneExpiredRecords(at: number): void {
+    for (const [id, entry] of this.expired) if (entry.removeAt <= at) this.expired.delete(id);
+    while (this.expired.size > MAX_EXPIRED_RECORDS) this.expired.delete(this.expired.keys().next().value!);
+  }
+
+  private toView(entry: SideChatEntry): SideChatView {
+    const { runtime: _runtime, ...view } = entry;
+    return structuredClone({ ...view, serverNow: new Date(this.now()).toISOString() });
   }
 
   private touchEntry(entry: SideChatEntry): void {
     const now = this.now();
     entry.lastActiveAt = new Date(now).toISOString();
-    entry.expiresAt = new Date(now + this.idleTtlMs).toISOString();
+    entry.expiresAt = entry.status === 'running' ? null : new Date(now + this.idleTtlMs).toISOString();
   }
 
   private async runBeforeDispose(id: string, clientInstanceId: string): Promise<void> {
@@ -226,11 +308,6 @@ export class EphemeralSideChatManager {
       log.warn({ err, sideChatId: id, phase: 'side_chat_abort' }, 'Side chat run cleanup failed');
     }
   }
-}
-
-function toView(entry: SideChatEntry): SideChatView {
-  const { runtime: _runtime, ...view } = entry;
-  return structuredClone(view);
 }
 
 function normalizeOptionalString(value: unknown): string | undefined {

@@ -1,8 +1,9 @@
-import { MessageSquarePlus, MessageSquareText, Plus, Send, ShieldCheck, Square, X } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { MessageList } from '@/features/chat/messages/message-list';
@@ -36,9 +37,12 @@ import {
   getSideChat,
   getSideChatMessages,
   heartbeatSideChat,
+  extendSideChat,
+  getSideChatClientInstanceId,
   sendSideChatInput,
 } from './side-chat-api';
-import type { SideChatView } from './side-chat.types';
+import type { SideChatTab, SideChatView } from './side-chat.types';
+import { buildSideChatReading, limitSideChatDraft, SIDE_CHAT_DRAFT_BYTES, textBytes } from './side-chat-reading';
 
 type SideChatClarifyPrompt = { requestId: string; question: string; choices?: string[] };
 const SIDE_CHAT_CLOSE_CONFIRM_DISABLED_KEY = 'xopc:side-chat-close-confirm-disabled:v1';
@@ -75,6 +79,8 @@ function sideChatErrorMessage(cause: unknown, m: SideChatMessages): string {
   if (code === 'NOT_FOUND') return m.errorNotFound;
   if (code === 'CONFLICT') return m.errorConflict;
   if (code === 'LIMIT_REACHED') return m.errorLimitReached;
+  if (code === 'CAPACITY_REACHED') return m.errorCapacity;
+  if (code === 'PARENT_NOT_FOUND') return m.parentMissing;
   if (code === 'INTERNAL_ERROR') return m.failed;
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -137,8 +143,10 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
     if (!request) return;
     setCreating(true);
     setCreateError(null);
+    const gateway = useGatewayStore.getState();
     void createSideChat(request.parentSessionKey, request.selections)
       .then((sideChat) => {
+        if (useGatewayStore.getState().token !== gateway.token || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
         addTab({ id: sideChat.id, parentSessionKey: sideChat.parentSessionKey, title: 'Side chat' });
       })
       .catch((error) => {
@@ -155,7 +163,11 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
   }, [removeTab]);
 
   const requestCloseTab = useCallback((id: string) => {
-    if (isSideChatCloseConfirmDisabled()) {
+    const state = useSideChatStore.getState();
+    const tab = state.tabs.find((candidate) => candidate.id === id);
+    const reading = state.readings[id];
+    const empty = reading && !reading.messages.length && !reading.truncated && !state.drafts[id]?.trim() && !tab?.runId;
+    if (empty || isSideChatCloseConfirmDisabled()) {
       closeTab(id);
       return;
     }
@@ -210,7 +222,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
       <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-edge px-2">
         {tabs.map((tab) => (
           <div key={tab.id} className={cn('flex h-8 shrink-0 items-center rounded-lg pl-3 text-sm', tab.id === activeId ? 'bg-surface-hover text-fg' : 'text-fg-muted')}>
-            <button type="button" className="max-w-32 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}</button>
+            <button type="button" className="max-w-40 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}{tab.ended ? ` · ${m.endedLabel}` : ''}</button>
             <button type="button" className="flex size-8 items-center justify-center rounded-md hover:bg-surface-active" aria-label={m.closeAria} onClick={() => requestCloseTab(tab.id)}>
               <X className="size-3.5" />
             </button>
@@ -228,32 +240,39 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
           <Plus className="size-4" />
         </Button>
         <Button type="button" variant="ghost" className="ml-auto size-8 shrink-0 p-0" aria-label={m.closePaneAria} onClick={() => setOpen(parentSessionKey, false)}>
-          <X className="size-4" />
+          <ChevronRight className="size-4" />
         </Button>
       </div>
+      {createError && activeTab ? <div className="shrink-0 border-b border-edge px-4 py-2 text-xs text-fg-muted" role="status">
+        <p>{createError}</p>
+        {allTabs.filter((tab) => !tab.ended).map((tab) => <button key={tab.id} type="button" className="mr-2 mt-1 rounded border border-edge px-2 py-1" onClick={() => {
+          setActive(tab.id);
+          window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: tab.parentSessionKey } }));
+        }}>{tab.title === 'Side chat' ? m.title : tab.title}</button>)}
+      </div> : null}
       {activeTab ? (
         <SideChatConversation
-          key={activeTab.id}
+          key={`${activeTab.id}:${token ?? ''}`}
           sideChatId={activeTab.id}
           token={token ?? undefined}
           initialRunId={activeTab.runId}
           onRunIdChange={setTabRunId}
-          onMissing={removeTab}
+          parentSessionKey={parentSessionKey}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 text-center">
           <MessageSquarePlus className="mb-4 size-10 text-fg-muted" strokeWidth={1.5} />
           <h2 className="text-lg font-semibold text-fg">{m.title}</h2>
           <p className="mt-2 max-w-sm text-sm leading-6 text-fg-muted">{m.temporaryDescription}</p>
-          {creating ? <p className="mt-4 text-xs text-fg-muted">{m.creating}</p> : null}
+          {creating ? <Skeleton className="mt-4 h-4 w-32" /> : null}
           {createError ? <p className="mt-4 text-xs text-red-600 dark:text-red-400">{createError}</p> : null}
         </div>
       )}
       <ConfirmDialog
         open={pendingCloseId !== null}
-        title={m.closeConfirmTitle}
-        description={m.closeConfirmDescription}
-        confirmLabel={m.closeConfirmAction}
+        title={tabs.find((tab) => tab.id === pendingCloseId)?.runId ? m.stopCloseTitle : m.closeConfirmTitle}
+        description={tabs.find((tab) => tab.id === pendingCloseId)?.runId ? m.stopCloseDescription : m.closeConfirmDescription}
+        confirmLabel={tabs.find((tab) => tab.id === pendingCloseId)?.runId ? m.stopCloseAction : m.closeConfirmAction}
         cancelLabel={m.closeConfirmCancel}
         checkboxLabel={m.closeConfirmDontAskAgain}
         checkboxChecked={dontAskCloseAgain}
@@ -281,17 +300,37 @@ export function SideChatConversation({
   token,
   initialRunId,
   onRunIdChange,
-  onMissing,
+  parentSessionKey,
 }: {
   sideChatId: string;
   token?: string;
   initialRunId?: string;
   onRunIdChange: (id: string, runId?: string) => void;
-  onMissing: (id: string) => void;
+  parentSessionKey?: string;
 }) {
   const [view, setView] = useState<SideChatView | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState('');
+  const [messages, setMessages] = useState<Message[]>(() => useSideChatStore.getState().readings[sideChatId]?.messages ?? []);
+  const draft = useSideChatStore((state) => state.drafts[sideChatId] ?? '');
+  const setDraft = useCallback((text: string) => useSideChatStore.getState().setDraft(sideChatId, text), [sideChatId]);
+  const [ended, setEnded] = useState<SideChatTab['ended']>(() => useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.ended);
+  const [loading, setLoading] = useState(!ended);
+  const [connectionLost, setConnectionLost] = useState(false);
+  const [extending, setExtending] = useState(false);
+  const [recreating, setRecreating] = useState(false);
+  const [parentMissing, setParentMissing] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [now, setNow] = useState(Date.now);
+  const [clockOffset, setClockOffset] = useState(0);
+  const [showTemporaryInfo, setShowTemporaryInfo] = useState(false);
+  const fresh = useSideChatStore((state) => state.tabs.find((tab) => tab.id === sideChatId)?.fresh);
+  const truncated = useSideChatStore((state) => state.readings[sideChatId]?.truncated ?? false);
+  const activeRef = useRef(true);
+  const endedRef = useRef(ended);
+  const gatewayIdentity = useRef(useGatewayStore.getState());
+  const sameGateway = useCallback(() => gatewayIdentity.current.token === useGatewayStore.getState().token
+    && gatewayIdentity.current.baseUrl === useGatewayStore.getState().baseUrl, []);
+  const isCurrent = useCallback(() => activeRef.current && sameGateway(), [sameGateway]);
+  useEffect(() => { activeRef.current = true; return () => { activeRef.current = false; }; }, []);
   const [running, setRunning] = useState(Boolean(initialRunId));
   const [runId, setRunId] = useState<string | undefined>(initialRunId);
   const [error, setError] = useState<string | null>(null);
@@ -300,6 +339,8 @@ export function SideChatConversation({
   const [clarifyError, setClarifyError] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const messageRevisionRef = useRef(0);
+  const lastViewAt = useRef(0);
+  const submittingRef = useRef(false);
   const pendingUserMessagesRef = useRef(new Map<string, Message>());
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language);
@@ -321,38 +362,153 @@ export function SideChatConversation({
     loadMoreMessages: loadNoOlderSideChatMessages,
   });
 
+  useEffect(() => {
+    if (isCurrent() && (messages.length || !loading)) useSideChatStore.getState().rememberMessages(sideChatId, messages);
+  }, [messages, loading, sideChatId, isCurrent]);
+
+  const finish = useCallback((reason: NonNullable<SideChatTab['ended']>) => {
+    if (!isCurrent() || endedRef.current) return;
+    endedRef.current = reason;
+    messageRevisionRef.current += 1;
+    setEnded(reason);
+    setRunning(false);
+    setRunId(undefined);
+    setClarify(null);
+    setView(null);
+    setNotice('');
+    setError(null);
+    setConnectionLost(false);
+    setLoading(false);
+    setMessages((current) => buildSideChatReading(current).messages);
+    useSideChatStore.getState().markEnded(sideChatId, reason);
+  }, [isCurrent, sideChatId]);
+
+  const handleFailure = useCallback((cause: unknown) => {
+    if (!isCurrent()) return;
+    const failure = cause as { status?: number; body?: { code?: string; reason?: string } };
+    if (failure.body?.code === 'EXPIRED' || failure.status === 410) {
+      finish(failure.body?.reason === 'waiting' ? 'waiting' : 'idle');
+    } else if (failure.status === 404 || failure.body?.code === 'NOT_FOUND') {
+      finish('unavailable');
+    } else {
+      setConnectionLost(true);
+    }
+    setLoading(false);
+  }, [finish, isCurrent]);
+
+  const applyView = useCallback((sideChat: SideChatView) => {
+    if (!isCurrent() || endedRef.current) return;
+    const receivedAt = sideChat.serverNow ? Date.parse(sideChat.serverNow) : 0;
+    if (receivedAt && receivedAt < lastViewAt.current) return;
+    lastViewAt.current = receivedAt;
+    setView(sideChat);
+    setConnectionLost(false);
+    if (sideChat.serverNow) setClockOffset(Date.parse(sideChat.serverNow) - Date.now());
+    setNow(Date.now());
+    setRunning(sideChat.status !== 'idle');
+    setRunId(sideChat.runId);
+    onRunIdChange(sideChatId, sideChat.runId);
+    setClarify(sideChat.clarification ?? null);
+  }, [isCurrent, onRunIdChange, sideChatId]);
+
   const reload = useCallback(async () => {
     const revision = messageRevisionRef.current;
-    const [sideChat, wireMessages] = await Promise.all([getSideChat(sideChatId), getSideChatMessages(sideChatId)]);
-    setView(sideChat);
-    if (messageRevisionRef.current === revision) {
-      setRunning(sideChat.status === 'running' || Boolean(initialRunId));
-      setMessages(reconcilePendingUserMessages(
-        normalizeAgentMessages(wireMessages),
-        pendingUserMessagesRef.current,
-      ));
-    }
-  }, [initialRunId, sideChatId]);
+    try {
+      const [sideChat, wireMessages] = await Promise.all([getSideChat(sideChatId), getSideChatMessages(sideChatId)]);
+      if (!isCurrent() || endedRef.current) return;
+      if (messageRevisionRef.current === revision) {
+        applyView(sideChat);
+        setMessages(reconcilePendingUserMessages(normalizeAgentMessages(wireMessages), pendingUserMessagesRef.current));
+      }
+      setLoading(false);
+    } catch (cause) { handleFailure(cause); }
+  }, [applyView, handleFailure, isCurrent, sideChatId]);
 
   useEffect(() => {
-    void reload().catch((cause: unknown) => {
-      if ((cause as { status?: number })?.status === 404) onMissing(sideChatId);
-      else setError(sideChatErrorMessage(cause, sideChatMessages));
+    if (ended) return;
+    void reload();
+    let polling = false;
+    const sync = async () => {
+      if (polling || endedRef.current) return;
+      polling = true;
+      const revision = messageRevisionRef.current;
+      try {
+        const sideChat = await heartbeatSideChat(sideChatId);
+        if (sideChat && revision === messageRevisionRef.current) applyView(sideChat);
+      } catch (cause) { handleFailure(cause); }
+      finally { polling = false; }
+    };
+    const timer = window.setInterval(() => { setNow(Date.now()); void sync(); }, 30_000);
+    const resume = () => { if (document.visibilityState !== 'hidden') void reload(); };
+    window.addEventListener('online', resume);
+    window.addEventListener('pageshow', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('pageshow', resume);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, [ended, reload, applyView, handleFailure, sideChatId]);
+
+  useEffect(() => {
+    if (ended) return;
+    return subscribeRealtimeTopic(`side-chat:${getSideChatClientInstanceId()}:${sideChatId}`, {
+      onEvent: (event) => { if (event.event === 'expired') finish((event.data as { reason?: string })?.reason === 'waiting' ? 'waiting' : 'idle'); },
+      onGap: () => reload(),
     });
-    const timer = window.setInterval(() => heartbeatSideChat(sideChatId), 60_000);
-    return () => window.clearInterval(timer);
-  }, [onMissing, reload, sideChatId, sideChatMessages]);
+  }, [ended, finish, reload, sideChatId]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(''), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const remainingMs = view?.expiresAt ? Date.parse(view.expiresAt) - (now + clockOffset) : Infinity;
+  const warning = !ended && !connectionLost && remainingMs <= 5 * 60_000;
+  const extend = async () => {
+    if (extending || endedRef.current) return;
+    setExtending(true);
+    try {
+      const sideChat = await extendSideChat(sideChatId);
+      if (!isCurrent() || endedRef.current) return;
+      applyView(sideChat);
+      setError(null);
+      setNotice(sideChatMessages.extended);
+    } catch (cause) {
+      const status = (cause as { status?: number }).status;
+      if (status === 404 || status === 410) handleFailure(cause);
+      if (!endedRef.current) setError(sideChatMessages.extendFailed);
+    } finally { setExtending(false); }
+  };
+
+  const recreate = async () => {
+    const parent = parentSessionKey ?? useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.parentSessionKey;
+    if (!parent || recreating) return;
+    setRecreating(true);
+    setError(null);
+    try {
+      const next = await createSideChat(parent, []);
+      if (!sameGateway()) return;
+      useSideChatStore.getState().replaceTab(sideChatId, { id: next.id, parentSessionKey: parent, title: 'Side chat' });
+    } catch (cause) {
+      if (!isCurrent()) return;
+      if ((cause as { body?: { code?: string } }).body?.code === 'PARENT_NOT_FOUND') setParentMissing(true);
+      setError(sideChatErrorMessage(cause, sideChatMessages));
+    } finally { setRecreating(false); }
+  };
 
   const clarifyVisible = Boolean(clarify);
   const previousClarifyVisibleRef = useRef(clarifyVisible);
   useLayoutEffect(() => {
     const previous = previousClarifyVisibleRef.current;
     previousClarifyVisibleRef.current = clarifyVisible;
-    if (previous === clarifyVisible) return;
+    if (ended || previous === clarifyVisible) return;
     scrollToBottom(false);
     const frame = requestAnimationFrame(() => scrollToBottom(false));
     return () => cancelAnimationFrame(frame);
-  }, [clarifyVisible, scrollToBottom]);
+  }, [clarifyVisible, scrollToBottom, ended]);
 
   const mutateAssistant = useCallback((change: (message: Message) => void) => {
     messageRevisionRef.current += 1;
@@ -369,9 +525,10 @@ export function SideChatConversation({
   }, []);
 
   useEffect(() => {
-    if (!runId) return;
+    if (!runId || ended) return;
     return subscribeRealtimeTopic(`run:${runId}`, {
       onEvent: (event) => {
+        if (!isCurrent() || endedRef.current) return;
         const envelope = event.data as { payload?: Record<string, unknown> } | undefined;
         const payload = envelope?.payload ?? {};
         if (event.event === 'assistant_message_start') mutateAssistant(() => {});
@@ -387,6 +544,7 @@ export function SideChatConversation({
             choices: Array.isArray(payload.choices) ? payload.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
           });
           setClarifyError(null);
+          void reload();
         } else if (event.event === 'error') setError(String(payload.message ?? sideChatMessages.failed));
         else if (event.event === 'run_end') {
           setRunning(false);
@@ -398,11 +556,14 @@ export function SideChatConversation({
       },
       onGap: () => reload(),
     });
-  }, [mutateAssistant, onRunIdChange, reload, runId, sideChatId, sideChatMessages.failed]);
+  }, [ended, isCurrent, mutateAssistant, onRunIdChange, reload, runId, sideChatId, sideChatMessages.failed]);
 
   const submitDraft = () => {
     const content = draft.trim();
-    if (!content || running) return;
+    if (!content || running || submittingRef.current || endedRef.current || connectionLost) return;
+    if (textBytes(content) > SIDE_CHAT_DRAFT_BYTES) { setError(sideChatMessages.draftTooLong); return; }
+    const sentDraft = draft;
+    submittingRef.current = true;
     setDraft('');
     setError(null);
     messageRevisionRef.current += 1;
@@ -418,28 +579,55 @@ export function SideChatConversation({
     setRunning(true);
     void sendSideChatInput(sideChatId, content)
       .then((nextRunId) => {
+        if (!sameGateway() || endedRef.current) return;
+        useSideChatStore.getState().setTabRunId(sideChatId, nextRunId);
+        if (!isCurrent()) return;
         setRunId(nextRunId);
         onRunIdChange(sideChatId, nextRunId);
       })
       .catch((cause: unknown) => {
+        if (!sameGateway()) return;
+        const state = useSideChatStore.getState();
+        if (!isCurrent() && !state.tabs.some((tab) => tab.id === sideChatId)) return;
+        const currentDraft = useSideChatStore.getState().drafts[sideChatId] ?? '';
+        setDraft(currentDraft ? `${sentDraft}\n${currentDraft}` : sentDraft);
         pendingUserMessagesRef.current.delete(optimisticId);
+        const reading = state.readings[sideChatId];
+        if (reading) state.rememberMessages(sideChatId, reading.messages.filter((message) => message.renderKey !== optimisticMessage.renderKey));
+        if (!isCurrent()) return;
         setMessages((current) => current.filter((message) => message.renderKey !== optimisticMessage.renderKey));
         setRunning(false);
-        setError(sideChatErrorMessage(cause, sideChatMessages));
-      });
+        const status = (cause as { status?: number }).status;
+        if (status === 404 || status === 410) handleFailure(cause);
+        else setError(sideChatErrorMessage(cause, sideChatMessages));
+      }).finally(() => { submittingRef.current = false; });
   };
 
   const answerClarify = async (answer: string) => {
-    if (!clarify) return;
+    if (!clarify || endedRef.current) return;
     setClarifySubmitting(true);
     setClarifyError(null);
     try {
       await answerSideChatClarification(sideChatId, clarify.requestId, answer);
       setClarify(null);
+      void reload();
     } catch (cause) {
-      setClarifyError(sideChatErrorMessage(cause, sideChatMessages));
+      if ((cause as { status?: number }).status === 410) handleFailure(cause);
+      else setClarifyError(sideChatErrorMessage(cause, sideChatMessages));
     } finally {
       setClarifySubmitting(false);
+    }
+  };
+
+  const stopRun = async () => {
+    try {
+      await abortSideChat(sideChatId, runId);
+      if (isCurrent()) setClarify(null);
+    } catch (cause) {
+      if (!isCurrent()) return;
+      const status = (cause as { status?: number }).status;
+      if (status === 404 || status === 410) handleFailure(cause);
+      else setError(sideChatErrorMessage(cause, sideChatMessages));
     }
   };
 
@@ -450,7 +638,7 @@ export function SideChatConversation({
       composer?.focus();
       composer?.setSelectionRange(text.length, text.length);
     });
-  }, []);
+  }, [setDraft]);
 
   const saveAssistantAsNote = useCallback(async (content: string) => {
     try {
@@ -466,6 +654,10 @@ export function SideChatConversation({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-5 pt-2 text-xs text-fg-muted">
+        <button type="button" className="rounded px-1 py-1 hover:bg-surface-hover" aria-expanded={showTemporaryInfo} onClick={() => setShowTemporaryInfo((current) => !current)}>{sideChatMessages.temporaryLabel}</button>
+        {showTemporaryInfo ? <p className="mt-1">{sideChatMessages.temporaryDescription}</p> : null}
+      </div>
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
@@ -473,7 +665,12 @@ export function SideChatConversation({
           onScroll={onScroll}
           className="chat-messages h-full overflow-y-auto overflow-x-hidden px-5 py-4 [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]"
         >
-          {messages.length ? (
+          {loading && !messages.length ? (
+            <div className="space-y-5" aria-busy="true" aria-label={sideChatMessages.creating}>
+              <Skeleton className="ml-auto h-12 w-3/4" />
+              <Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-4/5" />
+            </div>
+          ) : messages.length ? (
             <MessageList
               messages={messages}
               authToken={token}
@@ -482,18 +679,19 @@ export function SideChatConversation({
               progress={null}
               reasoningLevel="on"
               registerListContentRef={registerListContentRef}
-              deleteRoundDisabled={running}
+              deleteRoundDisabled={running || Boolean(ended)}
               onSaveAssistantAsNote={saveAssistantAsNote}
-              onEditUserMessage={(message) => editUserMessage(userMessageText(message))}
+              onEditUserMessage={ended ? undefined : (message) => editUserMessage(userMessageText(message))}
               responseFeedbackEnabled={false}
             />
-          ) : (
+          ) : !ended ? (
             <div className="flex min-h-64 flex-col items-center justify-center text-center">
               <MessageSquarePlus className="mb-4 size-9 text-fg-muted" strokeWidth={1.5} />
               <h2 className="text-lg font-semibold text-fg">{sideChatMessages.title}</h2>
-              <p className="mt-2 text-sm text-fg-muted">{sideChatMessages.emptyDescription}</p>
+              <p className="mt-2 text-sm text-fg-muted">{fresh ? sideChatMessages.freshContext : sideChatMessages.emptyDescription}</p>
             </div>
-          )}
+          ) : null}
+          {truncated && ended ? <p className="mt-3 text-xs text-fg-muted">{sideChatMessages.partialReading}</p> : null}
         </div>
         <ScrollToBottomButton
           visible={!atBottom}
@@ -501,7 +699,15 @@ export function SideChatConversation({
           contained
         />
       </div>
-      {clarify ? (
+      {connectionLost && !ended ? <p role="status" className="shrink-0 px-4 py-2 text-xs text-fg-muted">{sideChatMessages.connectionLost}</p> : null}
+      {notice ? <p role="status" className="shrink-0 px-4 py-2 text-xs text-fg-muted">{notice}</p> : null}
+      {warning ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-edge px-4 py-2 text-xs text-fg-muted">
+          <span>{remainingMs <= 0 ? sideChatMessages.verifying : sideChatMessages.expiring.replace('{{minutes}}', String(Math.max(1, Math.ceil(remainingMs / 60_000))))}</span>
+          <Button type="button" variant="ghost" className="ml-auto h-8 text-xs" disabled={extending || remainingMs <= 0} onClick={() => void extend()}>{sideChatMessages.keepAlive}</Button>
+        </div>
+      ) : null}
+      {clarify && !ended ? (
         <div className="shrink-0 border-t border-edge px-3 pt-3">
           <ClarifyPrompt
             prompt={clarify}
@@ -509,15 +715,25 @@ export function SideChatConversation({
             submitError={clarifyError}
             labels={m.chat}
             onSubmit={answerClarify}
-            onCancel={async () => {
-              await abortSideChat(sideChatId, runId);
-              setClarify(null);
-            }}
+            onCancel={stopRun}
           />
         </div>
       ) : null}
       {error ? <p className="border-t border-edge px-4 py-2 text-xs text-red-600 dark:text-red-400">{error}</p> : null}
-      <form onSubmit={(event) => { event.preventDefault(); submitDraft(); }} className="shrink-0 border-t border-edge p-3">
+      {ended ? (
+        <div className="shrink-0 border-t border-edge p-3">
+          <div className="rounded-xl border border-edge bg-surface-panel p-4">
+            <h2 className="text-base font-semibold" aria-live="polite">{ended === 'unavailable' ? sideChatMessages.unavailableTitle : sideChatMessages.expiredTitle}</h2>
+            <p className="mt-2 text-sm text-fg-muted">{parentMissing ? sideChatMessages.parentMissing : ended === 'waiting' ? sideChatMessages.waitExpired : messages.length ? sideChatMessages.expiredDescription : sideChatMessages.unavailableDescription}</p>
+            {draft ? <div className="mt-3"><label htmlFor={`side-chat-draft-${sideChatId}`} className="text-xs text-fg-muted">{sideChatMessages.unsentDraft}</label><textarea id={`side-chat-draft-${sideChatId}`} value={draft} onChange={(event) => setDraft(limitSideChatDraft(event.target.value))} rows={3} className="mt-1 w-full resize-y rounded-lg border border-edge bg-surface-base p-2 text-sm" /></div> : null}
+            <Button type="button" variant="primary" className="mt-4" disabled={recreating} onClick={() => {
+              if (parentMissing) { if (parentSessionKey) useSideChatStore.getState().setOpen(parentSessionKey, false); }
+              else void recreate();
+            }}>{parentMissing ? sideChatMessages.closePaneAria : recreating ? sideChatMessages.creating : draft.trim() ? sideChatMessages.newWithDraft : sideChatMessages.newAria}</Button>
+            {messages.length && !parentMissing ? <p className="mt-2 text-xs text-fg-muted">{sideChatMessages.replaceHint}</p> : null}
+          </div>
+        </div>
+      ) : <form onSubmit={(event) => { event.preventDefault(); submitDraft(); }} className="shrink-0 border-t border-edge p-3">
         <div className="rounded-2xl border border-edge bg-surface-panel p-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15">
           {view?.context.selections.length ? (
             <div
@@ -536,7 +752,11 @@ export function SideChatConversation({
           <textarea
             ref={composerRef}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              const text = event.target.value;
+              if (textBytes(text) > SIDE_CHAT_DRAFT_BYTES) setError(sideChatMessages.draftTooLong);
+              setDraft(limitSideChatDraft(text));
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -553,13 +773,13 @@ export function SideChatConversation({
               <span className="truncate">{sideChatMessages.parentPermissions.replace('{{model}}', view?.config.modelRef ?? '')}</span>
             </span>
             {running ? (
-              <Button type="button" className="size-9 rounded-full p-0" aria-label={m.chat.abort} onClick={() => void abortSideChat(sideChatId, runId)}><Square className="size-3.5 fill-current" /></Button>
+              <Button type="button" className="size-9 rounded-full p-0" aria-label={m.chat.abort} onClick={() => void stopRun()}><Square className="size-3.5 fill-current" /></Button>
             ) : (
-              <Button type="submit" className="size-9 rounded-full p-0" disabled={!draft.trim()} aria-label={m.chat.sendMessage}><Send className="size-4" /></Button>
+              <Button type="submit" className="size-9 rounded-full p-0" disabled={!draft.trim() || connectionLost || textBytes(draft) > SIDE_CHAT_DRAFT_BYTES} aria-label={m.chat.sendMessage}><Send className="size-4" /></Button>
             )}
           </div>
         </div>
-      </form>
+      </form>}
     </div>
   );
 }
