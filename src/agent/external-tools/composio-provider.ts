@@ -24,6 +24,7 @@ import {
   upsertConnectorActionMetadata,
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
+import { ExternalToolSearchError } from './search-error.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
   ExternalToolDescriptor,
@@ -204,12 +205,19 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const available = this.availableInstallations();
     const toolkits = available.installations.map(toolkitFromInstallation);
     if (toolkits.length === 0) return [];
-    const session = await this.adapter.createSession({
-      principalId: available.principalId,
-      toolkits,
-      authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), toolkits),
-    });
-    const result = await session.search({ query, toolkits });
+    let phase: 'create_session' | 'search' = 'create_session';
+    let result: unknown;
+    try {
+      const session = await this.adapter.createSession({
+        principalId: available.principalId,
+        toolkits,
+        authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), toolkits),
+      });
+      phase = 'search';
+      result = await session.search({ query, toolkits });
+    } catch (cause) {
+      throw new ExternalToolSearchError(phase, toolkits, cause);
+    }
     const schemas = result && typeof result === 'object' && !Array.isArray(result)
       ? (result as Record<string, unknown>).toolSchemas
       : undefined;
