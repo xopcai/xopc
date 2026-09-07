@@ -133,8 +133,11 @@ export const MessageList = memo(function MessageList({
     showScrollToBottom,
     scrollToBottom,
     onScroll,
+    onContentSizeChange,
+    onLayout,
     onScrollBeginDrag,
     onScrollEndDrag,
+    onMomentumScrollBegin,
     onMomentumScrollEnd,
   } = useChatListScrollFollow({
     listRef,
@@ -240,7 +243,7 @@ export const MessageList = memo(function MessageList({
     [],
   );
 
-  if (loading) {
+  if (loading && messages.length === 0) {
     return (
       <View style={styles.center}>
         {listHeader}
@@ -361,8 +364,11 @@ export const MessageList = memo(function MessageList({
         keyExtractor={keyExtractor}
         contentContainerStyle={listContentStyle}
         onScroll={onScroll}
+        onContentSizeChange={onContentSizeChange}
+        onLayout={onLayout}
         onScrollBeginDrag={onScrollBeginDrag}
         onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollBegin={onMomentumScrollBegin}
         onMomentumScrollEnd={onMomentumScrollEnd}
         onStartReached={() => {
           if (!hasOlder || loadingOlder) return;

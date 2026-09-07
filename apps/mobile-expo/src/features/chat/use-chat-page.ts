@@ -8,7 +8,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   createDefaultNewSessionPreferences,
   modelPreferenceForAgent,
@@ -46,6 +46,7 @@ import {
   dedupeWireMessages,
   mergeStreamingAssistantIntoMessages,
 } from './session-message-parser';
+import { reconcileMessageRows } from './reconcile-message-rows';
 import { takeNewChatSessionKey } from './session-prefetch';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
@@ -266,11 +267,22 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     chatSession.awaitingSessionRefresh &&
     sessionHistoryQuery.dataUpdatedAt > chatSession.sessionDataUpdatedAtRef.current;
 
+  const committedRowsRef = useRef({ scope: '', messages: [] as Message[] });
+  const rowScope = JSON.stringify([activeGatewayId, sessionKey]);
   const displayMessages = useMemo<Message[]>(() => {
     const base = mergeOptimisticUserMessages(sessionMessages, chatSession.optimisticMessages);
-    if (!chatSession.streamingMsg) return base;
-    return mergeStreamingAssistantIntoMessages(base, chatSession.streamingMsg);
-  }, [sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);
+    const next = chatSession.streamingMsg
+      ? mergeStreamingAssistantIntoMessages(base, chatSession.streamingMsg)
+      : base;
+    return reconcileMessageRows(
+      committedRowsRef.current.scope === rowScope ? committedRowsRef.current.messages : [],
+      next,
+    );
+  }, [rowScope, sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);
+
+  useLayoutEffect(() => {
+    committedRowsRef.current = { scope: rowScope, messages: displayMessages };
+  }, [rowScope, displayMessages]);
 
   useEffect(() => {
     chatSession.displayMessagesRef.current = displayMessages;
@@ -508,7 +520,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
         .then(() => chatSession.setSnackMsg(m.chat.messageCopied))
         .catch(() => chatSession.setSnackMsg(m.chat.messageCopyFailed));
     },
-    [m.chat.messageCopied, m.chat.messageCopyFailed, chatSession],
+    [m.chat.messageCopied, m.chat.messageCopyFailed, chatSession.setSnackMsg],
   );
 
   const handleUserMessageEdit = useCallback(
@@ -516,12 +528,12 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       setComposerSuggestion(text);
       chatSession.setSnackMsg(m.chat.messageReadyToEdit);
     },
-    [m.chat.messageReadyToEdit, chatSession],
+    [m.chat.messageReadyToEdit, chatSession.setSnackMsg],
   );
 
   const handleUserMessageRetry = useCallback((message: Message) => {
     void chatSession.retryMessage(message);
-  }, [chatSession]);
+  }, [chatSession.retryMessage]);
 
   const handleAssistantCopy = useCallback(
     (text: string) => {
@@ -529,7 +541,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
         .then(() => chatSession.setSnackMsg(m.chat.messageCopied))
         .catch(() => chatSession.setSnackMsg(m.chat.messageCopyFailed));
     },
-    [m.chat.messageCopied, m.chat.messageCopyFailed, chatSession],
+    [m.chat.messageCopied, m.chat.messageCopyFailed, chatSession.setSnackMsg],
   );
 
   const handleAssistantSaveToNote = useCallback(
@@ -547,7 +559,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
           savingAssistantNoteRef.current = false;
         });
     },
-    [chatSession, m.chat.messageSavedToNote, m.notesPage.actionFailed, m.notesPage.savedOffline],
+    [chatSession.setSnackMsg, m.chat.messageSavedToNote, m.notesPage.actionFailed, m.notesPage.savedOffline],
   );
 
   const handleAssistantRegenerate = useCallback(

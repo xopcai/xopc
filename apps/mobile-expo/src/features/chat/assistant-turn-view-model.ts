@@ -18,7 +18,6 @@ function hasAssistantAnswerText(content: MessageContent[]): boolean {
   return content.some(
     (block) =>
       block.type === 'text'
-      && block.presentation !== 'pending'
       && block.presentation !== 'narration'
       && Boolean(block.text.trim()),
   );
