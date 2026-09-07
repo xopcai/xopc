@@ -517,3 +517,9 @@ stream `run_end.status` 增加 `suspended`（协同升级 contract 与所有 con
 候选映射覆盖 Gmail、Google Calendar、Google Drive、Slack、Notion 和 Outlook。首次安装仍需要已配置 Composio BYOK 或 XOPC Cloud；缺少环境配置时显示错误与连接器设置入口。MCP URL elicitation 和跨渠道交互属于后续适配范围。
 
 验证包括连接恢复仓储与服务、首次安装、重复点击、后台检查、失效重试、目标更新、会话重置、账号隔离、TaskRun 队列去重、数据库升级、停止语义及 React 操作区测试；另使用 Chrome 检查桌面和 320px 深色界面、详情面板与延迟继续确认。第三方调用在自动测试中使用适配器替身，没有连接真实 Gmail 账号或读取用户邮箱。
+
+### 工具能力故障与授权故障
+
+授权有效不代表任务工具可用。恢复服务在入队前及 worker 消费前检查候选能力对应的动作契约；缺失契约或查询异常保存 `capabilityError`，保留账号、停止自动继续意图，界面展示“应用工具暂不可用”和“重试检查”。检查通过后由用户继续，工具故障不触发 OAuth。
+
+托管工具搜索必须传递实际 `query`。云端将搜索提示按工具 slug 获取完整定义，返回以 slug 为键的统一 `inputSchema`；执行时精确查询目标定义并保留 toolkit、账号所有权、操作策略和幂等校验，不再将一次语义搜索结果视为执行白名单。本地不会发布缺失或无效参数定义的搜索项，也不会用空对象伪造契约。XOPC 与 model-gateway 的此项接口修改需配套发布，不提供旧接口兼容分支。

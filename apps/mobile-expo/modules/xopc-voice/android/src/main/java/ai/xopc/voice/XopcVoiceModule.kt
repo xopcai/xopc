@@ -1,5 +1,6 @@
 package ai.xopc.voice
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.media.*
@@ -13,6 +14,7 @@ import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.functions.Queues
+import java.lang.ref.WeakReference
 
 class XopcVoiceModule : Module() {
   private var recorder: AudioRecord? = null
@@ -31,6 +33,11 @@ class XopcVoiceModule : Module() {
   private var lastPlayed = 0
   private val playbackQueue = VoicePlaybackQueue()
   private var playbackVolume = 1f
+  private var forcedSpeaker = false
+  private var previousAudioMode: Int? = null
+  private var previousSpeakerphone: Boolean? = null
+  private var volumeActivity: WeakReference<Activity>? = null
+  private var previousVolumeStream = AudioManager.USE_DEFAULT_STREAM_TYPE
   private var inputDeviceId: Int? = null
   private var outputDeviceId: Int? = null
   private var inputRoutingListener: AudioRouting.OnRoutingChangedListener? = null
@@ -71,19 +78,39 @@ class XopcVoiceModule : Module() {
     AsyncFunction("flush") { flush() }.runOnQueue(Queues.MAIN)
     AsyncFunction("stop") { stop() }.runOnQueue(Queues.MAIN)
     AsyncFunction("setSpeaker") { enabled: Boolean ->
-      if (Build.VERSION.SDK_INT >= 31) {
-        if (enabled) manager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }?.let { manager.setCommunicationDevice(it) }
-        else manager.clearCommunicationDevice()
-      } else {
-        @Suppress("DEPRECATION")
-        manager.isSpeakerphoneOn = enabled
-      }
+      if (recorder != null) { applyOutputRoute(enabled); forcedSpeaker = enabled }
     }.runOnQueue(Queues.MAIN)
+    OnActivityEntersForeground { handler.post { if (recorder != null) bindVolumeKeys() } }
     OnActivityEntersBackground {
       val generation = epoch
       if (!background && recorder != null) handler.post { if (epoch == generation) interrupt("background") }
     }
     OnDestroy { handler.post { stop() } }
+  }
+
+  private fun bindVolumeKeys() {
+    val activity = appContext.currentActivity ?: return
+    if (volumeActivity?.get() !== activity) {
+      volumeActivity?.get()?.volumeControlStream = previousVolumeStream
+      volumeActivity = WeakReference(activity)
+      previousVolumeStream = activity.volumeControlStream
+    }
+    // Call audio uses its own volume group, including while listening between replies.
+    activity.volumeControlStream = AudioManager.STREAM_VOICE_CALL
+  }
+
+  @Suppress("DEPRECATION")
+  private fun applyOutputRoute(forceSpeaker: Boolean) {
+    val speaker = useVoiceSpeaker(forceSpeaker, manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type })
+    if (Build.VERSION.SDK_INT >= 31) {
+      if (speaker) {
+        val device = manager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        check(device != null && manager.setCommunicationDevice(device)) { "PLAYBACK_UNAVAILABLE" }
+      } else manager.clearCommunicationDevice()
+    } else {
+      if (previousSpeakerphone == null) previousSpeakerphone = manager.isSpeakerphoneOn
+      manager.isSpeakerphoneOn = speaker
+    }
   }
 
   private fun acquireAudioFocus(attributes: AudioAttributes): Boolean {
@@ -180,8 +207,11 @@ class XopcVoiceModule : Module() {
         VoiceCallService.onStop = { interrupt("ended") }
         context.startForegroundService(Intent(context, VoiceCallService::class.java).putExtra("title", title).putExtra("stopLabel", stopLabel))
       }
+      previousAudioMode = manager.mode
       try { manager.mode = AudioManager.MODE_IN_COMMUNICATION }
       catch (error: RuntimeException) { Log.w("XopcVoice", "Communication audio mode is unavailable", error) }
+      bindVolumeKeys()
+      applyOutputRoute(false)
       if (!acquireAudioFocus(attributes)) Log.w("XopcVoice", "Audio focus was not granted; continuing capture")
       val minInput = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
       check(minInput > 0) { "MICROPHONE_FORMAT_UNAVAILABLE" }
@@ -210,6 +240,12 @@ class XopcVoiceModule : Module() {
         }
       }, "xopc-voice-capture").apply { start() }
       devices = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) {
+          if (epoch == generation && !forcedSpeaker) {
+            try { applyOutputRoute(false) }
+            catch (error: RuntimeException) { Log.w("XopcVoice", "Audio output selection failed", error); interrupt("route_lost") }
+          }
+        }
         override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) {
           if (activeAudioDeviceRemoved(removed.map { it.id }, inputDeviceId, outputDeviceId, epoch == generation)) interrupt("route_lost")
         }
@@ -266,7 +302,7 @@ class XopcVoiceModule : Module() {
   }
 
   private fun stop() {
-    if (recorder == null && track == null && focus == null && !background) return
+    if (recorder == null && track == null && focus == null && !background && previousAudioMode == null) return
     epoch++
     capturing = false
     handler.removeCallbacks(progress)
@@ -285,11 +321,19 @@ class XopcVoiceModule : Module() {
     devices?.let { manager.unregisterAudioDeviceCallback(it) }; devices = null
     focus?.let { manager.abandonAudioFocusRequest(it) }; focus = null
     if (Build.VERSION.SDK_INT >= 31) manager.clearCommunicationDevice()
-    manager.mode = AudioManager.MODE_NORMAL
+    else previousSpeakerphone?.let {
+      @Suppress("DEPRECATION")
+      manager.isSpeakerphoneOn = it
+    }
+    previousSpeakerphone = null
+    previousAudioMode?.let { manager.mode = it }; previousAudioMode = null
+    volumeActivity?.get()?.volumeControlStream = previousVolumeStream
+    volumeActivity = null
     VoiceCallService.onStop = null
     context.stopService(Intent(context, VoiceCallService::class.java))
     background = false
     playbackVolume = 1f
+    forcedSpeaker = false
     inputDeviceId = null
     outputDeviceId = null
   }

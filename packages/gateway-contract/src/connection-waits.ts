@@ -7,6 +7,7 @@ export type ConnectionNeed = {
   accountSelector?: string;
   connectionId?: string;
   unavailable?: boolean;
+  capabilityError?: string;
   attempt?: { id: string; connectionId?: string; expiresAt: number };
 };
 

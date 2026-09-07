@@ -65,7 +65,8 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
     description: 'Load exact contracts for up to three external tools returned by xopc_tool_search.',
     parameters: ToolDescribeSchema,
     async execute(_toolCallId, params) {
-      return textResult(await service.describe(params.toolRefs));
+      const result = await service.describe(params.toolRefs);
+      return textResult({ ...result, ...(result.notFound.length ? { instruction: 'These exact tool contracts are unavailable. Do not execute them, invent revisions, or reconnect the account. Use a different available tool or explain the capability failure.' } : {}) });
     },
   };
   const executeTool: AgentTool<typeof ToolExecuteSchema, Record<string, unknown>> = {
@@ -112,6 +113,15 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       if (range) new Intl.DateTimeFormat('en', { timeZone: range.timezone }).format();
       const principal = connectorPrincipalForSession(context.sessionKey);
       if (!principal.isLocalOwner) throw new Error('Connection recovery is available in the owner chat.');
+      const selected = connectionBindings(context.sessionKey);
+      if (params.requirements.every(item => selected.some(need => need.connectorId === item.candidateRef
+        && need.connectionId && (!item.accountId || item.accountId === need.accountId)
+        && (!item.accountSelector || item.accountSelector === need.accountSelector)
+        && listConnectorConnections({ principalId: principal.principalId, connectorId: need.connectorId })
+          .some(connection => connection.id === need.connectionId && connection.status === 'active')))) {
+        return textResult({ status: 'already_connected', selectedConnections: selected,
+          instruction: 'These accounts were already checked for this objective. Missing tool contracts are a tool availability problem. Do not request authorization again or invent a revision. Explain the unavailable capability and stop retrying the same tools.' });
+      }
       const result = requireSessionConnection({ sessionKey: context.sessionKey,
         principalId: principal.principalId, agentId: principal.agentId ?? 'main', summary: params.purpose, checkpoint: params.checkpoint,
         needs: params.requirements.map(item => {

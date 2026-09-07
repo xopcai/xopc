@@ -1,6 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
+import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
 import type { Config } from '../../config/schema.js';
 import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
@@ -261,6 +262,7 @@ export async function* runProcessDirectStreaming(
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
   const sessionKey = input.sessionKey ?? 'agent:main:main';
+  const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(sessionKey, input.runId));
   const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId, input.origin);
 
@@ -460,7 +462,7 @@ export async function* runProcessDirectStreaming(
         }
       }
 
-      if (channel === 'webchat') {
+      if (channel === 'webchat' && !isConnectionResume) {
         pushVisible({
           type: 'user_message',
           timestamp: userMessage.timestamp ?? Date.now(),
@@ -478,7 +480,7 @@ export async function* runProcessDirectStreaming(
       const pendingUserMessage = (turnSourceContexts.length > 0
         ? injectSourceContextsIntoUserMessage(userMessage, turnSourceContexts)
         : userMessage) as TranscriptUserMessage;
-      setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
+      if (!isConnectionResume) setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
 
       try {
         const result = await deps.agentManager.withSkillCapabilities(
@@ -520,7 +522,7 @@ export async function* runProcessDirectStreaming(
           pushVisible({ type: 'error', content: formatStreamError(result.errorMessage) });
         }
       } finally {
-        clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
+        if (!isConnectionResume) clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
       }
     } catch (err) {
       if (err instanceof AsyncQueueOverflowError) {
