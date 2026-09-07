@@ -199,6 +199,7 @@ export interface AutomationMetrics {
 }
 
 export interface PrepareAutomationAgentSessionInput {
+  automationName?: string;
   sessionKey: string;
   projectId?: string;
   agentId: string;

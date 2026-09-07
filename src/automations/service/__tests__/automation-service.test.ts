@@ -289,10 +289,12 @@ describe('AutomationService', () => {
 
   it('retries a failed action within the same durable run', async () => {
     let calls = 0;
+    const sessionKeys: string[] = [];
     service.setDeps({
       agentService: {
         turnDispatcher: {
-          processDirect: async () => {
+          processDirect: async (_message, sessionKey) => {
+            sessionKeys.push(sessionKey);
             calls += 1;
             if (calls === 1) throw new Error('temporary provider failure');
             return 'recovered';
@@ -314,9 +316,29 @@ describe('AutomationService', () => {
     );
 
     expect(calls).toBe(2);
+    expect(new Set(sessionKeys).size).toBe(1);
+    expect(completed?.sessionKey).toBe(sessionKeys[0]);
     expect(completed).toMatchObject({ status: 'succeeded', attemptNumber: 2, rootRunId: queued.id });
     expect((await service.listRunEvents(queued.id)).map((event) => event.type))
       .toContain('action.retry_scheduled');
+  });
+
+  it('retains the session link when an agent action throws', async () => {
+    service.setDeps({ agentService: { turnDispatcher: {
+      processDirect: async () => { throw new Error('No available model candidates'); },
+    } } });
+    const automation = await service.create({
+      name: 'Fail before transcript', trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'hello' },
+    });
+    const queued = await service.runNow(automation.id);
+    const completed = await waitFor(() => service.getRun(queued.id), (run) => run?.status === 'failed');
+    expect(completed?.sessionKey).toContain(queued.id);
+    expect(completed?.error).toBe('No available model candidates');
+    const events = await service.listRunEvents(queued.id);
+    expect(events.find((event) => event.type === 'action.failed')?.data).toMatchObject({
+      sessionKey: completed?.sessionKey,
+    });
   });
 
   it('reclaims a queued durable run after service restart', async () => {

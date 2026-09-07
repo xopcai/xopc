@@ -62,8 +62,9 @@ function isHiddenEmptyProjectChatShell(session: {
 }): boolean {
   return session.hiddenFromSessionList === true
     && session.messageCount === 0
-    && session.customData?.genericNewChatShell !== false
-    && Boolean(session.routing?.peerId?.startsWith('chat_'));
+    && (session.customData?.origin === 'automation'
+      || (session.customData?.genericNewChatShell !== false
+        && Boolean(session.routing?.peerId?.startsWith('chat_'))));
 }
 
 function textField(body: Record<string, unknown>, key: string): string | undefined {
