@@ -5,6 +5,11 @@ import { voiceErrorMessage } from '../voice-error';
 
 describe('voiceErrorMessage', () => {
   it.each([
+    ['PLAYBACK_STALLED', en.voice.playbackFailed],
+    ['PLAYBACK_FAILED', en.voice.playbackFailed],
+    ['playback_failed', en.voice.playbackFailed],
+    ['NO_RESPONSE_AUDIO', en.voice.noResponseAudio],
+    ['RESPONSE_FAILED', en.voice.responseFailed],
     ['audio_focus_lost', en.voice.audioFocusLost],
     ['capture_failed', en.voice.captureFailed],
     ['route_lost', en.voice.routeLost],

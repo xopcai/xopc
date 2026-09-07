@@ -6,6 +6,19 @@ import type { MessageBundle } from './en';
 
 export const zh: MessageBundle = {
   voice: {
+    thinking: '正在准备回复…',
+    buffering: '正在等待声音播放…',
+    speaking: '正在播放回复…',
+    playbackFailed: '声音已收到，但播放中断。请检查通话音量和音频输出后继续通话。',
+    noResponseAudio: '本次回复只有文字，没有生成声音。请检查网关语音服务。',
+    responseFailed: '回复或语音生成失败，请查看对话并检查网关语音服务。',
+    approvalLoadError: '暂时无法获取待确认操作。通话仍保持连接，请刷新确认状态。',
+    approvalSubmitError: '确认未能提交，请先刷新操作状态再重试。',
+    approvalPermission: '当前网关未允许此设备访问确认操作，请更新网关或检查设备权限。',
+    refreshApprovals: '刷新确认状态',
+    copyDiagnostics: '复制声音诊断',
+    diagnosticsCopied: '已复制音频计数和错误码，不含录音与对话文字。',
+    diagnosticsCopyFailed: '复制诊断失败，请重试。',
     "endingSoon": "本次连接将在一分钟内结束，之后可在同一对话中继续。",
     "languageZh": "中文",
     "languageEn": "英语",
