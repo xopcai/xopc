@@ -16,6 +16,7 @@ import { LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
 import { queryKeys } from '../../query/keys';
 import { removeNoteFromListCaches } from '../../query/note-list-cache';
 import { invalidateNoteLists } from '../../query/workspace-sync';
+import { useNoteReadAloud } from '../notes/useNoteReadAloud';
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
 import { NoteViewActionBar, type NoteViewActionBarItem } from '../notes/NoteViewActionBar';
 import { NoteReadSurface } from '../notes/NoteReadSurface';
@@ -273,6 +274,8 @@ export function PageScreen() {
     },
   });
 
+  const { readAloudItem, stopNoteReadAloud } = useNoteReadAloud(id, title, markdown);
+
   const handleDelete = useCallback(async () => {
     if (!id || deleting || deletePending || actionLoading) return;
     setDeleting(true);
@@ -280,6 +283,7 @@ export function PageScreen() {
     Keyboard.dismiss();
     try {
       await prepareSavedNote();
+      stopNoteReadAloud();
       setEditing(false);
       scheduleDelete(id, async () => {
         await deleteNote(id);
@@ -297,7 +301,7 @@ export function PageScreen() {
     } finally {
       setDeleting(false);
     }
-  }, [actionLoading, deletePending, deleting, id, pm.actionFailed, pm.deletePending, prepareSavedNote, queryClient, router, scheduleDelete]);
+  }, [actionLoading, deletePending, deleting, id, pm.actionFailed, pm.deletePending, prepareSavedNote, queryClient, router, scheduleDelete, stopNoteReadAloud]);
 
   const handleCreateTag = useCallback((raw: string) => addNoteTag(raw), [addNoteTag]);
 
@@ -444,9 +448,10 @@ export function PageScreen() {
 
   const startEditing = useCallback((): void => {
     if (deletePending || deleting || actionLoading) return;
+    stopNoteReadAloud();
     editorStartedAtRef.current = Date.now();
     setEditing(true);
-  }, [actionLoading, deletePending, deleting]);
+  }, [actionLoading, deletePending, deleting, stopNoteReadAloud]);
 
   const handleEditorRuntimeState = useCallback((state: { ready: boolean }): void => {
     if (!state.ready || editorStartedAtRef.current === null) return;
@@ -477,6 +482,7 @@ export function PageScreen() {
   ] : [], [actionLoading, editing, finishEditing, handleOpenNoteChat, id, note, pm.done, pm.edit, pm.openChat, pm.viewMore, startEditing]);
 
   const viewActionItems = useMemo<NoteViewActionBarItem[]>(() => [
+    readAloudItem,
     {
       key: 'share',
       icon: 'share-variant-outline',
@@ -505,7 +511,7 @@ export function PageScreen() {
       label: pm.viewMore,
       onPress: () => setMoreVisible(true),
     },
-  ], [actionLoading, handleOpenNoteChat, handleShare, handleTogglePinned, note?.pinned, pm.openChat, pm.pin, pm.unpin, pm.viewMore, pm.viewShare]);
+  ], [readAloudItem, actionLoading, handleOpenNoteChat, handleShare, handleTogglePinned, note?.pinned, pm.openChat, pm.pin, pm.unpin, pm.viewMore, pm.viewShare]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
@@ -624,7 +630,7 @@ export function PageScreen() {
       {showReadActions && !deletePending ? <Text style={{ color: colors.text.tertiary, textAlign: 'center' }}>{pm.noteChatContextHint}</Text> : null}
       {showReadActions && !deletePending ? (
         <NoteViewActionBar
-          items={viewActionItems.map((item) => ({ ...item, disabled: Boolean(actionLoading) || deleting || deletePending }))}
+          items={viewActionItems.map((item) => ({ ...item, disabled: item.disabled || Boolean(actionLoading) || deleting || deletePending }))}
         />
       ) : null}
 

@@ -1569,6 +1569,8 @@ export const en = {
   },
 
   notesPage: {
+    readAloud: 'Read aloud',
+    readAloudBackToNote: 'Back to note',
     deletingNote: 'Deleting note…',
     shareLinkDescription: 'Create a read-only snapshot valid for 24 hours, including referenced attachments. Anyone with the link can view it without signing in. Later edits do not update the snapshot.',
     createShareLink: 'Create share link',
