@@ -106,6 +106,9 @@ export interface MessageContextRef {
 }
 
 export interface Message {
+  /** Local row identity survives optimistic/live-to-history reconciliation. */
+  renderKey?: string;
+  persistedId?: string;
   id?: string;
   turnId?: string;
   role: 'user' | 'assistant' | 'user-with-attachments';

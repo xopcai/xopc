@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeStreamingAssistantIntoMessages } from '../session-message-parser';
+import { mergeStreamingAssistantIntoMessages, parseSessionMessages } from '../session-message-parser';
 import type { Message } from '../messages.types';
 
 describe('mergeStreamingAssistantIntoMessages', () => {
@@ -30,6 +30,32 @@ describe('mergeStreamingAssistantIntoMessages', () => {
     expect(merged).toHaveLength(1);
     expect(merged[0]?.id).toBe('stream-200');
     expect(merged[0]?.content).toEqual(streaming.content);
+  });
+
+  it('does not duplicate committed text when history lacks streaming segment ids', () => {
+    const persisted = parseSessionMessages([
+      { id: 'stored', role: 'assistant', content: 'First sentence. Second sentence.' },
+    ]);
+    const streaming: Message = {
+      id: 'live', role: 'assistant', content: [
+        { type: 'text', text: 'First sentence. Second sentence.', segmentId: 'segment', presentation: 'answer' },
+      ],
+    };
+    expect(mergeStreamingAssistantIntoMessages(persisted, streaming)[0].content).toEqual(streaming.content);
+  });
+
+  it('keeps the longer text when history gets ahead of the throttled live render', () => {
+    const persisted = parseSessionMessages([
+      { id: 'stored', role: 'assistant', content: 'First sentence. Second sentence.' },
+    ]);
+    const streaming: Message = {
+      id: 'live', role: 'assistant', content: [
+        { type: 'text', text: 'First sentence.', segmentId: 'segment', presentation: 'pending' },
+      ],
+    };
+    expect(mergeStreamingAssistantIntoMessages(persisted, streaming)[0].content).toEqual([
+      { type: 'text', text: 'First sentence. Second sentence.', segmentId: 'segment', presentation: 'answer' },
+    ]);
   });
 
   it('does not cross a user-message turn boundary', () => {
