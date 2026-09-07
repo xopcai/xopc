@@ -1500,6 +1500,7 @@ export class AgentManager implements AgentInstanceGateway {
     const request = this.config.gatewayClarify?.requestClarification;
     if (!request) return false;
     const answer = await request(sessionKey, {
+      kind: 'approval',
       question: `Allow ${toolName} to run once?\n${detail.slice(0, 500)}`,
       choices: ['Allow once', 'Deny'],
       default: 'Deny',

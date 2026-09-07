@@ -22,6 +22,7 @@ const ClarifySchema = Type.Object({
 });
 
 export type ClarifyRequestPayload = {
+  kind?: 'approval';
   question: string;
   choices?: string[];
   default?: string;

@@ -68,6 +68,8 @@ export class GatewayAgentRunner {
   /** Maps webchat session key → active `runId` for `clarify` tool routing. */
   private readonly activeWebchatRunBySession = new Map<string, string>();
   private readonly externalStreamBySession = new Map<string, (event: ClarifyStreamEvent) => void>();
+  private readonly externalClarificationTimeouts = new Map<string, number | null>();
+  private readonly externalClarificationResponses = new Map<string, () => boolean>();
   readonly inputs: SessionInputCoordinator;
 
   constructor(opts: GatewayAgentRunnerOptions) {
@@ -166,15 +168,20 @@ export class GatewayAgentRunner {
     sessionKey: string,
     runId: string,
     publish: (event: ClarifyStreamEvent) => void,
+    options?: { clarificationTimeoutMs?: number | null; beforeClarificationResponse?: () => boolean },
   ): void {
     this.activeWebchatRunBySession.set(sessionKey, runId);
     this.externalStreamBySession.set(sessionKey, publish);
+    if (options?.clarificationTimeoutMs !== undefined) this.externalClarificationTimeouts.set(sessionKey, options.clarificationTimeoutMs);
+    if (options?.beforeClarificationResponse) this.externalClarificationResponses.set(sessionKey, options.beforeClarificationResponse);
   }
 
   unregisterExternalWebchatRun(sessionKey: string, runId: string): void {
     if (this.activeWebchatRunBySession.get(sessionKey) === runId) {
       this.activeWebchatRunBySession.delete(sessionKey);
       this.externalStreamBySession.delete(sessionKey);
+      this.externalClarificationTimeouts.delete(sessionKey);
+      this.externalClarificationResponses.delete(sessionKey);
     }
   }
 
@@ -371,6 +378,8 @@ export class GatewayAgentRunner {
       );
     }
     return this.clarifyBridge.startRequest({
+      timeoutMs: this.externalClarificationTimeouts.get(sessionKey),
+      beforeResponse: this.externalClarificationResponses.get(sessionKey),
       sessionKey,
       runId,
       publishStream,

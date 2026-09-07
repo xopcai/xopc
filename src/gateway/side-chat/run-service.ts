@@ -47,7 +47,7 @@ export class SideChatRunService {
       abortController: new AbortController(),
     };
     this.activeBySideChat.set(sideChatId, run);
-    this.options.manager.setStatus(sideChatId, clientInstanceId, 'running');
+    this.options.manager.setStatus(sideChatId, clientInstanceId, 'running', run.runId);
     void this.execute(run, text, sideChat.config).catch((err) => {
       log.error({ err, sideChatId, runId: run.runId }, 'Side chat run cleanup failed');
     });
@@ -56,9 +56,15 @@ export class SideChatRunService {
 
   async abort(sideChatId: string, clientInstanceId: string, runId?: string): Promise<boolean> {
     this.options.manager.get(sideChatId, clientInstanceId);
+    return this.cancelRun(sideChatId, clientInstanceId, runId);
+  }
+
+  /** Disposal has already removed the transcript from the public manager. */
+  async cancelRun(sideChatId: string, clientInstanceId: string, runId?: string): Promise<boolean> {
     const active = this.activeBySideChat.get(sideChatId);
-    if (!active || (runId && active.runId !== runId)) return false;
+    if (!active || active.clientInstanceId !== clientInstanceId || (runId && active.runId !== runId)) return false;
     this.options.agentRunner.cancelClarificationForRun(active.runId);
+    this.options.agentRunner.unregisterExternalWebchatRun(active.executionSessionKey, active.runId);
     active.abortController.abort();
     await abortEmbeddedRun(active.executionSessionKey).catch(() => false);
     return true;
@@ -70,8 +76,11 @@ export class SideChatRunService {
   }
 
   submitClarification(sideChatId: string, clientInstanceId: string, requestId: string, answer: string): boolean {
-    this.options.manager.get(sideChatId, clientInstanceId);
-    return this.options.agentRunner.submitClarifyResponse(requestId, answer);
+    const sideChat = this.options.manager.get(sideChatId, clientInstanceId);
+    if (sideChat.clarification?.requestId !== requestId) return false;
+    const handled = this.options.agentRunner.submitClarifyResponse(requestId, answer);
+    if (handled) this.options.manager.setStatus(sideChatId, clientInstanceId, 'running');
+    return handled;
   }
 
   private async execute(
@@ -89,6 +98,14 @@ export class SideChatRunService {
       this.options.publishRealtime(topic, event.type, event);
     };
     const publishMapped = (event: { type: string; [key: string]: unknown }) => {
+      if (run.abortController.signal.aborted) return;
+      if (event.type === 'clarify_request') {
+        this.options.manager.waitForInput(run.sideChatId, run.clientInstanceId, {
+          requestId: String(event.requestId),
+          question: String(event.question),
+          choices: Array.isArray(event.choices) ? event.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
+        }, event.kind === 'approval' ? 'waiting-approval' : 'waiting-input');
+      }
       for (const mapped of mapper.map(event)) publish(mapped);
     };
 
@@ -102,6 +119,15 @@ export class SideChatRunService {
         run.executionSessionKey,
         run.runId,
         (event: ClarifyStreamEvent) => publishMapped(event),
+        {
+          clarificationTimeoutMs: null,
+          beforeClarificationResponse: () => {
+            try {
+              this.options.manager.setStatus(run.sideChatId, run.clientInstanceId, 'running');
+              return true;
+            } catch { return false; }
+          },
+        },
       );
       const result = await this.options.getAgentService().runEphemeralTurn({
         executionSessionKey: run.executionSessionKey,

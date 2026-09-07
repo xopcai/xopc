@@ -45,4 +45,42 @@ describe('side chat store session isolation', () => {
     expect(second).toBeNull();
     expect(useSideChatStore.getState().pendingCreate).toBeNull();
   });
+  it('bounds reading copies, strips tool data, and never persists drafts or content', async () => {
+    const { useSideChatStore } = await import('@/stores/side-chat-store');
+    const state = useSideChatStore.getState();
+    for (let i = 0; i < 8; i++) {
+      state.addTab({ id: `side-${i}`, parentSessionKey: 'parent', title: 'Side chat' });
+      state.rememberMessages(`side-${i}`, [{ role: 'assistant', content: [
+        { type: 'text', text: 'x'.repeat(900_000) },
+        { type: 'tool_use', id: 'tool', name: 'exec', status: 'done', result: 'private-tool-output' },
+      ] }]);
+    }
+    state.setDraft('side-7', 'private-draft');
+    await Promise.resolve();
+    const readings = useSideChatStore.getState().readings;
+    expect(Object.keys(readings).length).toBeLessThanOrEqual(5);
+    expect(Object.values(readings).reduce((sum, reading) => sum + reading.bytes, 0)).toBeLessThanOrEqual(2 * 1024 * 1024);
+    expect(readings['side-7'].truncated).toBe(true);
+    expect(JSON.stringify(readings)).not.toContain('private-tool-output');
+    const storage = sessionStorage.getItem('xopc:side-chat-panes:v2') ?? '';
+    expect(storage).not.toContain('private-draft');
+    expect(storage).not.toContain('xxxx');
+  });
+
+  it('transfers drafts atomically and clears page data on gateway identity changes', async () => {
+    const { useSideChatStore } = await import('@/stores/side-chat-store');
+    const { useGatewayStore } = await import('@/stores/gateway-store');
+    const state = useSideChatStore.getState();
+    state.addTab({ id: 'old', parentSessionKey: 'parent', title: 'Side chat' });
+    state.setDraft('old', 'unsent');
+    state.markEnded('old', 'idle');
+    state.replaceTab('old', { id: 'new', parentSessionKey: 'parent', title: 'Side chat' });
+    expect(useSideChatStore.getState().drafts).toEqual({ new: 'unsent' });
+    expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['new']);
+    useGatewayStore.setState({ baseUrl: 'https://different-gateway.invalid' });
+    expect(useSideChatStore.getState().drafts).toEqual({});
+    expect(useSideChatStore.getState().tabs).toEqual([]);
+    expect(useSideChatStore.getState().readings).toEqual({});
+  });
+
 });

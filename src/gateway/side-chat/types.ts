@@ -57,7 +57,11 @@ export interface SideChatView {
   status: SideChatStatus;
   createdAt: string;
   lastActiveAt: string;
-  expiresAt: string;
+  lastSeenAt: string;
+  expiresAt: string | null;
+  serverNow?: string;
+  runId?: string;
+  clarification?: { requestId: string; question: string; choices?: string[] };
   messageCount: number;
   context: SideChatContextSnapshot;
   config: SideChatConfig;

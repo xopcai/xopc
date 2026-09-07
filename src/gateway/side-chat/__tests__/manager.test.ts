@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { EphemeralSideChatManager, SideChatError } from '../manager.js';
+import { EphemeralSideChatManager, SideChatError, type EphemeralSideChatManagerOptions } from '../manager.js';
 import type { SessionMetadata } from '../../../session/types.js';
 
 function metadata(): SessionMetadata {
@@ -23,7 +23,7 @@ function metadata(): SessionMetadata {
   };
 }
 
-function createManager(params: { now?: () => number; maxPerClient?: number; messages?: AgentMessage[] } = {}) {
+function createManager(params: { now?: () => number; maxPerClient?: number; messages?: AgentMessage[]; options?: Partial<EphemeralSideChatManagerOptions> } = {}) {
   const messages = params.messages ?? [{ role: 'user', content: 'parent message', timestamp: 1 }];
   return new EphemeralSideChatManager({
     getParentMetadata: async (key) => key === metadata().key ? metadata() : null,
@@ -34,6 +34,7 @@ function createManager(params: { now?: () => number; maxPerClient?: number; mess
     maxPerClient: params.maxPerClient,
     idleTtlMs: 1_000,
     startSweepTimer: false,
+    ...params.options,
   });
 }
 
@@ -72,14 +73,20 @@ describe('EphemeralSideChatManager', () => {
     await manager.disposeAll();
   });
 
-  it('refreshes the lease on heartbeat and removes expired side chats', async () => {
+  it('extends only on explicit activity and removes expired side chats', async () => {
     let now = 1_000;
     const manager = createManager({ now: () => now });
     const sideChat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'tab-1' });
 
     now = 1_500;
-    const refreshed = manager.heartbeat(sideChat.id, 'tab-1');
-    expect(Date.parse(refreshed.expiresAt)).toBe(2_500);
+    const seen = manager.heartbeat(sideChat.id, 'tab-1');
+    expect(seen.expiresAt).toBe(sideChat.expiresAt);
+    expect(seen.lastActiveAt).toBe(sideChat.lastActiveAt);
+    expect(seen.lastSeenAt).not.toBe(sideChat.lastSeenAt);
+    manager.updateConfig(sideChat.id, 'tab-1', { modelRef: 'openai/changed' });
+    expect(manager.get(sideChat.id, 'tab-1').expiresAt).toBe(sideChat.expiresAt);
+    const refreshed = manager.extend(sideChat.id, 'tab-1');
+    expect(Date.parse(refreshed.expiresAt!)).toBe(2_500);
     now = 2_499;
     await expect(manager.sweepExpired()).resolves.toBe(0);
     now = 2_500;
@@ -90,7 +97,7 @@ describe('EphemeralSideChatManager', () => {
   it('rejects missing parents and oversized or malformed selections', async () => {
     const manager = createManager();
     await expect(manager.create({ parentSessionKey: 'missing', clientInstanceId: 'tab-1' }))
-      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+      .rejects.toMatchObject({ code: 'PARENT_NOT_FOUND' });
     await expect(manager.create({
       parentSessionKey: metadata().key,
       clientInstanceId: 'tab-1',
@@ -98,4 +105,86 @@ describe('EphemeralSideChatManager', () => {
     })).rejects.toThrow('endLine must be >= startLine');
     await manager.disposeAll();
   });
+  it('rejects expired reads and writes before the sweep, without disclosing the reason to other clients', async () => {
+    let now = 0;
+    const onExpired = vi.fn();
+    const onBeforeDispose = vi.fn();
+    const manager = createManager({ now: () => now, options: { onExpired, onBeforeDispose } });
+    const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    now = 1000;
+    expect(() => manager.heartbeat(chat.id, 'other')).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
+    expect(onExpired).not.toHaveBeenCalled();
+    for (const request of [() => manager.heartbeat(chat.id, 'owner'), () => manager.extend(chat.id, 'owner'),
+      () => manager.getRuntime(chat.id, 'owner'), () => manager.setStatus(chat.id, 'owner', 'running')]) {
+      expect(request).toThrow(expect.objectContaining({ code: 'EXPIRED', reason: 'idle' }));
+    }
+    expect(onExpired).toHaveBeenCalledOnce();
+    expect(onBeforeDispose).toHaveBeenCalledOnce();
+    await manager.disposeAll();
+  });
+
+  it('keeps long runs alive, then starts a full idle window when the run finishes', async () => {
+    let now = 0;
+    const manager = createManager({ now: () => now });
+    const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    manager.setStatus(chat.id, 'owner', 'running', 'run-1');
+    now = 100_000;
+    await expect(manager.sweepExpired()).resolves.toBe(0);
+    expect(manager.get(chat.id, 'owner')).toMatchObject({ expiresAt: null, runId: 'run-1' });
+    manager.setStatus(chat.id, 'owner', 'idle');
+    expect(manager.get(chat.id, 'owner').expiresAt).toBe(new Date(101_000).toISOString());
+    now = 101_000;
+    await expect(manager.sweepExpired()).resolves.toBe(1);
+    await manager.disposeAll();
+  });
+
+  it.each(['waiting-input', 'waiting-approval'] as const)('expires %s even though a run is still open', async (status) => {
+    let now = 0;
+    const manager = createManager({ now: () => now });
+    const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    manager.setStatus(chat.id, 'owner', 'running');
+    manager.setStatus(chat.id, 'owner', status);
+    now = 500;
+    manager.extend(chat.id, 'owner');
+    now = 1500;
+    expect(() => manager.get(chat.id, 'owner')).toThrow(expect.objectContaining({ code: 'EXPIRED', reason: 'waiting' }));
+    await manager.disposeAll();
+  });
+
+  it('reserves capacity while parent context loads and releases reservations on failure', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const load = vi.fn(async () => { await gate; return []; });
+    const manager = createManager({ maxPerClient: 1, options: { loadParentMessages: load } });
+    const first = manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+    await expect(manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' })).rejects.toMatchObject({ code: 'LIMIT_REACHED' });
+    release();
+    await first;
+    await manager.disposeAll();
+    const failed = createManager({ maxPerClient: 1 });
+    await expect(failed.create({ parentSessionKey: 'missing', clientInstanceId: 'owner' })).rejects.toThrow();
+    await expect(failed.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' })).resolves.toHaveProperty('id');
+    await failed.disposeAll();
+  });
+
+  it('bounds expired reason records and removes them after their retention window', async () => {
+    let now = 0;
+    const manager = createManager({ now: () => now });
+    let first = '';
+    let latest = '';
+    for (let i = 0; i < 502; i++) {
+      const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+      first ||= chat.id;
+      latest = chat.id;
+      now += 1000;
+      await manager.sweepExpired();
+    }
+    expect(() => manager.get(first, 'owner')).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
+    expect(() => manager.get(latest, 'owner')).toThrow(expect.objectContaining({ code: 'EXPIRED' }));
+    now += 30 * 60_000;
+    expect(() => manager.get(latest, 'owner')).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
+    await manager.disposeAll();
+  });
+
 });
