@@ -122,10 +122,14 @@ export class ManagedComposioClient implements ComposioSessionsClient {
         return response.item;
       },
       search: async () => {
-        const response = await this.request<{ result: unknown }>({
-          path: `/connectors/composio/toolkits/${encodeURIComponent(toolkit())}/tools`,
-        });
-        return response.result;
+        const results = await Promise.all([...new Set(toolkits)].map(async (slug) => {
+          const response = await this.request<{ result: { toolSchemas?: JsonRecord } }>({
+            path: `/connectors/composio/toolkits/${encodeURIComponent(slug)}/tools`,
+          });
+          return response.result;
+        }));
+        if (results.length === 1) return results[0];
+        return { toolSchemas: Object.assign({}, ...results.map((result) => result.toolSchemas ?? {})) };
       },
       execute: async (toolSlug: string, args: JsonRecord = {}, options) => {
         const selected = options?.account ?? connectedAccounts[toolkit()]?.[0];
