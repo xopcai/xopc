@@ -29,9 +29,10 @@ async function readFormError(res: Response): Promise<string> {
 }
 
 /** POST multipart/form-data with Bearer auth (no JSON Content-Type). */
-export async function postNoteFormData<T>(url: string, form: FormData): Promise<T> {
+export async function postNoteFormData<T>(url: string, form: FormData, idempotencyKey?: string): Promise<T> {
   const token = useGatewayStore.getState().token;
   const headers = new Headers();
+  if (idempotencyKey) headers.set('Idempotency-Key', idempotencyKey);
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }

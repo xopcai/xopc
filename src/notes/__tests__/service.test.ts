@@ -95,6 +95,17 @@ describe('NotesService markdown sync and AI edit', () => {
     service = new NotesService(store as never);
   });
 
+  it('records the latest content editor even when manual snapshots are throttled', async () => {
+    const note = await service.createNote({ markdown: 'Original', capturedVia: { channel: 'web' } });
+    const agentEdit = await service.updateNote(note.id, { markdown: 'Agent draft' }, 'ai_edit');
+    expect(agentEdit?.lastEditTrigger).toBe('ai_edit');
+    await service.updateNote(note.id, { pinned: true });
+    expect((await service.getNote(note.id))?.lastEditTrigger).toBe('ai_edit');
+    const manualEdit = await service.updateNote(note.id, { markdown: 'Manual revision' });
+    expect(manualEdit?.lastEditTrigger).toBe('edit');
+    expect(store.snapshots).toHaveLength(1);
+  });
+
   it('uses the first 10 characters of quick capture markdown as the default title', async () => {
     const note = await service.quickCapture('今天要整理产品方案和会议纪要', { channel: 'web' });
     expect(note.title).toBe('今天要整理产品方案和');
