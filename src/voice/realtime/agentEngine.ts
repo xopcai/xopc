@@ -3,6 +3,7 @@ import type { StreamingSttSession, StreamingSttEvent } from '../../media-underst
 import { createLogger } from '../../utils/logger.js';
 import { speakStream } from '../tts/speak-core.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
+import { ConversationTurn } from './conversationTurn.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
@@ -52,6 +53,23 @@ export function createAgentVoiceEngine(options: {
   let finalCount = 0;
   let committing = false;
   const finalizedUtterances = new Set<string>();
+  let pendingTurn: { text: string; cancelled: boolean } | undefined;
+  const turn = new ConversationTurn(claim.silenceDurationMs, (text) => {
+    if (closed || muted) return;
+    if (queuedTurns >= 8) {
+      send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Too many queued voice turns', recoverable: false });
+      void options.onClose('input_backpressure', true);
+      return;
+    }
+    queuedTurns += 1;
+    const generation = inputGeneration;
+    const pending = { text, cancelled: false };
+    pendingTurn = pending;
+    conversationTail = conversationTail.then(() => {
+      if (pendingTurn === pending) pendingTurn = undefined;
+      if (generation === inputGeneration && !pending.cancelled) return runConversationTurn(text);
+    }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
+  });
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
     const response = activeResponse;
     if (!response) return false;
@@ -240,10 +258,18 @@ export function createAgentVoiceEngine(options: {
     });
   }
 
+  function bufferFinal(utteranceId: string, text: string): void {
+    try { turn.final(utteranceId, text); } catch {
+      send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Voice turn input limit reached', recoverable: false });
+      void options.onClose('input_backpressure', true);
+    }
+  }
+
   function onSttEvent(event: StreamingSttEvent): void {
     if (closed) return;
     if (event.type === 'ready' || event.type === 'usage') return;
     if (event.type === 'error') {
+      turn.reset();
       log.warn({ err: event.error, sessionId: claim.sessionId, provider: stt!.route.provider }, 'Realtime STT failed');
       send('session.error', { code: 'PROVIDER_ERROR', message: 'Streaming transcription failed', recoverable: false });
       void options.onClose('provider_error', true);
@@ -251,12 +277,23 @@ export function createAgentVoiceEngine(options: {
     }
     if (muted || finalizedUtterances.has(event.utteranceId)) return;
     if (event.type === 'speech_started') {
+      if (claim.request.purpose === 'conversation') {
+        if (pendingTurn) {
+          pendingTurn.cancelled = true;
+          turn.restore(pendingTurn.text);
+          pendingTurn = undefined;
+        }
+        turn.start(event.utteranceId);
+      }
       if (claim.request.purpose === 'conversation' && claim.config.voice?.realtime?.bargeIn && !activeResponse?.awaitingClarification) {
         cancelActiveResponse('barge_in');
       }
       send('input.speech_started', { utteranceId: event.utteranceId });
     }
-    if (event.type === 'speech_stopped') send('input.speech_stopped', { utteranceId: event.utteranceId });
+    if (event.type === 'speech_stopped') {
+      if (claim.request.purpose === 'conversation') turn.stop(event.utteranceId);
+      send('input.speech_stopped', { utteranceId: event.utteranceId });
+    }
     if (event.type === 'transcript_delta') {
       send('input.transcript.delta', {
         utteranceId: event.utteranceId,
@@ -266,7 +303,10 @@ export function createAgentVoiceEngine(options: {
     }
     if (event.type === 'transcript_final') {
       const text = event.text.trim();
-      if (!text) return;
+      if (!text) {
+        if (claim.request.purpose === 'conversation') bufferFinal(event.utteranceId, '');
+        return;
+      }
       if (finalizedUtterances.size >= 10_000) {
         void options.onClose('utterance_limit', true);
         return;
@@ -280,24 +320,17 @@ export function createAgentVoiceEngine(options: {
         ...(event.language === 'zh' || event.language === 'en' ? { language: event.language } : {}),
       });
       if (claim.request.purpose === 'conversation') {
-        if (activeResponse?.awaitingClarification) return;
+        if (activeResponse?.awaitingClarification) { turn.reset(); return; }
         if (claim.config.voice?.realtime?.bargeIn) cancelActiveResponse('barge_in');
-        if (queuedTurns >= 8) {
-          send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Too many queued voice turns', recoverable: false });
-          void options.onClose('input_backpressure', true);
-          return;
-        }
-        queuedTurns += 1;
-        const generation = inputGeneration;
-        conversationTail = conversationTail.then(() => {
-          if (generation === inputGeneration) return runConversationTurn(text);
-        }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
+        bufferFinal(event.utteranceId, text);
       }
     }
   }
 
 
   function discardInput(): Promise<void> {
+    turn.reset();
+    pendingTurn = undefined;
     inputGeneration += 1;
     queuedTurns = 0;
     bufferedAudio = [];
@@ -373,6 +406,7 @@ export function createAgentVoiceEngine(options: {
     close() {
       if (closing) return closing;
       closed = true;
+      turn.reset();
       cancelActiveResponse('session_closed');
       sttAbort.abort('session_closed');
       sttSession?.abort('session_closed');

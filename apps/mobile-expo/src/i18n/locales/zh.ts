@@ -1570,6 +1570,16 @@ export const zh: MessageBundle = {
   },
 
   notesPage: {
+    deletingNote: '正在删除笔记…',
+    shareLinkDescription: '创建 24 小时有效的只读快照，含正文中引用的附件。获得链接的人无需登录即可查看；后续编辑不会自动更新快照。',
+    createShareLink: '生成分享链接',
+    copyShareLink: '复制链接',
+    revokeShareLink: '撤销分享链接',
+    shareLinkCopied: '分享链接已复制',
+    shareLinkRevoked: '分享链接已撤销',
+    syncBeforeAction: '请先完成笔记同步，再重试此操作。',
+    noteChatContextHint: '将此笔记作为对话上下文，打开后可继续提问。',
+    deletePending: '笔记待删除，可撤销。删除后相关分享链接也将失效。',
     title: '笔记',
     noteTitle: '标题',
     quickCapturePlaceholder: '写下你的想法…',

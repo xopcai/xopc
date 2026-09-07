@@ -482,8 +482,8 @@ export function VoiceSettingsPanel() {
         <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
         <label className="flex items-center justify-between gap-3 text-sm text-fg">{v.experience.pace}
           <Select className={selectClassName()} value={String(form.voice.realtime.silenceDurationMs)} onChange={(e) => updateRealtime({ silenceDurationMs: Number(e.target.value) })}>
-            <SelectOption value="400">{v.experience.fast}</SelectOption><SelectOption value="700">{v.experience.standard}</SelectOption><SelectOption value="1200">{v.experience.relaxed}</SelectOption>
-            {![400, 700, 1200].includes(form.voice.realtime.silenceDurationMs) ? <SelectOption value={String(form.voice.realtime.silenceDurationMs)}>{form.voice.realtime.silenceDurationMs} ms</SelectOption> : null}
+            <SelectOption value="800">{v.experience.fast}</SelectOption><SelectOption value="1200">{v.experience.standard}</SelectOption><SelectOption value="2000">{v.experience.relaxed}</SelectOption>
+            {![800, 1200, 2000].includes(form.voice.realtime.silenceDurationMs) ? <SelectOption value={String(form.voice.realtime.silenceDurationMs)}>{form.voice.realtime.silenceDurationMs} ms</SelectOption> : null}
           </Select>
         </label>
       </> : null}
