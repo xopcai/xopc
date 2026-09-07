@@ -51,6 +51,8 @@ import {
   listConnectorLearningJobs,
   upsertConnectorSyncPolicy,
 } from '../../../storage/sqlite/index.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { markContextSourceAssertionsForReview } from './context-sources.js';
 
@@ -415,6 +417,9 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     const principalId = c.req.query('principalId')?.trim() || 'local-owner';
     const sessionKey = c.req.query('sessionKey')?.trim() || undefined;
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'gateway.admin') && (!sessionKey || principalId !== 'local-owner')) {
+      return c.json({ ok: false, error: 'A local-owner session is required to read confirmations.' }, 403);
+    }
     const approvals = listConnectorApprovals({
       principalId,
       sessionKey,
@@ -509,6 +514,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     const current = getConnectorApproval(id);
     if (!current) return c.json({ ok: false, error: 'Connector approval not found.' }, 404);
+    const sessionKey = typeof record.sessionKey === 'string' ? record.sessionKey.trim() : '';
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'gateway.admin')
+      && (!sessionKey || current.sessionKey !== sessionKey || current.principalId !== 'local-owner')) {
+      return c.json({ ok: false, error: 'Confirmation does not belong to the requested local-owner session.' }, 403);
+    }
     const approval = decideConnectorApproval(id, decision);
     if (!approval || approval.status !== decision) {
       return c.json({ ok: false, error: `Connector approval is ${approval?.status ?? 'unavailable'}.`, payload: { approval } }, 409);

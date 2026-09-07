@@ -61,6 +61,8 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
   if (path.startsWith('/api/devices/me/push')) return 'notifications.self';
   if (path.startsWith('/api/endpoint-tools')) return 'device.self';
+  if (method === 'GET' && path === '/api/connectors/approvals') return 'sessions.read';
+  if (method === 'POST' && path === '/api/connectors/approvals/respond') return 'sessions.write';
   if (path === '/api/agent' || path.startsWith('/api/agent/')) return 'agents.run';
   if (path.startsWith('/api/agents') || path.startsWith('/api/models')) {
     return methodScope(method, 'agents.read', 'gateway.admin');

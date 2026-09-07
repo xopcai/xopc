@@ -1,6 +1,9 @@
 import type { MessageBundle } from '../../i18n/messages';
 export function voiceErrorMessage(code: string | undefined, m: MessageBundle['voice']): string {
   if (!code) return '';
+  if (/PLAYBACK|playback_failed/.test(code)) return m.playbackFailed;
+  if (code === 'NO_RESPONSE_AUDIO') return m.noResponseAudio;
+  if (code === 'RESPONSE_FAILED') return m.responseFailed;
   if (/EMPTY_UTTERANCE/.test(code)) return m.noSpeech;
   if (/PERMISSION/.test(code)) return m.permission;
   if (/UPGRADE|NATIVE_BUILD/.test(code)) return m.upgrade;

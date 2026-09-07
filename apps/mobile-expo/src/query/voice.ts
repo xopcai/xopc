@@ -39,7 +39,9 @@ export function voiceSessionIdentity(gatewayId: string, sessionKey: string) {
 export type VoiceApproval = { id: string; sessionKey: string; actionId: string; argumentsPreview: Record<string, unknown>; status: string; expiresAt: string };
 export function voiceApprovalsOptions(gatewayId: string | undefined, sessionKey: string | undefined) {
   return {
-    queryKey: ['voice-approvals', gatewayId, sessionKey], retry: false as const, refetchInterval: 3000,
+    queryKey: ['voice-approvals', gatewayId, sessionKey], retry: false as const,
+    refetchInterval: (query: { state: { error: Error | null } }) =>
+      query.state.error instanceof VoiceRequestError && [403, 404].includes(query.state.error.status) ? false as const : 3000,
     queryFn: async ({ signal }: { signal: AbortSignal }): Promise<VoiceApproval[]> => {
       const response = await apiFetch(`/api/connectors/approvals?status=pending&sessionKey=${encodeURIComponent(sessionKey ?? '')}`, { signal });
       if (!response.ok) throw new VoiceRequestError('APPROVALS_UNAVAILABLE', response.status);
@@ -49,7 +51,7 @@ export function voiceApprovalsOptions(gatewayId: string | undefined, sessionKey:
     },
   };
 }
-export async function respondVoiceApproval(id: string, decision: 'approved' | 'denied') {
-  const response = await apiFetch('/api/connectors/approvals/respond', { method: 'POST', body: JSON.stringify({ id, decision }) });
+export async function respondVoiceApproval(id: string, decision: 'approved' | 'denied', sessionKey: string) {
+  const response = await apiFetch('/api/connectors/approvals/respond', { method: 'POST', body: JSON.stringify({ id, decision, sessionKey }) });
   if (!response.ok) throw new VoiceRequestError('APPROVAL_FAILED', response.status);
 }

@@ -12,10 +12,11 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, useTheme, spacing, typography } from '../../theme';
 import { isCallPermissionPromptActive, setCallSpeaker, useVoiceCall, voiceCall } from './voice-call';
 import { shouldPauseVoiceForBackground } from './voice-call-controller';
-import { voiceApprovalsOptions, respondVoiceApproval } from '../../query/voice';
+import { voiceApprovalsOptions, respondVoiceApproval, VoiceRequestError } from '../../query/voice';
 import { useVoicePreferences } from './voice-preferences';
 import { voiceErrorMessage } from './voice-error';
 import { VoiceCallOverlay } from './VoiceCallOverlay';
+import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 
 function approvalValue(value: unknown): string {
   if (value == null) return '';
@@ -37,16 +38,21 @@ export function VoiceCallSurface() {
   const router = useRouter();
   const captions = useVoicePreferences(s => s.captions);
   const [speaker, setSpeaker] = useState(false);
+  const [diagnosticCopy, setDiagnosticCopy] = useState<'copied' | 'failed'>();
   const [, tick] = useState(0);
-  const approvals = useQuery({ ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.sessionKey), enabled: state.phase === 'connected' && state.engine === 'agent' });
-  const pendingApprovals = state.phase === 'connected' && state.engine === 'agent' ? approvals.data ?? [] : [];
-  const approval = useMutation({ mutationFn: ({ id, decision }: { id: string; decision: 'approved' | 'denied' }) => respondVoiceApproval(id, decision), onSuccess: () => approvals.refetch(), retry: false });
+  const approvalsEnabled = state.phase === 'connected' && state.engine === 'agent' && Boolean(state.target);
+  const approvals = useQuery({ ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.sessionKey), enabled: approvalsEnabled });
+  const pendingApprovals = approvalsEnabled ? approvals.data ?? [] : [];
+  const approval = useMutation({ mutationFn: ({ id, decision, sessionKey }: { id: string; decision: 'approved' | 'denied'; sessionKey: string }) => respondVoiceApproval(id, decision, sessionKey), onSuccess: () => approvals.refetch(), retry: false });
   useEffect(() => { voiceCall.setApprovalPending(pendingApprovals.length > 0); }, [pendingApprovals.length]);
   const clarification = useMutation({
     mutationFn: ({ id, answer }: { id: string; answer?: string }) => submitClarifyResponse(id, answer === undefined ? { skip: true } : { answer }),
     onSuccess: (_, variables) => { if (voiceCall.getSnapshot().clarification?.requestId === variables.id) voiceCall.confirmationSent(); },
     retry: false,
   });
+  const resetApproval = approval.reset;
+  const resetClarification = clarification.reset;
+  useEffect(() => { resetApproval(); resetClarification(); setDiagnosticCopy(undefined); }, [state.startedAt, resetApproval, resetClarification]);
   useEffect(() => {
     const consent = DeviceEventEmitter.addListener('voice-consent-revoked', () => void voiceCall.end());
     const app = AppState.addEventListener('change', status => {
@@ -69,7 +75,7 @@ export function VoiceCallSurface() {
   }, [state.expanded, state.phase]);
   if (state.phase === 'idle') return null;
   const status = state.phase === 'connected'
-    ? (state.clarification || pendingApprovals.length > 0) ? m.waiting : state.activity ? m.working : state.responseId ? m.replying : m.connected
+    ? (state.clarification || pendingApprovals.length > 0) ? m.waiting : state.responseStage === 'speaking' ? m.speaking : state.activity ? m.working : state.responseStage === 'buffering' ? m.buffering : state.responseId ? m.thinking : m.connected
     : m[state.phase];
   const muted = state.muted ? m.muted : status;
   const elapsed = Math.max(0, Math.floor((Date.now() - state.startedAt) / 1000));
@@ -134,12 +140,23 @@ export function VoiceCallSurface() {
               return summary ? <Text key={key} style={{ color: colors.text.secondary }}>{key}: {summary}</Text> : null;
             })}
             <View style={styles.row}>
-              <Button disabled={approval.isPending} onPress={() => approval.mutate({ id: item.id, decision: 'denied' })}>{m.deny}</Button>
-              <Button disabled={approval.isPending} onPress={() => approval.mutate({ id: item.id, decision: 'approved' })}>{m.approve}</Button>
+              <Button disabled={approval.isPending} onPress={() => approval.mutate({ id: item.id, decision: 'denied', sessionKey: item.sessionKey })}>{m.deny}</Button>
+              <Button disabled={approval.isPending} onPress={() => approval.mutate({ id: item.id, decision: 'approved', sessionKey: item.sessionKey })}>{m.approve}</Button>
             </View>
           </View>)}
-          {(approval.isError || approvals.isError) && <Text>{m.approvalError}</Text>}
+          {approvalsEnabled && (approval.isError || approvals.isError) && <View style={styles.card}>
+            <Text accessibilityRole="alert" style={{ color: colors.semantic.error }}>{approval.isError ? m.approvalSubmitError
+              : approvals.error instanceof VoiceRequestError && approvals.error.status === 403 ? m.approvalPermission : m.approvalLoadError}</Text>
+            <Button loading={approvals.isFetching} disabled={approval.isPending} onPress={() => {
+              void approvals.refetch().then(result => { if (!result.isError) resetApproval(); });
+            }}>{m.refreshApprovals}</Button>
+          </View>}
           <Button onPress={showChat}>{m.returnChat}</Button>
+          <Button onPress={() => {
+            void setAppClipboardStringAsync(JSON.stringify(voiceCall.getDiagnostics(), null, 2))
+              .then(() => setDiagnosticCopy('copied')).catch(() => setDiagnosticCopy('failed'));
+          }}>{m.copyDiagnostics}</Button>
+          {diagnosticCopy && <Text accessibilityLiveRegion="polite" style={{ color: colors.text.secondary }}>{diagnosticCopy === 'copied' ? m.diagnosticsCopied : m.diagnosticsCopyFailed}</Text>}
         </ScrollView>
         <View style={styles.controls}>
           <Pressable disabled={state.phase === 'ending'} onPress={() => void voiceCall.setMuted(!state.muted)} style={styles.control} accessibilityRole="button" accessibilityLabel={state.muted ? m.unmute : m.mute}>
