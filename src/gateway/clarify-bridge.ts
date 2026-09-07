@@ -8,12 +8,16 @@ const log = createLogger('gateway:clarify');
 export const CLARIFY_USER_RESPONSE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface ClarifyBridgeRequest {
+  kind?: 'approval';
   question: string;
   choices?: string[];
   default?: string;
 }
 
 export interface StartClarifyRequestOptions {
+  /** null delegates the deadline to the owning ephemeral session. */
+  timeoutMs?: number | null;
+  beforeResponse?: () => boolean;
   sessionKey: string;
   /** Present for in-flight webchat runs. */
   runId?: string;
@@ -33,7 +37,8 @@ interface PendingClarification {
   choices?: string[];
   resolve: (answer: string) => void;
   reject: (error: Error) => void;
-  timeout: ReturnType<typeof setTimeout>;
+  timeout: ReturnType<typeof setTimeout> | undefined;
+  beforeResponse?: () => boolean;
 }
 
 /**
@@ -58,12 +63,13 @@ export class ClarifyBridge {
         }
       };
 
-      const timeout = setTimeout(() => {
+      const timeoutMs = opts.timeoutMs === undefined ? CLARIFY_USER_RESPONSE_TIMEOUT_MS : opts.timeoutMs;
+      const timeout = timeoutMs === null ? undefined : setTimeout(() => {
         const entry = this.deletePending(requestId);
         if (entry) {
-          entry.reject(new Error('Clarification timeout: user did not respond within 5 minutes'));
+          entry.reject(new Error(`Clarification timeout: user did not respond within ${timeoutMs / 60_000} minutes`));
         }
-      }, CLARIFY_USER_RESPONSE_TIMEOUT_MS);
+      }, timeoutMs);
 
       this.pending.set(requestId, {
         runId: runId ?? '',
@@ -72,6 +78,7 @@ export class ClarifyBridge {
         resolve,
         reject,
         timeout,
+        beforeResponse: opts.beforeResponse,
       });
 
       if (needsFreeText) {
@@ -80,6 +87,7 @@ export class ClarifyBridge {
 
       const payload: ClarifyStreamEvent = {
         type: 'clarify_request',
+        kind: request.kind,
         requestId,
         question: request.question,
         choices: request.choices,
@@ -132,6 +140,8 @@ export class ClarifyBridge {
   }
 
   handleResponse(requestId: string, answer: string): boolean {
+    const pending = this.pending.get(requestId);
+    if (!pending || pending.beforeResponse?.() === false) return false;
     const entry = this.deletePending(requestId);
     if (!entry) return false;
     entry.resolve(answer.trim());

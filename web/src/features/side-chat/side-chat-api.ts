@@ -67,8 +67,14 @@ export async function deleteSideChat(id: string): Promise<void> {
   await fetchJson(apiUrl(`/api/side-chats/${id}`), { method: 'DELETE', headers: headers() });
 }
 
-export function heartbeatSideChat(id: string): void {
-  void apiFetch(apiUrl(`/api/side-chats/${id}/heartbeat`), { method: 'POST', headers: headers() }).catch(() => {});
+export async function heartbeatSideChat(id: string): Promise<SideChatView> {
+  const response = await fetchJson<{ sideChat: SideChatView }>(apiUrl(`/api/side-chats/${id}/heartbeat`), { method: 'POST', headers: headers() });
+  return response.sideChat;
+}
+
+export async function extendSideChat(id: string): Promise<SideChatView> {
+  const response = await fetchJson<{ sideChat: SideChatView }>(apiUrl(`/api/side-chats/${id}/extend`), { method: 'POST', headers: headers() });
+  return response.sideChat;
 }
 
 export function disposeSideChatClient(): void {

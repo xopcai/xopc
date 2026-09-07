@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { ConfigSchema } from '../../../config/schema.js';
@@ -10,6 +10,7 @@ import {
   listAgentCapabilities,
   resolveAgentCapabilityCatalog,
 } from '../../capabilities/index.js';
+import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
 import { AgentToolsFactory } from '../factory.js';
 
 describe('AgentToolsFactory', () => {
@@ -157,4 +158,18 @@ describe('AgentToolsFactory', () => {
     expect(data?.availableTools).toEqual(['read_file']);
     expect(data?.tools).not.toContain('execute_code');
   });
+  it('routes side chat clarification through its isolated execution without a persistent session context', async () => {
+    const requestClarification = vi.fn(async () => 'yes');
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+      gatewayClarify: { requestClarification },
+    });
+    const tool = factory.createCoreTools().find((tool) => tool.name === 'clarify')!;
+    const result = await runWithEmbeddedExecutionSession('parent:side-chat:isolated', () => tool.execute('q1', { question: 'Continue?' }));
+    expect(result.details).toMatchObject({ answer: 'yes' });
+    expect(requestClarification).toHaveBeenCalledWith('parent:side-chat:isolated', expect.objectContaining({ question: 'Continue?' }));
+  });
+
 });

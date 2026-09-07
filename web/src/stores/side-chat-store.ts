@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 
 import type { SideChatSelection, SideChatTab } from '@/features/side-chat/side-chat.types';
+import type { Message } from '@/features/chat/messages/messages.types';
+import { buildSideChatReading, SIDE_CHAT_READING_BYTES, type SideChatReading } from '@/features/side-chat/side-chat-reading';
+import { useGatewayStore } from './gateway-store';
 
 const STORAGE_KEY = 'xopc:side-chat-panes:v2';
 export const SIDE_CHAT_WIDTH_MIN = 360;
@@ -55,6 +58,13 @@ function persist(state: StoredState): void {
 }
 
 type SideChatPaneState = StoredState & {
+  drafts: Record<string, string>;
+  readings: Record<string, SideChatReading>;
+  setDraft: (id: string, draft: string) => void;
+  rememberMessages: (id: string, messages: Message[]) => void;
+  markEnded: (id: string, reason: NonNullable<SideChatTab['ended']>) => void;
+  replaceTab: (oldId: string, tab: SideChatTab) => void;
+  reset: () => void;
   pendingCreate: PendingCreate | null;
   requestCreate: (parentSessionKey: string, selections?: SideChatSelection[]) => void;
   claimPendingCreate: (parentSessionKey: string, requestId: string) => PendingCreate | null;
@@ -83,6 +93,46 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
 
   return {
     ...initial,
+    drafts: {},
+    readings: {},
+    setDraft: (id, draft) => set({ drafts: { ...get().drafts, [id]: draft } }),
+    rememberMessages: (id, messages) => {
+      const readings = { ...get().readings };
+      delete readings[id];
+      readings[id] = buildSideChatReading(messages);
+      readings[id].truncated ||= get().readings[id]?.truncated ?? false;
+      let bytes = Object.values(readings).reduce((sum, entry) => sum + entry.bytes, 0);
+      while (Object.keys(readings).length > 5 || bytes > SIDE_CHAT_READING_BYTES) {
+        const oldest = Object.keys(readings)[0];
+        bytes -= readings[oldest].bytes;
+        delete readings[oldest];
+      }
+      set({ readings });
+    },
+    markEnded: (id, ended) => commit({ tabs: get().tabs.map((tab) => tab.id === id ? { ...tab, ended, runId: undefined } : tab) }),
+    replaceTab: (oldId, tab) => {
+      const state = get();
+      if (!state.tabs.some((existing) => existing.id === oldId)) return;
+      const drafts = { ...state.drafts, [tab.id]: state.drafts[oldId] ?? '' };
+      const readings = { ...state.readings };
+      delete drafts[oldId];
+      delete readings[oldId];
+      set({ drafts, readings });
+      commit({
+        tabs: state.tabs.map((existing) => existing.id === oldId ? { ...tab, fresh: true } : existing),
+        panes: {
+          ...state.panes,
+          [tab.parentSessionKey]: {
+            open: state.panes[tab.parentSessionKey]?.open ?? false,
+            activeId: state.panes[tab.parentSessionKey]?.activeId === oldId ? tab.id : state.panes[tab.parentSessionKey]?.activeId ?? tab.id,
+          },
+        },
+      });
+    },
+    reset: () => {
+      set({ drafts: {}, readings: {}, pendingCreate: null });
+      commit({ panes: {}, tabs: [] });
+    },
     pendingCreate: null,
     requestCreate: (parentSessionKey, selections = []) => {
       set({ pendingCreate: { requestId: crypto.randomUUID(), parentSessionKey, selections } });
@@ -110,6 +160,11 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     removeTab: (id) => {
       const removed = get().tabs.find((tab) => tab.id === id);
       if (!removed) return;
+      const drafts = { ...get().drafts };
+      const readings = { ...get().readings };
+      delete drafts[id];
+      delete readings[id];
+      set({ drafts, readings });
       const tabs = get().tabs.filter((tab) => tab.id !== id);
       const sessionTabs = tabs.filter((tab) => tab.parentSessionKey === removed.parentSessionKey);
       const current = get().panes[removed.parentSessionKey] ?? { open: false, activeId: null };
@@ -132,4 +187,11 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     setOpen: (parentSessionKey, open) => updatePane(parentSessionKey, { open }),
     setWidthPx: (widthPx) => commit({ widthPx: clampWidth(widthPx) }),
   };
+});
+
+useGatewayStore.subscribe((state, previous) => {
+  if (state.baseUrl !== previous.baseUrl || (previous.token !== undefined && state.token !== previous.token)) {
+    useSideChatStore.getState().reset();
+    try { sessionStorage.removeItem('xopc:side-chat-client-id'); } catch { /* Storage may be disabled. */ }
+  }
 });

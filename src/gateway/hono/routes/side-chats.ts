@@ -92,6 +92,14 @@ export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedR
     }
   });
 
+  authenticated.post('/api/side-chats/:sideChatId/extend', deps.chatRateLimitMiddleware, (c) => {
+    try {
+      return c.json({ ok: true, sideChat: service.sideChats.extend(c.req.param('sideChatId'), readClientInstanceId(c)) });
+    } catch (error) {
+      return respondSideChatError(c, error);
+    }
+  });
+
   authenticated.post('/api/side-chats/:sideChatId/inputs', deps.chatRateLimitMiddleware, async (c) => {
     try {
       const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
@@ -171,6 +179,10 @@ function respondSideChatError(c: Context, error: unknown): Response {
     logRouteError(log, c, error, 'Side chat request failed');
     return c.json({ ok: false, error: 'Side chat request failed', code: 'INTERNAL_ERROR' }, 500);
   }
-  const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'CONFLICT' ? 409 : error.code === 'LIMIT_REACHED' ? 429 : 400;
-  return c.json({ ok: false, error: error.message, code: error.code }, status);
+  const status = error.code === 'EXPIRED' ? 410
+    : error.code === 'NOT_FOUND' || error.code === 'PARENT_NOT_FOUND' ? 404
+    : error.code === 'CONFLICT' ? 409
+    : error.code === 'CAPACITY_REACHED' ? 503
+    : error.code === 'LIMIT_REACHED' ? 429 : 400;
+  return c.json({ ok: false, error: error.message, code: error.code, reason: error.reason }, status);
 }

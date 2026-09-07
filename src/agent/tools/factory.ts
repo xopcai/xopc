@@ -16,6 +16,7 @@ import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import { resolveDefaultAgentId } from '../agent-scope.js';
+import { getEmbeddedExecutionSession } from '../embedded/execution-context.js';
 import {
   createDefaultExternalToolGatewayTools,
   EXTERNAL_TOOL_NAMES,
@@ -359,6 +360,8 @@ export class AgentToolsFactory {
         resolveAskUser: () => {
           const req = this.deps.gatewayClarify?.requestClarification;
           if (!req) return null;
+          const executionSession = getEmbeddedExecutionSession();
+          if (executionSession) return (r) => req(executionSession, r);
           const ctx = this.deps.getCurrentContext();
           if (!ctx?.sessionKey) return null;
           if (!CLARIFY_SUPPORTED_CHANNELS.has(ctx.channel)) return null;
