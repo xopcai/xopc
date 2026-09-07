@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { TaskWorkflowCoordinator } from '../../tasks/task-workflow-coordinator.js';
-import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
 import { writeKnowledgeItem } from '../../knowledge-memory/index.js';
