@@ -28,6 +28,7 @@ export const MessageList = memo(function MessageList({
   onSelectWelcomeProject,
   welcomeOverlay,
   compactWelcome = false,
+  compactProductDelivery = false,
   onDeleteRound,
   onRetryUserMessageRound,
   deleteRoundDisabled,
@@ -56,6 +57,7 @@ export const MessageList = memo(function MessageList({
   onSelectWelcomeProject?: (projectId: string) => Promise<void> | void;
   welcomeOverlay?: ReactNode;
   compactWelcome?: boolean;
+  compactProductDelivery?: boolean;
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
   deleteRoundDisabled?: boolean;
@@ -127,6 +129,7 @@ export const MessageList = memo(function MessageList({
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
               reasoningLevel={reasoningLevel}
+              compactProductDelivery={compactProductDelivery}
               messageIndex={index}
               onDeleteRound={onDeleteRound}
               onRetryUserMessageRound={onRetryUserMessageRound}

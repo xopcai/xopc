@@ -18,6 +18,7 @@ export const HomeDecisionSchema = z.object({
     'overdue',
     'due_soon',
     'decision_needed',
+    'insight_available',
     'approval_required',
   ]),
   urgency: z.enum(['now', 'soon']),
@@ -34,6 +35,8 @@ export const HomeDecisionSchema = z.object({
     recommendation: z.string(),
     confidence: z.number(),
     valueScore: z.number().min(0).max(1).optional(),
+    evidenceIds: z.array(z.string()).max(20),
+    attentionKind: z.enum(['information', 'decision', 'receipt']),
     disposition: z.enum(['show_in_work', 'request_approval', 'auto_execute']).optional(),
     dispositionReason: z.string().optional(),
     actionStatus: z.enum(['not_authorized', 'approval_required', 'pending', 'executing', 'completed', 'rejected', 'failed']).optional(),
@@ -98,7 +101,7 @@ export const HomeActionSchema = z.discriminatedUnion('type', [
 
 export const HomeWorkbenchItemSchema = z.object({
   id: z.string(),
-  kind: z.enum(['decision', 'failure', 'running', 'scheduled']),
+  kind: z.enum(['decision', 'failure', 'running', 'scheduled', 'insight']),
   title: z.string(),
   summary: z.string(),
   recommendation: z.string().optional(),

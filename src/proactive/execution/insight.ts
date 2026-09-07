@@ -78,6 +78,11 @@ export function scoreInsight(candidate: InsightCandidate): number {
   return Math.round((candidate.confidence * 0.7 + urgencyWeight * 0.3) * 1000) / 1000;
 }
 
-export function isValuableInsight(candidate: InsightCandidate): boolean {
-  return candidate.confidence >= 0.65 && candidate.urgency !== 'low' && scoreInsight(candidate) >= 0.6;
+export function isValuableInsight(
+  candidate: InsightCandidate,
+  policy: { minConfidence: number; minScore: number } = { minConfidence: 0.65, minScore: 0.6 },
+): boolean {
+  return candidate.confidence >= policy.minConfidence
+    && candidate.urgency !== 'low'
+    && scoreInsight(candidate) >= policy.minScore;
 }

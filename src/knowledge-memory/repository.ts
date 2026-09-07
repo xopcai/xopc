@@ -8,6 +8,7 @@ import type {
   KnowledgeKind,
   KnowledgeOriginClass,
   KnowledgeRecordClass,
+  KnowledgeSource,
   KnowledgeStatus,
   KnowledgeVisibilityContext,
 } from './domain.js';
@@ -208,12 +209,22 @@ export function searchKnowledgeItems(input: {
   principalId?: string;
   asOf?: number;
   recordClass?: KnowledgeRecordClass;
+  trustedOnly?: boolean;
+  sources?: readonly KnowledgeSource[];
   limit?: number;
 }): KnowledgeItem[] {
   const principalId = input.principalId ?? USER_MODEL_PRINCIPAL_ID;
   const asOf = input.asOf ?? Date.now();
   const limit = Math.max(1, Math.min(100, input.limit ?? 12));
   const visible = visibilityClause(input.context);
+  const sourceParts: string[] = [];
+  const sourceValues: string[] = [];
+  if (input.sources?.includes('connector')) sourceParts.push("k.record_class = 'source_index'");
+  const memoryScopes = input.sources?.filter((source) => source !== 'connector') ?? [];
+  if (memoryScopes.length) {
+    sourceParts.push(`(k.record_class = 'memory' AND k.scope_type IN (${memoryScopes.map(() => '?').join(', ')}))`);
+    sourceValues.push(...memoryScopes);
+  }
   const fts = buildFts5SearchQuery(input.query);
   if (!fts) return [];
   const rows = getSqliteDatabase().prepare(`SELECT k.*, bm25(knowledge_items_fts) AS rank
@@ -223,9 +234,25 @@ export function searchKnowledgeItems(input: {
       AND (k.valid_to IS NULL OR k.valid_to >= ?)
       AND (k.expires_at IS NULL OR k.expires_at >= ?)
       ${input.recordClass ? 'AND k.record_class = ?' : ''}
+      ${input.trustedOnly ? "AND k.origin_class != 'untrusted'" : ''}
+      ${input.sources ? `AND (${sourceParts.length ? sourceParts.join(' OR ') : '0'})` : ''}
       AND ${visible.sql}
     ORDER BY rank ASC, k.importance DESC, k.updated_at DESC LIMIT ?`)
     .all(fts, principalId, asOf, asOf, asOf,
-      ...(input.recordClass ? [input.recordClass] : []), ...visible.values, limit) as KnowledgeRow[];
+      ...(input.recordClass ? [input.recordClass] : []), ...sourceValues, ...visible.values, limit) as KnowledgeRow[];
   return rows.map(fromRow);
+}
+
+export function knowledgeSourceAllowed(
+  item: KnowledgeItem,
+  sources: readonly KnowledgeSource[],
+): boolean {
+  if (item.recordClass === 'source_index') return sources.includes('connector');
+  return item.scope.type === 'session'
+    ? sources.includes('session')
+    : item.scope.type === 'workspace'
+      ? sources.includes('workspace')
+      : item.scope.type === 'project'
+        ? sources.includes('project')
+        : false;
 }

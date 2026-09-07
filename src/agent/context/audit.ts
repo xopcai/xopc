@@ -35,42 +35,50 @@ export function recordExecutionContext(
     sessionId: string;
     budget: ExecutionContextBudget;
     renderedChars: number;
+    includedContext?: ExecutionContext;
   },
 ): void {
   const createdAt = Date.now();
+  const included = new Set<string>();
+  const selected = input.includedContext ?? context;
+  for (const item of selected.rules) included.add(`rule:${item.id}`);
+  for (const item of selected.assertions) included.add(`assertion:${item.assertion.id}`);
+  for (const item of selected.goals) included.add(`goal:${item.id}`);
+  for (const item of selected.priorities) included.add(`priority:${item.id}`);
+  for (const item of selected.knowledge) included.add(`knowledge:${item.id}`);
   const items: ExecutionContextAudit['items'] = [
     ...context.rules.map((item) => ({
       objectType: 'rule' as const,
       objectId: item.id,
       reasons: [`${item.enforcementLevel}_rule`],
-      included: true,
+      included: included.has(`rule:${item.id}`),
     })),
     ...context.assertions.map((item) => ({
       objectType: 'assertion' as const,
       objectId: item.assertion.id,
       score: item.score,
       reasons: item.reasons,
-      included: true,
+      included: included.has(`assertion:${item.assertion.id}`),
     })),
     ...context.goals.map((item) => ({
       objectType: 'goal' as const,
       objectId: item.id,
       reasons: ['active_goal'],
-      included: true,
+      included: included.has(`goal:${item.id}`),
     })),
     ...context.priorities.map((item) => ({
       objectType: 'priority' as const,
       objectId: item.id,
       score: item.urgency,
       reasons: [`${item.rank}_priority`],
-      included: true,
+      included: included.has(`priority:${item.id}`),
     })),
     ...context.knowledge.map((item) => ({
       objectType: 'knowledge' as const,
       objectId: item.id,
       score: item.importance,
       reasons: ['task_relevant_knowledge'],
-      included: true,
+      included: included.has(`knowledge:${item.id}`),
     })),
   ];
   const metrics = {
@@ -79,6 +87,11 @@ export function recordExecutionContext(
     goals: context.goals.length,
     priorities: context.priorities.length,
     knowledge: context.knowledge.length,
+    includedRules: selected.rules.length,
+    includedAssertions: selected.assertions.length,
+    includedGoals: selected.goals.length,
+    includedPriorities: selected.priorities.length,
+    includedKnowledge: selected.knowledge.length,
     renderedChars: input.renderedChars,
   };
   runSqliteWriteTransaction((db) => {
@@ -154,4 +167,26 @@ export function recordExecutionContextFeedback(input: {
     rating = excluded.rating, reason = excluded.reason, updated_at = excluded.updated_at`)
     .run(input.turnId, input.rating, input.reason ?? null, now, now, input.turnId);
   return Number(result.changes) > 0;
+}
+
+export function getExecutionContextFeedbackScores(): Map<string, number> {
+  const rows = getSqliteDatabase().prepare(`SELECT i.object_type, i.object_id,
+      COUNT(*) AS samples,
+      SUM(CASE f.rating WHEN 'helpful' THEN 1 ELSE -1 END) AS balance
+    FROM execution_context_items i
+    JOIN execution_context_runs r ON r.run_id = i.run_id
+    JOIN (
+      SELECT turn_id, rating FROM execution_context_feedback
+      ORDER BY updated_at DESC LIMIT 500
+    ) f ON f.turn_id = r.turn_id
+    WHERE i.included = 1
+    GROUP BY i.object_type, i.object_id`).all() as Array<{
+      object_type: ExecutionContextAudit['items'][number]['objectType'];
+      object_id: string;
+      samples: number;
+      balance: number;
+    }>;
+  return new Map(rows.flatMap((row) => row.samples < 2
+    ? []
+    : [[`${row.object_type}:${row.object_id}`, Math.max(-0.1, Math.min(0.1, (row.balance / row.samples) * 0.1))]]));
 }

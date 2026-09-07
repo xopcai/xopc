@@ -102,6 +102,8 @@ export function nextQuietHoursEnd(quietHours: QuietHours | undefined, now = new 
 export class ProjectMonitoringService {
   readonly #scenarios = new ProactiveScenarioService();
 
+  constructor(private readonly workspaceId = 'default') {}
+
   get(projectId: string): ProjectMonitoringPolicy {
     const row = getSqliteDatabase()
       .prepare('SELECT * FROM project_monitoring_policies WHERE project_id = ?')
@@ -181,7 +183,7 @@ export class ProjectMonitoringService {
         if (!selected.has(scenario) && !existingSubscriptions.has(scenario)) continue;
         this.#scenarios.subscribe({
           scenarioKey: scenario,
-          workspaceId: 'default',
+          workspaceId: this.workspaceId,
           scopeKind: 'project',
           scopeId: input.projectId,
           enabled: selected.has(scenario),

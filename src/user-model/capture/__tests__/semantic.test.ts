@@ -79,4 +79,35 @@ describe('user model semantic capture', () => {
     }), evidence)?.candidates).toEqual([]);
     expect(parseUserModelInterpretation(response({ scope: { type: 'project' } }), evidence)).toBeNull();
   });
+
+  it('extracts grounded durable goals and collaboration rules separately', () => {
+    const parsed = parseUserModelInterpretation(JSON.stringify({
+      intent: 'user_assertion',
+      targetAssertionIds: [],
+      candidates: [],
+      goals: [{
+        title: 'Improve launch quality',
+        desiredOutcome: 'The launch passes the quality bar.',
+        scope: { type: 'global' },
+        evidence: [{ ref: 'entry-1', quote: 'focused on launch quality' }],
+        selfContained: true,
+        unresolvedReferences: [],
+      }],
+      collaborationRules: [{
+        category: 'communication',
+        priority: 10,
+        scope: { type: 'global' },
+        conditions: { enforcementLevel: 'prompt' },
+        statement: 'Keep answers concise.',
+        evidence: [{ ref: 'entry-1', quote: 'Keep answers concise.' }],
+        selfContained: true,
+        unresolvedReferences: [],
+      }],
+    }), evidence);
+
+    expect(parsed?.goals).toEqual([expect.objectContaining({ title: 'Improve launch quality' })]);
+    expect(parsed?.collaborationRules).toEqual([
+      expect.objectContaining({ statement: 'Keep answers concise.' }),
+    ]);
+  });
 });

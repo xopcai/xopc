@@ -3,10 +3,7 @@ export {
   sanitizeUserContextFenceEscapes,
 } from './context-fence.js';
 export { createMemoryManagerFromConfig } from './create-memory-manager.js';
-export {
-  isMemorySubsystemEnabled,
-  shouldPlanUserContextThisTurn,
-} from './memory-config.js';
+export { isMemorySubsystemEnabled } from './memory-config.js';
 export { MemoryManager } from './manager.js';
 export { discoverMemoryPlugins } from './plugin-discovery.js';
 export type { MemoryPluginMetadata } from './plugin-discovery.js';

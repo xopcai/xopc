@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 
 import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
 import {
+  createCollaborationRule,
+  listCollaborationRules,
+} from '../../storage/sqlite/collaboration-rule-repository.js';
+import { createUserGoal, listUserGoals } from '../goals.js';
+import {
   getUserAssertion,
   linkAssertionEvidence,
   reconcileAssertion,
@@ -34,6 +39,8 @@ export interface UserModelCaptureResult {
     kind: string;
     status: AssertionStatus;
   }>;
+  createdGoals: Array<{ id: string; title: string; status: 'proposed' | 'active' }>;
+  createdRules: Array<{ id: string; statement: string; status: 'active' | 'disabled' }>;
   outputs: Array<{
     candidateKey: string;
     assertionId?: string;
@@ -42,7 +49,16 @@ export interface UserModelCaptureResult {
 }
 
 export function emptyUserModelCaptureResult(): UserModelCaptureResult {
-  return { proposed: 0, created: 0, deduplicated: 0, rejected: 0, createdAssertions: [], outputs: [] };
+  return {
+    proposed: 0,
+    created: 0,
+    deduplicated: 0,
+    rejected: 0,
+    createdAssertions: [],
+    createdGoals: [],
+    createdRules: [],
+    outputs: [],
+  };
 }
 
 function scopeAllowed(type: UserModelScopeType, id: string | undefined, context: CaptureScopeContext): boolean {
@@ -113,11 +129,17 @@ export function executeUserModelInterpretation(input: {
     }
     return result;
   }
-  if (!input.interpretation.candidates.length) return result;
+  const goals = input.interpretation.goals ?? [];
+  const collaborationRules = input.interpretation.collaborationRules ?? [];
+  if (!input.interpretation.candidates.length && !goals.length && !collaborationRules.length) return result;
 
   const evidenceByRef = new Map(input.evidence.map((entry) => [entry.ref, entry]));
   const evidenceIds = new Map<string, string>();
-  for (const ref of new Set(input.interpretation.candidates.flatMap((item) => item.evidenceRefs))) {
+  for (const ref of new Set([
+    ...input.interpretation.candidates.flatMap((item) => item.evidenceRefs),
+    ...goals.flatMap((item) => item.evidenceRefs),
+    ...collaborationRules.flatMap((item) => item.evidenceRefs),
+  ])) {
     const item = evidenceByRef.get(ref);
     if (!item || item.role !== 'user') continue;
     const evidence = createContextEvidence({
@@ -138,6 +160,8 @@ export function executeUserModelInterpretation(input: {
     evidenceIds.set(ref, evidence.id);
   }
 
+  const explicitCommand = input.interpretation.intent === 'remember'
+    || input.interpretation.intent === 'correct';
   for (const source of input.interpretation.candidates) {
     result.proposed += 1;
     const key = candidateKey(source.predicate, source.scope.type, source.scope.id);
@@ -149,8 +173,6 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'rejected' });
       continue;
     }
-    const explicitCommand = input.interpretation.intent === 'remember'
-      || input.interpretation.intent === 'correct';
     const requiresConfirmation = !explicitCommand && (
       input.policy.write === 'confirm'
       || (sensitive && input.policy.sensitiveWrite === 'confirm')
@@ -176,6 +198,78 @@ export function executeUserModelInterpretation(input: {
     result.outputs.push({ candidateKey: key, assertionId: applied.assertion.id, outcome: applied.action });
     if (applied.action === 'deduplicated') result.deduplicated += 1;
     else result.created += 1;
+  }
+
+  for (const source of goals) {
+    result.proposed += 1;
+    const key = candidateKey(`goal:${source.title.toLocaleLowerCase()}`, source.scope.type, source.scope.id);
+    if (input.policy.write === 'deny'
+      || !scopeAllowed(source.scope.type, source.scope.id, input.scopeContext)) {
+      result.rejected += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+      continue;
+    }
+    const existing = listUserGoals().find((goal) => goal.scope.type === source.scope.type
+      && goal.scope.id === source.scope.id
+      && goal.title.toLocaleLowerCase() === source.title.toLocaleLowerCase()
+      && goal.status !== 'achieved' && goal.status !== 'abandoned');
+    if (existing) {
+      result.deduplicated += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
+      continue;
+    }
+    const active = explicitCommand || input.policy.write === 'allow';
+    const goal = createUserGoal({
+      title: source.title,
+      desiredOutcome: source.desiredOutcome,
+      scope: source.scope,
+      ...(source.declaredImportance === undefined ? {} : { declaredImportance: source.declaredImportance }),
+      ...(source.targetAt === undefined ? {} : { targetAt: source.targetAt }),
+      status: active ? 'active' : 'proposed',
+      authority: active ? 'user_explicit' : 'user_observed',
+      confidence: active ? 1 : 0.8,
+      createdBy: 'runtime',
+    });
+    result.created += 1;
+    result.createdGoals.push({ id: goal.id, title: goal.title, status: goal.status as 'proposed' | 'active' });
+    result.outputs.push({ candidateKey: key, outcome: 'created' });
+  }
+
+  for (const source of collaborationRules) {
+    result.proposed += 1;
+    const key = candidateKey(`rule:${source.category}:${source.statement.toLocaleLowerCase()}`, source.scope.type, source.scope.id);
+    if (input.policy.write === 'deny'
+      || !scopeAllowed(source.scope.type, source.scope.id, input.scopeContext)
+      || source.scope.type === 'agent') {
+      result.rejected += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+      continue;
+    }
+    const existing = listCollaborationRules().find((rule) => rule.scope.type === source.scope.type
+      && rule.scope.id === source.scope.id
+      && rule.statement.toLocaleLowerCase() === source.statement.toLocaleLowerCase()
+      && rule.status !== 'archived');
+    if (existing) {
+      result.deduplicated += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
+      continue;
+    }
+    const active = explicitCommand || input.policy.write === 'allow';
+    const rule = createCollaborationRule({
+      category: source.category,
+      priority: source.priority,
+      scope: source.scope,
+      conditions: {
+        ...source.conditions,
+        enforcementLevel: 'prompt',
+        ...(active ? {} : { reviewRequired: true }),
+      },
+      statement: source.statement,
+      status: active ? 'active' : 'disabled',
+    });
+    result.created += 1;
+    result.createdRules.push({ id: rule.id, statement: rule.statement, status: rule.status as 'active' | 'disabled' });
+    result.outputs.push({ candidateKey: key, outcome: 'created' });
   }
   return result;
 }

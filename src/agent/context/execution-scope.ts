@@ -5,6 +5,7 @@ import { TaskConversationRepository } from '../../tasks/task-conversation-reposi
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 
 import { buildActiveProjectContextForPrompt } from './project-context.js';
+import type { KnowledgeSource } from '../../knowledge-memory/index.js';
 
 const MAX_OBJECTIVE_TEXT = 1200;
 const MAX_CRITERIA = 12;
@@ -132,10 +133,17 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
   return lines.join('\n');
 }
 
-export function buildExecutionScopeContextForPrompt(sessionKey: string): string | undefined {
+export function buildExecutionScopeContextForPrompt(
+  sessionKey: string,
+  options: { includeKnowledge?: boolean; knowledgeSources?: readonly KnowledgeSource[] } = {},
+): string | undefined {
   const scope = resolveExecutionScope(sessionKey);
   const sections = [
-    buildActiveProjectContextForPrompt(sessionKey, { knowledgeQuery: scope.objective?.objective }),
+    buildActiveProjectContextForPrompt(sessionKey, {
+      knowledgeQuery: scope.objective?.objective,
+      includeKnowledge: options.includeKnowledge,
+      knowledgeSources: options.knowledgeSources,
+    }),
     formatCurrentWorkForPrompt(scope),
   ].filter((section): section is string => Boolean(section?.trim()));
   return sections.join('\n\n') || undefined;

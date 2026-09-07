@@ -14,6 +14,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import { reconcileAssertion } from '../../user-model/index.js';
 import { ContextProviderRegistry } from '../execution/context.js';
+import { getScenario } from '../scenarios/repository.js';
 import { ProactiveEventService } from '../service.js';
 import { defineTaskContract, TaskApplicationService } from '../../tasks/index.js';
 
@@ -87,7 +88,8 @@ describe('proactive context resolver', () => {
     }).event;
     const resolver = new ContextProviderRegistry();
 
-    const allowed = await resolver.collect('blocked_work', {
+    const blockedWork = getScenario('blocked_work')!;
+    const allowed = await resolver.collect(blockedWork, {
       batchId: 'batch-1',
       eventIds: [event.id],
       subscriptionId: 'subscription-1',
@@ -109,7 +111,7 @@ describe('proactive context resolver', () => {
       accountId: 'account:connection-1',
       allowedScenarioKeys: ['meeting_preparation'],
     });
-    const revoked = await resolver.collect('blocked_work', {
+    const revoked = await resolver.collect(blockedWork, {
       batchId: 'batch-1',
       eventIds: [event.id],
       subscriptionId: 'subscription-1',
@@ -127,7 +129,7 @@ describe('proactive context resolver', () => {
       contentHash: 'hash-secret',
       sensitivity: 'secret',
     }]);
-    const sensitive = await resolver.collect('blocked_work', {
+    const sensitive = await resolver.collect(blockedWork, {
       batchId: 'batch-1',
       eventIds: [event.id],
       subscriptionId: 'subscription-1',
@@ -185,7 +187,7 @@ describe('proactive context resolver', () => {
       payload: { reason: 'blocked' },
     }).event;
 
-    const resolved = await new ContextProviderRegistry().collect('blocked_work', {
+    const resolved = await new ContextProviderRegistry().collect(getScenario('blocked_work')!, {
       batchId: 'batch-1',
       eventIds: [event.id],
       subscriptionId: 'subscription-1',

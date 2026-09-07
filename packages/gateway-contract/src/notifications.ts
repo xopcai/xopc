@@ -72,7 +72,9 @@ export function notificationTargetRoute(
         ? `/automation/runs/${encodeURIComponent(target.runId)}`
         : `/automations?automation=${encodeURIComponent(target.automationId)}&run=${encodeURIComponent(target.runId)}`;
     case 'insight':
-      return `/inbox?item=${encodeURIComponent(target.inboxItemId)}`;
+      return surface === 'web'
+        ? `/?judgment=${encodeURIComponent(target.inboxItemId)}`
+        : `/inbox?item=${encodeURIComponent(target.inboxItemId)}`;
   }
 }
 

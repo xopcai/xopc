@@ -7,6 +7,7 @@ import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
 import { resolveCompactionPolicy } from '../agent/memory/compaction-policy.js';
 import { promoteCompactionLedger } from '../agent/memory/compaction-promotion.js';
+import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { resolveAgentIdFromSessionKey } from '../routing/agent-session-key.js';
 import { createLogger } from '../utils/logger.js';
 import {
@@ -778,6 +779,7 @@ export class SessionStore {
       }
       try {
         const metadata = getSessionMetadata(key);
+        const access = resolveUserContextSessionAccess(this.options.config, key);
         const promoted = promoteCompactionLedger({
           sessionKey: key,
           sessionId: expectedSnapshot.sessionId,
@@ -787,6 +789,10 @@ export class SessionStore {
           handover: result.handover,
           audit: result.audit,
           sourceEntries: expectedSnapshot.entries,
+          writePolicy: access.knowledge
+            && this.options.config.userContext.knowledgeMemory.sources.includes('session')
+            ? this.options.config.userContext.knowledgeMemory.writePolicy
+            : 'deny',
         });
         log.info(
           {

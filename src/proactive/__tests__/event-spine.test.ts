@@ -10,6 +10,8 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { ProactiveEventService } from '../service.js';
+import { pruneProactiveHistory } from '../maintenance.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { insertEvent } from '../events/repository.js';
 import { normalizeEventEnvelope } from '../events/envelope.js';
 import type { PublishEventInput } from '../events/types.js';
@@ -114,6 +116,17 @@ describe('proactive event spine', () => {
     const batches = service.listBatches();
     expect(batches).toHaveLength(2);
     expect(batches.map((batch) => batch.status).sort()).toEqual(['collecting', 'ready']);
+  });
+
+  it('prunes terminal history after the retention window', () => {
+    const service = new ProactiveEventService(() => [projectRisk]);
+    service.publish(event(), new Date('2026-01-01T00:00:00.000Z'));
+    getSqliteDatabase().prepare("UPDATE proactive_signal_batches SET status = 'ignored', updated_at = ?")
+      .run('2026-01-01T00:01:00.000Z');
+
+    expect(pruneProactiveHistory(new Date('2026-05-01T00:00:00.000Z'))).toEqual({ batches: 1, events: 1 });
+    expect(service.listBatches()).toEqual([]);
+    expect(service.listEvents()).toEqual([]);
   });
 
   it('does not route events that fail conditions or lack the aggregation scope', () => {

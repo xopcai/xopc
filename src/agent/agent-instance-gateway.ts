@@ -63,7 +63,7 @@ export interface AgentInstanceGateway {
     turnId: string,
   ): Promise<import('./context/coordinator.js').ExecutionContextPlan>;
 
-  /** Post-turn: sync external memory providers, queue next prefetch. */
+  /** Post-turn: capture durable structured user context according to policy. */
   afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined>;
 
   /** Bump the per-session "turns since memory review" counter. */

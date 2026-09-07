@@ -12,6 +12,7 @@ export type KnowledgeKind =
 export type KnowledgeStatus = 'candidate' | 'active' | 'needs_review' | 'stale' | 'archived' | 'rejected';
 export type KnowledgeOriginClass = 'owner' | 'agent' | 'system' | 'untrusted';
 export type KnowledgeRecordClass = 'memory' | 'source_index';
+export type KnowledgeSource = 'session' | 'workspace' | 'project' | 'connector';
 
 export interface KnowledgeItem {
   id: string;

@@ -46,11 +46,11 @@ export class ProactiveWorker {
       const run = claimNextRun(this.owner);
       if (!run) return;
       try {
-        const scenario = getScenario(run.scenarioKey);
-        if (!scenario || scenario.version !== run.scenarioVersion) throw new Error('Pinned scenario version is unavailable');
+        const scenario = getScenario(run.scenarioKey, run.scenarioVersion);
+        if (!scenario) throw new Error('Pinned scenario version is unavailable');
         const revision = run.promptRevisionId ? getPromptRevision(run.promptRevisionId) ?? undefined : undefined;
         const eventIds = eventIdsForBatch(run.batchId);
-        const context = await this.contexts.collect(run.scenarioKey, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
+        const context = await this.contexts.collect(scenario, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
         const snapshot = saveSnapshot(
           run.batchId,
           context.snapshotContent ?? context.content,
@@ -60,8 +60,15 @@ export class ProactiveWorker {
         const prompt = composeScenarioPrompt({ scenario, ...(revision ? { revision } : {}), runtimeContext: 'Use the read-only inspection tool to examine the authorized evidence.' });
         const output = await this.executor.execute({ systemPrompt: prompt.platformSafety, userPrompt: prompt.text, authorizedContext: context.content });
         const candidate = parseInsightCandidate(output.text, new Set(context.evidenceIds));
-        const valuable = isValuableInsight(candidate);
-        const insight = finishRun({ run, ...(valuable ? { candidate, valueScore: scoreInsight(candidate) } : {}), rawOutput: output.text, modelRef: output.modelRef });
+        const valueScore = scoreInsight(candidate);
+        const valuable = isValuableInsight(candidate, scenario.valuePolicy);
+        const insight = finishRun({
+          run,
+          ...(valuable ? { candidate, valueScore } : {}),
+          cooldownSeconds: scenario.valuePolicy.cooldownSeconds,
+          rawOutput: output.text,
+          modelRef: output.modelRef,
+        });
         const disposition = insight ? 'created' : valuable ? 'duplicate_suppressed' : 'value_gate_discarded';
         log.info(
           { runId: run.id, scenarioKey: run.scenarioKey, disposition, insightId: insight?.id },

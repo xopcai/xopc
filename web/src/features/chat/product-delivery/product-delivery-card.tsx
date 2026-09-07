@@ -66,7 +66,13 @@ function continuePrompt(reference: ProductReference, language: 'en' | 'zh'): str
     : `Continue working on ${KIND_LABELS[reference.kind].en.toLowerCase()} "${reference.title}" (ID: ${reference.id}): `;
 }
 
-export function ProductDeliveryCard({ delivery }: { delivery: ProductDeliveryEnvelope }) {
+export function ProductDeliveryCard({
+  delivery,
+  compact = false,
+}: {
+  delivery: ProductDeliveryEnvelope;
+  compact?: boolean;
+}) {
   const reference = delivery.primary;
   const navigate = useNavigate();
   const location = useLocation();
@@ -78,11 +84,59 @@ export function ProductDeliveryCard({ delivery }: { delivery: ProductDeliveryEnv
   const route = productReferenceOpenRoute(reference);
   const canOpen = Boolean(route && reference.capabilities.includes('open'));
   const canContinue = reference.capabilities.includes('continue_in_chat');
+  const isNote = reference.kind === 'note';
   const isFailure = delivery.operation === 'failed';
 
   const open = () => {
     if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
   };
+
+  if (compact) {
+    return (
+      <section
+        className={cn(
+          'mt-2 overflow-hidden rounded-lg border bg-surface-raised',
+          isFailure ? 'border-red-300/70 dark:border-red-500/35' : 'border-edge',
+        )}
+        aria-label={`${OPERATION_LABELS[delivery.operation][language]} ${KIND_LABELS[reference.kind][language]}`}
+      >
+        <button
+          type="button"
+          onClick={canOpen ? open : undefined}
+          disabled={!canOpen}
+          className={cn(
+            'flex min-h-10 w-full items-center gap-2.5 px-3 py-2 text-left',
+            canOpen && 'transition-colors hover:bg-surface-hover/60',
+            !canOpen && 'cursor-default',
+          )}
+        >
+          <Icon
+            className={cn(
+              'size-4 shrink-0',
+              isFailure ? 'text-red-600 dark:text-red-300' : 'text-accent-fg',
+            )}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">
+            <span className="font-medium text-fg">
+              {OPERATION_LABELS[delivery.operation][language]}
+            </span>
+            <span aria-hidden> · </span>
+            <span>{reference.title}</span>
+          </span>
+          {canOpen ? (
+            <span className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-accent">
+              {language === 'zh'
+                ? `打开${KIND_LABELS[reference.kind].zh}`
+                : `Open ${KIND_LABELS[reference.kind].en}`}
+              <ChevronRight className="size-3.5" aria-hidden />
+            </span>
+          ) : null}
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -130,9 +184,18 @@ export function ProductDeliveryCard({ delivery }: { delivery: ProductDeliveryEnv
             </span>
           ) : null}
         </span>
-        {canOpen ? <ChevronRight className="mt-2 size-4 shrink-0 text-fg-disabled" aria-hidden /> : null}
+        {canOpen ? (
+          isNote ? (
+            <span className="mt-1.5 flex shrink-0 items-center gap-0.5 text-xs font-medium text-accent">
+              {language === 'zh' ? '打开笔记' : 'Open Note'}
+              <ChevronRight className="size-3.5" aria-hidden />
+            </span>
+          ) : (
+            <ChevronRight className="mt-2 size-4 shrink-0 text-fg-disabled" aria-hidden />
+          )
+        ) : null}
       </button>
-      {canOpen || canContinue ? (
+      {!isNote && (canOpen || canContinue) ? (
         <div className="flex flex-wrap justify-end gap-2 border-t border-edge px-3 py-2">
           {canContinue ? (
             <Button

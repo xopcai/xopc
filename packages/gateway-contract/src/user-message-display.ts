@@ -5,6 +5,14 @@ const USER_CONTEXT_TAGS = [
   'collaboration-contract',
   'user-context',
 ] as const;
+const LEGACY_EXECUTION_CONTEXT_HEADINGS = [
+  'Collaboration rules:',
+  'Relevant user facts:',
+  'Active goals:',
+  'Current priorities:',
+  'Relevant knowledge:',
+] as const;
+const EMBEDDED_TIMESTAMP_PREFIX_RE = /(?:^|\r?\n)(\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}[^\]]*\]\s*)/u;
 
 function stripLeadingTaggedBlock(text: string, tag: string): string | null {
   const opening = `<${tag}>`;
@@ -29,6 +37,18 @@ export function stripSourceContextsEnvelope(text: string): string {
     .trimStart();
   const wrappedUserMessage = withoutContexts.match(/^<user_message>\r?\n([\s\S]*)\r?\n<\/user_message>\s*$/u);
   return wrappedUserMessage?.[1] ?? withoutContexts;
+}
+
+/** Remove execution context persisted before it gained a structured envelope. */
+function stripLegacyExecutionContext(text: string): string {
+  const trimmed = text.trimStart();
+  if (!LEGACY_EXECUTION_CONTEXT_HEADINGS.some((heading) => trimmed.startsWith(heading))) {
+    return text;
+  }
+  const timestamp = trimmed.match(EMBEDDED_TIMESTAMP_PREFIX_RE);
+  if (!timestamp || timestamp.index === undefined) return text;
+  const timestampStart = timestamp.index + timestamp[0].length - timestamp[1].length;
+  return trimmed.slice(timestampStart);
 }
 
 /**
@@ -64,6 +84,7 @@ export function stripRuntimeUserMessageEnvelope(text: string): string {
     remaining = beforeUserContext;
   }
 
+  remaining = stripLegacyExecutionContext(remaining);
   return remaining.replace(ENVELOPE_TIMESTAMP_PREFIX_RE, '');
 }
 

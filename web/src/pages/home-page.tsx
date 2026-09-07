@@ -12,7 +12,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +32,7 @@ import {
   acknowledgeWorkAttention,
   decideAgentJudgment,
   fetchHome,
+  feedbackAgentJudgment,
   instructAgentJudgment,
   respondToWorkDecision,
   retryWorkAttention,
@@ -173,6 +174,7 @@ function AgentJudgmentCard({
   onSnooze,
   onDismiss,
   onInstruct,
+  onFeedback,
 }: {
   item: HomeDecision;
   labels: ReturnType<typeof taskCopy>;
@@ -181,6 +183,7 @@ function AgentJudgmentCard({
   onSnooze: () => void;
   onDismiss: () => void;
   onInstruct: (instruction: string) => void;
+  onFeedback: (rating: 'useful' | 'not_useful') => void;
 }) {
   const [instruction, setInstruction] = useState('');
   const judgment = item.judgment!;
@@ -211,7 +214,15 @@ function AgentJudgmentCard({
       {judgment.decision ? <div className="mt-4"><p className="text-sm font-medium text-fg">{judgment.decision.question}</p><div className="mt-2 flex flex-wrap gap-2">{judgment.decision.options.map((option) => (
         <Button key={option.id} type="button" variant="secondary" className="h-auto min-h-9 flex-col items-start px-3 py-2 text-left" disabled={busy} title={option.consequence} onClick={() => onDecide(option.id)}><span>{option.label}</span><span className="text-[10px] font-normal text-fg-muted">{option.consequence}</span></Button>
       ))}</div></div> : null}
+      <details className="mt-4 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-xs">
+        <summary className="cursor-pointer font-medium text-fg-subtle">{labels.evidence} ({judgment.evidenceIds.length})</summary>
+        <ul className="mt-2 space-y-1 text-fg-muted">
+          {judgment.evidenceIds.map((id) => <li key={id} className="break-all font-mono text-[11px]">{id}</li>)}
+        </ul>
+      </details>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-edge-subtle pt-3">
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onFeedback('useful')}>{labels.useful}</Button>
+        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onFeedback('not_useful')}>{labels.notUseful}</Button>
         <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onSnooze}>{labels.snooze}</Button>
         <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onDismiss}>{labels.dismiss}</Button>
       </div>
@@ -229,6 +240,7 @@ export function HomePage() {
   const t = msg.projectsPage;
   const copy = taskCopy(language);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<HomeResponse | null>(null);
@@ -432,12 +444,33 @@ export function HomePage() {
       await action();
       await load();
       setReviewDecision(null);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete('judgment');
+        return next;
+      }, { replace: true });
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusyDecisionId(null);
     }
-  }, [load]);
+  }, [load, setSearchParams]);
+
+  useEffect(() => {
+    const requestedId = searchParams.get('judgment');
+    if (!requestedId || !home) return;
+    const decision = home.decisions.find((item) => item.judgment?.inboxItemId === requestedId);
+    if (decision) setReviewDecision(decision);
+  }, [home, searchParams]);
+
+  const closeJudgment = useCallback(() => {
+    setReviewDecision(null);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('judgment');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const runAction = useCallback<HomeActionRunner>((action, itemId) => {
     if (action.type === 'open') {
@@ -555,7 +588,7 @@ export function HomePage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open) setReviewDecision(null); }}>
+      <Dialog.Root open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open) closeJudgment(); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
@@ -573,6 +606,7 @@ export function HomePage() {
                   onSnooze={() => void handleJudgmentAction(reviewDecision, () => transitionAgentJudgment(reviewDecision.judgment!.inboxItemId, 'snoozed'))}
                   onDismiss={() => void handleJudgmentAction(reviewDecision, () => transitionAgentJudgment(reviewDecision.judgment!.inboxItemId, 'resolved'))}
                   onInstruct={(instruction) => void handleJudgmentAction(reviewDecision, () => instructAgentJudgment(reviewDecision.judgment!.inboxItemId, instruction))}
+                  onFeedback={(rating) => void handleJudgmentAction(reviewDecision, () => feedbackAgentJudgment(reviewDecision.judgment!.inboxItemId, rating))}
                 />
               ) : null}
             </div>

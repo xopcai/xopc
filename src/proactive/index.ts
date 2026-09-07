@@ -6,6 +6,7 @@ export { matchesCondition, matchScenario } from './routing/matcher.js';
 export type { EventCondition, ScenarioRoute } from './routing/types.js';
 export type { SignalBatch } from './routing/batch-repository.js';
 export { ProactiveEventService } from './service.js';
+export { pruneProactiveHistory } from './maintenance.js';
 export { ProactiveScenarioService } from './scenarios/service.js';
 export type { PromptRevision, ScenarioDefinition, ScenarioSubscription } from './scenarios/types.js';
 export {

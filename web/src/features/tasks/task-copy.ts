@@ -50,6 +50,9 @@ export function taskCopy(language: 'en' | 'zh') {
     dismiss: '忽略',
     feedbackPlaceholder: '告诉 AI：以后遇到这类情况应该怎样判断…',
     applyFeedback: '调整后续判断',
+    evidence: '证据引用',
+    useful: '有帮助',
+    notUseful: '没帮助',
     taskStatuses: {
       pending: '待推进',
       planning: '正在明确完成标准',
@@ -245,6 +248,9 @@ export function taskCopy(language: 'en' | 'zh') {
     dismiss: 'Dismiss',
     feedbackPlaceholder: 'Tell AI how to judge this kind of event next time…',
     applyFeedback: 'Update future judgments',
+    evidence: 'Evidence references',
+    useful: 'Useful',
+    notUseful: 'Not useful',
     taskStatuses: {
       pending: 'Pending',
       planning: 'Defining done',

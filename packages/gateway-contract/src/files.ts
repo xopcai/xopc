@@ -6,7 +6,7 @@ export const FileSpaceBindingSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session'), id: z.string().min(1) }),
 ]);
 
-export const FileCapabilitySchema = z.enum(['preview', 'edit', 'download', 'share', 'upload']);
+export const FileCapabilitySchema = z.enum(['preview', 'edit', 'download', 'share', 'upload', 'delete']);
 
 export const FileSpaceSchema = z.object({
   id: z.string().min(1),

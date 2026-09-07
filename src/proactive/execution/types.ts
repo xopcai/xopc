@@ -53,7 +53,6 @@ export interface ProactiveAgentExecutor {
 
 export interface ContextProvider {
   id: string;
-  supports(scenarioKey: string): boolean;
   collect(input: {
     scenarioKey: string;
     batchId: string;

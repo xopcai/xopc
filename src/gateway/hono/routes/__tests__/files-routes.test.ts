@@ -342,6 +342,29 @@ describe('files routes', () => {
     expect(readFileSync(join(workspace, 'note.txt'), 'utf8')).toBe('two');
   });
 
+  it('uploads into a nested directory and deletes only files', async () => {
+    const workspace = join(stateDir, 'workspace');
+    mkdirSync(join(workspace, 'docs'), { recursive: true });
+    const { app, project } = appFor(workspace);
+    const context = await app.request(`/api/files/contexts/project/${project.id}`);
+    const spaceId = (await context.json() as { space: { id: string } }).space.id;
+
+    const form = new FormData();
+    form.set('directory', 'docs');
+    form.set('file', new File(['nested'], 'report.txt', { type: 'text/plain' }));
+    const uploaded = await app.request(`/api/files/spaces/${spaceId}/upload`, { method: 'POST', body: form });
+    expect(uploaded.status).toBe(201);
+    const uploadedResource = (await uploaded.json() as { resource: { id: string; relativePath: string; capabilities: string[] } }).resource;
+    expect(uploadedResource).toMatchObject({ relativePath: 'docs/report.txt' });
+    expect(uploadedResource.capabilities).toContain('delete');
+    expect(readFileSync(join(workspace, 'docs', 'report.txt'), 'utf8')).toBe('nested');
+
+    const directoryId = fileResourceId(spaceId, 'docs');
+    expect((await app.request(`/api/files/${encodeURIComponent(directoryId)}`, { method: 'DELETE' })).status).toBe(400);
+    expect((await app.request(`/api/files/${encodeURIComponent(uploadedResource.id)}`, { method: 'DELETE' })).status).toBe(200);
+    expect((await app.request(`/api/files/${encodeURIComponent(uploadedResource.id)}`)).status).toBe(404);
+  });
+
   it('accepts only one concurrent edit for the same revision', async () => {
     const workspace = join(stateDir, 'workspace');
     mkdirSync(workspace, { recursive: true });

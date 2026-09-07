@@ -14,6 +14,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ContextProviderRegistry } from '../execution/context.js';
+import { getScenario } from '../scenarios/repository.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
@@ -107,7 +108,7 @@ describe('proactive temporal worker', () => {
     expect(new ProactiveScenarioService().list().map((scenario) => scenario.key))
       .toContain('meeting_preparation');
 
-    const context = await new ContextProviderRegistry().collect('meeting_preparation', {
+    const context = await new ContextProviderRegistry().collect(getScenario('meeting_preparation')!, {
       batchId: 'batch-1',
       eventIds: [events.listEvents()[0]!.id],
       subscriptionId: 'subscription-1',
