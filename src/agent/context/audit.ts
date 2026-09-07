@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
-import type { ExecutionContext } from './execution-context.js';
+import type { ExecutionContext } from './execution-context.types.js';
 
 export interface ExecutionContextBudget {
   maxAssertions: number;

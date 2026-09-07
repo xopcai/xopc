@@ -6,6 +6,7 @@ import { notifyUserContextChange } from '../../user-context/changes.js';
 import { validateSessionId } from '../../session/session-id.js';
 import type { SessionListQuery, SessionMetadata, PaginatedResult } from '../../session/types.js';
 import { buildDefaultSessionMetadata, type SessionMetadataSeed } from './session-metadata.js';
+import { readCurrentSessionId } from './session-instance-repository.js';
 import {
   buildGlobalSessionStats,
   metadataToSessionInsert,
@@ -136,12 +137,7 @@ export function ensureSessionRecord(
   return runSqliteWriteTransaction((db) => ensureSessionInTransaction(db, sessionKey, cwd, seed));
 }
 
-export function readCurrentSessionId(db: DatabaseSync, sessionKey: string): string | null {
-  const row = db
-    .prepare(`SELECT session_id FROM sessions WHERE session_key = ?`)
-    .get(sessionKey) as { session_id?: string } | undefined;
-  return row?.session_id ?? null;
-}
+export { readCurrentSessionId } from './session-instance-repository.js';
 
 export function getSessionMetadata(sessionKey: string): SessionMetadata | null {
   const db = getSqliteDatabase();
