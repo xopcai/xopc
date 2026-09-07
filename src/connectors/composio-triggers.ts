@@ -1,9 +1,7 @@
 import crypto, { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, appendFile, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 
 import type { Config } from '../config/schema.js';
-import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { listConnectorConnections, upsertConnectorConnection } from '../storage/sqlite/connector-repository.js';
 
 export type ComposioTriggerArchiveEntry = {
@@ -14,10 +12,7 @@ export type ComposioTriggerArchiveEntry = {
   payload: unknown;
 };
 
-function archivePath(config: Config): string {
-  const workspace = getWorkspacePath(config) || './workspace';
-  return join(workspace, 'state', 'connectors', 'composio-triggers.jsonl');
-}
+
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -96,7 +91,7 @@ export function applyComposioConnectionLifecycleEvent(payload: unknown): string 
   return connection.id;
 }
 
-export async function appendComposioTriggerEvent(config: Config, payload: unknown): Promise<ComposioTriggerArchiveEntry> {
+export async function appendComposioTriggerEvent(_config: Config, payload: unknown): Promise<ComposioTriggerArchiveEntry> {
   const record = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
   const normalized = normalizeComposioTriggerPayload(payload);
   const entry: ComposioTriggerArchiveEntry = {
@@ -106,22 +101,11 @@ export async function appendComposioTriggerEvent(config: Config, payload: unknow
     trigger: normalized.trigger ?? normalized.type,
     payload,
   };
-  const path = archivePath(config);
-  await mkdir(dirname(path), { recursive: true });
-  const recent = await listComposioTriggerEvents(config, 500);
-  const existing = recent.find((candidate) => candidate.id === entry.id);
-  if (existing) return existing;
-  await appendFile(path, `${JSON.stringify(entry)}\n`, 'utf8');
-  return entry;
+  return new DurableState<ComposioTriggerArchiveEntry>('composio-events').update(entry.id, existing => ({
+    value: existing ?? entry, result: existing ?? entry,
+  }));
 }
 
-export async function listComposioTriggerEvents(config: Config, limit = 50): Promise<ComposioTriggerArchiveEntry[]> {
-  const path = archivePath(config);
-  const text = await readFile(path, 'utf8').catch(() => '');
-  return text
-    .split('\n')
-    .filter(Boolean)
-    .slice(-Math.max(1, Math.min(limit, 500)))
-    .map((line) => JSON.parse(line) as ComposioTriggerArchiveEntry)
-    .reverse();
+export async function listComposioTriggerEvents(_config: Config, limit = 50): Promise<ComposioTriggerArchiveEntry[]> {
+  return new DurableState<ComposioTriggerArchiveEntry>('composio-events').values(Math.max(1, Math.min(Math.floor(limit) || 50, 500)), true);
 }

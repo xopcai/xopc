@@ -1,3 +1,4 @@
+import { useTestDatabase } from '../../../../storage/sqlite/__tests__/test-database.js';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -17,6 +18,8 @@ const TEST_MEDIA = join(TEST_ROOT, 'asset.png');
 
 vi.mock('../../../../config/paths.js', () => ({ resolveStateDir: () => TEST_STATE_DIR }));
 vi.mock('../../../../tunnel/tunnel-state.js', () => ({ loadTunnelState: () => null }));
+
+useTestDatabase();
 
 describe('public Note share routes', () => {
   beforeEach(() => {

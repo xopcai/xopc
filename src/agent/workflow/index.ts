@@ -2,7 +2,6 @@ export { applySubagentProgress } from './agent-progress.js';
 export { BUILTIN_WORKFLOWS } from './builtins/index.js';
 export {
   createWorkflowCatalog,
-  defaultUserDir,
   type CatalogEntry,
   type SaveWorkflowInput,
   type WorkflowCatalog,

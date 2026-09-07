@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, mkdir, writeFile, rm, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { writeTextAtomic } from '../infra/write-file-atomic.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createLogger } from '../utils/logger.js';
 import {
   deleteNoteAgentContextRecord,
@@ -13,7 +13,7 @@ import {
   upsertNoteRecord,
 } from '../storage/sqlite/index.js';
 import { buildNoteIndexMeta } from './note-index-meta.js';
-import { resolveNoteMediaDir, resolveNoteHistoryDir } from './paths.js';
+import { resolveNoteMediaDir } from './paths.js';
 import type {
   Note,
   NoteIndexEntry,
@@ -111,87 +111,49 @@ export class NotesStore {
   }
 
   async saveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
-    const historyDir = resolveNoteHistoryDir(note.id);
-    await mkdir(historyDir, { recursive: true });
-    const snapshot: NoteSnapshot = {
-      noteId: note.id,
-      timestamp: Date.now(),
-      trigger,
-      title: note.title,
-      markdown: note.markdown,
-      tags: note.tags,
-      kind: note.kind,
-      status: note.status,
-    };
-    const filePath = join(historyDir, `${snapshot.timestamp}.json`);
-    await writeTextAtomic(filePath, JSON.stringify(snapshot, null, 2));
-    log.debug({ noteId: note.id, trigger, timestamp: snapshot.timestamp }, 'Snapshot saved');
+    requireXopcDatabase();
+    runSqliteWriteTransaction(db => {
+      const row = db.prepare('SELECT MAX(timestamp) AS timestamp FROM note_snapshots WHERE note_id = ?').get(note.id) as { timestamp: number | null };
+      const snapshot: NoteSnapshot = {
+        noteId: note.id,
+        timestamp: Math.max(Date.now(), (row.timestamp ?? 0) + 1),
+        trigger,
+        title: note.title,
+        markdown: note.markdown,
+        tags: note.tags,
+        kind: note.kind,
+        status: note.status,
+      };
+      db.prepare('INSERT INTO note_snapshots(note_id, timestamp, payload) VALUES (?, ?, ?)')
+        .run(note.id, snapshot.timestamp, JSON.stringify(snapshot));
+    });
   }
 
   async listSnapshots(noteId: string): Promise<NoteSnapshotEntry[]> {
-    const historyDir = resolveNoteHistoryDir(noteId);
-    let files: string[];
-    try {
-      files = await readdir(historyDir);
-    } catch {
-      return [];
-    }
-    const entries: NoteSnapshotEntry[] = [];
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const timestamp = parseInt(file.slice(0, -'.json'.length), 10);
-      if (!Number.isFinite(timestamp)) continue;
-      try {
-        const content = await readFile(join(historyDir, file), 'utf-8');
-        const snapshot = JSON.parse(content) as NoteSnapshot;
-        const rawText = snapshot.markdown ?? '';
-        entries.push({
-          timestamp: snapshot.timestamp,
-          trigger: snapshot.trigger,
-          snippet: rawText.slice(0, 80) || undefined,
-        });
-      } catch {
-        log.debug({ noteId, file }, 'Skipped unreadable snapshot');
-      }
-    }
-    entries.sort((a, b) => b.timestamp - a.timestamp);
-    return entries;
+    const rows = requireXopcDatabase().db.prepare('SELECT payload FROM note_snapshots WHERE note_id = ? ORDER BY timestamp DESC')
+      .all(noteId) as Array<{ payload: string }>;
+    return rows.map(row => {
+      const snapshot = JSON.parse(row.payload) as NoteSnapshot;
+      return { timestamp: snapshot.timestamp, trigger: snapshot.trigger, snippet: snapshot.markdown?.slice(0, 80) || undefined };
+    });
   }
 
   async getSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot | null> {
-    const filePath = join(resolveNoteHistoryDir(noteId), `${timestamp}.json`);
-    try {
-      const content = await readFile(filePath, 'utf-8');
-      return JSON.parse(content) as NoteSnapshot;
-    } catch {
-      return null;
-    }
+    const row = requireXopcDatabase().db.prepare('SELECT payload FROM note_snapshots WHERE note_id = ? AND timestamp = ?')
+      .get(noteId, timestamp) as { payload: string } | undefined;
+    return row ? JSON.parse(row.payload) as NoteSnapshot : null;
   }
 
   async pruneSnapshots(noteId: string, maxCount: number): Promise<void> {
-    const historyDir = resolveNoteHistoryDir(noteId);
-    let files: string[];
-    try {
-      files = await readdir(historyDir);
-    } catch {
-      return;
-    }
-    const jsonFiles = files.filter((f) => f.endsWith('.json')).sort();
-    if (jsonFiles.length <= maxCount) return;
-    const toDelete = jsonFiles.slice(0, jsonFiles.length - maxCount);
-    for (const file of toDelete) {
-      await rm(join(historyDir, file), { force: true }).catch(() => undefined);
-    }
-    log.debug({ noteId, deleted: toDelete.length }, 'Pruned old snapshots');
+    if (!Number.isSafeInteger(maxCount) || maxCount < 0) throw new Error('Invalid snapshot retention count');
+    requireXopcDatabase().db.prepare(`DELETE FROM note_snapshots WHERE note_id = ? AND timestamp NOT IN (
+      SELECT timestamp FROM note_snapshots WHERE note_id = ? ORDER BY timestamp DESC LIMIT ?
+    )`).run(noteId, noteId, maxCount);
   }
 
   async deleteAllSnapshots(noteId: string): Promise<void> {
-    const historyDir = resolveNoteHistoryDir(noteId);
-    await rm(historyDir, { recursive: true, force: true }).catch(() => undefined);
+    requireXopcDatabase().db.prepare('DELETE FROM note_snapshots WHERE note_id = ?').run(noteId);
   }
-
-  /** No-op: SQLite writes are synchronous. Kept for API compatibility with tests. */
-  async flush(): Promise<void> {}
 }
 
 export { buildNoteIndexMeta };
