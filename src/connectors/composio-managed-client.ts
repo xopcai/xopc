@@ -121,10 +121,10 @@ export class ManagedComposioClient implements ComposioSessionsClient {
         });
         return response.item;
       },
-      search: async () => {
+      search: async ({ query }) => {
         const results = await Promise.all([...new Set(toolkits)].map(async (slug) => {
           const response = await this.request<{ result: { toolSchemas?: JsonRecord } }>({
-            path: `/connectors/composio/toolkits/${encodeURIComponent(slug)}/tools`,
+            path: `/connectors/composio/toolkits/${encodeURIComponent(slug)}/tools?query=${encodeURIComponent(query)}`,
           });
           return response.result;
         }));

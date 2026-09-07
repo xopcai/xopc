@@ -12,6 +12,7 @@ import {
   scopeForComposioAction,
 } from '../../connectors/composio.js';
 import type { ConnectorActionMetadata, ConnectorInstallationPolicy } from '../../connectors/types.js';
+import { isToolInputSchema } from '../../connectors/connection-capabilities.js';
 import { connectorPrincipalForSession } from '../../connectors/principal.js';
 import { connectionBinding, connectionBindings, requireSessionConnection, publishConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import {
@@ -158,9 +159,8 @@ function schemaSummary(value: unknown, fallback: string): string {
 }
 
 function actionInputSchema(action: ConnectorActionMetadata): Record<string, unknown> {
-  const schema = action.inputSchema && typeof action.inputSchema === 'object' && !Array.isArray(action.inputSchema)
-    ? action.inputSchema as Record<string, unknown>
-    : { type: 'object' };
+  if (!isToolInputSchema(action.inputSchema)) throw new Error(`Exact input contract is unavailable for ${action.actionId}`);
+  const schema = action.inputSchema;
   const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
     ? schema.properties as Record<string, unknown>
     : {};
@@ -214,6 +214,8 @@ export class ComposioToolProvider implements ExternalToolProvider {
         toolkitFromInstallation(candidate) === toolkit
       ));
       if (!installation) continue;
+      const inputSchema = schema && typeof schema === 'object' ? (schema as Record<string, unknown>).inputSchema : undefined;
+      if (!isToolInputSchema(inputSchema)) continue;
       upsertConnectorActionMetadata(contractFromSearch(
         installation.connectorId,
         toolkit,
@@ -237,7 +239,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const toolkit = toolkitFromInstallation(resolved.installation);
     const action = listConnectorActionMetadata(resolved.installation.connectorId)
       .find((candidate) => candidate.actionId === resolved.actionId);
-    if (!action?.inputSchema || !isComposioActionAllowedByCatalog(action.actionId)) return undefined;
+    if (!action || !isToolInputSchema(action.inputSchema) || !isComposioActionAllowedByCatalog(action.actionId)) return undefined;
     const summary = `Run ${action.actionId} in ${toolkit}.`;
     return {
       toolRef,
@@ -270,7 +272,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const toolkit = toolkitFromInstallation(resolved.installation);
     const action = listConnectorActionMetadata(resolved.installation.connectorId)
       .find((candidate) => candidate.actionId === resolved.actionId);
-    if (!action?.inputSchema || !isComposioActionAllowedByCatalog(resolved.actionId)) {
+    if (!action || !isToolInputSchema(action.inputSchema) || !isComposioActionAllowedByCatalog(resolved.actionId)) {
       return textResult('The exact action contract is unavailable. Search and describe the tool again.');
     }
     let fresh = await this.adapter.syncConnections({ principalId: available.principalId });
