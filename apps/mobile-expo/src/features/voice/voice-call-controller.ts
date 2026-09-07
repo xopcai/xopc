@@ -1,5 +1,6 @@
 import type { CreateVoiceSessionRequest, CreateVoiceSessionResponse, VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
 import type { VoiceTransport, VoiceTransportCallbacks } from './voice-transport';
+import { VoiceDiagnostics, voiceDiagnosticFinding } from './voice-diagnostics';
 
 type Transport = Pick<VoiceTransport, 'connect' | 'send' | 'audio' | 'close'>;
 
@@ -9,6 +10,7 @@ export type CallState = {
   target?: CallTarget; name: string; engine?: 'agent' | 'omni'; expanded: boolean; muted: boolean;
   startedAt: number; expiresAt?: number; responseId?: string; userText: string; assistantText: string;
   activity?: string; error?: string;
+  responseStage?: 'thinking' | 'buffering' | 'speaking';
   clarification?: { requestId: string; question: string; choices?: string[] };
 };
 export type CallDependencies = {
@@ -31,6 +33,7 @@ export function shouldPauseVoiceForBackground(state: CallState, permissionPrompt
 }
 
 export class VoiceCallController {
+  private diagnostics = new VoiceDiagnostics();
   private state = initial();
   private listeners = new Set<() => void>();
   private generation = 0;
@@ -46,15 +49,22 @@ export class VoiceCallController {
   private responseComplete = false;
   private limitTimer?: ReturnType<typeof setTimeout>;
   private recoveryTimer?: ReturnType<typeof setTimeout>;
+  private playbackTimer?: ReturnType<typeof setTimeout>;
   private inputReset = Promise.resolve();
   constructor(private deps: CallDependencies) {}
   getSnapshot = (): CallState => this.state;
+  getDiagnostics = () => {
+    const snapshot = this.diagnostics.snapshot();
+    return { ...snapshot, phase: this.state.phase, errorCode: this.state.error ?? snapshot.errorCode,
+      finding: voiceDiagnosticFinding(snapshot.responses.at(-1)) };
+  };
   subscribe = (fn: () => void): (() => void) => { this.listeners.add(fn); return () => this.listeners.delete(fn); };
   private update(value: Partial<CallState>) { this.state = { ...this.state, ...value }; this.listeners.forEach(fn => fn()); }
   expand = (expanded = true) => this.update({ expanded });
 
   start(target: CallTarget): Promise<void> {
     if (this.state.phase !== 'idle') { this.expand(); return Promise.resolve(); }
+    this.diagnostics.start();
     this.identity = undefined;
     this.approvalPending = false;
     this.update({ ...initial(), phase: 'connecting', target, startedAt: Date.now() });
@@ -67,22 +77,27 @@ export class VoiceCallController {
     const abort = new AbortController();
     this.abort = abort;
     const deadline = recovering ? setTimeout(() => { if (generation === this.generation) void this.pause('NETWORK'); }, 10_000) : undefined;
-    this.update({ phase: recovering ? 'recovering' : 'connecting', error: undefined, responseId: undefined, clarification: undefined });
+    this.update({ phase: recovering ? 'recovering' : 'connecting', error: undefined, responseId: undefined, responseStage: undefined, clarification: undefined });
     const current = () => generation === this.generation && !abort.signal.aborted;
     try {
       const prepared = await this.deps.prepare(target, abort.signal, recovering);
       if (!current()) return;
       if (this.identity && this.identity !== prepared.identity) throw new Error('SESSION_CHANGED');
       this.identity = prepared.identity;
+      this.diagnostics.setEngine(prepared.engine);
       this.update({ name: prepared.name, engine: prepared.engine, target: { ...target, engine: prepared.engine } });
       await this.deps.audio.start(target.background, {
         pcm: bytes => {
           if (!current() || this.state.phase !== 'connected' || this.state.muted || this.state.clarification || this.approvalPending) return;
-          try { this.transport?.audio(bytes); } catch { void this.pause('INPUT_DROPPED'); }
+          try { this.transport?.audio(bytes); this.diagnostics.input(bytes.byteLength); } catch { void this.pause('INPUT_DROPPED'); }
         },
         played: (id, bytes) => {
-          if (!current() || id !== this.state.responseId) return;
+          if (!current() || id !== this.state.responseId || bytes <= this.renderedBytes) return;
           this.renderedBytes = bytes;
+          this.diagnostics.played(id, bytes);
+          const responseStage = bytes < this.receivedBytes ? 'speaking' : 'thinking';
+          if (this.state.responseStage !== responseStage) this.update({ responseStage });
+          this.watchPlayback(true);
           this.transport?.send('response.audio.played', { responseId: id, playedBytes: bytes });
           this.finishResponse();
         },
@@ -96,7 +111,12 @@ export class VoiceCallController {
         audio: (id, pcm) => {
           if (!current() || id !== this.state.responseId) return;
           this.receivedBytes += pcm.byteLength;
-          void this.deps.audio.enqueue(id, pcm).catch(() => { if (current()) void this.pause('PLAYBACK_FAILED'); });
+          this.diagnostics.received(id, pcm);
+          if (this.state.responseStage === 'thinking') this.update({ responseStage: 'buffering' });
+          this.watchPlayback();
+          void this.deps.audio.enqueue(id, pcm).then(() => {
+            if (current()) this.diagnostics.queued(id, pcm.byteLength);
+          }).catch(() => { if (current()) void this.pause('PLAYBACK_FAILED'); });
         },
         close: reason => { if (current()) void this.disconnected(reason); },
       });
@@ -121,18 +141,34 @@ export class VoiceCallController {
     }
   }
   private finishResponse() {
-    if (this.responseComplete && this.renderedBytes >= this.receivedBytes) this.update({ responseId: undefined, activity: undefined });
+    if (this.responseComplete && this.renderedBytes >= this.receivedBytes) {
+      clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
+      this.update({ responseId: undefined, responseStage: undefined, activity: undefined });
+    }
+  }
+  private watchPlayback(progress = false) {
+    if (progress) { clearTimeout(this.playbackTimer); this.playbackTimer = undefined; }
+    if (this.renderedBytes >= this.receivedBytes || this.playbackTimer) return;
+    const generation = this.generation;
+    const id = this.state.responseId;
+    this.playbackTimer = setTimeout(() => {
+      this.playbackTimer = undefined;
+      if (generation === this.generation && id === this.state.responseId && this.renderedBytes < this.receivedBytes) void this.pause('PLAYBACK_STALLED');
+    }, 5000);
   }
   private onEvent(event: VoiceServerEvent) {
     switch (event.type) {
       case 'input.transcript.final': this.update({ userText: event.payload.text }); break;
       case 'response.created':
+        this.diagnostics.response(event.payload.responseId);
+        clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
         this.receivedBytes = 0; this.renderedBytes = 0; this.responseComplete = false;
-        this.update({ responseId: event.payload.responseId, assistantText: '', activity: undefined }); break;
+        this.update({ responseId: event.payload.responseId, responseStage: 'thinking', assistantText: '', activity: undefined, error: undefined }); break;
       case 'response.audio.started':
         if (event.payload.format.sampleRate !== 24000) void this.pause('UNSUPPORTED_FORMAT');
         break;
       case 'response.text.delta':
+        this.diagnostics.text(event.payload.responseId, event.payload.delta.length);
         if (event.payload.responseId === this.state.responseId) this.update({ assistantText: (this.state.assistantText + event.payload.delta).slice(-32_000) }); break;
       case 'response.activity':
         if (event.payload.responseId === this.state.responseId) this.update({ activity: event.payload.status === 'running' ? event.payload.toolName : undefined }); break;
@@ -142,16 +178,23 @@ export class VoiceCallController {
         this.transport?.send('input.mute', { muted: true });
         this.update({ clarification: event.payload }); break;
       case 'response.cancelled':
+        this.diagnostics.cancelled(event.payload.responseId, event.payload.reason);
         if (event.payload.responseId === this.state.responseId) {
+          clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
           void this.deps.audio.flush();
-          this.update({ responseId: undefined, activity: undefined, clarification: undefined });
+          this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
         }
         break;
       case 'response.done':
-        if (event.payload.responseId === this.state.responseId) { this.responseComplete = true; this.finishResponse(); }
+        this.diagnostics.done(event.payload.responseId, event.payload.finishReason);
+        if (event.payload.responseId === this.state.responseId) {
+          if (!event.payload.audio && this.state.assistantText && this.receivedBytes === 0 && !this.state.error) this.update({ error: 'NO_RESPONSE_AUDIO' });
+          this.responseComplete = true; this.finishResponse();
+        }
         if (this.state.target) this.deps.invalidate(this.state.target);
         break;
       case 'session.error':
+        this.diagnostics.error(event.payload.code);
         if (event.payload.recoverable && event.payload.code !== 'NO_ACTIVE_RESPONSE') this.update({ error: event.payload.code });
         break;
     }
@@ -172,8 +215,10 @@ export class VoiceCallController {
     const generation = this.generation;
     const transport = this.transport;
     const startedAt = performance.now();
+    this.diagnostics.cancelled(id, 'client_cancelled');
+    clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
     this.deps.audio.capture(false);
-    this.update({ responseId: undefined, activity: undefined, clarification: undefined });
+    this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
     try { await this.deps.audio.flush(); }
     catch { if (generation === this.generation) await this.pause('PLAYBACK_FAILED'); return; }
     if (generation !== this.generation) return;
@@ -201,13 +246,15 @@ export class VoiceCallController {
   async end(): Promise<void> { await this.stopResources(true); }
   private stopResources(end: boolean, reason?: string): Promise<void> {
     if (this.state.phase === 'idle') return Promise.resolve();
+    this.diagnostics.end(reason ?? 'user_finished');
     const stoppingGeneration = ++this.generation;
     clearTimeout(this.limitTimer); clearTimeout(this.recoveryTimer);
+    clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
     this.deps.audio.capture(false);
     this.transport?.send('session.stop', { reason: 'user_finished' });
     this.transport?.close(); this.transport = undefined;
     this.abort?.abort();
-    this.update({ phase: 'ending', responseId: undefined, activity: undefined, clarification: undefined });
+    this.update({ phase: 'ending', responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
     const opening = this.opening;
     this.cleanup = this.cleanup.then(async () => {
       await opening;

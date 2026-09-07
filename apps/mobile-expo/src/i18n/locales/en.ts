@@ -4,6 +4,19 @@
  */
 export const en = {
   voice: {
+    thinking: 'Preparing a reply…',
+    buffering: 'Waiting for audio playback…',
+    speaking: 'Speaking…',
+    playbackFailed: 'Audio arrived, but playback stopped. Check the call volume and audio output, then continue.',
+    noResponseAudio: 'This reply has text but no audio. Check the gateway voice service.',
+    responseFailed: 'The reply or speech generation failed. Check the conversation and gateway voice service.',
+    approvalLoadError: 'Could not load confirmations. The call is still connected; refresh to check pending actions.',
+    approvalSubmitError: 'Could not submit this confirmation. Refresh its status before trying again.',
+    approvalPermission: 'This gateway does not allow this device to access confirmations. Update the gateway or check device permissions.',
+    refreshApprovals: 'Refresh confirmations',
+    copyDiagnostics: 'Copy audio diagnostics',
+    diagnosticsCopied: 'Copied audio counters and error codes. No recordings or conversation text included.',
+    diagnosticsCopyFailed: 'Could not copy diagnostics. Please try again.',
     "endingSoon": "This connection ends in less than a minute. You can continue in the same Chat.",
     "languageZh": "Chinese",
     "languageEn": "English",
