@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule, type NativeModule } from 'expo';
-import { requestRecordingPermissionsAsync } from 'expo-audio';
+import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from 'expo-audio';
+import { AppState } from 'react-native';
 import { claimAudioCapture, releaseAudioCapture } from './audio-playback-coordinator';
 
 type Subscription = { remove(): void };
@@ -28,6 +29,7 @@ export function encodePcm(bytes: Uint8Array): string {
 }
 
 export class NativeAudioSession {
+  permissionPromptActive = false;
   private owner = Symbol('voice');
   private subscriptions: Subscription[] = [];
   private owned = false;
@@ -44,8 +46,16 @@ export class NativeAudioSession {
     this.owned = true;
     const epoch = ++this.epoch;
     try {
-      if (!(await requestRecordingPermissionsAsync()).granted) throw new Error('PERMISSION_DENIED');
+      let permission = await getRecordingPermissionsAsync();
       if (epoch !== this.epoch) throw new Error('CANCELLED');
+      if (!permission.granted) {
+        this.permissionPromptActive = true;
+        try { permission = await requestRecordingPermissionsAsync(); }
+        finally { this.permissionPromptActive = false; }
+      }
+      if (!permission.granted) throw new Error('PERMISSION_DENIED');
+      if (epoch !== this.epoch) throw new Error('CANCELLED');
+      if (!background && AppState.currentState !== 'active') throw new Error('background');
       this.subscriptions = [
         native.addListener('pcm', ({ audio, captureId }) => {
           if (this.capturing && captureId === this.captureId) callbacks.pcm(decodePcm(audio));
