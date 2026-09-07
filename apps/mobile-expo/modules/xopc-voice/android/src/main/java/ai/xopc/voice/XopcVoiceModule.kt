@@ -29,6 +29,7 @@ class XopcVoiceModule : Module() {
   private var responseId = ""
   private var submitted = 0
   private var lastPlayed = 0
+  private val playbackQueue = VoicePlaybackQueue()
   private var playbackVolume = 1f
   private var inputDeviceId: Int? = null
   private var outputDeviceId: Int? = null
@@ -38,6 +39,13 @@ class XopcVoiceModule : Module() {
   private var savedContext: Context? = null
   private val context get() = requireNotNull(savedContext ?: appContext.reactContext?.applicationContext)
   private val manager get() = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+  private val playbackPump = Runnable {
+    try { pumpPlayback() }
+    catch (error: RuntimeException) {
+      Log.w("XopcVoice", "Audio playback write failed", error)
+      interrupt("playback_failed")
+    }
+  }
   private val progress = object : Runnable {
     override fun run() {
       val player = track ?: return
@@ -218,13 +226,31 @@ class XopcVoiceModule : Module() {
     val bytes = Base64.decode(audio, Base64.NO_WRAP)
     require(bytes.isNotEmpty() && bytes.size % 2 == 0)
     check(submitted - lastPlayed + bytes.size <= 96000) { "Playback buffer full" }
-    val written = player.write(bytes, 0, bytes.size, AudioTrack.WRITE_NON_BLOCKING)
-    check(written == bytes.size) { "Playback underrun or overflow" }
-    submitted += written
+    playbackQueue.add(bytes)
+    submitted += bytes.size
+    pumpPlayback()
     player.play()
   }
 
+  private fun pumpPlayback() {
+    val player = track ?: return
+    handler.removeCallbacks(playbackPump)
+    // Reserve space for the frame, then lower the streaming start threshold. Leaving
+    // the effective buffer at two seconds stalls short replies (also after flush).
+    check(player.setBufferSizeInFrames(player.bufferCapacityInFrames) > 0) { "PLAYBACK_UNAVAILABLE" }
+    val drained = try {
+      playbackQueue.drain { bytes, offset, count ->
+        player.write(bytes, offset, count, AudioTrack.WRITE_NON_BLOCKING)
+      }
+    } finally {
+      check(player.setBufferSizeInFrames(1) > 0) { "PLAYBACK_UNAVAILABLE" }
+    }
+    if (!drained) handler.postDelayed(playbackPump, 10)
+  }
+
   private fun flush() {
+    handler.removeCallbacks(playbackPump)
+    playbackQueue.clear()
     track?.pause()
     track?.flush()
     responseId = ""

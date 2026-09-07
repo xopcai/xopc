@@ -17,6 +17,7 @@ vi.mock('expo-file-system', () => ({
   },
 }));
 vi.mock('expo', () => ({ requireOptionalNativeModule: () => null }));
+vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }));
 
 import { VoicePreview } from '../voice-preview';
 
