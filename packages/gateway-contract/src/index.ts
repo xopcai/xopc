@@ -20,3 +20,5 @@ export * from './mobile-privacy.js';
 export * from './device-pairing.js';
 
 export * from './model-selection.js';
+
+export * from './connection-waits.js';

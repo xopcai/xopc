@@ -1,6 +1,6 @@
 import type { ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 
-export type ChatStreamStatus = 'success' | 'error' | 'cancelled';
+export type ChatStreamStatus = 'success' | 'error' | 'cancelled' | 'suspended';
 
 export type PetFeedbackTaskState = 'working' | 'waiting' | 'success' | 'error';
 export type PetFeedbackSensitivity = 'public' | 'private';
