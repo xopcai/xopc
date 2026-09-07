@@ -1,4 +1,4 @@
-/* Evaluate in the foreground Android development app with agent-device CDP.
+/* Evaluate in the foreground iOS or Android development app with agent-device CDP.
  * Uses the real native module, requires microphone permission, and never uploads audio.
  * Inspect globalThis.__voiceNativeProbe for results; every run releases its audio session.
  */
@@ -32,17 +32,24 @@
     await audio.enqueue(id, tone(bytes));
     await expectPlayed(id, bytes, startedAt);
   };
+  const callbacks = {
+    pcm: bytes => { result.capturedFrames++; result.capturedBytes += bytes.length; },
+    played: (id, bytes) => played.set(id, bytes),
+    interrupted: reason => { result.interruption = reason; },
+  };
+  const capture = async () => {
+    const before = result.capturedFrames;
+    audio.capture(true);
+    const deadline = Date.now() + 2000;
+    while (result.capturedFrames === before && !result.interruption && Date.now() < deadline) await sleep(40);
+    audio.capture(false);
+    if (result.interruption) throw new Error(`Audio interrupted: ${result.interruption}`);
+    if (result.capturedFrames === before) throw new Error('No native microphone frames');
+  };
   void (async () => {
     try {
-      await audio.start(false, { title: 'Voice diagnostic', end: 'End' }, {
-        pcm: bytes => { result.capturedFrames++; result.capturedBytes += bytes.length; },
-        played: (id, bytes) => played.set(id, bytes),
-        interrupted: reason => { result.interruption = reason; },
-      });
-      audio.capture(true);
-      await sleep(500);
-      audio.capture(false);
-      if (!result.capturedFrames) throw new Error('No native microphone frames');
+      await audio.start(false, { title: 'Voice diagnostic', end: 'End' }, callbacks);
+      await capture();
       await play('short-reply', 24000);
       await play('ten-milliseconds', 480);
       await play('full-window', 96000);
@@ -55,6 +62,16 @@
       await sleep(100);
       await audio.flush();
       await play('after-interruption', 24000);
+      await audio.speaker(true);
+      await capture();
+      await play('speaker', 24000);
+      await audio.speaker(false);
+      await capture();
+      await play('system-output', 24000);
+      await audio.stop();
+      await audio.start(false, { title: 'Voice diagnostic', end: 'End' }, callbacks);
+      await capture();
+      await play('second-call', 24000);
       if (result.interruption) throw new Error(`Audio interrupted: ${result.interruption}`);
       result.stage = 'passed';
     } catch (error) {
