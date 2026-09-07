@@ -1,4 +1,7 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
+
+import { insertSessionInput } from '../storage/sqlite/session-input-repository.js';
+import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
 import { voiceMemoryBudget } from '../voice/realtime/conversation-context.js';
@@ -493,6 +496,7 @@ export class GatewayService {
     });
 
     this.agentRunner = new GatewayAgentRunner({
+      validateConnectionResume: input => this.connectionRecovery.preflight(input),
       bus: this.bus,
       sessionIndex: this.sessionIndex,
       getAgentService: () => this.ensureAgentService(),
@@ -702,16 +706,15 @@ export class GatewayService {
           return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).sessionKey;
         },
         runAgent: async (runId, sessionKey, message) => {
-          const stream = this.agentRunner.runAgent(
-            message,
-            'webchat',
-            sessionKey,
-            { type: 'system', source: 'workflow' },
-            undefined,
-            undefined,
-            { runId },
-          );
-          while (!(await stream.next()).done) { /* published through the run topic */ }
+          const clientMessageId = `task:${runId}`;
+          const session = await this.sessionIndex.getSessionMetadata(sessionKey);
+          if (!session) throw new Error('Task session is unavailable');
+          insertSessionInput({ id: crypto.randomUUID(), sessionKey, clientMessageId, expectedSessionId: session.sessionId,
+            requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: message,
+            origin: { type: 'system', source: 'workflow' }, taskRunId: runId,
+          });
+          void this.agentRunner.inputs.drain(sessionKey);
+          await this.agentRunner.inputs.waitForCompletion(sessionKey, clientMessageId);
         },
       });
     }
@@ -812,6 +815,12 @@ export class GatewayService {
   ): ReturnType<GatewayAgentRunner['runAgent']> {
     return this.agentRunner.runAgent(...args);
   }
+
+  readonly connectionRecovery = new ConnectionRecoveryService({
+    getConfig: () => this.config,
+    saveConfig: (config) => this.saveConfig(config),
+    drain: (sessionKey) => { void this.agentRunner.inputs.drain(sessionKey); },
+  });
 
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
     return this.agentRunner.submitSessionInput(...args);
@@ -1043,6 +1052,7 @@ export class GatewayService {
 
     this.ensureAgentService();
     this.agentRunner.recoverSessionInputs();
+    this.connectionRecovery.start();
 
     this.channelManager.setOutboundHooks({
       runMessageSending: (to, content, channel) =>
@@ -1453,6 +1463,7 @@ export class GatewayService {
     this.browserExtensionBindKey = null;
 
     registerClarifyBridge(null);
+    this.connectionRecovery.stop();
     this.agentRunner.disposeClarifyBridge();
     await disposeAllSessionMcpRuntimes().catch((err) => {
       log.warn({ err }, 'MCP runtime shutdown failed');

@@ -12,6 +12,7 @@ import {
   markChatRunCompleted,
   markChatRunFailed,
   markChatRunRunning,
+  markChatRunWaiting,
 } from '@/features/chat/session/chat-run-presence-store';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { apiFetch } from '@/lib/fetch';
@@ -34,7 +35,7 @@ function parseCompletedSessionRun(value: unknown): CompletedSessionRun | null {
   const run = parseSessionRun(value);
   if (!run || !value || typeof value !== 'object') return null;
   const status = (value as Record<string, unknown>).status;
-  if (status !== 'success' && status !== 'error' && status !== 'cancelled') return null;
+  if (status !== 'success' && status !== 'error' && status !== 'cancelled' && status !== 'suspended') return null;
   return { ...run, status };
 }
 
@@ -91,6 +92,7 @@ export function startChatRunStateBridge(): () => void {
       useChatSessionStore.getState().clearStreamingState(sessionKey);
       const visible = useChatSessionStore.getState().focusedSessionKey === sessionKey;
       if (status === 'error') markChatRunFailed(sessionKey, !visible);
+      else if (status === 'suspended') markChatRunWaiting(sessionKey);
       else if (status === 'success') markChatRunCompleted(sessionKey, !visible);
       else clearChatRunPresence(sessionKey);
       dispatchTranscriptRefresh(sessionKey);

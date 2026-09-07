@@ -12,7 +12,8 @@ import {
   scopeForComposioAction,
 } from '../../connectors/composio.js';
 import type { ConnectorActionMetadata, ConnectorInstallationPolicy } from '../../connectors/types.js';
-import { parseSessionKey } from '../../routing/session-key.js';
+import { connectorPrincipalForSession } from '../../connectors/principal.js';
+import { connectionBinding, connectionBindings, requireSessionConnection, publishConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import {
   consumeConnectorApproval,
   createConnectorApproval,
@@ -33,7 +34,6 @@ import type {
   ExternalToolSearchHit,
 } from './types.js';
 
-const CONNECT_ACTION = '$connect';
 const CONNECTION_ARGUMENT = 'xopcConnectionId';
 
 type CurrentContext = { channel: string; chatId: string; sessionKey: string } | null;
@@ -50,22 +50,6 @@ function textResult(value: unknown): AgentToolResult<Record<string, unknown>> {
   return {
     content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
     details: {},
-  };
-}
-
-function connectorPrincipalForSession(sessionKey: string | undefined): {
-  principalId: string;
-  agentId?: string;
-  isLocalOwner: boolean;
-} {
-  const parsed = parseSessionKey(sessionKey);
-  if (!parsed || parsed.source === 'cli' || parsed.source === 'webchat') {
-    return { principalId: 'local-owner', agentId: parsed?.agentId, isLocalOwner: true };
-  }
-  return {
-    principalId: `channel:${parsed.source}:${parsed.accountId}:${parsed.peerKind}:${parsed.peerId}`,
-    agentId: parsed.agentId,
-    isLocalOwner: false,
   };
 }
 
@@ -123,9 +107,9 @@ function syncLocalOwnerInstallations(config: Config | undefined): void {
       id,
       connectorId,
       principalId: 'local-owner',
-      enabled: true,
+      enabled: existing?.enabled ?? true,
       allowedAgentIds: existing?.allowedAgentIds ?? [],
-      maxScope: getComposioToolkitScope(config, toolkit),
+      maxScope: existing?.maxScope ?? getComposioToolkitScope(config, toolkit),
       confirmationPolicy: existing?.confirmationPolicy ?? 'writes',
       selectedConnectionIds: existing?.selectedConnectionIds ?? [],
       createdAt: existing?.createdAt,
@@ -221,16 +205,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const schemas = result && typeof result === 'object' && !Array.isArray(result)
       ? (result as Record<string, unknown>).toolSchemas
       : undefined;
-    const hits: ExternalToolSearchHit[] = available.installations.map((installation) => {
-      const toolkit = toolkitFromInstallation(installation);
-      return {
-        toolRef: externalToolRef(this.source, installation.id, CONNECT_ACTION),
-        source: this.source,
-        namespace: toolkit,
-        title: `Connect ${toolkit}`,
-        summary: `Authorize an account for the installed ${toolkit} app.`,
-      };
-    });
+    const hits: ExternalToolSearchHit[] = [];
     if (!schemas || typeof schemas !== 'object' || Array.isArray(schemas)) return hits;
     for (const [actionId, schema] of Object.entries(schemas)) {
       const toolkit = toolkitForAction(actionId, toolkits);
@@ -260,22 +235,6 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const resolved = this.resolve(toolRef);
     if (!resolved) return undefined;
     const toolkit = toolkitFromInstallation(resolved.installation);
-    if (resolved.actionId === CONNECT_ACTION) {
-      const summary = `Authorize an account for the installed ${toolkit} app.`;
-      return {
-        toolRef,
-        source: this.source,
-        namespace: toolkit,
-        title: `Connect ${toolkit}`,
-        summary,
-        description: `${summary} Never claim the connection succeeded until it is checked again.`,
-        inputSchema: {
-          type: 'object',
-          properties: { alias: { type: 'string', description: 'Optional account label.' } },
-          additionalProperties: false,
-        },
-      };
-    }
     const action = listConnectorActionMetadata(resolved.installation.connectorId)
       .find((candidate) => candidate.actionId === resolved.actionId);
     if (!action?.inputSchema || !isComposioActionAllowedByCatalog(action.actionId)) return undefined;
@@ -309,39 +268,49 @@ export class ComposioToolProvider implements ExternalToolProvider {
       executionArgs = hook.params ?? args;
     }
     const toolkit = toolkitFromInstallation(resolved.installation);
-    if (resolved.actionId === CONNECT_ACTION) {
-      const authorization = await this.adapter.authorize({
-        principalId: available.principalId,
-        toolkit,
-        authConfigId: installedConfigToolkits(this.deps.getConfig())
-          .find((item) => item.connectorId === resolved.installation.connectorId)?.authConfigId,
-        installationId: resolved.installation.id,
-        alias: typeof executionArgs.alias === 'string' ? executionArgs.alias : undefined,
-      });
-      return textResult({
-        status: authorization.status,
-        toolkit,
-        authorizationUrl: authorization.connectUrl,
-        connectionId: authorization.connectionId,
-        instruction: 'Ask the user to open the authorization URL. Check the connection again after they finish.',
-      });
-    }
     const action = listConnectorActionMetadata(resolved.installation.connectorId)
       .find((candidate) => candidate.actionId === resolved.actionId);
     if (!action?.inputSchema || !isComposioActionAllowedByCatalog(resolved.actionId)) {
       return textResult('The exact action contract is unavailable. Search and describe the tool again.');
     }
-    await this.adapter.syncConnections({ principalId: available.principalId }).catch(() => []);
+    let fresh = await this.adapter.syncConnections({ principalId: available.principalId });
+    const binding = available.context ? connectionBinding(available.context.sessionKey, resolved.installation.connectorId) : undefined;
+    const expired = fresh.find(item => item.connectorId === resolved.installation.connectorId && item.status === 'expired' && item.id === binding);
+    if (expired) {
+      const refreshed = await this.adapter.refreshConnection(expired);
+      fresh = fresh.map(item => item.id === refreshed.id ? refreshed : item);
+    }
     const connections = listConnectorConnections({
       principalId: available.principalId,
       connectorId: resolved.installation.connectorId,
-    }).filter((connection) => connection.status === 'active');
+    }).filter((connection) => connection.status === 'active' && fresh.some(item => item.id === connection.id)
+      && (!resolved.installation.selectedConnectionIds.length || resolved.installation.selectedConnectionIds.includes(connection.id)));
     const requestedConnection = typeof executionArgs[CONNECTION_ARGUMENT] === 'string'
       ? executionArgs[CONNECTION_ARGUMENT]
-      : undefined;
+      : available.context ? connectionBinding(available.context.sessionKey, resolved.installation.connectorId) : undefined;
+    const bindings = available.context ? connectionBindings(available.context.sessionKey).filter(need => need.connectorId === resolved.installation.connectorId) : [];
+    if (bindings.length > 1 && !requestedConnection) return textResult({ status: 'account_selection_required',
+      accounts: bindings, instruction: 'Choose the account for this operation using xopcConnectionId.' });
+    if (bindings.length && requestedConnection && !bindings.some(need => need.connectionId === requestedConnection)) {
+      return textResult('This account was not selected for the current objective.');
+    }
     const connection = requestedConnection
       ? connections.find((candidate) => candidate.id === requestedConnection)
-      : connections.find((candidate) => candidate.isDefault) ?? connections[0];
+      : connections.length === 1 ? connections[0] : undefined;
+    const requestConnection = () => {
+      if (!available.context) return textResult({ status: 'connection_required' });
+      const result = requireSessionConnection({
+        sessionKey: available.context.sessionKey, principalId: available.principalId,
+        agentId: available.agentId ?? 'main', summary: `Continue ${action.actionId} using ${toolkit}`,
+        needs: [{ key: `${resolved.installation.connectorId}:default`, connectorId: resolved.installation.connectorId,
+          connectionId: requestedConnection,
+          label: getConnectorDefinition(resolved.installation.connectorId)?.displayName ?? toolkit,
+          capabilities: [action.actionId] }],
+      });
+      publishConnectionWait(available.context.sessionKey);
+      return textResult(result);
+    };
+    if (!connection) return requestConnection();
     const actionArgs = { ...executionArgs };
     delete actionArgs[CONNECTION_ARGUMENT];
     const argsHash = connectorArgumentsHash(actionArgs);
@@ -358,7 +327,9 @@ export class ComposioToolProvider implements ExternalToolProvider {
       confirmed = Boolean(consumeConnectorApproval(approvalId, argsHash));
       if (!confirmed) return textResult('The connector approval is not approved, has expired, or was already used.');
     }
-    const result = await this.adapter.executeWithPolicy({
+    let result: Awaited<ReturnType<ComposioSessionsAdapter['executeWithPolicy']>>;
+    try {
+      result = await this.adapter.executeWithPolicy({
       context: {
         principalId: available.principalId,
         toolkits: [toolkit],
@@ -372,6 +343,13 @@ export class ComposioToolProvider implements ExternalToolProvider {
       sessionKey: available.context?.sessionKey,
       confirmed,
     });
+    } catch (error) {
+      if (action.scope === 'read') {
+        const checked = await this.adapter.syncConnections({ principalId: available.principalId }).catch(() => undefined);
+        if (checked && !checked.some(item => item.id === connection.id && item.status === 'active')) return requestConnection();
+      }
+      throw error;
+    }
     if (result.decision === 'confirmation_required') {
       const approval = createConnectorApproval({
         principalId: available.principalId,

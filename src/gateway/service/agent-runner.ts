@@ -1,3 +1,4 @@
+import { onConnectionWaitChanged } from '../../storage/sqlite/connection-wait-repository.js';
 import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -43,6 +44,7 @@ import {
 const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
+  validateConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput) => Promise<boolean>;
   bus: MessageBus;
   sessionIndex: SessionIndex;
   /** Resolved lazily — the runner is constructed before AgentService exists. */
@@ -71,10 +73,17 @@ export class GatewayAgentRunner {
   private readonly externalClarificationTimeouts = new Map<string, number | null>();
   private readonly externalClarificationResponses = new Map<string, () => boolean>();
   readonly inputs: SessionInputCoordinator;
+  private readonly unsubscribeConnectionWait: () => void;
 
   constructor(opts: GatewayAgentRunnerOptions) {
     this.opts = opts;
+    this.unsubscribeConnectionWait = onConnectionWaitChanged(sessionKey => {
+      const revision = this.inputs.snapshot(sessionKey).revision;
+      opts.emit('session.connection-wait.changed', { sessionKey, revision });
+      opts.publishRealtime('sessions', 'session.connection-wait.changed', { sessionKey, revision });
+    });
     this.inputs = new SessionInputCoordinator({
+      beforeExecute: opts.validateConnectionResume,
       sessionExists: async (sessionKey) => Boolean(await opts.sessionIndex.getSessionMetadata(sessionKey)),
       execute: async (input) => {
         const generator = this.runAgent(
@@ -84,7 +93,7 @@ export class GatewayAgentRunner {
           input.origin,
           input.attachments,
           input.thinking,
-          { runId: input.runId, sourceContexts: input.sourceContexts },
+          { runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts },
         );
         let result: { status: string; summary: string } | undefined;
         while (true) {
@@ -162,6 +171,7 @@ export class GatewayAgentRunner {
   /** Called from `GatewayService.stop()` so the bridge gets cleaned up. */
   disposeClarifyBridge(): void {
     this.clarifyBridge.dispose();
+    this.unsubscribeConnectionWait();
   }
 
   registerExternalWebchatRun(
@@ -198,7 +208,7 @@ export class GatewayAgentRunner {
     origin: TurnOrigin,
     attachments?: UserTurnAttachment[],
     thinking?: string,
-    runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
+    runOptions?: { signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
   ): AsyncGenerator<
     { type: string; [key: string]: unknown },
     { status: string; summary: string },
