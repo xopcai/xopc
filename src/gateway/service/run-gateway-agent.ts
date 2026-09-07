@@ -1,3 +1,4 @@
+import { isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
 import crypto from 'crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -61,7 +62,7 @@ export async function *runGatewayAgent(
   origin: TurnOrigin,
   attachments?: UserTurnAttachment[],
   thinking?: string,
-  runOptions?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
+  runOptions?: { signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -127,7 +128,7 @@ export async function *runGatewayAgent(
       metadata: webchatMetadata,
     });
     taskRun = TaskRunCoordinator.start({
-      runId,
+      runId: runOptions?.taskRunId ?? runId,
       context: executionContext,
       fallbackObjective: message,
     });
@@ -211,8 +212,9 @@ export async function *runGatewayAgent(
           yield* emitAndYield([event]);
         }
 
-        const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';
-        const endSummary = mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully';
+        const suspended = isConnectionSuspended(sessionKey, runId);
+        const endStatus = mergedSignal.aborted ? 'cancelled' : suspended ? 'suspended' : 'success';
+        const endSummary = mergedSignal.aborted ? 'Interrupted' : suspended ? 'Waiting for connection' : 'Message processed successfully';
         taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
         terminalStatus = endStatus;
         taskRunSummary = endSummary;
@@ -220,8 +222,8 @@ export async function *runGatewayAgent(
         completeRealtimeTopic(`run:${runId}`);
         runTopicCompleted = true;
         return {
-          status: mergedSignal.aborted ? 'aborted' : 'ok',
-          summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
+          status: mergedSignal.aborted ? 'aborted' : suspended ? 'suspended' : 'ok',
+          summary: endSummary,
         };
       } catch (error) {
         if (mergedSignal.aborted) {
@@ -277,7 +279,7 @@ export async function *runGatewayAgent(
             assistantPlainText,
             aborted: mergedSignal.aborted,
             ...(streamError !== undefined ? { streamError } : {}),
-            skipTaskReview: reviewHint?.skipTaskReview ?? false,
+            skipTaskReview: terminalStatus === 'suspended' || (reviewHint?.skipTaskReview ?? false),
             outboundMetadata: {},
           });
         } catch (completionErr) {

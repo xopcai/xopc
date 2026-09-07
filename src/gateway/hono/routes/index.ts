@@ -1,3 +1,4 @@
+import { registerConnectionWaitRoutes } from './connection-waits.js';
 import type { Hono } from 'hono';
 
 import { registerActivityRoutes } from './activity.js';
@@ -37,6 +38,7 @@ export function registerCoreAuthenticatedRoutes(
   registerMobilePrivacyRoutes(authenticated, deps);
   registerAgentStreamRoutes(authenticated, deps);
   registerSessionsRoutes(authenticated, deps);
+  registerConnectionWaitRoutes(authenticated, deps);
   registerExecutionEnvironmentRoutes(authenticated, deps);
   registerSideChatRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);

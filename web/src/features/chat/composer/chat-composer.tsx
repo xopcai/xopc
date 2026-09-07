@@ -1,3 +1,4 @@
+import { ConnectionActionBar } from '../connections/connection-action-bar';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -560,6 +561,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <div className="relative flex min-h-0 w-full flex-col">
+      {sessionKey ? <ConnectionActionBar key={sessionKey} sessionKey={sessionKey} /> : null}
       {composerContext ? <ComposerContextBar {...composerContext} sessionKey={sessionKey} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
     <div
       className={cn(

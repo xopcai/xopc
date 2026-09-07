@@ -11,6 +11,7 @@ import {
   markChatRunCompleted,
   markChatRunFailed,
   markChatRunRunning,
+  markChatRunWaiting,
 } from '@/features/chat/session/chat-run-presence-store';
 import {
   appendThinkingDelta,
@@ -294,7 +295,8 @@ export function createAgentStreamMessagingCallbacks(opts: {
         reloadSessionSnapshot();
         return;
       }
-      markChatRunCompleted(chatId, !visible);
+      if (status === 'suspended') markChatRunWaiting(chatId);
+      else markChatRunCompleted(chatId, !visible);
       if (!visible) {
         onBackgroundTerminal();
         return;

@@ -1252,7 +1252,7 @@ describe('SQLite migrations', () => {
       db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
         .run('# gmail updates', 'summary-1');
 
-      expect(applyPendingMigrations(db)).toBe(149);
+      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
       expect(db.prepare('SELECT canonical_key, record_class FROM knowledge_items ORDER BY knowledge_id').all())
         .toEqual([
           { canonical_key: 'decision:release', record_class: 'memory' },
@@ -1263,6 +1263,24 @@ describe('SQLite migrations', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('preserves queued inputs and their instance binding across the connection-wait migration', () => {
+    const db = openEmptyDb();
+    try {
+      ensureSchemaMetaTable(db);
+      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 149 });
+      db.prepare(`INSERT INTO session_inputs(id,session_key,client_message_id,expected_session_id,
+        requested_delivery,effective_delivery,status,content,origin_json,position,version,created_at_ms,updated_at_ms,context_snapshots_json)
+        VALUES ('input','session','client','instance','next','next','queued','Original request','{"type":"system","source":"internal"}',1,3,10,11,'[]')`).run();
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT content, expected_session_id, status, kind, version, context_snapshots_json FROM session_inputs').get())
+        .toEqual({ content: 'Original request', expected_session_id: 'instance', status: 'queued', kind: 'message', version: 3, context_snapshots_json: '[]' });
+      expect(() => db.prepare("UPDATE session_inputs SET status = 'suspended' WHERE id = 'input'").run()).not.toThrow();
+      expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+    } finally { db.close(); }
   });
 
 });

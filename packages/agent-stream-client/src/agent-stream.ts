@@ -373,7 +373,7 @@ export function dispatchAgentStreamEvent(
       if (
         typeof parsed.runId === 'string'
         && typeof parsed.sessionKey === 'string'
-        && (p.status === 'success' || p.status === 'error' || p.status === 'cancelled')
+        && (p.status === 'success' || p.status === 'error' || p.status === 'cancelled' || p.status === 'suspended')
       ) {
         cb?.onResult({
           runId: parsed.runId,

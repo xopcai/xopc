@@ -162,7 +162,7 @@ export class ChatStreamMapper {
     return [this.make('run_end', {
       status,
       summary,
-      petFeedback: createPetFeedback(status === 'success' ? 'success' : 'error', { recoverable: status !== 'error' }),
+      petFeedback: createPetFeedback(status === 'suspended' ? 'clarify' : status === 'success' ? 'success' : 'error', { recoverable: status !== 'error' }),
     })];
   }
 

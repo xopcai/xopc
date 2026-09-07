@@ -281,6 +281,7 @@ export class TaskRunRepository {
              WHERE wait.task_run_id = task_runs.run_id AND wait.status = 'active'
            ))
          )
+           AND NOT EXISTS (SELECT 1 FROM session_inputs input WHERE input.task_run_id = task_runs.run_id AND input.status IN ('queued','running'))
            AND (? IS NULL OR executor_kind = ?)
            AND COALESCE(scheduled_at, 0) <= ?
            AND (lease_expires_at IS NULL OR lease_expires_at <= ?)

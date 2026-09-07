@@ -61,7 +61,7 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
       getCurrentContext: deps.getCurrentContext,
     }));
   }
-  return createExternalToolGatewayTools(providers);
+  return createExternalToolGatewayTools(providers, deps.getCurrentContext);
 }
 
 export { ExternalToolService } from './service.js';

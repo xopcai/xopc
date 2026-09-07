@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ChatRunPresenceStatus = 'running' | 'completed' | 'failed';
+export type ChatRunPresenceStatus = 'running' | 'completed' | 'failed' | 'waiting';
 
 export type ChatRunPresence = {
   status: ChatRunPresenceStatus;
@@ -120,4 +120,10 @@ export function markChatRunFailed(sessionKey: string, unread: boolean): void {
 
 export function clearChatRunPresence(sessionKey: string): void {
   useChatRunPresenceStore.getState().clear(sessionKey);
+}
+
+export function markChatRunWaiting(sessionKey: string): void {
+  useChatRunPresenceStore.setState(state => ({ runs: { ...state.runs,
+    [sessionKey]: { status: 'waiting', startedAt: state.runs[sessionKey]?.startedAt ?? Date.now(), updatedAt: Date.now(), unread: false },
+  } }));
 }

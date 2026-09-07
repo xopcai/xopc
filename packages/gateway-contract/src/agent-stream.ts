@@ -99,7 +99,7 @@ export type AgentStreamClarifyRequestPayload = {
   petFeedback?: PetFeedback;
 };
 
-export type AgentStreamRunStatus = 'success' | 'error' | 'cancelled';
+export type AgentStreamRunStatus = 'success' | 'error' | 'cancelled' | 'suspended';
 
 export type AgentStreamRunEndPayload = {
   runId: string;

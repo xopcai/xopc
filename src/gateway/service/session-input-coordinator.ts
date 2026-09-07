@@ -1,8 +1,10 @@
-import { SessionInstanceChangedError } from '../../storage/sqlite/session-input-repository.js';
 import crypto from 'node:crypto';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
+import type { SessionInput } from '../../storage/sqlite/session-input-repository.js';
+import { consumeConnectionResume, publishConnectionWait, invalidateConnectionResumeIntent, cancelConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
+import { SessionInstanceChangedError } from '../../storage/sqlite/session-input-repository.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
 import {
   summarizeSourceContext,
@@ -65,9 +67,11 @@ export class SessionInputCoordinator {
   private readonly submissionTails = new Map<string, Promise<void>>();
 
   constructor(private readonly deps: {
+    beforeExecute?: (input: SessionInput) => Promise<boolean>;
     sessionExists: (sessionKey: string) => Promise<boolean>;
     execute: (input: {
       runId: string;
+      taskRunId?: string;
       sessionKey: string;
       content: string;
       attachments?: UserTurnAttachment[];
@@ -170,6 +174,7 @@ export class SessionInputCoordinator {
       if (result.ok === false) return result;
 
       if (!result.idempotent) {
+        cancelConnectionObjective(sessionKey);
         const replacement = {
           role: 'user',
           content,
@@ -238,6 +243,7 @@ export class SessionInputCoordinator {
       targetRunId: canSteer ? runtime.activeRunId : undefined,
     });
 
+    invalidateConnectionResumeIntent(sessionKey);
     if (canSteer) {
       const accepted = await this.deps.steer(sessionKey, content);
       if (!accepted) {
@@ -260,11 +266,18 @@ export class SessionInputCoordinator {
         const runId = crypto.randomUUID();
         const input = claimNextSessionInput(sessionKey, runId);
         if (!input) return;
+        if ((this.deps.beforeExecute && !await this.deps.beforeExecute(input)) || !consumeConnectionResume(input)) {
+          finishSessionInputRun(sessionKey, runId, 'cancelled');
+          this.publish(sessionKey);
+          continue;
+        }
+        if (input.kind === 'connection_resume') publishConnectionWait(sessionKey);
         this.publish(sessionKey);
         let result: { status: string; summary: string };
         try {
           result = await this.deps.execute({
             runId,
+            taskRunId: input.taskRunId,
             sessionKey,
             content: input.content,
             attachments: input.attachments as UserTurnAttachment[] | undefined,
@@ -277,7 +290,7 @@ export class SessionInputCoordinator {
           result = { status: 'error', summary: message };
           log.warn({ err: error, sessionKey, runId, inputId: input.id }, 'Session input execution failed');
         }
-        const terminal = result.status === 'ok'
+        const terminal = result.status === 'suspended' ? 'suspended' : result.status === 'ok'
           ? 'completed'
           : result.status === 'aborted'
             ? 'cancelled'
@@ -329,7 +342,7 @@ export class SessionInputCoordinator {
     while (true) {
       const row = findSessionInput(sessionKey, clientMessageId);
       if (!row) throw new Error('Session input disappeared before completion');
-      if (row.status === 'completed') return;
+      if (row.status === 'completed' || row.status === 'suspended') return;
       if (row.status === 'failed' || row.status === 'cancelled' || row.status === 'interrupted') {
         throw new Error(row.error ?? `Session input ended with status ${row.status}`);
       }
