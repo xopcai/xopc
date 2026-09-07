@@ -2,6 +2,9 @@ import crypto from 'node:crypto';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 
+import { createLogger } from '../../utils/logger.js';
+import { searchFailureDetails } from './search-error.js';
+
 import type {
   ExternalToolExecutionContext,
   ExternalToolProvider,
@@ -9,6 +12,8 @@ import type {
   ExternalToolSource,
   VersionedExternalToolDescriptor,
 } from './types.js';
+
+const log = createLogger('ExternalToolService');
 
 const DEFAULT_SEARCH_LIMIT = 8;
 const MAX_SEARCH_LIMIT = 20;
@@ -65,7 +70,7 @@ export class ExternalToolService {
     query: string;
     sources?: ExternalToolSource[];
     limit?: number;
-  }): Promise<{ tools: ExternalToolSearchHit[]; unavailableSources: ExternalToolSource[] }> {
+  }): Promise<{ tools: ExternalToolSearchHit[]; unavailableSources: ExternalToolSource[]; sourceErrors?: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> }> {
     const selected: ExternalToolProvider[] = params.sources?.length
       ? params.sources
           .map((source) => this.providerBySource.get(source))
@@ -75,13 +80,21 @@ export class ExternalToolService {
       selected.map(async (provider) => ({ provider, hits: await provider!.search(params.query) })),
     );
     const unavailableSources: ExternalToolSource[] = [];
+    const sourceErrors: Array<ReturnType<typeof searchFailureDetails> & { source: ExternalToolSource }> = [];
     const hits: ExternalToolSearchHit[] = [];
     for (const [index, result] of settled.entries()) {
       if (result.status === 'fulfilled') {
         hits.push(...result.value.hits);
       } else {
         const provider = selected[index];
-        if (provider) unavailableSources.push(provider.source);
+        if (provider) {
+          unavailableSources.push(provider.source);
+          const details = { source: provider.source, ...searchFailureDetails(result.reason) };
+          sourceErrors.push(details);
+          const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          log.warn({ ...details, err: result.reason instanceof Error ? result.reason : undefined, errorMessage },
+            `External tool search failed for ${provider.source}: ${errorMessage}`);
+        }
       }
     }
     const limit = Math.min(MAX_SEARCH_LIMIT, Math.max(1, params.limit ?? DEFAULT_SEARCH_LIMIT));
@@ -97,7 +110,7 @@ export class ExternalToolService {
         title: hit.title,
         summary: hit.summary.slice(0, 300),
       }));
-    return { tools, unavailableSources };
+    return { tools, unavailableSources, ...(sourceErrors.length ? { sourceErrors } : {}) };
   }
 
   async describe(toolRefs: string[]): Promise<{

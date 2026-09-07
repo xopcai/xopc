@@ -1,6 +1,7 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ExternalToolSearchError } from '../search-error.js';
 import { ExternalToolService } from '../service.js';
 import type {
   ExternalToolDescriptor,
@@ -62,7 +63,38 @@ describe('ExternalToolService', () => {
         summary: descriptor.summary,
       }],
       unavailableSources: ['mcp'],
+      sourceErrors: [{ source: 'mcp', phase: 'search' }],
     });
+  });
+
+  it.each(['create_session', 'search'] as const)('preserves Composio %s diagnostics and healthy results', async (phase) => {
+    const cause = Object.assign(new Error('provider detail'), { code: 'toolkit_unavailable', status: 503 });
+    const service = new ExternalToolService([
+      provider({ source: 'extension', hits: [descriptor] }),
+      {
+        ...provider({ source: 'composio' }),
+        search: vi.fn(async () => { throw new ExternalToolSearchError(phase, ['gmail', 'slack'], cause); }),
+      },
+    ]);
+    const result = await service.search({ query: 'add' });
+    expect(result.tools).toHaveLength(1);
+    expect(result.sourceErrors).toEqual([{
+      source: 'composio', phase, toolkits: ['gmail', 'slack'], code: 'toolkit_unavailable', status: 503,
+    }]);
+    expect(JSON.stringify(result)).not.toContain('provider detail');
+  });
+
+  it('handles non-Error rejections and circular causes', async () => {
+    const cause: Record<string, unknown> = { code: 'offline', statusCode: 502 };
+    cause.cause = cause;
+    const service = new ExternalToolService([{
+      ...provider({ source: 'mcp' }),
+      search: vi.fn().mockRejectedValueOnce('offline').mockRejectedValueOnce(cause),
+    }]);
+    expect((await service.search({ query: '' })).sourceErrors).toEqual([{ source: 'mcp', phase: 'search' }]);
+    expect((await service.search({ query: '' })).sourceErrors).toEqual([{
+      source: 'mcp', phase: 'search', code: 'offline', status: 502,
+    }]);
   });
 
   it('requires the described revision and validates arguments before execution', async () => {

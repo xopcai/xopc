@@ -37,6 +37,44 @@ describe('ManagedComposioClient', () => {
     await expect(session.execute('GMAIL_SEND_EMAIL', { to: 'a@example.test' })).resolves.toEqual({ successful: true });
   });
 
+  it('aggregates Gmail and Slack tool catalogs in a managed search session', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith('/gmail/tools')) {
+        return json({ result: { toolSchemas: { GMAIL_FETCH_EMAILS: { description: 'Fetch email' } } } });
+      }
+      if (String(input).endsWith('/slack/tools')) {
+        return json({ result: { toolSchemas: { SLACK_SEARCH_MESSAGES: { description: 'Search messages' } } } });
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+    const client = new ManagedComposioClient({
+      fetchImpl: fetchImpl as typeof fetch,
+      routerUrl: 'https://router.test/v1',
+      credentials: { resolveApiKey: vi.fn(async () => 'cloud-token') },
+    });
+    const session = await client.sessions.create('owner', { toolkits: { enable: ['gmail', 'slack', 'gmail'] } });
+    await expect(session.search({ query: 'messages' })).resolves.toEqual({ toolSchemas: {
+      GMAIL_FETCH_EMAILS: { description: 'Fetch email' },
+      SLACK_SEARCH_MESSAGES: { description: 'Search messages' },
+    } });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await expect(session.execute('GMAIL_FETCH_EMAILS')).rejects.toThrow('exactly one toolkit');
+  });
+
+  it('preserves managed HTTP errors when one catalog request fails', async () => {
+    const client = new ManagedComposioClient({
+      fetchImpl: vi.fn(async (input: string | URL | Request) => String(input).endsWith('/slack/tools')
+        ? json({ error: { message: 'Slack unavailable', code: 'toolkit_unavailable' } }, 503)
+        : json({ result: { toolSchemas: {} } })) as typeof fetch,
+      routerUrl: 'https://router.test/v1',
+      credentials: { resolveApiKey: vi.fn(async () => 'cloud-token') },
+    });
+    const session = await client.sessions.create('owner', { toolkits: { enable: ['gmail', 'slack'] } });
+    await expect(session.search({ query: 'messages' })).rejects.toMatchObject({
+      code: 'toolkit_unavailable', status: 503,
+    });
+  });
+
   it('requires renewed XOPC consent when connector scopes are absent', async () => {
     const status = await inspectManagedComposioStatus({
       routerUrl: 'https://router.test/v1',
