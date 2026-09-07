@@ -6,7 +6,6 @@ import { messages as getMessages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
-import { disposeSideChatClient } from './side-chat-api';
 import { addSelectionToMainChat } from './side-chat-selection-actions';
 
 const MAX_SELECTION_CHARS = 32_000;
@@ -17,9 +16,10 @@ type SelectionPopup = {
   text: string;
   left: number;
   top: number;
+  fromSide: boolean;
 };
 
-/** Contextual launcher shown only for text selected inside the primary Chat content. */
+/** Selection actions for the main conversation and its temporary side chats. */
 export function SideChatSelectionLauncher() {
   const { pathname } = useLocation();
   const sessionKey = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
@@ -29,13 +29,6 @@ export function SideChatSelectionLauncher() {
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
   const setWorkspaceOpen = useWorkspacePanelStore((state) => state.setOpen);
   const [popup, setPopup] = useState<SelectionPopup | null>(null);
-
-  useEffect(() => {
-    const dispose = () => disposeSideChatClient();
-    window.addEventListener('pagehide', dispose);
-    return () => window.removeEventListener('pagehide', dispose);
-  }, []);
-
   const inspectSelection = useCallback(() => {
     if (!sessionKey || sessionKey === 'new' || pendingCreate) {
       setPopup(null);
@@ -52,15 +45,14 @@ export function SideChatSelectionLauncher() {
     const anchorElement = nodeElement(selection.anchorNode);
     const focusElement = nodeElement(selection.focusNode);
     const main = document.getElementById('app-main-content');
+    const side = document.getElementById('app-side-chat-panel');
+    const fromSide = Boolean(side?.contains(anchorElement) && side?.contains(focusElement));
     if (
       !anchorElement
       || !focusElement
-      || !main?.contains(anchorElement)
-      || !main.contains(focusElement)
+      || (!fromSide && (!main?.contains(anchorElement) || !main.contains(focusElement)))
       || !anchorElement.closest('[data-chat-message-index]')
       || !focusElement.closest('[data-chat-message-index]')
-      || anchorElement.closest('#app-side-chat-panel')
-      || focusElement.closest('#app-side-chat-panel')
     ) {
       setPopup(null);
       return;
@@ -77,7 +69,7 @@ export function SideChatSelectionLauncher() {
     );
     const preferredTop = rect.bottom + 8;
     const top = preferredTop + 38 < window.innerHeight ? preferredTop : Math.max(VIEWPORT_GUTTER, rect.top - 42);
-    setPopup({ text, left, top });
+    setPopup({ text, left, top, fromSide });
   }, [pathname, pendingCreate, sessionKey]);
 
   useEffect(() => {
@@ -106,7 +98,7 @@ export function SideChatSelectionLauncher() {
       role="group"
       aria-label={m.selectedTextActionsAria}
       className="fixed z-[70] flex h-9 overflow-hidden rounded-lg border border-edge bg-surface-panel text-xs font-medium text-fg shadow-popover"
-      style={{ left: popup.left, top: popup.top, width: POPOVER_WIDTH }}
+      style={{ left: popup.left, top: popup.top, width: popup.fromSide ? POPOVER_WIDTH / 2 : POPOVER_WIDTH }}
       onPointerDown={(event) => event.preventDefault()}
     >
       <button
@@ -121,7 +113,7 @@ export function SideChatSelectionLauncher() {
         <Plus className="size-3.5 shrink-0" />
         <span className="whitespace-nowrap">{m.addToChat}</span>
       </button>
-      <button
+      {!popup.fromSide ? <button
         type="button"
         className="inline-flex flex-1 items-center justify-center gap-1.5 border-l border-edge px-3 transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         onClick={() => {
@@ -139,7 +131,7 @@ export function SideChatSelectionLauncher() {
       >
         <MessageSquarePlus className="size-3.5 shrink-0" />
         <span className="whitespace-nowrap">{m.askInSideChat}</span>
-      </button>
+      </button> : null}
     </div>
   );
 }
