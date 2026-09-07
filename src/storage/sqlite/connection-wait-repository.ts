@@ -6,7 +6,7 @@ import { createLogger } from '../../utils/logger.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { isXopcDatabaseOpen } from './connection.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
-import { readCurrentSessionId } from './session-repository.js';
+import { readCurrentSessionId } from './session-instance-repository.js';
 import { bumpSessionInputRevision, getSessionInputById, getSessionInputState, insertSessionInput, setSessionInputStatus, type SessionInput } from './session-input-repository.js';
 
 const log = createLogger('Connectors:Wait');

@@ -2,9 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import {
   searchKnowledgeItems,
-  type KnowledgeItem,
-  type KnowledgeSource,
-  type KnowledgeVisibilityContext,
 } from '../../knowledge-memory/index.js';
 import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -14,61 +11,25 @@ import { listUserAssertions } from '../../user-model/repository.js';
 import type { UserAssertion, UserModelScope } from '../../user-model/domain.js';
 import { buildUserContextBlock } from '../memory/context-fence.js';
 import { getExecutionContextFeedbackScores } from './audit.js';
+import type {
+  ExecutionContext,
+  ExecutionContextRequest,
+  ExecutionGoal,
+  ExecutionPriority,
+  ExecutionRule,
+  RankedExecutionAssertion,
+  RuleEnforcementLevel,
+} from './execution-context.types.js';
 
-export type RuleEnforcementLevel = 'prompt' | 'planner' | 'tool_gate';
-
-export interface ExecutionRule {
-  id: string;
-  statement: string;
-  priority: number;
-  enforcementLevel: RuleEnforcementLevel;
-  conditions: Record<string, unknown>;
-}
-
-export interface RankedExecutionAssertion {
-  assertion: UserAssertion;
-  score: number;
-  reasons: string[];
-}
-
-export interface ExecutionGoal {
-  id: string;
-  title: string;
-  desiredOutcome: string;
-  status: string;
-  declaredImportance?: number;
-  targetAt?: number;
-}
-
-export interface ExecutionPriority {
-  id: string;
-  targetType: string;
-  targetId: string;
-  rank: 'primary' | 'secondary' | 'background';
-  urgency: number;
-  validTo: number;
-}
-
-export interface ExecutionContext {
-  traceId: string;
-  asOf: number;
-  query: string;
-  rules: ExecutionRule[];
-  assertions: RankedExecutionAssertion[];
-  goals: ExecutionGoal[];
-  priorities: ExecutionPriority[];
-  knowledge: KnowledgeItem[];
-}
-
-export interface ExecutionContextRequest extends KnowledgeVisibilityContext {
-  query: string;
-  asOf?: number;
-  maxAssertions?: number;
-  maxKnowledge?: number;
-  includeUserModel?: boolean;
-  includeKnowledge?: boolean;
-  knowledgeSources?: readonly KnowledgeSource[];
-}
+export type {
+  ExecutionContext,
+  ExecutionContextRequest,
+  ExecutionGoal,
+  ExecutionPriority,
+  ExecutionRule,
+  RankedExecutionAssertion,
+  RuleEnforcementLevel,
+} from './execution-context.types.js';
 
 function scopeVisible(scope: UserModelScope, context: ExecutionContextRequest): boolean {
   if (scope.type === 'global') return true;
