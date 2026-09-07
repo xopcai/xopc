@@ -52,7 +52,10 @@ function capabilities(name: string, directory: boolean, writable: boolean): File
   const extension = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
   const result: FileCapability[] = ['download', 'share'];
   if (MIME_TYPES[extension] || TEXT_EXTENSIONS.has(extension)) result.unshift('preview');
-  if (writable && TEXT_EXTENSIONS.has(extension)) result.push('edit');
+  if (writable) {
+    if (TEXT_EXTENSIONS.has(extension)) result.push('edit');
+    result.push('delete');
+  }
   return result;
 }
 

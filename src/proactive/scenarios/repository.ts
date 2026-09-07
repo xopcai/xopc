@@ -18,6 +18,13 @@ function scenarioFromRow(row: Row): ScenarioDefinition {
     ...(condition ? { condition } : {}),
     aggregation: text(row, 'aggregation') as ScenarioDefinition['aggregation'],
     debounceSeconds: Number(row.debounce_seconds), maxWindowSeconds: Number(row.max_window_seconds),
+    contextProviderIds: JSON.parse(text(row, 'context_provider_ids_json')) as string[],
+    valuePolicy: {
+      minConfidence: Number(row.min_confidence),
+      minScore: Number(row.min_value_score),
+      cooldownSeconds: Number(row.cooldown_seconds),
+      maxRunsPerDay: Number(row.max_runs_per_day),
+    },
   };
 }
 
@@ -45,8 +52,11 @@ export function listScenarios(): ScenarioDefinition[] {
   return (getSqliteDatabase().prepare('SELECT * FROM proactive_scenarios ORDER BY scenario_key').all() as Row[]).map(scenarioFromRow);
 }
 
-export function getScenario(key: string): ScenarioDefinition | null {
-  const row = getSqliteDatabase().prepare('SELECT * FROM proactive_scenarios WHERE scenario_key = ?').get(key) as Row | undefined;
+export function getScenario(key: string, version?: number): ScenarioDefinition | null {
+  const row = version === undefined
+    ? getSqliteDatabase().prepare('SELECT * FROM proactive_scenarios WHERE scenario_key = ?').get(key) as Row | undefined
+    : getSqliteDatabase().prepare('SELECT * FROM proactive_scenario_versions WHERE scenario_key = ? AND version = ?')
+      .get(key, version) as Row | undefined;
   return row ? scenarioFromRow(row) : null;
 }
 

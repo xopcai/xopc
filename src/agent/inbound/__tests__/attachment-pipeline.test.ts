@@ -202,4 +202,52 @@ describe('attachment-pipeline', () => {
     setPendingTranscriptUserMessage('sk-stale', pending);
     expect(transformUserMessageForPersistence('sk-stale', runtime)).toEqual(runtime);
   });
+
+  it('persists the display-safe Note message when model context is also injected', () => {
+    const noteEnvelope = [
+      '<source_contexts>',
+      '<source_context kind="note" id="note-1" version="42">',
+      'Frozen note content',
+      '</source_context>',
+      '</source_contexts>',
+    ].join('\n');
+    const userText = '[2026-09-08 00:59 GMT+8] Complete the note';
+    const pending = {
+      role: 'user' as const,
+      content: [{
+        type: 'text' as const,
+        text: `${noteEnvelope}\n\n<user_message>\n${userText}\n</user_message>`,
+      }],
+      metadata: {
+        sourceContexts: [{ kind: 'note', sourceId: 'note-1', version: '42', title: 'Plan' }],
+      },
+      timestamp: 1,
+    };
+    setPendingTranscriptUserMessage('sk-note-context', pending);
+
+    const runtime = {
+      role: 'user' as const,
+      content: [{
+        type: 'text' as const,
+        text: [
+          '<xopc_task_execution>',
+          'Task: Complete the bound Note',
+          '</xopc_task_execution>',
+          '',
+          noteEnvelope,
+          '',
+          '<user_message>',
+          '<user-context>',
+          'Relevant user facts:',
+          '- Prefers concise replies.',
+          '</user-context>',
+          '',
+          userText,
+          '</user_message>',
+        ].join('\n'),
+      }],
+    };
+
+    expect(transformUserMessageForPersistence('sk-note-context', runtime)).toEqual(pending);
+  });
 });

@@ -100,6 +100,7 @@ export const MessageBubble = memo(function MessageBubble({
   onEditUserMessage,
   userMessageCanEdit = true,
   responseFeedbackEnabled = true,
+  compactProductDelivery = false,
 }: {
   message: Message;
   authToken?: string;
@@ -133,6 +134,8 @@ export const MessageBubble = memo(function MessageBubble({
   onEditUserMessage?: (message: Message, messageIndex: number) => void;
   userMessageCanEdit?: boolean;
   responseFeedbackEnabled?: boolean;
+  /** Use a single-line operation receipt inside note-detail chat. */
+  compactProductDelivery?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -633,6 +636,7 @@ export const MessageBubble = memo(function MessageBubble({
                 authToken={authToken}
                 sessionKey={sessionKey}
                 projectId={projectId}
+                compactProductDelivery={compactProductDelivery}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
                   '{{count}}',
                   String(assistantTurnView.sources.length),

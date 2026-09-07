@@ -1,10 +1,10 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import type { FileResource, FileSpace } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
 
-import { FileServiceError, type FileSpaceService, fileResourceFromPath, resolveFilePath } from '../../../files/file-service.js';
+import { FileServiceError, type FileSpaceService, fileResourceFromPath, parseFileResourceId, resolveFilePath } from '../../../files/file-service.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import { fuzzySubsequenceScore, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -196,6 +196,27 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
         return (await files.resource(id)).resource;
       });
       return c.json({ resource });
+    } catch (error) { return errorResponse(c, error); }
+  });
+
+  authenticated.delete('/api/files/:id', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const initial = await files.resource(id);
+      if (!initial.space.writable) throw new FileServiceError(403, 'File space is read-only');
+      if (initial.resource.kind !== 'file') throw new FileServiceError(400, 'Resource is not a file');
+      await withMutationLock(initial.absolutePath, async () => {
+        const current = await files.resource(id);
+        if (current.absolutePath !== initial.absolutePath) throw new FileServiceError(409, 'File has changed');
+        if (current.resource.kind !== 'file') throw new FileServiceError(400, 'Resource is not a file');
+        const { relativePath } = parseFileResourceId(id);
+        const displayPath = await resolveFilePath(current.space.root, relativePath, false);
+        await unlink(displayPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') throw new FileServiceError(404, 'File not found');
+          throw error;
+        });
+      });
+      return c.json({ ok: true });
     } catch (error) { return errorResponse(c, error); }
   });
 

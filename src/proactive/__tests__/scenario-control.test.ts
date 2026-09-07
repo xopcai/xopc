@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { getScenario } from '../scenarios/repository.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 
 describe('proactive scenario control plane', () => {
@@ -18,12 +20,8 @@ describe('proactive scenario control plane', () => {
     service = new ProactiveScenarioService();
   });
 
-  it('enables the three built-in workspace scenarios by default', () => {
-    expect(service.subscriptions().filter((item) => item.enabled).map((item) => item.scenarioKey).sort()).toEqual([
-      'automation_failure_impact',
-      'blocked_work',
-      'project_delivery_risk',
-    ]);
+  it('does not seed broad workspace subscriptions', () => {
+    expect(service.subscriptions().filter((item) => item.enabled)).toEqual([]);
   });
 
   afterEach(() => {
@@ -36,7 +34,7 @@ describe('proactive scenario control plane', () => {
     expect(service.list().map((item) => item.key)).toEqual([
       'automation_failure_impact', 'blocked_work', 'discussion_follow_up', 'meeting_preparation', 'project_delivery_risk',
     ]);
-    expect(service.routes()).toHaveLength(3);
+    expect(service.routes()).toHaveLength(0);
     service.subscribe({
       scenarioKey: 'project_delivery_risk', workspaceId: 'default',
       scopeKind: 'project', scopeId: 'project-1', enabled: true,
@@ -44,6 +42,24 @@ describe('proactive scenario control plane', () => {
     expect(service.routes().find((route) => route.scope.projectId === 'project-1')).toMatchObject({
       key: 'project_delivery_risk', scope: { workspaceId: 'default', projectId: 'project-1' },
     });
+  });
+
+  it('keeps immutable scenario versions available to pinned runs', () => {
+    const current = getScenario('blocked_work')!;
+    const original = getScenario('blocked_work', current.version)!;
+    const nextVersion = current.version + 1;
+    const db = getSqliteDatabase();
+    db.prepare(`UPDATE proactive_scenarios SET version = ?, base_prompt = ?, updated_at = datetime('now')
+      WHERE scenario_key = 'blocked_work'`).run(nextVersion, 'Next version prompt');
+
+    expect(getScenario('blocked_work')).toMatchObject({ version: nextVersion, basePrompt: 'Next version prompt' });
+    expect(getScenario('blocked_work', current.version)).toEqual(original);
+  });
+
+  it('rejects scenario contract changes without a version bump', () => {
+    expect(() => getSqliteDatabase().prepare(`UPDATE proactive_scenarios
+      SET base_prompt = 'mutated in place' WHERE scenario_key = 'blocked_work'`).run())
+      .toThrow('proactive scenario contract changes require a new version');
   });
 
   it('publishes immutable prompt revisions and rolls back explicitly', () => {

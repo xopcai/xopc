@@ -1,5 +1,6 @@
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
+import { ProductDeliveryCard } from '@/features/chat/product-delivery/product-delivery-card';
 import { SearchSourceList } from '@/features/chat/tool-results/search-source-list';
 
 import type { AssistantTurnViewModel } from './assistant-turn-view-model';
@@ -11,15 +12,21 @@ export function AssistantTurnTasks({
   sessionKey,
   projectId,
   sourcesLabel,
+  compactProductDelivery = false,
 }: {
   view: AssistantTurnViewModel;
   authToken?: string;
   sessionKey?: string | null;
   projectId?: string | null;
   sourcesLabel: string;
+  compactProductDelivery?: boolean;
 }) {
   return (
     <>
+      {view.delivery ? (
+        <ProductDeliveryCard delivery={view.delivery} compact={compactProductDelivery} />
+      ) : null}
+
       {view.outcome ? (
         <TurnOutcomeResult
           outcome={view.outcome}

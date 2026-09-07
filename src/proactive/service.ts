@@ -38,7 +38,13 @@ export class ProactiveEventService {
   listBatches = listBatches;
   markReadyBatches = markReadyBatches;
 
-  health(): { events: number; collecting: number; ready: number; oldestReadyAt: string | null } {
+  health(): {
+    events: number;
+    collecting: number;
+    ready: number;
+    oldestReadyAt: string | null;
+    last24Hours: { runs: number; insights: number; discarded: number; useful: number; notUseful: number };
+  } {
     const db = getSqliteDatabase();
     const events = db.prepare('SELECT COUNT(*) AS count FROM proactive_events').get() as { count: number };
     const batches = db.prepare(`SELECT
@@ -46,11 +52,28 @@ export class ProactiveEventService {
       SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) AS ready,
       MIN(CASE WHEN status = 'ready' THEN ready_at END) AS oldest_ready_at
       FROM proactive_signal_batches`).get() as { collecting: number | null; ready: number | null; oldest_ready_at: string | null };
+    const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+    const runs = db.prepare(`SELECT COUNT(*) AS runs,
+      SUM(CASE WHEN status = 'discarded' THEN 1 ELSE 0 END) AS discarded
+      FROM proactive_runs WHERE started_at >= ?`).get(since) as { runs: number; discarded: number | null };
+    const insights = db.prepare('SELECT COUNT(*) AS count FROM proactive_insights WHERE created_at >= ?')
+      .get(since) as { count: number };
+    const feedback = db.prepare(`SELECT
+      SUM(CASE WHEN rating = 'useful' THEN 1 ELSE 0 END) AS useful,
+      SUM(CASE WHEN rating = 'not_useful' THEN 1 ELSE 0 END) AS not_useful
+      FROM proactive_feedback WHERE created_at >= ?`).get(since) as { useful: number | null; not_useful: number | null };
     return {
       events: events.count,
       collecting: batches.collecting ?? 0,
       ready: batches.ready ?? 0,
       oldestReadyAt: batches.oldest_ready_at,
+      last24Hours: {
+        runs: runs.runs,
+        insights: insights.count,
+        discarded: runs.discarded ?? 0,
+        useful: feedback.useful ?? 0,
+        notUseful: feedback.not_useful ?? 0,
+      },
     };
   }
 }

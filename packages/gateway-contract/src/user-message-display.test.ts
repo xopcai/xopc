@@ -42,6 +42,23 @@ describe('stripRuntimeUserMessageEnvelope', () => {
     const authored = '<user-profile>\nExample\n</user-profile>\n\nExplain this XML';
     expect(stripRuntimeUserMessageEnvelope(authored)).toBe(authored);
   });
+
+  it('removes legacy untagged execution context from persisted messages', () => {
+    expect(stripRuntimeUserMessageEnvelope([
+      'Relevant user facts:',
+      '- Prefers concise replies.',
+      '',
+      'Active goals:',
+      '- Ship the release: Finish the work.',
+      '',
+      '[2026-09-08 00:59 GMT+8] Complete the note',
+    ].join('\n'))).toBe('Complete the note');
+  });
+
+  it('preserves user-authored text that starts with a legacy heading', () => {
+    const authored = '[2026-09-08 00:59 GMT+8] Relevant user facts:\n- Example for review';
+    expect(stripRuntimeUserMessageEnvelope(authored)).toBe('Relevant user facts:\n- Example for review');
+  });
 });
 
 describe('stripSourceContextsEnvelope', () => {

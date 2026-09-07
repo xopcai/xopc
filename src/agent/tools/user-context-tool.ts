@@ -8,6 +8,8 @@ export interface UserContextToolOptions {
   agentId: string;
   workspaceId: string;
   getSessionId: () => string | undefined;
+  getProjectId?: () => string | undefined;
+  canRead: () => boolean;
 }
 
 const SearchSchema = Type.Object({
@@ -22,7 +24,16 @@ function visible(options: UserContextToolOptions, slotId: string): boolean {
   return scope?.type === 'global'
     || (scope?.type === 'agent' && scope.id === options.agentId)
     || (scope?.type === 'workspace' && scope.id === options.workspaceId)
+    || (scope?.type === 'project' && scope.id === options.getProjectId?.())
     || (scope?.type === 'session' && scope.id === options.getSessionId());
+}
+
+function referenceable(assertion: NonNullable<ReturnType<typeof getUserAssertion>>): boolean {
+  return assertion.status === 'active'
+    && assertion.authority !== 'external_untrusted'
+    && assertion.sensitivity !== 'secret'
+    && assertion.sensitivity !== 'regulated'
+    && assertion.disclosurePolicy !== 'ask_before_reference';
 }
 
 export function createUserContextSearchTool(options: UserContextToolOptions): AgentTool {
@@ -32,9 +43,13 @@ export function createUserContextSearchTool(options: UserContextToolOptions): Ag
     description: 'Search typed user assertions such as identity, preferences, routines, and current state.',
     parameters: SearchSchema,
     async execute(_toolCallId, raw): Promise<AgentToolResult<{}>> {
+      if (!options.canRead()) {
+        return { content: [{ type: 'text', text: 'User context is disabled for this session.' }], details: { error: 'user_context_disabled' } };
+      }
       const input = raw as { query: string; maxResults?: number };
-      const results = listUserAssertions({ statuses: ['active', 'needs_review'], limit: 1_000 })
+      const results = listUserAssertions({ statuses: ['active'], limit: 1_000 })
         .filter((assertion) => visible(options, assertion.slotId))
+        .filter(referenceable)
         .map((assertion) => ({
           assertion,
           score: retrievalLexicalSimilarity(input.query, `${assertion.statement} ${assertion.normalizedValue}`),
@@ -62,9 +77,12 @@ export function createUserContextGetTool(options: UserContextToolOptions): Agent
     description: 'Read one typed user assertion and its subject, predicate, and scope.',
     parameters: GetSchema,
     async execute(_toolCallId, raw): Promise<AgentToolResult<{}>> {
+      if (!options.canRead()) {
+        return { content: [{ type: 'text', text: 'User context is disabled for this session.' }], details: { error: 'user_context_disabled' } };
+      }
       const id = (raw as { id: string }).id;
       const assertion = getUserAssertion(id);
-      if (!assertion || !visible(options, assertion.slotId)) {
+      if (!assertion || !visible(options, assertion.slotId) || !referenceable(assertion)) {
         return { content: [{ type: 'text', text: `User assertion not found: ${id}` }], details: { id } };
       }
       const result = { assertion, slot: getAssertionSlot(assertion.slotId) };

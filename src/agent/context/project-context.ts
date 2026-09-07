@@ -5,7 +5,12 @@ import {
 } from '../../projects/workspace.js';
 import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
-import { listKnowledgeItems, searchKnowledgeItems } from '../../knowledge-memory/index.js';
+import {
+  knowledgeSourceAllowed,
+  listKnowledgeItems,
+  searchKnowledgeItems,
+  type KnowledgeSource,
+} from '../../knowledge-memory/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
@@ -56,7 +61,11 @@ function selectProjectKnowledge(input: {
 
 export function buildActiveProjectContextForPrompt(
   sessionKey: string,
-  options: { knowledgeQuery?: string } = {},
+  options: {
+    knowledgeQuery?: string;
+    includeKnowledge?: boolean;
+    knowledgeSources?: readonly KnowledgeSource[];
+  } = {},
 ): string | undefined {
   const project = getProjectForSession(sessionKey);
   if (!project) return undefined;
@@ -74,7 +83,7 @@ export function buildActiveProjectContextForPrompt(
         state: `${task.phase}/${new TaskReadModelProjector().project(task).operationalState}`,
       })),
     recentSessions: new ProjectStore().getRecentSessions(project.id, MAX_SESSIONS),
-    knowledgeItems: selectProjectKnowledge({
+    knowledgeItems: options.includeKnowledge === false ? [] : selectProjectKnowledge({
       relevant: options.knowledgeQuery?.trim()
         ? searchKnowledgeItems({
             query: options.knowledgeQuery,
@@ -84,11 +93,16 @@ export function buildActiveProjectContextForPrompt(
               projectId: project.id,
               sessionId: sessionKey,
             },
+            trustedOnly: true,
+            sources: options.knowledgeSources,
             limit: MAX_RELEVANT_KNOWLEDGE,
           })
         : [],
       recent: listKnowledgeItems({ statuses: ['active'], limit: 500 })
         .filter((item) => item.scope.type === 'project' && item.scope.id === project.id)
+        .filter((item) => item.originClass !== 'untrusted')
+        .filter((item) => !options.knowledgeSources
+          || knowledgeSourceAllowed(item, options.knowledgeSources))
         .slice(0, MAX_RECENT_KNOWLEDGE),
     }),
     localApp: localApp ? {

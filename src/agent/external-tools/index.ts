@@ -23,6 +23,7 @@ export interface DefaultExternalToolGatewayDeps {
   hookRunner?: ExtensionHookRunner;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
   getMemoryManager?: () => MemoryManager;
+  canAccessMemory: () => boolean;
 }
 
 export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolGatewayDeps) {
@@ -51,6 +52,7 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
       getMemoryManager: deps.getMemoryManager,
       disabledTools: deps.disabledTools,
       getSessionKey: () => deps.getCurrentContext()?.sessionKey,
+      canAccess: deps.canAccessMemory,
       hookRunner: deps.hookRunner,
       toolExecutorConfig: deps.toolExecutorConfig,
     }),

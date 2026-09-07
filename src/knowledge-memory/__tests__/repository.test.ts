@@ -90,5 +90,22 @@ describe('knowledge repository', () => {
     expect(searchKnowledgeItems({ query: 'Build failed', context })[0]).toMatchObject({
       canonicalKey: 'source-item:gmail:message-1', recordClass: 'source_index',
     });
+    expect(searchKnowledgeItems({ query: 'Build failed', context, trustedOnly: true })).toEqual([]);
+  });
+
+  it('limits retrieval to configured knowledge sources', () => {
+    writeKnowledgeItem({
+      kind: 'project_fact', scope: { type: 'project', id: 'project-1' },
+      canonicalKey: 'project:atlas', content: 'Atlas project release plan',
+      confidence: 1, importance: 1, originClass: 'owner', status: 'active',
+    });
+    writeKnowledgeItem({
+      kind: 'workspace_fact', scope: { type: 'workspace', id: '/workspace' },
+      canonicalKey: 'workspace:atlas', content: 'Atlas workspace release plan',
+      confidence: 1, importance: 1, originClass: 'owner', status: 'active',
+    });
+
+    expect(searchKnowledgeItems({ query: 'Atlas release', context, sources: ['project'] })
+      .map((item) => item.canonicalKey)).toEqual(['project:atlas']);
   });
 });

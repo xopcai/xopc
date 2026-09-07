@@ -180,6 +180,13 @@ export function instructAgentJudgment(itemId: string, instruction: string): Prom
   });
 }
 
+export function feedbackAgentJudgment(itemId: string, rating: 'useful' | 'not_useful'): Promise<{ ok: true }> {
+  return fetchJson(apiUrl(`/api/inbox/judgments/${encodeURIComponent(itemId)}/feedback`), {
+    method: 'POST',
+    body: JSON.stringify({ rating }),
+  });
+}
+
 export function retryWorkAttention(
   item: Pick<HomeAttention, 'kind' | 'runId'>,
 ): Promise<{ ok: true; runId: string; sessionKey?: string }> {

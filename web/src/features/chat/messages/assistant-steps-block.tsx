@@ -53,8 +53,6 @@ import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
-import { ProductDeliveryCard } from '@/features/chat/product-delivery/product-delivery-card';
-import { extractProductDelivery } from '@/features/chat/product-delivery/product-delivery';
 import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/wheel-scroll-chain';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -520,16 +518,6 @@ function StepRow({
     return parseBrowserSetupRequired(toolResultText);
   }, [block, toolResultText]);
 
-  const productDelivery = useMemo(
-    () => block.type === 'tool_use' ? extractProductDelivery(block) : null,
-    [block],
-  );
-  const renderProductDelivery = productDelivery
-    && productDelivery.primary?.kind !== 'workflow_run'
-    && productDelivery.primary?.kind !== 'file'
-    ? productDelivery
-    : null;
-
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
     const text = block.text?.trim() ?? '';
@@ -683,7 +671,6 @@ function StepRow({
             {stepLabels.toolFailedImpact}
           </p>
         ) : null}
-        {renderProductDelivery ? <ProductDeliveryCard delivery={renderProductDelivery} /> : null}
         {!hasCard && detailLine ? (
           <p className="min-w-0 break-words text-xs text-fg-muted [overflow-wrap:anywhere]">
             {detailLine}

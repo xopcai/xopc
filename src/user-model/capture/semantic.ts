@@ -21,9 +21,29 @@ export interface ParsedAssertionCandidate extends AssertionCandidate {
   originalTimePhrase?: string;
 }
 
+export interface ParsedGoalCandidate {
+  title: string;
+  desiredOutcome: string;
+  scope: AssertionCandidate['scope'];
+  declaredImportance?: number;
+  targetAt?: number;
+  evidenceRefs: string[];
+}
+
+export interface ParsedCollaborationRuleCandidate {
+  category: 'communication' | 'execution' | 'boundary' | 'routine' | 'proactive';
+  priority: number;
+  scope: AssertionCandidate['scope'];
+  conditions: Record<string, unknown>;
+  statement: string;
+  evidenceRefs: string[];
+}
+
 export interface UserModelInterpretation {
   intent: UserModelCaptureIntent;
   candidates: ParsedAssertionCandidate[];
+  goals?: ParsedGoalCandidate[];
+  collaborationRules?: ParsedCollaborationRuleCandidate[];
   targetAssertionIds: string[];
   abstentionReason?: string;
 }
@@ -72,9 +92,33 @@ const CandidateSchema = z.object({
   unresolvedReferences: z.array(z.string()).max(8),
 }).strict();
 
+const GroundingSchema = z.object({
+  evidence: z.array(z.object({ ref: z.string().min(1), quote: z.string().min(1) }).strict()).min(1).max(8),
+  selfContained: z.boolean(),
+  unresolvedReferences: z.array(z.string()).max(8),
+});
+
+const GoalSchema = z.object({
+  title: z.string().min(1).max(200),
+  desiredOutcome: z.string().min(1).max(600),
+  scope: ScopeSchema,
+  declaredImportance: z.number().min(0).max(1).optional(),
+  targetAt: z.string().datetime({ offset: true }).optional(),
+}).merge(GroundingSchema).strict();
+
+const CollaborationRuleSchema = z.object({
+  category: z.enum(['communication', 'execution', 'boundary', 'routine', 'proactive']),
+  priority: z.number().int().min(0).max(100),
+  scope: ScopeSchema,
+  conditions: z.record(z.string(), z.unknown()).default({}),
+  statement: z.string().min(4).max(600),
+}).merge(GroundingSchema).strict();
+
 const InterpretationSchema = z.object({
   intent: z.enum(USER_MODEL_CAPTURE_INTENTS),
   candidates: z.array(CandidateSchema).max(8),
+  goals: z.array(GoalSchema).max(4).default([]),
+  collaborationRules: z.array(CollaborationRuleSchema).max(4).default([]),
   targetAssertionIds: z.array(z.string().min(1)).max(8),
   abstentionReason: z.string().max(500).optional(),
 }).strict();
@@ -99,6 +143,18 @@ function parseTime(value: string | undefined): number | undefined {
   return value === undefined ? undefined : Date.parse(value);
 }
 
+function groundedEvidenceRefs(
+  item: { evidence: Array<{ ref: string; quote: string }>; selfContained: boolean; unresolvedReferences: string[] },
+  evidenceByRef: ReadonlyMap<string, CaptureEvidence>,
+): string[] | undefined {
+  if (!item.selfContained || item.unresolvedReferences.length) return undefined;
+  const grounded = item.evidence.every((claim) => {
+    const source = evidenceByRef.get(claim.ref);
+    return source?.role === 'user' && comparable(source.text).includes(comparable(claim.quote));
+  });
+  return grounded ? [...new Set(item.evidence.map((claim) => claim.ref))] : undefined;
+}
+
 export function parseUserModelInterpretation(
   raw: string,
   evidence: CaptureEvidence[],
@@ -117,12 +173,8 @@ export function parseUserModelInterpretation(
   const candidates: ParsedAssertionCandidate[] = [];
   if (candidateIntents.has(parsed.intent)) {
     for (const item of parsed.candidates) {
-      if (!item.selfContained || item.unresolvedReferences.length) continue;
-      const grounded = item.evidence.every((claim) => {
-        const source = evidenceByRef.get(claim.ref);
-        return source?.role === 'user' && comparable(source.text).includes(comparable(claim.quote));
-      });
-      if (!grounded) continue;
+      const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
+      if (!evidenceRefs) continue;
       const observedAt = Math.max(...item.evidence.map((claim) => evidenceByRef.get(claim.ref)!.createdAt));
       candidates.push({
         subject: item.subject,
@@ -155,14 +207,43 @@ export function parseUserModelInterpretation(
           : {}),
         observedAt,
         createdBy: 'runtime',
-        evidenceRefs: [...new Set(item.evidence.map((claim) => claim.ref))],
+        evidenceRefs,
       });
     }
   }
+  const structuredIntents = new Set<UserModelCaptureIntent>(['remember', 'confirm', 'correct', 'user_assertion']);
+  const goals = structuredIntents.has(parsed.intent) ? parsed.goals.flatMap((item) => {
+    const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
+    if (!evidenceRefs) return [];
+    return [{
+      title: item.title,
+      desiredOutcome: item.desiredOutcome,
+      scope: item.scope,
+      ...(item.declaredImportance === undefined ? {} : { declaredImportance: item.declaredImportance }),
+      ...(item.targetAt === undefined ? {} : { targetAt: parseTime(item.targetAt) }),
+      evidenceRefs,
+    }];
+  }) : [];
+  const collaborationRules = structuredIntents.has(parsed.intent)
+    ? parsed.collaborationRules.flatMap((item) => {
+        const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
+        if (!evidenceRefs || item.scope.type === 'agent') return [];
+        return [{
+          category: item.category,
+          priority: item.priority,
+          scope: item.scope,
+          conditions: item.conditions,
+          statement: item.statement,
+          evidenceRefs,
+        }];
+      })
+    : [];
   const allowed = new Set(allowedTargetIds);
   return {
     intent: parsed.intent,
     candidates,
+    goals,
+    collaborationRules,
     targetAssertionIds: [...new Set(parsed.targetAssertionIds.filter((id) => allowed.has(id)))],
     ...(parsed.abstentionReason ? { abstentionReason: parsed.abstentionReason } : {}),
   };

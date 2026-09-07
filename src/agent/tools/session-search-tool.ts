@@ -137,6 +137,7 @@ export interface SessionSearchToolDeps {
   getSessionStore: () => SessionStore;
   getPrimaryModel: () => Model<Api>;
   getCurrentSessionKey?: () => string | undefined;
+  canAccess?: () => boolean;
 }
 
 type SessionSearchParams = {
@@ -159,6 +160,12 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
       params: any,
       signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
+      if (deps.canAccess && !deps.canAccess()) {
+        return {
+          content: [{ type: 'text', text: 'Cross-session history is disabled for this session.' }],
+          details: { error: 'cross_session_history_disabled' },
+        };
+      }
       const p = params as SessionSearchParams;
       const store = deps.getSessionStore();
       const limit = Math.min(15, Math.max(1, p.limit ?? 5));

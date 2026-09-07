@@ -13,11 +13,13 @@ import {
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import {
+  deleteWorkspaceFile,
   downloadBinaryFile,
   downloadTextFile,
   fetchWorkspaceFileBlob,
   readWorkspaceFile,
   searchWorkspaceFiles,
+  uploadWorkspaceFile,
 } from '@/features/workspace/workspace-api';
 import {
   detectPreviewFileType,
@@ -65,11 +67,12 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const [fileSearchLoading, setFileSearchLoading] = useState(false);
   const [fileSearchError, setFileSearchError] = useState<string | null>(null);
   const [pendingTrash, setPendingTrash] = useState<TreeEntry | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<TreeEntry | null>(null);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
-  const { tree, rootResource, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
+  const { tree, rootResource, loading, error, loadRoot, loadChildren, refreshDirectory, reset } = useWorkspaceTree(
     workspaceAgentId,
     chatSessionKey,
     projectId,
@@ -304,6 +307,9 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
         case 'trash':
           setPendingTrash(entry);
           break;
+        case 'delete':
+          if (!entry.isDirectory) setPendingDelete(entry);
+          break;
         case 'share':
           await createShareLink({
             path: entry.path,
@@ -338,6 +344,47 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
     await loadRoot();
     showComposerNotification('success', m.workspace.trashSuccess, undefined, { duration: 2500 });
   }, [loadRoot, m.workspace.trashFailed, m.workspace.trashSuccess, pendingTrash, previewPath, setPreviewPath]);
+
+  const uploadFiles = useCallback(async (files: File[], directory: string) => {
+    try {
+      await Promise.all(files.map((file) => uploadWorkspaceFile(file, directory, workspaceReadOpts)));
+      await refreshDirectory(directory).catch(() => undefined);
+      showComposerNotification(
+        'success',
+        m.workspace.uploadSuccess.replace('{{count}}', String(files.length)),
+        undefined,
+        { duration: 2500 },
+      );
+    } catch (err) {
+      await refreshDirectory(directory).catch(() => undefined);
+      showComposerNotification(
+        'warning',
+        `${m.workspace.uploadFailed}: ${err instanceof Error ? err.message : String(err)}`,
+        undefined,
+        { duration: 4000 },
+      );
+    }
+  }, [m.workspace.uploadFailed, m.workspace.uploadSuccess, refreshDirectory, workspaceReadOpts]);
+
+  const confirmDelete = useCallback(async () => {
+    const entry = pendingDelete;
+    if (!entry) return;
+    try {
+      await deleteWorkspaceFile(entry.fileId);
+      if (previewPath === entry.path) setPreviewPath(null);
+      setPendingDelete(null);
+      const separator = entry.path.lastIndexOf('/');
+      await refreshDirectory(separator < 0 ? '' : entry.path.slice(0, separator)).catch(() => undefined);
+      showComposerNotification('success', m.workspace.deleteSuccess, undefined, { duration: 2500 });
+    } catch (err) {
+      showComposerNotification(
+        'warning',
+        `${m.workspace.deleteFailed}: ${err instanceof Error ? err.message : String(err)}`,
+        undefined,
+        { duration: 4000 },
+      );
+    }
+  }, [m.workspace.deleteFailed, m.workspace.deleteSuccess, pendingDelete, previewPath, refreshDirectory, setPreviewPath]);
 
   return (
     <>
@@ -525,11 +572,14 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
                 onExpandDir={handleExpandDir}
                 onAction={handleAction}
                 onFileDragStart={handleFileDragStart}
+                onUploadFiles={(files, directory) => void uploadFiles(files, directory)}
+                uploadDropHint={m.workspace.dropToUpload}
                 actionLabels={{
                   preview: m.workspace.preview,
                   download: m.workspace.download,
                   copyPath: m.workspace.copyPath,
                   share: m.workspace.shareLink,
+                  delete: m.workspace.deleteFile,
                   ...(electron
                     ? {
                         openDefault: m.workspace.openSystemApp,
@@ -567,6 +617,16 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
         destructive
         onConfirm={() => void confirmTrash()}
         onCancel={() => setPendingTrash(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={m.workspace.deleteConfirmTitle}
+        description={m.workspace.deleteConfirmDescription.replace('{{name}}', pendingDelete?.name ?? '')}
+        confirmLabel={m.workspace.deleteFile}
+        cancelLabel={m.workspace.cancel}
+        destructive
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setPendingDelete(null)}
       />
     </>
   );

@@ -97,4 +97,18 @@ describe('session_search summary model', () => {
       { type: 'text', text: 'session_search error: Unknown model: missing/model' },
     ]);
   });
+
+  it('does not access the store when cross-session history is disabled', async () => {
+    const store = createStore();
+    const tool = createSessionSearchTool({
+      getSessionStore: () => store as never,
+      getPrimaryModel: () => model('deepseek', 'deepseek-v4-flash'),
+      canAccess: () => false,
+    });
+
+    const result = await tool.execute('call-1', { query: 'launch date' });
+
+    expect(store.list).not.toHaveBeenCalled();
+    expect(result.details).toEqual({ error: 'cross_session_history_disabled' });
+  });
 });

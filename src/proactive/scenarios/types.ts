@@ -12,6 +12,13 @@ export interface ScenarioDefinition {
   aggregation: ScenarioRoute['aggregation'];
   debounceSeconds: number;
   maxWindowSeconds: number;
+  contextProviderIds: string[];
+  valuePolicy: {
+    minConfidence: number;
+    minScore: number;
+    cooldownSeconds: number;
+    maxRunsPerDay: number;
+  };
 }
 
 export interface ScenarioSubscription {

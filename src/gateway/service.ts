@@ -415,11 +415,11 @@ export class GatewayService {
       config: this.config,
     });
 
-    this.automationService = new AutomationService(this.proactive);
+    this.automationService = new AutomationService(this.proactive, this.workspacePath);
 
     this.notesService = new NotesService(new NotesStore());
 
-    this.projects = new ProjectService(undefined, this.proactive);
+    this.projects = new ProjectService(undefined, this.proactive, this.workspacePath);
     const emitDiscussion = (capture: import('../discussions/index.js').DiscussionCapture) => {
       this.emit('discussion.updated', capture);
     };
@@ -1275,7 +1275,7 @@ export class GatewayService {
   }
 
   private ensureDefaultProactiveScenarioSubscriptions(): void {
-    for (const scenarioKey of ['meeting_preparation', 'discussion_follow_up']) {
+    for (const scenarioKey of ['automation_failure_impact', 'meeting_preparation', 'discussion_follow_up']) {
       if (this.proactiveScenarios.subscriptions(scenarioKey).some(
         (subscription) => subscription.workspaceId === this.currentWorkspacePath,
       )) continue;

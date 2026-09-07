@@ -15,8 +15,16 @@ export interface ClaimedRun {
 export function claimNextRun(owner: string, now = new Date(), leaseSeconds = 120): ClaimedRun | null {
   return runSqliteWriteTransaction((db) => {
     const nowIso = now.toISOString();
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
     db.prepare(`UPDATE proactive_signal_batches SET status = 'ignored', updated_at = ? WHERE status = 'ready'
       AND subscription_id IN (SELECT subscription_id FROM proactive_scenario_subscriptions WHERE enabled = 0)`).run(nowIso);
+    db.prepare(`UPDATE proactive_signal_batches AS batch SET status = 'ignored', updated_at = ?
+      WHERE batch.status = 'ready' AND EXISTS (
+        SELECT 1 FROM proactive_scenario_versions scenario
+        WHERE scenario.scenario_key = batch.scenario_key AND scenario.version = batch.scenario_version
+        AND (SELECT COUNT(*) FROM proactive_runs run
+          WHERE run.scenario_key = batch.scenario_key AND run.started_at >= ?) >= scenario.max_runs_per_day
+      )`).run(nowIso, dayStart);
     db.prepare(`UPDATE proactive_signal_batches SET status = 'failed_permanent', updated_at = ?
       WHERE status = 'processing' AND batch_id IN (
         SELECT batch_id FROM proactive_runs WHERE status = 'running' AND lease_expires_at <= ? AND attempt >= 3
@@ -76,7 +84,14 @@ export function attachSnapshot(runId: string, snapshotId: string): void {
     .run(snapshotId, new Date().toISOString(), runId));
 }
 
-export function finishRun(input: { run: ClaimedRun; candidate?: InsightCandidate; valueScore?: number; rawOutput: string; modelRef?: string }, now = new Date()): ProactiveInsight | null {
+export function finishRun(input: {
+  run: ClaimedRun;
+  candidate?: InsightCandidate;
+  valueScore?: number;
+  cooldownSeconds?: number;
+  rawOutput: string;
+  modelRef?: string;
+}, now = new Date()): ProactiveInsight | null {
   return runSqliteWriteTransaction((db) => {
     const nowIso = now.toISOString();
     const subjectScope = (db.prepare(`SELECT DISTINCT e.subject_kind, e.subject_id
@@ -101,7 +116,7 @@ export function finishRun(input: { run: ClaimedRun; candidate?: InsightCandidate
         input.run.subscriptionId,
         input.run.scenarioKey,
         fingerprint,
-        new Date(now.getTime() - 7 * 24 * 60 * 60_000).toISOString(),
+        new Date(now.getTime() - (input.cooldownSeconds ?? 7 * 24 * 60 * 60) * 1000).toISOString(),
       ) : undefined;
     const valuable = Boolean(input.candidate) && !duplicate;
     db.prepare(`UPDATE proactive_runs SET status = ?, raw_output = ?, model_ref = ?, lease_owner = NULL,

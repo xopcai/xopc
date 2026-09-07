@@ -171,6 +171,7 @@ describe('external tool providers', () => {
         getExternalToolEntries: () => [{ providerId: 'remote-memory', tool }],
       }) as unknown as MemoryManager,
       getSessionKey: () => undefined,
+      canAccess: () => true,
       toolExecutorConfig: { enableTimeout: false, enableRetry: false },
     });
 
@@ -183,5 +184,26 @@ describe('external tool providers', () => {
       { toolCallId: 'call-memory' },
     )).resolves.toMatchObject({ content: [{ text: 'memory-ok' }] });
     expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('hides external memory tools when memory access is disabled', async () => {
+    const provider = new MemoryToolProvider({
+      getMemoryManager: () => ({
+        getExternalToolEntries: () => [{
+          providerId: 'remote-memory',
+          tool: { name: 'remote_memory_query' } as AgentTool,
+        }],
+      }) as unknown as MemoryManager,
+      getSessionKey: () => 'agent:main:main',
+      canAccess: () => false,
+    });
+
+    expect(await provider.search('memory')).toEqual([]);
+    await expect(provider.execute(
+      'memory:remote-memory:remote_memory_query',
+      {},
+      undefined,
+      { toolCallId: 'call-memory' },
+    )).rejects.toThrow('unavailable');
   });
 });

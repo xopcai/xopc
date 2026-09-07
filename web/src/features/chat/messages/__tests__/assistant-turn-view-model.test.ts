@@ -116,4 +116,77 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.activity.blocks.map((block) => block.type)).toEqual(expectedTypes);
     expect(view.activity.expandedByDefault).toBe(expanded);
   });
+
+  it('promotes the latest object delivery to the turn result surface', () => {
+    const delivery = {
+      version: 1,
+      operation: 'updated',
+      primary: {
+        kind: 'note',
+        id: 'note-1',
+        title: 'Updated note',
+        capabilities: ['open'],
+      },
+    } as const;
+    const message: Message = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'note-update',
+          name: 'xopc_use',
+          status: 'done',
+          result: `Updated\nxopc-product-delivery:${encodeURIComponent(JSON.stringify(delivery))}`,
+        },
+        {
+          type: 'tool_use',
+          id: 'send-final',
+          name: 'send_message',
+          status: 'done',
+          result: 'Message sent',
+        },
+      ],
+    };
+
+    const view = buildAssistantTurnViewModel({
+      message,
+      isStreaming: false,
+      reasoningLevel: 'off',
+    });
+
+    expect(view.delivery).toEqual(delivery);
+  });
+
+  it('does not promote a note delivery that only opens an existing note', () => {
+    const delivery = {
+      version: 1,
+      operation: 'opened',
+      primary: {
+        kind: 'note',
+        id: 'note-1',
+        title: 'Existing note',
+        capabilities: ['open'],
+      },
+    } as const;
+    const message: Message = {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'note-open',
+          name: 'xopc_use',
+          status: 'done',
+          result: `Opened\nxopc-product-delivery:${encodeURIComponent(JSON.stringify(delivery))}`,
+        },
+      ],
+    };
+
+    const view = buildAssistantTurnViewModel({
+      message,
+      isStreaming: false,
+      reasoningLevel: 'off',
+    });
+
+    expect(view.delivery).toBeNull();
+  });
 });

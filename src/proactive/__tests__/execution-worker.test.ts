@@ -11,6 +11,7 @@ import { claimNextRun, listInsights } from '../execution/repository.js';
 import type { ProactiveAgentExecutor } from '../execution/types.js';
 import { ProactiveWorker } from '../execution/worker.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
+import { getScenario } from '../scenarios/repository.js';
 import { ProactiveEventService } from '../service.js';
 
 describe('proactive execution worker', () => {
@@ -87,14 +88,17 @@ describe('proactive execution worker', () => {
   });
 
   it('persists the snapshot-safe context instead of model-visible external content', async () => {
+    const scenario = getScenario('blocked_work')!;
+    getSqliteDatabase().prepare(`UPDATE proactive_scenarios
+      SET version = ?, context_provider_ids_json = '["external_evidence"]', updated_at = datetime('now')
+      WHERE scenario_key = 'blocked_work'`).run(scenario.version + 1);
     const eventId = publishAndReady('work-1:blocked:snapshot');
     const contexts = new ContextProviderRegistry([{
       id: 'external_evidence',
-      supports: () => true,
-      collect: async () => ({
+      collect: async (input) => ({
         content: { body: 'raw external body' },
         snapshotContent: { contentHash: 'hash-1' },
-        evidenceIds: [eventId],
+        evidenceIds: input.eventIds,
       }),
     }]);
     const executor: ProactiveAgentExecutor = { execute: async () => ({ text: JSON.stringify({
@@ -138,6 +142,37 @@ describe('proactive execution worker', () => {
     }) }) };
     await new ProactiveWorker(fake).tick();
     expect(events.listBatches().some((batch) => batch.status === 'failed_retryable')).toBe(true);
+  });
+
+  it('stops starting runs after the scenario daily budget is exhausted', async () => {
+    const scenario = getScenario('blocked_work')!;
+    getSqliteDatabase().prepare(`UPDATE proactive_scenarios
+      SET version = ?, max_runs_per_day = 1, updated_at = datetime('now')
+      WHERE scenario_key = 'blocked_work'`).run(scenario.version + 1);
+    let calls = 0;
+    const executor: ProactiveAgentExecutor = { execute: async ({ authorizedContext }) => {
+      calls += 1;
+      const batch = authorizedContext.event_batch as { events: Array<{ evidenceId: string }> };
+      return { text: JSON.stringify({
+        title: `Material blocker ${calls}`,
+        summary: 'A task is blocked.',
+        whyNow: 'The status changed.',
+        impact: 'Delivery may slip.',
+        recommendation: 'Resolve the blocker.',
+        workDone: 'Inspected the event.',
+        decision: null,
+        urgency: 'high',
+        confidence: 0.9,
+        evidenceIds: [batch.events[0]!.evidenceId],
+      }) };
+    } };
+    publishAndReady('work-1:blocked:budget-1');
+    await new ProactiveWorker(executor).tick();
+    publishAndReady('work-1:blocked:budget-2');
+    await new ProactiveWorker(executor).tick();
+
+    expect(calls).toBe(1);
+    expect(events.listBatches().filter((batch) => batch.status === 'ignored')).toHaveLength(1);
   });
 
   it('permanently fails a run after three expired leases', () => {
