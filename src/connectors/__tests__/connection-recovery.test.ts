@@ -99,6 +99,52 @@ describe('durable connection recovery', () => {
     expect(getActiveConnectionWait(sessionKey)).toBeUndefined();
   });
 
+  it('finishes local setup after selecting an existing Gmail account without another OAuth flow', async () => {
+    config.connectors.instances = {};
+    requireWait(); activeConnection('connection-1'); activeConnection('connection-2');
+    expect(recovery.snapshot(sessionKey).wait?.needs[0].phase).toBe('choose_account');
+    const selected = await recovery.act(sessionKey, action('select_account', { needKey: need.key, accountId: 'connection-2' }));
+    expect(selected.snapshot.wait?.phase).toBe('ready');
+    expect(selected.snapshot.wait?.needs[0].connectionId).toBe('connection-2');
+    expect(Object.keys(config.connectors.instances)).toContain('composio-gmail');
+    expect(authorize).not.toHaveBeenCalled();
+    expect(drain).not.toHaveBeenCalled();
+    expect((await recovery.act(sessionKey, action('continue'))).snapshot.wait?.phase).toBe('queued');
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('treats renewed authorizations for the same account as one choice and preserves an explicit binding', async () => {
+    const original = activeConnection();
+    upsertConnectorConnection({ ...original, id: 'renewed', providerConnectionId: 'renewed-provider', accountId: original.accountId });
+    requireWait();
+    expect(recovery.snapshot(sessionKey).wait?.needs[0].accounts).toHaveLength(1);
+    expect(recovery.snapshot(sessionKey).wait?.phase).toBe('ready');
+    const wait = getActiveConnectionWait(sessionKey)!;
+    updateConnectionWait({ ...wait, needs: [{ ...need, connectionId: original.id, accountId: original.accountId }] }, wait.version);
+    expect(recovery.snapshot(sessionKey).wait?.needs[0].connectionId).toBe(original.id);
+    expect(recovery.snapshot(sessionKey).wait?.needs[0].accounts).toHaveLength(1);
+  });
+
+  it('continues with a single existing account when local setup is missing', async () => {
+    config.connectors.instances = {};
+    requireWait(); activeConnection();
+    expect(recovery.snapshot(sessionKey).wait?.phase).toBe('ready');
+    expect((await recovery.act(sessionKey, action('continue'))).snapshot.wait?.phase).toBe('queued');
+    expect(authorize).not.toHaveBeenCalled();
+    expect(Object.keys(config.connectors.instances)).toContain('composio-gmail');
+  });
+
+  it('clears an unrelated pending authorization when the user selects an existing account', async () => {
+    requireWait();
+    await recovery.act(sessionKey, action('connect', { needKey: need.key }));
+    activeConnection('existing');
+    const selected = await recovery.act(sessionKey, action('select_account', { needKey: need.key, accountId: 'existing' }));
+    expect(selected.snapshot.wait?.phase).toBe('queued');
+    expect(getActiveConnectionWait(sessionKey)?.needs[0].attempt).toBeUndefined();
+    expect(getActiveConnectionWait(sessionKey)?.needs[0].connectionId).toBe('existing');
+    expect(authorize).toHaveBeenCalledTimes(1);
+  });
+
   it('merges repeated requirements into one wait without storing authorization URLs', () => {
     const first = requireWait();
     expect(requireWait().id).toBe(first.id);
