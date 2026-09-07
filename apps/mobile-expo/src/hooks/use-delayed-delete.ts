@@ -30,6 +30,7 @@ export function useDelayedDelete<Id extends string>() {
 
       const timer = setTimeout(() => {
         pendingRef.current.delete(id);
+        if (mountedRef.current) setUndoId((current) => current === id ? null : current);
         void commit()
           .catch((error) => {
             if (!mountedRef.current) return;
@@ -54,10 +55,9 @@ export function useDelayedDelete<Id extends string>() {
   const undoDelete = useCallback((id: Id | null = undoId) => {
     if (!id) return;
     const pending = pendingRef.current.get(id);
-    if (pending) {
-      clearTimeout(pending.timer);
-      pendingRef.current.delete(id);
-    }
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingRef.current.delete(id);
     setHiddenIds((prev) => {
       const next = new Set(prev);
       next.delete(id);

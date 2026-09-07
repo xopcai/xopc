@@ -1569,6 +1569,16 @@ export const en = {
   },
 
   notesPage: {
+    deletingNote: 'Deleting note…',
+    shareLinkDescription: 'Create a read-only snapshot valid for 24 hours, including referenced attachments. Anyone with the link can view it without signing in. Later edits do not update the snapshot.',
+    createShareLink: 'Create share link',
+    copyShareLink: 'Copy link',
+    revokeShareLink: 'Revoke link',
+    shareLinkCopied: 'Share link copied',
+    shareLinkRevoked: 'Share link revoked',
+    syncBeforeAction: 'Sync this note before trying again.',
+    noteChatContextHint: 'Use this note as conversation context, then ask a follow-up.',
+    deletePending: 'Note scheduled for deletion. Undo to keep it. Related share links will also be revoked.',
     title: 'Notes',
     noteTitle: 'Title',
     quickCapturePlaceholder: 'Write down your thought…',

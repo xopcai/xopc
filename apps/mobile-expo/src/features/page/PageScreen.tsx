@@ -10,6 +10,12 @@ import { t, useMessages } from '../../i18n/messages';
 import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useTheme } from '../../theme';
 
+import { NoteShareSheet } from '../notes/NoteShareSheet';
+import { useDelayedDelete } from '../../hooks/use-delayed-delete';
+import { LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
+import { queryKeys } from '../../query/keys';
+import { removeNoteFromListCaches } from '../../query/note-list-cache';
+import { invalidateNoteLists } from '../../query/workspace-sync';
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
 import { NoteViewActionBar, type NoteViewActionBarItem } from '../notes/NoteViewActionBar';
 import { NoteReadSurface } from '../notes/NoteReadSurface';
@@ -27,7 +33,7 @@ import type {
   NoteEditorLabels,
 } from '../notes/editor/editor-protocol';
 import { useNoteTagsStore } from '../../stores/note-tags-store';
-import { requestNoteAiEdit } from '../../query/notes';
+import { deleteNote, requestNoteAiEdit } from '../../query/notes';
 import { recordInteractionPerformanceEvent } from '../../product/usage-metrics';
 import { useNoteEditSession } from './useNoteEditSession';
 import { useNoteEditorAttachments } from './useNoteEditorAttachments';
@@ -59,6 +65,9 @@ export function PageScreen() {
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const { hiddenIds, undoId, scheduleDelete, undoDelete } = useDelayedDelete<string>();
+  const deletePending = Boolean(id && hiddenIds.has(id));
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
@@ -200,6 +209,8 @@ export function PageScreen() {
       }
       if (!id || !note) return;
       event.preventDefault();
+      if (deleting || (deletePending && !undoId)) return;
+      if (undoId) undoDelete();
       if (savingBeforeLeaveRef.current) return;
       savingBeforeLeaveRef.current = true;
       Keyboard.dismiss();
@@ -214,10 +225,11 @@ export function PageScreen() {
       })();
     });
     return unsubscribe;
-  }, [id, navigation, note, saveEditorBeforeLeave]);
+  }, [deletePending, deleting, id, navigation, note, saveEditorBeforeLeave, undoDelete, undoId]);
 
   const handleBack = useCallback(() => {
-    if (savingBeforeLeaveRef.current) return;
+    if (savingBeforeLeaveRef.current || deleting || (deletePending && !undoId)) return;
+    if (undoId) undoDelete();
     savingBeforeLeaveRef.current = true;
     Keyboard.dismiss();
     void (async () => {
@@ -229,12 +241,15 @@ export function PageScreen() {
         savingBeforeLeaveRef.current = false;
       }
     })();
-  }, [router, saveEditorBeforeLeave]);
+  }, [deletePending, deleting, router, saveEditorBeforeLeave, undoDelete, undoId]);
 
   useDismissOnHardwareBack(router, { onBack: handleBack });
 
   const {
     actionLoading,
+    prepareSavedNote,
+    shareNote,
+    dismissShare,
     handleOpenNoteChat,
     handleShare,
     handleSyncNow,
@@ -251,15 +266,38 @@ export function PageScreen() {
     dismissMore: () => setMoreVisible(false),
     messages: {
       actionFailed: pm.actionFailed,
+      syncBeforeAction: pm.syncBeforeAction,
       pin: pm.pin,
       saved: pm.saved,
-      shareNotesCopied: pm.shareNotesCopied,
-      shareNotesTitle: pm.shareNotesTitle,
       unpin: pm.unpin,
-      untitledNote: pm.untitledNote,
-      updated: pm.updated,
     },
   });
+
+  const handleDelete = useCallback(async () => {
+    if (!id || deleting || deletePending || actionLoading) return;
+    setDeleting(true);
+    setMoreVisible(false);
+    Keyboard.dismiss();
+    try {
+      await prepareSavedNote();
+      setEditing(false);
+      scheduleDelete(id, async () => {
+        await deleteNote(id);
+        removeNoteFromListCaches(queryClient, id);
+        void invalidateNoteLists(queryClient);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.shares });
+        allowNextRemoveRef.current = true;
+        router.replace('/notes');
+      }, (error) => {
+        setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
+      });
+      setSnackMsg(pm.deletePending);
+    } catch (error) {
+      setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
+    } finally {
+      setDeleting(false);
+    }
+  }, [actionLoading, deletePending, deleting, id, pm.actionFailed, pm.deletePending, prepareSavedNote, queryClient, router, scheduleDelete]);
 
   const handleCreateTag = useCallback((raw: string) => addNoteTag(raw), [addNoteTag]);
 
@@ -405,9 +443,10 @@ export function PageScreen() {
   }, [flushEditorToDraft]);
 
   const startEditing = useCallback((): void => {
+    if (deletePending || deleting || actionLoading) return;
     editorStartedAtRef.current = Date.now();
     setEditing(true);
-  }, []);
+  }, [actionLoading, deletePending, deleting]);
 
   const handleEditorRuntimeState = useCallback((state: { ready: boolean }): void => {
     if (!state.ready || editorStartedAtRef.current === null) return;
@@ -442,6 +481,7 @@ export function PageScreen() {
       key: 'share',
       icon: 'share-variant-outline',
       label: pm.viewShare,
+      loading: actionLoading === 'share',
       onPress: () => void handleShare(),
     },
     {
@@ -473,10 +513,16 @@ export function PageScreen() {
         onBack={handleBack}
         backLabel={m.common.back}
         statusLabel={note ? saveStatusLabel : undefined}
-        rightActions={headerActions}
+        rightActions={deletePending || deleting ? [] : headerActions.map((action) => ({ ...action, disabled: Boolean(actionLoading) }))}
       />
 
-      {showLoading ? (
+      {deletePending ? (
+        <View style={styles.center}>
+          <Icon source="trash-can-outline" size={42} color={colors.text.tertiary} />
+          <Text style={{ color: colors.text.secondary }}>{undoId ? pm.deletePending : pm.deletingNote}</Text>
+          {undoId ? <Button onPress={() => { undoDelete(); setSnackMsg(''); }}>{m.listInteraction.undo}</Button> : <ActivityIndicator />}
+        </View>
+      ) : showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.primary} />
           <Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text>
@@ -542,7 +588,7 @@ export function PageScreen() {
         />
       ) : null}
 
-      {showReadActions ? (
+      {showReadActions && !deletePending ? (
         <View style={styles.wordCountWrap} pointerEvents="none">
           <Text style={[styles.wordCountText, { color: colors.text.tertiary }]}>
             {t(pm.charCount, { count: wordCount })}
@@ -575,9 +621,10 @@ export function PageScreen() {
         </Pressable>
       ) : null}
 
-      {showReadActions ? (
+      {showReadActions && !deletePending ? <Text style={{ color: colors.text.tertiary, textAlign: 'center' }}>{pm.noteChatContextHint}</Text> : null}
+      {showReadActions && !deletePending ? (
         <NoteViewActionBar
-          items={viewActionItems}
+          items={viewActionItems.map((item) => ({ ...item, disabled: Boolean(actionLoading) || deleting || deletePending }))}
         />
       ) : null}
 
@@ -585,7 +632,7 @@ export function PageScreen() {
         visible={moreVisible}
         onDismiss={() => setMoreVisible(false)}
         title={pm.viewMore}
-        maxHeight="40%"
+        maxHeight="55%"
       >
         <View style={styles.moreActions}>
           <Pressable
@@ -618,8 +665,20 @@ export function PageScreen() {
             <Icon source="share-variant-outline" size={22} color={colors.text.secondary} />
             <Text style={[styles.moreActionLabel, { color: colors.text.primary }]}>{pm.viewShare}</Text>
           </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.moreAction, pressed && styles.moreActionPressed]}
+            disabled={Boolean(actionLoading) || deleting || deletePending}
+            onPress={() => void handleDelete()}
+            accessibilityRole="button"
+            accessibilityLabel={pm.delete}
+          >
+            <Icon source="trash-can-outline" size={22} color={colors.semantic.error} />
+            <Text style={[styles.moreActionLabel, { color: colors.semantic.error }]}>{pm.delete}</Text>
+          </Pressable>
         </View>
       </BottomSheetModal>
+
+      {shareNote ? <NoteShareSheet key={`${shareNote.id}:${shareNote.updatedAt}`} note={shareNote} onDismiss={dismissShare} /> : null}
 
       <NoteTagPickerSheet
         visible={tagPickerVisible}
@@ -633,7 +692,8 @@ export function PageScreen() {
 
       <Snackbar
         visible={Boolean(snackMsg)}
-        duration={TOAST_DURATION_SHORT}
+        duration={undoId ? LIST_DELETE_UNDO_MS : TOAST_DURATION_SHORT}
+        action={undoId ? { label: m.listInteraction.undo, onPress: () => { undoDelete(); setSnackMsg(''); } } : undefined}
         onDismiss={() => setSnackMsg('')}
       >
         {snackMsg}

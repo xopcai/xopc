@@ -95,6 +95,8 @@ Use **Settings → Logs** or `xopc logs tail` to find the first provider error. 
 
 ## Interaction and validation
 
+Calls allow a short continuation window before answering. The default response pacing now uses 1,200 ms of provider silence; common unfinished Chinese/English phrases get additional waiting time. Resuming speech discards a reply that has not yet been shown or played. Interrupting an already playing reply remains immediate when enabled. This is pause/continuation handling, not full semantic speech detection. The policy runs on the gateway and applies to mobile, web and desktop; deploy the updated gateway for connected clients to receive it.
+
 **Stop reply** clears playback and cancels the current response, invalidating queued and unfinished input. It does not send a message or undo completed tool actions. Tool progress and explicit clarification/connector approval controls appear in the call. Ambient speech does not answer a pending clarification. Calls opened from a task retain its existing task status and detail link.
 
 The saved default is `voice.realtime.defaultEngine` (`agent` by default, or `omni`). A session creation request may omit `engine` to use it. Active calls keep their original route.
