@@ -74,6 +74,29 @@ describe('structured user context routes', () => {
     });
   });
 
+  it('persists and restores a focus exclusion without changing understanding truth', async () => {
+    const focus = upsertUserFocus({ canonicalKey: 'focus:exclude', title: 'Ship', summary: 'Release', horizon: 'current', status: 'active', confidence: 1, evidenceRefs: [] });
+    const created = await app.request('/api/you/understandings', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'preference', statement: 'Keep releases small.' }),
+    });
+    const { understanding } = await created.json() as { understanding: { id: string; versionId: string } };
+    const url = `/api/you/understandings/${understanding.id}/focus-exclusions/${focus.id}`;
+    expect((await app.request(url, { method: 'PUT' })).status).toBe(200);
+    expect((await app.request(url, { method: 'PUT' })).status).toBe(200);
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    await expect((await app.request('/api/you')).json()).resolves.toMatchObject({
+      understandings: [{ id: understanding.id, versionId: understanding.versionId, status: 'active', excludedFocusIds: [focus.id] }],
+    });
+    expect((await app.request(url, { method: 'DELETE' })).status).toBe(200);
+    await expect((await app.request('/api/you')).json()).resolves.toMatchObject({
+      understandings: [{ status: 'active', excludedFocusIds: [] }],
+    });
+    expect((await app.request(`/api/you/understandings/${understanding.id}/focus-exclusions/missing`, { method: 'PUT' })).status).toBe(404);
+  });
+
   it('offers a local call-name suggestion without persisting it', async () => {
     const response = await app.request('/api/you/profile');
     const body = await response.json() as { profile: { callName: string }; suggestedCallName: string };

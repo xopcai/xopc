@@ -12,8 +12,8 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
-import { ReadAloudButton } from '@/features/voice/read-aloud-button';
-import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
+import { useReadAloudStore } from '@/features/voice/read-aloud-store';
+import { detectSpeechLanguage } from '@/features/voice/read-aloud-text';
 
 import {
   catalyzeNote,
@@ -31,6 +31,8 @@ import { NoteHistoryPanel } from './note-history-panel';
 import { NoteMarkdownView } from './note-markdown-view';
 import { NoteBreakdownPanel } from './note-breakdown-panel';
 import { NoteShareDialog } from './note-share-dialog';
+import { NoteReadAloudControls } from './note-read-aloud-controls';
+import { buildNoteReadAloudText } from './note-read-aloud';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
@@ -262,8 +264,19 @@ function NoteDetailPanelInner({
     [backButtonClassName, n.back, onBack, showBackButton],
   );
 
+  const stopNoteReading = useCallback(() => {
+    const player = useReadAloudStore.getState();
+    if (player.source?.type === 'note' && player.source.id === noteId) player.stop();
+  }, [noteId]);
+
+  const handleModeChange = useCallback((nextMode: EditorMode) => {
+    if (nextMode !== 'preview') stopNoteReading();
+    setMode(nextMode);
+  }, [stopNoteReading]);
+
   const handleTitleChange = useCallback(
     (value: string) => {
+      stopNoteReading();
       setTitle(value);
       if (!noteId) return;
       pendingTitleRef.current = value;
@@ -284,7 +297,7 @@ function NoteDetailPanelInner({
         }
       }, 600);
     },
-    [noteId, mutate, onSaved],
+    [stopNoteReading, noteId, mutate, onSaved],
   );
 
   const headerMain = useMemo(
@@ -340,9 +353,9 @@ function NoteDetailPanelInner({
   }, [activeSidePanel, catalyzing, handleCatalyze, note?.aiDeep?.catalysis?.report]);
 
   const getNoteReadAloudInput = useCallback(() => {
-    const markdown = previewSnapshot?.markdown ?? pendingMarkdownRef.current ?? note?.markdown ?? '';
-    const noteTitle = previewSnapshot?.title ?? title;
-    const text = buildSpeakableText([noteTitle, markdown].filter(Boolean).join('\n\n'));
+    const markdown = previewSnapshot ? (previewSnapshot.markdown ?? '') : (pendingMarkdownRef.current ?? note?.markdown ?? '');
+    const noteTitle = previewSnapshot ? (previewSnapshot.title ?? '') : title;
+    const text = buildNoteReadAloudText(noteTitle, markdown);
     return {
       source: { type: 'note' as const, id: noteId, title: noteTitle || n.titlePlaceholder },
       text,
@@ -398,7 +411,7 @@ function NoteDetailPanelInner({
             <Search className="size-4" aria-hidden />
           </button>
         ) : null}
-        <ReadAloudButton
+        <NoteReadAloudControls
           input={getNoteReadAloudInput}
           labels={{
             read: n.readAloud,
@@ -406,8 +419,8 @@ function NoteDetailPanelInner({
             pause: n.readAloudPause,
             resume: n.readAloudResume,
             retry: n.readAloudRetry,
+            stop: n.readAloudStop,
           }}
-          showLabel
         />
         <button
           type="button"
@@ -446,7 +459,7 @@ function NoteDetailPanelInner({
         </button>
         <NoteDetailModeSwitcher
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={handleModeChange}
           labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }}
         />
         <button
@@ -482,6 +495,8 @@ function NoteDetailPanelInner({
       n.readAloudPreparing,
       n.readAloudResume,
       n.readAloudRetry,
+      n.readAloudStop,
+      handleModeChange,
       getNoteReadAloudInput,
       handleShare,
       language,
@@ -502,6 +517,7 @@ function NoteDetailPanelInner({
   const handleSave = useCallback(
     (content: string) => {
       if (!noteId) return;
+      stopNoteReading();
       pendingMarkdownRef.current = content;
 
       // Debounce saves to avoid excessive API calls
@@ -523,29 +539,34 @@ function NoteDetailPanelInner({
         }
       }, 600);
     },
-    [noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved],
+    [stopNoteReading, noteId, mutate, n.saveFailed, n.saveFailedHint, onSaved],
   );
 
   const handleHistorySelect = useCallback(
     (entry: NoteSnapshotEntry) => {
       getNoteSnapshot(noteId, entry.timestamp).then((snapshot) => {
-        if (snapshot) setPreviewSnapshot(snapshot);
+        if (snapshot) {
+          stopNoteReading();
+          setPreviewSnapshot(snapshot);
+        }
       });
     },
-    [noteId],
+    [noteId, stopNoteReading],
   );
 
   const handleHistoryClose = useCallback(() => {
+    stopNoteReading();
     setActiveSidePanel(null);
     setPreviewSnapshot(null);
-  }, []);
+  }, [stopNoteReading]);
 
   const handleHistoryRestored = useCallback(() => {
+    stopNoteReading();
     setActiveSidePanel(null);
     setPreviewSnapshot(null);
     void mutate().catch(showRefreshError);
     onSaved?.();
-  }, [mutate, onSaved, showRefreshError]);
+  }, [mutate, onSaved, showRefreshError, stopNoteReading]);
 
   useEffect(() => {
     return () => {
@@ -590,7 +611,7 @@ function NoteDetailPanelInner({
   }
 
   const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
-  const displayText = isPreviewingSnapshot ? (previewSnapshot.markdown ?? '') : (note.markdown ?? '');
+  const displayText = isPreviewingSnapshot ? (previewSnapshot.markdown ?? '') : (pendingMarkdownRef.current ?? note.markdown ?? '');
   const noteCreatedAtMs = new Date(note.createdAt).getTime();
   const shouldSuggestNoteAutomation =
     Number.isFinite(noteCreatedAtMs) && Date.now() - noteCreatedAtMs < 60 * 60 * 1000;
