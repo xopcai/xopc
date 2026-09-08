@@ -4,7 +4,7 @@
  * Responsibilities:
  *  - Render a 1200x630 jpeg preview for shareable artefacts.
  *  - HTML / sites: launch its own Playwright browser (does NOT share the user
- *    BrowserManager — the user-facing browser is for the agent and we mustn't
+ *    Browser Control runtime — the user-facing browser is for the agent and we mustn't
  *    pollute its context).
  *  - Images: pass through with size cap; downscale only if oversized.
  *  - Anything else: emit an SVG placeholder card with the file name + icon.

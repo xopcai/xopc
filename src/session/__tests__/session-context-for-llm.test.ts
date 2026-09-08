@@ -129,6 +129,31 @@ describe('session-context-for-llm', () => {
     expect(text).not.toContain('stale result');
   });
 
+  it('keeps only the newest browser screenshot while preserving semantic results', () => {
+    const rows = [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'browser-1', name: 'browser_use', input: { action: 'observe' } },
+          { type: 'tool_use', id: 'browser-2', name: 'browser_use', input: { action: 'observe' } },
+        ],
+      },
+      {
+        role: 'toolResult', toolCallId: 'browser-1',
+        content: [{ type: 'text', text: 'revision 1' }, { type: 'image', data: 'old-image', mimeType: 'image/jpeg' }],
+      },
+      {
+        role: 'toolResult', toolCallId: 'browser-2',
+        content: [{ type: 'text', text: 'revision 2' }, { type: 'image', data: 'new-image', mimeType: 'image/jpeg' }],
+      },
+    ] as unknown as TranscriptStoredRow[];
+
+    const projected = JSON.stringify(buildSessionContextForLlm(rows));
+    expect(projected).toContain('revision 1');
+    expect(projected).not.toContain('old-image');
+    expect(projected).toContain('new-image');
+  });
+
   it('buildSessionContextForLlm maps included bash execution rows into user context', () => {
     const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;
     const bash = { role: 'bashExecution', command: 'pwd', output: '/repo\n', exitCode: 0 } as const;

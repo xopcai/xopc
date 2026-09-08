@@ -31,7 +31,7 @@ export class BrowserbaseProvider implements CloudBrowserProvider {
   async connect(): Promise<{ browser: Browser; context: BrowserContext }> {
     const apiKey = this.config.apiKey || process.env.BROWSERBASE_API_KEY;
     if (!apiKey) {
-      throw new Error('Browserbase API key not configured (set BROWSERBASE_API_KEY or browser.cloudProvider config)');
+      throw new Error('Browserbase API key not configured (set BROWSERBASE_API_KEY or browser.driver.apiKey)');
     }
 
     const projectId = this.config.projectId || process.env.BROWSERBASE_PROJECT_ID;

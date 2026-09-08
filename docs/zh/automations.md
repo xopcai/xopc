@@ -57,4 +57,4 @@ Webhook 地址和密钥都应视为凭据，不要放进公开仓库、截图或
 - 执行已保存的浏览器检查并报告变化；
 - 从另一个受信任服务触发调研 Workflow。
 
-可重复步骤见[工作流](./workflows.md)，网站操作见[浏览器自动化](./browser-workflows.md)。
+可重复步骤见[工作流](./workflows.md)，网站操作见[浏览器自动化](./browser-automations.md)。

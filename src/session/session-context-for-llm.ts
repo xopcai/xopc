@@ -345,6 +345,48 @@ function toolCallIds(message: AgentMessage): string[] {
   return ids;
 }
 
+function browserToolCallIds(messages: AgentMessage[]): Set<string> {
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue;
+    const content = (message as unknown as { content?: unknown }).content;
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      const record = asRecord(block);
+      if (!record || stringValue(record.name) !== 'browser_use') continue;
+      const id = toolCallIdFromBlock(record);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+/** Keep semantic browser text throughout history, but only the newest browser screenshot. */
+function projectBrowserVisualContext(messages: AgentMessage[]): AgentMessage[] {
+  const browserIds = browserToolCallIds(messages);
+  let latestVisualIndex = -1;
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]!;
+    if (!browserIds.has(toolResultId(message) ?? '')) continue;
+    const content = (message as unknown as { content?: unknown }).content;
+    if (Array.isArray(content) && content.some((block) => asRecord(block)?.type === 'image')) {
+      latestVisualIndex = index;
+    }
+  }
+  if (latestVisualIndex < 0) return messages;
+  return messages.map((message, index) => {
+    if (index === latestVisualIndex || !browserIds.has(toolResultId(message) ?? '')) return message;
+    const record = message as unknown as Record<string, unknown>;
+    if (!Array.isArray(record.content)) return message;
+    const content = record.content.map((block) =>
+      asRecord(block)?.type === 'image'
+        ? { type: 'text', text: '[Earlier browser screenshot omitted; semantic observation retained.]' }
+        : block,
+    );
+    return { ...record, content } as unknown as AgentMessage;
+  });
+}
+
 function filterAssistantToolCalls(message: AgentMessage, pairedIds: Set<string>): AgentMessage | null {
   const record = message as unknown as Record<string, unknown>;
   const content = record.content;
@@ -499,7 +541,7 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       out.push(r);
     }
   }
-  return sanitizeToolPairs(out);
+  return projectBrowserVisualContext(sanitizeToolPairs(out));
 }
 
 /** Visible chat messages only - no LLM-only audit/context expansion. */

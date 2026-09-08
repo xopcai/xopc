@@ -19,7 +19,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Voice (optional) | `text_to_speech` — when TTS is enabled in config |
 | Memory (optional) | `memory_search`, `memory_get`; `session_search` when configured |
 | Images (optional) | `image`, `image_generate` when models and keys are set |
-| Browser (optional) | `browser_use`; `browser_recipe` for saved [Browser automations](browser-workflows.md) |
+| Browser (optional) | `browser_use`; `browser_automation` for saved [Browser automations](../../browser-automations.md) |
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
 | Multi-agent orchestration | `workflow` — fan-out subagents via a deterministic JS script. See [Dynamic Workflows](workflows.md). |
 | Automations (optional) | `automation` — when the runtime exposes the automation service (typical gateway setup) |
@@ -327,8 +327,8 @@ Programmatic generation may support reference images for some providers; the `im
 
 ## Browser (optional)
 
-Registered when browser automation is enabled by config and allowed by the effective Agent tool policy. The local
-browser runtime is optional:
+Registered when Browser Control is enabled and allowed by the effective Agent tool policy. A local Playwright driver
+requires Chromium:
 
 ```bash
 npm install playwright-core@1.60.0
@@ -339,16 +339,14 @@ Add `-g` to the install command when xopc itself is installed globally.
 
 | Tool | Purpose |
 |------|---------|
-| `browser_use` | Operates the browser with actions such as opening pages, inspecting content, clicking, typing, scrolling, taking screenshots, and waiting for page changes. For complex tasks, call `tool_manual({ tool: "browser_use" })` first. |
-| `browser_recipe` | Saves, lists, runs, pauses, and updates reusable [Browser automations](browser-workflows.md) when the Gateway provides the browser automation service. |
+| `browser_use` | Observes semantic page structure and performs typed navigation, ref-based actions, waits, uploads, tab operations, and short sequences. Screenshots are an explicit fallback. |
+| `browser_automation` | Runs reusable, strict [Browser automations](../../browser-automations.md) through the Gateway service. |
 
 To disable browser automation globally, set `agents.defaults.tools.browser_use.mode` to `"deny"`. A single Agent may override that exact tool id.
 
-**URL policy:** Navigation rejects URLs that embed credentials, target **cloud metadata / IMDS** hosts and link-local ranges (always, even if private URLs are allowed), or contain patterns that look like **API keys or tokens** in the query (anti-exfiltration). Top-level `browser.allowPrivateUrls` relaxes private-IP blocking only; metadata and suspicious token patterns remain blocked.
+**Security:** Navigation always rejects embedded credentials, cloud metadata hosts, link-local addresses, and suspicious credential-bearing query strings. Private hosts require an exact hostname allowlist entry. Cross-domain navigation, uploads, sensitive input, destructive actions, and external effects follow the configured allow/ask/deny policy.
 
-**Backends:** top-level `browser.backend` selects the browser backend (`local`, `cdp`, `cloud`, `extension`, or `cloakbrowser`). Optional `browser.cdpUrl` connects directly to a CDP WebSocket. Per-command timeouts use `browser.commandTimeout` (seconds). **Dialogs:** `browser.dialogPolicy` (`must_respond` \| `auto_dismiss` \| `auto_accept`) and `browser.dialogTimeoutSeconds` interact with the CDP supervisor.
-
-Uses a per-session tab; `browser.headless` controls whether local browser runs show a visible window.
+**Drivers:** `browser.driver.kind` selects `extension`, `playwright`, `cdp`, or `remote`. All drivers implement the same strict semantic contract; no compatibility translation is performed.
 
 ---
 
