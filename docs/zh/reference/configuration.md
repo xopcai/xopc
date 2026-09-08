@@ -32,6 +32,7 @@ xopc config validate
 | `extensions` | 扩展启用、停用和扩展配置 |
 | `runtimeTools` | 托管 Node.js 与 Python 环境 |
 | `heartbeat` | 启用后的周期性 Agent 检查 |
+| `platform` | 独立或平台连接模式、平台 URL、可选工作区和已校验的 Discovery 快照 |
 
 Workflow 和 Automation 通常在对应 Gateway 页面管理，不直接写入 `xopc.json`。
 

@@ -6,11 +6,17 @@ import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
 import { assertChannelPluginConfigs } from './validate-channel-configs.js';
+import { setActivePlatformDiscovery } from '../platform/resolution.js';
 
 const log = createLogger('ConfigLoader');
 
 /** Number of backup files to keep */
 const CONFIG_BACKUP_COUNT = 10;
+
+function activateConfig(configValue: Config): Config {
+  setActivePlatformDiscovery(configValue.platform.mode === 'connected' ? configValue.platform.discovery : undefined);
+  return configValue;
+}
 
 /**
  * Rotate config backups before writing new config.
@@ -64,18 +70,18 @@ export function loadConfig(configPath?: string): Config {
       const json = JSON.parse(content);
       const cfg = ConfigSchema.parse(json);
       assertChannelPluginConfigs(cfg);
-      return cfg;
+      return activateConfig(cfg);
     } catch (error) {
       log.error({ err: error, path }, `Failed to load config`);
       const cfg = ConfigSchema.parse(undefined);
       assertChannelPluginConfigs(cfg);
-      return cfg;
+      return activateConfig(cfg);
     }
   }
 
   const cfg = ConfigSchema.parse(undefined);
   assertChannelPluginConfigs(cfg);
-  return cfg;
+  return activateConfig(cfg);
 }
 
 /**

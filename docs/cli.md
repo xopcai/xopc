@@ -33,6 +33,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `doctor` | Diagnose installation, data, and security issues |
 | `support` | Create a redacted diagnostic report for an xopc problem |
 | `runtime` | Manage Node.js and Python tool runtimes |
+| `platform` | Connect to XOPC Cloud or an enterprise platform |
 | `update` | Check for and install updates |
 | `logs` | Query and follow logs |
 | `config` | Read, edit, and validate configuration |
@@ -68,6 +69,10 @@ xopc models status
 xopc gateway
 xopc gateway health
 
+# Platform connection
+xopc platform status
+xopc platform connect https://xopc.example.com
+
 # Configuration and diagnostics
 xopc config validate
 xopc doctor
@@ -75,6 +80,8 @@ xopc logs tail
 ```
 
 To make XOPC Sessions searchable in ctx, see [Export history to ctx](./ctx-history.md).
+
+Platform connection, discovery, and runtime registration are documented in [XOPC Platform](./platform.md).
 
 ## Profiles and paths
 

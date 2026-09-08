@@ -12,6 +12,7 @@ import type { SessionMetadata } from '../session/types.js';
 import type { CompactionSourceSnapshot } from '../storage/sqlite/index.js';
 import { projectSessionShare, type SessionShareMessage, type SessionShareToolActivity } from './session-share-projector.js';
 import { SessionShareSnapshotConflictError, type SessionShareSource } from './session-share-service.js';
+import { resolveConnectedPlatformEndpoint } from '../platform/resolution.js';
 
 const DEFAULT_SHARE_URL = 'https://share.xopc.ai';
 const MAX_MESSAGES = 10_000;
@@ -172,7 +173,7 @@ export class HostedSessionSharePublisher {
   private readonly baseUrl: string;
 
   constructor(
-    baseUrl = process.env.XOPC_SHARE_URL ?? DEFAULT_SHARE_URL,
+    baseUrl = process.env.XOPC_SHARE_URL ?? resolveConnectedPlatformEndpoint('shareApi') ?? DEFAULT_SHARE_URL,
     private readonly credentials = new CredentialResolver(),
     private readonly fetchImpl: typeof fetch = fetch,
   ) {

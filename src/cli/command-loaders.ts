@@ -32,6 +32,7 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   doctor: () => import('./commands/doctor/index.js'),
   support: () => import('./commands/support.js'),
   runtime: () => import('./commands/runtime.js'),
+  platform: () => import('./commands/platform.js'),
   image: () => import('./commands/image.js'),
   channels: () => import('./commands/channels.js'),
   models: () => import('./commands/models.js'),

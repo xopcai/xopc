@@ -63,6 +63,8 @@
 
 xopc 可以在桌面、网页、终端、手机、Telegram、微信和飞书中使用；你也可以选择自己的云端模型或本地模型。
 
+xopc 可以完全独立使用，也可以按需连接 XOPC Cloud 或企业独立部署的 XOPC Platform，使用平台统一发布的服务和 runtime 调度。连接是显式选择，不会自动上传本地数据库或工作区。详见 [XOPC Platform](https://xopcai.github.io/xopc/zh/platform)。
+
 想了解完整的产品理念、信任模型和下一阶段方向，请阅读[产品理念](https://xopcai.github.io/xopc/zh/product)。
 
 ---
@@ -216,6 +218,7 @@ xopc extensions dev ./my-extension
 | [Project、Task 与笔记](https://xopcai.github.io/xopc/zh/projects-tasks-notes) | 用唯一且可验证的 Task 模型推进长期工作，并按需增加 Project 上下文 |
 | [分享会话](https://xopcai.github.io/xopc/zh/session-sharing) | 发布经过检查、带有效期和访问上限的只读 Session 快照 |
 | [配置](https://xopcai.github.io/xopc/zh/configuration) | `xopc.json` 字段 |
+| [XOPC Platform](https://xopcai.github.io/xopc/zh/platform) | 独立与连接模式、Discovery 和 runtime 注册 |
 | [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
 | [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |
 | [架构](https://xopcai.github.io/xopc/zh/architecture) | 整体结构 |
@@ -227,7 +230,7 @@ xopc extensions dev ./my-extension
 
 ## 常见问题
 
-**xopc 是云服务吗？** — 不是。xopc 运行在你的机器上，配置与状态默认保存在 **`~/.xopc/`**。你也可以自行部署 gateway 供其他设备连接。
+**xopc 是云服务吗？** — xopc 应用运行在你的机器上，配置与状态默认保存在 **`~/.xopc/`**。它可以保持独立运行，也可以显式连接 XOPC Cloud 或企业自己的平台；连接不会自动迁移本地数据库。
 
 **“本地优先”是否意味着数据绝不会离开电脑？** — 不一定。如果选择云端模型，与当前请求相关的对话和上下文会发送给对应模型服务商；需要完全留在本机的工作，请使用本地模型并检查数据源和工具权限。
 

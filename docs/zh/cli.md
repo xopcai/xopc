@@ -32,6 +32,7 @@ xopc --version
 | `project` | 管理长期 Project |
 | `doctor` | 诊断安装、数据和安全问题 |
 | `runtime` | 管理 Node.js 与 Python 工具运行环境 |
+| `platform` | 连接 XOPC Cloud 或企业平台 |
 | `update` | 检查和安装更新 |
 | `logs` | 查询和跟踪日志 |
 | `config` | 读取、修改和验证配置 |
@@ -67,6 +68,10 @@ xopc models status
 xopc gateway
 xopc gateway health
 
+# 平台连接
+xopc platform status
+xopc platform connect https://xopc.example.com
+
 # 配置与诊断
 xopc config validate
 xopc doctor
@@ -74,6 +79,8 @@ xopc logs tail
 ```
 
 如需在 ctx 中搜索 XOPC Session，请参阅[导出历史到 ctx](./ctx-history.md)。
+
+平台连接、Discovery 与 runtime 注册见 [XOPC Platform](./platform.md)。
 
 ## Profile 与路径
 
