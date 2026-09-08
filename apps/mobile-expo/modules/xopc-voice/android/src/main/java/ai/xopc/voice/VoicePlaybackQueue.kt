@@ -22,3 +22,27 @@ internal class VoicePlaybackQueue {
     return true
   }
 }
+
+/** Converts AudioTrack's process-wide playback head into per-response byte progress. */
+internal class VoicePlaybackProgress {
+  private var base = 0L
+  private var previous = 0L
+  private var initialized = false
+
+  fun reset(playbackHeadPosition: Int) {
+    base = playbackHeadPosition.toLong() and 0xffffffffL
+    previous = base
+    initialized = true
+  }
+
+  fun playedBytes(playbackHeadPosition: Int, submittedBytes: Int): Int {
+    val current = playbackHeadPosition.toLong() and 0xffffffffL
+    if (!initialized) reset(playbackHeadPosition)
+    // AudioTrack.flush() may reset the head asynchronously. Distinguish that
+    // small backwards jump from the uint32 wrap that occurs after long sessions.
+    if (current < previous && previous - current < 0x80000000L) base = current
+    val frames = if (current >= base) current - base else 0x100000000L - base + current
+    previous = current
+    return minOf(submittedBytes.toLong(), frames * 2).toInt()
+  }
+}

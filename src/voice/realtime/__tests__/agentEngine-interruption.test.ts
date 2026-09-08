@@ -84,6 +84,42 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);
   });
 
+  it('does not transcribe or cancel assistant playback echoed by the speaker', async () => {
+    const runAgent = vi.fn(async function* () {
+      yield { type: 'assistant_delta' as const, payload: { delta: '今天天气怎么样？答案是晴天。' } };
+    });
+    const test = await setup(runAgent);
+    mocks.speak.mockImplementationOnce(async () => ({
+      outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 0])); controller.close(); } }),
+    }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalled());
+    test.emit({ type: 'speech_started', utteranceId: 'echo' });
+    test.emit({ type: 'transcript_final', utteranceId: 'echo', revision: 1, text: '今天天气怎么样' });
+
+    expect(test.send.mock.calls.filter(([type, payload]) => type === 'input.transcript.final' && payload.utteranceId === 'echo')).toEqual([]);
+    expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);
+    expect(runAgent).toHaveBeenCalledOnce();
+  });
+
+  it('flushes an unpunctuated acknowledgement as soon as a tool starts', async () => {
+    let releaseTool!: () => void;
+    const toolRunning = new Promise<void>((resolve) => { releaseTool = resolve; });
+    cleanups.push(() => releaseTool());
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: '我先帮你查一下' } };
+      yield { type: 'tool_start', payload: { toolCallId: 'tool-1', toolName: 'search' } };
+      await toolRunning;
+      yield { type: 'tool_end', payload: { toolCallId: 'tool-1', toolName: 'search', status: 'success' } };
+    });
+
+    test.final('first');
+    await vi.waitFor(() => expect(mocks.speak).toHaveBeenCalledWith('我先帮你查一下', expect.anything(), expect.anything()));
+    expect(test.send).toHaveBeenCalledWith('response.activity', expect.objectContaining({ status: 'running' }));
+    releaseTool();
+  });
+
   it('cancels a thinking response only after barge-in transcription is final', async () => {
     let responseSignal!: AbortSignal;
     const test = await setup(async function* (_text, _key, signal) {
