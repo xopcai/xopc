@@ -1,4 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
+import { chooseModelThinking } from '@xopcai/gateway-contract';
 import { ArrowLeft, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -19,9 +20,8 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   chat: MessageBundle['chat'];
   sessionModel: string;
   modelDisabled: boolean;
-  onModelChange: (modelId: string) => void | Promise<void>;
+  onModelChange: (modelId: string, thinkingLevel?: string) => void | Promise<void>;
   thinkingLevel: string;
-  modelSupportsThinking: boolean;
   thinkingDisabled: boolean;
   onThinkingChange: (level: string) => void | Promise<void>;
 }) {
@@ -40,9 +40,12 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   const title = modelLabel.split('/').at(-1) || modelLabel;
   const thinking = selected?.thinking;
   const adjustable = thinking?.mode === 'levels' || thinking?.mode === 'toggle';
+  const effectiveThinkingLevel = thinking
+    ? chooseModelThinking(thinking, thinkingLevel)
+    : thinkingLevel;
   const levelLabel = (level: string) => thinking?.mode === 'toggle' && level !== 'off'
     ? m.modelThinkingOn : m.thinkingLevels[level as ThinkingLevel] ?? level;
-  const effort = adjustable ? levelLabel(thinkingLevel) : '';
+  const effort = adjustable ? levelLabel(effectiveThinkingLevel) : '';
   const busy = pending || modelDisabled;
 
   async function save(action: () => void | Promise<void>, modelChange = false) {
@@ -83,7 +86,13 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
             </button>
             <ModelPickerList models={models} value={sessionModel} disabled={busy}
               searchPlaceholder={m.modelSearchPlaceholder} noMatches={m.modelNoMatches}
-              onChange={(id) => void save(() => onModelChange(id), true)} />
+              onChange={(id) => {
+                const nextModel = models.find((model) => model.id === id);
+                const nextThinking = nextModel?.thinking
+                  ? chooseModelThinking(nextModel.thinking, effectiveThinkingLevel)
+                  : effectiveThinkingLevel;
+                void save(() => onModelChange(id, nextThinking), true);
+              }} />
           </> : <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {registry.isLoading ? <div className="space-y-4 p-3"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-24" /><Skeleton className="h-11 w-full" /></div> : <>
               <button ref={modelButtonRef} type="button" disabled={busy || !models.length} onClick={() => setView('models')}
@@ -98,10 +107,10 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
               {selected && <div className="mt-4 px-3">
                 <p className="mb-2 text-xs font-medium text-fg-muted">{m.modelThinkingLabel}</p>
                 {adjustable ? <div role="group" aria-label={m.modelThinkingLabel} className={cn('grid gap-1 rounded-lg bg-surface-base p-1', thinking.options.length > 4 ? 'grid-cols-3' : thinking.options.length === 4 ? 'grid-cols-4' : thinking.options.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
-                  {thinking.options.map((level) => <button key={level} type="button" aria-pressed={level === thinkingLevel}
+                  {thinking.options.map((level) => <button key={level} type="button" aria-pressed={level === effectiveThinkingLevel}
                     disabled={busy || thinkingDisabled} onClick={() => void save(() => onThinkingChange(level))}
                     className={cn('min-h-11 min-w-11 flex-1 rounded-md px-2 text-sm text-fg hover:bg-surface-hover disabled:opacity-50', interaction.focusRingPanel,
-                      level === thinkingLevel && 'bg-accent-soft font-medium text-accent-fg')}>
+                      level === effectiveThinkingLevel && 'bg-accent-soft font-medium text-accent-fg')}>
                     {levelLabel(level)}
                   </button>)}
                 </div> : <p className="text-sm text-fg-muted">{thinking?.mode === 'none' ? m.thinkingUnsupported : m.modelThinkingUnknown}</p>}

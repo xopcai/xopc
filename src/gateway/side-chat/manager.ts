@@ -37,13 +37,14 @@ export interface EphemeralSideChatManagerOptions {
   getParentMetadata: (sessionKey: string) => Promise<SessionMetadata | null>;
   loadParentMessages: (sessionKey: string) => Promise<AgentMessage[]>;
   getDefaultModelRef: (sessionKey: string) => string;
+  getDefaultThinkingLevel?: (sessionKey: string) => ThinkingLevel;
   getWorkspacePath: (metadata: SessionMetadata) => string;
   idleTtlMs?: number;
   maxPerClient?: number;
   maxTotal?: number;
   now?: () => number;
   startSweepTimer?: boolean;
-  onBeforeDispose?: (sideChatId: string, clientInstanceId: string) => void | Promise<void>;
+  onBeforeDispose?: (sideChatId: string, clientInstanceId: string, messages: AgentMessage[]) => void | Promise<void>;
   onExpired?: (sideChatId: string, clientInstanceId: string, reason: 'idle' | 'waiting') => void;
 }
 
@@ -130,7 +131,9 @@ export class EphemeralSideChatManager {
     runtime.captureBaseline();
     const config: SideChatConfig = {
       modelRef: normalizeOptionalString(input.config?.modelRef) || this.options.getDefaultModelRef(parentSessionKey),
-      thinkingLevel: input.config?.thinkingLevel,
+      thinkingLevel: input.config?.thinkingLevel
+        ?? this.options.getDefaultThinkingLevel?.(parentSessionKey)
+        ?? 'medium',
     };
     const entry: SideChatEntry = {
       id,
@@ -218,10 +221,11 @@ export class EphemeralSideChatManager {
     }
     if (entry.clientInstanceId !== clientInstanceId) return false;
     entry.status = 'closing';
+    const messages = entry.runtime.loadConversationMessages();
     this.entries.delete(id);
     const cleanup = (async () => {
       try {
-        await this.runBeforeDispose(id, clientInstanceId);
+        await this.runBeforeDispose(id, clientInstanceId, messages);
         await evictEmbeddedSessionRunner(entry.runtime.runtimeId, 'side_chat_dispose');
         return true;
       } finally {
@@ -301,9 +305,9 @@ export class EphemeralSideChatManager {
     entry.expiresAt = entry.status === 'running' ? null : new Date(now + this.idleTtlMs).toISOString();
   }
 
-  private async runBeforeDispose(id: string, clientInstanceId: string): Promise<void> {
+  private async runBeforeDispose(id: string, clientInstanceId: string, messages: AgentMessage[]): Promise<void> {
     try {
-      await this.options.onBeforeDispose?.(id, clientInstanceId);
+      await this.options.onBeforeDispose?.(id, clientInstanceId, messages);
     } catch (err) {
       log.warn({ err, sideChatId: id, phase: 'side_chat_abort' }, 'Side chat run cleanup failed');
     }

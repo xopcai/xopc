@@ -22,7 +22,7 @@
     "selectionCount_one": "{{count}} 处选中内容",
     "selectionCount_other": "{{count}} 处选中内容",
     "parentPermissionsHint": "沿用主任务的工具与审批策略",
-    "parentPermissions": "主任务权限 · {{model}}",
+    "parentPermissions": "主任务权限",
     "selectedTextActionsAria": "选中文本操作",
     "addToChat": "添加到对话",
     "askInSideChat": "侧边提问",

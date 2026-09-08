@@ -10,6 +10,8 @@ import type { ChatMessages } from '@/i18n/messages';
 
 export interface UseComposerAttachmentsOptions {
   chat: ChatMessages;
+  initialAttachments?: Attachment[];
+  onAttachmentsChange?: (attachments: Attachment[]) => void;
 }
 
 export interface UseComposerAttachmentsReturn {
@@ -28,12 +30,21 @@ export interface UseComposerAttachmentsReturn {
 }
 
 export function useComposerAttachments(options: UseComposerAttachmentsOptions): UseComposerAttachmentsReturn {
-  const { chat: m } = options;
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const { chat: m, initialAttachments = [], onAttachmentsChange } = options;
+  const [attachments, setAttachmentsState] = useState<Attachment[]>(initialAttachments);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentsRef = useRef(attachments);
+  const onAttachmentsChangeRef = useRef(onAttachmentsChange);
   attachmentsRef.current = attachments;
+  onAttachmentsChangeRef.current = onAttachmentsChange;
+
+  const setAttachments = useCallback<React.Dispatch<React.SetStateAction<Attachment[]>>>((update) => {
+    const next = typeof update === 'function' ? update(attachmentsRef.current) : update;
+    attachmentsRef.current = next;
+    setAttachmentsState(next);
+    onAttachmentsChangeRef.current?.(next);
+  }, []);
 
   const clearAttachments = useCallback(() => {
     setAttachments([]);

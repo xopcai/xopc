@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections } = vi.hoisted(() => ({
+const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections, updateSideChatConfig } = vi.hoisted(() => ({
   createSideChat: vi.fn(async (parentSessionKey: string, selections: unknown[]) => ({
     id: 'side-2',
     parentSessionKey,
@@ -19,6 +19,21 @@ const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideC
     onExpiry: null as null | ((event: { event: string; data?: unknown }) => void),
   },
   sendSideChatInput: vi.fn(async () => 'run-1'),
+  updateSideChatConfig: vi.fn(async (_id: string, config: { modelRef?: string; thinkingLevel?: string }) => ({
+    id: 'side-1',
+    parentSessionKey: 'parent',
+    clientInstanceId: 'tab-1',
+    status: 'idle' as const,
+    createdAt: new Date(0).toISOString(),
+    lastActiveAt: new Date(0).toISOString(),
+    expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    messageCount: 0,
+    context: {
+      parentSessionKey: 'parent', parentSessionId: 'parent-id', parentMessageCount: 0,
+      createdAt: new Date(0).toISOString(), selections: [], contentHash: 'hash',
+    },
+    config: { modelRef: config.modelRef ?? 'openai/test', thinkingLevel: config.thinkingLevel ?? 'medium' },
+  })),
   sideChatSelections: { current: [] as Array<{ id: string; type: 'text'; text: string; label?: string }> },
 }));
 
@@ -51,6 +66,14 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
   extendSideChat: vi.fn(),
   getSideChatClientInstanceId: () => 'tab-1',
   sendSideChatInput,
+  updateSideChatConfig,
+}));
+
+vi.mock('@/features/chat/model/composer-model-config-control', () => ({
+  ComposerModelConfigControl: ({ sessionModel, onModelChange }: {
+    sessionModel: string;
+    onModelChange: (model: string, thinking?: string) => void;
+  }) => <button type="button" aria-label="Side chat model" onClick={() => onModelChange('openai/changed', 'high')}>{sessionModel}</button>,
 }));
 
 vi.mock('@/features/gateway/gateway-realtime', () => ({
@@ -95,6 +118,7 @@ describe('SideChatConversation composer', () => {
     sendSideChatInput.mockClear();
     createSideChat.mockClear();
     deleteSideChat.mockClear();
+    updateSideChatConfig.mockClear();
     localStorage.removeItem('xopc:side-chat-close-confirm-disabled:v1');
     sideChatSelections.current = [];
     getSideChatMessages.mockReset();
@@ -141,38 +165,37 @@ describe('SideChatConversation composer', () => {
   });
 
   async function typeDraft(value: string) {
-    const textarea = container.querySelector('textarea');
+    const input = container.querySelector<HTMLDivElement>('[role="textbox"]');
     await act(async () => {
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-      valueSetter?.call(textarea, value);
-      textarea?.dispatchEvent(new Event('input', { bubbles: true }));
+      if (input) input.textContent = value;
+      input?.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    return textarea;
+    return input;
   }
 
-  it('clears the textarea immediately when Enter sends the draft', async () => {
+  it('clears the editor immediately when Enter sends the draft', async () => {
     await renderConversation();
-    const textarea = await typeDraft('hello');
-    expect(textarea).not.toBeNull();
-    expect(textarea?.value).toBe('hello');
+    const input = await typeDraft('hello');
+    expect(input).not.toBeNull();
+    expect(input?.textContent).toBe('hello');
 
     await act(async () => {
-      textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     });
 
-    expect(sendSideChatInput).toHaveBeenCalledWith('side-1', 'hello');
-    expect(textarea?.value).toBe('');
+    expect(sendSideChatInput).toHaveBeenCalledWith('side-1', 'hello', []);
+    expect(input?.textContent).toBe('');
   });
 
-  it('clears the textarea immediately when the send button submits the draft', async () => {
+  it('clears the editor immediately when the send button submits the draft', async () => {
     await renderConversation();
-    const textarea = await typeDraft('hello');
+    const input = await typeDraft('hello');
     const send = container.querySelector<HTMLButtonElement>('button[aria-label="Send"]');
 
     await act(async () => { send?.click(); });
 
-    expect(sendSideChatInput).toHaveBeenCalledWith('side-1', 'hello');
-    expect(textarea?.value).toBe('');
+    expect(sendSideChatInput).toHaveBeenCalledWith('side-1', 'hello', []);
+    expect(input?.textContent).toBe('');
   });
 
   it('keeps the sent user message when the initial empty snapshot resolves later', async () => {
@@ -260,6 +283,45 @@ describe('SideChatConversation composer', () => {
     expect(container.querySelector('[data-side-chat-scroll-viewport]')?.textContent).toContain('侧边对话');
     expect(container.querySelector('form')?.textContent).toContain('1 处选中内容');
     expect(container.querySelector('[title="沿用主任务的工具与审批策略"]')?.textContent).toContain('主任务权限');
+  });
+
+  it('updates only the side chat model configuration', async () => {
+    await renderConversation();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Side chat model"]')?.click();
+    });
+
+    expect(updateSideChatConfig).toHaveBeenCalledWith('side-1', {
+      modelRef: 'openai/changed',
+      thinkingLevel: 'high',
+    });
+    expect(container.querySelector('button[aria-label="Side chat model"]')?.textContent).toBe('openai/changed');
+  });
+
+  it('sends an attachment-only draft through the shared composer payload', async () => {
+    useSideChatStore.setState({
+      drafts: {
+        'side-1': {
+          text: '',
+          attachments: [{ type: 'document', name: 'notes.txt', mimeType: 'text/plain', size: 5, content: 'aGVsbG8=' }],
+        },
+      },
+    });
+    await renderConversation();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Send"]')?.click();
+    });
+
+    expect(sendSideChatInput).toHaveBeenCalledWith('side-1', '', [{
+      type: 'document',
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      size: 5,
+      data: 'aGVsbG8=',
+    }]);
+    expect(useSideChatStore.getState().drafts['side-1']).toEqual({ text: '', attachments: [] });
   });
 
   it('localizes side chat API errors by error code', async () => {
@@ -402,7 +464,7 @@ describe('SideChatConversation composer', () => {
     expect(useSideChatStore.getState().tabs[0].id).toBe('side-1');
     await act(async () => create?.click());
     expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['side-2']);
-    expect(container.querySelector('textarea')?.value).toBe('keep my question');
+    expect(container.querySelector('[role="textbox"]')?.textContent).toBe('keep my question');
     expect(sendSideChatInput).not.toHaveBeenCalled();
   });
 
@@ -447,7 +509,7 @@ describe('SideChatConversation composer', () => {
 
   it('recovers waiting questions on reload and does not delete when the page is hidden', async () => {
     const view = await getSideChat('side-1');
-    vi.mocked(getSideChat).mockResolvedValueOnce({ ...view, status: 'waiting-input', runId: 'run-waiting', clarification: { requestId: 'question-1', question: 'Which option?', choices: ['A', 'B'] } });
+    vi.mocked(getSideChat).mockResolvedValueOnce({ ...view, status: 'waiting-input', runId: 'run-waiting', clarification: { requestId: 'question-1', kind: 'input', question: 'Which option?', choices: ['A', 'B'] } });
     await renderColumn();
     expect(container.textContent).toContain('Which option?');
     await act(async () => { window.dispatchEvent(new Event('pagehide')); });
@@ -461,7 +523,7 @@ describe('SideChatConversation composer', () => {
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Collapse sidebar"]')?.click());
     expect(deleteSideChat).not.toHaveBeenCalled();
     await act(async () => useSideChatStore.getState().setOpen('parent', true));
-    expect(container.querySelector('textarea')?.value).toBe('read this later');
+    expect(container.querySelector('[role="textbox"]')?.textContent).toBe('read this later');
   });
 
   it('shows the ended state when a heartbeat finds an expired session and stops polling', async () => {
@@ -485,7 +547,7 @@ describe('SideChatConversation composer', () => {
     await act(async () => textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     await act(async () => root.render(null));
     await act(async () => reject(new Error('network failed')));
-    expect(useSideChatStore.getState().drafts['side-1']).toBe('do not lose this');
+    expect(useSideChatStore.getState().drafts['side-1']).toEqual({ text: 'do not lose this', attachments: [] });
     expect(useSideChatStore.getState().readings['side-1'].messages).toEqual([]);
   });
 

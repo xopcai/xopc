@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import type { SideChatSelection, SideChatTab } from '@/features/side-chat/side-chat.types';
 import type { Message } from '@/features/chat/messages/messages.types';
+import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { buildSideChatReading, SIDE_CHAT_READING_BYTES, type SideChatReading } from '@/features/side-chat/side-chat-reading';
 import { useGatewayStore } from './gateway-store';
 
@@ -17,6 +18,8 @@ type StoredState = {
   widthPx: number;
 };
 type PendingCreate = { requestId: string; parentSessionKey: string; selections: SideChatSelection[] };
+export type SideChatDraft = { text: string; attachments: Attachment[] };
+const EMPTY_DRAFT: SideChatDraft = { text: '', attachments: [] };
 
 function clampWidth(width: number): number {
   return Math.min(SIDE_CHAT_WIDTH_MAX, Math.max(SIDE_CHAT_WIDTH_MIN, Math.round(width)));
@@ -58,9 +61,10 @@ function persist(state: StoredState): void {
 }
 
 type SideChatPaneState = StoredState & {
-  drafts: Record<string, string>;
+  drafts: Record<string, SideChatDraft>;
   readings: Record<string, SideChatReading>;
-  setDraft: (id: string, draft: string) => void;
+  setDraftText: (id: string, text: string) => void;
+  setDraftAttachments: (id: string, attachments: Attachment[]) => void;
   rememberMessages: (id: string, messages: Message[]) => void;
   markEnded: (id: string, reason: NonNullable<SideChatTab['ended']>) => void;
   replaceTab: (oldId: string, tab: SideChatTab) => void;
@@ -95,7 +99,18 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     ...initial,
     drafts: {},
     readings: {},
-    setDraft: (id, draft) => set({ drafts: { ...get().drafts, [id]: draft } }),
+    setDraftText: (id, text) => set({
+      drafts: {
+        ...get().drafts,
+        [id]: { ...(get().drafts[id] ?? EMPTY_DRAFT), text },
+      },
+    }),
+    setDraftAttachments: (id, attachments) => set({
+      drafts: {
+        ...get().drafts,
+        [id]: { ...(get().drafts[id] ?? EMPTY_DRAFT), attachments },
+      },
+    }),
     rememberMessages: (id, messages) => {
       const readings = { ...get().readings };
       delete readings[id];
@@ -113,7 +128,7 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     replaceTab: (oldId, tab) => {
       const state = get();
       if (!state.tabs.some((existing) => existing.id === oldId)) return;
-      const drafts = { ...state.drafts, [tab.id]: state.drafts[oldId] ?? '' };
+      const drafts = { ...state.drafts, [tab.id]: state.drafts[oldId] ?? EMPTY_DRAFT };
       const readings = { ...state.readings };
       delete drafts[oldId];
       delete readings[oldId];

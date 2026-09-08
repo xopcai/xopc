@@ -55,7 +55,7 @@ describe('side chat store session isolation', () => {
         { type: 'tool_use', id: 'tool', name: 'exec', status: 'done', result: 'private-tool-output' },
       ] }]);
     }
-    state.setDraft('side-7', 'private-draft');
+    state.setDraftText('side-7', 'private-draft');
     await Promise.resolve();
     const readings = useSideChatStore.getState().readings;
     expect(Object.keys(readings).length).toBeLessThanOrEqual(5);
@@ -72,10 +72,13 @@ describe('side chat store session isolation', () => {
     const { useGatewayStore } = await import('@/stores/gateway-store');
     const state = useSideChatStore.getState();
     state.addTab({ id: 'old', parentSessionKey: 'parent', title: 'Side chat' });
-    state.setDraft('old', 'unsent');
+    state.setDraftText('old', 'unsent');
+    state.setDraftAttachments('old', [{ name: 'notes.txt', type: 'document', mimeType: 'text/plain', size: 5, content: 'aGVsbG8=' }]);
     state.markEnded('old', 'idle');
     state.replaceTab('old', { id: 'new', parentSessionKey: 'parent', title: 'Side chat' });
-    expect(useSideChatStore.getState().drafts).toEqual({ new: 'unsent' });
+    expect(useSideChatStore.getState().drafts).toEqual({
+      new: { text: 'unsent', attachments: [{ name: 'notes.txt', type: 'document', mimeType: 'text/plain', size: 5, content: 'aGVsbG8=' }] },
+    });
     expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['new']);
     useGatewayStore.setState({ baseUrl: 'https://different-gateway.invalid' });
     expect(useSideChatStore.getState().drafts).toEqual({});
