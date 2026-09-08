@@ -10,6 +10,7 @@ import {
   type BrowserActionInput,
   type BrowserExtensionStatus,
   type BrowserWireCommand,
+  type BrowserWireKeepAlive,
   type BrowserWireResult,
 } from '@xopcai/browser-control-contract';
 
@@ -114,9 +115,12 @@ export class ExtensionBrowserProvider {
         this._handleMessage(data.toString(), ws);
       });
 
-      (ws as { on: Function }).on('close', () => {
+      (ws as { on: Function }).on('close', (code: number, reason: Buffer) => {
         if (this.clientWs !== ws) return;
-        log.warn('Chrome Extension disconnected');
+        log.warn(
+          { code, reason: reason.toString(), pendingCount: this.pending.size },
+          'Chrome Extension disconnected',
+        );
         this.clientWs = null;
         this.socketConnected = false;
         this.handshakeReceived = false;
@@ -347,6 +351,8 @@ export class ExtensionBrowserProvider {
         return;
       }
 
+      if (isBrowserWireKeepAlive(msg)) return;
+
       // Network events
       if (msg.type === 'network_event') {
         log.debug({ listenerId: msg.listenerId, eventType: msg.eventType }, 'Network event');
@@ -378,4 +384,11 @@ export function isBrowserWireResult(value: unknown): value is BrowserWireResult 
     && Boolean(result)
     && typeof result === 'object'
     && typeof (result as { ok?: unknown }).ok === 'boolean';
+}
+
+function isBrowserWireKeepAlive(value: unknown): value is BrowserWireKeepAlive {
+  return Boolean(value)
+    && typeof value === 'object'
+    && (value as { type?: unknown }).type === 'keepalive'
+    && typeof (value as { timestamp?: unknown }).timestamp === 'number';
 }

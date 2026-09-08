@@ -51,6 +51,45 @@ describe('browser_use tool', () => {
     expect(result.details).toMatchObject({ ok: true, receipt: { action: 'observe' } });
   });
 
+  it('decodes strict-provider placeholder fields into the selected action', async () => {
+    const { tool, execute } = createTool({
+      ok: true,
+      receipt: { action: 'navigate', risk: 'read', durationMs: 1, verified: true },
+    });
+
+    await tool.execute('call-strict', {
+      action: 'navigate',
+      sessionId: '',
+      approvalId: '',
+      revision: 0,
+      ref: '',
+      expect: {
+        urlIncludes: '',
+        titleIncludes: '',
+        textIncludes: '',
+        ref: '',
+        state: 'visible',
+      },
+      visual: 'never',
+      url: 'https://www.google.com/search?q=ai+news',
+      value: '',
+      submit: false,
+      key: ' ',
+      deltaY: 0,
+      condition: 'page_idle',
+      timeoutMs: 1000,
+      paths: ['/'],
+      operation: 'list',
+      tabId: '',
+      steps: [{ action: 'click', ref: '' }],
+    }, undefined as never, undefined as never);
+
+    expect(execute).toHaveBeenCalledWith('task-1', {
+      action: 'navigate',
+      url: 'https://www.google.com/search?q=ai+news',
+    }, undefined);
+  });
+
   it('returns screenshots as image content without copying base64 into details', async () => {
     const { tool } = createTool({
       ok: true,

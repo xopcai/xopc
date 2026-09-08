@@ -36,24 +36,24 @@ export class ExtensionDriver implements BrowserDriver {
     await this.send({ action: 'close', sessionId });
   }
 
-  navigate(_sessionId: string, input: BrowserNavigateInput): Promise<BrowserControlResult> {
-    return this.send(input);
+  navigate(sessionId: string, input: BrowserNavigateInput): Promise<BrowserControlResult> {
+    return this.send({ ...input, sessionId });
   }
 
-  async observe(_sessionId: string, input: BrowserObserveInput): Promise<BrowserObservation> {
-    const result = await this.send(input);
+  async observe(sessionId: string, input: BrowserObserveInput): Promise<BrowserObservation> {
+    const result = await this.send({ ...input, sessionId });
     if ('error' in result) throw new Error(result.error.message);
     const observation = result.receipt.observation;
     if (!observation) throw new Error('Extension returned no browser observation');
     return observation;
   }
 
-  perform(_sessionId: string, input: BrowserPrimitiveInput): Promise<BrowserControlResult> {
-    return this.send(input);
+  perform(sessionId: string, input: BrowserPrimitiveInput): Promise<BrowserControlResult> {
+    return this.send({ ...input, sessionId });
   }
 
-  tabs(_sessionId: string, input: BrowserTabsInput): Promise<BrowserControlResult> {
-    return this.send(input);
+  tabs(sessionId: string, input: BrowserTabsInput): Promise<BrowserControlResult> {
+    return this.send({ ...input, sessionId });
   }
 
   private async send(input: Parameters<ExtensionBrowserProvider['send']>[0]): Promise<BrowserControlResult> {
