@@ -39,6 +39,19 @@ describe('AgentToolsFactory', () => {
     expect(factory.createCoreTools().map((tool) => tool.name)).not.toContain('browser_use');
   });
 
+  it('exposes provider-compatible object schemas for every core tool', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+      getConfig: () => ConfigSchema.parse({ browser: { enabled: true, driver: { kind: 'extension' } } }),
+    });
+
+    for (const tool of factory.createCoreTools()) {
+      expect(tool.parameters, tool.name).toMatchObject({ type: 'object' });
+    }
+  });
+
   it('does not register desktop pet creation as a core tool', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp/xopc-tools-factory-test',
