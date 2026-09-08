@@ -14,9 +14,9 @@ const ClarifySchema = Type.Object({
       maxItems: 10,
     }),
   ),
-  default: Type.Optional(
+  suggestedAnswer: Type.Optional(
     Type.String({
-      description: 'Default answer if the user does not respond within timeout.',
+      description: 'Optional recommendation shown to the user. It is never selected automatically.',
     }),
   ),
 });
@@ -25,17 +25,25 @@ export type ClarifyRequestPayload = {
   kind?: 'approval';
   question: string;
   choices?: string[];
-  default?: string;
+  suggestedAnswer?: string;
+  /** Stable hash of the exact operation guarded by an approval. */
+  approvalKey?: string;
 };
 
+export type ClarifyRequestResult =
+  | { status: 'answered'; answer: string }
+  | { status: 'waiting'; waitId: string; expiresAt?: number };
+
 export type GatewayClarifyRequestFn = (
-  sessionKey: string,
+  context: { sessionKey: string; runId: string; toolCallId: string },
   request: ClarifyRequestPayload,
-) => Promise<string>;
+) => Promise<ClarifyRequestResult>;
 
 export interface ClarifyToolDeps {
   /** Resolve a per-turn callback; returns null when clarification is unavailable. */
-  resolveAskUser: () => ((request: ClarifyRequestPayload) => Promise<string>) | null;
+  resolveAskUser: (
+    toolCallId: string,
+  ) => ((request: ClarifyRequestPayload) => Promise<ClarifyRequestResult>) | null;
 }
 
 function waitForAbort(signal: AbortSignal | undefined): Promise<never> {
@@ -51,14 +59,14 @@ function waitForAbort(signal: AbortSignal | undefined): Promise<never> {
   });
 }
 
-type ClarifyParams = { question: string; choices?: string[]; default?: string };
+type ClarifyParams = { question: string; choices?: string[]; suggestedAnswer?: string };
 
 export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
   return {
     name: 'clarify',
     label: '❓ Clarify',
     description:
-      'Ask the user a clarifying question and wait for their response.\n\n' +
+      'Ask the user a clarifying question and pause the objective until they respond.\n\n' +
       'Use this when you need more information to proceed correctly, rather than guessing.\n\n' +
       'WHEN TO USE:\n' +
       '- Ambiguous instructions with multiple valid interpretations\n' +
@@ -71,33 +79,22 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
       'TIPS:\n' +
       '- Provide choices when there are clear options (faster for the user)\n' +
       '- Keep questions short and specific\n' +
-      '- Include a default when one option is clearly more likely',
+      '- Include a suggested answer when one option is clearly more likely',
     parameters: ClarifySchema,
 
     async execute(
-      _toolCallId: string,
+      toolCallId: string,
       params: any,
       signal?: AbortSignal,
-    ): Promise<AgentToolResult<{ answer: string }>> {
+    ): Promise<AgentToolResult<{ answer: string; waitId?: string; status?: 'waiting' }>> {
       const p = params as ClarifyParams;
-      const askUser = deps.resolveAskUser();
+      const askUser = deps.resolveAskUser(toolCallId);
       if (!askUser) {
-        if (p.default !== undefined && p.default !== '') {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Interactive clarification is not available in this environment. Using default: ${p.default}`,
-              },
-            ],
-            details: { answer: p.default },
-          };
-        }
         return {
           content: [
             {
               type: 'text',
-              text: 'Clarification is not available in this environment (no active webchat run). Provide a default or proceed with the best assumption.',
+              text: 'Clarification is not available in this environment. Proceed with the best safe assumption or explain what is missing.',
             },
           ],
           details: { answer: '' },
@@ -107,18 +104,25 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
       const payload: ClarifyRequestPayload = {
         question: p.question,
         choices: p.choices,
-        default: p.default,
+        suggestedAnswer: p.suggestedAnswer,
       };
 
       try {
-        const answer = await Promise.race([
+        const result = await Promise.race([
           askUser(payload),
           waitForAbort(signal),
         ]);
 
+        if (result.status === 'waiting') {
+          return {
+            content: [{ type: 'text', text: 'Waiting for the user to answer this clarification. End the current run now.' }],
+            details: { answer: '', waitId: result.waitId, status: result.status },
+          };
+        }
+
         return {
-          content: [{ type: 'text', text: `User answered: ${answer}` }],
-          details: { answer },
+          content: [{ type: 'text', text: `User answered: ${result.answer}` }],
+          details: { answer: result.answer },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -126,19 +130,7 @@ export function createClarifyTool(deps: ClarifyToolDeps): AgentTool {
         if (message === 'aborted') {
           return {
             content: [{ type: 'text', text: 'Clarification cancelled (run aborted).' }],
-            details: { answer: p.default ?? '' },
-          };
-        }
-
-        if (p.default !== undefined && p.default !== '' && message.toLowerCase().includes('timeout')) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `User did not respond in time. Using default: ${p.default}`,
-              },
-            ],
-            details: { answer: p.default },
+            details: { answer: '' },
           };
         }
 

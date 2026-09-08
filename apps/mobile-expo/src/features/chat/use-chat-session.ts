@@ -18,7 +18,8 @@ import { randomUUID } from 'expo-crypto';
 
 import {
   AgentMessageSender,
-  submitClarifyResponse,
+  fetchClarificationSnapshot,
+  submitClarificationResponse,
   type MessagingCallbacks,
 } from '../../api/agent-client';
 import { queryKeys } from '../../query/keys';
@@ -102,7 +103,8 @@ export interface UseChatSessionReturn {
   abort: () => void;
   cancelRecovery: () => void;
   submitClarifyAnswer: (answer: string) => Promise<void>;
-  skipClarifyAnswer: () => Promise<void>;
+  letAgentDecideClarification: () => Promise<void>;
+  cancelClarification: () => Promise<void>;
   clearAllState: () => void;
 
   // Refs (needed by parent)
@@ -152,6 +154,25 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifySubmitError, setClarifySubmitError] = useState<string | null>(null);
+  const clarificationAttemptRef = useRef<{ signature: string; idempotencyKey: string } | null>(null);
+
+  const refreshClarification = useCallback(async (targetSessionKey: string) => {
+    const snapshot = await fetchClarificationSnapshot(targetSessionKey);
+    if (activeSessionKeyRef.current !== targetSessionKey) return;
+    const wait = snapshot.clarification;
+    setClarifyPrompt(wait?.status === 'open' ? {
+      requestId: wait.id,
+      kind: wait.kind,
+      question: wait.question,
+      choices: wait.choices,
+      suggestedAnswer: wait.suggestedAnswer,
+      version: wait.version,
+      createdAt: wait.createdAt,
+      expiresAt: wait.expiresAt,
+    } : null);
+    clarificationAttemptRef.current = null;
+    setClarifySubmitError(null);
+  }, []);
   const scope = localMessageScope(activeGatewayId, sessionKey);
   const optimisticMessages = useLocalMessagesStore(state => state.sessions[scope] ?? readLocalMessages(scope));
   const setOptimisticMessages = useCallback((update: (messages: Message[]) => Message[]) => {
@@ -288,7 +309,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     sendingRef.current = false;
     runBusyRef.current = false;
     clearAllState();
-  }, [sessionKey, clearAllState]);
+    if (sessionKey) void refreshClarification(sessionKey).catch(() => undefined);
+  }, [sessionKey, clearAllState, refreshClarification]);
 
   // ── Run busy tracking ────────────────────────────────────
   useEffect(() => {
@@ -319,7 +341,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     void refreshSessionHeadByKey(targetSessionKey).catch(() => {
       invalidateSessionByKey(targetSessionKey);
     });
-  }, [activeGatewayId, invalidateSessionByKey, queryClient, refreshSessionHeadByKey, sessionKey]);
+    void refreshClarification(targetSessionKey).catch(() => undefined);
+  }, [activeGatewayId, invalidateSessionByKey, queryClient, refreshClarification, refreshSessionHeadByKey, sessionKey]);
 
   // Safety: never leave the composer blocked if history refresh stalls (common on slow FRP).
   useEffect(() => {
@@ -522,6 +545,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         if (!isCurrentSession()) return;
         flushStreamingMessage();
         setClarifyPrompt(payload);
+        clarificationAttemptRef.current = null;
         setClarifySubmitError(null);
         setClarifySubmitting(false);
       },
@@ -681,12 +705,26 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }, [finalizeMessage, flushStreamingMessage]);
 
   // ── Clarify answer ───────────────────────────────────────
-  const submitClarifyAnswer = useCallback(async (answer: string) => {
+  const respondToClarification = useCallback(async (
+    action: 'answer' | 'agent_decide' | 'cancel',
+    answer?: string,
+  ) => {
     if (!clarifyPrompt || clarifySubmitting) return;
+    const signature = `${clarifyPrompt.requestId}\n${clarifyPrompt.version}\n${action}\n${answer ?? ''}`;
+    if (clarificationAttemptRef.current?.signature !== signature) {
+      clarificationAttemptRef.current = { signature, idempotencyKey: randomUUID() };
+    }
+    const idempotencyKey = clarificationAttemptRef.current.idempotencyKey;
     setClarifySubmitting(true);
     setClarifySubmitError(null);
     try {
-      await submitClarifyResponse(clarifyPrompt.requestId, { answer });
+      await submitClarificationResponse(clarifyPrompt.requestId, {
+        action,
+        answer,
+        expectedVersion: clarifyPrompt.version,
+        idempotencyKey,
+      });
+      clarificationAttemptRef.current = null;
       setClarifyPrompt(null);
     } catch (e) {
       setClarifySubmitError(e instanceof Error ? e.message : String(e));
@@ -695,19 +733,9 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     }
   }, [clarifyPrompt, clarifySubmitting]);
 
-  const skipClarifyAnswer = useCallback(async () => {
-    if (!clarifyPrompt || clarifySubmitting) return;
-    setClarifySubmitting(true);
-    setClarifySubmitError(null);
-    try {
-      await submitClarifyResponse(clarifyPrompt.requestId, { skip: true });
-      setClarifyPrompt(null);
-    } catch (e) {
-      setClarifySubmitError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setClarifySubmitting(false);
-    }
-  }, [clarifyPrompt, clarifySubmitting]);
+  const submitClarifyAnswer = useCallback((answer: string) => respondToClarification('answer', answer), [respondToClarification]);
+  const letAgentDecideClarification = useCallback(() => respondToClarification('agent_decide'), [respondToClarification]);
+  const cancelClarification = useCallback(() => respondToClarification('cancel'), [respondToClarification]);
 
   // ── Pending run ──────────────────────────────────────────
   useEffect(() => {
@@ -863,6 +891,26 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     });
   }, [sessionKey, awaitingSessionRefresh, refreshSessionHeadByKey, invalidateSessionByKey]);
 
+  useEffect(() => subscribeGatewayEvent('clarification.updated', (detail) => {
+    if (!detail || typeof detail !== 'object') return;
+    const wait = detail as { sessionKey?: string };
+    if (wait.sessionKey !== sessionKey) return;
+    void refreshClarification(sessionKey).catch(() => undefined);
+  }), [refreshClarification, sessionKey]);
+
+  useEffect(() => subscribeGatewayEvent('session.input-state', (detail) => {
+    if (!detail || typeof detail !== 'object' || (detail as { sessionKey?: string }).sessionKey !== sessionKey) return;
+    void refreshClarification(sessionKey).catch(() => undefined);
+  }), [refreshClarification, sessionKey]);
+
+  useEffect(() => {
+    if (!clarifyPrompt?.expiresAt) return;
+    const timer = setTimeout(() => {
+      void refreshClarification(sessionKey).catch(() => undefined);
+    }, Math.max(0, clarifyPrompt.expiresAt - Date.now()) + 250);
+    return () => clearTimeout(timer);
+  }, [clarifyPrompt?.expiresAt, refreshClarification, sessionKey]);
+
   // ── Cleanup on unmount ───────────────────────────────────
   useEffect(() => {
     mountedRef.current = true;
@@ -903,12 +951,14 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   useEffect(() => {
     return subscribeGatewayEvent('gateway.realtime-connected', () => {
-      if (!sessionKey || sendingRef.current || activeSessionKeyRef.current !== sessionKey) return;
+      if (!sessionKey || activeSessionKeyRef.current !== sessionKey) return;
+      void refreshClarification(sessionKey).catch(() => undefined);
+      if (sendingRef.current) return;
       if (!readPendingAgentRunId(sessionKey)) return;
       if (senderRef.current.isStreamingFor(sessionKey)) return;
       streamRecoveryRef.current.wake();
     });
-  }, [sessionKey]);
+  }, [refreshClarification, sessionKey]);
 
   // Detect a stalled realtime run
   useEffect(() => {
@@ -943,7 +993,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     abort,
     cancelRecovery: streamRecovery.cancelRecovery,
     submitClarifyAnswer,
-    skipClarifyAnswer,
+    letAgentDecideClarification,
+    cancelClarification,
     clearAllState,
 
     // Refs

@@ -9,6 +9,10 @@ export type SessionInputStatus =
   | 'queued' | 'running' | 'injecting'
   | 'completed' | 'cancelled' | 'failed' | 'interrupted' | 'suspended';
 
+export type SessionInputPayload =
+  | { waitId: string; objectiveRevision: number; resolution: 'continued' | 'skipped' }
+  | { waitId: string; objectiveRevision: number; resolution: 'answered' | 'agent_decide' | 'cancelled' };
+
 export type SessionInput = {
   id: string;
   sessionKey: string;
@@ -19,8 +23,8 @@ export type SessionInput = {
   status: SessionInputStatus;
   content: string;
   taskRunId?: string;
-  kind: 'message' | 'connection_resume';
-  payload?: { waitId: string; objectiveRevision: number; resolution: 'continued' | 'skipped' };
+  kind: 'message' | 'connection_resume' | 'clarification_resume';
+  payload?: SessionInputPayload;
   attachments?: unknown[];
   contextRefs?: SourceContextRefSummary[];
   contextSnapshots?: AgentSourceContext[];

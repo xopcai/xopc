@@ -160,7 +160,7 @@ describe('AgentToolsFactory', () => {
     expect(data?.tools).not.toContain('execute_code');
   });
   it('routes side chat clarification through its isolated execution without a persistent session context', async () => {
-    const requestClarification = vi.fn(async () => 'yes');
+    const requestClarification = vi.fn(async () => ({ status: 'answered' as const, answer: 'yes' }));
     const factory = new AgentToolsFactory({
       workspace: '/tmp/xopc-tools-factory-test',
       bus: {} as MessageBus,
@@ -168,9 +168,16 @@ describe('AgentToolsFactory', () => {
       gatewayClarify: { requestClarification },
     });
     const tool = factory.createCoreTools().find((tool) => tool.name === 'clarify')!;
-    const result = await runWithEmbeddedExecutionSession('parent:side-chat:isolated', () => tool.execute('q1', { question: 'Continue?' }));
+    const result = await runWithEmbeddedExecutionSession(
+      'parent:side-chat:isolated',
+      () => tool.execute('q1', { question: 'Continue?' }),
+      'run-1',
+    );
     expect(result.details).toMatchObject({ answer: 'yes' });
-    expect(requestClarification).toHaveBeenCalledWith('parent:side-chat:isolated', expect.objectContaining({ question: 'Continue?' }));
+    expect(requestClarification).toHaveBeenCalledWith(
+      { sessionKey: 'parent:side-chat:isolated', runId: 'run-1', toolCallId: 'q1' },
+      expect.objectContaining({ question: 'Continue?' }),
+    );
   });
 
 });

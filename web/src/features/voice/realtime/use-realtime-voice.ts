@@ -70,7 +70,17 @@ export interface UseRealtimeVoiceReturn {
   finalTranscript: string;
   responseText: string;
   activities: Array<{ toolCallId: string; toolName: string; status: 'running' | 'completed' | 'failed' }>;
-  clarification: { responseId: string; requestId: string; question: string; choices?: string[] } | null;
+  clarification: {
+    responseId: string;
+    requestId: string;
+    kind: 'input' | 'approval';
+    question: string;
+    choices?: string[];
+    suggestedAnswer?: string;
+    version: number;
+    createdAt: number;
+    expiresAt?: number;
+  } | null;
   dismissClarification: (requestId: string) => void;
   responsePhase: VoiceResponsePhase;
   muted: boolean;
@@ -356,7 +366,6 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             setResponsePhase('speaking');
           }
           if (event.type === 'response.done' && activeResponseIdRef.current === event.payload.responseId) {
-            setClarification(null);
             responseDoneRef.current = true;
             if (!playerRef.current?.hasPendingAudio) {
               activeResponseIdRef.current = null;

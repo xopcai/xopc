@@ -490,7 +490,8 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
       clarifySubmitting: fq.clarifySubmitting,
       clarifySubmitError: fq.clarifySubmitError,
       submitClarifyAnswer: fq.submitClarifyAnswer,
-      cancelClarifyAnswer: fq.cancelClarifyAnswer,
+      letAgentDecideClarification: fq.letAgentDecideClarification,
+      cancelClarification: fq.cancelClarification,
     },
     agents: {
       chatAgents: chatAgentsData,

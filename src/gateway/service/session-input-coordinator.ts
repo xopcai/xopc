@@ -4,6 +4,10 @@ import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import type { SessionInput } from '../../storage/sqlite/session-input-repository.js';
 import { consumeConnectionResume, publishConnectionWait, invalidateConnectionResumeIntent, cancelConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
+import {
+  consumeClarificationResume,
+  supersedeActiveClarification,
+} from '../../storage/sqlite/clarification-wait-repository.js';
 import { SessionInstanceChangedError } from '../../storage/sqlite/session-input-repository.js';
 import type { UserTurnAttachment } from '../user-turn-input.js';
 import {
@@ -175,6 +179,7 @@ export class SessionInputCoordinator {
 
       if (!result.idempotent) {
         cancelConnectionObjective(sessionKey);
+        supersedeActiveClarification(sessionKey);
         const replacement = {
           role: 'user',
           content,
@@ -244,6 +249,7 @@ export class SessionInputCoordinator {
     });
 
     invalidateConnectionResumeIntent(sessionKey);
+    supersedeActiveClarification(sessionKey);
     if (canSteer) {
       const accepted = await this.deps.steer(sessionKey, content);
       if (!accepted) {
@@ -266,7 +272,9 @@ export class SessionInputCoordinator {
         const runId = crypto.randomUUID();
         const input = claimNextSessionInput(sessionKey, runId);
         if (!input) return;
-        if ((this.deps.beforeExecute && !await this.deps.beforeExecute(input)) || !consumeConnectionResume(input)) {
+        if ((this.deps.beforeExecute && !await this.deps.beforeExecute(input))
+          || !consumeConnectionResume(input)
+          || !consumeClarificationResume(input)) {
           finishSessionInputRun(sessionKey, runId, 'cancelled');
           this.publish(sessionKey);
           continue;

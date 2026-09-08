@@ -161,8 +161,13 @@ export const voiceServerEventSchema = z.discriminatedUnion('type', [
   serverEnvelope('response.clarification', z.strictObject({
     responseId: z.string().min(1).max(160),
     requestId: z.string().min(1).max(160),
+    kind: z.enum(['input', 'approval']),
     question: z.string().min(1).max(8_000),
     choices: z.array(z.string().max(1_000)).max(20).optional(),
+    suggestedAnswer: z.string().max(1_000).optional(),
+    version: z.number().int().positive(),
+    createdAt: z.number().nonnegative(),
+    expiresAt: z.number().nonnegative().optional(),
   })),
   serverEnvelope('response.text.delta', z.strictObject({
     responseId: z.string().min(1).max(160),

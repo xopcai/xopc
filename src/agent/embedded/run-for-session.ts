@@ -10,6 +10,7 @@ import type { SessionStore } from '../../session/store.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
 import { runXopcEmbeddedTurn } from './run-turn.js';
+import { runWithEmbeddedExecutionSession } from './execution-context.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
 import { createLogger } from '../../utils/logger.js';
@@ -57,7 +58,7 @@ export async function runEmbeddedTurnForSession(
     parentSignal: params.abortSignal,
   });
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
-    if (result.stopReason === 'connection_required') return result;
+    if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required') return result;
     try {
       const rows = await sessionStore.loadTranscriptRows(sessionKey);
       const hasTurn = rows.some((source) => {
@@ -237,26 +238,30 @@ export async function runEmbeddedTurnForSession(
       }
 
       try {
-        const turnResult = await runXopcEmbeddedTurn({
+        const turnResult = await runWithEmbeddedExecutionSession(
           sessionKey,
+          () => runXopcEmbeddedTurn({
+            sessionKey,
+            runId,
+            userMessage: userMessageForTurn,
+            images: params.llmImages,
+            model: candidateModel,
+            modelRef: candidateModelRef,
+            tools,
+            systemPrompt,
+            thinkingLevel,
+            promptCachePolicy,
+            workspaceDir,
+            sessionStore,
+            timeoutMs: attemptPlan.timeoutMs,
+            turnPolicy,
+            abortSignal: supervisor.signal,
+            onEvent: params.onEvent,
+            onAgentEvent: (event) => agentManager.emitRuntimeEvent(sessionKey, event),
+            resumeLastUserMessage,
+          }),
           runId,
-          userMessage: userMessageForTurn,
-          images: params.llmImages,
-          model: candidateModel,
-          modelRef: candidateModelRef,
-          tools,
-          systemPrompt,
-          thinkingLevel,
-          promptCachePolicy,
-          workspaceDir,
-          sessionStore,
-          timeoutMs: attemptPlan.timeoutMs,
-          turnPolicy,
-          abortSignal: supervisor.signal,
-          onEvent: params.onEvent,
-          onAgentEvent: (event) => agentManager.emitRuntimeEvent(sessionKey, event),
-          resumeLastUserMessage,
-        });
+        );
 
         if (turnResult.ok) {
           if (isFallbackAttempt) {
