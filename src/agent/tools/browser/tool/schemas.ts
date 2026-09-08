@@ -1,9 +1,11 @@
+import type { BrowserActionInput } from '@xopcai/browser-control-contract';
 import { Type, type Static, type TSchema } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 
 const ApprovalId = Type.Optional(Type.String({ description: 'One-time local-owner approval id for this exact action.' }));
 const SessionId = Type.Optional(Type.String({ description: 'Browser session id returned by the previous observation.' }));
 const Revision = Type.Number({ description: 'Observation revision used to resolve element refs.' });
-const Ref = Type.String({ description: 'Ephemeral element ref from the latest observation.' });
+const Ref = Type.String({ minLength: 1, description: 'Ephemeral element ref from the latest observation.' });
 
 const ExpectationSchema = Type.Object({
   urlIncludes: Type.Optional(Type.String()),
@@ -149,3 +151,114 @@ export const BrowserUseSchema = Type.Object({
 }, { additionalProperties: false });
 
 export type BrowserUseInput = Static<typeof BrowserUseSchema>;
+
+const ACTION_FIELDS = {
+  observe: ['visual'],
+  navigate: ['url', 'expect'],
+  click: ['revision', 'ref', 'expect'],
+  fill: ['revision', 'ref', 'value', 'submit', 'expect'],
+  select: ['revision', 'ref', 'value', 'expect'],
+  press: ['revision', 'ref', 'key', 'expect'],
+  scroll: ['revision', 'ref', 'deltaY', 'expect'],
+  wait: ['revision', 'condition', 'value', 'ref', 'timeoutMs'],
+  upload: ['revision', 'ref', 'paths', 'expect'],
+  tabs: ['operation', 'tabId', 'url'],
+  sequence: ['revision', 'steps', 'expect'],
+  close: [],
+} as const;
+
+const SEQUENCE_STEP_FIELDS = {
+  click: ['ref', 'expect'],
+  fill: ['ref', 'value', 'submit', 'expect'],
+  select: ['ref', 'value', 'expect'],
+  press: ['ref', 'key', 'expect'],
+  scroll: ['ref', 'deltaY', 'expect'],
+} as const;
+
+type BrowserActionName = keyof typeof ACTION_FIELDS;
+type SequenceActionName = keyof typeof SEQUENCE_STEP_FIELDS;
+
+/** Decode the provider-facing superset into one exact Browser Control action. */
+export function decodeBrowserUseInput(value: unknown): BrowserActionInput | null {
+  if (!isRecord(value) || !isBrowserActionName(value.action)) return null;
+
+  const candidate: Record<string, unknown> = { action: value.action };
+  copyNonEmptyString(value, candidate, 'sessionId');
+  copyNonEmptyString(value, candidate, 'approvalId');
+
+  for (const field of ACTION_FIELDS[value.action]) {
+    const fieldValue = value[field];
+    if (fieldValue === undefined || fieldValue === null) continue;
+    if (field === 'expect') {
+      const expectation = decodeExpectation(fieldValue);
+      if (expectation) candidate.expect = expectation;
+    } else if (field === 'steps') {
+      if (!Array.isArray(fieldValue)) {
+        candidate.steps = fieldValue;
+        continue;
+      }
+      const steps = fieldValue.map(decodeSequenceStep);
+      if (steps.some((step) => step === null)) return null;
+      candidate.steps = steps;
+    } else if ((field === 'ref' || field === 'tabId' || field === 'url') && fieldValue === '') {
+      continue;
+    } else {
+      candidate[field] = fieldValue;
+    }
+  }
+
+  return Value.Check(BrowserUseActionSchema, candidate)
+    ? candidate as BrowserActionInput
+    : null;
+}
+
+function decodeSequenceStep(value: unknown): Record<string, unknown> | null {
+  if (!isRecord(value) || !isSequenceActionName(value.action)) return null;
+  const candidate: Record<string, unknown> = { action: value.action };
+  for (const field of SEQUENCE_STEP_FIELDS[value.action]) {
+    const fieldValue = value[field];
+    if (fieldValue === undefined || fieldValue === null) continue;
+    if (field === 'expect') {
+      const expectation = decodeExpectation(fieldValue);
+      if (expectation) candidate.expect = expectation;
+    } else if (field === 'ref' && fieldValue === '') {
+      continue;
+    } else {
+      candidate[field] = fieldValue;
+    }
+  }
+  return candidate;
+}
+
+function decodeExpectation(value: unknown): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
+  const expectation: Record<string, unknown> = {};
+  for (const field of ['urlIncludes', 'titleIncludes', 'textIncludes', 'ref'] as const) {
+    copyNonEmptyString(value, expectation, field);
+  }
+  if (expectation.ref && (value.state === 'visible' || value.state === 'hidden')) {
+    expectation.state = value.state;
+  }
+  return Object.keys(expectation).length > 0 ? expectation : null;
+}
+
+function copyNonEmptyString(
+  source: Record<string, unknown>,
+  target: Record<string, unknown>,
+  field: string,
+): void {
+  const value = source[field];
+  if (typeof value === 'string' && value.length > 0) target[field] = value;
+}
+
+function isBrowserActionName(value: unknown): value is BrowserActionName {
+  return typeof value === 'string' && Object.hasOwn(ACTION_FIELDS, value);
+}
+
+function isSequenceActionName(value: unknown): value is SequenceActionName {
+  return typeof value === 'string' && Object.hasOwn(SEQUENCE_STEP_FIELDS, value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}

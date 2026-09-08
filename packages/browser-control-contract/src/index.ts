@@ -1,7 +1,7 @@
 export type BrowserVisualMode = 'never' | 'auto' | 'always';
 export type BrowserRiskLevel = 'read' | 'draft' | 'external_effect' | 'destructive' | 'sensitive';
 
-export const BROWSER_EXTENSION_PROTOCOL_VERSION = 2;
+export const BROWSER_EXTENSION_PROTOCOL_VERSION = 3;
 
 export interface BrowserExpectation {
   urlIncludes?: string;
@@ -208,6 +208,11 @@ export interface BrowserWireCommand {
 export interface BrowserWireResult {
   id: string;
   result: BrowserControlResult;
+}
+
+export interface BrowserWireKeepAlive {
+  type: 'keepalive';
+  timestamp: number;
 }
 
 export interface BrowserExtensionStatus {
