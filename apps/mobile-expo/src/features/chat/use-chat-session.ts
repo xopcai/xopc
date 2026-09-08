@@ -74,6 +74,7 @@ import type { MessageSubmission } from './message-submission';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
+import { queueAssistantAudioAutoplay } from './assistant-audio-autoplay';
 
 const STREAMING_RENDER_THROTTLE_MS = 50;
 
@@ -539,6 +540,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           mimeType: payload.mimeType,
           name: payload.name,
         };
+        queueAssistantAudioAutoplay(audio, callbackSessionKey);
         appendAudioToStreamingAssistant(audio);
       },
       onClarifyRequest: (payload) => {

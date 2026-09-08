@@ -47,6 +47,25 @@ describe('mobile persistent voice controller', () => {
     await h.controller.end();
   });
 
+  it('briefly gates bridged microphone frames while first reply audio primes echo cancellation', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    vi.mocked(h.deps.audio.capture).mockClear();
+    h.event('response.created', { responseId: 'answer' });
+    h.connection().audio('answer', new Uint8Array(4800));
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(false);
+
+    await vi.advanceTimersByTimeAsync(299);
+    expect(h.deps.audio.capture).not.toHaveBeenCalledWith(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(true);
+
+    vi.mocked(h.deps.audio.capture).mockClear();
+    h.connection().audio('answer', new Uint8Array(4800));
+    expect(h.deps.audio.capture).not.toHaveBeenCalledWith(false);
+    await h.controller.end();
+  });
+
   it('pauses with a playback error when arriving audio makes no native progress', async () => {
     vi.useFakeTimers();
     const h = harness(); await h.controller.start(target);
