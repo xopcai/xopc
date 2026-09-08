@@ -51,6 +51,7 @@ export class VoiceCallController {
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   private playbackTimer?: ReturnType<typeof setTimeout>;
   private inputReset = Promise.resolve();
+  private playbackReset = Promise.resolve();
   constructor(private deps: CallDependencies) {}
   getSnapshot = (): CallState => this.state;
   getDiagnostics = () => {
@@ -114,8 +115,11 @@ export class VoiceCallController {
           this.diagnostics.received(id, pcm);
           if (this.state.responseStage === 'thinking') this.update({ responseStage: 'buffering' });
           this.watchPlayback();
-          void this.deps.audio.enqueue(id, pcm).then(() => {
-            if (current()) this.diagnostics.queued(id, pcm.byteLength);
+          void this.playbackReset.then(() => {
+            if (!current() || id !== this.state.responseId) return;
+            return this.deps.audio.enqueue(id, pcm);
+          }).then(() => {
+            if (current() && id === this.state.responseId) this.diagnostics.queued(id, pcm.byteLength);
           }).catch(() => { if (current()) void this.pause('PLAYBACK_FAILED'); });
         },
         close: reason => { if (current()) void this.disconnected(reason); },
@@ -181,7 +185,7 @@ export class VoiceCallController {
         this.diagnostics.cancelled(event.payload.responseId, event.payload.reason);
         if (event.payload.responseId === this.state.responseId) {
           clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
-          void this.deps.audio.flush();
+          void this.flushPlayback().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
           this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
         }
         break;
@@ -219,12 +223,17 @@ export class VoiceCallController {
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
     this.deps.audio.capture(false);
     this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
-    try { await this.deps.audio.flush(); }
+    try { await this.flushPlayback(); }
     catch { if (generation === this.generation) await this.pause('PLAYBACK_FAILED'); return; }
     if (generation !== this.generation) return;
     transport?.send('session.metric', { responseId: id, metric: 'local_stop', durationMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)) });
     transport?.send('response.cancel', { responseId: id });
     this.deps.audio.capture(!this.state.muted && !this.approvalPending && this.state.phase === 'connected');
+  }
+  private flushPlayback(): Promise<void> {
+    const flush = this.playbackReset.then(() => this.deps.audio.flush());
+    this.playbackReset = flush.catch(() => {});
+    return flush;
   }
   setApprovalPending(pending: boolean) {
     if (this.approvalPending === pending) return;

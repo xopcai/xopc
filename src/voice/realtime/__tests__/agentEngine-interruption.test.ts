@@ -68,6 +68,40 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.send.mock.calls.filter(([type]) => type === 'session.error')).toEqual([]);
   });
 
+  it('does not cancel an audible response for ambient VAD without recognized speech', async () => {
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: 'Hello.' } };
+    });
+    mocks.speak.mockImplementationOnce(async () => ({
+      outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array([1, 0])); controller.close(); } }),
+    }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalled());
+    test.emit({ type: 'speech_started', utteranceId: 'ambient' });
+    test.emit({ type: 'speech_stopped', utteranceId: 'ambient' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toEqual([]);
+  });
+
+  it('cancels a thinking response only after barge-in transcription is final', async () => {
+    let responseSignal!: AbortSignal;
+    const test = await setup(async function* (_text, _key, signal) {
+      responseSignal = signal;
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    test.final('first');
+    await vi.waitFor(() => expect(responseSignal).toBeDefined());
+    test.emit({ type: 'speech_started', utteranceId: 'second' });
+    expect(responseSignal.aborted).toBe(false);
+    test.emit({ type: 'transcript_delta', utteranceId: 'second', revision: 1, text: 'Wait' });
+    expect(responseSignal.aborted).toBe(false);
+    test.emit({ type: 'speech_stopped', utteranceId: 'second' });
+    test.emit({ type: 'transcript_final', utteranceId: 'second', revision: 2, text: 'Wait' });
+    expect(responseSignal.aborted).toBe(true);
+    expect(test.send.mock.calls.filter(([type]) => type === 'response.cancelled')).toHaveLength(1);
+  });
+
   it('submits a single combined turn after a slow speaker finishes', async () => {
     const runAgent = vi.fn(async function* () { yield { type: 'assistant_delta' as const, payload: { delta: '好的。' } }; });
     const test = await setup(runAgent);
