@@ -172,10 +172,3 @@ chrome.runtime.onMessage.addListener(
     return true;
   },
 );
-
-// ── Heartbeat ────────────────────────────────────────────────────────
-
-setInterval(() => {
-  if (!chrome.runtime?.id) return;
-  chrome.runtime.sendMessage({ type: 'content/heartbeat' }).catch(() => {});
-}, 30_000);
