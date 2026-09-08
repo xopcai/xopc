@@ -1,4 +1,5 @@
 import type { TextContent } from '@/features/chat/messages/messages.types';
+import { markdownSafeTruncationEnd } from '@/components/markdown/inline-code-delimiters';
 
 const NARRATION_MAX_LENGTH = 160;
 
@@ -52,7 +53,8 @@ export function firstNarrationSentence(text: string): string {
     return normalized.slice(0, boundary + (char === '\n' ? 0 : 1)).trim();
   }
   if (normalized.length <= NARRATION_MAX_LENGTH) return normalized;
-  return `${normalized.slice(0, NARRATION_MAX_LENGTH).trimEnd()}…`;
+  const safeEnd = markdownSafeTruncationEnd(normalized, NARRATION_MAX_LENGTH);
+  return `${normalized.slice(0, safeEnd).trimEnd()}…`;
 }
 
 export function assistantTextForDisplay(block: TextContent): string {
