@@ -37,6 +37,7 @@ type TerminalPanelState = {
   tabsBySessionKey: Record<string, TerminalTab[]>;
   activeTabKeyBySessionKey: Record<string, string | undefined>;
   height: number;
+  open: (sessionKey: string) => void;
   toggle: (sessionKey: string) => void;
   close: (sessionKey: string) => void;
   addTerminal: (sessionKey: string) => string;
@@ -50,11 +51,10 @@ export const useTerminalPanelStore = create<TerminalPanelState>((set, get) => ({
   tabsBySessionKey: {},
   activeTabKeyBySessionKey: {},
   height: TERMINAL_HEIGHT_DEFAULT,
-  toggle: (sessionKey) => {
+  open: (sessionKey) => {
     const state = get();
-    const nextOpen = !state.openBySessionKey[sessionKey];
-    if (!nextOpen || state.tabsBySessionKey[sessionKey]?.length) {
-      set({ openBySessionKey: { ...state.openBySessionKey, [sessionKey]: nextOpen } });
+    if (state.tabsBySessionKey[sessionKey]?.length) {
+      set({ openBySessionKey: { ...state.openBySessionKey, [sessionKey]: true } });
       return;
     }
     const key = createTerminalKey();
@@ -63,6 +63,15 @@ export const useTerminalPanelStore = create<TerminalPanelState>((set, get) => ({
       tabsBySessionKey: { ...state.tabsBySessionKey, [sessionKey]: [{ key }] },
       activeTabKeyBySessionKey: { ...state.activeTabKeyBySessionKey, [sessionKey]: key },
     });
+  },
+  toggle: (sessionKey) => {
+    const state = get();
+    const nextOpen = !state.openBySessionKey[sessionKey];
+    if (!nextOpen || state.tabsBySessionKey[sessionKey]?.length) {
+      set({ openBySessionKey: { ...state.openBySessionKey, [sessionKey]: nextOpen } });
+      return;
+    }
+    state.open(sessionKey);
   },
   close: (sessionKey) => set((state) => ({
     openBySessionKey: { ...state.openBySessionKey, [sessionKey]: false },

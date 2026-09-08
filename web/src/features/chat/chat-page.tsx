@@ -1047,6 +1047,10 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         canChangeWorkspace={false}
         workspaceDisabled={isSessionTransitioning || stream.sending || stream.streaming}
         onWorkspaceChange={session.onSessionWorkingDirectoryChange}
+        prepareTerminalSession={session.projectPreparation ? projectComposer.prepareSession : undefined}
+        terminalDisabled={Boolean(session.projectPreparation && (
+          projectComposer.busy || !projectComposer.allowed || projectComposer.checking
+        ))}
       /> : null}
 
       <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat-frame)+8rem)]')}>

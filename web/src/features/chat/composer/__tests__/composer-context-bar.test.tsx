@@ -110,7 +110,7 @@ describe('ComposerContextBar', () => {
   it('places environment selection beside the project selector in the same context bar', async () => {
     await render({
       sessionKey: null, project: { id: 'code', name: 'xopc' }, canChangeWorkspace: false,
-      environmentPicker: <ProjectEnvironmentPicker selection={{ mode: 'managed_worktree', options: { localAvailable: true }, allowed: true, busy: false, checkFailed: false, checking: false, failure: null, changeMode: vi.fn(), retry: vi.fn(), send: vi.fn() }} />,
+      environmentPicker: <ProjectEnvironmentPicker selection={{ mode: 'managed_worktree', options: { localAvailable: true }, allowed: true, busy: false, checkFailed: false, checking: false, failure: null, changeMode: vi.fn(), retry: vi.fn(), prepareSession: vi.fn(), send: vi.fn() }} />,
     });
     const projectSelector = container.querySelector<HTMLButtonElement>('[aria-label="Change the project for this chat"]')!;
     const environmentSelector = container.querySelector<HTMLButtonElement>('[aria-label="New session environment"]')!;
