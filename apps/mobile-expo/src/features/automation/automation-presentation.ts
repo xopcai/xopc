@@ -23,7 +23,7 @@ export function automationActionPreview(automation: Automation): string {
   switch (automation.action.kind) {
     case 'agent': return automation.action.instruction.trim();
     case 'workflow': return automation.action.goal?.trim() || automation.action.workflowId;
-    case 'browser_recipe': return automation.action.recipeId;
+    case 'browser_automation': return automation.action.automationId;
     case 'task_command': return `${automation.action.taskId} · ${automation.action.command.type}`;
   }
 }

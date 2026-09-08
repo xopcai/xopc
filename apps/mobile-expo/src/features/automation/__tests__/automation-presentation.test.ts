@@ -37,5 +37,9 @@ describe('automation presentation', () => {
   it('formats useful compact values', () => {
     expect(formatAutomationDuration(65_000)).toBe('1m 5s');
     expect(automationActionPreview(automation)).toBe('Ship release');
+    expect(automationActionPreview({
+      ...automation,
+      action: { kind: 'browser_automation', automationId: 'collect-title' },
+    })).toBe('collect-title');
   });
 });

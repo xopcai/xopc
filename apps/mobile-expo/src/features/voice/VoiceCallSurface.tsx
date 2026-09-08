@@ -40,7 +40,7 @@ export function VoiceCallSurface() {
   const captions = useVoicePreferences(s => s.captions);
   const [speaker, setSpeaker] = useState(false);
   const [diagnosticCopy, setDiagnosticCopy] = useState<'copied' | 'failed'>();
-  const clarificationAttempt = useRef<{ signature: string; idempotencyKey: string }>();
+  const clarificationAttempt = useRef<{ signature: string; idempotencyKey: string } | undefined>(undefined);
   const [, tick] = useState(0);
   const approvalsEnabled = state.phase === 'connected' && state.engine === 'agent' && Boolean(state.target);
   const approvals = useQuery({ ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.sessionKey), enabled: approvalsEnabled });
@@ -50,14 +50,16 @@ export function VoiceCallSurface() {
   const clarification = useMutation({
     mutationFn: ({ id, action, answer, version }: { id: string; action: 'answer' | 'agent_decide' | 'cancel'; answer?: string; version: number }) => {
       const signature = `${id}\n${version}\n${action}\n${answer ?? ''}`;
-      if (clarificationAttempt.current?.signature !== signature) {
-        clarificationAttempt.current = { signature, idempotencyKey: randomUUID() };
+      let attempt = clarificationAttempt.current;
+      if (attempt?.signature !== signature) {
+        attempt = { signature, idempotencyKey: randomUUID() };
+        clarificationAttempt.current = attempt;
       }
       return submitClarificationResponse(id, {
         action,
         answer,
         expectedVersion: version,
-        idempotencyKey: clarificationAttempt.current.idempotencyKey,
+        idempotencyKey: attempt.idempotencyKey,
       });
     },
     onSuccess: (_, variables) => {
@@ -68,7 +70,12 @@ export function VoiceCallSurface() {
   });
   const resetApproval = approval.reset;
   const resetClarification = clarification.reset;
-  useEffect(() => { resetApproval(); resetClarification(); setDiagnosticCopy(undefined); }, [state.startedAt, resetApproval, resetClarification]);
+  useEffect(() => {
+    clarificationAttempt.current = undefined;
+    resetApproval();
+    resetClarification();
+    setDiagnosticCopy(undefined);
+  }, [state.startedAt, resetApproval, resetClarification]);
   useEffect(() => {
     const consent = DeviceEventEmitter.addListener('voice-consent-revoked', () => void voiceCall.end());
     const app = AppState.addEventListener('change', status => {
