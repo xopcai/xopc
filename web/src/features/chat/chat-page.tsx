@@ -1224,7 +1224,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
             <div
               className={cn(
                 'sticky bottom-0 z-10 shrink-0 bg-surface-panel',
-                compactWelcomeLayout ? 'py-2.5' : 'py-4',
+                compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
               )}
             >
               <div

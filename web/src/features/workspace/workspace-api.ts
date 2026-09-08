@@ -94,6 +94,13 @@ async function resolveResource(path: string, options?: WorkspaceEditorRequestOpt
   return FileResourceSchema.parse(body.resource);
 }
 
+export async function resolveWorkspaceFileResource(
+  path: string,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<FileResource> {
+  return resolveResource(path, options);
+}
+
 export async function fetchWorkspaceDirectoryListing(
   dir = '',
   options?: WorkspaceEditorRequestOptions,

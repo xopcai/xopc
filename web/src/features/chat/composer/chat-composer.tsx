@@ -669,7 +669,7 @@ export const ChatComposer = memo(function ChatComposer({
         />
 
         <div
-          className={cn('relative px-4 pb-0 pt-1', att.attachments.length > 0 && 'pt-2')}
+          className={cn('relative px-3 pb-0 pt-1 sm:px-4', att.attachments.length > 0 && 'pt-2')}
         >
           <AtMentionPicker
             open={pickers.atPicker.open}
