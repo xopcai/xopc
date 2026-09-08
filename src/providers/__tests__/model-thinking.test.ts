@@ -17,13 +17,28 @@ describe('model thinking capabilities', () => {
     expect(chooseModelThinking(result, 'high', 'low')).toBe('low');
   });
 
-  it('offers an explicit binary control for binary provider adapters', () => {
+  it('offers an explicit binary control for adapters with an on/off request shape', () => {
     expect(getModelThinking(model({ compat: { thinkingFormat: 'zai', supportsReasoningEffort: false } })))
+      .toMatchObject({ mode: 'toggle', options: ['off', 'high'] });
+    expect(getModelThinking(model({ compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: false } })))
+      .toMatchObject({ mode: 'toggle', options: ['off', 'high'] });
+    expect(getModelThinking(model({ compat: { thinkingFormat: 'together', supportsReasoningEffort: false } })))
       .toMatchObject({ mode: 'toggle', options: ['off', 'high'] });
   });
 
-  it('does not expose invented effort levels on unsupported models', () => {
+  it('distinguishes unsupported models from non-configurable always-on reasoning', () => {
     expect(getModelThinking(model({ reasoning: false }))).toMatchObject({ mode: 'none', options: ['off'] });
-    expect(getModelThinking(model({ compat: { supportsReasoningEffort: false } }))).toMatchObject({ mode: 'unknown' });
+    expect(getModelThinking(model({ compat: { supportsReasoningEffort: false } })))
+      .toMatchObject({ mode: 'fixed', options: ['high'], initialValue: 'high' });
+    expect(getModelThinking(model({
+      thinkingLevelMap: { off: null, minimal: null, low: null, medium: null, high: null, xhigh: null, max: 'max' },
+    }))).toMatchObject({ mode: 'fixed', options: ['max'], initialValue: 'max' });
+  });
+
+  it('does not offer off when a toggle-shaped adapter marks it unsupported', () => {
+    expect(getModelThinking(model({
+      compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: false },
+      thinkingLevelMap: { off: null },
+    }))).toMatchObject({ mode: 'fixed', options: ['high'], initialValue: 'high' });
   });
 });

@@ -1,7 +1,7 @@
 export type ModelThinkingValue = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export type ModelThinkingCapabilities = {
-  mode: 'none' | 'toggle' | 'levels' | 'unknown';
+  mode: 'none' | 'toggle' | 'levels' | 'fixed' | 'unknown';
   options: ModelThinkingValue[];
   initialValue: ModelThinkingValue;
   supportsAdaptive: false;
