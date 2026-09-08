@@ -17,7 +17,13 @@ export type SideChatView = {
   expiresAt: string | null;
   serverNow?: string;
   runId?: string;
-  clarification?: { requestId: string; question: string; choices?: string[] };
+  clarification?: {
+    requestId: string;
+    kind: 'input' | 'approval';
+    question: string;
+    choices?: string[];
+    suggestedAnswer?: string;
+  };
   messageCount: number;
   context: {
     parentSessionKey: string;

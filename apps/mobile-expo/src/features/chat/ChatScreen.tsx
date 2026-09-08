@@ -267,7 +267,8 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             submitting={chat.clarifySubmitting}
             submitError={chat.clarifySubmitError}
             onSubmit={(answer) => void chat.submitClarifyAnswer(answer)}
-            onSkip={() => void chat.skipClarifyAnswer()}
+            onAgentDecide={() => void chat.letAgentDecideClarification()}
+            onCancel={() => void chat.cancelClarification()}
           />
           <ChatComposer
             contextControl={sessionKey ? <ChatContextControl

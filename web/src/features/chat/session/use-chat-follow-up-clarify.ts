@@ -8,11 +8,6 @@ import {
 
 import type { ClarifyPromptState } from '@/features/chat/composer/clarify-prompt';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
-import {
-  clearClarifyPromptSnapshot,
-  readClarifyPromptSnapshot,
-  writeClarifyPromptSnapshot,
-} from '@/features/chat/clarify/clarify-prompt-storage';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import {
   MAX_PENDING_FOLLOW_UPS,
@@ -52,16 +47,44 @@ export type ChatFollowUpClarifyApi = {
   reorderPendingFollowUp: (fromIndex: number, toIndex: number) => void;
   steerPendingFollowUp: (id: string) => Promise<void>;
   submitClarifyAnswer: (answer: string) => Promise<void>;
-  cancelClarifyAnswer: () => Promise<void>;
-  /** Clear visible clarify UI only (keep per-session storage). */
+  letAgentDecideClarification: () => Promise<void>;
+  cancelClarification: () => Promise<void>;
   clearVisibleClarify: () => void;
   dismissClarify: () => void;
   dismissClarifyForSession: (chatId: string) => void;
   clearPendingFollowUps: () => void;
   dismissClarifyAndClearPending: () => void;
-  onClarifyToolEnd: (chatId: string) => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
 };
+
+function parseClarification(raw: unknown, expectedSessionKey?: string): ClarifyPromptState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const value = record.clarification && typeof record.clarification === 'object'
+    ? record.clarification as Record<string, unknown>
+    : record;
+  if (value.status !== undefined && value.status !== 'open') return null;
+  if (expectedSessionKey && typeof value.sessionKey === 'string' && value.sessionKey !== expectedSessionKey) return null;
+  const requestId = typeof value.id === 'string' ? value.id : value.requestId;
+  const question = value.question;
+  const kind = value.kind === 'approval' ? 'approval' : 'input';
+  const choices = Array.isArray(value.choices)
+    ? value.choices.filter((choice): choice is string => typeof choice === 'string' && Boolean(choice.trim()))
+    : undefined;
+  if (typeof requestId !== 'string' || !requestId.trim() || typeof question !== 'string' || !question.trim()) return null;
+  return {
+    requestId: requestId.trim(),
+    kind,
+    question: question.trim(),
+    choices: choices && choices.length >= 2 ? choices : undefined,
+    suggestedAnswer: typeof value.suggestedAnswer === 'string' && value.suggestedAnswer.trim()
+      ? value.suggestedAnswer.trim()
+      : undefined,
+    version: typeof value.version === 'number' ? value.version : 1,
+    createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
+    expiresAt: typeof value.expiresAt === 'number' ? value.expiresAt : undefined,
+  };
+}
 
 export function useChatFollowUpClarify(options: {
   sessionKey: string | null;
@@ -88,6 +111,7 @@ export function useChatFollowUpClarify(options: {
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifySubmitError, setClarifySubmitError] = useState<string | null>(null);
   const clarifyPromptRef = useRef<ClarifyPromptState | null>(null);
+  const clarificationAttemptRef = useRef<{ signature: string; idempotencyKey: string } | null>(null);
 
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
@@ -119,29 +143,73 @@ export function useChatFollowUpClarify(options: {
     applyState(json?.payload);
   }, [applyState, sessionKeyRef]);
 
+  const refreshClarification = useCallback(async (key: string) => {
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/clarification`)).catch(() => null);
+    if (!res?.ok || sessionKeyRef.current !== key) return;
+    const json = await res.json().catch(() => null) as { payload?: unknown } | null;
+    setClarifySubmitError(null);
+    setClarifyPrompt(parseClarification(json?.payload, key));
+    clarificationAttemptRef.current = null;
+  }, [sessionKeyRef]);
+
   useEffect(() => {
     revisionRef.current = -1;
     pendingFollowUpsRef.current = [];
     setPendingFollowUps([]);
     setEditingFollowUpId(null);
+    setClarifyPrompt(null);
     if (!sessionKey || sessionKey !== decodedKey) return;
-    setClarifyPrompt(readClarifyPromptSnapshot(sessionKey));
     void refreshState(sessionKey);
-  }, [decodedKey, refreshState, sessionKey]);
+    void refreshClarification(sessionKey);
+  }, [decodedKey, refreshClarification, refreshState, sessionKey]);
 
   useEffect(() => {
-    const onState = (event: Event) => applyState((event as CustomEvent<unknown>).detail);
+    const onState = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      applyState(detail);
+      const key = sessionKeyRef.current;
+      if (key && detail && typeof detail === 'object' && (detail as { sessionKey?: unknown }).sessionKey === key) {
+        void refreshClarification(key);
+      }
+    };
+    const onClarification = (event: Event) => {
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (detail && typeof detail === 'object') {
+        const eventSessionKey = (detail as Record<string, unknown>).sessionKey;
+        if (typeof eventSessionKey === 'string' && eventSessionKey !== key) return;
+      }
+      setClarifySubmitError(null);
+      setClarifyPrompt(parseClarification(detail, key));
+      clarificationAttemptRef.current = null;
+    };
     const onReconnect = () => {
       const key = sessionKeyRef.current;
-      if (key) void refreshState(key);
+      if (key) {
+        void refreshState(key);
+        void refreshClarification(key);
+      }
     };
     window.addEventListener('session-input-state', onState);
+    window.addEventListener('clarification-updated', onClarification);
     window.addEventListener('gateway-realtime-connected', onReconnect);
     return () => {
       window.removeEventListener('session-input-state', onState);
+      window.removeEventListener('clarification-updated', onClarification);
       window.removeEventListener('gateway-realtime-connected', onReconnect);
     };
-  }, [applyState, refreshState, sessionKeyRef]);
+  }, [applyState, refreshClarification, refreshState, sessionKeyRef]);
+
+  useEffect(() => {
+    if (!clarifyPrompt?.expiresAt) return;
+    const delay = Math.max(0, clarifyPrompt.expiresAt - Date.now()) + 250;
+    const timer = window.setTimeout(() => {
+      const key = sessionKeyRef.current;
+      if (key) void refreshClarification(key);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [clarifyPrompt?.expiresAt, refreshClarification, sessionKeyRef]);
 
   const clearVisibleClarify = useCallback(() => {
     setClarifySubmitError(null);
@@ -152,7 +220,6 @@ export function useChatFollowUpClarify(options: {
     (chatId: string) => {
       const key = String(chatId ?? '').trim();
       if (!key) return;
-      clearClarifyPromptSnapshot(key);
       if (sessionKeyRef.current === key) {
         setClarifySubmitError(null);
         setClarifyPrompt(null);
@@ -162,36 +229,22 @@ export function useChatFollowUpClarify(options: {
   );
 
   const dismissClarify = useCallback(() => {
-    const key = sessionKeyRef.current;
-    if (key) clearClarifyPromptSnapshot(key);
     setClarifySubmitError(null);
     setClarifyPrompt(null);
-  }, [sessionKeyRef]);
+  }, []);
 
   const clearPendingFollowUps = useCallback(() => {
     setEditingFollowUpId(null);
   }, []);
 
   const dismissClarifyAndClearPending = useCallback(() => {
-    const key = sessionKeyRef.current;
-    if (key) {
-      clearClarifyPromptSnapshot(key);
-    }
     setClarifySubmitError(null);
     setClarifyPrompt(null);
     setEditingFollowUpId(null);
-  }, [sessionKeyRef]);
-
-  const onClarifyToolEnd = useCallback(
-    (chatId: string) => {
-      dismissClarifyForSession(chatId);
-    },
-    [dismissClarifyForSession],
-  );
+  }, []);
 
   const makeOnClarifyRequest = useCallback(
     (chatId: string) => (payload: ClarifyPromptState) => {
-      writeClarifyPromptSnapshot(chatId, payload);
       if (!shouldApplyStreamUpdate(chatId)) return;
       sendingRef.current = false;
       streamingRef.current = false;
@@ -199,6 +252,7 @@ export function useChatFollowUpClarify(options: {
       useChatSessionStore.getState().setSessionProgress(chatId, null);
       setClarifySubmitError(null);
       setClarifyPrompt(payload);
+      clarificationAttemptRef.current = null;
     },
     [shouldApplyStreamUpdate, sendingRef, streamingRef],
   );
@@ -362,55 +416,43 @@ export function useChatFollowUpClarify(options: {
     }
   }, [applyState, removePendingFollowUp, sessionKeyRef]);
 
-  const submitClarifyAnswer = useCallback(async (answer: string) => {
+  const respondToClarification = useCallback(async (action: 'answer' | 'agent_decide' | 'cancel', answer?: string) => {
     const p = clarifyPromptRef.current;
     if (!p) return;
+    const signature = `${p.requestId}\n${p.version}\n${action}\n${answer ?? ''}`;
+    if (clarificationAttemptRef.current?.signature !== signature) {
+      clarificationAttemptRef.current = { signature, idempotencyKey: crypto.randomUUID() };
+    }
+    const idempotencyKey = clarificationAttemptRef.current.idempotencyKey;
     setClarifySubmitting(true);
     setClarifySubmitError(null);
     try {
-      const res = await apiFetch(apiUrl(`/api/clarify/${encodeURIComponent(p.requestId)}`), {
+      const res = await apiFetch(apiUrl(`/api/clarifications/${encodeURIComponent(p.requestId)}/responses`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer }),
+        body: JSON.stringify({ action, answer, expectedVersion: p.version, idempotencyKey }),
       });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
         setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
+        const key = sessionKeyRef.current;
+        if (key && (res.status === 409 || res.status === 410)) void refreshClarification(key);
         return;
       }
-      const key = sessionKeyRef.current;
-      if (key) clearClarifyPromptSnapshot(key);
+      clarificationAttemptRef.current = null;
       setClarifyPrompt(null);
       setClarifySubmitError(null);
     } finally {
       setClarifySubmitting(false);
     }
-  }, [sessionKeyRef]);
+  }, [refreshClarification, sessionKeyRef]);
 
-  const cancelClarifyAnswer = useCallback(async () => {
-    const p = clarifyPromptRef.current;
-    if (!p) return;
-    setClarifySubmitting(true);
-    setClarifySubmitError(null);
-    try {
-      const res = await apiFetch(apiUrl(`/api/clarify/${encodeURIComponent(p.requestId)}`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skip: true }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
-        return;
-      }
-      const key = sessionKeyRef.current;
-      if (key) clearClarifyPromptSnapshot(key);
-      setClarifyPrompt(null);
-      setClarifySubmitError(null);
-    } finally {
-      setClarifySubmitting(false);
-    }
-  }, [sessionKeyRef]);
+  const submitClarifyAnswer = useCallback(
+    (answer: string) => respondToClarification('answer', answer),
+    [respondToClarification],
+  );
+  const letAgentDecideClarification = useCallback(() => respondToClarification('agent_decide'), [respondToClarification]);
+  const cancelClarification = useCallback(() => respondToClarification('cancel'), [respondToClarification]);
 
   return {
     clarifyPrompt,
@@ -430,13 +472,13 @@ export function useChatFollowUpClarify(options: {
     reorderPendingFollowUp,
     steerPendingFollowUp,
     submitClarifyAnswer,
-    cancelClarifyAnswer,
+    letAgentDecideClarification,
+    cancelClarification,
     clearVisibleClarify,
     dismissClarify,
     dismissClarifyForSession,
     clearPendingFollowUps,
     dismissClarifyAndClearPending,
-    onClarifyToolEnd,
     makeOnClarifyRequest,
   };
 }

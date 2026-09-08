@@ -1257,7 +1257,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 submitError={clarify.clarifySubmitError}
                 labels={m.chat}
                 onSubmit={clarify.submitClarifyAnswer}
-                onCancel={clarify.cancelClarifyAnswer}
+                onAgentDecide={clarify.letAgentDecideClarification}
+                onCancel={clarify.cancelClarification}
               />
               {latestConversationPlan ? (
                 <ConversationPlanDock
@@ -1293,8 +1294,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 disabled={
                   !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
                   Boolean(session.projectPreparation && !projectComposer.allowed) ||
-                  session.modelConfigSaving || projectComposer.busy || updatingContext ||
-                  Boolean(clarify.clarifyPrompt)
+                  session.modelConfigSaving || projectComposer.busy || updatingContext
                 }
                 sending={stream.sending}
                 streaming={stream.streaming}

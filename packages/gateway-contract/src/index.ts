@@ -22,3 +22,4 @@ export * from './device-pairing.js';
 export * from './model-selection.js';
 
 export * from './connection-waits.js';
+export * from './clarifications.js';

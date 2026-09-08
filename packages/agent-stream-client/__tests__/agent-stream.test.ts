@@ -345,6 +345,31 @@ describe('dispatchAgentStreamEvent', () => {
     });
   });
 
+  it('dispatches durable clarification metadata without inventing a timeout', () => {
+    const onClarifyRequest = vi.fn();
+    dispatchAgentStreamEvent(
+      'clarify_request',
+      JSON.stringify(envelope('clarify_request', 'run-1', {
+        requestId: 'clarify-1',
+        kind: 'input',
+        question: 'Which environment?',
+        choices: ['Staging', 'Production'],
+        suggestedAnswer: 'Staging',
+        version: 3,
+        createdAt: 123,
+      })),
+      callbacks({ onClarifyRequest }),
+    );
+    expect(onClarifyRequest).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: 'clarify-1',
+      kind: 'input',
+      suggestedAnswer: 'Staging',
+      version: 3,
+      createdAt: 123,
+      expiresAt: undefined,
+    }));
+  });
+
   it('calls terminal callbacks for run_end and error', () => {
     const cb = callbacks();
     dispatchAgentStreamEvent('run_end', JSON.stringify(envelope('run_end', 'run-1', { status: 'success' })), cb);

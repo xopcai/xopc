@@ -324,7 +324,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const composerDisabled =
     modelMutation.isPending ||
-    Boolean(chatSession.clarifyPrompt) ||
     chatSession.sending ||
     !sessionKey || bootstrap.creatingInitialSession;
 

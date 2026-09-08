@@ -1,4 +1,5 @@
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
+import { isClarificationSuspended } from '../../storage/sqlite/clarification-wait-repository.js';
 import crypto from 'crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -214,9 +215,17 @@ export async function *runGatewayAgent(
           yield* emitAndYield([event]);
         }
 
-        const suspended = isConnectionSuspended(sessionKey, runId);
+        const connectionSuspended = isConnectionSuspended(sessionKey, runId);
+        const clarificationSuspended = isClarificationSuspended(sessionKey, runId);
+        const suspended = connectionSuspended || clarificationSuspended;
         const endStatus = mergedSignal.aborted ? 'cancelled' : suspended ? 'suspended' : 'success';
-        const endSummary = mergedSignal.aborted ? 'Interrupted' : suspended ? 'Waiting for connection' : 'Message processed successfully';
+        const endSummary = mergedSignal.aborted
+          ? 'Interrupted'
+          : connectionSuspended
+            ? 'Waiting for connection'
+            : clarificationSuspended
+              ? 'Waiting for user input'
+              : 'Message processed successfully';
         taskRunStatus = mergedSignal.aborted ? 'cancelled' : 'succeeded';
         terminalStatus = endStatus;
         taskRunSummary = endSummary;

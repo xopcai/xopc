@@ -1,11 +1,21 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-const executionSessionStorage = new AsyncLocalStorage<string>();
+type EmbeddedExecutionContext = { sessionKey: string; runId?: string };
 
-export function runWithEmbeddedExecutionSession<T>(sessionKey: string, run: () => T): T {
-  return executionSessionStorage.run(sessionKey, run);
+const executionSessionStorage = new AsyncLocalStorage<EmbeddedExecutionContext>();
+
+export function runWithEmbeddedExecutionSession<T>(
+  sessionKey: string,
+  run: () => T,
+  runId?: string,
+): T {
+  return executionSessionStorage.run({ sessionKey, runId }, run);
 }
 
 export function getEmbeddedExecutionSession(): string | undefined {
-  return executionSessionStorage.getStore();
+  return executionSessionStorage.getStore()?.sessionKey;
+}
+
+export function getEmbeddedExecutionRunId(): string | undefined {
+  return executionSessionStorage.getStore()?.runId;
 }

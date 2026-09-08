@@ -129,9 +129,13 @@ export class ChatStreamMapper {
         return [
           this.make('clarify_request', {
             requestId: String(event.requestId ?? ''),
+            kind: event.kind === 'approval' ? 'approval' : 'input',
             question: String(event.question ?? ''),
             choices: Array.isArray(event.choices) ? event.choices.filter((x): x is string => typeof x === 'string') : undefined,
-            default: typeof event.default === 'string' ? event.default : undefined,
+            suggestedAnswer: typeof event.suggestedAnswer === 'string' ? event.suggestedAnswer : undefined,
+            version: typeof event.version === 'number' ? event.version : 1,
+            createdAt: typeof event.createdAt === 'number' ? event.createdAt : Date.now(),
+            expiresAt: typeof event.expiresAt === 'number' ? event.expiresAt : undefined,
             petFeedback: createPetFeedback('clarify'),
           }),
         ];
