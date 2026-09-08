@@ -72,7 +72,7 @@ export function createConsentController(deps: ConsentDependencies) {
 
 const CONTENT_RESOURCES = new Set([
   'agent', 'sessions', 'tasks', 'notes', 'workspace', 'inbox', 'projects', 'files',
-  'media', 'voice', 'clarify', 'automations', 'automation-runs', 'workflows', 'shares',
+  'media', 'voice', 'clarifications', 'automations', 'automation-runs', 'workflows', 'shares',
 ]);
 
 /** Stored workspace content can also feed indexing, understanding and scheduled agent work. */
