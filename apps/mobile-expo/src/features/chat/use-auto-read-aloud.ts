@@ -116,7 +116,10 @@ export function advanceAutoReadAloud(
     };
   }
 
-  const completedNewReply = previous.wasStreaming
+  // Keep the completion edge armed until the persisted assistant message reaches
+  // this hook. The stream can finish one render before the history query updates.
+  const awaitingCompletedReply = previous.wasStreaming || streaming;
+  const completedNewReply = awaitingCompletedReply
     && !streaming
     && candidate
     && candidate.key !== previous.lastSeenKey;
@@ -124,7 +127,7 @@ export function advanceAutoReadAloud(
     tracker: {
       sessionKey,
       enabled,
-      wasStreaming: streaming,
+      wasStreaming: completedNewReply ? false : awaitingCompletedReply,
       lastSeenKey: completedNewReply ? candidate.key : previous.lastSeenKey,
     },
     input: completedNewReply ? candidate.input : null,

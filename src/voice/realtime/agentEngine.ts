@@ -4,6 +4,7 @@ import { createLogger } from '../../utils/logger.js';
 import { speakStream } from '../tts/speak-core.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { ConversationTurn } from './conversationTurn.js';
+import { isLikelyPlaybackEcho } from './playback-echo.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
@@ -15,6 +16,7 @@ interface ActiveVoiceResponse {
   abortController: AbortController;
   segmenter: SpeakableSegmenter;
   text: string;
+  audibleText: string;
   audioStarted: boolean;
   speechTail: Promise<void>;
   speechError?: Error;
@@ -99,6 +101,7 @@ export function createAgentVoiceEngine(options: {
       signal: response.abortController.signal,
       allowFallback: false,
     });
+    let phraseMarkedAudible = false;
     try {
       if (response.abortController.signal.aborted || activeResponse !== response || closed) return;
       if (result.outputFormat !== 'pcm') throw new Error(`Realtime TTS returned unsupported format: ${result.outputFormat}`);
@@ -107,6 +110,10 @@ export function createAgentVoiceEngine(options: {
         const item = await reader.read();
         if (item.done) break;
         if (response.abortController.signal.aborted || activeResponse !== response) return;
+        if (!phraseMarkedAudible && item.value.byteLength > 0) {
+          phraseMarkedAudible = true;
+          response.audibleText = `${response.audibleText} ${phrase}`.trim().slice(-8_000);
+        }
         if (!response.audioStarted) {
           response.audioStarted = true;
           log.info({
@@ -163,6 +170,7 @@ export function createAgentVoiceEngine(options: {
       abortController: new AbortController(),
       segmenter: new SpeakableSegmenter(),
       text: '',
+      audibleText: '',
       audioStarted: false,
       speechTail: Promise.resolve(),
       queuedSpeechCharacters: 0,
@@ -198,6 +206,11 @@ export function createAgentVoiceEngine(options: {
           response.text += event.payload.delta;
           send('response.text.delta', { responseId: response.id, delta: event.payload.delta });
           queuePhrases(response, response.segmenter.push(event.payload.delta));
+        }
+        if (event.type === 'tool_start') {
+          // Agents commonly announce a tool without punctuation. Do not hold that
+          // useful acknowledgement until the tool finishes or the whole turn ends.
+          queuePhrases(response, response.segmenter.flush());
         }
         if ((event.type === 'tool_start' || event.type === 'tool_end') && typeof event.payload?.toolCallId === 'string' && typeof event.payload?.toolName === 'string') {
           send('response.activity', { responseId: response.id, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
@@ -323,6 +336,17 @@ export function createAgentVoiceEngine(options: {
       }
       finalizedUtterances.add(event.utteranceId);
       finalCount += 1;
+      if (claim.request.purpose === 'conversation'
+        && activeResponse?.audioStarted
+        && isLikelyPlaybackEcho(text, activeResponse.audibleText)) {
+        bufferFinal(event.utteranceId, '');
+        log.debug({
+          sessionId: claim.sessionId,
+          responseId: activeResponse.id,
+          transcriptCharacters: text.length,
+        }, 'Ignored finalized transcription matching active voice playback');
+        return;
+      }
       send('input.transcript.final', {
         utteranceId: event.utteranceId,
         revision: event.revision,
