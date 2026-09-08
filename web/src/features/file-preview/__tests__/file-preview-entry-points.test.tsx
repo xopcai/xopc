@@ -20,9 +20,9 @@ vi.mock('@/features/preview-runtime/use-workspace-preview-state', () => ({
     },
     loading: false, loadError: null, textContent: '<h1>Report</h1>', binaryBuffer: null,
     fileResourceId: 'file-a', mtimeMs: null, saveStatus: 'idle', canDownload: true,
-    markdownEditMode: false, htmlCodeMode: false,
+    sourceEditMode: false,
     recommendedOpenWithApps: [], recentOpenWithApps: [],
-    setHtmlCodeMode: vi.fn(), onDownload: vi.fn(),
+    setSourceEditMode: vi.fn(), onDownload: vi.fn(),
     createAttachmentFile: async () => new File(['<h1>Report</h1>'], 'report.html', { type: 'text/html' }),
   }),
 }));

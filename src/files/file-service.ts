@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { access, lstat, opendir, realpath, stat } from 'node:fs/promises';
+import { access, lstat, open, opendir, realpath, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
@@ -10,8 +10,19 @@ import type { Config } from '../config/schema.js';
 import { resolveProjectAgentId, type ProjectService } from '../projects/index.js';
 
 const SKIPPED_NAMES = new Set(['.DS_Store', '.git', 'node_modules']);
+const TEXT_SNIFF_BYTES = 8 * 1024;
 const TEXT_EXTENSIONS = new Set([
-  'css', 'csv', 'html', 'htm', 'js', 'json', 'jsx', 'md', 'markdown', 'mjs', 'cjs', 'svg', 'ts', 'tsx', 'tsv', 'txt', 'xml', 'yaml', 'yml',
+  'astro', 'bash', 'bat', 'c', 'cc', 'cfg', 'clj', 'cljs', 'cljc', 'cmd', 'conf', 'cpp', 'cs', 'css', 'csv', 'cts', 'cxx',
+  'dart', 'editorconfig', 'edn', 'env', 'erl', 'ex', 'exs', 'fish', 'fs', 'fsx', 'gitattributes', 'gitignore', 'go', 'gql',
+  'graphql', 'groovy', 'h', 'hh', 'hpp', 'hrl', 'htm', 'html', 'hxx', 'ini', 'java', 'js', 'json', 'json5', 'jsonc', 'jsx',
+  'kt', 'kts', 'less', 'lock', 'log', 'lua', 'm', 'markdown', 'md', 'mjs', 'mm', 'mts', 'nix', 'npmrc', 'php', 'pl', 'pm', 'properties',
+  'proto', 'ps1', 'py', 'pyw', 'r', 'rb', 'rs', 'sass', 'scala', 'scss', 'sh', 'sol', 'sql', 'svelte', 'svg', 'swift',
+  'tf', 'tfvars', 'toml', 'ts', 'tsv', 'tsx', 'txt', 'vue', 'xml', 'xsd', 'xsl', 'yaml', 'yml', 'zsh',
+]);
+const TEXT_FILE_NAMES = new Set([
+  '.dockerignore', '.eslintignore', '.prettierignore', '.stylelintignore',
+  'brewfile', 'changelog', 'codeowners', 'dockerfile', 'gemfile', 'jenkinsfile',
+  'license', 'makefile', 'procfile', 'rakefile', 'readme',
 ]);
 const MIME_TYPES: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
@@ -41,19 +52,56 @@ function normalizeRelativePath(input: string): string {
   return normalized.split('/').filter((part) => part && part !== '.').join('/');
 }
 
-function mimeType(name: string, directory: boolean): string {
-  if (directory) return 'inode/directory';
-  const extension = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
-  return MIME_TYPES[extension] ?? 'application/octet-stream';
+function fileExtension(name: string): string {
+  return name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
 }
 
-function capabilities(name: string, directory: boolean, writable: boolean): FileCapability[] {
+function isTextFileName(name: string): boolean {
+  const normalized = name.toLowerCase();
+  const extension = fileExtension(normalized);
+  return TEXT_EXTENSIONS.has(extension)
+    || TEXT_FILE_NAMES.has(normalized)
+    || normalized.startsWith('.env.')
+    || normalized.startsWith('dockerfile.');
+}
+
+function bufferLooksText(buffer: Buffer): boolean {
+  if (buffer.length === 0) return true;
+  let controlBytes = 0;
+  for (const byte of buffer) {
+    if (byte === 0) return false;
+    if ((byte < 8 || (byte > 13 && byte < 32)) && byte !== 27) controlBytes += 1;
+  }
+  return controlBytes / buffer.length < 0.01;
+}
+
+async function isTextFile(name: string, absolutePath: string): Promise<boolean> {
+  if (isTextFileName(name)) return true;
+  if (MIME_TYPES[fileExtension(name)]) return false;
+  const handle = await open(absolutePath, 'r').catch(() => null);
+  if (!handle) return false;
+  try {
+    const buffer = Buffer.allocUnsafe(TEXT_SNIFF_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    return bufferLooksText(buffer.subarray(0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+}
+
+function mimeType(name: string, directory: boolean, textFile: boolean): string {
+  if (directory) return 'inode/directory';
+  const extension = fileExtension(name);
+  return MIME_TYPES[extension] ?? (textFile ? 'text/plain' : 'application/octet-stream');
+}
+
+function capabilities(name: string, directory: boolean, writable: boolean, textFile: boolean): FileCapability[] {
   if (directory) return writable ? ['share', 'upload'] : ['share'];
-  const extension = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
+  const extension = fileExtension(name);
   const result: FileCapability[] = ['download', 'share'];
-  if (MIME_TYPES[extension] || TEXT_EXTENSIONS.has(extension)) result.unshift('preview');
+  if (MIME_TYPES[extension] || textFile) result.unshift('preview');
   if (writable) {
-    if (TEXT_EXTENSIONS.has(extension)) result.push('edit');
+    if (textFile) result.push('edit');
     result.push('delete');
   }
   return result;
@@ -113,6 +161,7 @@ export async function fileResourceFromPath(
   const relativePath = relative(canonicalRoot, displayPath).split(sep).join('/');
   const name = basename(displayPath);
   const directory = info.isDirectory();
+  const textFile = !directory && await isTextFile(name, absolutePath);
   return {
     id: fileResourceId(space.id, relativePath),
     spaceId: space.id,
@@ -120,11 +169,11 @@ export async function fileResourceFromPath(
     relativePath,
     parentPath: dirname(relativePath).split(sep).join('/').replace(/^\.$/, ''),
     kind: directory ? 'directory' : 'file',
-    mimeType: mimeType(name, directory),
+    mimeType: mimeType(name, directory, textFile),
     size: info.size,
     modifiedAt: Math.max(0, Math.round(info.mtimeMs)),
     revision: `${revisionInfo.mtimeNs}:${revisionInfo.ctimeNs}:${revisionInfo.ino}:${revisionInfo.size}`,
-    capabilities: capabilities(name, directory, space.writable),
+    capabilities: capabilities(name, directory, space.writable, textFile),
   };
 }
 

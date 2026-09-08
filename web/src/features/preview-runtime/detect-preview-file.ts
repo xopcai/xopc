@@ -4,36 +4,95 @@ export const TEXT_PREVIEW_MAX_BYTES = 5 * 1024 * 1024;
 export const BINARY_PREVIEW_MAX_BYTES = 32 * 1024 * 1024;
 
 const CODE_EXTS = new Set([
+  '.astro',
+  '.bat',
+  '.c',
+  '.cc',
+  '.clj',
+  '.cljs',
+  '.cljc',
+  '.cmd',
+  '.cpp',
+  '.cs',
+  '.cts',
+  '.cxx',
+  '.dart',
+  '.edn',
+  '.erl',
+  '.ex',
+  '.exs',
+  '.fish',
+  '.fs',
+  '.fsx',
+  '.go',
+  '.gql',
+  '.graphql',
+  '.groovy',
+  '.h',
+  '.hh',
+  '.hpp',
+  '.hrl',
+  '.hxx',
+  '.java',
   '.ts',
   '.tsx',
+  '.mts',
   '.js',
   '.jsx',
   '.mjs',
   '.cjs',
   '.css',
   '.scss',
+  '.sass',
+  '.less',
   '.json',
   '.jsonc',
+  '.json5',
   '.yml',
   '.yaml',
   '.xml',
+  '.xsd',
+  '.xsl',
   '.py',
-  '.go',
+  '.pyw',
+  '.rb',
+  '.php',
   '.rs',
-  '.java',
-  '.c',
-  '.cpp',
-  '.h',
-  '.hpp',
+  '.kt',
+  '.kts',
+  '.scala',
+  '.swift',
+  '.m',
+  '.mm',
   '.sh',
   '.bash',
   '.zsh',
+  '.ps1',
   '.sql',
+  '.lua',
+  '.r',
+  '.pl',
+  '.pm',
+  '.sol',
+  '.tf',
+  '.tfvars',
+  '.nix',
+  '.proto',
+  '.vue',
+  '.svelte',
   '.toml',
   '.ini',
+  '.cfg',
+  '.conf',
+  '.properties',
 ]);
 
-const TEXT_EXTS = new Set(['.txt', '.log', '.csv', '.tsv', '.env', '.gitignore']);
+const TEXT_EXTS = new Set([
+  '.txt', '.log', '.lock', '.csv', '.tsv', '.env', '.gitignore', '.gitattributes',
+  '.editorconfig', '.npmrc', '.dockerignore', '.eslintignore', '.prettierignore', '.stylelintignore',
+]);
+const CODE_FILE_NAMES = new Set(['dockerfile', 'gemfile', 'jenkinsfile', 'makefile', 'procfile', 'rakefile']);
+const TEXT_FILE_NAMES = new Set(['brewfile', 'changelog', 'codeowners', 'license', 'readme']);
 const IMAGE_EXTS = new Set([
   '.png',
   '.jpg',
@@ -86,9 +145,10 @@ const MIME_BY_EXT = new Map<string, string>([
 ]);
 
 export function getPreviewFileExtension(path: string): string {
-  const i = path.lastIndexOf('.');
-  if (i <= 0 || i === path.length - 1) return '';
-  return path.slice(i).toLowerCase();
+  const fileName = getPreviewFileName(path);
+  const i = fileName.lastIndexOf('.');
+  if (i < 0 || i === fileName.length - 1) return '';
+  return fileName.slice(i).toLowerCase();
 }
 
 export function getPreviewFileName(path: string): string {
@@ -105,6 +165,7 @@ export function inferPreviewMimeType(fileName: string, mimeType?: string | null)
 
 export function detectPreviewFileType(fileName: string, mimeType?: string | null): PreviewFileType {
   const ext = getPreviewFileExtension(fileName);
+  const normalizedName = getPreviewFileName(fileName).toLowerCase();
   const mime = inferPreviewMimeType(fileName, mimeType);
 
   if (mime === 'text/markdown' || ext === '.md' || ext === '.markdown') return 'markdown';
@@ -128,8 +189,14 @@ export function detectPreviewFileType(fileName: string, mimeType?: string | null
   if (mime.startsWith('audio/') || AUDIO_EXTS.has(ext)) return 'audio';
   if (mime.startsWith('video/') || VIDEO_EXTS.has(ext)) return 'video';
   if (mime === 'application/zip' || ARCHIVE_EXTS.has(ext)) return 'archive';
-  if (CODE_EXTS.has(ext)) return 'code';
-  if (mime.startsWith('text/') || TEXT_EXTS.has(ext) || mime === 'application/json') return 'text';
+  if (CODE_EXTS.has(ext) || CODE_FILE_NAMES.has(normalizedName) || normalizedName.startsWith('dockerfile.')) return 'code';
+  if (
+    mime.startsWith('text/')
+    || TEXT_EXTS.has(ext)
+    || TEXT_FILE_NAMES.has(normalizedName)
+    || normalizedName.startsWith('.env.')
+    || mime === 'application/json'
+  ) return 'text';
   return 'unsupported';
 }
 

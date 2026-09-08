@@ -40,7 +40,7 @@ const PLUGINS: Record<PreviewFileType, PreviewPlugin> = {
   text: {
     id: 'text',
     readMode: 'text',
-    capabilities: ['download'],
+    capabilities: ['download', 'edit'],
     render: (props) => createElement(TextPreviewPluginView, props),
   },
   markdown: {
@@ -52,7 +52,7 @@ const PLUGINS: Record<PreviewFileType, PreviewPlugin> = {
   code: {
     id: 'code',
     readMode: 'text',
-    capabilities: ['download'],
+    capabilities: ['download', 'edit'],
     render: (props) => createElement(CodePreviewPluginView, props),
   },
   html: {

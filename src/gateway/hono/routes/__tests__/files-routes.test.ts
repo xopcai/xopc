@@ -145,21 +145,24 @@ describe('files routes', () => {
     }
   });
 
-  it('edits .markdown documents using the returned revision', async () => {
-    const root = join(stateDir, 'workspace');
-    mkdirSync(root);
-    writeFileSync(join(root, 'note.markdown'), '# Before');
-    const { app } = appFor(root);
-    const id = fileResourceId(fileSpaceId(realpathSync(root)), 'note.markdown');
-    const resource = await (await app.request(`/api/files/${id}`)).json() as { resource: { revision: string; capabilities: string[] } };
-    expect(resource.resource.capabilities).toContain('edit');
-    const saved = await app.request(`/api/files/${id}/content`, {
-      method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: '# After', revision: resource.resource.revision }),
-    });
-    expect(saved.status).toBe(200);
-    expect(readFileSync(join(root, 'note.markdown'), 'utf8')).toBe('# After');
-  });
+  it.each(['note.markdown', '.env', 'deploy.sh', 'notes.custom'])(
+    'edits supported text file %s using the returned revision',
+    async (name) => {
+      const root = join(stateDir, 'workspace');
+      mkdirSync(root);
+      writeFileSync(join(root, name), '# Before');
+      const { app } = appFor(root);
+      const id = fileResourceId(fileSpaceId(realpathSync(root)), name);
+      const resource = await (await app.request(`/api/files/${id}`)).json() as { resource: { revision: string; capabilities: string[] } };
+      expect(resource.resource.capabilities).toContain('edit');
+      const saved = await app.request(`/api/files/${id}/content`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content: '# After', revision: resource.resource.revision }),
+      });
+      expect(saved.status).toBe(200);
+      expect(readFileSync(join(root, name), 'utf8')).toBe('# After');
+    },
+  );
 
   it('lists and opens internal symlinks while rejecting escapes and terminating cycles', async () => {
     const root = join(stateDir, 'workspace');

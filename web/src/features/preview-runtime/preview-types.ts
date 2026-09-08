@@ -73,12 +73,9 @@ export type PreviewActions = {
 };
 
 export type PreviewWorkspaceEditing = {
-  markdownEditMode: boolean;
-  onSaveMarkdown?: (next: string) => void | Promise<void>;
-  markdownWordWrap?: boolean;
-  onToggleMarkdownWordWrap?: () => void;
-  htmlCodeMode: boolean;
-  onHtmlChange?: (next: string) => void;
+  sourceEditMode: boolean;
+  onSourceChange?: (next: string) => void;
+  sourceWordWrap?: boolean;
   isDark?: boolean;
 };
 
