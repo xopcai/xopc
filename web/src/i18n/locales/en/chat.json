@@ -30,6 +30,7 @@
     "modelConfigSaving": "Saving…",
     "modelRetry": "Retry",
     "modelThinkingUnknown": "Thinking controls are not available for this model",
+    "modelThinkingFixed": "Always on",
     "modelThinkingOn": "On",
     "modelThinkingLabel": "Thinking effort",
     "modelConfigLabel": "Model",

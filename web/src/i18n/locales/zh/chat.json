@@ -30,6 +30,7 @@
     "modelConfigSaving": "正在保存…",
     "modelRetry": "重试",
     "modelThinkingUnknown": "此模型未提供可调节的思考档位",
+    "modelThinkingFixed": "固定开启",
     "modelThinkingOn": "开启",
     "modelThinkingLabel": "思考强度",
     "modelConfigLabel": "模型",

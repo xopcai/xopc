@@ -9,6 +9,8 @@ const { models } = vi.hoisted(() => ({ models: [
     thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
   { id: 'other/two', name: 'Model Two', provider: 'other', reasoning: false,
     thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
+  { id: 'fixed/three', name: 'Model Three', provider: 'fixed', reasoning: true,
+    thinking: { mode: 'fixed', options: ['high'], initialValue: 'high', supportsAdaptive: false } },
   { id: 'xopc-cloud/openai-codex/gpt-5.6-luna', name: 'openai-codex/gpt-5.6-luna', provider: 'xopc-cloud', reasoning: true,
     thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
 ] }));
@@ -56,6 +58,7 @@ describe('composer model configuration', () => {
     expect(button('Low')).toBeTruthy();
     expect(button('Medium')).toBeUndefined();
     expect(document.body.textContent).not.toContain('Default');
+    expect(document.querySelector('[role="group"]')?.parentElement?.className).toContain('mb-2');
     await click([...document.querySelectorAll('button')].find((item) => item.textContent === 'Model Onetest')!);
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(document.body.textContent).toContain('Model Two');
@@ -75,5 +78,17 @@ describe('composer model configuration', () => {
     expect(container.textContent).toContain('original');
     expect(container.textContent).toContain('Unavailable');
     expect(document.querySelector('[role="group"]')).toBeNull();
+  });
+
+  it('shows always-on reasoning as fixed instead of unsupported', async () => {
+    await render({ sessionModel: 'fixed/three', thinkingLevel: 'off' });
+    expect(container.querySelector('button')?.textContent).toBe('Model Three· Always on');
+    expect(document.body.textContent).toContain('Always on');
+    expect(document.body.textContent).not.toContain('Not supported by this model');
+    expect(document.querySelector('[role="group"]')).toBeNull();
+    const popover = document.querySelector('[role="dialog"]');
+    expect(popover?.className).toContain('max-h-[min(21rem,calc(100dvh-3rem))]');
+    expect(popover?.className).not.toContain(' h-[min(21rem,calc(100dvh-3rem))]');
+    expect(popover?.querySelector('[aria-live="polite"]')).toBeNull();
   });
 });

@@ -45,7 +45,9 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
     : thinkingLevel;
   const levelLabel = (level: string) => thinking?.mode === 'toggle' && level !== 'off'
     ? m.modelThinkingOn : m.thinkingLevels[level as ThinkingLevel] ?? level;
-  const effort = adjustable ? levelLabel(effectiveThinkingLevel) : '';
+  const effort = adjustable
+    ? levelLabel(effectiveThinkingLevel)
+    : thinking?.mode === 'fixed' ? m.modelThinkingFixed : '';
   const busy = pending || modelDisabled;
 
   async function save(action: () => void | Promise<void>, modelChange = false) {
@@ -79,7 +81,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
       <Popover.Portal>
         <Popover.Content side="top" align="end" sideOffset={8} collisionPadding={12}
           aria-label={m.modelConfigLabel}
-          className={cn(APP_PORTALED_POPOVER_Z, 'xopc-composer-config-popover flex h-[min(21rem,calc(100dvh-3rem))] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-2 shadow-popover')}>
+          className={cn(APP_PORTALED_POPOVER_Z, 'xopc-composer-config-popover flex max-h-[min(21rem,calc(100dvh-3rem))] w-[min(20rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-2 shadow-popover')}>
           {view === 'models' ? <>
             <button ref={backButtonRef} type="button" onClick={() => setView('config')} className={cn('mb-2 flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-2 text-sm text-fg hover:bg-surface-hover', interaction.focusRingPanel)}>
               <ArrowLeft className="size-4" aria-hidden />{m.modelBack}
@@ -93,7 +95,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
                   : effectiveThinkingLevel;
                 void save(() => onModelChange(id, nextThinking), true);
               }} />
-          </> : <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          </> : <div className="min-h-0 overflow-y-auto overscroll-contain">
             {registry.isLoading ? <div className="space-y-4 p-3"><Skeleton className="h-6 w-40" /><Skeleton className="h-4 w-24" /><Skeleton className="h-11 w-full" /></div> : <>
               <button ref={modelButtonRef} type="button" disabled={busy || !models.length} onClick={() => setView('models')}
                 className={cn('flex min-h-14 w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-surface-hover disabled:opacity-60', interaction.focusRingPanel)}>
@@ -104,7 +106,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
                 <ChevronRight className="size-4 shrink-0 text-fg-muted" aria-hidden />
               </button>
               {unavailable && <p className="px-3 py-2 text-sm text-fg-muted">{m.modelUnavailable}</p>}
-              {selected && <div className="mt-4 px-3">
+              {selected && <div className="mb-2 mt-4 px-3">
                 <p className="mb-2 text-xs font-medium text-fg-muted">{m.modelThinkingLabel}</p>
                 {adjustable ? <div role="group" aria-label={m.modelThinkingLabel} className={cn('grid gap-1 rounded-lg bg-surface-base p-1', thinking.options.length > 4 ? 'grid-cols-3' : thinking.options.length === 4 ? 'grid-cols-4' : thinking.options.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
                   {thinking.options.map((level) => <button key={level} type="button" aria-pressed={level === effectiveThinkingLevel}
@@ -113,16 +115,20 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
                       level === effectiveThinkingLevel && 'bg-accent-soft font-medium text-accent-fg')}>
                     {levelLabel(level)}
                   </button>)}
-                </div> : <p className="text-sm text-fg-muted">{thinking?.mode === 'none' ? m.thinkingUnsupported : m.modelThinkingUnknown}</p>}
+                </div> : <p className="text-sm text-fg-muted">{
+                  thinking?.mode === 'none' ? m.thinkingUnsupported
+                    : thinking?.mode === 'fixed' ? m.modelThinkingFixed
+                      : m.modelThinkingUnknown
+                }</p>}
               </div>}
             </>}
           </div>}
-          <div className="shrink-0 px-3 py-2 text-xs" aria-live="polite">
+          {(pending || error || registry.error || notice) && <div className="shrink-0 px-3 py-2 text-xs" aria-live="polite">
             {pending ? <span className="inline-flex items-center gap-2 text-fg-muted"><Loader2 className="size-3 animate-spin" aria-hidden />{m.modelConfigSaving}</span>
               : error ? <span role="alert" className="text-danger">{error}</span>
               : registry.error ? <button type="button" onClick={() => void registry.mutate()} className={cn('text-accent-fg', interaction.focusRingPanel)}>{m.modelRetry}</button>
               : notice ? <span className="text-fg-muted">{notice} · {title}{effort ? ` · ${effort}` : ''}</span> : null}
-          </div>
+          </div>}
           <Link to="/settings/capabilities/models" className={cn('shrink-0 rounded-lg border-t border-edge-subtle px-3 py-3 text-sm text-fg-muted hover:bg-surface-hover', interaction.focusRingPanel)}>
             {models.length ? m.modelManage : m.modelConfigure}
           </Link>
