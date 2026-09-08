@@ -57,10 +57,9 @@ import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
 import {
   homeGreetingPeriod,
   mobileRouteForHomeHref,
+  partitionHomeBackground,
   rankHomeContinueCandidates,
-  rankHomeRunningCandidates,
   type HomeContinueCandidate,
-  type HomeRunningCandidate,
 } from './home-presentation';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
@@ -72,21 +71,21 @@ type ContinueItem = {
   meta: string;
   summary?: string;
   icon: string;
-  onPress: () => void;
-};
-
-type RunningItem = {
-  id: string;
-  title: string;
-  meta: string;
-  summary?: string;
-  icon: string;
+  active?: boolean;
   onPress: () => void;
 };
 
 type RemoteHomeAction = Exclude<HomeAction, { type: 'open' | 'review_judgment' }>;
+type HomeOpenSource = 'attention' | 'continue' | 'update';
+type HomeLibraryRoute = '/tasks' | '/inbox' | '/notes' | '/sessions' | '/files' | '/automation';
 
 const TERMINAL_PROJECT_STATUSES = new Set(['completed', 'cancelled', 'archived']);
+
+function recordHomeOpen(source: HomeOpenSource): void {
+  if (source === 'attention') recordUsageEvent('home_attention_opened');
+  else if (source === 'update') recordUsageEvent('home_update_opened');
+  else recordUsageEvent('home_continue_opened');
+}
 
 function iconForNoteKind(kind: NoteIndexEntry['kind']): string {
   if (kind === 'task') return 'checkbox-marked-circle-outline';
@@ -199,10 +198,10 @@ export function WorkspaceHomeScreen() {
     staleTime: 60_000,
   });
 
-  const contentStillLoading = homeQuery.isLoading
+  const continueStillLoading = homeQuery.isLoading
     || recentNotesQuery.isLoading
-    || sessionsQuery.isLoading
-    || projectsQuery.isLoading;
+    || sessionsQuery.isLoading;
+  const contentStillLoading = continueStillLoading || projectsQuery.isLoading;
 
   useEffect(() => {
     if (homeReadyRecorded.current || !configured || contentStillLoading) return;
@@ -236,7 +235,7 @@ export function WorkspaceHomeScreen() {
       return acknowledgeHomeAttention(item);
     },
     onSuccess: (_result, action) => {
-      recordUsageEvent('home_focus_action_completed');
+      recordUsageEvent('home_attention_action_completed');
       void queryClient.invalidateQueries({ queryKey: queryKeys.home });
       setToastMessage(
         action.type === 'connector_decision'
@@ -257,12 +256,12 @@ export function WorkspaceHomeScreen() {
     },
   });
 
-  const runHomeAction = useCallback((action: HomeAction) => {
+  const runHomeAction = useCallback((action: HomeAction, source: HomeOpenSource) => {
     if (action.type === 'open') {
-      recordUsageEvent('home_continue_opened');
+      recordHomeOpen(source);
       router.push(mobileRouteForHomeHref(action.href) as never);
     } else if (action.type === 'review_judgment') {
-      recordUsageEvent('home_continue_opened');
+      recordHomeOpen(source);
       router.push({ pathname: '/inbox', params: { item: action.itemId } });
     } else {
       remoteActionMutation.mutate(action);
@@ -273,8 +272,13 @@ export function WorkspaceHomeScreen() {
     (homeQuery.data?.runningConversations ?? []).map((item) => item.sessionKey),
   ), [homeQuery.data?.runningConversations]);
 
-  const runningItems = useMemo<RunningItem[]>(() => {
-    const candidates: HomeRunningCandidate<RunningItem>[] = [];
+  const background = useMemo(
+    () => partitionHomeBackground(homeQuery.data?.background ?? []),
+    [homeQuery.data?.background],
+  );
+
+  const continueItems = useMemo<ContinueItem[]>(() => {
+    const candidates: HomeContinueCandidate<ContinueItem>[] = [];
     const activeConversationRoutes = new Set(
       (homeQuery.data?.runningConversations ?? []).map(
         (conversation) => `/chat/${encodeURIComponent(conversation.sessionKey)}`,
@@ -284,7 +288,7 @@ export function WorkspaceHomeScreen() {
     for (const conversation of homeQuery.data?.runningConversations ?? []) {
       candidates.push({
         id: `conversation:${conversation.runId}`,
-        kind: 'conversation',
+        kind: 'active_chat',
         updatedAt: conversation.updatedAt,
         value: {
           id: `conversation:${conversation.runId}`,
@@ -293,6 +297,7 @@ export function WorkspaceHomeScreen() {
             ? t(hm.runningConversationWithAgent, { agent: conversation.agentId })
             : hm.runningConversation,
           icon: 'message-processing-outline',
+          active: true,
           onPress: () => {
             recordUsageEvent('home_continue_opened');
             openChat(router, conversation.sessionKey);
@@ -301,8 +306,8 @@ export function WorkspaceHomeScreen() {
       });
     }
 
-    for (const item of homeQuery.data?.background ?? []) {
-      if (item.kind !== 'running' || !item.openAction) continue;
+    for (const item of background.running) {
+      if (!item.openAction) continue;
       const openAction = item.openAction;
       if (
         openAction.type === 'open'
@@ -310,26 +315,19 @@ export function WorkspaceHomeScreen() {
       ) continue;
       candidates.push({
         id: item.id,
-        kind: 'work',
+        kind: 'running_work',
         updatedAt: item.updatedAt,
         value: {
           id: item.id,
           title: item.title,
-          meta: item.statusLabel
-            ? `${hm.runningWork} · ${item.statusLabel}`
-            : hm.runningWork,
+          meta: item.statusLabel ? `${hm.runningWork} · ${item.statusLabel}` : hm.runningWork,
           summary: item.summary,
           icon: 'progress-clock',
-          onPress: () => runHomeAction(openAction),
+          active: true,
+          onPress: () => runHomeAction(openAction, 'continue'),
         },
       });
     }
-
-    return rankHomeRunningCandidates(candidates);
-  }, [hm, homeQuery.data?.background, homeQuery.data?.runningConversations, router, runHomeAction]);
-
-  const continueItems = useMemo<ContinueItem[]>(() => {
-    const candidates: HomeContinueCandidate<ContinueItem>[] = [];
 
     for (const session of sessionsQuery.data?.items ?? []) {
       if (activeConversationKeys.has(session.key)) continue;
@@ -370,13 +368,26 @@ export function WorkspaceHomeScreen() {
     }
 
     return rankHomeContinueCandidates(candidates, undefined).slice(0, 3);
-  }, [activeConversationKeys, hm, recentNotesQuery.data?.items, router, sessionsQuery.data?.items]);
+  }, [
+    activeConversationKeys,
+    background.running,
+    hm,
+    homeQuery.data?.runningConversations,
+    recentNotesQuery.data?.items,
+    router,
+    runHomeAction,
+    sessionsQuery.data?.items,
+  ]);
 
-  const homeAgents = useMemo(() => sortHomeAgents(
-    agentsQuery.data?.items ?? [],
-    readAgentUsage(activeGatewayId),
-    agentsQuery.data?.defaultId,
-  ).slice(0, 4), [activeGatewayId, agentsQuery.data]);
+  const homeAgents = useMemo(() => {
+    const agents = agentsQuery.data?.items ?? [];
+    if (agents.length < 2) return [];
+    return sortHomeAgents(
+      agents,
+      readAgentUsage(activeGatewayId),
+      agentsQuery.data?.defaultId,
+    ).slice(0, 3);
+  }, [activeGatewayId, agentsQuery.data]);
 
   const handleAgentPress = useCallback((agent: ChatAgentOption) => {
     recordUsageEvent('ask_ai_started');
@@ -406,6 +417,25 @@ export function WorkspaceHomeScreen() {
     openAskAi();
   }, [openAskAi]);
 
+  const openSearch = useCallback(() => {
+    recordUsageEvent('home_search_opened');
+    setSearchOpen(true);
+  }, []);
+
+  const openGatewayOptions = useCallback(() => {
+    if (gatewayProfiles.length > 1) {
+      recordUsageEvent('gateway_switcher_opened');
+      setGatewaySwitcherVisible(true);
+      return;
+    }
+    router.push('/settings/gateway');
+  }, [gatewayProfiles.length, router]);
+
+  const openLibrary = useCallback((route: HomeLibraryRoute) => {
+    recordUsageEvent('home_library_opened');
+    router.push(route);
+  }, [router]);
+
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
@@ -433,7 +463,6 @@ export function WorkspaceHomeScreen() {
 
   const projects = activeProjects(projectsQuery.data ?? []);
   const movingCount = projects.reduce((total, project) => total + project.operating.counts.moving, 0);
-  const scheduledCount = (homeQuery.data?.background ?? []).filter((item) => item.kind === 'scheduled').length;
   const initialLoading = contentStillLoading || inboxQuery.isLoading || agentsQuery.isLoading;
   const refreshing = !initialLoading && (homeQuery.isFetching
     || recentNotesQuery.isFetching
@@ -448,11 +477,11 @@ export function WorkspaceHomeScreen() {
         showLogo
         title={gatewayProfiles.length > 1 ? activeGateway?.name ?? 'xopc' : 'xopc'}
         onTitlePress={gatewayProfiles.length > 1
-          ? () => setGatewaySwitcherVisible(true)
+          ? openGatewayOptions
           : undefined}
         titleAccessibilityLabel={m.gateway.switcher.title}
         rightActions={[
-          { icon: 'magnify', onPress: () => setSearchOpen(true), accessibilityLabel: m.common.search },
+          { icon: 'magnify', onPress: openSearch, accessibilityLabel: m.common.search },
           { icon: 'cog-outline', onPress: () => router.push('/settings'), accessibilityLabel: m.settings.title },
         ]}
       />
@@ -467,31 +496,27 @@ export function WorkspaceHomeScreen() {
           language={language}
           gatewayOnline={gatewayOnline}
           starting={homeQuery.isLoading}
-          onGatewayPress={() => {
-            if (gatewayProfiles.length > 1) setGatewaySwitcherVisible(true);
-            else router.push('/settings/gateway');
-          }}
+          onGatewayPress={openGatewayOptions}
         />
         {homeQuery.isError && gatewayOnline ? (
           <HomeLoadError onRetry={() => void homeQuery.refetch()} retrying={homeQuery.isFetching} />
         ) : null}
-        <RunningSection
-          items={runningItems}
-          loading={runningItems.length === 0 && homeQuery.isLoading}
-        />
-        <ContinueSection
-          items={continueItems}
-          loading={continueItems.length === 0 && contentStillLoading}
-        />
         <NeedsYouSection
           items={homeQuery.data?.needsUser ?? []}
           pending={remoteActionMutation.isPending}
-          onAction={runHomeAction}
+          onAction={(action) => runHomeAction(action, 'attention')}
+        />
+        <ContinueSection
+          items={continueItems}
+          loading={continueItems.length === 0 && continueStillLoading}
+        />
+        <UpdatesSection
+          items={background.updates}
+          onAction={(action) => runHomeAction(action, 'update')}
         />
         <AgentsSection
           agents={homeAgents}
           defaultAgentId={agentsQuery.data?.defaultId}
-          loading={agentsQuery.isLoading}
           pending={isOpeningAskAi}
           onAgentPress={handleAgentPress}
           onManage={() => router.push('/ai/agents')}
@@ -502,13 +527,12 @@ export function WorkspaceHomeScreen() {
           sessionCount={sessionsQuery.data?.total}
           projectCount={projects.length}
           movingCount={movingCount}
-          scheduledCount={scheduledCount}
-          onWork={() => router.push('/tasks')}
-          onInbox={() => router.push('/inbox')}
-          onNotes={() => router.push('/notes')}
-          onSessions={() => router.push('/sessions')}
-          onFiles={() => router.push('/files')}
-          onAutomation={() => router.push('/automation')}
+          onWork={() => openLibrary('/tasks')}
+          onInbox={() => openLibrary('/inbox')}
+          onNotes={() => openLibrary('/notes')}
+          onSessions={() => openLibrary('/sessions')}
+          onFiles={() => openLibrary('/files')}
+          onAutomation={() => openLibrary('/automation')}
         />
       </ScrollView>
       <WorkspaceActionDock onCapture={capture} onAskAi={askAi} askAiPending={isOpeningAskAi} />
@@ -526,9 +550,11 @@ export function WorkspaceHomeScreen() {
         visible={gatewaySwitcherVisible}
         onDismiss={() => setGatewaySwitcherVisible(false)}
         onSwitched={(profileId) => {
+          recordUsageEvent('gateway_switch_completed');
           const profile = useGatewayStore.getState().profiles.find((item) => item.gatewayId === profileId);
           if (profile) setToastMessage(t(m.gateway.switcher.switched, { name: profile.name }));
         }}
+        onSwitchFailed={() => recordUsageEvent('gateway_switch_failed')}
         onManage={() => router.push('/settings/gateway')}
         onAdd={() => router.push('/settings/gateway/new')}
         onEdit={(profileId) => router.push(`/settings/gateway/${profileId}`)}
@@ -566,8 +592,10 @@ function HomeGreeting({
 
   return (
     <View style={styles.greeting}>
-      <Text style={[styles.greetingDate, { color: colors.text.secondary }]}>{date}</Text>
-      <Text style={[styles.greetingTitle, { color: colors.text.primary }]}>{greeting}</Text>
+      <View style={styles.greetingLine}>
+        <Text style={[styles.greetingTitle, { color: colors.text.primary }]}>{greeting}</Text>
+        <Text style={[styles.greetingDate, { color: colors.text.secondary }]}>{date}</Text>
+      </View>
       {!gatewayOnline ? (
         <Pressable
           style={[styles.connectionStatus, { backgroundColor: colors.surface.input }]}
@@ -620,83 +648,6 @@ function HomeLoadError({ onRetry, retrying }: { onRetry: () => void; retrying: b
   );
 }
 
-function RunningSection({ items, loading }: { items: RunningItem[]; loading: boolean }) {
-  const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
-  const [expanded, setExpanded] = useState(false);
-  const reducedMotion = useReducedMotion();
-  if (loading) {
-    return <Section title={hm.sectionRunning}><ListSkeleton count={1} /></Section>;
-  }
-  if (items.length === 0) return null;
-  const visibleItems = expanded ? items : items.slice(0, 3);
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeadingRow}>
-        <View style={styles.sectionHeadingCopy}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{hm.sectionRunning}</Text>
-          <Text style={[
-            styles.sectionCount,
-            { color: colors.accent.primary, backgroundColor: colors.accent.soft },
-          ]}>{items.length}</Text>
-        </View>
-        {items.length > 3 ? (
-          <Pressable
-            style={styles.sectionAction}
-            onPress={() => setExpanded((value) => !value)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded }}
-          >
-            <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>
-              {expanded ? hm.showLess : hm.viewAll}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <Animated.View
-        layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.standard)}
-        style={[
-          styles.runningList,
-          { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle },
-        ]}
-      >
-        {visibleItems.map((item, index) => (
-          <Animated.View
-            key={item.id}
-            entering={index < 3 || reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
-            exiting={index < 3 || reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
-            layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.runningRow,
-                pressed && { backgroundColor: colors.surface.pressed },
-              ]}
-              onPress={item.onPress}
-              accessibilityRole="button"
-            >
-              <View style={[styles.runningIcon, { backgroundColor: colors.accent.soft }]}>
-                <Icon source={item.icon} size={20} color={colors.accent.primary} />
-              </View>
-              <View style={styles.rowCopy}>
-                <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-                <Text numberOfLines={1} style={[styles.runningMeta, { color: colors.accent.primary }]}>{item.meta}</Text>
-                {item.summary ? (
-                  <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
-                ) : null}
-              </View>
-              <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-              {index < visibleItems.length - 1 ? (
-                <View style={[styles.runningDivider, { backgroundColor: colors.border.subtle }]} />
-              ) : null}
-            </Pressable>
-          </Animated.View>
-        ))}
-      </Animated.View>
-    </View>
-  );
-}
-
 function ContinueSection({ items, loading }: { items: ContinueItem[]; loading: boolean }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
@@ -723,7 +674,10 @@ function ContinueSection({ items, loading }: { items: ContinueItem[]; loading: b
         </View>
         <View style={styles.continueCopy}>
           <Text numberOfLines={1} style={[styles.continueTitle, { color: colors.text.primary }]}>{featured.title}</Text>
-          <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{featured.meta}</Text>
+          <Text numberOfLines={1} style={[
+            styles.rowSubtitle,
+            { color: featured.active ? colors.accent.primary : colors.text.tertiary },
+          ]}>{featured.meta}</Text>
           {featured.summary ? (
             <Text numberOfLines={2} style={[styles.continueSummary, { color: colors.text.secondary }]}>{featured.summary}</Text>
           ) : null}
@@ -737,7 +691,10 @@ function ContinueSection({ items, loading }: { items: ContinueItem[]; loading: b
               <Icon source={item.icon} size={20} color={colors.text.secondary} />
               <View style={styles.rowCopy}>
                 <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
-                <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{item.meta}</Text>
+                <Text numberOfLines={1} style={[
+                  styles.rowSubtitle,
+                  { color: item.active ? colors.accent.primary : colors.text.tertiary },
+                ]}>{item.meta}</Text>
               </View>
               <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
               {index < rest.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
@@ -753,6 +710,54 @@ function focusIcon(kind: HomeFocusItem['kind']): string {
   if (kind === 'decision') return 'shield-check-outline';
   if (kind === 'failure') return 'alert-circle-outline';
   return 'progress-clock';
+}
+
+function UpdatesSection({
+  items,
+  onAction,
+}: {
+  items: HomeFocusItem[];
+  onAction: (action: HomeAction) => void;
+}) {
+  const { colors } = useTheme();
+  const { homePage: hm } = useMessages();
+  if (items.length === 0) return null;
+  return (
+    <Section title={hm.sectionUpdates}>
+      <View style={[styles.groupedList, { backgroundColor: colors.surface.panel }]}>
+        {items.map((item, index) => (
+          <Pressable
+            key={item.id}
+            style={({ pressed }) => [
+              styles.listRow,
+              pressed && { backgroundColor: colors.surface.pressed },
+            ]}
+            onPress={() => item.openAction && onAction(item.openAction)}
+            disabled={!item.openAction}
+            accessible={Boolean(item.openAction)}
+            accessibilityRole={item.openAction ? 'button' : undefined}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: colors.accent.soft }]}>
+              <Icon
+                source={item.kind === 'insight' ? 'lightbulb-outline' : 'calendar-clock-outline'}
+                size={18}
+                color={colors.accent.primary}
+              />
+            </View>
+            <View style={styles.rowCopy}>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+              <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
+              {item.statusLabel ? (
+                <Text numberOfLines={1} style={[styles.updateMeta, { color: colors.text.tertiary }]}>{item.statusLabel}</Text>
+              ) : null}
+            </View>
+            {item.openAction ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
+            {index < items.length - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
+          </Pressable>
+        ))}
+      </View>
+    </Section>
+  );
 }
 
 function NeedsYouSection({
@@ -834,8 +839,8 @@ function AttentionRow({
         style={styles.attentionMain}
         onPress={() => item.openAction && onAction(item.openAction)}
         disabled={!item.openAction}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !item.openAction }}
+        accessible={Boolean(item.openAction)}
+        accessibilityRole={item.openAction ? 'button' : undefined}
       >
         <View style={[styles.rowIcon, { backgroundColor: colors.surface.grouped }]}>
           <Icon
@@ -847,6 +852,11 @@ function AttentionRow({
         <View style={styles.rowCopy}>
           <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
           <Text numberOfLines={2} style={[styles.rowSubtitle, { color: colors.text.secondary }]}>{item.summary}</Text>
+          {item.recommendation && item.recommendation !== item.summary ? (
+            <Text numberOfLines={2} style={[styles.attentionRecommendation, { color: colors.text.tertiary }]}>
+              {item.recommendation}
+            </Text>
+          ) : null}
         </View>
         {item.openAction ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
       </Pressable>
@@ -881,14 +891,12 @@ function AttentionRow({
 function AgentsSection({
   agents,
   defaultAgentId,
-  loading,
   pending,
   onAgentPress,
   onManage,
 }: {
   agents: ChatAgentOption[];
   defaultAgentId?: string;
-  loading: boolean;
   pending: boolean;
   onAgentPress: (agent: ChatAgentOption) => void;
   onManage: () => void;
@@ -896,7 +904,7 @@ function AgentsSection({
   const { colors } = useTheme();
   const messages = useMessages();
   const hm = messages.homePage;
-  if (!loading && agents.length === 0) return null;
+  if (agents.length === 0) return null;
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeadingRow}>
@@ -905,36 +913,30 @@ function AgentsSection({
           <Text style={[styles.sectionLink, { color: colors.accent.primary }]}>{hm.manageAgents}</Text>
         </Pressable>
       </View>
-      {loading && agents.length === 0 ? (
-        <View style={styles.agentSkeletons}>
-          {[0, 1, 2].map((key) => <View key={key} style={[styles.agentSkeleton, { backgroundColor: colors.surface.input }]} />)}
-        </View>
-      ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentList}>
-          {agents.map((agent) => {
-            const isDefault = agent.id === defaultAgentId || agent.isDefault === true;
-            const name = agentDisplayName(agent, messages.agentsPage);
-            const description = agentDisplayDescription(agent, messages.agentsPage);
-            return (
-              <Pressable
-                key={agent.id}
-                style={({ pressed }) => [styles.agentItem, pressed && { backgroundColor: colors.surface.pressed }]}
-                onPress={() => onAgentPress(agent)}
-                disabled={pending}
-                accessibilityRole="button"
-                accessibilityLabel={name}
-                accessibilityState={{ disabled: pending, busy: pending }}
-              >
-                <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={48} />
-                <Text numberOfLines={1} style={[styles.agentName, { color: colors.text.primary }]}>{name}</Text>
-                <Text numberOfLines={1} style={[styles.agentDescription, { color: isDefault ? colors.accent.primary : colors.text.tertiary }]}>
-                  {isDefault ? hm.defaultAgent : description || hm.askAiHint}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentList}>
+        {agents.map((agent) => {
+          const isDefault = agent.id === defaultAgentId || agent.isDefault === true;
+          const name = agentDisplayName(agent, messages.agentsPage);
+          const description = agentDisplayDescription(agent, messages.agentsPage);
+          return (
+            <Pressable
+              key={agent.id}
+              style={({ pressed }) => [styles.agentItem, pressed && { backgroundColor: colors.surface.pressed }]}
+              onPress={() => onAgentPress(agent)}
+              disabled={pending}
+              accessibilityRole="button"
+              accessibilityLabel={name}
+              accessibilityState={{ disabled: pending, busy: pending }}
+            >
+              <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={48} />
+              <Text numberOfLines={1} style={[styles.agentName, { color: colors.text.primary }]}>{name}</Text>
+              <Text numberOfLines={1} style={[styles.agentDescription, { color: isDefault ? colors.accent.primary : colors.text.tertiary }]}>
+                {isDefault ? hm.defaultAgent : description || hm.askAiHint}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -945,7 +947,6 @@ function LibrarySection({
   sessionCount,
   projectCount,
   movingCount,
-  scheduledCount,
   onWork,
   onInbox,
   onNotes,
@@ -958,7 +959,6 @@ function LibrarySection({
   sessionCount?: number;
   projectCount: number;
   movingCount: number;
-  scheduledCount: number;
   onWork: () => void;
   onInbox: () => void;
   onNotes: () => void;
@@ -993,16 +993,14 @@ function LibrarySection({
           summary={sessionCount == null ? undefined : t(hm.librarySessionsSummary, { count: sessionCount })}
           onPress={onSessions}
         />
-        <LibraryRow icon="folder-outline" label={hm.libraryFiles} summary={hm.libraryFilesSummary} onPress={onFiles} last={scheduledCount === 0} />
-        {scheduledCount > 0 ? (
-          <LibraryRow
-            icon="calendar-clock-outline"
-            label={hm.libraryAutomation}
-            summary={t(hm.libraryAutomationSummary, { count: scheduledCount })}
-            onPress={onAutomation}
-            last
-          />
-        ) : null}
+        <LibraryRow icon="folder-outline" label={hm.libraryFiles} summary={hm.libraryFilesSummary} onPress={onFiles} />
+        <LibraryRow
+          icon="calendar-clock-outline"
+          label={hm.libraryAutomation}
+          summary={hm.libraryAutomationSummary}
+          onPress={onAutomation}
+          last
+        />
       </View>
     </Section>
   );
@@ -1119,9 +1117,10 @@ const styles = StyleSheet.create({
   emptyText: { ...typography.body, textAlign: 'center' },
   connectButton: { minHeight: 48, borderRadius: radii.xxl, justifyContent: 'center', paddingHorizontal: spacing.xl, marginTop: spacing.sm },
   connectButtonText: { ...typography.ui, fontWeight: '600' },
-  greeting: { paddingTop: spacing.sm, paddingBottom: spacing.xs },
-  greetingDate: { ...typography.label, marginBottom: spacing.xs },
-  greetingTitle: { ...typography.largeTitle, marginBottom: spacing.sm },
+  greeting: { paddingTop: spacing.xs, paddingBottom: spacing.xs },
+  greetingLine: { minHeight: 28, flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: spacing.sm },
+  greetingDate: { ...typography.caption },
+  greetingTitle: { ...typography.heading },
   connectionStatus: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderRadius: radii.md, paddingHorizontal: spacing.md },
   connectionStarting: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   connectionDot: { width: 7, height: 7, borderRadius: radii.full },
@@ -1142,11 +1141,6 @@ const styles = StyleSheet.create({
   sectionLink: { ...typography.caption, fontWeight: '600' },
   sectionBody: { gap: spacing.sm },
   groupedList: { borderRadius: radii.lg, overflow: 'hidden' },
-  runningList: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, overflow: 'hidden' },
-  runningRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  runningIcon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
-  runningMeta: { ...typography.caption, fontWeight: '600' },
-  runningDivider: { position: 'absolute', left: 66, right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
   continueFeatured: { minHeight: 106, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg },
   continueIcon: { width: 42, height: 42, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   continueCopy: { minWidth: 0, flex: 1, gap: spacing.xxs },
@@ -1156,8 +1150,10 @@ const styles = StyleSheet.create({
   rowCopy: { minWidth: 0, flex: 1, gap: spacing.xxs },
   rowTitle: { ...typography.ui, fontWeight: '600' },
   rowSubtitle: { ...typography.caption },
+  updateMeta: { ...typography.caption, marginTop: spacing.xxs },
   rowDivider: { position: 'absolute', left: 52, right: 0, bottom: 0, height: StyleSheet.hairlineWidth },
   attentionRow: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  attentionRecommendation: { ...typography.caption, marginTop: spacing.xs },
   attentionMain: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   rowIcon: { width: 32, height: 32, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center' },
   attentionActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, paddingLeft: 44, paddingTop: spacing.xs },
@@ -1168,8 +1164,6 @@ const styles = StyleSheet.create({
   agentItem: { width: 108, minHeight: 116, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: radii.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   agentName: { ...typography.label, fontWeight: '600', width: '100%', textAlign: 'center' },
   agentDescription: { ...typography.caption, width: '100%', textAlign: 'center' },
-  agentSkeletons: { flexDirection: 'row', gap: spacing.sm },
-  agentSkeleton: { width: 108, height: 116, borderRadius: radii.lg },
   libraryRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg },
   libraryLabel: { ...typography.ui, minWidth: 74 },
   librarySummary: { ...typography.caption, minWidth: 0, flex: 1, textAlign: 'right' },

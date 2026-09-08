@@ -27,6 +27,7 @@ export type GatewaySwitcherSheetProps = {
   visible: boolean;
   onDismiss: () => void;
   onSwitched?: (profileId: string) => void;
+  onSwitchFailed?: (profileId: string) => void;
   onManage: () => void;
   onAdd: () => void;
   onEdit: (profileId: string) => void;
@@ -45,6 +46,7 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
   visible,
   onDismiss,
   onSwitched,
+  onSwitchFailed,
   onManage,
   onAdd,
   onEdit,
@@ -99,6 +101,7 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
     setPendingProfileId(null);
     if (result.status === 'failed') {
       setFailure({ profileId, error: result.error });
+      onSwitchFailed?.(profileId);
       return;
     }
     setFailure(null);
@@ -111,7 +114,7 @@ export const GatewaySwitcherSheet = memo(function GatewaySwitcherSheet({
     }
     onDismiss();
     onSwitched?.(profileId);
-  }, [copy.switched, dismiss, onDismiss, onSwitched]);
+  }, [copy.switched, dismiss, onDismiss, onSwitchFailed, onSwitched]);
 
   const openEdit = useCallback((profileId: string) => {
     dismiss();

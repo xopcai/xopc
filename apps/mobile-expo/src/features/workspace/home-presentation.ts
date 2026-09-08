@@ -5,12 +5,19 @@ export type HomeContinueCandidate<T> = {
   updatedAt: number;
 };
 
-export type HomeRunningCandidate<T> = {
-  value: T;
-  id: string;
-  kind: 'conversation' | 'work';
-  updatedAt: number;
+export type HomeBackgroundItem = {
+  kind: 'decision' | 'failure' | 'running' | 'scheduled' | 'insight';
 };
+
+export function partitionHomeBackground<T extends HomeBackgroundItem>(items: T[]): {
+  running: T[];
+  updates: T[];
+} {
+  return {
+    running: items.filter((item) => item.kind === 'running'),
+    updates: items.filter((item) => item.kind === 'insight' || item.kind === 'scheduled'),
+  };
+}
 
 export type HomeGreetingPeriod = 'morning' | 'afternoon' | 'evening';
 
@@ -39,17 +46,6 @@ export function rankHomeContinueCandidates<T>(
     .filter((candidate) => candidate.id !== focusedId)
     .sort((left, right) => (
       continueTier(right, nowMs) - continueTier(left, nowMs)
-      || right.updatedAt - left.updatedAt
-    ))
-    .map((candidate) => candidate.value);
-}
-
-export function rankHomeRunningCandidates<T>(
-  candidates: HomeRunningCandidate<T>[],
-): T[] {
-  return candidates
-    .sort((left, right) => (
-      Number(right.kind === 'conversation') - Number(left.kind === 'conversation')
       || right.updatedAt - left.updatedAt
     ))
     .map((candidate) => candidate.value);
