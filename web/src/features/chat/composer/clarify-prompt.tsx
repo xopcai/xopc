@@ -8,15 +8,17 @@ import { interaction } from '@/lib/interaction';
 
 export type ClarifyPromptState = {
   requestId: string;
+  kind: 'input' | 'approval';
   question: string;
   choices?: string[];
-  default?: string;
+  suggestedAnswer?: string;
+  version: number;
+  createdAt: number;
+  expiresAt?: number;
 };
 
-/** Must match `CLARIFY_USER_RESPONSE_TIMEOUT_MS` in `src/gateway/clarify-bridge.ts`. */
-const CLARIFY_PROMPT_COUNTDOWN_MS = 5 * 60 * 1000;
-
-const CLARIFY_TIMEOUT_MINUTES = Math.round(CLARIFY_PROMPT_COUNTDOWN_MS / 60_000);
+type ClarifyPromptView = Pick<ClarifyPromptState, 'requestId' | 'question' | 'choices' | 'suggestedAnswer' | 'expiresAt'>
+  & Partial<Pick<ClarifyPromptState, 'kind' | 'version' | 'createdAt'>>;
 
 function formatClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -28,25 +30,26 @@ export type ClarifyPromptCopy = Pick<
   ChatMessages,
   | 'clarifyRegionAria'
   | 'clarifyResumeHint'
-  | 'clarifyServerTimeout'
-  | 'clarifyDefaultTimeoutNote'
-  | 'clarifySkipNote'
+  | 'clarifyDurableNote'
+  | 'clarifyApprovalTimeout'
   | 'clarifyChoicesGroupAria'
   | 'clarifyCustomLabel'
   | 'clarifyPlaceholder'
   | 'clarifySend'
-  | 'clarifyUseDefault'
-  | 'clarifyDefaultChoice'
-  | 'clarifySkip'
+  | 'clarifyUseSuggested'
+  | 'clarifySuggestedChoice'
+  | 'clarifyAgentDecide'
+  | 'clarifyCancel'
   | 'clarifyTimeRemaining'
 >;
 
 type ClarifyPromptProps = {
-  prompt: ClarifyPromptState | null;
+  prompt: ClarifyPromptView | null;
   submitting: boolean;
   submitError: string | null;
   labels: ClarifyPromptCopy;
   onSubmit: (answer: string) => void | Promise<void>;
+  onAgentDecide?: () => void | Promise<void>;
   onCancel: () => void | Promise<void>;
 };
 
@@ -56,6 +59,7 @@ export function ClarifyPrompt({
   submitError,
   labels,
   onSubmit,
+  onAgentDecide,
   onCancel,
 }: ClarifyPromptProps) {
   if (!prompt) {
@@ -70,6 +74,7 @@ export function ClarifyPrompt({
       submitError={submitError}
       labels={labels}
       onSubmit={onSubmit}
+      onAgentDecide={onAgentDecide}
       onCancel={onCancel}
     />
   );
@@ -81,24 +86,26 @@ function ClarifyPromptBody({
   submitError,
   labels,
   onSubmit,
+  onAgentDecide,
   onCancel,
 }: {
-  prompt: ClarifyPromptState;
+  prompt: ClarifyPromptView;
   submitting: boolean;
   submitError: string | null;
   labels: ClarifyPromptCopy;
   onSubmit: (answer: string) => void | Promise<void>;
+  onAgentDecide?: () => void | Promise<void>;
   onCancel: () => void | Promise<void>;
 }) {
   const [customDraft, setCustomDraft] = useState('');
-  const [deadlineMs] = useState(() => Date.now() + CLARIFY_PROMPT_COUNTDOWN_MS);
   const [tick, setTick] = useState(0);
   const regionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!prompt.expiresAt) return;
     const id = window.setInterval(() => setTick((n) => n + 1), 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [prompt.expiresAt]);
 
   useEffect(() => {
     regionRef.current?.focus();
@@ -113,8 +120,10 @@ function ClarifyPromptBody({
 
   const remainingSeconds = useMemo(() => {
     void tick;
-    return Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
-  }, [deadlineMs, tick]);
+    return prompt.expiresAt
+      ? Math.max(0, Math.ceil((prompt.expiresAt - Date.now()) / 1000))
+      : null;
+  }, [prompt.expiresAt, tick]);
 
   const metaId = `clarify-meta-${prompt.requestId}`;
   const errId = submitError ? `clarify-err-${prompt.requestId}` : undefined;
@@ -131,12 +140,12 @@ function ClarifyPromptBody({
   );
 
   const hasChoices = Array.isArray(prompt.choices) && prompt.choices.length >= 2;
-  const defaultLabel = prompt.default
-    ? labels.clarifyDefaultChoice.replace('{{text}}', prompt.default)
+  const suggestedLabel = prompt.suggestedAnswer
+    ? labels.clarifySuggestedChoice.replace('{{text}}', prompt.suggestedAnswer)
     : null;
-
-  const timeoutLine = labels.clarifyServerTimeout.replace('{{minutes}}', String(CLARIFY_TIMEOUT_MINUTES));
-  const timeLeftLine = labels.clarifyTimeRemaining.replace('{{time}}', formatClock(remainingSeconds));
+  const timeLeftLine = remainingSeconds === null
+    ? null
+    : labels.clarifyTimeRemaining.replace('{{time}}', formatClock(remainingSeconds));
 
   return (
     <section
@@ -154,10 +163,8 @@ function ClarifyPromptBody({
       <MarkdownView content={prompt.question} compact className="mb-3" />
 
       <ul id={metaId} className="mb-3 list-inside list-disc space-y-1 text-xs text-fg-muted">
-        <li>{timeoutLine}</li>
-        {prompt.default ? <li>{labels.clarifyDefaultTimeoutNote}</li> : null}
-        <li>{labels.clarifySkipNote}</li>
-        <li>{timeLeftLine}</li>
+        <li>{prompt.kind === 'approval' ? labels.clarifyApprovalTimeout : labels.clarifyDurableNote}</li>
+        {timeLeftLine ? <li>{timeLeftLine}</li> : null}
       </ul>
 
       {submitError ? (
@@ -192,7 +199,7 @@ function ClarifyPromptBody({
                   {c}
                 </Button>
               ))}
-              {prompt.default ? (
+              {prompt.suggestedAnswer ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -201,9 +208,9 @@ function ClarifyPromptBody({
                     'min-h-9 w-full justify-start rounded-lg border border-dashed border-edge px-3 py-2 text-left text-sm font-normal text-fg-muted',
                     'hover:border-edge hover:text-fg',
                   )}
-                  onClick={() => pick(prompt.default!)}
+                  onClick={() => pick(prompt.suggestedAnswer!)}
                 >
-                  {defaultLabel}
+                  {suggestedLabel}
                 </Button>
               ) : null}
             </div>
@@ -268,21 +275,32 @@ function ClarifyPromptBody({
           >
             {labels.clarifySend}
           </Button>
-          {prompt.default ? (
+          {prompt.suggestedAnswer ? (
             <Button
               type="button"
               variant="secondary"
               disabled={submitting}
               className="shrink-0 rounded-lg px-3 py-2 text-sm font-normal text-fg-muted shadow-none hover:text-fg"
-              onClick={() => pick(prompt.default!)}
+              onClick={() => pick(prompt.suggestedAnswer!)}
             >
-              {labels.clarifyUseDefault}
+              {labels.clarifyUseSuggested}
             </Button>
           ) : null}
         </form>
       )}
 
       <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-edge-subtle pt-3">
+        {prompt.kind === 'input' && onAgentDecide ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={submitting}
+            className="text-fg-muted hover:text-fg"
+            onClick={() => void onAgentDecide()}
+          >
+            {labels.clarifyAgentDecide}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -290,7 +308,7 @@ function ClarifyPromptBody({
           className="text-fg-muted hover:text-fg"
           onClick={() => void onCancel()}
         >
-          {labels.clarifySkip}
+          {labels.clarifyCancel}
         </Button>
       </div>
     </section>

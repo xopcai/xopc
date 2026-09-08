@@ -6,6 +6,8 @@ import {
 import {
   buildSessionDetailPath,
   parseSessionResponse,
+  type ClarificationResponseAction,
+  type ClarificationWaitSnapshot,
 } from '@xopcai/gateway-contract';
 
 import {
@@ -154,11 +156,27 @@ export async function refineVoiceTranscript(text: string): Promise<string> {
   return json.payload.text;
 }
 
-export async function submitClarifyResponse(
+export async function fetchClarificationSnapshot(sessionKey: string): Promise<ClarificationWaitSnapshot> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/clarification`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
+  }
+  const json = await res.json() as { ok?: boolean; payload?: ClarificationWaitSnapshot; error?: { message?: string } };
+  if (!json.ok || !json.payload) throw new Error(json.error?.message ?? 'Clarification state unavailable');
+  return json.payload;
+}
+
+export async function submitClarificationResponse(
   requestId: string,
-  payload: { answer: string } | { skip: true },
+  payload: {
+    action: ClarificationResponseAction;
+    expectedVersion: number;
+    idempotencyKey: string;
+    answer?: string;
+  },
 ): Promise<void> {
-  const res = await apiFetch(`/api/clarify/${encodeURIComponent(requestId)}`, {
+  const res = await apiFetch(`/api/clarifications/${encodeURIComponent(requestId)}/responses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

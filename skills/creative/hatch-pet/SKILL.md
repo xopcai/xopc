@@ -15,7 +15,7 @@ Use this skill when the user wants to create, customize, refine, or install an x
 
 Do not jump straight to `create_desktop_pet` when the pet idea is vague. First guide the user with `clarify` so the final pet has a clear visual identity, personality, and action set.
 
-Use at most 3 concise `clarify` calls before creating or updating the pet. Each call should ask one short question. Provide `choices` when useful, set a sensible `default`, and write the question so the user knows they can type their own custom answer instead of picking a listed option.
+Use at most 3 concise `clarify` calls before creating or updating the pet. Each call should ask one short question. Provide `choices` when useful, set a sensible `suggestedAnswer`, and write the question so the user knows they can type their own custom answer instead of picking a listed option.
 
 Recommended questions for a new pet:
 

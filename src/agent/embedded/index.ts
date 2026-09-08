@@ -14,7 +14,11 @@ export {
   InMemoryTranscriptRuntime,
   type EmbeddedTranscriptRuntime,
 } from './transcript-runtime.js';
-export { getEmbeddedExecutionSession, runWithEmbeddedExecutionSession } from './execution-context.js';
+export {
+  getEmbeddedExecutionRunId,
+  getEmbeddedExecutionSession,
+  runWithEmbeddedExecutionSession,
+} from './execution-context.js';
 export {
   acquireEmbeddedSessionRunner,
   buildEmbeddedRunnerFingerprint,

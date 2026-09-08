@@ -11,7 +11,16 @@ export type CallState = {
   startedAt: number; expiresAt?: number; responseId?: string; userText: string; assistantText: string;
   activity?: string; error?: string;
   responseStage?: 'thinking' | 'buffering' | 'speaking';
-  clarification?: { requestId: string; question: string; choices?: string[] };
+  clarification?: {
+    requestId: string;
+    kind: 'input' | 'approval';
+    question: string;
+    choices?: string[];
+    suggestedAnswer?: string;
+    version: number;
+    createdAt: number;
+    expiresAt?: number;
+  };
 };
 export type CallDependencies = {
   audio: {

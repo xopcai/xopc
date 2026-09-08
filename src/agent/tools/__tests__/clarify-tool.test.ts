@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createClarifyTool } from '../clarify-tool.js';
 
 describe('clarify tool', () => {
-  it('returns unavailable message when resolveAskUser is null and no default', async () => {
+  it('returns unavailable without silently using a recommendation', async () => {
     const tool = createClarifyTool({
       resolveAskUser: () => null,
     });
@@ -11,30 +11,22 @@ describe('clarify tool', () => {
     expect((r.content[0] as { text: string }).text).toContain('not available');
   });
 
-  it('uses default when resolveAskUser is null but default is set', async () => {
-    const tool = createClarifyTool({
-      resolveAskUser: () => null,
-    });
-    const r = await tool.execute('2', { question: 'Which?', default: 'A' });
-    expect(r.details?.answer).toBe('A');
-  });
-
   it('calls askUser and returns answer', async () => {
-    const ask = vi.fn().mockResolvedValue('blue');
+    const ask = vi.fn().mockResolvedValue({ status: 'answered', answer: 'blue' });
     const tool = createClarifyTool({
       resolveAskUser: () => ask,
     });
     const r = await tool.execute('3', { question: 'Color?' });
-    expect(ask).toHaveBeenCalledWith({ question: 'Color?', choices: undefined, default: undefined });
+    expect(ask).toHaveBeenCalledWith({ question: 'Color?', choices: undefined, suggestedAnswer: undefined });
     expect(r.details?.answer).toBe('blue');
   });
 
-  it('uses default on timeout message', async () => {
-    const ask = vi.fn().mockRejectedValue(new Error('Clarification timeout: user did not respond within 5 minutes'));
+  it('returns a durable waiting result without choosing the recommendation', async () => {
+    const ask = vi.fn().mockResolvedValue({ status: 'waiting', waitId: 'wait-1' });
     const tool = createClarifyTool({
       resolveAskUser: () => ask,
     });
-    const r = await tool.execute('4', { question: 'x', default: 'fallback' });
-    expect(r.details?.answer).toBe('fallback');
+    const r = await tool.execute('4', { question: 'x', suggestedAnswer: 'fallback' });
+    expect(r.details).toMatchObject({ answer: '', waitId: 'wait-1', status: 'waiting' });
   });
 });

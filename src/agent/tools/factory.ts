@@ -15,7 +15,10 @@ import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import { resolveDefaultAgentId } from '../agent-scope.js';
-import { getEmbeddedExecutionSession } from '../embedded/execution-context.js';
+import {
+  getEmbeddedExecutionRunId,
+  getEmbeddedExecutionSession,
+} from '../embedded/execution-context.js';
 import {
   createDefaultExternalToolGatewayTools,
   EXTERNAL_TOOL_NAMES,
@@ -343,15 +346,19 @@ export class AgentToolsFactory {
       }),
       createToolManualTool(),
       createClarifyTool({
-        resolveAskUser: () => {
+        resolveAskUser: (toolCallId) => {
           const req = this.deps.gatewayClarify?.requestClarification;
           if (!req) return null;
           const executionSession = getEmbeddedExecutionSession();
-          if (executionSession) return (r) => req(executionSession, r);
+          const runId = getEmbeddedExecutionRunId();
+          if (executionSession && runId) {
+            return (request) => req({ sessionKey: executionSession, runId, toolCallId }, request);
+          }
           const ctx = this.deps.getCurrentContext();
           if (!ctx?.sessionKey) return null;
           if (!CLARIFY_SUPPORTED_CHANNELS.has(ctx.channel)) return null;
-          return (r) => req(ctx.sessionKey, r);
+          if (!runId) return null;
+          return (request) => req({ sessionKey: ctx.sessionKey, runId, toolCallId }, request);
         },
       }),
       createTodoTool({

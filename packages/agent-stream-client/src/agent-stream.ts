@@ -358,12 +358,18 @@ export function dispatchAgentStreamEvent(
         const choices = Array.isArray(p.choices)
           ? (p.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
           : undefined;
-        const def = typeof p.default === 'string' && p.default.trim() ? p.default.trim() : undefined;
+        const suggestedAnswer = typeof p.suggestedAnswer === 'string' && p.suggestedAnswer.trim()
+          ? p.suggestedAnswer.trim()
+          : undefined;
         cb.onClarifyRequest({
           requestId,
+          kind: p.kind === 'approval' ? 'approval' : 'input',
           question,
           choices: choices && choices.length >= 2 ? choices : undefined,
-          default: def,
+          suggestedAnswer,
+          version: typeof p.version === 'number' ? p.version : 1,
+          createdAt: typeof p.createdAt === 'number' ? p.createdAt : Date.now(),
+          expiresAt: typeof p.expiresAt === 'number' ? p.expiresAt : undefined,
           petFeedback,
         });
       }

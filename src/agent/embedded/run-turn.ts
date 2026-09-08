@@ -1,4 +1,8 @@
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
+import {
+  getClarificationResumeInput,
+  isClarificationSuspended,
+} from '../../storage/sqlite/clarification-wait-repository.js';
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
@@ -329,9 +333,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     runner.piSm.appendCustomEntry('coding_run_started', { runId, workspace: workspaceDir, required: params.verifyChanges ?? sessionKey.startsWith('agent:coder:'), ...await verification.summary() });
     let policyStopped = false;
     let connectionStopped = false;
+    let clarificationStopped = false;
     params.turnPolicy?.reset();
     session.agent.beforeToolCall = async (context, signal) => {
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
+      if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
       const decision = await params.turnPolicy?.beforeToolCall(context, signal);
       if (decision?.block) {
         policyStopped ||= decision.terminate === true;
@@ -346,6 +352,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     };
     session.agent.afterToolCall = async (context) => {
       connectionStopped ||= isConnectionSuspended(sessionKey, runId);
+      clarificationStopped ||= isClarificationSuspended(sessionKey, runId);
       const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args) : '';
       const checked = await verification.afterTool(context);
       if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
@@ -354,7 +361,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     };
     session.agent.shouldStopAfterTurn = (context) => {
       policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
-      return policyStopped || connectionStopped;
+      return policyStopped || connectionStopped || clarificationStopped;
     };
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
@@ -377,8 +384,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         session.agent,
         async () => {
           const connectionResume = getConnectionResumeInput(sessionKey, runId);
+          const clarificationResume = getClarificationResumeInput(sessionKey, runId);
           if (connectionResume) {
             await session.sendCustomMessage({ customType: 'connection_resume', content: connectionResume.content, display: false }, { triggerTurn: true });
+          } else if (clarificationResume) {
+            await session.sendCustomMessage({ customType: 'clarification_resume', content: clarificationResume.content, display: false }, { triggerTurn: true });
           } else if (params.resumeLastUserMessage) {
             await session.agent.continue();
           } else {
@@ -387,7 +397,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             await session.prompt(text, images.length > 0 ? { images } : undefined);
           }
           await session.agent.waitForIdle();
-          if (connectionStopped) return;
+          clarificationStopped ||= isClarificationSuspended(sessionKey, runId);
+          if (connectionStopped || clarificationStopped) return;
           await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
             sessionKey,
             log,
@@ -416,6 +427,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       );
 
       if (connectionStopped) runner.piSm.appendCustomEntry('connection_required', { runId, sessionKey });
+      if (clarificationStopped) runner.piSm.appendCustomEntry('clarification_required', { runId, sessionKey });
       runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? sessionKey.startsWith('agent:coder:'), ...await verification.summary() });
 
       if (runAbortSignal.aborted) {
@@ -437,7 +449,15 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         model: `${session.agent.state.model?.provider ?? resolvedModel.provider}/${session.agent.state.model?.id ?? resolvedModel.id}`,
         thinkingLevel: session.agent.state.thinkingLevel,
       });
-      return { ok: true, ...(connectionStopped ? { stopReason: 'connection_required' as const } : {}), lastAssistantText: lastAssistantPlainText(session) };
+      return {
+        ok: true,
+        ...(connectionStopped
+          ? { stopReason: 'connection_required' as const }
+          : clarificationStopped
+            ? { stopReason: 'clarification_required' as const }
+            : {}),
+        lastAssistantText: lastAssistantPlainText(session),
+      };
     } finally {
       runAbortSignal.removeEventListener('abort', abortListener);
     }

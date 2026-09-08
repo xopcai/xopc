@@ -59,6 +59,7 @@ import { buckets, isGatewayStrictSecurityEnabled } from './rate-limit/index.js';
 import { prewarmModelRegistry } from '../providers/index.js';
 import { ModelCatalogSyncService } from '../providers/model-catalog-sync-service.js';
 import { getXopcCloudCatalogCoordinator } from '../providers/xopc-cloud-catalog-coordinator.js';
+import { collectMediaUrisFromMessages, deleteMediaUris } from '../media/session-references.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import { subscribeToLogs } from '../utils/logger/log-stream.js';
@@ -66,8 +67,8 @@ import {
   resolveConfigPath,
   resolveExtensionsDir,
 } from '../config/paths.js';
-import type { ClarifyStreamEvent } from './clarify-bridge.js';
-import { registerClarifyBridge } from './clarify-runtime.js';
+import type { ClarificationStreamEvent } from './ephemeral-clarification-waiter.js';
+import { registerClarificationChannelRuntime } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { NotificationService } from '../notifications/service.js';
 import { ProjectService, resolveProjectAgentId } from '../projects/index.js';
@@ -281,7 +282,7 @@ export class GatewayService {
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
-   * `submitClarifyResponse`, clarify-bridge dispatch). Owns the
+   * clarification dispatch). Owns the
    * `activeWebchatRunBySession` + `runAbortControllers` maps.
    */
   readonly agentRunner: GatewayAgentRunner;
@@ -527,9 +528,12 @@ export class GatewayService {
       getParentMetadata: (sessionKey) => this.sessionIndex.getSessionMetadata(sessionKey),
       loadParentMessages: (sessionKey) => this.sessionIndex.getStore().load(sessionKey),
       getDefaultModelRef: (sessionKey) => this.ensureAgentService().getModelForSession(sessionKey),
+      getDefaultThinkingLevel: (sessionKey) => this.ensureAgentService().getThinkingLevelForSession(sessionKey),
       getWorkspacePath: (metadata) => metadata.cwd || this.currentWorkspacePath,
-      onBeforeDispose: (sideChatId, clientInstanceId) =>
-        sideChatRuns?.cancelRun(sideChatId, clientInstanceId).then(() => undefined),
+      onBeforeDispose: async (sideChatId, clientInstanceId, messages) => {
+        await sideChatRuns?.cancelRun(sideChatId, clientInstanceId);
+        await deleteMediaUris(collectMediaUrisFromMessages(messages));
+      },
       onExpired: (sideChatId, clientInstanceId, reason) => {
         const topic = `side-chat:${clientInstanceId}:${sideChatId}`;
         this.realtime.broker.publish(topic, 'expired', { reason });
@@ -638,12 +642,14 @@ export class GatewayService {
         return null;
       },
       gatewayClarify: {
-        requestClarification: (sessionKey, request) => {
-          const executionSessionKey = getEmbeddedExecutionSession() ?? sessionKey;
+        requestClarification: (context, request) => {
+          const executionSessionKey = getEmbeddedExecutionSession() ?? context.sessionKey;
           return this.agentRunner.requestClarification({
             sessionKey: executionSessionKey,
+            runId: context.runId,
+            toolCallId: context.toolCallId,
             request,
-            publishStreamFor: (_runId) => (event: ClarifyStreamEvent) => {
+            publishStreamFor: (_runId) => (event: ClarificationStreamEvent) => {
               this._agentService!.turnDispatcher.enqueueWebchatStreamEvent(executionSessionKey, event);
             },
           });
@@ -851,8 +857,16 @@ export class GatewayService {
     return this.agentRunner.getActiveRunId(sessionKey);
   }
 
-  submitClarifyResponse(requestId: string, answer: string): boolean {
-    return this.agentRunner.submitClarifyResponse(requestId, answer);
+  answerEphemeralClarification(requestId: string, answer: string): boolean {
+    return this.agentRunner.answerEphemeralClarification(requestId, answer);
+  }
+
+  getClarificationState(sessionKey: string) {
+    return this.agentRunner.getClarificationState(sessionKey);
+  }
+
+  resolveClarificationResponse(input: Parameters<GatewayAgentRunner['resolveClarificationResponse']>[0]) {
+    return this.agentRunner.resolveClarificationResponse(input);
   }
 
   private initializeExtensionLoader(): void {
@@ -1049,7 +1063,12 @@ export class GatewayService {
       }
     }
 
-    registerClarifyBridge(this.agentRunner.getClarifyBridge());
+    registerClarificationChannelRuntime({
+      answerChoice: (requestId, choiceIndex, idempotencyKey) =>
+        this.agentRunner.answerClarificationChoice(requestId, choiceIndex, idempotencyKey),
+      answerText: (sessionKey, text, idempotencyKey) =>
+        this.agentRunner.answerClarificationText(sessionKey, text, idempotencyKey),
+    });
 
     this.ensureAgentService();
     this.agentRunner.recoverSessionInputs();
@@ -1463,9 +1482,9 @@ export class GatewayService {
     this.browserExtensionProvider = null;
     this.browserExtensionBindKey = null;
 
-    registerClarifyBridge(null);
+    registerClarificationChannelRuntime(null);
     this.connectionRecovery.stop();
-    this.agentRunner.disposeClarifyBridge();
+    this.agentRunner.disposeClarifications();
     await disposeAllSessionMcpRuntimes().catch((err) => {
       log.warn({ err }, 'MCP runtime shutdown failed');
     });

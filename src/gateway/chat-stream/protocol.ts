@@ -157,7 +157,17 @@ export type TtsAudioEvent = ChatStreamEnvelope<
 >;
 export type ClarifyRequestEvent = ChatStreamEnvelope<
   'clarify_request',
-  { requestId: string; question: string; choices?: string[]; default?: string; petFeedback: PetFeedback }
+  {
+    requestId: string;
+    kind: 'input' | 'approval';
+    question: string;
+    choices?: string[];
+    suggestedAnswer?: string;
+    version: number;
+    createdAt: number;
+    expiresAt?: number;
+    petFeedback: PetFeedback;
+  }
 >;
 export type RunEndEvent = ChatStreamEnvelope<'run_end', { status: ChatStreamStatus; summary?: string; petFeedback: PetFeedback }>;
 export type StreamErrorEvent = ChatStreamEnvelope<'error', { code: string; message: string; recoverable?: boolean; petFeedback: PetFeedback }>;

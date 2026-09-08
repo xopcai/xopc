@@ -5,6 +5,8 @@
  * and concurrent processing across sessions.
  */
 
+import { createHash } from 'node:crypto';
+
 import {
   Agent,
   type AgentTool,
@@ -52,8 +54,10 @@ import {
   disposeAllSessionMcpRuntimes,
   retireSessionMcpRuntimeForSessionKey,
 } from './mcp/bundle-mcp-tools.js';
+import { getEmbeddedExecutionRunId } from './embedded/execution-context.js';
 import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './embedded/session-runner.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
+import { consumeClarificationApproval } from '../storage/sqlite/clarification-wait-repository.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { AutomationService } from '../automations/index.js';
@@ -1522,13 +1526,19 @@ export class AgentManager implements AgentInstanceGateway {
   private async requestToolConfirmation(sessionKey: string, toolName: string, detail: string): Promise<boolean> {
     const request = this.config.gatewayClarify?.requestClarification;
     if (!request) return false;
-    const answer = await request(sessionKey, {
+    const approvalKey = createHash('sha256').update(`${toolName}\0${detail}`).digest('hex');
+    const existing = consumeClarificationApproval(sessionKey, approvalKey);
+    if (existing) return existing === 'approved';
+    const runId = getEmbeddedExecutionRunId();
+    if (!runId) return false;
+    const result = await request({ sessionKey, runId, toolCallId: `approval:${approvalKey}` }, {
       kind: 'approval',
       question: `Allow ${toolName} to run once?\n${detail.slice(0, 500)}`,
       choices: ['Allow once', 'Deny'],
-      default: 'Deny',
-    }).catch(() => 'Deny');
-    return answer === 'Allow once';
+      suggestedAnswer: 'Deny',
+      approvalKey,
+    }).catch(() => ({ status: 'answered' as const, answer: 'Deny' }));
+    return result.status === 'answered' && result.answer === 'Allow once';
   }
 
   private refreshDynamicContextIfChanged(instance: AgentInstance): void {

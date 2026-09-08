@@ -44,7 +44,21 @@ export interface ResolvedStreamingTts {
 
 interface VoiceAgentEvent {
   type: string;
-  payload?: { delta?: unknown; message?: unknown; status?: unknown; toolCallId?: unknown; toolName?: unknown; requestId?: unknown; question?: unknown; choices?: unknown };
+  payload?: {
+    delta?: unknown;
+    message?: unknown;
+    status?: unknown;
+    toolCallId?: unknown;
+    toolName?: unknown;
+    requestId?: unknown;
+    kind?: unknown;
+    question?: unknown;
+    choices?: unknown;
+    suggestedAnswer?: unknown;
+    version?: unknown;
+    createdAt?: unknown;
+    expiresAt?: unknown;
+  };
 }
 
 export interface VoiceRealtimeRuntimeOptions {

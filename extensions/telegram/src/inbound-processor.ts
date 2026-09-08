@@ -18,7 +18,7 @@ import type { TelegramAccountManager } from './account-manager.js';
 import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/chat-commands/command-parse.js';
-import { tryConsumeTelegramClarifyFreeText } from '@xopcai/xopc/gateway/clarify-runtime.js';
+import { answerClarificationTextFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 import { resolveRoute } from '@xopcai/xopc/routing/index.js';
 import { resolveTelegramGroupContext } from './group-config-resolver.js';
 import { resolveTelegramFocusedSessionKey } from './focus-handler.js';
@@ -602,7 +602,11 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     if (
       finalContent.trim().length > 0 &&
       !isCommand &&
-      tryConsumeTelegramClarifyFreeText(sessionKey, finalContent.trim())
+      answerClarificationTextFromChannel(
+        sessionKey,
+        finalContent.trim(),
+        `telegram:${accountId}:${chatId}:message:${message.message_id}`,
+      )
     ) {
       log.debug({ sessionKey }, 'Telegram: consumed message as clarify reply');
       return;

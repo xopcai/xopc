@@ -116,9 +116,25 @@ export {
   setSessionInputStatus,
   type SessionInput,
   type SessionInputDelivery,
+  type SessionInputPayload,
   type SessionInputState,
   type SessionInputStatus,
 } from './session-input-repository.js';
+export {
+  consumeClarificationApproval,
+  consumeClarificationResume,
+  createClarificationWait,
+  getActiveClarification,
+  getClarification,
+  getClarificationResumeInput,
+  getClarificationSnapshot,
+  isClarificationSuspended,
+  resolveClarification,
+  supersedeActiveClarification,
+  type CreateClarificationInput,
+  type ResolveClarificationInput,
+  type ResolveClarificationResult,
+} from './clarification-wait-repository.js';
 export {
   replaceLatestSessionTurnAndQueueInput,
   validateLatestSessionTurnTarget,

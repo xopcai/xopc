@@ -1,34 +1,25 @@
-import { onConnectionWaitChanged } from '../../storage/sqlite/connection-wait-repository.js';
 import crypto from 'node:crypto';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import type { ClarificationResponseAction } from '@xopcai/gateway-contract';
 
-/**
- * GatewayAgentRunner — webchat agent invocation and the surrounding control
- * surface (abort, steer, clarify-bridge plumbing, scheduled Task continuations).
- *
- * Was 200 lines of `GatewayService` covering seven concerns that all hung off
- * the same handful of fields (`activeWebchatRunBySession`, `runAbortControllers`,
- * `clarifyBridge`, `runRelay`):
- *
- *   - `runAgent(message, channel, chatId, ...)` — wraps {@link runGatewayAgent}
- *   - `abortAgentRun(runId)` — POST /api/agent/abort + cleanup
- *   - `submitClarifyResponse(requestId, answer)` — UI answers a `clarify` call
- *   - `runScheduledWebchatTurn(sk, userTurn)` — background webchat user turn
- *   - `drainScheduledWebchatContinuation(sk, msg)` — background Task continuation
- *   - `clarifyForSession({ sessionKey, request })` — clarify-bridge dispatch
- *     used by `gatewayClarify.requestClarification` in AgentService
- *
- * Owns the two state maps (`activeWebchatRunBySession`, `runAbortControllers`)
- * directly so peer coordinators (sessions-api, marketplace, config) cannot
- * accidentally mutate them.
- */
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
 import type { SessionIndex } from '../../session/index.js';
-import type { ClarifyStreamEvent } from '../clarify-bridge.js';
-import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
+import { onConnectionWaitChanged } from '../../storage/sqlite/connection-wait-repository.js';
+import {
+  EphemeralClarificationWaiter,
+  type ClarificationStreamEvent,
+} from '../ephemeral-clarification-waiter.js';
+import {
+  createClarificationWait,
+  getClarification,
+  getClarificationSnapshot,
+  resolveClarification,
+  supersedeActiveClarification,
+} from '../../storage/sqlite/clarification-wait-repository.js';
+import type { ClarifyRequestPayload, ClarifyRequestResult } from '../../agent/tools/clarify-tool.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
@@ -40,6 +31,11 @@ import {
   type ReplaceLatestTurnInput,
   type SubmitSessionInput,
 } from './session-input-coordinator.js';
+
+/**
+ * Owns gateway agent runs, durable clarification coordination, and the
+ * lifecycle-bound clarification waiter used by ephemeral side chats.
+ */
 
 const log = createLogger('Gateway:AgentRunner');
 
@@ -66,11 +62,10 @@ export class GatewayAgentRunner {
   private readonly runAbortControllers = new Map<string, AbortController>();
   private readonly runCompletions = new Map<string, Promise<void>>();
   private readonly resolveRunCompletions = new Map<string, () => void>();
-  private readonly clarifyBridge = new ClarifyBridge();
+  private readonly ephemeralClarifications = new EphemeralClarificationWaiter();
   /** Maps webchat session key → active `runId` for `clarify` tool routing. */
   private readonly activeWebchatRunBySession = new Map<string, string>();
-  private readonly externalStreamBySession = new Map<string, (event: ClarifyStreamEvent) => void>();
-  private readonly externalClarificationTimeouts = new Map<string, number | null>();
+  private readonly externalStreamBySession = new Map<string, (event: ClarificationStreamEvent) => void>();
   private readonly externalClarificationResponses = new Map<string, () => boolean>();
   readonly inputs: SessionInputCoordinator;
   private readonly unsubscribeConnectionWait: () => void;
@@ -164,25 +159,19 @@ export class GatewayAgentRunner {
     return [...runs].map(([sessionKey, runId]) => ({ sessionKey, runId }));
   }
 
-  getClarifyBridge(): ClarifyBridge {
-    return this.clarifyBridge;
-  }
-
-  /** Called from `GatewayService.stop()` so the bridge gets cleaned up. */
-  disposeClarifyBridge(): void {
-    this.clarifyBridge.dispose();
+  disposeClarifications(): void {
+    this.ephemeralClarifications.dispose();
     this.unsubscribeConnectionWait();
   }
 
   registerExternalWebchatRun(
     sessionKey: string,
     runId: string,
-    publish: (event: ClarifyStreamEvent) => void,
-    options?: { clarificationTimeoutMs?: number | null; beforeClarificationResponse?: () => boolean },
+    publish: (event: ClarificationStreamEvent) => void,
+    options?: { beforeClarificationResponse?: () => boolean },
   ): void {
     this.activeWebchatRunBySession.set(sessionKey, runId);
     this.externalStreamBySession.set(sessionKey, publish);
-    if (options?.clarificationTimeoutMs !== undefined) this.externalClarificationTimeouts.set(sessionKey, options.clarificationTimeoutMs);
     if (options?.beforeClarificationResponse) this.externalClarificationResponses.set(sessionKey, options.beforeClarificationResponse);
   }
 
@@ -190,13 +179,12 @@ export class GatewayAgentRunner {
     if (this.activeWebchatRunBySession.get(sessionKey) === runId) {
       this.activeWebchatRunBySession.delete(sessionKey);
       this.externalStreamBySession.delete(sessionKey);
-      this.externalClarificationTimeouts.delete(sessionKey);
       this.externalClarificationResponses.delete(sessionKey);
     }
   }
 
   cancelClarificationForRun(runId: string): void {
-    this.clarifyBridge.cancelForRun(runId);
+    this.ephemeralClarifications.cancelForRun(runId);
   }
 
   // ── runAgent (webchat HTTP POST) ──────────────────────────────────────
@@ -290,7 +278,7 @@ export class GatewayAgentRunner {
 
   /** Abort an in-flight webchat agent run. */
   async abortAgentRun(runId: string): Promise<{ aborted: boolean; idle: boolean }> {
-    this.clarifyBridge.cancelForRun(runId);
+    this.ephemeralClarifications.cancelForRun(runId);
     const keysToMark: string[] = [];
     for (const [sk, id] of this.activeWebchatRunBySession) {
       if (id === runId) {
@@ -303,6 +291,8 @@ export class GatewayAgentRunner {
     }
     const completion = this.runCompletions.get(runId);
     for (const sk of keysToMark) {
+      const clarification = getClarificationSnapshot(sk)?.clarification;
+      if (clarification?.originRunId === runId) supersedeActiveClarification(sk);
       void this.opts.sessionIndex
         .appendTranscriptContextEntry(sk, {
           text: 'Webchat agent run aborted',
@@ -317,9 +307,56 @@ export class GatewayAgentRunner {
     return { aborted: true, idle: true };
   }
 
-  /** Deliver a user's answer to a pending `clarify` tool call. */
-  submitClarifyResponse(requestId: string, answer: string): boolean {
-    return this.clarifyBridge.handleResponse(requestId, answer);
+  answerEphemeralClarification(requestId: string, answer: string): boolean {
+    return this.ephemeralClarifications.answer(requestId, answer);
+  }
+
+  getClarificationState(sessionKey: string) {
+    return getClarificationSnapshot(sessionKey);
+  }
+
+  resolveClarificationResponse(input: {
+    id: string;
+    expectedVersion: number;
+    idempotencyKey: string;
+    action: ClarificationResponseAction;
+    answer?: string;
+  }) {
+    const result = resolveClarification(input);
+    if (result.ok) {
+      this.opts.emit('clarification.updated', result.clarification);
+      if (result.queued) void this.inputs.drain(result.clarification.sessionKey);
+    }
+    return result;
+  }
+
+  getClarificationById(id: string) {
+    return getClarification(id);
+  }
+
+  answerClarificationChoice(requestId: string, choiceIndex: number, idempotencyKey: string): boolean {
+    const wait = getClarification(requestId);
+    const answer = wait?.status === 'open' ? wait.choices?.[choiceIndex] : undefined;
+    if (!answer) return false;
+    return this.resolveClarificationResponse({
+      id: wait.id,
+      expectedVersion: wait.version,
+      idempotencyKey,
+      action: 'answer',
+      answer,
+    }).ok;
+  }
+
+  answerClarificationText(sessionKey: string, answer: string, idempotencyKey: string): boolean {
+    const wait = getClarificationSnapshot(sessionKey)?.clarification;
+    if (!wait || wait.status !== 'open' || !answer.trim()) return false;
+    return this.resolveClarificationResponse({
+      id: wait.id,
+      expectedVersion: wait.version,
+      idempotencyKey,
+      action: 'answer',
+      answer,
+    }).ok;
   }
 
   /** Same execution path as scheduled continuation, but lets callers observe failures. */
@@ -353,8 +390,8 @@ export class GatewayAgentRunner {
   // ── Clarify dispatch (called from AgentService.gatewayClarify) ────────
 
   /**
-   * Resolve clarify-bridge config for `sessionKey`: who delivers the question
-   * (webchat stream, Telegram message, or both), then start the bridge request.
+   * Persist normal clarification waits and use the lifecycle-bound waiter only
+   * for caller-owned ephemeral sessions.
    * Rejects when neither path is available (e.g. CLI without webchat or TG).
    *
    * `publishStreamFor(runId)` is the bridge into AgentService's
@@ -363,11 +400,13 @@ export class GatewayAgentRunner {
    */
   async requestClarification(opts: {
     sessionKey: string;
-    request: ClarifyBridgeRequest;
-    publishStreamFor: (runId: string) => (event: ClarifyStreamEvent) => void;
-  }): Promise<string> {
+    runId: string;
+    toolCallId: string;
+    request: ClarifyRequestPayload;
+    publishStreamFor: (runId: string) => (event: ClarificationStreamEvent) => void;
+  }): Promise<ClarifyRequestResult> {
     const { sessionKey, request, publishStreamFor } = opts;
-    const runId = this.activeWebchatRunBySession.get(sessionKey);
+    const runId = this.activeWebchatRunBySession.get(sessionKey) ?? opts.runId;
     const publishStream = this.externalStreamBySession.get(sessionKey)
       ?? (runId ? publishStreamFor(runId) : undefined);
     const metadata = await this.opts.sessionIndex.getSessionMetadata(sessionKey).catch(() => null);
@@ -377,31 +416,55 @@ export class GatewayAgentRunner {
         ? async (ctx: {
             sessionKey: string;
             requestId: string;
-            request: ClarifyBridgeRequest;
+            request: ClarifyRequestPayload;
           }) => {
             await this.deliverTelegramClarify(ctx);
           }
         : undefined;
-    if (!runId && !deliver) {
+    const persistedSession = getClarificationSnapshot(sessionKey);
+    if (!persistedSession && this.externalStreamBySession.has(sessionKey)) {
+      return this.ephemeralClarifications.start({
+        beforeResponse: this.externalClarificationResponses.get(sessionKey),
+        runId,
+        publish: publishStream!,
+        request,
+      }).then((answer) => ({ status: 'answered' as const, answer }));
+    }
+    if (!persistedSession) {
       return Promise.reject(
-        new Error('Clarify is not available for this session (use webchat, Telegram, or CLI)'),
+        new Error('Clarify requires a persisted session.'),
       );
     }
-    return this.clarifyBridge.startRequest({
-      timeoutMs: this.externalClarificationTimeouts.get(sessionKey),
-      beforeResponse: this.externalClarificationResponses.get(sessionKey),
+    const wait = createClarificationWait({
       sessionKey,
-      runId,
-      publishStream,
-      request,
-      deliver,
+      runId: opts.runId,
+      toolCallId: opts.toolCallId,
+      kind: request.kind === 'approval' ? 'approval' : 'input',
+      question: request.question,
+      choices: request.choices,
+      suggestedAnswer: request.suggestedAnswer,
+      approvalKey: request.approvalKey,
     });
+    const event: ClarificationStreamEvent = {
+      type: 'clarify_request',
+      requestId: wait.id,
+      kind: wait.kind,
+      question: wait.question,
+      choices: wait.choices,
+      suggestedAnswer: wait.suggestedAnswer,
+      expiresAt: wait.expiresAt,
+      createdAt: wait.createdAt,
+      version: wait.version,
+    };
+    if (this.activeWebchatRunBySession.has(sessionKey)) publishStream?.(event);
+    if (deliver) await deliver({ sessionKey, requestId: wait.id, request });
+    return { status: 'waiting' as const, waitId: wait.id, expiresAt: wait.expiresAt };
   }
 
   private async deliverTelegramClarify(ctx: {
     sessionKey: string;
     requestId: string;
-    request: ClarifyBridgeRequest;
+    request: ClarifyRequestPayload;
   }): Promise<void> {
     const metadata = await this.opts.sessionIndex.getSessionMetadata(ctx.sessionKey).catch(() => null);
     const routing = metadata?.routing;
@@ -410,9 +473,13 @@ export class GatewayAgentRunner {
     }
 
     let body = ctx.request.question;
-    if (ctx.request.default) {
-      body += `\n\nDefault if unsure: ${ctx.request.default}`;
+    if (ctx.request.suggestedAnswer) {
+      body += `\n\nSuggested answer (never selected automatically): ${ctx.request.suggestedAnswer}`;
     }
+
+    body += ctx.request.kind === 'approval'
+      ? '\n\nFor safety, this approval expires after 10 minutes.'
+      : '\n\nThis question remains available until you answer or cancel the task.';
 
     const choices = ctx.request.choices;
     const buttonRows =
@@ -425,9 +492,9 @@ export class GatewayAgentRunner {
           ])
         : undefined;
 
-    if (!buttonRows) {
-      body += '\n\nReply with your answer in this chat.';
-    }
+    body += buttonRows
+      ? '\n\nReply with your answer, or tap an option below.'
+      : '\n\nReply with your answer.';
 
     await this.opts.getChannelManager().send({
       channel: 'telegram',

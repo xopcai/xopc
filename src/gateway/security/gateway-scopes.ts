@@ -80,7 +80,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path.startsWith('/api/workflows')) {
     return methodScope(method, 'automations.read', 'automations.write');
   }
-  if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarify')) {
+  if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications')) {
     return 'sessions.write';
   }
   if (path.startsWith('/api/commands') || path.startsWith('/api/skills')) {

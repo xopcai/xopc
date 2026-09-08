@@ -34,7 +34,6 @@ export type AgentStreamFqCallbacks = {
   dismissClarifyForSession: (chatId: string) => void;
   clearVisibleClarify: () => void;
   makeOnClarifyRequest: (chatId: string) => MessagingCallbacks['onClarifyRequest'];
-  onClarifyToolEnd: (chatId: string) => void;
 };
 
 /**
@@ -179,9 +178,6 @@ export function createAgentStreamMessagingCallbacks(opts: {
       store().setSessionFlags(chatId, { streaming: true });
     },
     onToolEnd: (toolName, isErr, result, toolCallId, completedAt, activity) => {
-      if (toolName === 'clarify') {
-        fq.onClarifyToolEnd(chatId);
-      }
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
         completeTool(msg.content, toolName, isErr, result, toolCallId, completedAt, activity);
