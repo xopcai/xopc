@@ -69,9 +69,6 @@ importers:
       '@vscode/ripgrep':
         specifier: ^1.18.0
         version: 1.18.0
-      '@xopcai/browser-control-contract':
-        specifier: workspace:*
-        version: link:packages/browser-control-contract
       abort-controller:
         specifier: ^3.0.0
         version: 3.0.0
@@ -193,6 +190,9 @@ importers:
       '@vitejs/plugin-react-swc':
         specifier: ^4.3.1
         version: 4.3.1(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.22.3)(yaml@2.9.0))
+      '@xopcai/browser-control-contract':
+        specifier: workspace:*
+        version: link:packages/browser-control-contract
       '@xopcai/endpoint-tools-protocol':
         specifier: workspace:*
         version: link:packages/endpoint-tools-protocol
