@@ -62,7 +62,6 @@ import type { NotesService } from '../notes/index.js';
 import type { ProjectService } from '../projects/index.js';
 import {
   getInteractionState,
-  getSessionConfig,
   getSessionMetadata,
   isXopcDatabaseOpen,
 } from '../storage/sqlite/index.js';
