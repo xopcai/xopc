@@ -279,7 +279,7 @@
       "update_plan": "Update the visible multi-step coding plan for the current turn.",
       "web_search": "Search the public web for facts and pages newer than the model may know.",
       "web_fetch": "Fetch a URL and read its text content for the model.",
-      "browser_use": "Unified browser automation tool for navigation, snapshots, clicks, typing, screenshots, and browser pipelines.",
+      "browser_use": "Unified browser automation tool for semantic observation, verified clicks, typing, tab operations, and screenshot fallback.",
       "send_message": "Send outbound chat messages on connected channels (e.g. Telegram, CLI, gateway) when the agent replies.",
       "send_media": "Send images or other media attachments through those channels.",
       "user_context_search": "Search active user facts, goals, priorities, and collaboration rules.",

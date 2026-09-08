@@ -1,6 +1,8 @@
 export type BrowserVisualMode = 'never' | 'auto' | 'always';
 export type BrowserRiskLevel = 'read' | 'draft' | 'external_effect' | 'destructive' | 'sensitive';
 
+export const BROWSER_EXTENSION_PROTOCOL_VERSION = 2;
+
 export interface BrowserExpectation {
   urlIncludes?: string;
   titleIncludes?: string;
@@ -197,6 +199,7 @@ export type BrowserControlResult =
 
 export interface BrowserWireCommand {
   id: string;
+  protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
   input: BrowserActionInput;
   timeoutMs: number;
   visualFallback: boolean;
@@ -209,6 +212,8 @@ export interface BrowserWireResult {
 
 export interface BrowserExtensionStatus {
   type: 'status';
+  protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
+  extensionVersion: string;
   connected: boolean;
   sessionCount: number;
 }

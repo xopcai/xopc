@@ -73,7 +73,8 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'browser-install',
-    match: (path) => path === '/api/browser/playwright/install/stream',
+    match: (path) => path === '/api/browser/playwright/install/stream'
+      || path === '/api/browser/playwright/install/cancel',
     load: async () => {
       const { registerBrowserInstallRoutes } = await import('./browser-install.js');
       return { register: registerBrowserInstallRoutes };

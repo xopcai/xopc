@@ -29,7 +29,7 @@ const defaults: BrowserSettingsState = {
   driverKind: 'extension',
   headless: false,
   executablePath: '',
-  cdpEndpoint: '',
+  cdpEndpoint: 'http://127.0.0.1:9222',
   remoteProvider: 'browserbase',
   remoteApiKey: '',
   remoteProjectId: '',
@@ -60,7 +60,7 @@ export function parseBrowserSettings(config: unknown): BrowserSettingsState {
     driverKind: kind === 'playwright' || kind === 'cdp' || kind === 'remote' ? kind : 'extension',
     headless: driver.headless === true,
     executablePath: stringValue(driver.executablePath, ''),
-    cdpEndpoint: stringValue(driver.endpoint, ''),
+    cdpEndpoint: stringValue(driver.endpoint, defaults.cdpEndpoint),
     remoteProvider: driver.provider === 'browser-use' ? 'browser-use' : 'browserbase',
     remoteApiKey: stringValue(driver.apiKey, ''),
     remoteProjectId: stringValue(driver.projectId, ''),
@@ -99,6 +99,25 @@ export function buildBrowserConfig(state: BrowserSettingsState): Record<string, 
       consequentialActions: state.consequentialActions,
     },
   };
+}
+
+export function validateBrowserSettings(state: BrowserSettingsState): string | null {
+  if (state.driverKind === 'cdp') {
+    try {
+      const endpoint = new URL(state.cdpEndpoint);
+      if (endpoint.protocol !== 'http:' && endpoint.protocol !== 'https:' && endpoint.protocol !== 'ws:' && endpoint.protocol !== 'wss:') {
+        return 'CDP endpoint must use http, https, ws, or wss.';
+      }
+    } catch {
+      return 'Enter a valid CDP endpoint URL.';
+    }
+  }
+  if (!Number.isInteger(state.maxNodes) || state.maxNodes < 20 || state.maxNodes > 500) return 'Max nodes must be between 20 and 500.';
+  if (!Number.isInteger(state.maxCharacters) || state.maxCharacters < 1_000 || state.maxCharacters > 50_000) return 'Max characters must be between 1,000 and 50,000.';
+  if (!Number.isInteger(state.actionTimeoutMs) || state.actionTimeoutMs < 1_000 || state.actionTimeoutMs > 120_000) return 'Action timeout must be between 1,000 and 120,000 ms.';
+  if (!Number.isInteger(state.sessionTimeoutMs) || state.sessionTimeoutMs < 60_000 || state.sessionTimeoutMs > 3_600_000) return 'Session timeout must be between 60,000 and 3,600,000 ms.';
+  if (!Number.isInteger(state.maxSequenceLength) || state.maxSequenceLength < 1 || state.maxSequenceLength > 10) return 'Sequence length must be between 1 and 10.';
+  return null;
 }
 
 export async function patchBrowserSettings(state: BrowserSettingsState): Promise<void> {

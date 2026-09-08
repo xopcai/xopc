@@ -7,6 +7,7 @@ import type { Config } from '../../config/schema.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import {
   BROWSER_EXT_REQUIRED_FILES,
+  browserExtContentHash,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
   ensureBrowserExtensionOnStartup,
@@ -77,6 +78,7 @@ describe('browser-ext-install', () => {
     expect(
       computeNeedsRefresh({
         bundledManifestVersion: PACKAGE_VERSION,
+        bundledContentHash: browserExtContentHash(bundledDir),
         installedPath: null,
         meta: null,
       }),
@@ -86,10 +88,12 @@ describe('browser-ext-install', () => {
       computeNeedsRefresh({
         force: true,
         bundledManifestVersion: PACKAGE_VERSION,
+        bundledContentHash: browserExtContentHash(bundledDir),
         installedPath: bundledDir,
         meta: {
           xopcVersion: PACKAGE_VERSION,
           manifestVersion: PACKAGE_VERSION,
+          contentHash: browserExtContentHash(bundledDir),
           source: 'bundled',
           bundledFrom: 'env-override',
           installedAt: new Date().toISOString(),
@@ -109,6 +113,17 @@ describe('browser-ext-install', () => {
     const second = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(second.copied).toBe(false);
     expect(second.extensionDir).toBe(first.extensionDir);
+  });
+
+  it('refreshes artifacts when bundled code changes without a version bump', async () => {
+    const first = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
+    expect(first.copied).toBe(true);
+
+    writeFileSync(join(bundledDir, 'dist/background.js'), '// changed protocol implementation');
+
+    const refreshed = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
+    expect(refreshed.copied).toBe(true);
+    expect(readFileSync(join(refreshed.extensionDir, 'dist/background.js'), 'utf8')).toContain('changed protocol');
   });
 
   it('skips startup artifact sync when browser tools are disabled', async () => {
