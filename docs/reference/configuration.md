@@ -32,6 +32,7 @@ xopc config validate
 | `extensions` | Extension enable/disable and extension-specific configuration |
 | `runtimeTools` | Managed Node.js and Python runtimes |
 | `heartbeat` | Periodic Agent checks when enabled |
+| `platform` | Standalone or connected mode, the platform base URL, optional workspace, and validated discovery snapshot |
 
 Workflows and Automations are normally managed in their own Gateway pages rather than written directly into `xopc.json`.
 

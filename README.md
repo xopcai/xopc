@@ -63,6 +63,8 @@
 
 xopc works from desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark, with your choice of cloud or local models.
 
+Use xopc independently, or connect it to XOPC Cloud or a privately deployed XOPC Platform for centrally published services and runtime scheduling. Connecting is opt-in and does not upload the local database or workspace. See [XOPC Platform](https://xopcai.github.io/xopc/platform).
+
 For the full product philosophy, trust model, and roadmap, read [Product philosophy](https://xopcai.github.io/xopc/product).
 
 ---
@@ -216,6 +218,7 @@ Full reference: **[Configuration](https://xopcai.github.io/xopc/configuration)**
 | [Projects, Tasks, and Notes](https://xopcai.github.io/xopc/projects-tasks-notes) | Keep long-running work in one verified Task model with optional shared project context |
 | [Share a conversation](https://xopcai.github.io/xopc/session-sharing) | Publish a reviewed, read-only Session snapshot with expiration and view limits |
 | [Configuration](https://xopcai.github.io/xopc/configuration) | `xopc.json` reference |
+| [XOPC Platform](https://xopcai.github.io/xopc/platform) | Standalone and connected modes, discovery, and runtime registration |
 | [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
 | [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat, Feishu |
 | [Architecture](https://xopcai.github.io/xopc/architecture) | How pieces fit together |
@@ -227,7 +230,7 @@ Also: [Tools](https://xopcai.github.io/xopc/tools) · [Mobile app](https://xopca
 
 ## FAQ
 
-**Is xopc a hosted service?** — No. xopc runs on your machine, with configuration and state stored under **`~/.xopc/`** by default. You can self-host the gateway for access from other devices.
+**Is xopc a hosted service?** — The xopc application runs on your machine, with configuration and state stored under **`~/.xopc/`** by default. It can remain standalone or connect explicitly to XOPC Cloud or a private enterprise platform; connecting does not move the local database automatically.
 
 **Does local-first mean data never leaves my computer?** — Not necessarily. If you select a cloud model, conversation content and context relevant to the request are sent to that model provider. Use a local model and review source and tool permissions for work that must remain on-device.
 

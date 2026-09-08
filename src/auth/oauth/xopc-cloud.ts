@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 import { generatePKCE } from './pkce.js';
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
+import { resolveConnectedPlatformEndpoint } from '../../platform/resolution.js';
 
 const CLIENT_ID = 'xopc-native';
 const DEFAULT_CONSOLE_URL = 'https://console.xopc.ai';
@@ -20,7 +21,11 @@ interface OAuthErrorResponse {
 }
 
 function consoleUrl(): string {
-  return (process.env.XOPC_CONSOLE_URL ?? DEFAULT_CONSOLE_URL).replace(/\/+$/, '');
+  return (
+    process.env.XOPC_CONSOLE_URL
+    ?? resolveConnectedPlatformEndpoint('authorizationServer')
+    ?? DEFAULT_CONSOLE_URL
+  ).replace(/\/+$/, '');
 }
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
