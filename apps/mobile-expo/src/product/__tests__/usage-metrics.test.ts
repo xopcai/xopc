@@ -25,11 +25,16 @@ describe('usage metrics', () => {
 
   it('stores only event names and timestamps', () => {
     recordUsageEvent('home_viewed', 10);
-    recordUsageEvent('capture_completed', 20);
+    recordUsageEvent('home_attention_opened', 20);
+    recordUsageEvent('gateway_switch_completed', 30);
 
-    expect(readUsageSummary()).toEqual({ home_viewed: 1, capture_completed: 1 });
+    expect(readUsageSummary()).toEqual({
+      home_viewed: 1,
+      home_attention_opened: 1,
+      gateway_switch_completed: 1,
+    });
     expect(memory.get('product.usageEvents')).toBe(
-      '[{"name":"home_viewed","at":10},{"name":"capture_completed","at":20}]',
+      '[{"name":"home_viewed","at":10},{"name":"home_attention_opened","at":20},{"name":"gateway_switch_completed","at":30}]',
     );
   });
 
