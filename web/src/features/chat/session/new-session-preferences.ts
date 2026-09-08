@@ -3,8 +3,10 @@ import {
   parseNewSessionPreferences,
   withAgentModelPreference,
   withLastChatScope,
+  withProjectExecutionModePreference,
   withSelectedAgent,
   type AgentModelPreference,
+  type NewSessionExecutionMode,
   type NewSessionPreferences,
 } from '@xopcai/gateway-contract';
 
@@ -46,4 +48,13 @@ export function rememberAgentModel(
 
 export function rememberLastChatScope(projectId: string | null | undefined): NewSessionPreferences {
   return writePreferences(withLastChatScope(readNewSessionPreferences(), projectId));
+}
+
+export function rememberProjectExecutionMode(
+  projectId: string,
+  mode: NewSessionExecutionMode,
+): NewSessionPreferences {
+  return writePreferences(
+    withProjectExecutionModePreference(readNewSessionPreferences(), projectId, mode),
+  );
 }
