@@ -5,6 +5,7 @@
 
 import { loadConfig } from '../config/loader.js';
 import { createLogger } from '../utils/logger.js';
+import { resolveConnectedPlatformEndpoint } from '../platform/resolution.js';
 
 const log = createLogger('ExtensionMarketplace');
 
@@ -50,6 +51,8 @@ function normalizeStoreBaseUrl(): string {
       // fall through
     }
   }
+  const fromPlatform = resolveConnectedPlatformEndpoint('storeApi');
+  if (fromPlatform) return fromPlatform.replace(/\/+$/, '');
   try {
     const fromCfg = loadConfig().gateway?.skillsStoreBaseUrl?.trim();
     if (fromCfg) {

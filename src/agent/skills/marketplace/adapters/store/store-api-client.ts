@@ -8,6 +8,7 @@
 import { createHash } from 'node:crypto';
 
 import type { Config } from '../../../../../config/schema.js';
+import { resolveConnectedPlatformEndpoint } from '../../../../../platform/resolution.js';
 import { MAX_EXTENSION_STORE_ZIP_BYTES } from '../../../../../extensions/store-zip-limits.js';
 import { isValidSkillId, MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
 import type { SkillMarkdownPreviewPayload } from '../../../types.js';
@@ -74,6 +75,8 @@ export function resolveSkillsStoreBaseUrl(config: Config): string {
       // fall through
     }
   }
+  const fromPlatform = resolveConnectedPlatformEndpoint('storeApi');
+  if (fromPlatform) return normalizeBaseUrl(fromPlatform);
   const fromConfig = config.gateway?.skillsStoreBaseUrl?.trim();
   if (fromConfig) {
     try {

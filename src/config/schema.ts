@@ -11,6 +11,7 @@ import {
 import { DEFAULT_CONTEXT_COMPACTION_POLICY, UserContextConfigSchema } from '../user-context/config.js';
 import { DEFAULT_MODEL_REF } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
+import { PlatformConfigSchema } from '../platform/contracts.js';
 
 // ============================================
 // Agent Configs
@@ -1227,6 +1228,7 @@ export const ConfigSchema = z.object({
   mcp: McpConfigSchema,
   connectors: ConnectorsConfigSchema,
   experimental: ExperimentalConfigSchema,
+  platform: PlatformConfigSchema,
   extensions: ExtensionsConfigSchema.default({}),
   /** Per-vendor capability provider config (image / audio / video). */
   providers: ProvidersConfigSchema.optional(),
@@ -1366,6 +1368,7 @@ export const ConfigSchema = z.object({
   experimental: {
     workDiscoveryOnboarding: true,
   },
+  platform: { mode: 'standalone' as const },
   extensions: {
     allow: [],
     security: {

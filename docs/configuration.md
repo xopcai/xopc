@@ -45,6 +45,7 @@ The Gateway reloads many settings automatically, but credentials, extensions, ch
 | Connect an MCP server | **Settings → Agent MCP** | [MCP](./mcp.md) |
 | Connect a messaging app | **Channels** | [Channels](./channels/index.md) |
 | Enable remote access | **Settings → Remote access** | [Remote access](./remote-access.md) |
+| Connect XOPC Cloud or an enterprise platform | `xopc platform` | [XOPC Platform](./platform.md) |
 | Change voice or image providers | **Settings → Capabilities** | [Voice](./voice.md), [Images](./image-multimodal.md) |
 
 ## Editing JSON directly

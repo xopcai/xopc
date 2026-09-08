@@ -59,6 +59,7 @@ features:
 | Run something on a schedule | [Automations](./automations.md) |
 | Use xopc from a messaging app | [Channels](./channels/index.md) |
 | Connect external services | [Connectors](./connectors/index.md) |
+| Connect XOPC Cloud or a private enterprise platform | [XOPC Platform](./platform.md) |
 | Access xopc away from the host | [Remote access](./remote-access.md) |
 | Understand local storage and backup | [Data and file locations](./workspace.md) |
 | Fix a setup problem | [Troubleshooting](./how-to/diagnose-broken-setup.md) |

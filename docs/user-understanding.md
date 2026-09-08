@@ -50,4 +50,4 @@ Conversations, selected work folders, and configured connectors are independent 
 
 Do not store passwords, API keys, recovery codes, payment details, or regulated records as user-model facts. Local storage also does not guarantee local processing: context selected for a request may be sent to the configured model provider unless its processing policy requires local handling.
 
-The authoritative implementation is described in [Memory architecture](./design/technical/memory-architecture.md). Backup and deletion are covered in [Data and file locations](./workspace.md).
+The user model is stored with the rest of xopc's structured local state. Backup and deletion are covered in [Data and file locations](./workspace.md).

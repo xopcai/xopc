@@ -103,6 +103,7 @@ export default defineConfig({
             text: 'Configure and extend',
             items: [
               { text: 'Configuration', link: '/configuration' },
+              { text: 'XOPC Platform', link: '/platform' },
               { text: 'Models and providers', link: '/models' },
               { text: 'Tools', link: '/tools' },
               { text: 'Skills', link: '/skills' },
@@ -203,6 +204,7 @@ export default defineConfig({
             text: '配置与扩展',
             items: [
               { text: '配置', link: '/zh/configuration' },
+              { text: 'XOPC Platform', link: '/zh/platform' },
               { text: '模型与服务商', link: '/zh/models' },
               { text: '内置工具', link: '/zh/tools' },
               { text: '技能', link: '/zh/skills' },
