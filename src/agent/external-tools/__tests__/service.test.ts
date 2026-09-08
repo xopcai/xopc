@@ -97,6 +97,35 @@ describe('ExternalToolService', () => {
     }]);
   });
 
+  it('extracts current Composio SDK diagnostics without exposing the provider message', async () => {
+    const providerError = Object.assign(new Error('400 provider response'), {
+      status: 400,
+      error: {
+        error: {
+          code: 4300,
+          status: 400,
+          message: 'Twitter requires an auth config.',
+        },
+      },
+    });
+    const service = new ExternalToolService([{
+      ...provider({ source: 'composio' }),
+      search: vi.fn(async () => {
+        throw new ExternalToolSearchError('create_session', ['twitter'], providerError);
+      }),
+    }]);
+
+    const result = await service.search({ query: 'youtube' });
+    expect(result.sourceErrors).toEqual([{
+      source: 'composio',
+      phase: 'create_session',
+      toolkits: ['twitter'],
+      code: 4300,
+      status: 400,
+    }]);
+    expect(JSON.stringify(result)).not.toContain('Twitter requires an auth config');
+  });
+
   it('requires the described revision and validates arguments before execution', async () => {
     const execute = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'done' }],

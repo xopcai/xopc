@@ -99,7 +99,7 @@ curl -fsSL https://xopc.ai/install.sh | bash
 iex (irm https://xopc.ai/install.ps1)
 ```
 
-The installer detects your OS, installs **Node.js ≥ 22** when needed, and installs **`@xopcai/xopc`**. China mirror: add `--cn` (bash) or `-Cn` (PowerShell), or pass `--registry https://registry.npmmirror.com`.
+The installer detects your OS, installs **Node.js ≥ 22.22.3** when needed, and installs **`@xopcai/xopc`**. China mirror: add `--cn` (bash) or `-Cn` (PowerShell), or pass `--registry https://registry.npmmirror.com`.
 
 Then chat immediately:
 
@@ -108,7 +108,7 @@ xopc onboard --quick
 xopc                    # opens the local TUI
 ```
 
-### npm (already have Node.js 22+)
+### npm (already have Node.js 22.22.3+)
 
 ```bash
 npm install -g @xopcai/xopc
@@ -120,7 +120,7 @@ Large optional runtimes are installed only when you enable the related feature:
 
 ```bash
 npm install -g @huggingface/transformers@3.8.1 sherpa-onnx-node@1.13.4
-npm install -g @composio/core@0.14.0 @composio/experimental@0.2.0
+npm install -g @composio/core@0.18.1
 npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
 ```
 
@@ -271,7 +271,7 @@ pnpm run build && pnpm test && pnpm run lint
 
 **Issues:** [Bug report](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [Feature request](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) · [Security advisory](https://github.com/xopcai/xopc/security/advisories/new) (not public issues)
 
-**Tech stack:** TypeScript, Node.js ≥ 22, pnpm workspace. Built-in LLM layer via `@earendil-works/pi-ai`, React gateway console, Electron desktop.
+**Tech stack:** TypeScript, Node.js ≥ 22.22.3, pnpm workspace. Built-in LLM layer via `@earendil-works/pi-ai`, React gateway console, Electron desktop.
 
 ## Credits
 

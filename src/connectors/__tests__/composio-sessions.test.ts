@@ -37,8 +37,6 @@ vi.mock('@composio/core', () => ({
   },
 }));
 
-vi.mock('@composio/experimental', () => ({ PiProvider: class MockPiProvider {} }));
-
 describe('ComposioSessionsAdapter', () => {
   let stateDir: string;
   let session: ComposioSessionLike;

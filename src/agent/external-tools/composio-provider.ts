@@ -26,6 +26,7 @@ import {
   upsertConnectorActionMetadata,
   upsertConnectorInstallation,
 } from '../../storage/sqlite/index.js';
+import { createLogger } from '../../utils/logger.js';
 import { ExternalToolSearchError } from './search-error.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
@@ -36,6 +37,7 @@ import type {
 } from './types.js';
 
 const CONNECTION_ARGUMENT = 'xopcConnectionId';
+const log = createLogger('ComposioToolProvider');
 
 type CurrentContext = { channel: string; chatId: string; sessionKey: string } | null;
 
@@ -180,6 +182,7 @@ function actionInputSchema(action: ConnectorActionMetadata): Record<string, unkn
 export class ComposioToolProvider implements ExternalToolProvider {
   readonly source = 'composio' as const;
   private readonly adapter: ComposioSessionsAdapter;
+  private readonly unavailableToolkits = new Set<string>();
 
   constructor(private readonly deps: ComposioToolProviderDeps) {
     this.adapter = deps.adapter ?? new ComposioSessionsAdapter();
@@ -187,48 +190,79 @@ export class ComposioToolProvider implements ExternalToolProvider {
 
   async search(query: string): Promise<ExternalToolSearchHit[]> {
     const available = this.availableInstallations();
-    const toolkits = available.installations.map(toolkitFromInstallation);
-    if (toolkits.length === 0) return [];
-    let phase: 'create_session' | 'search' = 'create_session';
-    let result: unknown;
-    try {
-      const session = await this.adapter.createSession({
-        principalId: available.principalId,
-        toolkits,
-        authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), toolkits),
-      });
-      phase = 'search';
-      result = await session.search({ query, toolkits });
-    } catch (cause) {
-      throw new ExternalToolSearchError(phase, toolkits, cause);
-    }
-    const schemas = result && typeof result === 'object' && !Array.isArray(result)
-      ? (result as Record<string, unknown>).toolSchemas
-      : undefined;
+    if (available.installations.length === 0) return [];
+    const settled = await Promise.allSettled(available.installations.map(async (installation) => {
+      const toolkit = toolkitFromInstallation(installation);
+      let phase: 'create_session' | 'search' = 'create_session';
+      try {
+        const session = await this.adapter.createSession({
+          principalId: available.principalId,
+          toolkits: [toolkit],
+          authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), [toolkit]),
+        });
+        phase = 'search';
+        return {
+          installation,
+          toolkit,
+          result: await session.search({ query, toolkits: [toolkit] }),
+        };
+      } catch (cause) {
+        throw new ExternalToolSearchError(phase, [toolkit], cause);
+      }
+    }));
+
     const hits: ExternalToolSearchHit[] = [];
-    if (!schemas || typeof schemas !== 'object' || Array.isArray(schemas)) return hits;
-    for (const [actionId, schema] of Object.entries(schemas)) {
-      const toolkit = toolkitForAction(actionId, toolkits);
-      if (!toolkit || !isComposioActionAllowedByCatalog(actionId)) continue;
-      const installation = available.installations.find((candidate) => (
-        toolkitFromInstallation(candidate) === toolkit
-      ));
-      if (!installation) continue;
-      const inputSchema = schema && typeof schema === 'object' ? (schema as Record<string, unknown>).inputSchema : undefined;
-      if (!isToolInputSchema(inputSchema)) continue;
-      upsertConnectorActionMetadata(contractFromSearch(
-        installation.connectorId,
-        toolkit,
-        actionId,
-        schema,
-      ));
-      hits.push({
-        toolRef: externalToolRef(this.source, installation.id, actionId),
-        source: this.source,
-        namespace: toolkit,
-        title: actionId,
-        summary: schemaSummary(schema, `Run ${actionId} in ${toolkit}.`),
-      });
+    const failures: ExternalToolSearchError[] = [];
+    for (const attempt of settled) {
+      if (attempt.status === 'rejected') {
+        failures.push(attempt.reason instanceof ExternalToolSearchError
+          ? attempt.reason
+          : new ExternalToolSearchError('search', [], attempt.reason));
+        continue;
+      }
+      const { installation, toolkit, result } = attempt.value;
+      this.unavailableToolkits.delete(toolkit);
+      const schemas = result && typeof result === 'object' && !Array.isArray(result)
+        ? (result as Record<string, unknown>).toolSchemas
+        : undefined;
+      if (!schemas || typeof schemas !== 'object' || Array.isArray(schemas)) continue;
+      for (const [actionId, schema] of Object.entries(schemas)) {
+        if (toolkitForAction(actionId, [toolkit]) !== toolkit || !isComposioActionAllowedByCatalog(actionId)) continue;
+        const inputSchema = schema && typeof schema === 'object' ? (schema as Record<string, unknown>).inputSchema : undefined;
+        if (!isToolInputSchema(inputSchema)) continue;
+        upsertConnectorActionMetadata(contractFromSearch(
+          installation.connectorId,
+          toolkit,
+          actionId,
+          schema,
+        ));
+        hits.push({
+          toolRef: externalToolRef(this.source, installation.id, actionId),
+          source: this.source,
+          namespace: toolkit,
+          title: actionId,
+          summary: schemaSummary(schema, `Run ${actionId} in ${toolkit}.`),
+        });
+      }
+    }
+    if (failures.length === settled.length) {
+      const first = failures[0]!;
+      throw new ExternalToolSearchError(
+        first.phase,
+        [...new Set(failures.flatMap(failure => failure.toolkits))],
+        first,
+      );
+    }
+    if (failures.length > 0) {
+      const failedToolkits = [...new Set(failures.flatMap(failure => failure.toolkits))];
+      const newlyUnavailable = failedToolkits.filter(toolkit => !this.unavailableToolkits.has(toolkit));
+      failedToolkits.forEach(toolkit => this.unavailableToolkits.add(toolkit));
+      if (newlyUnavailable.length > 0) {
+        log.warn(
+          { failedToolkits: newlyUnavailable, failureCount: newlyUnavailable.length, err: failures[0] },
+          `Composio tool discovery skipped ${newlyUnavailable.length} unavailable toolkit${newlyUnavailable.length === 1 ? '' : 's'}`,
+        );
+      }
     }
     return hits;
   }

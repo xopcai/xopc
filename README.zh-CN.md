@@ -99,7 +99,7 @@ curl -fsSL https://xopc.ai/install.sh | bash
 iex (irm https://xopc.ai/install.ps1)
 ```
 
-安装脚本会自动识别系统、在需要时安装 **Node.js ≥ 22**，并安装 **`@xopcai/xopc`**。国内镜像：bash 加 `--cn`，PowerShell 加 `-Cn`，或指定 `--registry https://registry.npmmirror.com`。
+安装脚本会自动识别系统、在需要时安装 **Node.js ≥ 22.22.3**，并安装 **`@xopcai/xopc`**。国内镜像：bash 加 `--cn`，PowerShell 加 `-Cn`，或指定 `--registry https://registry.npmmirror.com`。
 
 然后直接开聊：
 
@@ -108,7 +108,7 @@ xopc onboard --quick
 xopc                    # 打开本地 TUI
 ```
 
-### npm（已具备 Node.js 22+）
+### npm（已具备 Node.js 22.22.3+）
 
 ```bash
 npm install -g @xopcai/xopc
@@ -120,7 +120,7 @@ npm install -g @xopcai/xopc
 
 ```bash
 npm install -g @huggingface/transformers@3.8.1 sherpa-onnx-node@1.13.4
-npm install -g @composio/core@0.14.0 @composio/experimental@0.2.0
+npm install -g @composio/core@0.18.1
 npm install -g @larksuiteoapi/node-sdk@1.66.0 playwright-core@1.60.0
 ```
 
@@ -271,7 +271,7 @@ pnpm run build && pnpm test && pnpm run lint
 
 **反馈：** [Bug 反馈](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [功能建议](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A 讨论](https://github.com/xopcai/xopc/discussions/categories/q-a) · [安全漏洞反馈](https://github.com/xopcai/xopc/security/advisories/new)（请勿公开发布漏洞细节）
 
-**技术栈：** TypeScript、Node.js ≥ 22、pnpm workspace。内置 LLM 层 `@earendil-works/pi-ai`，React 网关控制台，Electron 桌面端。
+**技术栈：** TypeScript、Node.js ≥ 22.22.3、pnpm workspace。内置 LLM 层 `@earendil-works/pi-ai`，React 网关控制台，Electron 桌面端。
 
 ## 致谢
 

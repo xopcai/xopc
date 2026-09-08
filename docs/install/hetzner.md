@@ -4,7 +4,7 @@ Run the gateway on a persistent VPS with **loopback bind** and reach it via SSH 
 
 ## Setup
 
-1. Install Node.js >= 22 and xopc.
+1. Install Node.js >= 22.22.3 and xopc.
 2. Configure `gateway.bind=loopback` and a strong token.
 3. Start: `xopc gateway service install && xopc gateway service start`
 4. Access:
