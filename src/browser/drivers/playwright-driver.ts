@@ -171,12 +171,12 @@ export class PlaywrightDriver implements BrowserDriver {
           ? (input.labels?.[0]?.innerText ?? '')
           : '';
         const name = element.getAttribute('aria-label')
-          ?? label
-          ?? element.getAttribute('alt')
-          ?? element.getAttribute('placeholder')
-          ?? html.innerText
-          ?? element.getAttribute('title')
-          ?? '';
+          || label
+          || element.getAttribute('alt')
+          || element.getAttribute('placeholder')
+          || html.innerText
+          || element.getAttribute('title')
+          || '';
         const rect = element.getBoundingClientRect();
         const root = globalThis as typeof globalThis & { __xopcRefCounter?: number };
         root.__xopcRefCounter = (root.__xopcRefCounter ?? 0) + 1;

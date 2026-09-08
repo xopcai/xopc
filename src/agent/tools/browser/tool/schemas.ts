@@ -5,13 +5,14 @@ const SessionId = Type.Optional(Type.String({ description: 'Browser session id r
 const Revision = Type.Number({ description: 'Observation revision used to resolve element refs.' });
 const Ref = Type.String({ description: 'Ephemeral element ref from the latest observation.' });
 
-const Expectation = Type.Optional(Type.Object({
+const ExpectationSchema = Type.Object({
   urlIncludes: Type.Optional(Type.String()),
   titleIncludes: Type.Optional(Type.String()),
   textIncludes: Type.Optional(Type.String()),
   ref: Type.Optional(Type.String()),
   state: Type.Optional(Type.Union([Type.Literal('visible'), Type.Literal('hidden')])),
-}, { additionalProperties: false }));
+}, { additionalProperties: false });
+const Expectation = Type.Optional(ExpectationSchema);
 
 function action<T extends string, P extends Record<string, TSchema>>(name: T, properties: P) {
   return Type.Object({
@@ -85,7 +86,7 @@ const Sequence = action('sequence', {
 });
 const Close = action('close', {});
 
-export const BrowserUseSchema = Type.Union([
+export const BrowserUseActionSchema = Type.Union([
   Observe,
   Navigate,
   Click,
@@ -99,5 +100,52 @@ export const BrowserUseSchema = Type.Union([
   Sequence,
   Close,
 ]);
+
+// Function-calling providers require a top-level object schema. Keep the
+// discriminated union above for exact runtime validation and expose this
+// bounded object shape to the model.
+export const BrowserUseSchema = Type.Object({
+  action: Type.Union([
+    Type.Literal('observe'),
+    Type.Literal('navigate'),
+    Type.Literal('click'),
+    Type.Literal('fill'),
+    Type.Literal('select'),
+    Type.Literal('press'),
+    Type.Literal('scroll'),
+    Type.Literal('wait'),
+    Type.Literal('upload'),
+    Type.Literal('tabs'),
+    Type.Literal('sequence'),
+    Type.Literal('close'),
+  ]),
+  sessionId: SessionId,
+  approvalId: ApprovalId,
+  revision: Type.Optional(Revision),
+  ref: Type.Optional(Ref),
+  expect: Type.Optional(ExpectationSchema),
+  visual: Type.Optional(Type.Union([Type.Literal('never'), Type.Literal('auto'), Type.Literal('always')])),
+  url: Type.Optional(Type.String({ minLength: 1 })),
+  value: Type.Optional(Type.String()),
+  submit: Type.Optional(Type.Boolean()),
+  key: Type.Optional(Type.String({ minLength: 1 })),
+  deltaY: Type.Optional(Type.Number()),
+  condition: Type.Optional(Type.Union([
+    Type.Literal('page_idle'),
+    Type.Literal('text'),
+    Type.Literal('visible'),
+    Type.Literal('hidden'),
+  ])),
+  timeoutMs: Type.Optional(Type.Number({ minimum: 100, maximum: 120_000 })),
+  paths: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1, maxItems: 20 })),
+  operation: Type.Optional(Type.Union([
+    Type.Literal('list'),
+    Type.Literal('create'),
+    Type.Literal('activate'),
+    Type.Literal('close'),
+  ])),
+  tabId: Type.Optional(Type.String()),
+  steps: Type.Optional(Type.Array(SequenceStep, { minItems: 1, maxItems: 10 })),
+}, { additionalProperties: false });
 
 export type BrowserUseInput = Static<typeof BrowserUseSchema>;

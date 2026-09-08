@@ -8,6 +8,7 @@ export type {
   BrowserWireCommand,
   BrowserWireResult,
 } from '@xopcai/browser-control-contract';
+export { BROWSER_EXTENSION_PROTOCOL_VERSION } from '@xopcai/browser-control-contract';
 
 export const XOPC_EXT_PORT = 19820;
 export const XOPC_EXT_HOST = '127.0.0.1';

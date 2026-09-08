@@ -1,11 +1,12 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { BrowserActionInput, BrowserControlResult, BrowserObservation } from '@xopcai/browser-control-contract';
+import { Value } from '@sinclair/typebox/value';
 
 import { formatBrowserObservation } from '../../../../browser/observation/format.js';
 import type { BrowserNotReadyError } from '../../../../browser/readiness.js';
 import type { BrowserRuntime } from '../../../../browser/runtime/browser-runtime.js';
 
-import { BrowserUseSchema, type BrowserUseInput } from './schemas.js';
+import { BrowserUseActionSchema, BrowserUseSchema, type BrowserUseInput } from './schemas.js';
 
 export interface CreateBrowserUseToolDeps {
   getRuntime: () => BrowserRuntime;
@@ -24,6 +25,16 @@ export function createBrowserUseTool(
     parameters: BrowserUseSchema,
 
     async execute(_toolCallId, params: BrowserUseInput, signal) {
+      if (!Value.Check(BrowserUseActionSchema, params)) {
+        return {
+          content: [{ type: 'text', text: `[INVALID_INPUT] Invalid parameters for browser action "${params.action}".` }],
+          details: {
+            ok: false,
+            kind: 'browser_error',
+            error: { code: 'INVALID_INPUT', message: `Invalid parameters for browser action "${params.action}".` },
+          },
+        };
+      }
       const readiness = await deps.getReadiness?.();
       if (readiness) {
         return {

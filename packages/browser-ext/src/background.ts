@@ -1,7 +1,7 @@
 import { executeBrowserCommand } from './controller';
 import { createLogger } from './logger';
 import type { BrowserExtensionStatus, BrowserWireCommand } from './protocol';
-import { XOPC_EXT_WS_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
+import { BROWSER_EXTENSION_PROTOCOL_VERSION, XOPC_EXT_WS_URL, WS_RECONNECT_BASE_DELAY, WS_RECONNECT_MAX_DELAY } from './protocol';
 import { automationSessions, closeAllSessions } from './session-manager';
 
 const log = createLogger('Background');
@@ -38,6 +38,8 @@ function sendStatus(): void {
   if (ws?.readyState !== WebSocket.OPEN) return;
   const status: BrowserExtensionStatus = {
     type: 'status',
+    protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+    extensionVersion: chrome.runtime.getManifest().version,
     connected: true,
     sessionCount: automationSessions.size,
   };

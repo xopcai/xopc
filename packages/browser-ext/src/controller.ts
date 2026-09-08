@@ -6,6 +6,7 @@ import type {
   BrowserWireCommand,
   BrowserWireResult,
 } from './protocol';
+import { BROWSER_EXTENSION_PROTOCOL_VERSION } from './protocol';
 import * as cdp from './cdp';
 import {
   addTabToAutomationGroup,
@@ -28,6 +29,15 @@ const observations = new Map<string, ObservationState>();
 
 export async function executeBrowserCommand(command: BrowserWireCommand): Promise<BrowserWireResult> {
   const startedAt = Date.now();
+  if (command.protocolVersion !== BROWSER_EXTENSION_PROTOCOL_VERSION) {
+    return {
+      id: command.id,
+      result: fail(
+        'DRIVER_UNAVAILABLE',
+        `Browser protocol mismatch. Expected ${BROWSER_EXTENSION_PROTOCOL_VERSION}; reload the xopc extension.`,
+      ),
+    };
+  }
   try {
     const result = await execute(command.input, command.timeoutMs, command.visualFallback, startedAt);
     return { id: command.id, result };
