@@ -26,7 +26,7 @@ import type {
   ChannelCommandAdapter,
 } from '@xopcai/xopc/channels/plugin-types.js';
 import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
-import { submitClarifyChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
+import { answerClarificationChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { issuePairingChallenge, resolveStandardPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
@@ -679,7 +679,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       if (lastColon > 0) {
         const requestId = rest.slice(0, lastColon);
         const idx = Number.parseInt(rest.slice(lastColon + 1), 10);
-        if (requestId && Number.isFinite(idx) && submitClarifyChoiceFromChannel(requestId, idx)) {
+        const idempotencyKey = `telegram:${_accountId}:callback:${ctx.callbackQuery.id}`;
+        if (requestId && Number.isFinite(idx) && answerClarificationChoiceFromChannel(requestId, idx, idempotencyKey)) {
           await ctx.answerCallbackQuery();
           return;
         }

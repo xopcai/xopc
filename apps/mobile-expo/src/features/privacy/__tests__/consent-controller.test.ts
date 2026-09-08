@@ -89,7 +89,7 @@ describe('data sharing consent', () => {
   });
 
   it('requires permission for content and AI actions while allowing reads, deletion and stopping work', () => {
-    for (const path of ['/api/sessions/s/inputs', '/api/tasks/t/inputs', '/api/notes', '/api/media', '/api/voice/speech', '/api/voice/transcriptions', '/api/workspace/sync', '/api/automations/a/run', '/api/files/s/upload', '/api/clarify/c']) {
+    for (const path of ['/api/sessions/s/inputs', '/api/tasks/t/inputs', '/api/notes', '/api/media', '/api/voice/speech', '/api/voice/transcriptions', '/api/workspace/sync', '/api/automations/a/run', '/api/files/s/upload', '/api/clarifications/c/responses']) {
       expect(requiresDataSharingConsent(path, 'POST'), path).toBe(true);
       expect(requiresDataSharingConsent(`${path.slice(1)}?source=mobile`, 'POST'), path).toBe(true);
       expect(requiresDataSharingConsent(path, 'GET'), path).toBe(false);

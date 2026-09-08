@@ -8,17 +8,25 @@ import { MarkdownView } from './MarkdownView';
 
 export type ClarifyPromptState = {
   requestId: string;
+  kind: 'input' | 'approval';
   question: string;
   choices?: string[];
-  default?: string;
+  suggestedAnswer?: string;
+  version: number;
+  createdAt: number;
+  expiresAt?: number;
 };
 
+type ClarifyPromptView = Pick<ClarifyPromptState, 'requestId' | 'question' | 'choices' | 'suggestedAnswer' | 'expiresAt'>
+  & Partial<Pick<ClarifyPromptState, 'kind' | 'version' | 'createdAt'>>;
+
 type ClarifyPromptProps = {
-  prompt: ClarifyPromptState | null;
+  prompt: ClarifyPromptView | null;
   submitting: boolean;
   submitError: string | null;
   onSubmit: (answer: string) => void;
-  onSkip: () => void;
+  onAgentDecide: () => void;
+  onCancel: () => void;
 };
 
 export const ClarifyPrompt = memo(function ClarifyPrompt({
@@ -26,15 +34,23 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
   submitting,
   submitError,
   onSubmit,
-  onSkip,
+  onAgentDecide,
+  onCancel,
 }: ClarifyPromptProps) {
   const { colors } = useTheme();
   const labels = useMessages().chat;
   const [draft, setDraft] = useState('');
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     setDraft('');
   }, [prompt?.requestId]);
+
+  useEffect(() => {
+    if (!prompt?.expiresAt) return;
+    const timer = setInterval(() => setTick(value => value + 1), 1_000);
+    return () => clearInterval(timer);
+  }, [prompt?.expiresAt]);
 
   const choices = useMemo(
     () => prompt?.choices?.filter((choice) => choice.trim().length > 0) ?? [],
@@ -50,6 +66,10 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
   const mutedColor = colors.text.secondary;
   const textColor = colors.text.primary;
   const inputBg = colors.surface.input;
+  const remainingSeconds = prompt.expiresAt
+    ? Math.max(0, Math.ceil((prompt.expiresAt - Date.now()) / 1_000))
+    : null;
+  void tick;
 
   const submitDraft = () => {
     if (!canSubmitDraft) return;
@@ -107,12 +127,12 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
               <Text style={[styles.choiceText, { color: textColor }]}>{choice}</Text>
             </Pressable>
           ))}
-          {prompt.default ? (
+          {prompt.suggestedAnswer ? (
             <Pressable
               disabled={submitting}
               style={({ pressed }) => [
                 styles.choiceButton,
-                styles.defaultChoiceButton,
+                styles.suggestedChoiceButton,
                 {
                   borderColor,
                   backgroundColor: pressed
@@ -121,10 +141,10 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
                   opacity: submitting ? 0.6 : 1,
                 },
               ]}
-              onPress={() => onSubmit(prompt.default!)}
+              onPress={() => onSubmit(prompt.suggestedAnswer!)}
             >
               <Text style={[styles.choiceText, { color: mutedColor }]}>
-                {labels.clarifyUseDefault}: {prompt.default}
+                {labels.clarifyUseSuggested}: {prompt.suggestedAnswer}
               </Text>
             </Pressable>
           ) : null}
@@ -168,11 +188,20 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
 
       <View style={styles.footerRow}>
         <Text variant="bodySmall" style={{ color: mutedColor }}>
-          {labels.clarifyTimeoutNote}
+          {prompt.kind === 'approval'
+            ? `${labels.clarifyApprovalTimeout}${remainingSeconds === null ? '' : ` ${labels.clarifyTimeRemaining.replace('{{time}}', `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`)}`}`
+            : labels.clarifyDurableNote}
         </Text>
-        <Button mode="text" compact disabled={submitting} onPress={onSkip}>
-          {labels.clarifySkip}
-        </Button>
+        <View style={styles.footerActions}>
+          {prompt.kind === 'input' ? (
+            <Button mode="text" compact disabled={submitting} onPress={onAgentDecide}>
+              {labels.clarifyAgentDecide}
+            </Button>
+          ) : null}
+          <Button mode="text" compact disabled={submitting} onPress={onCancel}>
+            {labels.clarifyCancel}
+          </Button>
+        </View>
       </View>
     </View>
   );
@@ -223,7 +252,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  defaultChoiceButton: {
+  suggestedChoiceButton: {
     borderStyle: 'dashed',
   },
   choiceText: {
@@ -257,5 +286,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
     marginTop: 8,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

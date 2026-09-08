@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, DeviceEventEmitter, Keyboard, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { submitClarifyResponse } from '../../api/agent-client';
+import { randomUUID } from 'expo-crypto';
+import { submitClarificationResponse } from '../../api/agent-client';
 import { ClarifyPrompt } from '../chat/ClarifyPrompt';
 import { MarkdownView } from '../chat/MarkdownView';
 import { useMessages } from '../../i18n/messages';
@@ -39,6 +40,7 @@ export function VoiceCallSurface() {
   const captions = useVoicePreferences(s => s.captions);
   const [speaker, setSpeaker] = useState(false);
   const [diagnosticCopy, setDiagnosticCopy] = useState<'copied' | 'failed'>();
+  const clarificationAttempt = useRef<{ signature: string; idempotencyKey: string }>();
   const [, tick] = useState(0);
   const approvalsEnabled = state.phase === 'connected' && state.engine === 'agent' && Boolean(state.target);
   const approvals = useQuery({ ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.sessionKey), enabled: approvalsEnabled });
@@ -46,8 +48,22 @@ export function VoiceCallSurface() {
   const approval = useMutation({ mutationFn: ({ id, decision, sessionKey }: { id: string; decision: 'approved' | 'denied'; sessionKey: string }) => respondVoiceApproval(id, decision, sessionKey), onSuccess: () => approvals.refetch(), retry: false });
   useEffect(() => { voiceCall.setApprovalPending(pendingApprovals.length > 0); }, [pendingApprovals.length]);
   const clarification = useMutation({
-    mutationFn: ({ id, answer }: { id: string; answer?: string }) => submitClarifyResponse(id, answer === undefined ? { skip: true } : { answer }),
-    onSuccess: (_, variables) => { if (voiceCall.getSnapshot().clarification?.requestId === variables.id) voiceCall.confirmationSent(); },
+    mutationFn: ({ id, action, answer, version }: { id: string; action: 'answer' | 'agent_decide' | 'cancel'; answer?: string; version: number }) => {
+      const signature = `${id}\n${version}\n${action}\n${answer ?? ''}`;
+      if (clarificationAttempt.current?.signature !== signature) {
+        clarificationAttempt.current = { signature, idempotencyKey: randomUUID() };
+      }
+      return submitClarificationResponse(id, {
+        action,
+        answer,
+        expectedVersion: version,
+        idempotencyKey: clarificationAttempt.current.idempotencyKey,
+      });
+    },
+    onSuccess: (_, variables) => {
+      clarificationAttempt.current = undefined;
+      if (voiceCall.getSnapshot().clarification?.requestId === variables.id) voiceCall.confirmationSent();
+    },
     retry: false,
   });
   const resetApproval = approval.reset;
@@ -129,8 +145,9 @@ export function VoiceCallSurface() {
           {state.responseId && <Button mode="outlined" onPress={() => void voiceCall.stopReply()}>{m.stopReply}</Button>}
           {state.clarification ? <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
             <ClarifyPrompt prompt={state.clarification} submitting={clarification.isPending} submitError={clarification.isError ? m.error : null}
-              onSubmit={answer => { if (state.clarification) clarification.mutate({ id: state.clarification.requestId, answer }); }}
-              onSkip={() => { if (state.clarification) clarification.mutate({ id: state.clarification.requestId }); }} />
+              onSubmit={answer => { if (state.clarification) clarification.mutate({ id: state.clarification.requestId, action: 'answer', answer, version: state.clarification.version }); }}
+              onAgentDecide={() => { if (state.clarification) clarification.mutate({ id: state.clarification.requestId, action: 'agent_decide', version: state.clarification.version }); }}
+              onCancel={() => { if (state.clarification) clarification.mutate({ id: state.clarification.requestId, action: 'cancel', version: state.clarification.version }); }} />
           </View> : null}
           {pendingApprovals.map(item => <View key={item.id} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
             <Text style={[typography.heading, { color: colors.text.primary }]}>{m.approval}</Text>

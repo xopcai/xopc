@@ -77,7 +77,7 @@ export type RunXopcEmbeddedTurnParams = {
 
 export type RunXopcEmbeddedTurnResult = {
   ok: boolean;
-  stopReason?: 'connection_required';
+  stopReason?: 'connection_required' | 'clarification_required';
   /** False for harness failures that must not trigger another model attempt. */
   retryable?: boolean;
   errorMessage?: string;

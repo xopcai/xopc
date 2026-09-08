@@ -93,9 +93,13 @@ export type AgentStreamTtsAudioPayload = {
 
 export type AgentStreamClarifyRequestPayload = {
   requestId: string;
+  kind: 'input' | 'approval';
   question: string;
   choices?: string[];
-  default?: string;
+  suggestedAnswer?: string;
+  version: number;
+  createdAt: number;
+  expiresAt?: number;
   petFeedback?: PetFeedback;
 };
 

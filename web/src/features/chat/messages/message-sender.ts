@@ -284,12 +284,16 @@ export type MessagingCallbacks = {
     attachTo?: 'last_assistant';
     messageId?: string;
   }) => void;
-  /** Agent `clarify` tool — user must answer via POST /api/clarify/:requestId */
+  /** Durable agent clarification projected from the gateway. */
   onClarifyRequest?: (payload: {
     requestId: string;
+    kind: 'input' | 'approval';
     question: string;
     choices?: string[];
-    default?: string;
+    suggestedAnswer?: string;
+    version: number;
+    createdAt: number;
+    expiresAt?: number;
   }) => void;
   /** User turn from another device or early in the POST stream (before assistant tokens). */
   onUserMessage?: (message: Message) => void;
@@ -736,8 +740,19 @@ export class MessageSender {
           const choices = Array.isArray(payload.choices)
             ? (payload.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
             : undefined;
-          const def = typeof payload.default === 'string' && payload.default.trim() ? payload.default.trim() : undefined;
-          cb.onClarifyRequest({ requestId, question, choices: choices && choices.length >= 2 ? choices : undefined, default: def });
+          const suggestedAnswer = typeof payload.suggestedAnswer === 'string' && payload.suggestedAnswer.trim()
+            ? payload.suggestedAnswer.trim()
+            : undefined;
+          cb.onClarifyRequest({
+            requestId,
+            kind: payload.kind === 'approval' ? 'approval' : 'input',
+            question,
+            choices: choices && choices.length >= 2 ? choices : undefined,
+            suggestedAnswer,
+            version: typeof payload.version === 'number' ? payload.version : 1,
+            createdAt: typeof payload.createdAt === 'number' ? payload.createdAt : Date.now(),
+            expiresAt: typeof payload.expiresAt === 'number' ? payload.expiresAt : undefined,
+          });
         }
         break;
       }

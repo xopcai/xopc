@@ -181,7 +181,10 @@ export function createAgentVoiceEngine(options: {
         response.abortController.signal,
       )) {
         if (activeResponse !== response || response.abortController.signal.aborted) return;
-        if (event.type === 'assistant_delta' || event.type === 'tool_end') response.awaitingClarification = false;
+        if (event.type === 'assistant_delta'
+          || (event.type === 'tool_end' && event.payload?.toolName !== 'clarify')) {
+          response.awaitingClarification = false;
+        }
         if (event.type === 'assistant_delta' && typeof event.payload?.delta === 'string') {
           if (response.text.length + event.payload.delta.length > 32_000) throw new Error('Voice response text limit reached');
           if (!response.firstTextSeen) {
@@ -201,7 +204,17 @@ export function createAgentVoiceEngine(options: {
         }
         if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
           response.awaitingClarification = true;
-          send('response.clarification', { responseId: response.id, requestId: event.payload.requestId.slice(0, 160), question: event.payload.question.slice(0, 8_000), ...(Array.isArray(event.payload.choices) ? { choices: event.payload.choices.filter((choice): choice is string => typeof choice === 'string').slice(0, 20).map((choice) => choice.slice(0, 1_000)) } : {}) });
+          send('response.clarification', {
+            responseId: response.id,
+            requestId: event.payload.requestId.slice(0, 160),
+            kind: event.payload.kind === 'approval' ? 'approval' : 'input',
+            question: event.payload.question.slice(0, 8_000),
+            ...(Array.isArray(event.payload.choices) ? { choices: event.payload.choices.filter((choice): choice is string => typeof choice === 'string').slice(0, 20).map((choice) => choice.slice(0, 1_000)) } : {}),
+            ...(typeof event.payload.suggestedAnswer === 'string' ? { suggestedAnswer: event.payload.suggestedAnswer.slice(0, 1_000) } : {}),
+            version: typeof event.payload.version === 'number' ? event.payload.version : 1,
+            createdAt: typeof event.payload.createdAt === 'number' ? event.payload.createdAt : Date.now(),
+            ...(typeof event.payload.expiresAt === 'number' ? { expiresAt: event.payload.expiresAt } : {}),
+          });
         }
         if (event.type === 'error') {
           throw new Error(typeof event.payload?.message === 'string' ? event.payload.message : 'Agent response failed');

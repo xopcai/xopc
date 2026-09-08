@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
 import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
+import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
 import type { Config } from '../../config/schema.js';
 import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
@@ -263,6 +264,8 @@ export async function* runProcessDirectStreaming(
 ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
   const sessionKey = input.sessionKey ?? 'agent:main:main';
   const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(sessionKey, input.runId));
+  const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(sessionKey, input.runId));
+  const isInternalResume = isConnectionResume || isClarificationResume;
   const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId, input.origin);
 
@@ -462,7 +465,7 @@ export async function* runProcessDirectStreaming(
         }
       }
 
-      if (channel === 'webchat' && !isConnectionResume) {
+      if (channel === 'webchat' && !isInternalResume) {
         pushVisible({
           type: 'user_message',
           timestamp: userMessage.timestamp ?? Date.now(),
@@ -480,7 +483,7 @@ export async function* runProcessDirectStreaming(
       const pendingUserMessage = (sourceContexts.length > 0
         ? injectSourceContextsIntoUserMessage(userMessage, sourceContexts)
         : userMessage) as TranscriptUserMessage;
-      if (!isConnectionResume) setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
+      if (!isInternalResume) setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
 
       try {
         const result = await deps.agentManager.withSkillCapabilities(
@@ -522,7 +525,7 @@ export async function* runProcessDirectStreaming(
           pushVisible({ type: 'error', content: formatStreamError(result.errorMessage) });
         }
       } finally {
-        if (!isConnectionResume) clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
+        if (!isInternalResume) clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
       }
     } catch (err) {
       if (err instanceof AsyncQueueOverflowError) {

@@ -89,38 +89,43 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     return result.ok ? c.json({ ok: true, payload: result.state }) : c.json({ ok: false, error: { code: 'CONFLICT', message: 'Input changed' }, payload: result.state }, 409);
   });
 
-  authenticated.post('/api/clarify/:requestId', chatRateLimitMiddleware, async (c) => {
-    const requestId = c.req.param('requestId')?.trim() ?? '';
-    if (!requestId) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing requestId' } },
-        400,
-      );
-    }
+  authenticated.get('/api/sessions/:sessionKey/clarification', (c) => {
+    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+    if (!sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
+    const snapshot = service.getClarificationState(sessionKey);
+    if (!snapshot) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
+    return c.json({ ok: true, payload: snapshot });
+  });
+
+  authenticated.post('/api/clarifications/:id/responses', chatRateLimitMiddleware, async (c) => {
+    const id = c.req.param('id')?.trim() ?? '';
     const body = await c.req.json().catch(() => null);
-    const skip =
-      body &&
-      typeof body === 'object' &&
-      (body as { skip?: unknown }).skip === true;
-    const rawAnswer =
-      body && typeof body === 'object' && typeof (body as { answer?: unknown }).answer === 'string'
-        ? (body as { answer: string }).answer
-        : '';
-    const answer = typeof rawAnswer === 'string' ? rawAnswer.trim() : '';
-    if (!skip && !answer) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing answer field' } },
-        400,
-      );
+    const record = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+    const action = record.action;
+    const expectedVersion = record.expectedVersion;
+    const idempotencyKey = typeof record.idempotencyKey === 'string' ? record.idempotencyKey.trim() : '';
+    if (!id || !idempotencyKey || typeof expectedVersion !== 'number'
+      || !Number.isInteger(expectedVersion)
+      || (action !== 'answer' && action !== 'agent_decide' && action !== 'cancel')) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid clarification response' } }, 400);
     }
-    const handled = service.submitClarifyResponse(requestId, skip ? '' : answer);
-    if (!handled) {
-      return c.json(
-        { ok: false, error: { code: 'NOT_FOUND', message: 'No pending clarification with this ID' } },
-        404,
-      );
-    }
-    return c.json({ ok: true, payload: { received: true } });
+    const result = service.resolveClarificationResponse({
+      id,
+      expectedVersion,
+      idempotencyKey,
+      action,
+      answer: typeof record.answer === 'string' ? record.answer : undefined,
+    });
+    if (result.ok === true) return c.json({ ok: true, payload: result }, result.queued ? 202 : 200);
+    const status = result.code === 'NOT_FOUND' ? 404 : result.code === 'EXPIRED' ? 410 : result.code === 'INVALID' ? 400 : 409;
+    const message = result.code === 'NOT_FOUND'
+      ? 'This clarification is no longer active'
+      : result.code === 'EXPIRED'
+        ? 'This approval has expired'
+        : result.code === 'INVALID'
+          ? 'The clarification response is invalid'
+          : 'The clarification changed; reload and try again';
+    return c.json({ ok: false, error: { code: result.code, message }, payload: result.clarification }, status);
   });
 
   authenticated.post('/api/send', chatRateLimitMiddleware, async (c) => {

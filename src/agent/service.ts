@@ -46,6 +46,7 @@ import {
 } from './messaging/index.js';
 import { InboundLoop } from './inbound/inbound-loop.js';
 import { TurnDispatcher } from './inbound/turn-dispatcher.js';
+import { buildTranscriptUserMessage, hydrateUserTurnForLlm } from './inbound/attachment-pipeline.js';
 import {
   SessionContextManager,
   SessionLifecycleManager,
@@ -732,12 +733,18 @@ export class AgentService {
     return this.modelManager.getModelForSession(sessionKey);
   }
 
+  getThinkingLevelForSession(sessionKey: string): ThinkingLevel {
+    return (this.agentManager.getOrCreateAgent(sessionKey).state.thinkingLevel as ThinkingLevel | undefined)
+      ?? 'medium';
+  }
+
   /** Run a full tool-capable turn against a caller-owned, non-persistent transcript. */
   async runEphemeralTurn(params: {
     executionSessionKey: string;
     parentSessionKey: string;
     runId: string;
     content: string;
+    attachments?: InboundAttachmentInput[];
     modelRef: string;
     thinkingLevel?: ThinkingLevel;
     transcriptRuntime: EmbeddedTranscriptRuntime;
@@ -747,11 +754,21 @@ export class AgentService {
     const agent = this.agentManager.getOrCreateAgent(params.parentSessionKey);
     const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(params.parentSessionKey);
     const model = resolveModel(params.modelRef);
+    const prepared = await this.prepareInboundAttachments(params.executionSessionKey, params.attachments);
+    const userMessage = await buildTranscriptUserMessage({
+      text: params.content,
+      prepared,
+      sessionKey: params.parentSessionKey,
+      modelRef: params.modelRef,
+      config: this.effectiveAppConfig(),
+      agentManager: this.agentManager,
+    });
+    const llmTurn = await hydrateUserTurnForLlm({ message: userMessage, modelRef: params.modelRef });
     return runWithEmbeddedExecutionSession(params.executionSessionKey, () =>
       runXopcEmbeddedTurn({
         sessionKey: params.executionSessionKey,
         runId: params.runId,
-        userMessage: { role: 'user', content: params.content, timestamp: Date.now() },
+        userMessage,
         model,
         modelRef: params.modelRef,
         tools: agent.state.tools,
@@ -763,7 +780,8 @@ export class AgentService {
         turnPolicy: this.agentManager.createAgentTurnPolicy(params.parentSessionKey),
         abortSignal: params.abortSignal,
         onEvent: params.onEvent,
-      }),
+        images: llmTurn.images,
+      }), params.runId,
     );
   }
 
