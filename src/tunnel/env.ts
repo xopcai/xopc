@@ -1,4 +1,5 @@
 import type { Config } from '../config/schema.js';
+import { resolveConnectedPlatformEndpoint } from '../platform/resolution.js';
 
 const DEV_REGISTRATION_SECRET = 'dev-registration-secret';
 
@@ -125,5 +126,8 @@ export function resolveTunnelBrokerUrl(
   configBrokerUrl: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  return env.XOPC_TUNNEL_BROKER_URL ?? configBrokerUrl ?? 'https://frp.xopc.ai/api';
+  return env.XOPC_TUNNEL_BROKER_URL
+    ?? resolveConnectedPlatformEndpoint('tunnelApi')
+    ?? configBrokerUrl
+    ?? 'https://frp.xopc.ai/api';
 }

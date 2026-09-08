@@ -45,6 +45,7 @@ Gateway 会自动重载许多设置，但凭据、扩展、消息通道和运行
 | 连接 MCP 服务 | **设置 → Agent MCP** | [MCP](./mcp.md) |
 | 连接消息应用 | **消息通道** | [消息通道](./channels/index.md) |
 | 启用远程访问 | **设置 → 远程访问** | [远程访问](./remote-access.md) |
+| 连接 XOPC Cloud 或企业平台 | `xopc platform` | [XOPC Platform](./platform.md) |
 | 修改语音或图像服务商 | **设置 → 能力** | [语音](./voice.md)、[图像](./image-multimodal.md) |
 
 ## 直接编辑 JSON
