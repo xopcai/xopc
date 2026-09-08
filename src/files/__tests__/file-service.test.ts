@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FileServiceError,
   fileResourceId,
+  fileResourceFromPath,
   parseFileResourceId,
   resolveFilePath,
 } from '../file-service.js';
@@ -31,5 +32,36 @@ describe('file service paths', () => {
     await writeFile(join(outside, 'secret.txt'), 'secret');
     await symlink(join(outside, 'secret.txt'), join(root, 'docs', 'secret.txt'));
     await expect(resolveFilePath(root, 'docs/secret.txt')).rejects.toMatchObject({ status: 400 });
+  });
+
+  it.each(['.env', '.env.local', 'deploy.sh', 'Dockerfile', 'Dockerfile.dev', 'app.py', 'config.toml', 'Cargo.lock'])(
+    'marks common source file %s as previewable and editable',
+    async (name) => {
+      const root = await mkdtemp(join(tmpdir(), 'xopc-files-text-'));
+      const path = join(root, name);
+      await writeFile(path, 'plain text');
+      const resource = await fileResourceFromPath({
+        id: 'space-one', title: 'test', kind: 'workspace', bindings: [], writable: true, root,
+      }, await realpath(path));
+      expect(resource.mimeType).not.toBe('application/octet-stream');
+      expect(resource.capabilities).toEqual(expect.arrayContaining(['preview', 'edit']));
+    },
+  );
+
+  it('sniffs unfamiliar text files without exposing binary files to the editor', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'xopc-files-sniff-'));
+    const textPath = join(root, 'notes.custom');
+    const binaryPath = join(root, 'payload.custom');
+    await writeFile(textPath, 'editable text\n');
+    await writeFile(binaryPath, Buffer.from([0x50, 0x4b, 0x00, 0x03, 0x04]));
+    const space = { id: 'space-one', title: 'test', kind: 'workspace' as const, bindings: [], writable: true, root };
+
+    const text = await fileResourceFromPath(space, await realpath(textPath));
+    const binary = await fileResourceFromPath(space, await realpath(binaryPath));
+
+    expect(text).toMatchObject({ mimeType: 'text/plain' });
+    expect(text.capabilities).toEqual(expect.arrayContaining(['preview', 'edit']));
+    expect(binary).toMatchObject({ mimeType: 'application/octet-stream' });
+    expect(binary.capabilities).not.toContain('edit');
   });
 });

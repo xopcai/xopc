@@ -18,6 +18,7 @@ import {
   fetchWorkspaceFileBlob,
   readWorkspaceFile,
   resolveWorkspaceFileReference,
+  resolveWorkspaceFileResource,
   writeWorkspaceFile,
 } from '@/features/workspace/workspace-api';
 import type { WorkspaceEditorRequestOptions } from '@/features/workspace/workspace-api';
@@ -49,8 +50,7 @@ type WorkspacePreviewLoadState = PreviewLoadedSource & {
 };
 
 type EditorUiState = {
-  markdownEditMode: boolean;
-  htmlCodeMode: boolean;
+  sourceEditMode: boolean;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
 };
 
@@ -121,14 +121,12 @@ function previewReducer(state: WorkspacePreviewLoadState, action: WorkspacePrevi
   }
 }
 
-function editorReducer(state: EditorUiState, action: { type: 'reset' } | { type: 'markdown'; value: boolean | ((p: boolean) => boolean) } | { type: 'html'; value: boolean | ((p: boolean) => boolean) } | { type: 'saveStatus'; value: EditorUiState['saveStatus'] }): EditorUiState {
+function editorReducer(state: EditorUiState, action: { type: 'reset' } | { type: 'source'; value: boolean | ((p: boolean) => boolean) } | { type: 'saveStatus'; value: EditorUiState['saveStatus'] }): EditorUiState {
   switch (action.type) {
     case 'reset':
-      return { markdownEditMode: false, htmlCodeMode: false, saveStatus: 'idle' };
-    case 'markdown':
-      return { ...state, markdownEditMode: typeof action.value === 'function' ? action.value(state.markdownEditMode) : action.value };
-    case 'html':
-      return { ...state, htmlCodeMode: typeof action.value === 'function' ? action.value(state.htmlCodeMode) : action.value };
+      return { sourceEditMode: false, saveStatus: 'idle' };
+    case 'source':
+      return { ...state, sourceEditMode: typeof action.value === 'function' ? action.value(state.sourceEditMode) : action.value };
     case 'saveStatus':
       return { ...state, saveStatus: action.value };
   }
@@ -162,8 +160,7 @@ export function useWorkspacePreviewState({
 
   const [preview, dispatchPreview] = useReducer(previewReducer, descriptor, emptyLoaded);
   const [editorUi, dispatchEditorUi] = useReducer(editorReducer, {
-    markdownEditMode: false,
-    htmlCodeMode: false,
+    sourceEditMode: false,
     saveStatus: 'idle',
   });
   const [recentOpenWithApps, setRecentOpenWithApps] = useState<Array<{ name: string; path: string; lastUsedAt: number }>>([]);
@@ -191,15 +188,53 @@ export function useWorkspacePreviewState({
     };
 
     if (mode === 'metadata') {
-      void resolveWorkspaceFileReference(filePath, readOpts)
-        .then((ref) => {
+      void Promise.all([
+        resolveWorkspaceFileResource(filePath, readOpts).catch(() => null),
+        resolveWorkspaceFileReference(filePath, readOpts).catch(() => null),
+      ])
+        .then(async ([resource, ref]) => {
+          if (!resource) {
+            if (!cancelled) {
+              dispatchPreview({
+                type: 'loadSuccess',
+                payload: {
+                  descriptor,
+                  fileResourceId: ref?.fileId ?? null,
+                  mtimeMs: typeof ref?.mtimeMs === 'number' ? ref.mtimeMs : null,
+                },
+              });
+            }
+            return;
+          }
+
+          const resolvedDescriptor: PreviewFileDescriptor = {
+            ...descriptor,
+            mimeType: resource.mimeType,
+            type: detectPreviewFileType(resource.name, resource.mimeType),
+          };
+          if (readModeForPreviewType(resolvedDescriptor.type) === 'text') {
+            const { content, mtimeMs } = await readWorkspaceFile(filePath, readOpts);
+            if (!cancelled) {
+              dispatchPreview({
+                type: 'loadSuccess',
+                payload: {
+                  descriptor: resolvedDescriptor,
+                  textContent: content,
+                  fileResourceId: resource.id,
+                  mtimeMs: typeof mtimeMs === 'number' ? mtimeMs : resource.modifiedAt,
+                },
+              });
+            }
+            return;
+          }
+
           if (!cancelled) {
             dispatchPreview({
               type: 'loadSuccess',
               payload: {
-                descriptor,
-                fileResourceId: ref?.fileId ?? null,
-                mtimeMs: typeof ref?.mtimeMs === 'number' ? ref.mtimeMs : null,
+                descriptor: resolvedDescriptor,
+                fileResourceId: resource.id,
+                mtimeMs: resource.modifiedAt,
               },
             });
           }
@@ -282,7 +317,7 @@ export function useWorkspacePreviewState({
     };
   }, [preview.binaryBuffer, preview.descriptor.fileName, preview.descriptor.type]);
 
-  const onSaveMarkdown = useCallback(
+  const onSaveSource = useCallback(
     async (next: string) => {
       if (!filePath) return;
       if (saveStatusClearRef.current !== undefined) clearTimeout(saveStatusClearRef.current);
@@ -300,14 +335,16 @@ export function useWorkspacePreviewState({
     [filePath, readOpts],
   );
 
-  const debouncedHtmlSave = useDebouncedCallback((value: string) => void onSaveMarkdown(value), 500);
-  const onHtmlChange = useCallback(
+  const debouncedSourceSave = useDebouncedCallback((value: string) => void onSaveSource(value), 500);
+  const onSourceChange = useCallback(
     (next: string) => {
       dispatchPreview({ type: 'patchText', text: next });
-      debouncedHtmlSave(next);
+      debouncedSourceSave(next);
     },
-    [debouncedHtmlSave],
+    [debouncedSourceSave],
   );
+
+  useEffect(() => () => debouncedSourceSave.cancel(), [debouncedSourceSave, filePath]);
 
   const onDownload = useCallback(async () => {
     if (!filePath) return;
@@ -428,13 +465,10 @@ export function useWorkspacePreviewState({
     ...preview,
     extractedText: preview.descriptor.type === 'pptx' ? preview.pptxText : null,
     extractedTextTruncated: preview.pptxTruncated,
-    markdownEditMode: editorUi.markdownEditMode,
-    setMarkdownEditMode: (value: boolean | ((p: boolean) => boolean)) => dispatchEditorUi({ type: 'markdown', value }),
-    htmlCodeMode: editorUi.htmlCodeMode,
-    setHtmlCodeMode: (value: boolean | ((p: boolean) => boolean)) => dispatchEditorUi({ type: 'html', value }),
+    sourceEditMode: editorUi.sourceEditMode,
+    setSourceEditMode: (value: boolean | ((p: boolean) => boolean)) => dispatchEditorUi({ type: 'source', value }),
     saveStatus: editorUi.saveStatus,
-    onSaveMarkdown,
-    onHtmlChange,
+    onSourceChange,
     onDownload,
     createAttachmentFile,
     canDownload,

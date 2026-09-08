@@ -6,7 +6,6 @@ import { FilePreview } from '@/features/file-preview/file-preview';
 import { Skeleton } from '@/components/ui/skeleton';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
-  getPreviewFileExtension,
   getPreviewFileName,
   useWorkspacePreviewState,
 } from '@/features/preview-runtime';
@@ -73,10 +72,8 @@ export function WorkspaceFilePreviewPanel({
   const [markdownWordWrap, setMarkdownWordWrap] = useState(false);
   const { expanded, setExpanded } = useFilePreviewExpanded(Boolean(filePath), dialogOpen);
 
-  const ext = filePath ? getPreviewFileExtension(filePath) : '';
   const name = filePath ? getPreviewFileName(filePath) : '';
-  const isMd = ext === '.md';
-  const isHtml = ext === '.html' || ext === '.htm';
+  const isEditableText = ['text', 'markdown', 'code', 'html'].includes(state.descriptor.type);
 
   const handleCopyPath = useCallback(async () => {
     if (!filePath) return;
@@ -164,7 +161,7 @@ export function WorkspaceFilePreviewPanel({
                 </p>
               ) : null}
               {state.loading ? <Skeleton className="h-3.5 w-32" /> : null}
-              {(isMd || (isHtml && state.htmlCodeMode)) && state.saveStatus !== 'idle' ? (
+              {isEditableText && state.sourceEditMode && state.saveStatus !== 'idle' ? (
                 <span className={cn('shrink-0', state.saveStatus === 'error' && 'text-red-600 dark:text-red-400')}>
                   {state.saveStatus === 'saving'
                     ? m.workspace.saving
@@ -178,14 +175,11 @@ export function WorkspaceFilePreviewPanel({
           expanded,
           onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
           onClose: handleClose,
-          edit: isMd ? {
-            active: state.markdownEditMode,
-            onToggle: () => state.setMarkdownEditMode((value) => !value),
-          } : isHtml ? {
-            active: state.htmlCodeMode,
-            onToggle: () => state.setHtmlCodeMode((value) => !value),
+          edit: isEditableText ? {
+            active: state.sourceEditMode,
+            onToggle: () => state.setSourceEditMode((value) => !value),
           } : undefined,
-          wordWrap: isMd && state.markdownEditMode ? {
+          wordWrap: isEditableText && state.sourceEditMode ? {
             active: markdownWordWrap,
             onToggle: () => setMarkdownWordWrap((value) => !value),
           } : undefined,
@@ -212,12 +206,9 @@ export function WorkspaceFilePreviewPanel({
         extractedText={state.extractedText}
         extractedTextTruncated={state.extractedTextTruncated}
         workspaceEditing={{
-          markdownEditMode: state.markdownEditMode,
-          onSaveMarkdown: state.onSaveMarkdown,
-          markdownWordWrap,
-          onToggleMarkdownWordWrap: () => setMarkdownWordWrap((value) => !value),
-          htmlCodeMode: state.htmlCodeMode,
-          onHtmlChange: state.onHtmlChange,
+          sourceEditMode: state.sourceEditMode,
+          onSourceChange: state.onSourceChange,
+          sourceWordWrap: markdownWordWrap,
           isDark: resolvedTheme === 'dark',
         }}
         actions={previewActions}
