@@ -31,7 +31,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Core | TypeScript on Node.js **>= 22** |
+| Core | TypeScript on Node.js **>= 22.22.3** |
 | LLM layer | **~23** built-in providers via `@earendil-works/pi-ai` (`KnownProvider`); more via `models.json` |
 | Tests | **vitest** (`src/**/__tests__/*.test.ts`) |
 
