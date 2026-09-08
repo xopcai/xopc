@@ -4,12 +4,8 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { HtmlPreviewFrame } from '@/features/preview-runtime/html-preview-frame';
 import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
 
-const loadMarkdownSplit = () => import('@/components/markdown/markdown-split');
-const loadHtmlWorkspaceEditor = () => import('@/components/html/html-workspace-editor');
-
-const MarkdownSplit = lazy(() => loadMarkdownSplit().then((m) => ({ default: m.MarkdownSplit })));
-const HtmlWorkspaceEditor = lazy(() =>
-  loadHtmlWorkspaceEditor().then((m) => ({ default: m.HtmlWorkspaceEditor })),
+const SourceWorkspaceEditor = lazy(() =>
+  import('@/components/codemirror/source-workspace-editor').then((m) => ({ default: m.SourceWorkspaceEditor })),
 );
 
 function EditorLoadingFallback() {
@@ -82,23 +78,24 @@ function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdo
   const isWorkspace = props.descriptor.context === 'workspace';
   const editing = props.workspaceEditing;
 
+  if (isWorkspace && editing?.sourceEditMode) {
+    return (
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <Suspense fallback={<EditorLoadingFallback />}>
+          <SourceWorkspaceEditor
+            key={props.descriptor.id}
+            fileName={props.descriptor.fileName}
+            initialContent={text}
+            onChange={(value) => editing.onSourceChange?.(value)}
+            isDark={(editing.isDark ?? (props.resolvedTheme === 'dark')) === true}
+            lineWrap={editing.sourceWordWrap === true}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   if (mode === 'markdown') {
-    if (isWorkspace && editing?.markdownEditMode) {
-      return (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <Suspense fallback={<EditorLoadingFallback />}>
-            <MarkdownSplit
-              key={props.descriptor.id}
-              initialContent={text}
-              onSave={(c) => void editing?.onSaveMarkdown?.(c)}
-              isDark={(editing?.isDark ?? (props.resolvedTheme === 'dark')) === true}
-              wordWrap={editing?.markdownWordWrap === true}
-              onToggleWordWrap={editing?.onToggleMarkdownWordWrap}
-            />
-          </Suspense>
-        </div>
-      );
-    }
     return (
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <MarkdownView content={text} />
@@ -107,20 +104,6 @@ function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdo
   }
 
   if (mode === 'html') {
-    if (isWorkspace && editing?.htmlCodeMode) {
-      return (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <Suspense fallback={<EditorLoadingFallback />}>
-            <HtmlWorkspaceEditor
-              key={props.descriptor.id}
-              initialContent={text}
-              onChange={(v) => editing?.onHtmlChange?.(v)}
-              isDark={(editing?.isDark ?? (props.resolvedTheme === 'dark')) === true}
-            />
-          </Suspense>
-        </div>
-      );
-    }
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-2 pt-1 sm:px-4">
         <HtmlPreviewFrame html={text} title={props.descriptor.fileName} />

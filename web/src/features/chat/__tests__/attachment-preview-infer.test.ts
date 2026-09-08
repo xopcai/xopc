@@ -17,6 +17,16 @@ describe('detectPreviewFileType', () => {
   it('prefers office types over image extension false positives', () => {
     expect(detectPreviewFileType('file.xlsx', 'application/octet-stream')).toBe('spreadsheet');
   });
+
+  it('detects common editable source and dotfiles with a generic mime type', () => {
+    expect(detectPreviewFileType('.env', 'application/octet-stream')).toBe('text');
+    expect(detectPreviewFileType('.env.local', 'application/octet-stream')).toBe('text');
+    expect(detectPreviewFileType('deploy.sh', 'application/octet-stream')).toBe('code');
+    expect(detectPreviewFileType('Dockerfile', 'application/octet-stream')).toBe('code');
+    expect(detectPreviewFileType('Dockerfile.dev', 'application/octet-stream')).toBe('code');
+    expect(detectPreviewFileType('/workspace/.config/README', 'application/octet-stream')).toBe('text');
+    expect(detectPreviewFileType('notes.custom', 'text/plain')).toBe('text');
+  });
 });
 
 describe('inferMimeTypeFromFileName', () => {
