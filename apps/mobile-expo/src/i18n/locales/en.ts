@@ -1041,7 +1041,7 @@ export const en = {
     noRuns: 'No runs yet.',
     interval: 'Every {{duration}} ms',
     triggerKinds: { manual: 'Manual', webhook: 'Webhook', event: 'Event' },
-    actionKinds: { agent: 'Agent instruction', workflow: 'Workflow', browser_recipe: 'Browser recipe', task_command: 'Task command' },
+    actionKinds: { agent: 'Agent instruction', workflow: 'Workflow', browser_automation: 'Browser automation', task_command: 'Task command' },
     afterRunKinds: { none: 'Run record only', saveToSession: 'Save to session', webhook: 'Send webhook' },
   },
 
