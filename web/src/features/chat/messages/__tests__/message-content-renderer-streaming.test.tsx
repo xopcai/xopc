@@ -154,6 +154,60 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('Still streaming');
   });
 
+  it.each([
+    {
+      name: 'ER diagram',
+      source: [
+        'erDiagram',
+        '    MESSAGE ||--o{ CARD : references',
+        '    MESSAGE {',
+        '        string id',
+        '        json metadata',
+        '    }',
+        '    CARD {',
+        '        string id',
+        '        string message_id',
+        '    }',
+      ],
+    },
+    {
+      name: 'flowchart',
+      source: [
+        'flowchart TD',
+        '    QA[QA Card]',
+        '    QA --> Interaction[Interaction Card<br/>与 Agent 执行绑定]',
+        '    QA --> Product[Product Card<br/>由业务系统投递]',
+        '    Interaction --> Single[qa_single_select]',
+        '    Product --> Auth[qa_connector_auth]',
+      ],
+    },
+  ])('renders a completed $name in an earlier text segment while a later segment streams', async ({ source }) => {
+    render([
+      {
+        type: 'text',
+        text: [
+          '```mermaid',
+          ...source,
+          '```',
+        ].join('\n'),
+        segmentId: 'diagram',
+        presentation: 'answer',
+      },
+      {
+        type: 'text',
+        text: 'Message details are still streaming',
+        segmentId: 'details',
+        presentation: 'pending',
+      },
+    ], true);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-diagram] svg')).not.toBeNull();
+    });
+    expect(container.querySelector('pre code.language-mermaid')).toBeNull();
+    expect(container.textContent).toContain('Message details');
+  });
+
   it('renders a tail Mermaid block as soon as streaming completes', async () => {
     const content: MessageContent[] = [{
       type: 'text',
@@ -246,6 +300,16 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('code')?.textContent).toBe('.env');
     expect(container.textContent).toContain('发现关键情况：项目里已经有你的 .env。');
     expect(container.textContent).not.toContain('后面还有内容');
+  });
+
+  it('does not cut a narration summary through an inline code span', () => {
+    const prefix = '正在检查相关实现，'.repeat(12);
+    const path = '`libs/ts/agent-channels/src/view-models/qa-card.ts`';
+    const summary = firstNarrationSentence(`${prefix}${path}，后续内容不展示`);
+
+    expect(summary).toContain(path);
+    expect(summary.match(/`/g)).toHaveLength(2);
+    expect(summary.endsWith('…')).toBe(true);
   });
 
   it('collapses adjacent narration segments into one process update', () => {

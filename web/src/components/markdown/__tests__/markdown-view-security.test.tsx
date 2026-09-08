@@ -93,6 +93,31 @@ describe('MarkdownView security boundary', () => {
     expect(container.querySelector('pre code.language-mermaid')).toBeNull();
   });
 
+  it.each([
+    {
+      name: 'flowchart',
+      source: 'flowchart TD\n    QA[QA Card] --> Interaction[Interaction Card]',
+    },
+    {
+      name: 'ER diagram',
+      source: 'erDiagram\n    MESSAGE ||--o{ CARD : references',
+    },
+  ])('recognizes an unlabeled $name code fence as Mermaid', async ({ source }) => {
+    const container = renderMarkdown(`\`\`\`\n${source}\n\`\`\``);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-diagram] svg')).not.toBeNull();
+    });
+    expect(container.querySelector('pre code')).toBeNull();
+  });
+
+  it('does not reinterpret a code fence explicitly labeled as another language', () => {
+    const container = renderMarkdown('```text\nflowchart TD\n    A --> B\n```');
+
+    expect(container.querySelector('[data-mermaid-diagram]')).toBeNull();
+    expect(container.querySelector('pre code.language-text')?.textContent).toContain('flowchart TD');
+  });
+
   it('shows an explicit error instead of raw source when Mermaid parsing fails', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const container = renderMarkdown('```mermaid\nnot a diagram\n```');
