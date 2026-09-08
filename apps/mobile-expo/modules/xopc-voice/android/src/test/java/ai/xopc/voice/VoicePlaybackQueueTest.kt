@@ -51,4 +51,26 @@ class VoicePlaybackQueueTest {
       assertThrows(IllegalStateException::class.java) { queue.drain { _, _, _ -> written } }
     }
   }
+
+  @Test fun playbackProgressRestartsAtZeroForEveryResponse() {
+    val progress = VoicePlaybackProgress()
+    progress.reset(100)
+    assertEquals(40, progress.playedBytes(120, 80))
+    progress.reset(120)
+    assertEquals(0, progress.playedBytes(120, 80))
+    assertEquals(20, progress.playedBytes(130, 80))
+  }
+
+  @Test fun playbackProgressHandlesADelayedFlushReset() {
+    val progress = VoicePlaybackProgress()
+    progress.reset(500)
+    assertEquals(0, progress.playedBytes(0, 80))
+    assertEquals(20, progress.playedBytes(10, 80))
+  }
+
+  @Test fun playbackProgressStillHandlesTheUint32FrameCounterWrap() {
+    val progress = VoicePlaybackProgress()
+    progress.reset(-16)
+    assertEquals(42, progress.playedBytes(5, 80))
+  }
 }

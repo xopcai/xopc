@@ -133,6 +133,47 @@ describe('automatic read aloud', () => {
     expect(completed.input?.text).toBe('Current reply');
   });
 
+  it('waits for the persisted reply when streaming finishes before history updates', () => {
+    const oldReply = findLatestAutoReadAloudCandidate({
+      messages: [assistant('Old reply', 'old')],
+      sessionKey: 'main',
+      language: 'en',
+      title: 'AI response',
+    });
+    let tracker: AutoReadAloudTracker = {
+      sessionKey: 'main',
+      enabled: true,
+      wasStreaming: true,
+      lastSeenKey: oldReply?.key ?? null,
+    };
+
+    const streamFinishedFirst = advanceAutoReadAloud(tracker, {
+      sessionKey: 'main',
+      enabled: true,
+      streaming: false,
+      candidate: oldReply,
+    });
+    tracker = streamFinishedFirst.tracker;
+    expect(streamFinishedFirst.input).toBeNull();
+    expect(tracker.wasStreaming).toBe(true);
+
+    const persistedReply = findLatestAutoReadAloudCandidate({
+      messages: [assistant('Old reply', 'old'), assistant('New reply', 'new')],
+      sessionKey: 'main',
+      language: 'en',
+      title: 'AI response',
+    });
+    const completed = advanceAutoReadAloud(tracker, {
+      sessionKey: 'main',
+      enabled: true,
+      streaming: false,
+      candidate: persistedReply,
+    });
+
+    expect(completed.input?.text).toBe('New reply');
+    expect(completed.tracker.wasStreaming).toBe(false);
+  });
+
   it('does not synthesize a second voice track for an audio reply', () => {
     const candidate = findLatestAutoReadAloudCandidate({
       messages: [assistant('Spoken reply', 'audio', true)],

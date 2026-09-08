@@ -32,6 +32,7 @@ class XopcVoiceModule : Module() {
   private var submitted = 0
   private var lastPlayed = 0
   private val playbackQueue = VoicePlaybackQueue()
+  private val playbackProgress = VoicePlaybackProgress()
   private var playbackVolume = 1f
   private var forcedSpeaker = false
   private var previousAudioMode: Int? = null
@@ -56,7 +57,7 @@ class XopcVoiceModule : Module() {
   private val progress = object : Runnable {
     override fun run() {
       val player = track ?: return
-      val bytes = minOf(submitted.toLong(), (player.playbackHeadPosition.toLong() and 0xffffffffL) * 2).toInt()
+      val bytes = playbackProgress.playedBytes(player.playbackHeadPosition, submitted)
       if (responseId.isNotEmpty() && bytes > lastPlayed) {
         lastPlayed = bytes
         sendEvent("played", mapOf("responseId" to responseId, "playedBytes" to bytes))
@@ -257,8 +258,8 @@ class XopcVoiceModule : Module() {
   }
 
   private fun enqueue(id: String, audio: String) {
-    val player = track ?: createTrack()
     if (responseId != id) { flush(); responseId = id }
+    val player = track ?: createTrack()
     val bytes = Base64.decode(audio, Base64.NO_WRAP)
     require(bytes.isNotEmpty() && bytes.size % 2 == 0)
     check(submitted - lastPlayed + bytes.size <= 96000) { "Playback buffer full" }
@@ -289,6 +290,7 @@ class XopcVoiceModule : Module() {
     playbackQueue.clear()
     track?.pause()
     track?.flush()
+    playbackProgress.reset(track?.playbackHeadPosition ?: 0)
     responseId = ""
     submitted = 0
     lastPlayed = 0

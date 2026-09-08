@@ -34,6 +34,7 @@ export type CallDependencies = {
   invalidate(target: CallTarget): void;
 };
 const initial = (): CallState => ({ phase: 'idle', name: '', expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '' });
+const PLAYBACK_CAPTURE_GUARD_MS = 300;
 
 export function shouldPauseVoiceForBackground(state: CallState, permissionPromptActive: boolean): boolean {
   if (state.target?.background || !['connecting', 'recovering', 'connected'].includes(state.phase)) return false;
@@ -59,6 +60,9 @@ export class VoiceCallController {
   private limitTimer?: ReturnType<typeof setTimeout>;
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   private playbackTimer?: ReturnType<typeof setTimeout>;
+  private playbackCaptureTimer?: ReturnType<typeof setTimeout>;
+  private playbackCaptureGuarded = false;
+  private playbackCaptureGuardApplied = false;
   private inputReset = Promise.resolve();
   private playbackReset = Promise.resolve();
   constructor(private deps: CallDependencies) {}
@@ -120,6 +124,7 @@ export class VoiceCallController {
         event: event => { if (current()) this.onEvent(event); },
         audio: (id, pcm) => {
           if (!current() || id !== this.state.responseId) return;
+          this.guardCaptureForPlayback();
           this.receivedBytes += pcm.byteLength;
           this.diagnostics.received(id, pcm);
           if (this.state.responseStage === 'thinking') this.update({ responseStage: 'buffering' });
@@ -156,8 +161,37 @@ export class VoiceCallController {
   private finishResponse() {
     if (this.responseComplete && this.renderedBytes >= this.receivedBytes) {
       clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
+      this.clearPlaybackCaptureGuard(true);
       this.update({ responseId: undefined, responseStage: undefined, activity: undefined });
     }
+  }
+  private shouldCapture(): boolean {
+    return this.state.phase === 'connected'
+      && !this.state.muted
+      && !this.state.clarification
+      && !this.approvalPending
+      && !this.playbackCaptureGuarded;
+  }
+  private guardCaptureForPlayback(): void {
+    if (this.playbackCaptureGuardApplied || this.playbackCaptureGuarded || !this.shouldCapture()) return;
+    this.playbackCaptureGuardApplied = true;
+    this.playbackCaptureGuarded = true;
+    this.deps.audio.capture(false);
+    const generation = this.generation;
+    const responseId = this.state.responseId;
+    this.playbackCaptureTimer = setTimeout(() => {
+      this.playbackCaptureTimer = undefined;
+      if (generation !== this.generation || responseId !== this.state.responseId) return;
+      this.playbackCaptureGuarded = false;
+      this.deps.audio.capture(this.shouldCapture());
+    }, PLAYBACK_CAPTURE_GUARD_MS);
+  }
+  private clearPlaybackCaptureGuard(restore: boolean): void {
+    clearTimeout(this.playbackCaptureTimer);
+    this.playbackCaptureTimer = undefined;
+    const wasGuarded = this.playbackCaptureGuarded;
+    this.playbackCaptureGuarded = false;
+    if (restore && wasGuarded) this.deps.audio.capture(this.shouldCapture());
   }
   private watchPlayback(progress = false) {
     if (progress) { clearTimeout(this.playbackTimer); this.playbackTimer = undefined; }
@@ -175,6 +209,8 @@ export class VoiceCallController {
       case 'response.created':
         this.diagnostics.response(event.payload.responseId);
         clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
+        this.clearPlaybackCaptureGuard(true);
+        this.playbackCaptureGuardApplied = false;
         this.receivedBytes = 0; this.renderedBytes = 0; this.responseComplete = false;
         this.update({ responseId: event.payload.responseId, responseStage: 'thinking', assistantText: '', activity: undefined, error: undefined }); break;
       case 'response.audio.started':
@@ -194,6 +230,7 @@ export class VoiceCallController {
         this.diagnostics.cancelled(event.payload.responseId, event.payload.reason);
         if (event.payload.responseId === this.state.responseId) {
           clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
+          this.clearPlaybackCaptureGuard(true);
           void this.flushPlayback().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
           this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
         }
@@ -218,7 +255,7 @@ export class VoiceCallController {
     this.inputReset = this.inputReset.then(() => {
       if (this.state.phase !== 'connected') return;
       this.transport?.send('input.mute', { muted: this.state.muted || Boolean(this.state.clarification) || this.approvalPending });
-      this.deps.audio.capture(this.state.phase === 'connected' && !this.state.muted && !this.state.clarification && !this.approvalPending);
+      this.deps.audio.capture(this.shouldCapture());
     });
     await this.inputReset;
   }
@@ -230,6 +267,7 @@ export class VoiceCallController {
     const startedAt = performance.now();
     this.diagnostics.cancelled(id, 'client_cancelled');
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
+    this.clearPlaybackCaptureGuard(false);
     this.deps.audio.capture(false);
     this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
     try { await this.flushPlayback(); }
@@ -237,7 +275,7 @@ export class VoiceCallController {
     if (generation !== this.generation) return;
     transport?.send('session.metric', { responseId: id, metric: 'local_stop', durationMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)) });
     transport?.send('response.cancel', { responseId: id });
-    this.deps.audio.capture(!this.state.muted && !this.approvalPending && this.state.phase === 'connected');
+    this.deps.audio.capture(this.shouldCapture());
   }
   private flushPlayback(): Promise<void> {
     const flush = this.playbackReset.then(() => this.deps.audio.flush());
@@ -268,6 +306,7 @@ export class VoiceCallController {
     const stoppingGeneration = ++this.generation;
     clearTimeout(this.limitTimer); clearTimeout(this.recoveryTimer);
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
+    this.clearPlaybackCaptureGuard(false);
     this.deps.audio.capture(false);
     this.transport?.send('session.stop', { reason: 'user_finished' });
     this.transport?.close(); this.transport = undefined;
