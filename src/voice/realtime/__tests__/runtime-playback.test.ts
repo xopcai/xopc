@@ -110,9 +110,16 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     expect(events.some((event) => event.type === 'session.error' || event.type === 'response.cancelled')).toBe(false);
   });
 
-  it.each([true, false])('honors bargeIn=%s while the response is waiting for playback', async (bargeIn) => {
+  it.each([true, false])('honors bargeIn=%s after speech is finalized during playback', async (bargeIn) => {
     await start(bargeIn);
     onSttEvent({ type: 'speech_started', utteranceId: 'u2' });
+    await roundTrip();
+    expect(events.some((event) => event.type === 'response.cancelled')).toBe(false);
+    onSttEvent({ type: 'transcript_delta', utteranceId: 'u2', revision: 1, text: 'Stop' });
+    await roundTrip();
+    expect(events.some((event) => event.type === 'response.cancelled')).toBe(false);
+    onSttEvent({ type: 'speech_stopped', utteranceId: 'u2' });
+    onSttEvent({ type: 'transcript_final', utteranceId: 'u2', revision: 2, text: 'Stop' });
     await roundTrip();
     expect(events.some((event) => event.type === 'response.cancelled')).toBe(bargeIn);
     if (!bargeIn) {

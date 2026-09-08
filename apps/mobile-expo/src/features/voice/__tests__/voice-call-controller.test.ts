@@ -25,7 +25,7 @@ describe('mobile persistent voice controller', () => {
     h.event('response.created', { responseId: 'answer' });
     h.event('response.text.delta', { responseId: 'answer', delta: 'Hello' });
     h.connection().audio('answer', new Uint8Array([1, 0, 2, 0]));
-    await Promise.resolve();
+    await vi.waitFor(() => expect(h.deps.audio.enqueue).toHaveBeenCalled());
     h.audio().played('answer', 4);
     h.event('response.done', { responseId: 'answer', audio: true, finishReason: 'completed' });
     await h.controller.end();
@@ -112,6 +112,20 @@ describe('mobile persistent voice controller', () => {
     expect(h.controller.getSnapshot().phase).toBe('connected');
     h.event('session.error', { code: 'NO_ACTIVE_RESPONSE', recoverable: true });
     expect(h.controller.getSnapshot().error).toBeUndefined();
+    await h.controller.end();
+  });
+  it('finishes cancelling old playback before enqueueing a new response', async () => {
+    const h = harness(); await h.controller.start(target);
+    let finishFlush!: () => void;
+    vi.mocked(h.deps.audio.flush).mockImplementationOnce(() => new Promise(resolve => { finishFlush = resolve; }));
+    h.event('response.created', { responseId: 'old' });
+    h.event('response.cancelled', { responseId: 'old', reason: 'barge_in' });
+    h.event('response.created', { responseId: 'new' });
+    h.connection().audio('new', new Uint8Array([1, 0]));
+    await Promise.resolve();
+    expect(h.deps.audio.enqueue).not.toHaveBeenCalled();
+    finishFlush();
+    await vi.waitFor(() => expect(h.deps.audio.enqueue).toHaveBeenCalledWith('new', new Uint8Array([1, 0])));
     await h.controller.end();
   });
   it('never opens the microphone after a cancelled pending start', async () => {
