@@ -33,7 +33,7 @@ body:
     id: node-version
     attributes:
       label: Node.js version
-      description: Output of `node --version` (requires Node ≥ 22)
+      description: Output of `node --version` (requires Node ≥ 22.22.3)
       placeholder: "v22.x.x"
     validations:
       required: true

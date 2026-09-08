@@ -83,6 +83,54 @@ describe('durable connection recovery', () => {
     expect(await provider.describe(ref)).toBeTruthy();
   });
 
+  it('isolates toolkit discovery failures so Twitter cannot block YouTube', async () => {
+    upsertConnectorInstallation({ id: 'composio-gmail-local-owner', connectorId: 'composio-gmail', principalId: 'local-owner',
+      enabled: false, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+    config.connectors!.instances = {
+      'composio-twitter': {
+        xopcConnector: { managed: true, connectorId: 'composio-twitter', enabled: true },
+        runtime: { type: 'composio', role: 'toolkit', toolkit: 'twitter' },
+      },
+      'composio-youtube': {
+        xopcConnector: { managed: true, connectorId: 'composio-youtube', enabled: true },
+        runtime: { type: 'composio', role: 'toolkit', toolkit: 'youtube' },
+      },
+    };
+    for (const toolkit of ['twitter', 'youtube']) {
+      upsertConnectorInstallation({ id: `composio-${toolkit}-local-owner`, connectorId: `composio-${toolkit}`, principalId: 'local-owner',
+        enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+    }
+    const createSession = vi.fn(async (context: { toolkits?: string[] }) => {
+      const toolkit = context.toolkits?.[0];
+      if (toolkit === 'twitter') {
+        throw Object.assign(new Error('Twitter requires an explicit auth config.'), { status: 400 });
+      }
+      return {
+        search: vi.fn(async () => ({
+          toolSchemas: {
+            YOUTUBE_SEARCH_YOU_TUBE: {
+              description: 'Search YouTube',
+              inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+            },
+          },
+        })),
+      };
+    });
+    const provider = new ComposioToolProvider({
+      getConfig: () => config,
+      getCurrentContext: () => ({ sessionKey, channel: 'webchat', chatId: sessionKey }),
+      adapter: { createSession } as unknown as ComposioSessionsAdapter,
+    });
+
+    await expect(provider.search('youtube')).resolves.toEqual([
+      expect.objectContaining({ namespace: 'youtube', title: 'YOUTUBE_SEARCH_YOU_TUBE' }),
+    ]);
+    expect(createSession.mock.calls.map(([context]) => context.toolkits)).toEqual([
+      ['twitter'],
+      ['youtube'],
+    ]);
+  });
+
   it('does not request OAuth again for the selected account during a continuation', async () => {
     requireWait(); activeConnection();
     await recovery.act(sessionKey, action('continue'));

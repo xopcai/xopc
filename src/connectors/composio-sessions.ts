@@ -171,12 +171,8 @@ export class ComposioSessionsAdapter {
         return new ManagedComposioClient();
       }
       let Composio: typeof import('@composio/core').Composio;
-      let PiProvider: typeof import('@composio/experimental').PiProvider;
       try {
-        [{ Composio }, { PiProvider }] = await Promise.all([
-          import('@composio/core'),
-          import('@composio/experimental'),
-        ]);
+        ({ Composio } = await import('@composio/core'));
       } catch (cause) {
         throw new Error(
           'The xopc installation is missing the bundled Composio runtime. '
@@ -191,7 +187,6 @@ export class ComposioSessionsAdapter {
         dangerouslyAllowAutoUploadDownloadFiles: Boolean(options.fileDownloadDir),
         fileUploadDirs: false,
         ...(options.fileDownloadDir ? { fileDownloadDir: options.fileDownloadDir } : {}),
-        provider: new PiProvider(),
         host: 'xopc',
       }) as unknown as ComposioSessionsClient;
       client.mode = 'byok';
