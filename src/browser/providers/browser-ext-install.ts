@@ -24,7 +24,6 @@ import { resolveBinDir } from '../../config/paths.js';
 import { resolvePackageRoot } from '../../infra/update-check.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { createLogger } from '../../utils/logger.js';
-import { shouldRunExtensionBridgeServer } from '../backend-from-config.js';
 import { assertCacheDir } from '../cache-dir-policy.js';
 
 const log = createLogger('BrowserExtInstall');
@@ -382,9 +381,9 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   };
 }
 
-/** Gateway startup hook: ensure artifacts only while the extension backend is active. */
+/** Gateway startup hook: ensure artifacts only while the extension driver is active. */
 export async function ensureBrowserExtensionOnStartup(config: Config | undefined): Promise<void> {
-  if (!shouldRunExtensionBridgeServer(config)) return;
+  if (config?.browser.enabled === false || config?.browser.driver.kind !== 'extension') return;
   await ensureBrowserExtensionArtifacts();
 }
 

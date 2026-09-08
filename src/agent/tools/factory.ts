@@ -9,7 +9,6 @@
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
-import type { Page } from 'playwright-core';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
@@ -53,7 +52,7 @@ import {
   createClarifyTool,
   createToolManualTool,
   createAutomationTool,
-  createBrowserRecipeTool,
+  createBrowserAutomationTool,
   createXopcUseTool,
   createDesktopPetTool,
   createSkillInstallTool,
@@ -70,13 +69,9 @@ import type { SessionStore } from '../../session/store.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
-import {
-  BrowserManager,
-  BrowserNotReadyError,
-  CdpSupervisor,
-  checkBrowserReadiness,
-  resolveBrowserBackendFromConfig,
-} from '../../browser/index.js';
+import { BrowserNotReadyError, checkBrowserReadiness } from '../../browser/index.js';
+import { createBrowserDriver } from '../../browser/drivers/create-driver.js';
+import { BrowserRuntime } from '../../browser/runtime/browser-runtime.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
@@ -84,7 +79,7 @@ import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
 import type { AutomationService } from '../../automations/index.js';
-import type { BrowserRecipeService } from '../../browser/recipes/index.js';
+import type { BrowserAutomationService } from '../../browser/automations/index.js';
 import type { NotesService } from '../../notes/index.js';
 import type { ProjectService } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
@@ -135,7 +130,8 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
-  getBrowserRecipeService?: () => BrowserRecipeService | undefined;
+  getBrowserAutomationService?: () => BrowserAutomationService | undefined;
+  emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
@@ -181,10 +177,8 @@ export interface CreateCoreToolsOptions {
 }
 
 export class AgentToolsFactory {
-  private browserManager: BrowserManager | null = null;
-  /** One dialog/console supervisor per chat session (browser tab). */
-  private readonly browserTaskSupervisors = new Map<string, CdpSupervisor>();
-  /** Cached readiness probe — keyed by backend mode + extension host:port. */
+  private browserRuntime: BrowserRuntime | null = null;
+  /** Cached readiness probe keyed by the active driver configuration. */
   private browserReadinessCache: {
     key: string;
     expiresAt: number;
@@ -212,13 +206,7 @@ export class AgentToolsFactory {
   };
 
   private browserReadinessKey(): string {
-    const cfg = this.deps.getConfig?.();
-    const backend = resolveBrowserBackendFromConfig(cfg);
-    const host = '127.0.0.1';
-    const port = 19820;
-    const cdpUrl = backend.mode === 'cdp' ? backend.config.wsEndpoint : '';
-    const cloudKind = backend.mode === 'cloud' ? backend.config.type : '';
-    return `${backend.mode}@${host}:${port}|${cdpUrl}|${cloudKind}`;
+    return JSON.stringify(this.deps.getConfig?.()?.browser.driver ?? null);
   }
 
   private async checkBrowserReadinessCached(): Promise<BrowserNotReadyError | null> {
@@ -250,52 +238,39 @@ export class AgentToolsFactory {
     this.browserReadinessCache = null;
   }
 
-  private browserSupervisorForTask(taskId: string): CdpSupervisor {
-    let s = this.browserTaskSupervisors.get(taskId);
-    if (!s) {
-      s = new CdpSupervisor({ dialogPolicy: 'auto_dismiss', dialogTimeoutSeconds: 300 });
-      this.browserTaskSupervisors.set(taskId, s);
-    }
-    return s;
-  }
-
-  private async acquireBrowserPage(): Promise<Page> {
-    const taskId = this.deps.getCurrentContext()?.sessionKey ?? 'default';
-    const mgr = this.ensureBrowserManager();
-    await mgr.ensureConnected();
-    if (mgr.getExtensionProvider()) {
-      return null as unknown as Page;
-    }
-    const page = await mgr.getPage(taskId);
-    this.browserSupervisorForTask(taskId).attach(page);
-    return page;
-  }
-
-  private ensureBrowserManager(): BrowserManager {
-    if (!this.browserManager) {
-      this.browserManager = new BrowserManager({
-        getHeadless: () => false,
-        getBackend: () => resolveBrowserBackendFromConfig(this.deps.getConfig?.()),
+  private ensureBrowserRuntime(): BrowserRuntime {
+    if (!this.browserRuntime) {
+      this.browserRuntime = new BrowserRuntime({
+        getConfig: () => {
+          const config = this.deps.getConfig?.();
+          if (!config) throw new Error('Browser configuration is unavailable');
+          return config.browser;
+        },
+        createDriver: async () => {
+          const config = this.deps.getConfig?.();
+          if (!config) throw new Error('Browser configuration is unavailable');
+          return createBrowserDriver(config.browser);
+        },
+        allowedUploadRoots: [this.deps.workspace],
+        emit: this.deps.emitBrowserEvent,
       });
     }
-    return this.browserManager;
+    return this.browserRuntime;
   }
 
   /** Close Playwright and all pages (gateway stop, agent manager dispose, or config hot-reload). */
   async shutdownBrowser(): Promise<void> {
     this.browserReadinessCache = null;
-    if (!this.browserManager) {
+    if (!this.browserRuntime) {
       return;
     }
-    await this.browserManager.shutdown();
-    this.browserManager = null;
-    this.browserTaskSupervisors.clear();
+    await this.browserRuntime.shutdown();
+    this.browserRuntime = null;
   }
 
   /** Drop the tab for a session when its agent instance is removed. */
   async closeBrowserPageForSession(sessionKey: string): Promise<void> {
-    this.browserTaskSupervisors.delete(sessionKey);
-    await this.browserManager?.closePage(sessionKey);
+    await this.browserRuntime?.closeTaskSession(sessionKey);
   }
 
   createCoreTools(options?: CreateCoreToolsOptions): AgentTool<any, any>[] {
@@ -536,8 +511,8 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(browserEnabled && this.deps.getBrowserRecipeService
-        ? [createBrowserRecipeTool({ getBrowserRecipeService: this.deps.getBrowserRecipeService })]
+      ...(browserEnabled && this.deps.getBrowserAutomationService
+        ? [createBrowserAutomationTool({ getBrowserAutomationService: this.deps.getBrowserAutomationService })]
         : []),
       ...(this.deps.getAutomationService
         || this.deps.getProjectService
@@ -562,16 +537,9 @@ export class AgentToolsFactory {
       ...(browserEnabled
         ? [
             createBrowserUseTool({
-              getManager: () => this.ensureBrowserManager(),
-              getPageForTask: () => this.acquireBrowserPage(),
+              getRuntime: () => this.ensureBrowserRuntime(),
               getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
-              getConfig: () => this.deps.getConfig?.(),
               getReadiness: () => this.checkBrowserReadinessCached(),
-              getSupervisor: () =>
-                this.browserSupervisorForTask(this.deps.getCurrentContext()?.sessionKey ?? 'default'),
-              notifyBrowserPageClosed: (taskId) => {
-                this.browserTaskSupervisors.delete(taskId);
-              },
             }),
           ]
         : []),

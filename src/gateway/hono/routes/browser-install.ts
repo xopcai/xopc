@@ -13,19 +13,6 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createGatewayRouteLogger('BrowserInstall');
 
-function parseCloakInstallBody(body: unknown): { cacheDir?: string; binaryPath?: string } {
-  const input = body && typeof body === 'object' && !Array.isArray(body)
-    ? (body as Record<string, unknown>)
-    : {};
-  const cacheDir = typeof input.cacheDir === 'string' && input.cacheDir.trim()
-    ? input.cacheDir.trim()
-    : undefined;
-  const binaryPath = typeof input.binaryPath === 'string' && input.binaryPath.trim()
-    ? input.binaryPath.trim()
-    : undefined;
-  return { cacheDir, binaryPath };
-}
-
 function isInstallCancelled(err: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return true;
   return err instanceof Error && err.message === 'Install cancelled';
@@ -142,13 +129,6 @@ export function registerBrowserInstallRoutes(authenticated: Hono, deps: Authenti
     'playwright',
     '/api/browser/playwright/install/cancel',
   );
-  registerInstallCancelRoute(
-    authenticated,
-    deps,
-    'cloakbrowser',
-    '/api/browser/cloakbrowser/install/cancel',
-  );
-
   authenticated.post('/api/browser/playwright/install/stream', strictRateLimitMiddleware, async (c) => {
     return streamSSE(c, async (stream) => {
       await runBrowserInstallStream('playwright', stream, async (signal, emitProgress) => {
@@ -163,32 +143,6 @@ export function registerBrowserInstallRoutes(authenticated: Hono, deps: Authenti
           throw new Error(payload.reason ?? 'Chromium not found after install');
         }
         return payload;
-      });
-    });
-  });
-
-  authenticated.post('/api/browser/cloakbrowser/install/stream', strictRateLimitMiddleware, async (c) => {
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      body = {};
-    }
-    const { cacheDir, binaryPath } = parseCloakInstallBody(body);
-
-    return streamSSE(c, async (stream) => {
-      await runBrowserInstallStream('cloakbrowser', stream, async (signal, emitProgress) => {
-        log.info(
-          { cacheDir, binaryPath: binaryPath ? '(custom)' : undefined },
-          'Gateway: starting streamed CloakBrowser install',
-        );
-        const { installCloakBrowser } = await import('../../../browser/providers/cloakbrowser.js');
-        return installCloakBrowser({
-          cacheDir,
-          binaryPath,
-          signal,
-          onProgress: emitProgress,
-        });
       });
     });
   });

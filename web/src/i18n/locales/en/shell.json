@@ -14,7 +14,7 @@
     "settings": "Settings",
     "sessions": "Session management",
     "automations": "Automations",
-    "browserWorkflows": "Browser automations",
+    "browserAutomations": "Browser automations",
     "home": "Workbench",
     "projects": "Projects",
     "localApps": "App Workshop",

@@ -184,7 +184,8 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
-  getBrowserRecipeService?: () => import('../browser/recipes/index.js').BrowserRecipeService | undefined;
+  getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
+  emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
@@ -451,7 +452,8 @@ export class AgentManager implements AgentInstanceGateway {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
-      getBrowserRecipeService: this.config.getBrowserRecipeService,
+      getBrowserAutomationService: this.config.getBrowserAutomationService,
+      emitBrowserEvent: this.config.emitBrowserEvent,
       getNotesService: this.config.getNotesService,
       getProjectService: this.config.getProjectService,
       getLocalAppService: this.config.getLocalAppService,

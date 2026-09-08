@@ -5,45 +5,11 @@
  * Commands are sent over the WS connection and results are returned asynchronously.
  */
 
+import type { BrowserActionInput, BrowserWireCommand, BrowserWireResult } from '@xopcai/browser-control-contract';
+
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('ExtensionProvider');
-
-// ── Protocol types (mirrored from packages/browser-ext/src/protocol.ts) ──
-
-export type ExtensionAction =
-  | 'open' | 'navigate' | 'reload' | 'back' | 'forward' | 'get_url' | 'get_title'
-  | 'state' | 'snapshot' | 'screenshot' | 'content'
-  | 'evaluate'
-  | 'click' | 'type' | 'scroll' | 'wait'
-  | 'query_selector' | 'query_selector_all' | 'wait_for_selector'
-  | 'mouse_move' | 'mouse_click' | 'mouse_down' | 'mouse_up' | 'mouse_wheel'
-  | 'keys' | 'keyboard_type' | 'keyboard_down' | 'keyboard_up' | 'keyboard_insert_text'
-  | 'get_bounding_box' | 'get_element_text' | 'get_element_attribute'
-  | 'get_elements_count' | 'set_input_files' | 'scroll_into_view'
-  | 'set_viewport_size' | 'get_viewport_size'
-  | 'network_start' | 'network_events' | 'network_stop'
-  | 'dialog'
-  | 'get_cookies' | 'set_cookies' | 'clear_cookies'
-  | 'close' | 'new_tab' | 'list_tabs'
-  | 'cdp'
-  | 'ping';
-
-export interface ExtensionCommand {
-  id: string;
-  action: ExtensionAction;
-  tabId?: number;
-  args?: Record<string, unknown>;
-  timeout?: number;
-}
-
-export interface ExtensionResult {
-  id: string;
-  ok: boolean;
-  data?: unknown;
-  error?: string;
-  durationMs?: number;
-}
 
 // ── Configuration ────────────────────────────────────────────────────
 
@@ -66,7 +32,7 @@ const DEFAULT_COMMAND_TIMEOUT = 30_000;
 // ── Provider ─────────────────────────────────────────────────────────
 
 interface PendingRequest {
-  resolve: (result: ExtensionResult) => void;
+  resolve: (result: BrowserWireResult) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -222,26 +188,25 @@ export class ExtensionBrowserProvider {
     });
   }
 
-  /** Send a command to the extension and wait for the result. */
-  async sendCommand(action: ExtensionAction, args?: Record<string, unknown>, options?: { tabId?: number; timeout?: number }): Promise<ExtensionResult> {
+  /** Send one Browser Control v2 action to the extension. */
+  async send(input: BrowserActionInput, timeoutMs?: number, visualFallback = true): Promise<BrowserWireResult> {
     if (!this.connected || !this.clientWs) {
       throw new Error('Extension not connected. Ensure the Chrome Extension is installed and connected.');
     }
 
     const id = `cmd_${++this.commandCounter}_${Date.now()}`;
-    const cmd: ExtensionCommand = {
+    const cmd: BrowserWireCommand = {
       id,
-      action,
-      args,
-      tabId: options?.tabId,
-      timeout: options?.timeout ?? this.config.commandTimeout,
+      input,
+      timeoutMs: timeoutMs ?? this.config.commandTimeout,
+      visualFallback,
     };
 
-    return new Promise<ExtensionResult>((resolve, reject) => {
+    return new Promise<BrowserWireResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Command timeout: ${action} (${cmd.timeout}ms)`));
-      }, cmd.timeout!);
+        reject(new Error(`Browser action timed out: ${input.action} (${cmd.timeoutMs}ms)`));
+      }, cmd.timeoutMs);
 
       this.pending.set(id, { resolve, reject, timer });
 
@@ -258,16 +223,6 @@ export class ExtensionBrowserProvider {
   /** Whether the extension is currently connected. */
   isConnected(): boolean {
     return this.connected;
-  }
-
-  /** Close the Chrome Extension client without stopping the WebSocket server. */
-  disconnectClient(): void {
-    if (!this.clientWs) return;
-    try {
-      (this.clientWs as { close: () => void }).close();
-    } catch {
-      /* */
-    }
   }
 
   /** Shutdown the WebSocket server. */
@@ -328,7 +283,7 @@ export class ExtensionBrowserProvider {
       if (pending) {
         clearTimeout(pending.timer);
         this.pending.delete(id);
-        pending.resolve(msg as ExtensionResult);
+        pending.resolve(msg as BrowserWireResult);
       }
     } catch (e) {
       log.error({ err: e }, 'Failed to parse extension message');

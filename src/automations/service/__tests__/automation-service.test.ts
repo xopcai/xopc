@@ -584,17 +584,17 @@ describe('AutomationService', () => {
     expect(productRunsAfterRerun.map((item) => item.run.id)).toContain(rerun.id);
   });
 
-  it('runs a published Browser Recipe action and records its task', async () => {
+  it('runs an enabled browser automation action and records its task', async () => {
     const runAndWait = vi.fn(async () => ({
       id: 'recipe-run-1',
       status: 'succeeded' as const,
       result: { title: 'Example' },
     }));
-    service.setDeps({ browserRecipeService: { runAndWait } });
+    service.setDeps({ browserAutomationService: { runAndWait } });
     const automation = await service.create({
       name: 'Collect page title',
       trigger: { kind: 'manual' },
-      action: { kind: 'browser_recipe', recipeId: 'collect-title', args: { query: 'xopc' } },
+      action: { kind: 'browser_automation', automationId: 'collect-title', inputs: { query: 'xopc' } },
     });
 
     const queued = await service.runNow(automation.id);

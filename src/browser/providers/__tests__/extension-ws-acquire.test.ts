@@ -16,19 +16,17 @@ describe('extension-ws-acquire', () => {
     shutdown.mockClear();
   });
 
-  it('forceShutdownExtensionBrowserServer clears shared state regardless of refCount', async () => {
+  it('keeps the listener until every holder releases it', async () => {
     const mod = await import('../extension-ws-acquire.js');
-    const { release } = await mod.acquireExtensionBrowserServer({ port: 19820, host: '127.0.0.1' });
-    await mod.acquireExtensionBrowserServer({ port: 19820, host: '127.0.0.1' });
+    const first = await mod.acquireExtensionBrowserServer({ port: 19820, host: '127.0.0.1' });
+    const second = await mod.acquireExtensionBrowserServer({ port: 19820, host: '127.0.0.1' });
 
     expect(mod.getExtensionBrowserServerSnapshot().refCount).toBe(2);
-
-    const forced = await mod.forceShutdownExtensionBrowserServer();
-    expect(forced).toBe(true);
-    expect(shutdown).toHaveBeenCalledTimes(1);
-    expect(mod.getExtensionBrowserServerSnapshot().active).toBe(false);
-
-    await release();
+    await first.release();
+    expect(mod.getExtensionBrowserServerSnapshot().refCount).toBe(1);
+    expect(shutdown).not.toHaveBeenCalled();
+    await second.release();
+    expect(shutdown).toHaveBeenCalledOnce();
     expect(mod.getExtensionBrowserServerSnapshot().active).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 /**
- * Where user-facing browser caches (CloakBrowser binaries, CDP launcher
+ * Where user-facing browser caches (extension artifacts and CDP launcher
  * profiles, etc.) are allowed to live.
  *
  * Restricting the writable set to the user's home directory makes it safe to

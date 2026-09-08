@@ -168,8 +168,8 @@ export class AutomationActionExecutor {
     if (automation.action.kind === 'workflow') {
       return this.executeWorkflow(automation, automation.action, run, signal, hooks);
     }
-    if (automation.action.kind === 'browser_recipe') {
-      return this.executeBrowserRecipe(automation, automation.action, signal, hooks);
+    if (automation.action.kind === 'browser_automation') {
+      return this.executeBrowserAutomation(automation, automation.action, signal, hooks);
     }
     if (automation.action.kind === 'task_command') {
       await hooks.onRunPatch?.({ currentPhase: 'action' });
@@ -187,9 +187,9 @@ export class AutomationActionExecutor {
     return this.executeAgent(automation, automation.action, run, signal, hooks, deadlineAtMs);
   }
 
-  private async executeBrowserRecipe(
+  private async executeBrowserAutomation(
     automation: Automation,
-    action: Extract<AutomationAction, { kind: 'browser_recipe' }>,
+    action: Extract<AutomationAction, { kind: 'browser_automation' }>,
     signal: AbortSignal,
     hooks: AutomationActionExecutionHooks,
   ): Promise<AutomationActionTask> {
@@ -198,21 +198,21 @@ export class AutomationActionExecutor {
     if (safetyMode !== 'auto_apply') {
       return {
         status: 'succeeded',
-        summary: `${safetyMode === 'suggest_only' ? 'Suggest only' : 'Ask before applying'}: Browser automation ${action.recipeId} was not run.`,
+        summary: `${safetyMode === 'suggest_only' ? 'Suggest only' : 'Ask before applying'}: Browser automation ${action.automationId} was not run.`,
       };
     }
-    const service = this.deps.browserRecipeService;
+    const service = this.deps.browserAutomationService;
     if (!service) return { status: 'failed', error: 'Browser automation is not available' };
-    const run = await service.runAndWait(action.recipeId, action.args ?? {}, signal);
+    const run = await service.runAndWait(action.automationId, action.inputs ?? {}, signal);
     if (run.status === 'succeeded') {
       return {
         status: 'succeeded',
-        summary: `Browser automation ${action.recipeId} completed: ${JSON.stringify(run.result ?? null).slice(0, 3_500)}`,
+        summary: `Browser automation ${action.automationId} completed: ${JSON.stringify(run.result ?? null).slice(0, 3_500)}`,
       };
     }
     return {
       status: run.status === 'cancelled' ? 'cancelled' : 'failed',
-      error: run.error ?? `Browser automation ${action.recipeId} ${run.status}`,
+      error: run.error ?? `Browser automation ${action.automationId} ${run.status}`,
     };
   }
 

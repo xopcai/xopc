@@ -143,16 +143,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   );
   authenticated.post('/api/gateway/reveal-auth-secret', strictRateLimitMiddleware, revealGatewayAuthSecretHandler);
 
-  /** POST /api/agents/browser/reveal-cloud-api-key — plaintext browser cloud apiKey from config only. */
-  authenticated.post('/api/agents/browser/reveal-cloud-api-key', strictRateLimitMiddleware, async (c) => {
-    const config = service.currentConfig as Config;
-    const apiKey = config.browser?.cloud?.apiKey?.trim() || null;
-    return c.json({
-      ok: true,
-      payload: { apiKey, source: apiKey ? ('config' as const) : ('none' as const) },
-    });
-  });
-
   /** POST /api/tools/web/reveal-search-api-key — plaintext search provider apiKey by index. */
   authenticated.post('/api/tools/web/reveal-search-api-key', strictRateLimitMiddleware, async (c) => {
     let index = -1;

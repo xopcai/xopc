@@ -12,6 +12,9 @@
     "pack:zip": "node scripts/pack-zip.mjs",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@xopcai/browser-control-contract": "workspace:*"
+  },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
     "adm-zip": "^0.6.0",

@@ -11,7 +11,7 @@ const ALWAYS_BLOCKED_HOSTNAMES = new Set([
 ]);
 
 /**
- * Cloud metadata / IMDS IPv4 addresses — always blocked regardless of `allowPrivateUrls`.
+ * Cloud metadata / IMDS IPv4 addresses — always blocked regardless of `privateHostAllowed`.
  * Covers AWS, GCP, Azure, DigitalOcean, Oracle, Alibaba Cloud, and ECS task metadata.
  */
 const ALWAYS_BLOCKED_IPV4 = new Set([
@@ -39,16 +39,16 @@ const API_KEY_PATTERN =
  * no cloud metadata endpoints, no API key exfiltration attempts.
  *
  * @param raw URL string from the agent
- * @param options.allowPrivateUrls When true, skip private-IP blocking (cloud metadata still blocked)
+ * @param options.privateHostAllowed When true, skip private-IP blocking (cloud metadata still blocked)
  */
 export function assertBrowserUrlAllowed(
   raw: string,
-  options?: { allowPrivateUrls?: boolean },
+  options?: { privateHostAllowed?: boolean },
 ): void {
   const parsed = parseAndValidateUrl(raw);
   assertNotApiKeyExfiltration(raw);
   assertNotAlwaysBlocked(parsed.hostname);
-  assertNotPrivate(parsed.hostname, options?.allowPrivateUrls ?? false);
+  assertNotPrivate(parsed.hostname, options?.privateHostAllowed ?? false);
 }
 
 /**
@@ -95,13 +95,13 @@ export function containsApiKeyPattern(raw: string): boolean {
  */
 export function checkPostRedirectUrl(
   finalUrl: string,
-  options?: { allowPrivateUrls?: boolean },
+  options?: { privateHostAllowed?: boolean },
 ): string | undefined {
   if (isAlwaysBlockedUrl(finalUrl)) {
     return 'Blocked: redirect landed on a cloud metadata endpoint';
   }
 
-  if (options?.allowPrivateUrls) return undefined;
+  if (options?.privateHostAllowed) return undefined;
 
   try {
     const url = new URL(finalUrl.trim());
@@ -173,20 +173,21 @@ function assertNotAlwaysBlocked(hostname: string): void {
 
 function assertNotPrivate(hostname: string, allowPrivate: boolean): void {
   const host = hostname.toLowerCase();
+  if (allowPrivate) return;
 
   if (host === 'localhost' || host.endsWith('.localhost')) {
     throw new Error('Blocked: localhost');
   }
 
   if (isIPv4(host)) {
-    if (!allowPrivate && isBlockedIPv4(host)) {
+    if (isBlockedIPv4(host)) {
       throw new Error('Blocked: private or non-public IPv4 address');
     }
     return;
   }
 
   if (isIPv6(host)) {
-    if (!allowPrivate && isBlockedIPv6(host)) {
+    if (isBlockedIPv6(host)) {
       throw new Error('Blocked: private or loopback IPv6 address');
     }
     return;

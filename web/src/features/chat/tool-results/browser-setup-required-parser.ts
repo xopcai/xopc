@@ -1,64 +1,55 @@
 /** Discriminated payload emitted by `browser_use` when preflight fails. */
 export type BrowserSetupRequiredPayload = {
   kind: 'browser_setup_required';
-  backend: 'extension' | 'local' | 'cloakbrowser' | 'cdp' | 'cloud';
+  driver: 'extension' | 'playwright' | 'cdp' | 'remote';
   reason:
     | 'extension_not_installed'
-    | 'extension_bridge_offline'
     | 'extension_not_connected'
-    | 'local_chromium_missing'
-    | 'cloakbrowser_not_installed'
+    | 'chromium_missing'
     | 'cdp_unreachable'
-    | 'cloud_api_key_missing';
+    | 'remote_api_key_missing';
   deepLink: string;
   detail?: string;
   message?: string;
 };
 
-const VALID_BACKENDS: ReadonlySet<BrowserSetupRequiredPayload['backend']> = new Set([
+const VALID_DRIVERS: ReadonlySet<BrowserSetupRequiredPayload['driver']> = new Set([
   'extension',
-  'local',
-  'cloakbrowser',
+  'playwright',
   'cdp',
-  'cloud',
+  'remote',
 ]);
 
 const VALID_REASONS: ReadonlySet<BrowserSetupRequiredPayload['reason']> = new Set([
   'extension_not_installed',
-  'extension_bridge_offline',
   'extension_not_connected',
-  'local_chromium_missing',
-  'cloakbrowser_not_installed',
+  'chromium_missing',
   'cdp_unreachable',
-  'cloud_api_key_missing',
+  'remote_api_key_missing',
 ]);
 
-/** Detect + decode the JSON sentinel `browser_use` emits when the backend isn't ready. */
-export function parseBrowserSetupRequired(resultText: string | undefined): BrowserSetupRequiredPayload | null {
-  if (!resultText?.trim()) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(resultText);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const rec = parsed as Record<string, unknown>;
+/** Decode only the structured tool details; browser setup is never inferred from display text. */
+export function parseBrowserSetupRequired(details: unknown): BrowserSetupRequiredPayload | null {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return null;
+  const rec = details as Record<string, unknown>;
   if (rec.kind !== 'browser_setup_required') return null;
+  const hint = rec.hint && typeof rec.hint === 'object' && !Array.isArray(rec.hint)
+    ? rec.hint as Record<string, unknown>
+    : null;
+  if (!hint) return null;
 
-  const backend = rec.backend;
-  const reason = rec.reason;
-  const deepLink = rec.deepLink;
-  if (typeof backend !== 'string' || !VALID_BACKENDS.has(backend as never)) return null;
+  const driver = hint.driver;
+  const reason = hint.reason;
+  const deepLink = hint.deepLink;
+  if (typeof driver !== 'string' || !VALID_DRIVERS.has(driver as never)) return null;
   if (typeof reason !== 'string' || !VALID_REASONS.has(reason as never)) return null;
   if (typeof deepLink !== 'string' || !deepLink.startsWith('/settings/')) return null;
 
   return {
     kind: 'browser_setup_required',
-    backend: backend as BrowserSetupRequiredPayload['backend'],
+    driver: driver as BrowserSetupRequiredPayload['driver'],
     reason: reason as BrowserSetupRequiredPayload['reason'],
     deepLink,
-    detail: typeof rec.detail === 'string' ? rec.detail : undefined,
-    message: typeof rec.message === 'string' ? rec.message : undefined,
+    detail: typeof hint.detail === 'string' ? hint.detail : undefined,
   };
 }

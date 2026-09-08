@@ -45,21 +45,27 @@ describe('assertBrowserUrlAllowed', () => {
     ).toThrow(/API key|token/i);
   });
 
-  it('allows private IPs when allowPrivateUrls is true', () => {
+  it('allows private IPs when privateHostAllowed is true', () => {
     expect(() =>
-      assertBrowserUrlAllowed('http://192.168.1.1/', { allowPrivateUrls: true }),
+      assertBrowserUrlAllowed('http://192.168.1.1/', { privateHostAllowed: true }),
     ).not.toThrow();
     expect(() =>
-      assertBrowserUrlAllowed('http://10.0.0.1/', { allowPrivateUrls: true }),
+      assertBrowserUrlAllowed('http://10.0.0.1/', { privateHostAllowed: true }),
+    ).not.toThrow();
+    expect(() =>
+      assertBrowserUrlAllowed('http://localhost:3000/', { privateHostAllowed: true }),
+    ).not.toThrow();
+    expect(() =>
+      assertBrowserUrlAllowed('http://router.local/', { privateHostAllowed: true }),
     ).not.toThrow();
   });
 
-  it('still blocks cloud metadata even with allowPrivateUrls', () => {
+  it('still blocks cloud metadata even with privateHostAllowed', () => {
     expect(() =>
-      assertBrowserUrlAllowed('http://169.254.169.254/', { allowPrivateUrls: true }),
+      assertBrowserUrlAllowed('http://169.254.169.254/', { privateHostAllowed: true }),
     ).toThrow(/metadata|link-local/i);
     expect(() =>
-      assertBrowserUrlAllowed('http://metadata.google.internal/', { allowPrivateUrls: true }),
+      assertBrowserUrlAllowed('http://metadata.google.internal/', { privateHostAllowed: true }),
     ).toThrow(/metadata/i);
   });
 });
@@ -109,11 +115,11 @@ describe('checkPostRedirectUrl', () => {
     expect(checkPostRedirectUrl('https://example.com/')).toBeUndefined();
   });
 
-  it('allows private redirect when allowPrivateUrls', () => {
-    expect(checkPostRedirectUrl('http://192.168.1.1/', { allowPrivateUrls: true })).toBeUndefined();
+  it('allows private redirect when privateHostAllowed', () => {
+    expect(checkPostRedirectUrl('http://192.168.1.1/', { privateHostAllowed: true })).toBeUndefined();
   });
 
-  it('still blocks metadata redirect even with allowPrivateUrls', () => {
-    expect(checkPostRedirectUrl('http://169.254.169.254/', { allowPrivateUrls: true })).toMatch(/metadata/i);
+  it('still blocks metadata redirect even with privateHostAllowed', () => {
+    expect(checkPostRedirectUrl('http://169.254.169.254/', { privateHostAllowed: true })).toMatch(/metadata/i);
   });
 });

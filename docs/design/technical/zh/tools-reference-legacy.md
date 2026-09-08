@@ -19,7 +19,7 @@
 | 语音（可选） | `text_to_speech` — 在配置中启用 TTS 时注册 |
 | 记忆（可选） | `memory_search`, `memory_get`；配置后可含 `session_search` |
 | 图像（可选） | `image`, `image_generate` — 需模型与密钥 |
-| 浏览器（可选） | `browser_use`；`browser_recipe` 用于管理已保存的[浏览器自动化](browser-workflows.md) |
+| 浏览器（可选） | `browser_use`；`browser_automation` 用于运行已保存的[浏览器自动化](../../../zh/browser-automations.md) |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 多 Agent 编排（可选） | `workflow` — 通过确定性 JS 脚本扇出子 Agent。见 [动态工作流](workflows.md)。 |
 | 自动化（可选） | `automation` — 运行时提供自动化服务（常见为网关） |
@@ -325,7 +325,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ## 浏览器（可选）
 
-当浏览器自动化已在配置中启用，并被最终生效的 Agent 工具策略允许时注册。本地浏览器运行时为可选依赖：
+当 Browser Control 已启用，并被最终生效的 Agent 工具策略允许时注册。本地 Playwright 驱动需要 Chromium：
 
 ```bash
 npm install playwright-core@1.60.0
@@ -336,16 +336,14 @@ npx playwright-core install chromium
 
 | 工具 | 作用 |
 |------|------|
-| `browser_use` | 负责打开网页、读取内容、点击、输入、滚动、截图和等待页面变化等浏览器操作。复杂任务可先调用 `tool_manual({ tool: "browser_use" })`。 |
-| `browser_recipe` | 网关提供浏览器自动化服务时，用于保存、列出、运行、暂停和修改可重复使用的[浏览器自动化](browser-workflows.md)。 |
+| `browser_use` | 读取语义化页面结构，并执行强类型导航、基于 ref 的操作、等待、上传、标签页操作和短序列；截图仅作为显式回退。 |
+| `browser_automation` | 通过网关服务运行严格定义的可复用[浏览器自动化](../../../zh/browser-automations.md)。 |
 
 如需全局禁用浏览器自动化，将 `agents.defaults.tools.browser_use.mode` 设为 `"deny"`；单个 Agent 可覆盖这个确切工具 id。
 
-**URL 策略：** 拒绝带内嵌凭据的 URL、指向**云元数据 / IMDS** 及链路本地地址的导航（即使允许私网也仍拦截），以及查询串里疑似 **API Key / Token 外泄** 的模式。顶层 `browser.allowPrivateUrls` 仅放宽**私网 IP** 拦截；元数据与可疑凭据模式仍拦截。
+**安全策略：** 导航始终拒绝内嵌凭据、云元数据主机、链路本地地址和疑似携带凭据的查询串。私网主机必须精确加入主机名白名单。跨域导航、上传、敏感输入、破坏性操作和外部副作用遵循 allow/ask/deny 策略。
 
-**运行后端：** 顶层 `browser.backend` 选择浏览器后端（`local`、`cdp`、`cloud`、`extension`、`cloakbrowser`）。可选 `browser.cdpUrl` 直连 CDP WebSocket。单次操作超时：`browser.commandTimeout`（秒）。**对话框：** `browser.dialogPolicy`（`must_respond` \| `auto_dismiss` \| `auto_accept`）与 `browser.dialogTimeoutSeconds` 配合 CDP 监督器。
-
-每会话独立标签；`browser.headless` 控制本机浏览器是否显示窗口。
+**驱动：** `browser.driver.kind` 可选择 `extension`、`playwright`、`cdp` 或 `remote`。所有驱动实现同一份严格语义契约，不提供兼容转换。
 
 ---
 

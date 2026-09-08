@@ -42,9 +42,9 @@ export type AutomationAction =
       timeoutSeconds?: number;
     }
   | {
-      kind: 'browser_recipe';
-      recipeId: string;
-      args?: Record<string, unknown>;
+      kind: 'browser_automation';
+      automationId: string;
+      inputs?: Record<string, unknown>;
       timeoutSeconds?: number;
     }
   | {
@@ -229,8 +229,8 @@ export interface AutomationDeps {
   getDefaultAgentId?: () => string;
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
   workflowRunService?: WorkflowRunServiceLike;
-  browserRecipeService?: {
-    runAndWait(recipeId: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<{
+  browserAutomationService?: {
+    runAndWait(automationId: string, inputs: Record<string, unknown>, signal?: AbortSignal): Promise<{
       id: string;
       status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
       result?: unknown;
