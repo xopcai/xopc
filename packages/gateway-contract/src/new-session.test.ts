@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createDefaultNewSessionPreferences,
+  executionModePreferenceForProject,
   modelPreferenceForAgent,
   newSessionCacheKey,
   parseNewSessionPreferences,
   resolveNewSessionSpec,
   withAgentModelPreference,
   withLastChatScope,
+  withProjectExecutionModePreference,
   withSelectedAgent,
 } from './new-session.js';
 
@@ -110,6 +112,17 @@ describe('new session contract', () => {
     expect(preferences.modelByAgent).toEqual({ research: { modelRef: 'p/b' } });
   });
 
+  it('stores execution mode preferences per normalized project', () => {
+    let preferences = createDefaultNewSessionPreferences();
+    expect(executionModePreferenceForProject(preferences, 'project-a')).toBeUndefined();
+    preferences = withProjectExecutionModePreference(preferences, ' project-a ', 'managed_worktree');
+    preferences = withProjectExecutionModePreference(preferences, 'project-b', 'local_checkout');
+    expect(executionModePreferenceForProject(preferences, 'project-a')).toBe('managed_worktree');
+    expect(executionModePreferenceForProject(preferences, ' project-b ')).toBe('local_checkout');
+    preferences = withProjectExecutionModePreference(preferences, 'project-a', null);
+    expect(executionModePreferenceForProject(preferences, 'project-a')).toBeUndefined();
+  });
+
   it('records project and no-project scopes without ambiguity', () => {
     let preferences = createDefaultNewSessionPreferences();
     preferences = withLastChatScope(preferences, ' project-a ');
@@ -133,11 +146,16 @@ describe('new session contract', () => {
         Coder: { modelRef: ' p/a ', thinkingLevel: ' high ' },
         invalid: { modelRef: '' },
       },
+      executionModeByProject: {
+        ' p1 ': 'managed_worktree',
+        invalid: 'remote',
+      },
       lastChatScope: { kind: 'project', projectId: ' p1 ' },
     })).toEqual({
       version: 1,
       selectedAgentId: 'coder',
       modelByAgent: { coder: { modelRef: 'p/a', thinkingLevel: 'high' } },
+      executionModeByProject: { p1: 'managed_worktree' },
       lastChatScope: { kind: 'project', projectId: 'p1' },
     });
     expect(parseNewSessionPreferences({ version: 0 }).lastChatScope).toEqual({ kind: 'none' });
