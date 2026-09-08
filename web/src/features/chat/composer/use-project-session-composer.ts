@@ -23,7 +23,8 @@ type PendingCreation = {
   baseUrl: string;
   token: string | undefined;
   sessionKey: string | null;
-  resolve: (accepted: boolean) => void;
+  completion: Promise<string | null>;
+  resolve: (sessionKey: string | null) => void;
 };
 
 /** Keeps the first draft in the composer until its chosen environment is ready. */
@@ -39,6 +40,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
   const [failure, setFailure] = useState<{ preparation: ProjectSessionPreparation; message: string } | null>(null);
   const [pending, setPending] = useState<PendingCreation | null>(null);
   const pendingRef = useRef<PendingCreation | null>(null);
+  const projectSendPendingRef = useRef(false);
   const onSendRef = useRef(onSend);
   onSendRef.current = onSend;
   const { data: options, error, isValidating, mutate } = useSWR(
@@ -59,7 +61,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
     const current = pendingRef.current;
     pendingRef.current = null;
     setPending(null);
-    current?.resolve(accepted);
+    current?.resolve(accepted ? current.sessionKey : null);
   }, []);
 
   useEffect(() => {
@@ -77,35 +79,59 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
   }, [pending, sessionKey, ready, preparation, finish, baseUrl, token]);
 
   useEffect(() => () => {
-    pendingRef.current?.resolve(false);
+    pendingRef.current?.resolve(null);
     pendingRef.current = null;
   }, []);
 
+  const prepareSession = useCallback(async (): Promise<string | null> => {
+    if (!preparation) return sessionKey;
+    const currentPending = pendingRef.current;
+    if (currentPending) {
+      return currentPending.preparation === preparation ? currentPending.completion : null;
+    }
+    if (!allowed || isValidating) return null;
+    setFailure(null);
+    let resolveCompletion!: (sessionKey: string | null) => void;
+    const completion = new Promise<string | null>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const current: PendingCreation = {
+      preparation,
+      baseUrl,
+      token,
+      sessionKey: null,
+      completion,
+      resolve: resolveCompletion,
+    };
+    pendingRef.current = current;
+    setPending(current);
+    void Promise.resolve().then(() => preparation.create(mode)).then((key) => {
+      if (pendingRef.current !== current) return;
+      rememberProjectExecutionMode(preparation.project.id, mode);
+      const created = { ...current, sessionKey: key };
+      pendingRef.current = created;
+      setPending(created);
+    }).catch((cause) => {
+      if (pendingRef.current !== current) return;
+      setFailure({ preparation, message: cause instanceof Error ? cause.message : String(cause) });
+      void mutate();
+      finish(false);
+    });
+    return completion;
+  }, [allowed, baseUrl, finish, isValidating, mode, mutate, preparation, sessionKey, token]);
+
   const send: ComposerSendHandler = async (...args) => {
-    if (pendingRef.current) return false;
     if (preparation) {
-      if (!allowed || isValidating) return false;
-      setFailure(null);
-      const accepted = await new Promise<boolean>((resolve) => {
-        const current: PendingCreation = { preparation, baseUrl, token, sessionKey: null, resolve };
-        pendingRef.current = current;
-        setPending(current);
-        void Promise.resolve().then(() => preparation.create(mode)).then((key) => {
-          if (pendingRef.current !== current) return;
-          rememberProjectExecutionMode(preparation.project.id, mode);
-          const created = { ...current, sessionKey: key };
-          pendingRef.current = created;
-          setPending(created);
-        }).catch((cause) => {
-          if (pendingRef.current !== current) return;
-          setFailure({ preparation, message: cause instanceof Error ? cause.message : String(cause) });
-          void mutate();
-          finish(false);
-        });
-      });
-      if (!accepted) return false;
-      // Use the newly hydrated session's effort instead of the unbound composer's placeholder.
-      args[2] = undefined;
+      if (projectSendPendingRef.current) return false;
+      projectSendPendingRef.current = true;
+      try {
+        const preparedSessionKey = await prepareSession();
+        if (!preparedSessionKey) return false;
+        // Use the newly hydrated session's effort instead of the unbound composer's placeholder.
+        args[2] = undefined;
+      } finally {
+        projectSendPendingRef.current = false;
+      }
     }
     // The session-bound callback changes after navigation; never send through the old one.
     void onSendRef.current(...args);
@@ -122,6 +148,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
       setFailure(null);
     },
     retry: () => void mutate(),
+    prepareSession,
     send,
   };
 }

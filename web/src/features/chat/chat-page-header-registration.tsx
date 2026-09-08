@@ -1,5 +1,5 @@
-import { Plus, SquareTerminal } from 'lucide-react';
-import { memo, useEffect, useLayoutEffect } from 'react';
+import { Loader2, Plus, SquareTerminal } from 'lucide-react';
+import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -37,6 +37,8 @@ type ChatPageHeaderRegistrationProps = {
   canChangeWorkspace?: boolean;
   workspaceDisabled?: boolean;
   onWorkspaceChange?: (path: string) => Promise<void>;
+  prepareTerminalSession?: () => Promise<string | null>;
+  terminalDisabled?: boolean;
   projectId?: string | null;
   context?: Pick<SessionContextPanelProps, 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
 };
@@ -58,6 +60,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   canChangeWorkspace = false,
   workspaceDisabled = false,
   onWorkspaceChange,
+  prepareTerminalSession,
+  terminalDisabled = false,
   projectId,
   context,
 }: ChatPageHeaderRegistrationProps) {
@@ -73,11 +77,29 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const terminalPanelOpen = useTerminalPanelStore((s) => activeSessionKey ? Boolean(s.openBySessionKey[activeSessionKey]) : false);
   const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
+  const openTerminalPanel = useTerminalPanelStore((s) => s.open);
+  const [terminalPreparing, setTerminalPreparing] = useState(false);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const terminalPlatform = window.electronAPI?.platform;
   const terminalShortcut = terminalShortcutLabel(terminalPlatform);
+  const terminalAvailable = Boolean(window.electronAPI?.terminal && (activeSessionKey || prepareTerminalSession));
+
+  const handleTerminalToggle = useCallback(() => {
+    if (!terminalAvailable || terminalDisabled || terminalPreparing) return;
+    if (activeSessionKey) {
+      toggleTerminalPanel(activeSessionKey);
+      return;
+    }
+    if (!prepareTerminalSession) return;
+    setTerminalPreparing(true);
+    void prepareTerminalSession()
+      .then((createdSessionKey) => {
+        if (createdSessionKey) openTerminalPanel(createdSessionKey);
+      })
+      .finally(() => setTerminalPreparing(false));
+  }, [activeSessionKey, openTerminalPanel, prepareTerminalSession, terminalAvailable, terminalDisabled, terminalPreparing, toggleTerminalPanel]);
 
   const isMobileLayout = useMediaQuery(MAX_MD);
   const chromeLayout = resolveShellChromeLayout({
@@ -96,15 +118,15 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   useLayoutEffect(() => () => clearPageHeader(), [clearPageHeader]);
 
   useEffect(() => {
-    if (!activeSessionKey || !window.electronAPI?.terminal) return;
+    if (!terminalAvailable) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!matchesTerminalShortcut(event, terminalPlatform)) return;
       event.preventDefault();
-      toggleTerminalPanel(activeSessionKey);
+      handleTerminalToggle();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeSessionKey, terminalPlatform, toggleTerminalPanel]);
+  }, [handleTerminalToggle, terminalAvailable, terminalPlatform]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -168,7 +190,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             </span>
           ) : null}
           {activeSessionKey && hasMessages ? <SessionShareButton key={`share:${activeSessionKey}`} sessionKey={activeSessionKey} /> : null}
-          {activeSessionKey && window.electronAPI?.terminal ? (
+          {terminalAvailable ? (
             <button
               type="button"
               className={cn(
@@ -178,9 +200,10 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               title={`${m.chat.terminal.open} (${terminalShortcut})`}
               aria-label={m.chat.terminal.open}
               aria-pressed={terminalPanelOpen}
-              onClick={() => toggleTerminalPanel(activeSessionKey)}
+              disabled={terminalDisabled || terminalPreparing}
+              onClick={handleTerminalToggle}
             >
-              <SquareTerminal className="size-4" />
+              {terminalPreparing ? <Loader2 className="size-4 animate-spin" /> : <SquareTerminal className="size-4" />}
             </button>
           ) : null}
           <SessionContextPanel
@@ -226,6 +249,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     projectId,
     context,
     terminalPanelOpen,
+    terminalAvailable,
+    terminalDisabled,
+    terminalPreparing,
     activeSessionKey,
     hasMessages,
     workspacePath,
@@ -235,7 +261,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     canChangeWorkspace,
     workspaceDisabled,
     onWorkspaceChange,
-    toggleTerminalPanel,
+    handleTerminalToggle,
     setPageHeader,
   ]);
 
