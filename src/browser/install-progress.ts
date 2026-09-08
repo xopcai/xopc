@@ -1,4 +1,4 @@
-/** Shared install progress events for CloakBrowser and Playwright Chromium. */
+/** Playwright Chromium installation progress. */
 export type BrowserInstallPhase =
   | 'starting'
   | 'downloading'

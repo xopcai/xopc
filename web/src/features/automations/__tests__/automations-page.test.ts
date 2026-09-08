@@ -164,8 +164,8 @@ describe('automation buildInput', () => {
         maxSubagents: '5',
       },
       workflowInputValid: true,
-      browserWorkflowId: '',
-      browserWorkflowInputs: {},
+      browserAutomationId: '',
+      browserAutomationInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
     }, workflow);
@@ -187,16 +187,16 @@ describe('automation buildInput', () => {
       ...initialForm,
       name: 'Collect title',
       triggerMode: 'manual',
-      actionMode: 'browser_recipe',
-      browserWorkflowId: 'collect-title',
-      browserWorkflowInputs: { query: 'xopc', limit: 2 },
+      actionMode: 'browser_automation',
+      browserAutomationId: 'collect-title',
+      browserAutomationInputs: { query: 'xopc', limit: 2 },
       safetyMode: 'auto_apply',
     }, null);
 
     expect(input.action).toEqual({
-      kind: 'browser_recipe',
-      recipeId: 'collect-title',
-      args: { query: 'xopc', limit: 2 },
+      kind: 'browser_automation',
+      automationId: 'collect-title',
+      inputs: { query: 'xopc', limit: 2 },
     });
     expect(input.reliability?.executionTimeoutSeconds).toBe(1800);
   });
@@ -224,8 +224,8 @@ describe('automation buildInput', () => {
       workflowGoal: '',
       workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
       workflowInputValid: true,
-      browserWorkflowId: '',
-      browserWorkflowInputs: {},
+      browserAutomationId: '',
+      browserAutomationInputs: {},
       safetyMode: 'ask_before_apply',
       timeoutSeconds: '300',
       completionWebhookUrl: 'https://example.com/hook',
@@ -258,8 +258,8 @@ describe('automation buildInput', () => {
       workflowGoal: '',
       workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
       workflowInputValid: true,
-      browserWorkflowId: '',
-      browserWorkflowInputs: {},
+      browserAutomationId: '',
+      browserAutomationInputs: {},
       safetyMode: 'suggest_only',
       timeoutSeconds: '300',
     }, null);

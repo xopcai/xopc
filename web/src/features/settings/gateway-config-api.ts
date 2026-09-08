@@ -50,25 +50,6 @@ export async function revealGatewayAuthSecret(
   return data.payload;
 }
 
-export async function revealBrowserCloudApiKey(): Promise<{
-  apiKey: string | null;
-  source: 'config' | 'none';
-}> {
-  const data = await fetchJson<{
-    ok?: boolean;
-    payload?: { apiKey: string | null; source: 'config' | 'none' };
-    error?: { message?: string };
-  }>(apiUrl('/api/agents/browser/reveal-cloud-api-key'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  if (!data.ok || !data.payload) {
-    throw new Error(data.error?.message ?? 'Reveal failed');
-  }
-  return data.payload;
-}
-
 function normalizeSecretForRestartCompare(value: string): string {
   return isMaskedGatewaySecret(value) ? '' : value.trim();
 }

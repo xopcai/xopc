@@ -14,7 +14,8 @@ describe('tool_manual tool', () => {
 
     expect(text).toContain('Browser Tool Manual');
     expect(text).toContain('browser_use');
-    expect(text).toContain('Pipeline mode');
+    expect(text).toContain('semantic element refs');
+    expect(text).toContain('browser_automation');
   });
 
   it('returns the xopc_use manual', async () => {

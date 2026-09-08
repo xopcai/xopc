@@ -154,8 +154,8 @@ describe('readOverviewBrowserDiagnosticsInput', () => {
   it('reads top-level browser runtime config', () => {
     expect(
       readOverviewBrowserDiagnosticsInput({
-        browser: { enabled: true, backend: 'cdp' },
+        browser: { enabled: true, driver: { kind: 'cdp', endpoint: 'ws://127.0.0.1:9222' } },
       }),
-    ).toEqual({ enabled: true, backend: 'cdp' });
+    ).toEqual({ enabled: true, driverKind: 'cdp' });
   });
 });

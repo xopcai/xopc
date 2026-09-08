@@ -1,14 +1,11 @@
-/** Per-backend install mutex — Playwright and CloakBrowser may install in parallel. */
-export type BrowserInstallKind = 'playwright' | 'cloakbrowser';
+export type BrowserInstallKind = 'playwright';
 
 const locked: Record<BrowserInstallKind, boolean> = {
   playwright: false,
-  cloakbrowser: false,
 };
 
 const activeController: Record<BrowserInstallKind, AbortController | null> = {
   playwright: null,
-  cloakbrowser: null,
 };
 
 export type BrowserInstallLock = {
@@ -50,7 +47,7 @@ export function isBrowserInstallRunning(kind: BrowserInstallKind): boolean {
 
 /** Test helper — reset lock state between unit tests. */
 export function resetBrowserInstallLockForTests(): void {
-  for (const kind of ['playwright', 'cloakbrowser'] as const) {
+  for (const kind of ['playwright'] as const) {
     activeController[kind]?.abort();
     activeController[kind] = null;
     locked[kind] = false;

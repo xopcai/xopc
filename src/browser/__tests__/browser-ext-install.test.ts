@@ -115,22 +115,22 @@ describe('browser-ext-install', () => {
     const extensionRoot = join(binDir, 'browser-ext');
 
     await ensureBrowserExtensionOnStartup({
-      browser: { enabled: false, backend: 'extension' },
+      browser: { enabled: false, driver: { kind: 'extension' } },
     } as unknown as Config);
 
     expect(existsSync(extensionRoot)).toBe(false);
   });
 
-  it('syncs startup artifacts for the enabled extension backend only', async () => {
+  it('syncs startup artifacts for the enabled extension driver only', async () => {
     const extensionRoot = join(binDir, 'browser-ext');
 
     await ensureBrowserExtensionOnStartup({
-      browser: { enabled: true, backend: 'local' },
+      browser: { enabled: true, driver: { kind: 'playwright', headless: true } },
     } as unknown as Config);
     expect(existsSync(extensionRoot)).toBe(false);
 
     await ensureBrowserExtensionOnStartup({
-      browser: { enabled: true, backend: 'extension' },
+      browser: { enabled: true, driver: { kind: 'extension' } },
     } as unknown as Config);
     expect(validateBrowserExtLayout(extensionRoot)).toBe(true);
   });

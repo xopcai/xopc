@@ -114,14 +114,17 @@ function isAnyChannelConfigured(config: unknown): boolean {
   });
 }
 
-function readBrowserConfig(config: unknown): { enabled: boolean; backend: string } {
-  if (!config || typeof config !== 'object') return { enabled: false, backend: 'extension' };
+function readBrowserConfig(config: unknown): { enabled: boolean; driverKind: string } {
+  if (!config || typeof config !== 'object') return { enabled: false, driverKind: 'extension' };
   const browser = (config as Record<string, unknown>).browser;
-  if (!browser || typeof browser !== 'object' || Array.isArray(browser)) return { enabled: false, backend: 'extension' };
+  if (!browser || typeof browser !== 'object' || Array.isArray(browser)) return { enabled: false, driverKind: 'extension' };
   const record = browser as Record<string, unknown>;
+  const driver = record.driver && typeof record.driver === 'object' && !Array.isArray(record.driver)
+    ? record.driver as Record<string, unknown>
+    : undefined;
   return {
     enabled: record.enabled === true,
-    backend: typeof record.backend === 'string' && record.backend.trim() ? record.backend.trim() : 'extension',
+    driverKind: typeof driver?.kind === 'string' && driver.kind.trim() ? driver.kind.trim() : 'extension',
   };
 }
 
@@ -350,7 +353,7 @@ export function buildSetupStatusSnapshot(input: {
   };
 }
 
-export function readOverviewBrowserDiagnosticsInput(config: unknown): { enabled: boolean; backend: string } {
+export function readOverviewBrowserDiagnosticsInput(config: unknown): { enabled: boolean; driverKind: string } {
   return readBrowserConfig(config);
 }
 

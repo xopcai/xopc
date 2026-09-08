@@ -72,6 +72,9 @@ importers:
       '@vscode/ripgrep':
         specifier: ^1.18.0
         version: 1.18.0
+      '@xopcai/browser-control-contract':
+        specifier: workspace:*
+        version: link:packages/browser-control-contract
       abort-controller:
         specifier: ^3.0.0
         version: 3.0.0
@@ -770,7 +773,13 @@ importers:
         specifier: 4.1.5
         version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@26.4.1)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.22.3)(yaml@2.9.0))
 
+  packages/browser-control-contract: {}
+
   packages/browser-ext:
+    dependencies:
+      '@xopcai/browser-control-contract':
+        specifier: workspace:*
+        version: link:../browser-control-contract
     devDependencies:
       '@types/chrome':
         specifier: ^0.0.287

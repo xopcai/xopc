@@ -92,7 +92,7 @@ export {
 } from './clarify-tool.js';
 
 
-export { BrowserManager, assertBrowserUrlAllowed } from '../../browser/index.js';
+export { BrowserRuntime, assertBrowserUrlAllowed } from '../../browser/index.js';
 
 export {
   createDelegateTool,
@@ -104,7 +104,7 @@ export { createWorkflowTool, type WorkflowToolDeps, type WorkflowToolInput } fro
 
 
 export { createAutomationTool, type AutomationToolDeps } from './automation-tool.js';
-export { createBrowserRecipeTool } from './browser-recipe-tool.js';
+export { createBrowserAutomationTool } from './browser-automation-tool.js';
 export { createXopcUseTool, type XopcUseToolDeps, type XopcUseToolInput } from './xopc-use-tool.js';
 
 export { createSkillsListTool, createSkillViewTool, type SkillsToolsDeps } from './skills-tools.js';

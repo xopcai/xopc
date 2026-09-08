@@ -843,7 +843,7 @@ type AutomationAction =
   | { kind: 'agent.run'; instruction: string }
   | { kind: 'project.update'; input: ProjectUpdateTemplate }
   | { kind: 'notify'; input: NotificationTemplate }
-  | { kind: 'browser_recipe'; recipeId: string; input: unknown };
+  | { kind: 'browser_automation'; automationId: string; inputs: Record<string, unknown> };
 ```
 
 `task.command` calls the same command service as REST, Agent tools, and UI. No Automation code imports task repositories.
@@ -1063,7 +1063,7 @@ Existing Project status maps without aliases: `active -> active`, `paused -> pau
 
 Built-in proactive scenarios are deleted and reseeded with the new event contracts. User Automations using `task.status_changed` cannot be mapped safely because one old status can represent phase, run state, or wait state. Those Automations are preserved but disabled with `requires_migration_review`, and the migration report includes their ids and old trigger configuration. The runtime does not emulate the old event.
 
-Existing Agent, standalone Workflow, and browser-recipe actions retain their meaning under the new Automation action union. No old Automation action writes Task status directly.
+Agent, standalone Workflow, and Browser Automation actions retain their meaning under the Automation action union. Automation actions do not write Task status directly.
 
 ### 14.6 Links and runtime fields
 

@@ -8,7 +8,6 @@ import {
   ModelRouteSchema,
   type AgentModelsOverride,
 } from '../agent-config/index.js';
-import { checkCacheDir } from '../browser/cache-dir-policy.js';
 import { DEFAULT_CONTEXT_COMPACTION_POLICY, UserContextConfigSchema } from '../user-context/config.js';
 import { DEFAULT_MODEL_REF } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
@@ -51,63 +50,81 @@ export const AgentsConfigSchema = UnifiedAgentsConfigSchema.default({
   list: [{ id: 'main', enabled: true }],
 });
 
-const BrowserCloudConfigSchema = z
-  .object({
+const BrowserDriverSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('extension'),
+  }).strict(),
+  z.object({
+    kind: z.literal('playwright'),
+    headless: z.boolean().default(false),
+    executablePath: z.string().min(1).optional(),
+  }).strict(),
+  z.object({
+    kind: z.literal('cdp'),
+    endpoint: z.string().url(),
+  }).strict(),
+  z.object({
+    kind: z.literal('remote'),
+    provider: z.enum(['browserbase', 'browser-use']),
     apiKey: z.string().optional(),
     projectId: z.string().optional(),
     region: z.string().optional(),
-  })
-  .strict()
-  .optional();
+  }).strict(),
+]);
 
-const BrowserExtensionConfigSchema = z
-  .object({
-    port: z.number().int().min(1024).max(65535).optional(),
-    host: z.string().min(1).optional(),
-    connectionTimeout: z.number().int().positive().optional(),
-  })
-  .strict()
-  .optional();
-
-const BrowserCloakConfigSchema = z
-  .object({
-    keepOpen: z.boolean().optional(),
-    temporaryProfile: z.boolean().optional(),
-    cacheDir: z.string().optional().superRefine((value, ctx) => {
-      const result = checkCacheDir(value);
-      if (result.ok === false) {
-        ctx.addIssue({ code: 'custom', message: result.message });
-      }
-    }),
-    binaryPath: z.string().optional(),
-    timezone: z.string().optional(),
-    locale: z.string().optional(),
-    webrtcIp: z.string().optional(),
-    fingerprintPlatform: z.string().optional(),
-    extraArgs: z.array(z.string()).optional(),
-  })
-  .strict()
-  .optional();
+const BrowserHostnameSchema = z.string().min(1).refine((value) => {
+  if (value !== value.toLowerCase() || value.includes('/') || value.includes(':') && !value.startsWith('[')) {
+    return false;
+  }
+  try {
+    return new URL(`http://${value}`).hostname === value;
+  } catch {
+    return false;
+  }
+}, 'Host must be one exact lowercase hostname or IP address.');
 
 export const BrowserConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
-    backend: z.enum(['local', 'cdp', 'cloud', 'extension', 'cloakbrowser']).default('extension'),
-    headless: z.boolean().optional(),
-    allowPrivateUrls: z.boolean().optional(),
-    commandTimeout: z.number().int().min(5).max(900).optional(),
-    cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
-    cloud: BrowserCloudConfigSchema,
-    cdpUrl: z.string().optional(),
-    extension: BrowserExtensionConfigSchema,
-    cloakbrowser: BrowserCloakConfigSchema,
-    humanize: z.boolean().optional(),
-    humanPreset: z.enum(['default', 'careful']).optional(),
-    dialogPolicy: z.enum(['must_respond', 'auto_dismiss', 'auto_accept']).optional(),
-    dialogTimeoutSeconds: z.number().int().positive().optional(),
+    driver: BrowserDriverSchema.default({ kind: 'extension' }),
+    observation: z.object({
+      maxNodes: z.number().int().min(20).max(500).default(180),
+      maxCharacters: z.number().int().min(1_000).max(50_000).default(12_000),
+      visualFallback: z.boolean().default(true),
+    }).strict().default({ maxNodes: 180, maxCharacters: 12_000, visualFallback: true }),
+    limits: z.object({
+      actionTimeoutMs: z.number().int().min(1_000).max(120_000).default(30_000),
+      sessionTimeoutMs: z.number().int().min(60_000).max(3_600_000).default(900_000),
+      maxSequenceLength: z.number().int().min(1).max(10).default(5),
+    }).strict().default({ actionTimeoutMs: 30_000, sessionTimeoutMs: 900_000, maxSequenceLength: 5 }),
+    security: z.object({
+      privateNetworks: z.literal('deny').default('deny'),
+      allowedPrivateHosts: z.array(BrowserHostnameSchema).default([]),
+      crossDomainNavigation: z.enum(['allow', 'ask', 'deny']).default('ask'),
+      uploads: z.enum(['allow', 'ask', 'deny']).default('ask'),
+      consequentialActions: z.enum(['allow', 'ask', 'deny']).default('ask'),
+    }).strict().default({
+      privateNetworks: 'deny',
+      allowedPrivateHosts: [],
+      crossDomainNavigation: 'ask',
+      uploads: 'ask',
+      consequentialActions: 'ask',
+    }),
   })
   .strict()
-  .default({ enabled: true, backend: 'extension' });
+  .default({
+    enabled: true,
+    driver: { kind: 'extension' },
+    observation: { maxNodes: 180, maxCharacters: 12_000, visualFallback: true },
+    limits: { actionTimeoutMs: 30_000, sessionTimeoutMs: 900_000, maxSequenceLength: 5 },
+    security: {
+      privateNetworks: 'deny',
+      allowedPrivateHosts: [],
+      crossDomainNavigation: 'ask',
+      uploads: 'ask',
+      consequentialActions: 'ask',
+    },
+  });
 
 // ============================================
 // Channel Configs (per-channel Zod lives in bundled extensions; root schema is open)
@@ -1326,7 +1343,16 @@ export const ConfigSchema = z.object({
   },
   browser: {
     enabled: true,
-    backend: 'extension' as const,
+    driver: { kind: 'extension' as const },
+    observation: { maxNodes: 180, maxCharacters: 12_000, visualFallback: true },
+    limits: { actionTimeoutMs: 30_000, sessionTimeoutMs: 900_000, maxSequenceLength: 5 },
+    security: {
+      privateNetworks: 'deny' as const,
+      allowedPrivateHosts: [],
+      crossDomainNavigation: 'ask' as const,
+      uploads: 'ask' as const,
+      consequentialActions: 'ask' as const,
+    },
   },
   tools: {
     web: {

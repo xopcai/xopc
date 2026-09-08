@@ -6,7 +6,7 @@ import {
 const INTERNAL_ROUTE_ROOTS = new Set([
   'agents',
   'automations',
-  'browser-workflows',
+  'browser-automations',
   'channels',
   'chat',
   'connectors',

@@ -1,11 +1,22 @@
-export { BrowserManager, type BrowserManagerOptions } from './manager.js';
-export { resolveBrowserBackendFromConfig } from './backend-from-config.js';
-export { resolveBrowserCommandTimeoutMs } from './browser-command-timeout.js';
+export { BrowserRuntime, type BrowserRuntimeOptions } from './runtime/browser-runtime.js';
+export { createBrowserDriver } from './drivers/create-driver.js';
+export type { BrowserDriver, BrowserPrimitiveInput } from './drivers/browser-driver.js';
+export { PlaywrightDriver, type PlaywrightDriverOptions } from './drivers/playwright-driver.js';
+export { ExtensionDriver } from './drivers/extension-driver.js';
+export { formatBrowserObservation } from './observation/format.js';
+export { classifyBrowserRisk, browserRiskNeedsApproval } from './policy/browser-policy.js';
+export {
+  createBrowserApproval,
+  consumeBrowserApproval,
+  decideBrowserApproval,
+  listBrowserApprovals,
+} from './policy/approval-store.js';
+export { verifyBrowserExpectation } from './verification/expectation.js';
 export {
   BrowserNotReadyError,
   buildBrowserSetupDeepLink,
   checkBrowserReadiness,
-  type BrowserBackendKind,
+  type BrowserDriverKind,
   type BrowserNotReadyReason,
   type BrowserSetupHint,
 } from './readiness.js';
@@ -15,67 +26,3 @@ export {
   containsApiKeyPattern,
   isAlwaysBlockedUrl,
 } from './url-policy.js';
-export { CdpSupervisor, type DialogEvent, type ConsoleEntry, type DialogPolicy } from './cdp-supervisor.js';
-export { truncateSnapshotAtBoundary, snapshotSummaryHeader } from './snapshot-helpers.js';
-export {
-  startTracing,
-  stopTracing,
-  checkBotDetection,
-  cleanupOrphanProcesses,
-  type TracingOptions,
-  type BotDetectionResult,
-} from './session-lifecycle.js';
-export {
-  BrowserBackSchema,
-  BrowserCdpSchema,
-  BrowserClickSchema,
-  BrowserCloseSchema,
-  BrowserConsoleSchema,
-  BrowserDialogSchema,
-  BrowserGetImagesSchema,
-  BrowserNavigateSchema,
-  BrowserPressSchema,
-  BrowserScreenshotSchema,
-  BrowserScrollSchema,
-  BrowserSnapshotSchema,
-  BrowserTypeSchema,
-  BrowserVisionSchema,
-} from './schemas.js';
-
-export {
-  humanizedClick,
-  humanizedFill,
-  humanizedPress,
-  humanizedScroll,
-  resolveHumanConfig,
-  generateMousePath,
-  generateTypingPlan,
-  generateScrollPlan,
-  type HumanConfig,
-  type HumanPreset,
-} from './humanize.js';
-
-export {
-  buildStealthArgs,
-  buildLocalStealthArgs,
-  generateFingerprintSeed,
-  removeQuarantineAttr,
-  makeExecutable,
-  WEBDRIVER_OVERRIDE_SCRIPT,
-  type StealthOptions,
-} from './stealth.js';
-
-export { createBrowserActionRegistry } from './actions/registry.js';
-export type {
-  BrowserActionName,
-  BrowserActionContext,
-  BrowserActionHandler,
-  BrowserActionRegistry as BrowserActionRegistryType,
-  BrowserActionResult,
-  BrowserArtifact,
-  BrowserDiagnostics,
-} from './actions/types.js';
-
-export { parseBrowserPipeline, type PipelineDocument, type PipelineStep } from './pipeline/schema.js';
-export { runBrowserPipeline, validateBrowserPipeline } from './pipeline/runner.js';
-export { resolveTemplate, resolveTemplateDeep } from './pipeline/template.js';

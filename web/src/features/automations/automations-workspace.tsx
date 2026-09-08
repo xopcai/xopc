@@ -42,12 +42,12 @@ import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
-import { browserWorkflowApi, type BrowserWorkflow } from '@/features/browser-workflows/browser-workflow-api';
+import { browserAutomationApi, type BrowserAutomation } from '@/features/browser-automations/browser-automation-api';
 import {
-  browserWorkflowInputsComplete,
-  defaultBrowserWorkflowInputs,
-} from '@/features/browser-workflows/browser-workflow-input-utils';
-import { BrowserWorkflowInputFields } from '@/features/browser-workflows/browser-workflow-inputs';
+  browserAutomationInputsComplete,
+  defaultBrowserAutomationInputs,
+} from '@/features/browser-automations/browser-automation-input-utils';
+import { BrowserAutomationInputFields } from '@/features/browser-automations/browser-automation-inputs';
 import { validateWorkflowInputEditorValue } from '@/features/workflows/workflow-input-editor.utils';
 import { WorkflowRunSetupPanel } from '@/features/workflows/workflow-run-setup-panel';
 import {
@@ -101,7 +101,7 @@ function formatDate(ms: number | undefined, labels: AutomationsMessages, languag
 
 function actionLabel(action: AutomationAction, labels: AutomationsMessages): string {
   if (action.kind === 'workflow') return labels.action.workflowWithId.replace('{id}', action.workflowId);
-  if (action.kind === 'browser_recipe') return `Browser automation: ${action.recipeId}`;
+  if (action.kind === 'browser_automation') return `Browser automation: ${action.automationId}`;
   return action.agentId ? labels.action.agentWithId.replace('{id}', action.agentId) : labels.action.agent;
 }
 
@@ -292,7 +292,7 @@ export function AutomationsWorkspace({
     { refreshInterval: 5_000 },
   );
   const workflowDefinitionsSwr = useSWR('automation-workflow-definitions', listWorkflowDefinitions);
-  const browserWorkflowsSwr = useSWR('automation-browser-workflows', () => browserWorkflowApi.list());
+  const browserAutomationsSwr = useSWR('automation-browser-automations', () => browserAutomationApi.list());
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
   const projectsSwr = useSWR('automation-projects', () => fetchProjects({ sortBy: 'name', sortOrder: 'asc', limit: 200 }));
   const initialLoading =
@@ -353,9 +353,9 @@ export function AutomationsWorkspace({
     ].some((value) => value.toLocaleLowerCase().includes(normalizedSearch));
   }), [cronLabels, filter, labels, language, normalizedSearch, systemAutomations, userAutomations, userRuns]);
   const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
-  const browserWorkflows = useMemo(
-    () => (browserWorkflowsSwr.data?.workflows ?? []).filter((workflow) => workflow.enabled),
-    [browserWorkflowsSwr.data],
+  const browserAutomations = useMemo(
+    () => (browserAutomationsSwr.data?.automations ?? []).filter((automation) => automation.enabled),
+    [browserAutomationsSwr.data],
   );
   const agentOptions = chatAgentsSwr.data?.items ?? [];
   const projects = projectsSwr.data?.items ?? [];
@@ -363,9 +363,9 @@ export function AutomationsWorkspace({
     () => workflowDefinitions.find((workflow) => workflow.id === form.workflowId.trim()) ?? null,
     [form.workflowId, workflowDefinitions],
   );
-  const selectedBrowserWorkflow = useMemo(
-    () => browserWorkflows.find((workflow) => workflow.id === form.browserWorkflowId.trim()) ?? null,
-    [browserWorkflows, form.browserWorkflowId],
+  const selectedBrowserAutomation = useMemo(
+    () => browserAutomations.find((automation) => automation.id === form.browserAutomationId.trim()) ?? null,
+    [browserAutomations, form.browserAutomationId],
   );
   const workflowSelectionInvalid =
     form.actionMode === 'workflow' &&
@@ -381,8 +381,8 @@ export function AutomationsWorkspace({
     (form.triggerMode !== 'event' || (Boolean(form.eventType.trim()) && payloadMatchIsValid(form.eventPayloadMatch))) &&
     (form.actionMode === 'workflow'
       ? !workflowSelectionInvalid && !workflowInputInvalid
-      : form.actionMode === 'browser_recipe'
-        ? selectedBrowserWorkflow !== null && browserWorkflowInputsComplete(selectedBrowserWorkflow, form.browserWorkflowInputs)
+      : form.actionMode === 'browser_automation'
+        ? selectedBrowserAutomation !== null && browserAutomationInputsComplete(selectedBrowserAutomation, form.browserAutomationInputs)
         : Boolean(form.instruction.trim()));
   const templates = useMemo(
     () => [
@@ -1031,9 +1031,9 @@ export function AutomationsWorkspace({
                   workflowDefinitions={workflowDefinitions}
                   selectedWorkflow={selectedWorkflow}
                   workflowsLoading={workflowDefinitionsSwr.isLoading}
-                  browserWorkflows={browserWorkflows}
-                  selectedBrowserWorkflow={selectedBrowserWorkflow}
-                  browserWorkflowsLoading={browserWorkflowsSwr.isLoading}
+                  browserAutomations={browserAutomations}
+                  selectedBrowserAutomation={selectedBrowserAutomation}
+                  browserAutomationsLoading={browserAutomationsSwr.isLoading}
                   agentOptions={agentOptions}
                   agentsLoading={chatAgentsSwr.isLoading}
                   language={language}
@@ -1894,7 +1894,7 @@ function AutomationOverview({
         <OverviewItem
           icon={automation.action.kind === 'workflow'
             ? <GitBranch className="size-4" aria-hidden />
-            : automation.action.kind === 'browser_recipe'
+            : automation.action.kind === 'browser_automation'
               ? <ListTree className="size-4" aria-hidden />
               : <Zap className="size-4" aria-hidden />}
           label={labels.info.action}
@@ -2051,9 +2051,9 @@ function AutomationForm({
   workflowDefinitions,
   selectedWorkflow,
   workflowsLoading,
-  browserWorkflows,
-  selectedBrowserWorkflow,
-  browserWorkflowsLoading,
+  browserAutomations,
+  selectedBrowserAutomation,
+  browserAutomationsLoading,
   agentOptions,
   agentsLoading,
   language,
@@ -2066,9 +2066,9 @@ function AutomationForm({
   workflowDefinitions: WorkflowDefinition[];
   selectedWorkflow: WorkflowDefinition | null;
   workflowsLoading: boolean;
-  browserWorkflows: BrowserWorkflow[];
-  selectedBrowserWorkflow: BrowserWorkflow | null;
-  browserWorkflowsLoading: boolean;
+  browserAutomations: BrowserAutomation[];
+  selectedBrowserAutomation: BrowserAutomation | null;
+  browserAutomationsLoading: boolean;
   agentOptions: ChatAgentOption[];
   agentsLoading: boolean;
   language: StoredLanguage;
@@ -2097,16 +2097,16 @@ function AutomationForm({
   }, [form.actionMode, form.workflowId, setForm, workflowDefinitions]);
 
   useEffect(() => {
-    if (form.actionMode !== 'browser_recipe') return;
-    if (form.browserWorkflowId.trim()) return;
-    const first = browserWorkflows[0];
+    if (form.actionMode !== 'browser_automation') return;
+    if (form.browserAutomationId.trim()) return;
+    const first = browserAutomations[0];
     if (!first) return;
     setForm((prev) => ({
       ...prev,
-      browserWorkflowId: first.id,
-      browserWorkflowInputs: defaultBrowserWorkflowInputs(first),
+      browserAutomationId: first.id,
+      browserAutomationInputs: defaultBrowserAutomationInputs(first),
     }));
-  }, [browserWorkflows, form.actionMode, form.browserWorkflowId, setForm]);
+  }, [browserAutomations, form.actionMode, form.browserAutomationId, setForm]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -2278,9 +2278,9 @@ function AutomationForm({
             update({
               actionMode,
               ...(usesActionDefault
-                ? { timeoutSeconds: actionMode === 'browser_recipe' ? '600' : '1800' }
+                ? { timeoutSeconds: actionMode === 'browser_automation' ? '600' : '1800' }
                 : {}),
-              ...(actionMode === 'browser_recipe' ? { safetyMode: 'auto_apply' as const } : {}),
+              ...(actionMode === 'browser_automation' ? { safetyMode: 'auto_apply' as const } : {}),
               ...(actionMode === 'workflow' && !form.workflowId.trim() && workflowDefinitions[0]
                 ? {
                     workflowId: workflowDefinitions[0].id,
@@ -2294,9 +2294,9 @@ function AutomationForm({
         >
           <SelectOption value="agent">{labels.action.runAgent}</SelectOption>
           <SelectOption value="workflow">{labels.action.runWorkflow}</SelectOption>
-          <SelectOption value="browser_recipe">{language === 'zh' ? '浏览器自动化' : 'Browser automation'}</SelectOption>
+          <SelectOption value="browser_automation">{language === 'zh' ? '浏览器自动化' : 'Browser automation'}</SelectOption>
         </Select>
-        {form.actionMode !== 'browser_recipe' ? <Field label={labels.form.agent}>
+        {form.actionMode !== 'browser_automation' ? <Field label={labels.form.agent}>
           <Select
             className={inputClass}
             value={form.agentId}
@@ -2388,21 +2388,21 @@ function AutomationForm({
             <Field label={language === 'zh' ? '浏览器自动化' : 'Browser automation'}>
               <Select
                 className={inputClass}
-                value={form.browserWorkflowId}
+                value={form.browserAutomationId}
                 onChange={(event) => {
-                  const workflow = browserWorkflows.find((item) => item.id === event.target.value);
+                  const workflow = browserAutomations.find((item) => item.id === event.target.value);
                   update({
-                    browserWorkflowId: event.target.value,
-                    browserWorkflowInputs: workflow ? defaultBrowserWorkflowInputs(workflow) : {},
+                    browserAutomationId: event.target.value,
+                    browserAutomationInputs: workflow ? defaultBrowserAutomationInputs(workflow) : {},
                   });
                 }}
-                disabled={browserWorkflowsLoading || browserWorkflows.length === 0}
+                disabled={browserAutomationsLoading || browserAutomations.length === 0}
               >
-                {browserWorkflows.length === 0 ? <SelectOption value="">{language === 'zh' ? '没有已启用的浏览器自动化' : 'No enabled browser automations'}</SelectOption> : null}
-                {browserWorkflows.map((workflow) => <SelectOption key={workflow.id} value={workflow.id}>{workflow.name}</SelectOption>)}
+                {browserAutomations.length === 0 ? <SelectOption value="">{language === 'zh' ? '没有已启用的浏览器自动化' : 'No enabled browser automations'}</SelectOption> : null}
+                {browserAutomations.map((workflow) => <SelectOption key={workflow.id} value={workflow.id}>{workflow.name}</SelectOption>)}
               </Select>
             </Field>
-            {selectedBrowserWorkflow && Object.keys(selectedBrowserWorkflow.inputs).length > 0 ? <Field label={language === 'zh' ? '运行时填写' : 'Run inputs'}><BrowserWorkflowInputFields workflow={selectedBrowserWorkflow} values={form.browserWorkflowInputs} language={language} onChange={(browserWorkflowInputs) => update({ browserWorkflowInputs })} /></Field> : null}
+            {selectedBrowserAutomation && Object.keys(selectedBrowserAutomation.inputs).length > 0 ? <Field label={language === 'zh' ? '运行时填写' : 'Run inputs'}><BrowserAutomationInputFields automation={selectedBrowserAutomation} values={form.browserAutomationInputs} language={language} onChange={(browserAutomationInputs) => update({ browserAutomationInputs })} /></Field> : null}
           </>
         )}
 
@@ -2415,7 +2415,7 @@ function AutomationForm({
             <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
           </summary>
           <div className="grid gap-4 border-t border-edge-subtle p-4">
-        {form.actionMode !== 'browser_recipe' ? <><Section title={labels.form.safety} />
+        {form.actionMode !== 'browser_automation' ? <><Section title={labels.form.safety} />
         <Field label={labels.form.safety}>
           <Select
             className={inputClass}

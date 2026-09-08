@@ -1,6 +1,6 @@
 /**
  * Single shared HTTP + WebSocket listener for the Chrome extension bridge.
- * Gateway and BrowserManager both need the server; only one process may bind a port.
+ * Gateway and Browser Control sessions share one listener because only one process may bind the port.
  */
 
 import type { ExtensionBrowserProvider, ExtensionProviderConfig } from './extension.js';
@@ -40,20 +40,6 @@ export function getExtensionBrowserServerSnapshot(): ExtensionBrowserServerSnaps
     return { active: false, refCount: 0, key: null };
   }
   return { active: true, refCount: state.refCount, key: state.key };
-}
-
-export function getExtensionBrowserProvider(): ExtensionBrowserProvider | null {
-  return state?.provider ?? null;
-}
-
-/** Shut down the shared listener regardless of remaining ref counts (settings UI stop). */
-export async function forceShutdownExtensionBrowserServer(): Promise<boolean> {
-  return withExclusive(async () => {
-    if (!state) return false;
-    await state.provider.shutdown();
-    state = null;
-    return true;
-  });
 }
 
 function normalizeConfig(config?: ExtensionProviderConfig): Required<ExtensionProviderConfig> {
