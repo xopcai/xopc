@@ -1,12 +1,16 @@
 import type { Context, Hono } from 'hono';
+import { chooseModelThinking } from '@xopcai/gateway-contract';
 
+import { getModelThinking } from '../../../providers/model-thinking.js';
+import { resolveModel } from '../../../providers/index.js';
 import {
   SideChatError,
   parseThinkingLevel,
   validateSideChatSelections,
 } from '../../side-chat/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { validateWebchatContent } from '../../chat-limits.js';
+import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
+import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 
 const CLIENT_HEADER = 'x-xopc-client-instance-id';
@@ -69,12 +73,24 @@ export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedR
         throw new SideChatError('modelRef must be a string', 'INVALID_REQUEST');
       }
       const modelRef = typeof body.modelRef === 'string' ? body.modelRef : undefined;
+      const current = service.sideChats.get(c.req.param('sideChatId'), readClientInstanceId(c, body.clientInstanceId));
+      const nextModelRef = modelRef ?? current.config.modelRef;
+      let thinking;
+      try {
+        thinking = getModelThinking(resolveModel(nextModelRef));
+      } catch {
+        throw new SideChatError(`Model unavailable: ${nextModelRef}`, 'INVALID_REQUEST');
+      }
+      const requestedThinking = parseThinkingLevel(body.thinkingLevel);
       const sideChat = service.sideChats.updateConfig(
         c.req.param('sideChatId'),
         readClientInstanceId(c, body.clientInstanceId),
         {
-          modelRef,
-          thinkingLevel: parseThinkingLevel(body.thinkingLevel),
+          modelRef: nextModelRef,
+          thinkingLevel: chooseModelThinking(
+            thinking,
+            requestedThinking ?? current.config.thinkingLevel,
+          ),
         },
       );
       return c.json({ ok: true, sideChat });
@@ -104,12 +120,18 @@ export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedR
     try {
       const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
       const content = typeof body.content === 'string' ? body.content : '';
+      const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
       const contentError = validateWebchatContent(content);
       if (contentError) throw new SideChatError(contentError, 'INVALID_REQUEST');
+      const attachmentError = validateWebchatAttachments(attachments);
+      if (attachmentError) throw new SideChatError(attachmentError, 'INVALID_REQUEST');
+      if (!content.trim() && !attachments?.length) {
+        throw new SideChatError('content or attachments are required', 'INVALID_REQUEST');
+      }
       const result = service.sideChatRuns.submit(
         c.req.param('sideChatId'),
         readClientInstanceId(c, body.clientInstanceId),
-        content,
+        { content, attachments: attachments as UserTurnAttachment[] | undefined },
       );
       return c.json({ ok: true, payload: result }, 202);
     } catch (error) {

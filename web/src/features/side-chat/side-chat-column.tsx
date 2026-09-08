@@ -1,11 +1,20 @@
-import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, Send, ShieldCheck, Square, X } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
+import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
+import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
+import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
+import { ComposerFrame } from '@/features/chat/composer/composer-frame';
+import { ComposerAttachButton, ComposerRunControl, ComposerToolbarRow } from '@/features/chat/composer/composer-toolbar';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
+import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
+import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
+import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
+import { MAX_CHAT_ATTACHMENTS, type Attachment } from '@/features/chat/attachments/attachment-utils';
 import { MessageList } from '@/features/chat/messages/message-list';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -40,13 +49,21 @@ import {
   extendSideChat,
   getSideChatClientInstanceId,
   sendSideChatInput,
+  updateSideChatConfig,
 } from './side-chat-api';
 import type { SideChatTab, SideChatView } from './side-chat.types';
 import { buildSideChatReading, limitSideChatDraft, SIDE_CHAT_DRAFT_BYTES, textBytes } from './side-chat-reading';
 
-type SideChatClarifyPrompt = { requestId: string; question: string; choices?: string[] };
+type SideChatClarifyPrompt = {
+  requestId: string;
+  kind: 'input' | 'approval';
+  question: string;
+  choices?: string[];
+  suggestedAnswer?: string;
+};
 const SIDE_CHAT_CLOSE_CONFIRM_DISABLED_KEY = 'xopc:side-chat-close-confirm-disabled:v1';
 const loadNoOlderSideChatMessages = () => {};
+const EMPTY_SIDE_CHAT_ATTACHMENTS: Attachment[] = [];
 
 function isSideChatCloseConfirmDisabled(): boolean {
   try {
@@ -73,6 +90,10 @@ function userMessageText(message: Message): string {
     .trim();
 }
 
+function attachmentNames(message: Message): string {
+  return (message.attachments ?? []).map((attachment) => attachment.name ?? '').filter(Boolean).join('\n');
+}
+
 function sideChatErrorMessage(cause: unknown, m: SideChatMessages): string {
   const code = (cause as { body?: { code?: unknown } } | null)?.body?.code;
   if (code === 'INVALID_REQUEST') return m.errorInvalidRequest;
@@ -92,10 +113,12 @@ function reconcilePendingUserMessages(
   const next = [...loaded];
   for (const [id, optimistic] of pending) {
     const text = userMessageText(optimistic);
+    const names = attachmentNames(optimistic);
     const timestamp = optimistic.timestamp ?? 0;
     const confirmed = next.some((message) => (
       message.role === 'user'
       && userMessageText(message) === text
+      && attachmentNames(message) === names
       && Math.abs((message.timestamp ?? timestamp) - timestamp) < 60_000
     ));
     if (confirmed) {
@@ -166,7 +189,9 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
     const state = useSideChatStore.getState();
     const tab = state.tabs.find((candidate) => candidate.id === id);
     const reading = state.readings[id];
-    const empty = reading && !reading.messages.length && !reading.truncated && !state.drafts[id]?.trim() && !tab?.runId;
+    const sideDraft = state.drafts[id];
+    const empty = reading && !reading.messages.length && !reading.truncated
+      && !sideDraft?.text.trim() && !sideDraft?.attachments.length && !tab?.runId;
     if (empty || isSideChatCloseConfirmDisabled()) {
       closeTab(id);
       return;
@@ -310,8 +335,12 @@ export function SideChatConversation({
 }) {
   const [view, setView] = useState<SideChatView | null>(null);
   const [messages, setMessages] = useState<Message[]>(() => useSideChatStore.getState().readings[sideChatId]?.messages ?? []);
-  const draft = useSideChatStore((state) => state.drafts[sideChatId] ?? '');
-  const setDraft = useCallback((text: string) => useSideChatStore.getState().setDraft(sideChatId, text), [sideChatId]);
+  const draftText = useSideChatStore((state) => state.drafts[sideChatId]?.text ?? '');
+  const draftAttachments = useSideChatStore((state) => state.drafts[sideChatId]?.attachments ?? EMPTY_SIDE_CHAT_ATTACHMENTS);
+  const setDraftText = useCallback((text: string) => useSideChatStore.getState().setDraftText(sideChatId, text), [sideChatId]);
+  const setDraftAttachments = useCallback((next: Attachment[]) => {
+    useSideChatStore.getState().setDraftAttachments(sideChatId, next);
+  }, [sideChatId]);
   const [ended, setEnded] = useState<SideChatTab['ended']>(() => useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.ended);
   const [loading, setLoading] = useState(!ended);
   const [connectionLost, setConnectionLost] = useState(false);
@@ -337,7 +366,7 @@ export function SideChatConversation({
   const [clarify, setClarify] = useState<SideChatClarifyPrompt | null>(null);
   const [clarifySubmitting, setClarifySubmitting] = useState(false);
   const [clarifyError, setClarifyError] = useState<string | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const shouldSyncSelectionRef = useRef(false);
   const messageRevisionRef = useRef(0);
   const lastViewAt = useRef(0);
   const submittingRef = useRef(false);
@@ -345,6 +374,19 @@ export function SideChatConversation({
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language);
   const sideChatMessages = m.sideChat;
+  const attachments = useComposerAttachments({
+    chat: m.chat,
+    initialAttachments: draftAttachments,
+    onAttachmentsChange: setDraftAttachments,
+  });
+  const editor = useComposerEditor({
+    disabled: Boolean(ended) || connectionLost,
+    initialValue: draftText,
+    onValueChange: setDraftText,
+    autoFocusKey: sideChatId,
+    shouldSyncSelectionRef,
+  });
+  const kbdRef = useRef({} as ComposerKbdContext);
   const {
     scrollRef,
     atBottom,
@@ -540,8 +582,10 @@ export function SideChatConversation({
         else if (event.event === 'clarify_request') {
           setClarify({
             requestId: String(payload.requestId ?? ''),
+            kind: payload.kind === 'approval' ? 'approval' : 'input',
             question: String(payload.question ?? ''),
             choices: Array.isArray(payload.choices) ? payload.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
+            suggestedAnswer: typeof payload.suggestedAnswer === 'string' ? payload.suggestedAnswer : undefined,
           });
           setClarifyError(null);
           void reload();
@@ -559,25 +603,31 @@ export function SideChatConversation({
   }, [ended, isCurrent, mutateAssistant, onRunIdChange, reload, runId, sideChatId, sideChatMessages.failed]);
 
   const submitDraft = () => {
-    const content = draft.trim();
-    if (!content || running || submittingRef.current || endedRef.current || connectionLost) return;
+    const content = draftText.trim();
+    const wireAttachments = attachments.wireAttachmentsPayload();
+    if ((!content && wireAttachments.length === 0) || running || submittingRef.current || endedRef.current || connectionLost) return;
     if (textBytes(content) > SIDE_CHAT_DRAFT_BYTES) { setError(sideChatMessages.draftTooLong); return; }
-    const sentDraft = draft;
+    const sentDraft = {
+      text: draftText,
+      attachments: [...attachments.attachmentsRef.current],
+    };
     submittingRef.current = true;
-    setDraft('');
+    editor.resetEditor();
+    attachments.clearAttachments();
     setError(null);
     messageRevisionRef.current += 1;
     const optimisticId = crypto.randomUUID();
     const optimisticMessage: Message = {
       role: 'user',
       content: [{ type: 'text', text: content }],
+      attachments: sentDraft.attachments,
       timestamp: Date.now(),
       renderKey: `side-chat-user:${optimisticId}`,
     };
     pendingUserMessagesRef.current.set(optimisticId, optimisticMessage);
     setMessages((current) => [...current, optimisticMessage]);
     setRunning(true);
-    void sendSideChatInput(sideChatId, content)
+    void sendSideChatInput(sideChatId, content, wireAttachments)
       .then((nextRunId) => {
         if (!sameGateway() || endedRef.current) return;
         useSideChatStore.getState().setTabRunId(sideChatId, nextRunId);
@@ -589,8 +639,18 @@ export function SideChatConversation({
         if (!sameGateway()) return;
         const state = useSideChatStore.getState();
         if (!isCurrent() && !state.tabs.some((tab) => tab.id === sideChatId)) return;
-        const currentDraft = useSideChatStore.getState().drafts[sideChatId] ?? '';
-        setDraft(currentDraft ? `${sentDraft}\n${currentDraft}` : sentDraft);
+        const currentDraft = useSideChatStore.getState().drafts[sideChatId] ?? { text: '', attachments: [] };
+        const restoredDraft = {
+          text: currentDraft.text ? `${sentDraft.text}\n${currentDraft.text}` : sentDraft.text,
+          attachments: [...sentDraft.attachments, ...currentDraft.attachments],
+        };
+        if (isCurrent()) {
+          editor.resetEditor({ nextText: restoredDraft.text });
+          attachments.setAttachments(restoredDraft.attachments);
+        } else {
+          setDraftText(restoredDraft.text);
+          setDraftAttachments(restoredDraft.attachments);
+        }
         pendingUserMessagesRef.current.delete(optimisticId);
         const reading = state.readings[sideChatId];
         if (reading) state.rememberMessages(sideChatId, reading.messages.filter((message) => message.renderKey !== optimisticMessage.renderKey));
@@ -632,13 +692,8 @@ export function SideChatConversation({
   };
 
   const editUserMessage = useCallback((text: string) => {
-    setDraft(text);
-    requestAnimationFrame(() => {
-      const composer = composerRef.current;
-      composer?.focus();
-      composer?.setSelectionRange(text.length, text.length);
-    });
-  }, [setDraft]);
+    editor.resetEditor({ nextText: text, focus: true });
+  }, [editor.resetEditor]);
 
   const saveAssistantAsNote = useCallback(async (content: string) => {
     try {
@@ -651,6 +706,25 @@ export function SideChatConversation({
       throw cause;
     }
   }, [m.chat.messageSavedToNote, m.notes.quickCaptureFailed]);
+
+  const saveModelConfig = useCallback(async (patch: { modelRef?: string; thinkingLevel?: string }) => {
+    const next = await updateSideChatConfig(sideChatId, patch);
+    if (isCurrent() && !endedRef.current) setView(next);
+  }, [isCurrent, sideChatId]);
+
+  kbdRef.current = {
+    adapters: [],
+    send: submitDraft,
+    runBusy: running,
+    pendingFollowUpsCount: 0,
+    editingFollowUpId: null,
+    onCancelEditFollowUp: () => {},
+    attachmentsLen: attachments.attachments.length,
+    isComposing: editor.isComposing,
+    valueRef: editor.valueRef,
+    adjustHeight: editor.adjustHeight,
+    editorRef: editor.editorRef,
+  };
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -715,6 +789,7 @@ export function SideChatConversation({
             submitError={clarifyError}
             labels={m.chat}
             onSubmit={answerClarify}
+            onAgentDecide={() => answerClarify('Use your best judgment and continue without additional user input.')}
             onCancel={stopRun}
           />
         </div>
@@ -725,19 +800,53 @@ export function SideChatConversation({
           <div className="rounded-xl border border-edge bg-surface-panel p-4">
             <h2 className="text-base font-semibold" aria-live="polite">{ended === 'unavailable' ? sideChatMessages.unavailableTitle : sideChatMessages.expiredTitle}</h2>
             <p className="mt-2 text-sm text-fg-muted">{parentMissing ? sideChatMessages.parentMissing : ended === 'waiting' ? sideChatMessages.waitExpired : messages.length ? sideChatMessages.expiredDescription : sideChatMessages.unavailableDescription}</p>
-            {draft ? <div className="mt-3"><label htmlFor={`side-chat-draft-${sideChatId}`} className="text-xs text-fg-muted">{sideChatMessages.unsentDraft}</label><textarea id={`side-chat-draft-${sideChatId}`} value={draft} onChange={(event) => setDraft(limitSideChatDraft(event.target.value))} rows={3} className="mt-1 w-full resize-y rounded-lg border border-edge bg-surface-base p-2 text-sm" /></div> : null}
+            {draftText || draftAttachments.length ? <div className="mt-3"><label htmlFor={`side-chat-draft-${sideChatId}`} className="text-xs text-fg-muted">{sideChatMessages.unsentDraft}</label><ComposerAttachmentChips attachments={draftAttachments} topPadded={false} onRemove={attachments.removeAttachment} className="mt-1 rounded-t-lg" />{draftText ? <textarea id={`side-chat-draft-${sideChatId}`} value={draftText} onChange={(event) => setDraftText(limitSideChatDraft(event.target.value))} rows={3} className="mt-1 w-full resize-y rounded-lg border border-edge bg-surface-base p-2 text-sm" /> : null}</div> : null}
             <Button type="button" variant="primary" className="mt-4" disabled={recreating} onClick={() => {
               if (parentMissing) { if (parentSessionKey) useSideChatStore.getState().setOpen(parentSessionKey, false); }
               else void recreate();
-            }}>{parentMissing ? sideChatMessages.closePaneAria : recreating ? sideChatMessages.creating : draft.trim() ? sideChatMessages.newWithDraft : sideChatMessages.newAria}</Button>
+            }}>{parentMissing ? sideChatMessages.closePaneAria : recreating ? sideChatMessages.creating : draftText.trim() || draftAttachments.length ? sideChatMessages.newWithDraft : sideChatMessages.newAria}</Button>
             {messages.length && !parentMissing ? <p className="mt-2 text-xs text-fg-muted">{sideChatMessages.replaceHint}</p> : null}
           </div>
         </div>
       ) : <form onSubmit={(event) => { event.preventDefault(); submitDraft(); }} className="shrink-0 border-t border-edge p-3">
-        <div className="rounded-2xl border border-edge bg-surface-panel p-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15">
+        <ComposerFrame
+          dragging={attachments.isDragging}
+          onDragOver={(event) => {
+            if (!event.dataTransfer?.types.includes('Files')) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+            attachments.setIsDragging(true);
+          }}
+          onDragLeave={(event) => {
+            if (event.relatedTarget === null) attachments.setIsDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            attachments.setIsDragging(false);
+            const files = event.dataTransfer?.files;
+            if (files?.length) void attachments.processFiles(Array.from(files));
+          }}
+        >
+          <input
+            ref={attachments.fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPT}
+            className="hidden"
+            onChange={(event) => {
+              const files = event.target.files;
+              if (files) void attachments.processFiles(Array.from(files));
+              event.target.value = '';
+            }}
+          />
+          <ComposerAttachmentChips
+            attachments={attachments.attachments}
+            topPadded={false}
+            onRemove={attachments.removeAttachment}
+          />
           {view?.context.selections.length ? (
             <div
-              className="mb-2 inline-flex h-8 max-w-full items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 text-xs font-medium text-fg-muted"
+              className="mx-3 mt-3 inline-flex h-8 max-w-[calc(100%-1.5rem)] self-start items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 text-xs font-medium text-fg-muted sm:mx-4"
               title={view.context.selections.map((selection) => selection.label || selection.text).join('\n')}
             >
               <MessageSquareText className="size-3.5 shrink-0" />
@@ -749,36 +858,62 @@ export function SideChatConversation({
               </span>
             </div>
           ) : null}
-          <textarea
-            ref={composerRef}
-            value={draft}
-            onChange={(event) => {
-              const text = event.target.value;
-              if (textBytes(text) > SIDE_CHAT_DRAFT_BYTES) setError(sideChatMessages.draftTooLong);
-              setDraft(limitSideChatDraft(text));
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submitDraft();
-              }
-            }}
-            rows={3}
-            placeholder={m.chat.typeMessage}
-            className="w-full resize-none bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
-          />
-          <div className="mt-2 flex items-center justify-between">
+          <div className={view?.context.selections.length ? 'px-3 sm:px-4' : 'px-3 pt-1 sm:px-4'}>
+            <ChatComposerInput
+              editorRef={editor.editorRef}
+              disabled={connectionLost}
+              placeholder={m.chat.typeMessage}
+              onWireInput={(wire, caret) => {
+                const next = limitSideChatDraft(wire);
+                if (textBytes(wire) > SIDE_CHAT_DRAFT_BYTES) setError(sideChatMessages.draftTooLong);
+                editor.onWireInput(next, Math.min(caret, next.length));
+              }}
+              adjustHeight={editor.adjustHeight}
+              processFiles={attachments.processFiles}
+              processPastedText={attachments.processPastedText}
+              setIsComposing={editor.setIsComposing}
+              kbdRef={kbdRef}
+              chatMessages={m.chat}
+            />
+          </div>
+          <ComposerToolbarRow>
+            <ComposerAttachButton
+              disabled={connectionLost}
+              runBusy={running}
+              attachmentCount={attachments.attachments.length}
+              maxAttachments={MAX_CHAT_ATTACHMENTS}
+              chat={m.chat}
+              onPickFiles={() => attachments.fileInputRef.current?.click()}
+            />
             <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-fg-muted" title={sideChatMessages.parentPermissionsHint}>
               <ShieldCheck className="size-3.5 shrink-0" />
-              <span className="truncate">{sideChatMessages.parentPermissions.replace('{{model}}', view?.config.modelRef ?? '')}</span>
+              <span className="truncate">{sideChatMessages.parentPermissions}</span>
             </span>
-            {running ? (
-              <Button type="button" className="size-9 rounded-full p-0" aria-label={m.chat.abort} onClick={() => void stopRun()}><Square className="size-3.5 fill-current" /></Button>
-            ) : (
-              <Button type="submit" className="size-9 rounded-full p-0" disabled={!draft.trim() || connectionLost || textBytes(draft) > SIDE_CHAT_DRAFT_BYTES} aria-label={m.chat.sendMessage}><Send className="size-4" /></Button>
-            )}
-          </div>
-        </div>
+            <div className="ml-auto min-w-0">
+              {view ? (
+                <ComposerModelConfigControl
+                  chat={m.chat}
+                  sessionModel={view.config.modelRef}
+                  modelDisabled={running || connectionLost}
+                  onModelChange={(modelRef, thinkingLevel) => saveModelConfig({ modelRef, thinkingLevel })}
+                  thinkingLevel={view.config.thinkingLevel}
+                  thinkingDisabled={running || connectionLost}
+                  onThinkingChange={(thinkingLevel) => saveModelConfig({ thinkingLevel })}
+                />
+              ) : null}
+            </div>
+            <ComposerRunControl
+              disabled={connectionLost || textBytes(draftText) > SIDE_CHAT_DRAFT_BYTES}
+              voiceActive={false}
+              runBusy={running}
+              hasDraft={Boolean(draftText.trim()) || attachments.attachments.length > 0}
+              showSteeringInterrupt={false}
+              chat={m.chat}
+              onSend={submitDraft}
+              onAbort={() => void stopRun()}
+            />
+          </ComposerToolbarRow>
+        </ComposerFrame>
       </form>}
     </div>
   );

@@ -1,5 +1,6 @@
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { SideChatSelection, SideChatView } from './side-chat.types';
 
 const CLIENT_KEY = 'xopc:side-chat-client-id';
@@ -38,11 +39,23 @@ export async function getSideChatMessages(id: string): Promise<unknown[]> {
   return response.messages;
 }
 
-export async function sendSideChatInput(id: string, content: string): Promise<string> {
+export async function updateSideChatConfig(
+  id: string,
+  config: { modelRef?: string; thinkingLevel?: string },
+): Promise<SideChatView> {
+  const response = await fetchJson<{ sideChat: SideChatView }>(apiUrl(`/api/side-chats/${id}/config`), {
+    method: 'PATCH',
+    headers: headers(),
+    body: JSON.stringify(config),
+  });
+  return response.sideChat;
+}
+
+export async function sendSideChatInput(id: string, content: string, attachments?: WireAttachment[]): Promise<string> {
   const response = await fetchJson<{ payload: { runId: string } }>(apiUrl(`/api/side-chats/${id}/inputs`), {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, attachments }),
   });
   return response.payload.runId;
 }

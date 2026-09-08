@@ -12,6 +12,10 @@ export function syncComposerPlaceholderClass(el: HTMLElement, wire: string): voi
 
 export interface UseComposerEditorOptions {
   disabled: boolean;
+  /** Initial value for composer instances whose draft is owned by a parent store. */
+  initialValue?: string;
+  /** Mirrors draft changes to an optional parent store. */
+  onValueChange?: (value: string) => void;
   /** Route/session identity that should focus the editor when it changes. */
   autoFocusKey?: string | null;
   /** Fills the editor when user picks a welcome scenario. */
@@ -41,22 +45,33 @@ export interface UseComposerEditorReturn {
 }
 
 export function useComposerEditor(options: UseComposerEditorOptions): UseComposerEditorReturn {
-  const { disabled, autoFocusKey, welcomeDraftSeed, onExternalTextReplace, shouldSyncSelectionRef } = options;
+  const {
+    disabled,
+    initialValue = '',
+    onValueChange,
+    autoFocusKey,
+    welcomeDraftSeed,
+    onExternalTextReplace,
+    shouldSyncSelectionRef,
+  } = options;
 
-  const [value, setValue] = useState('');
-  const [cursor, setCursor] = useState(0);
+  const [value, setValue] = useState(initialValue);
+  const [cursor, setCursor] = useState(initialValue.length);
   const [isComposing, setIsComposing] = useState(false);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const valueRef = useRef(value);
   const cursorRef = useRef(cursor);
   const selectionRangeRef = useRef<Range | null>(null);
   const lastWelcomeDraftIdRef = useRef(0);
+  const onValueChangeRef = useRef(onValueChange);
 
   const pendingFocusAfterEnableRef = useRef(true);
   const lastAutoFocusKeyRef = useRef<string | null>(null);
+  const initializedEditorRef = useRef(false);
 
   valueRef.current = value;
   cursorRef.current = cursor;
+  onValueChangeRef.current = onValueChange;
 
   const adjustHeight = useCallback(() => {
     const el = editorRef.current;
@@ -64,6 +79,16 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`;
   }, []);
+
+  useLayoutEffect(() => {
+    if (initializedEditorRef.current) return;
+    const el = editorRef.current;
+    if (!el) return;
+    initializedEditorRef.current = true;
+    applyWireToEditor(el, initialValue, initialValue.length);
+    syncComposerPlaceholderClass(el, initialValue);
+    adjustHeight();
+  }, [adjustHeight, initialValue]);
 
   const focusForExternalPaste = useCallback(() => {
     const el = editorRef.current;
@@ -93,20 +118,19 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
       const caretOffset = opts?.caretOffset ?? nextText.length;
 
       setValue(nextText);
+      onValueChangeRef.current?.(nextText);
       valueRef.current = nextText;
       setCursor(caretOffset);
       cursorRef.current = caretOffset;
       selectionRangeRef.current = null;
 
-      requestAnimationFrame(() => {
-        const el = editorRef.current;
-        if (el) {
-          applyWireToEditor(el, nextText, caretOffset);
-          syncComposerPlaceholderClass(el, nextText);
-          if (opts?.focus) el.focus({ preventScroll: true });
-        }
-        adjustHeight();
-      });
+      const el = editorRef.current;
+      if (el) {
+        applyWireToEditor(el, nextText, caretOffset);
+        syncComposerPlaceholderClass(el, nextText);
+        if (opts?.focus) el.focus({ preventScroll: true });
+      }
+      adjustHeight();
     },
     [adjustHeight],
   );
@@ -235,6 +259,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     valueRef.current = wire;
     cursorRef.current = caret;
     setValue(wire);
+    onValueChangeRef.current?.(wire);
     setCursor(caret);
   }, []);
 

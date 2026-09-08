@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { EphemeralSideChatManager } from '../../../side-chat/manager.js';
 import type { SessionMetadata } from '../../../../session/types.js';
@@ -39,6 +39,34 @@ describe('side chat lifecycle routes', () => {
       expect(await result.json()).toMatchObject({ code: 'EXPIRED', reason: 'idle' });
     }
     expect((await request('heartbeat', 'other')).status).toBe(404);
+    await manager.disposeAll();
+  });
+
+  it('accepts attachment-only inputs and passes validated attachments to the run service', async () => {
+    const manager = new EphemeralSideChatManager({
+      startSweepTimer: false,
+      getParentMetadata: async () => ({ sessionId: 'parent-id', key: 'parent' }) as SessionMetadata,
+      loadParentMessages: async () => [],
+      getDefaultModelRef: () => 'openai/test',
+      getWorkspacePath: () => '/tmp',
+    });
+    const submit = vi.fn(() => ({ runId: 'run-1' }));
+    const app = new Hono();
+    registerSideChatRoutes(app, {
+      service: { sideChats: manager, sideChatRuns: { submit } },
+      chatRateLimitMiddleware: async (_c, next) => { await next(); },
+    } as unknown as AuthenticatedRouteDeps);
+    const chat = await manager.create({ parentSessionKey: 'parent', clientInstanceId: 'owner' });
+    const attachment = { type: 'file', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' };
+
+    const response = await app.request(`/api/side-chats/${chat.id}/inputs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-xopc-client-instance-id': 'owner' },
+      body: JSON.stringify({ content: '', attachments: [attachment] }),
+    });
+
+    expect(response.status).toBe(202);
+    expect(submit).toHaveBeenCalledWith(chat.id, 'owner', { content: '', attachments: [attachment] });
     await manager.disposeAll();
   });
 });
