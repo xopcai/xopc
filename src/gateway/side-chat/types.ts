@@ -47,7 +47,7 @@ export interface SideChatContextSnapshot {
 
 export interface SideChatConfig {
   modelRef: string;
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel: ThinkingLevel;
 }
 
 export interface SideChatView {
