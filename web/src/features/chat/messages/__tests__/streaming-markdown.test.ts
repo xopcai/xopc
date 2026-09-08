@@ -94,6 +94,23 @@ describe('prepareStreamingMarkdown', () => {
     const raw = '```md\n| Name | Age |';
     expect(prepareStreamingMarkdown(raw)).toBe(raw);
   });
+
+  it('holds an unfinished inline code span until its closing delimiter arrives', () => {
+    const partial = '共享类型定义在：\n\n`libs/ts/agent-channels/src/v';
+    const complete = '共享类型定义在：\n\n`libs/ts/agent-channels/src/view-models/qa-card.ts`';
+
+    expect(prepareStreamingMarkdown(partial)).toBe('共享类型定义在：\n\n');
+    expect(parseMarkdown(prepareStreamingMarkdown(partial))).not.toContain('`libs');
+    expect(prepareStreamingMarkdown(complete)).toBe(complete);
+    expect(parseMarkdown(prepareStreamingMarkdown(complete))).toContain(
+      '<code>libs/ts/agent-channels/src/view-models/qa-card.ts</code>',
+    );
+  });
+
+  it('keeps unfinished fenced code visible while streaming', () => {
+    const raw = '```ts\nconst value = `partial';
+    expect(prepareStreamingMarkdown(raw)).toBe(raw);
+  });
 });
 
 describe('mergeConsecutiveTextBlocks', () => {

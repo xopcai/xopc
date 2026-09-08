@@ -188,8 +188,18 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
   };
 }
 
+const MERMAID_SOURCE_HEADER_RE = /^(?:(?:flowchart|graph)\s+(?:TD|TB|LR|BT|RL)\b|stateDiagram(?:-v2)?\b|sequenceDiagram\b|classDiagram\b|erDiagram\b|xychart(?:-beta)?\b)/i;
+
+function isMermaidCodeBlock(code: HTMLElement): boolean {
+  if (code.classList.contains('language-mermaid')) return true;
+  if (Array.from(code.classList).some((className) => className.startsWith('language-'))) return false;
+
+  const firstLine = (code.textContent ?? '').trimStart().split(/[\r\n;]/, 1)[0]?.trim() ?? '';
+  return MERMAID_SOURCE_HEADER_RE.test(firstLine);
+}
+
 function findMermaidCodeBlocks(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('pre code.language-mermaid, pre code.hljs.language-mermaid'));
+  return Array.from(root.querySelectorAll<HTMLElement>('pre code')).filter(isMermaidCodeBlock);
 }
 
 function prepareMermaidShell(code: HTMLElement): HTMLElement | null {

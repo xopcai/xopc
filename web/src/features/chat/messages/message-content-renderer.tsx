@@ -584,6 +584,18 @@ export function ChunkedContent({
   onProgressiveRenderComplete?: () => void;
 }) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
+  const pendingTextIndex = renderContent.findLastIndex(
+    (block) => block.type === 'text' && block.presentation === 'pending',
+  );
+  const tailBlock = renderContent.at(-1);
+  const fallbackStreamingTextIndex = pendingTextIndex < 0
+    && tailBlock?.type === 'text'
+    && tailBlock.presentation === undefined
+      ? renderContent.length - 1
+      : -1;
+  const streamingTextIndex = isAssistantMessageStreaming
+    ? Math.max(pendingTextIndex, fallbackStreamingTextIndex)
+    : -1;
   const nodes: ReactNode[] = [];
   const activityBlocks = isUser ? [] : (assistantActivity?.blocks ?? []);
   const visibleToolIds = new Set(
@@ -640,7 +652,7 @@ export function ChunkedContent({
         b,
         `block-${i}`,
         isUser,
-        isAssistantMessageStreaming,
+        i === streamingTextIndex,
         imagePreviewLabel,
         onImagePreview,
         b.type === 'image' ? imgIdx : i,

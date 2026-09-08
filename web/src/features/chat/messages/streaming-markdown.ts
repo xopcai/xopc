@@ -1,4 +1,5 @@
 import type { MessageContent } from '@/features/chat/messages/messages.types';
+import { findUnclosedInlineCodeSpan } from '@/components/markdown/inline-code-delimiters';
 
 function tableLinePrefix(line: string): string {
   const withoutCr = line.replace(/\r$/, '');
@@ -83,9 +84,15 @@ function isInsideUnclosedFence(content: string): boolean {
  * persisted or copied back into the transcript.
  */
 export function prepareStreamingMarkdown(content: string): string {
-  if (!content.includes('|') || isInsideUnclosedFence(content)) return content;
+  const unclosedInlineCode = findUnclosedInlineCodeSpan(content);
+  const renderableContent = unclosedInlineCode
+    ? content.slice(0, unclosedInlineCode.start)
+    : content;
+  if (!renderableContent.includes('|') || isInsideUnclosedFence(renderableContent)) {
+    return renderableContent;
+  }
 
-  const lines = content.split('\n');
+  const lines = renderableContent.split('\n');
   let tailStart = lines.length - 1;
   while (tailStart > 0 && lines[tailStart - 1]?.trim()) {
     tailStart--;
@@ -93,18 +100,18 @@ export function prepareStreamingMarkdown(content: string): string {
 
   const tail = lines.slice(tailStart);
   const tableStart = tail.findIndex((line) => isLikelyPipeTableRow(line));
-  if (tableStart < 0) return content;
+  if (tableStart < 0) return renderableContent;
 
   const headerIndex = tailStart + tableStart;
   const header = lines[headerIndex] ?? '';
   const columns = splitPipeCells(header).length;
-  if (columns < 2) return content;
+  if (columns < 2) return renderableContent;
   const tablePrefix = tableLinePrefix(header);
 
   const separatorIndex = headerIndex + 1;
   const separator = lines[separatorIndex];
   if (separator === undefined) {
-    return `${content}${content.endsWith('\n') ? '' : '\n'}${buildSeparator(columns, tablePrefix)}`;
+    return `${renderableContent}${renderableContent.endsWith('\n') ? '' : '\n'}${buildSeparator(columns, tablePrefix)}`;
   }
 
   if (!tableLineBody(separator).trim()) {
@@ -122,7 +129,7 @@ export function prepareStreamingMarkdown(content: string): string {
     return next.join('\n');
   }
 
-  if (!isSeparatorLike(separator)) return content;
+  if (!isSeparatorLike(separator)) return renderableContent;
 
   const lastIndex = lines.length - 1;
   const last = lines[lastIndex] ?? '';
@@ -137,7 +144,7 @@ export function prepareStreamingMarkdown(content: string): string {
     return next.join('\n');
   }
 
-  return content;
+  return renderableContent;
 }
 
 /** Merge adjacent assistant text fragments so Markdown constructs can span realtime/UI chunks. */
