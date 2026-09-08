@@ -1,4 +1,4 @@
-import { Cloud, Globe, MonitorPlay, Puzzle, ShieldHalf, Terminal } from 'lucide-react';
+import { Cloud, Globe, MonitorPlay, Puzzle, Terminal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,11 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
-const BACKEND_ICON = {
+const DRIVER_ICON = {
   extension: Puzzle,
-  local: MonitorPlay,
-  cloakbrowser: ShieldHalf,
+  playwright: MonitorPlay,
   cdp: Terminal,
-  cloud: Cloud,
+  remote: Cloud,
 } as const;
 
 export function BrowserSetupRequiredCard({ payload }: { payload: BrowserSetupRequiredPayload }) {
@@ -20,7 +19,7 @@ export function BrowserSetupRequiredCard({ payload }: { payload: BrowserSetupReq
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).chat;
 
-  const Icon = BACKEND_ICON[payload.backend] ?? Globe;
+  const Icon = DRIVER_ICON[payload.driver] ?? Globe;
   const title = m.browserSetupRequiredTitle;
   const reasonCopy = m.browserSetupRequiredReasons[payload.reason] ?? m.browserSetupRequiredReasons.generic;
 

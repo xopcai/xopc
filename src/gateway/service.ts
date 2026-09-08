@@ -80,7 +80,7 @@ import {
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
-import { createRuntimeBrowserRecipeService, type BrowserRecipeService } from '../browser/recipes/index.js';
+import { createRuntimeBrowserAutomationService, type BrowserAutomationService } from '../browser/automations/index.js';
 import {
   ReadonlyProactiveAgentExecutor,
   listInsights,
@@ -151,7 +151,7 @@ export class GatewayService {
   private _agentService: AgentService | null = null;
   private channelManager: ChannelManager;
   private automationService: AutomationService;
-  private browserRecipeService: BrowserRecipeService | null = null;
+  private browserAutomationService: BrowserAutomationService | null = null;
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
@@ -243,14 +243,14 @@ export class GatewayService {
     return this.modelCatalogSync;
   }
 
-  get browserRecipes(): BrowserRecipeService {
-    if (!this.browserRecipeService) {
-      this.browserRecipeService = createRuntimeBrowserRecipeService({
+  get browserAutomations(): BrowserAutomationService {
+    if (!this.browserAutomationService) {
+      this.browserAutomationService = createRuntimeBrowserAutomationService({
         getConfig: () => this.config,
         emit: (type, payload) => this.emit(type, payload),
       });
     }
-    return this.browserRecipeService;
+    return this.browserAutomationService;
   }
 
   private stopGatewayUpdateCheck: (() => void) | null = null;
@@ -617,7 +617,8 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
-      getBrowserRecipeService: () => this.browserRecipes,
+      getBrowserAutomationService: () => this.browserAutomations,
+      emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
       getProjectService: () => this.projects,
       getLocalAppService: () => this.localApps,
@@ -665,7 +666,7 @@ export class GatewayService {
         input,
       ),
       workflowRunService: this.createWorkflowRunService(),
-      browserRecipeService: this.browserRecipes,
+      browserAutomationService: this.browserAutomations,
       executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
         const task = new TaskRepository().get(taskId);
         if (!task) return { ok: false, reason: 'not_found' };
@@ -1164,7 +1165,7 @@ export class GatewayService {
         input,
       ),
       workflowRunService: this.createWorkflowRunService(),
-      browserRecipeService: this.browserRecipes,
+      browserAutomationService: this.browserAutomations,
       executeTaskCommand: ({ taskId, idempotencyKey, command }) => {
         const task = new TaskRepository().get(taskId);
         if (!task) return { ok: false, reason: 'not_found' };
@@ -1452,9 +1453,9 @@ export class GatewayService {
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
 
-    await this.browserRecipeService?.shutdown();
+    await this.browserAutomationService?.shutdown();
 
-    // Stop browser extension WS server (shared acquire/release with BrowserManager)
+    // Stop the shared browser extension WebSocket server.
     if (this.browserExtensionRelease) {
       await this.browserExtensionRelease();
       this.browserExtensionRelease = null;
@@ -1496,19 +1497,9 @@ export class GatewayService {
     log.debug('Gateway service stopped');
   }
 
-  /** Start the browser extension WS server when backend is 'extension'. */
+  /** Start the browser extension WebSocket server when its driver is active. */
   private async startBrowserExtensionServerIfNeeded(): Promise<void> {
     await this.reconcileBrowserExtensionServer();
-  }
-
-  /** Release the gateway's hold on the shared extension bridge (does not restart). */
-  async releaseBrowserExtensionBridge(): Promise<void> {
-    if (!this.browserExtensionRelease) return;
-    await this.browserExtensionRelease();
-    this.browserExtensionRelease = null;
-    this.browserExtensionProvider = null;
-    this.browserExtensionBindKey = null;
-    log.debug('Browser extension WS server released');
   }
 
   /**
@@ -1516,8 +1507,15 @@ export class GatewayService {
    * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
    */
   async reconcileBrowserExtensionServer(): Promise<void> {
-    const { resolveExtensionBridgeServerConfig } = await import('../browser/backend-from-config.js');
-    const bridgeConfig = resolveExtensionBridgeServerConfig(this.config);
+    const driver = this.config.browser.driver;
+    const bridgeConfig = this.config.browser.enabled && driver.kind === 'extension'
+      ? {
+          host: '127.0.0.1',
+          port: 19820,
+          connectionTimeout: this.config.browser.limits.actionTimeoutMs,
+          commandTimeout: this.config.browser.limits.actionTimeoutMs,
+        }
+      : null;
 
     if (!bridgeConfig) {
       if (this.browserExtensionRelease) {
@@ -1525,7 +1523,7 @@ export class GatewayService {
         this.browserExtensionRelease = null;
         this.browserExtensionProvider = null;
         this.browserExtensionBindKey = null;
-        log.debug('Browser extension WS server stopped (backend is not extension)');
+        log.debug('Browser extension WebSocket server stopped because its driver is inactive');
       }
       return;
     }

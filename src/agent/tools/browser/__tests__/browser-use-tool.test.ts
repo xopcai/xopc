@@ -1,181 +1,66 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createBrowserUseTool } from '../tool/browser-use-tool.js';
-import type { BrowserManager } from '../../../../browser/manager.js';
+import type { BrowserRuntime } from '../../../../browser/runtime/browser-runtime.js';
 import { BrowserNotReadyError } from '../../../../browser/readiness.js';
+import { createBrowserUseTool } from '../tool/browser-use-tool.js';
 
-function mockPage() {
+function createTool(result: Awaited<ReturnType<BrowserRuntime['execute']>>) {
+  const execute = vi.fn().mockResolvedValue(result);
   return {
-    url: () => 'https://example.com',
-    title: () => Promise.resolve('Example'),
-    locator: () => ({
-      first: () => ({
-        waitFor: () => Promise.resolve(),
-        ariaSnapshot: () => Promise.resolve('- heading "Example Domain"'),
-      }),
-    }),
-    goto: vi.fn().mockResolvedValue(undefined),
-    goBack: vi.fn().mockResolvedValue({}),
-    screenshot: vi.fn().mockResolvedValue(Buffer.from('PNG')),
-    evaluate: vi.fn().mockResolvedValue('eval-result'),
-    keyboard: { press: vi.fn().mockResolvedValue(undefined) },
-    waitForTimeout: vi.fn().mockResolvedValue(undefined),
-  } as any;
-}
-
-function mockManager(): BrowserManager {
-  return {
-    getPage: vi.fn().mockResolvedValue(mockPage()),
-    closePage: vi.fn().mockResolvedValue(undefined),
-    shutdown: vi.fn().mockResolvedValue(undefined),
-    ensureConnected: vi.fn().mockResolvedValue(undefined),
-    getExtensionProvider: vi.fn().mockReturnValue(null),
-  } as any;
-}
-
-function createTool() {
-  const manager = mockManager();
-  const page = mockPage();
-  return {
+    execute,
     tool: createBrowserUseTool({
-      getManager: () => manager,
-      getPageForTask: () => Promise.resolve(page),
-      getTaskId: () => 'test-session',
-      getConfig: () => undefined,
-      notifyBrowserPageClosed: vi.fn(),
+      getRuntime: () => ({ execute } as unknown as BrowserRuntime),
+      getTaskId: () => 'task-1',
     }),
-    manager,
-    page,
   };
 }
 
 describe('browser_use tool', () => {
-  it('has correct name and parameters', () => {
-    const { tool } = createTool();
-    expect(tool.name).toBe('browser_use');
-    expect(tool.parameters).toBeDefined();
+  it('forwards a typed action and returns semantic observations', async () => {
+    const observation = {
+      sessionId: 'session-1', tabId: 'tab-1', revision: 2, documentId: 'doc-1',
+      url: 'https://example.com', title: 'Example', nodes: [],
+      changes: { added: [], changed: [], removed: [] },
+    };
+    const { tool, execute } = createTool({
+      ok: true,
+      receipt: { action: 'observe', risk: 'read', durationMs: 4, verified: true, observation },
+    });
+    const result = await tool.execute('call-1', { action: 'observe' }, undefined as never, undefined as never);
+    expect(execute).toHaveBeenCalledWith('task-1', { action: 'observe' }, undefined);
+    expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('https://example.com') });
+    expect(result.details).toMatchObject({ ok: true, receipt: { action: 'observe' } });
   });
 
-  describe('inspect mode', () => {
-    it('returns page state', async () => {
-      const { tool } = createTool();
-      const result = await tool.execute('call-1', { mode: 'inspect' }, undefined as any, undefined as any);
-      expect(result.content[0].text).toContain('https://example.com');
-      expect(result.content[0].text).toContain('Example');
-      expect(result.details.ok).toBe(true);
-      expect(result.details.mode).toBe('inspect');
+  it('returns screenshots as image content without copying base64 into details', async () => {
+    const { tool } = createTool({
+      ok: true,
+      receipt: {
+        action: 'observe', risk: 'read', durationMs: 4, verified: true,
+        observation: {
+          sessionId: 'session-1', tabId: 'tab-1', revision: 1, documentId: 'doc-1',
+          url: 'https://example.com', title: 'Example', nodes: [],
+          changes: { added: [], changed: [], removed: [] },
+          visual: { mimeType: 'image/jpeg', data: 'base64-data' },
+        },
+      },
     });
+    const result = await tool.execute('call-2', { action: 'observe', visual: 'always' }, undefined as never, undefined as never);
+    expect(result.content[1]).toEqual({ type: 'image', mimeType: 'image/jpeg', data: 'base64-data' });
+    expect(JSON.stringify(result.details)).not.toContain('base64-data');
   });
 
-  describe('close mode', () => {
-    it('closes browser page', async () => {
-      const { tool, manager } = createTool();
-      const result = await tool.execute('call-2', { mode: 'close' }, undefined as any, undefined as any);
-      expect(result.content[0].text).toContain('closed');
-      expect(result.details.ok).toBe(true);
-      expect(manager.closePage).toHaveBeenCalledWith('test-session');
+  it('short-circuits with a structured setup error', async () => {
+    const execute = vi.fn();
+    const tool = createBrowserUseTool({
+      getRuntime: () => ({ execute } as unknown as BrowserRuntime),
+      getTaskId: () => 'task-1',
+      getReadiness: async () => new BrowserNotReadyError({
+        driver: 'extension', reason: 'extension_not_installed', deepLink: '/settings/agent-browser?driver=extension',
+      }),
     });
-  });
-
-  describe('command mode', () => {
-    it('requires command parameter', async () => {
-      const { tool } = createTool();
-      const result = await tool.execute('call-3', { mode: 'command' }, undefined as any, undefined as any);
-      expect(result.details.ok).toBe(false);
-      expect(result.content[0].text).toContain('Missing');
-    });
-
-    it('executes a known command', async () => {
-      const { tool } = createTool();
-      const result = await tool.execute('call-4', { mode: 'command', command: 'press', args: { key: 'Enter' } }, undefined as any, undefined as any);
-      expect(result.details.ok).toBe(true);
-    });
-
-    it('returns error for unknown command', async () => {
-      const { tool } = createTool();
-      const result = await tool.execute('call-5', { mode: 'command', command: 'nonexistent', args: {} }, undefined as any, undefined as any);
-      expect(result.content[0].text).toContain('UNKNOWN_ACTION');
-    });
-  });
-
-  describe('unknown mode', () => {
-    it('returns error', async () => {
-      const { tool } = createTool();
-      const result = await tool.execute('call-9', { mode: 'unknown' as any }, undefined as any, undefined as any);
-      expect(result.content[0].text).toContain('Unknown mode');
-    });
-  });
-
-  describe('readiness preflight', () => {
-    function createToolWithReadiness(
-      getReadiness: () => Promise<BrowserNotReadyError | null>,
-    ) {
-      const manager = mockManager();
-      const page = mockPage();
-      const tool = createBrowserUseTool({
-        getManager: () => manager,
-        getPageForTask: () => Promise.resolve(page),
-        getTaskId: () => 'test-session',
-        getConfig: () => undefined,
-        getReadiness,
-        notifyBrowserPageClosed: vi.fn(),
-      });
-      return { tool, manager, page };
-    }
-
-    it('short-circuits with setup card payload when backend is not ready', async () => {
-      const err = new BrowserNotReadyError({
-        backend: 'extension',
-        reason: 'extension_not_connected',
-        deepLink: '/settings/agent-browser?tab=extension',
-        detail: 'no client connected',
-      });
-      const { tool, manager } = createToolWithReadiness(async () => err);
-      const result = await tool.execute(
-        'call-ready-1',
-        { mode: 'command', command: 'press', args: { key: 'Enter' } },
-        undefined as any,
-        undefined as any,
-      );
-      // Tool short-circuits before touching the manager.
-      expect(manager.ensureConnected).not.toHaveBeenCalled();
-      expect(result.details).toMatchObject({
-        ok: false,
-        kind: 'browser_setup_required',
-        backend: 'extension',
-        reason: 'extension_not_connected',
-        deepLink: '/settings/agent-browser?tab=extension',
-      });
-      const parsed = JSON.parse(result.content[0].text) as Record<string, unknown>;
-      expect(parsed.kind).toBe('browser_setup_required');
-      expect(parsed.backend).toBe('extension');
-      expect(parsed.reason).toBe('extension_not_connected');
-      expect(parsed.deepLink).toBe('/settings/agent-browser?tab=extension');
-      expect(typeof parsed.message).toBe('string');
-    });
-
-    it('short-circuits inspect mode too', async () => {
-      const err = new BrowserNotReadyError({
-        backend: 'local',
-        reason: 'local_chromium_missing',
-        deepLink: '/settings/agent-browser?tab=local',
-      });
-      const { tool, manager } = createToolWithReadiness(async () => err);
-      const result = await tool.execute('call-ready-2', { mode: 'inspect' }, undefined as any, undefined as any);
-      expect(manager.ensureConnected).not.toHaveBeenCalled();
-      expect(result.details.kind).toBe('browser_setup_required');
-      expect(result.details.backend).toBe('local');
-    });
-
-    it('runs the action normally when readiness returns null', async () => {
-      const { tool } = createToolWithReadiness(async () => null);
-      const result = await tool.execute(
-        'call-ready-3',
-        { mode: 'command', command: 'press', args: { key: 'Enter' } },
-        undefined as any,
-        undefined as any,
-      );
-      expect(result.details.ok).toBe(true);
-    });
+    const result = await tool.execute('call-3', { action: 'observe' }, undefined as never, undefined as never);
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.details).toMatchObject({ ok: false, kind: 'browser_setup_required' });
   });
 });

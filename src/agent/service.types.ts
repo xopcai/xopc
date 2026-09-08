@@ -30,7 +30,8 @@ export interface AgentServiceConfig {
     requestClarification: GatewayClarifyRequestFn;
   };
   getAutomationService?: () => AutomationService | undefined;
-  getBrowserRecipeService?: () => import('../browser/recipes/index.js').BrowserRecipeService | undefined;
+  getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
+  emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;

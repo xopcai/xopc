@@ -43,7 +43,7 @@ type ApiPayload<T> = {
 };
 
 export type BrowserDiagnostic = {
-  id: 'browser-playwright' | 'browser-cloakbrowser' | 'browser-extension';
+  id: 'browser-playwright' | 'browser-extension';
   label: string;
   status: DoctorCheckStatus;
   message: string;
@@ -52,7 +52,7 @@ export type BrowserDiagnostic = {
 
 export type BrowserDiagnosticsInput = {
   enabled: boolean;
-  backend: string;
+  driverKind: string;
 };
 
 function normalizeDoctorCheck(check: Partial<DoctorCheck>): DoctorCheck | null {
@@ -90,10 +90,6 @@ function browserStatus(installed: boolean | undefined): DoctorCheckStatus {
   return installed ? 'pass' : 'warn';
 }
 
-function browserSettingsPath(tab: string): string {
-  return `/settings/agent-browser?tab=${encodeURIComponent(tab)}`;
-}
-
 export function browserDiagnosticsSwrKey(input: BrowserDiagnosticsInput | null): [string, BrowserDiagnosticsInput] | null {
   if (!input?.enabled) return null;
   return ['setup-browser-diagnostics', input];
@@ -102,7 +98,7 @@ export function browserDiagnosticsSwrKey(input: BrowserDiagnosticsInput | null):
 export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): Promise<BrowserDiagnostic[]> {
   if (!input.enabled) return [];
 
-  if (input.backend === 'local') {
+  if (input.driverKind === 'playwright') {
     const data = await fetchJson<ApiPayload<{ installed?: boolean; reason?: string }>>(
       apiUrl('/api/browser/playwright/doctor'),
     );
@@ -112,27 +108,11 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
       label: 'Browser: Playwright',
       status: browserStatus(installed),
       message: installed ? 'Local Chromium is installed.' : (data.payload?.reason ?? 'Local Chromium is not installed.'),
-      path: browserSettingsPath('local'),
+      path: '/settings/agent-browser',
     }];
   }
 
-  if (input.backend === 'cloakbrowser') {
-    const data = await fetchJson<ApiPayload<{ installed?: boolean; version?: string | null }>>(
-      apiUrl('/api/browser/cloakbrowser/doctor'),
-    );
-    const installed = data.payload?.installed === true;
-    return [{
-      id: 'browser-cloakbrowser',
-      label: 'Browser: CloakBrowser',
-      status: browserStatus(installed),
-      message: installed
-        ? `CloakBrowser ${data.payload?.version ?? ''}`.trim()
-        : 'CloakBrowser is not installed.',
-      path: browserSettingsPath('cloakbrowser'),
-    }];
-  }
-
-  if (input.backend === 'extension') {
+  if (input.driverKind === 'extension') {
     const data = await fetchJson<{
       running?: boolean;
       connected?: boolean;
@@ -152,7 +132,7 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
             ? 'Chrome extension needs refresh.'
             : 'Chrome extension is installed but not connected.'
           : 'Chrome extension is not installed.',
-      path: browserSettingsPath('extension'),
+      path: '/settings/agent-browser',
     }];
   }
 
@@ -160,7 +140,7 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
     id: 'browser-playwright',
     label: 'Browser',
     status: 'skip',
-    message: `Browser backend "${input.backend}" is not checked on this overview.`,
-    path: browserSettingsPath(input.backend || 'overview'),
+    message: `Browser driver "${input.driverKind}" is configured.`,
+    path: '/settings/agent-browser',
   }];
 }

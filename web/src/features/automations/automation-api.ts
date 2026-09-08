@@ -38,9 +38,9 @@ export type AutomationAction =
       timeoutSeconds?: number;
     }
   | {
-      kind: 'browser_recipe';
-      recipeId: string;
-      args?: Record<string, unknown>;
+      kind: 'browser_automation';
+      automationId: string;
+      inputs?: Record<string, unknown>;
       timeoutSeconds?: number;
     };
 

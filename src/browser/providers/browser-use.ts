@@ -31,7 +31,7 @@ export class BrowserUseProvider implements CloudBrowserProvider {
   async connect(): Promise<{ browser: Browser; context: BrowserContext }> {
     const apiKey = this.config.apiKey || process.env.BROWSER_USE_API_KEY;
     if (!apiKey) {
-      throw new Error('Browser Use API key not configured (set BROWSER_USE_API_KEY or browser.cloudProvider config)');
+      throw new Error('Browser Use API key not configured (set BROWSER_USE_API_KEY or browser.driver.apiKey)');
     }
 
     // Create a Browser Use session via REST API

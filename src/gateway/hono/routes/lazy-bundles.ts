@@ -73,27 +73,24 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'browser-install',
-    match: (path) =>
-      path === '/api/browser/playwright/install/stream' ||
-      path === '/api/browser/cloakbrowser/install/stream',
+    match: (path) => path === '/api/browser/playwright/install/stream',
     load: async () => {
       const { registerBrowserInstallRoutes } = await import('./browser-install.js');
       return { register: registerBrowserInstallRoutes };
     },
   },
   {
-    id: 'browser-workflows',
-    match: (path) => startsWithAny(path, ['/api/browser/workflows', '/api/browser/workflow-runs']),
+    id: 'browser-automations',
+    match: (path) => startsWithAny(path, ['/api/browser/automations', '/api/browser/automation-runs']),
     load: async () => {
-      const { registerBrowserWorkflowRoutes } = await import('./browser-workflows.js');
-      return { register: registerBrowserWorkflowRoutes };
+      const { registerBrowserAutomationRoutes } = await import('./browser-automations.js');
+      return { register: registerBrowserAutomationRoutes };
     },
   },
   {
     id: 'browser',
     // `browser-install` above already matched the SSE install streams; this
-    // catches the remaining /api/browser/* handlers (extension, cdp,
-    // cloakbrowser doctor/launch/install, playwright doctor/install, cloud).
+    // catches the remaining Browser Control v2 setup handlers.
     match: (path) => startsWithAny(path, ['/api/browser']),
     load: async () => {
       const { registerBrowserRoutes } = await import('./browser.js');

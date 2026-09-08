@@ -50,6 +50,7 @@ import {
   BrowserSetupRequiredCard,
 } from '@/features/chat/tool-results/browser-setup-required-card';
 import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
+import { BrowserApprovalCard, parseBrowserApproval } from '@/features/chat/tool-results/browser-approval-card';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
@@ -509,14 +510,15 @@ function StepRow({
     }
   }, [block]);
 
-  // browser_use preflight produces a structured "setup required" sentinel.
-  // The agent-side text is JSON, so the generic outputPreview would render
-  // raw JSON — hide it and render the dedicated card instead.
   const browserSetup = useMemo(() => {
     if (block.type !== 'tool_use' || block.status === 'running') return null;
     if (block.name !== 'browser_use') return null;
-    return parseBrowserSetupRequired(toolResultText);
-  }, [block, toolResultText]);
+    return parseBrowserSetupRequired(block.details);
+  }, [block]);
+  const browserApproval = useMemo(() => {
+    if (block.type !== 'tool_use' || block.status === 'running' || block.name !== 'browser_use') return null;
+    return parseBrowserApproval(block.details);
+  }, [block]);
 
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
@@ -707,6 +709,9 @@ function StepRow({
         ) : null}
         {!isStreaming && browserSetup ? (
           <BrowserSetupRequiredCard payload={browserSetup} />
+        ) : null}
+        {!isStreaming && browserApproval ? (
+          <BrowserApprovalCard approval={browserApproval} />
         ) : null}
       </div>
     </div>

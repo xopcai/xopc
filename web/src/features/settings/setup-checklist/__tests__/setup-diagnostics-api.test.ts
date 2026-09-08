@@ -23,13 +23,13 @@ describe('fetchBrowserDiagnostics', () => {
       ),
     );
 
-    await expect(fetchBrowserDiagnostics({ enabled: true, backend: 'extension' })).resolves.toEqual([
+    await expect(fetchBrowserDiagnostics({ enabled: true, driverKind: 'extension' })).resolves.toEqual([
       {
         id: 'browser-extension',
         label: 'Browser: Chrome extension',
         status: 'warn',
         message: 'Chrome extension is installed but not connected.',
-        path: '/settings/agent-browser?tab=extension',
+        path: '/settings/agent-browser',
       },
     ]);
   });

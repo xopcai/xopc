@@ -69,104 +69,25 @@ export function buildSafeMcpConfigForWeb(config: Config) {
   };
 }
 
-function maskBrowserCloudConfigForWeb(cloud: unknown): Record<string, unknown> | null {
-  if (!cloud || typeof cloud !== 'object' || Array.isArray(cloud)) {
-    return null;
-  }
-  const raw = cloud as Record<string, unknown>;
-  const safe: Record<string, unknown> = {};
-  if (typeof raw.apiKey === 'string' && raw.apiKey.trim()) {
-    safe.apiKey = maskSecretLength(raw.apiKey);
-  }
-  if (typeof raw.projectId === 'string' && raw.projectId.trim()) {
-    safe.projectId = raw.projectId.trim();
-  }
-  if (typeof raw.region === 'string' && raw.region.trim()) {
-    safe.region = raw.region.trim();
-  }
-  return Object.keys(safe).length > 0 ? safe : null;
-}
-
 export function buildSafeBrowserConfigForWeb(browser: unknown) {
   if (!browser || typeof browser !== 'object') {
-    return {
-      enabled: false,
-      headless: false,
-      allowPrivateUrls: false,
-      commandTimeout: null,
-      backend: null,
-      cloudProvider: null,
-      cloud: null,
-      cdpUrl: null,
-      extension: null,
-      cloakbrowser: null,
-      humanize: null,
-      humanPreset: null,
-      dialogPolicy: null,
-      dialogTimeoutSeconds: null,
-    };
+    return { enabled: false };
   }
 
+  const raw = browser as Record<string, unknown>;
+  const rawDriver = raw.driver && typeof raw.driver === 'object' && !Array.isArray(raw.driver)
+    ? raw.driver as Record<string, unknown>
+    : undefined;
+  const driver = rawDriver ? { ...rawDriver } : undefined;
+  if (driver?.kind === 'remote' && typeof driver.apiKey === 'string' && driver.apiKey.trim()) {
+    driver.apiKey = maskSecretLength(driver.apiKey);
+  }
   return {
-    enabled: (browser as Record<string, unknown>).enabled !== false,
-    headless: (browser as Record<string, unknown>).headless === true,
-    allowPrivateUrls: (browser as Record<string, unknown>).allowPrivateUrls === true,
-    commandTimeout:
-      typeof (browser as Record<string, unknown>).commandTimeout === 'number' &&
-      Number.isFinite((browser as Record<string, unknown>).commandTimeout as number)
-        ? Math.floor((browser as Record<string, unknown>).commandTimeout as number)
-        : null,
-    backend:
-      (browser as Record<string, unknown>).backend === 'local' ||
-      (browser as Record<string, unknown>).backend === 'cdp' ||
-      (browser as Record<string, unknown>).backend === 'cloud' ||
-      (browser as Record<string, unknown>).backend === 'extension' ||
-      (browser as Record<string, unknown>).backend === 'cloakbrowser'
-        ? (browser as Record<string, unknown>).backend
-        : null,
-    cloudProvider:
-      (browser as Record<string, unknown>).cloudProvider === 'browserbase' ||
-      (browser as Record<string, unknown>).cloudProvider === 'browser-use'
-        ? (browser as Record<string, unknown>).cloudProvider
-        : null,
-    cloud: maskBrowserCloudConfigForWeb((browser as Record<string, unknown>).cloud),
-    cdpUrl:
-      typeof (browser as Record<string, unknown>).cdpUrl === 'string' &&
-      ((browser as Record<string, unknown>).cdpUrl as string).trim()
-        ? ((browser as Record<string, unknown>).cdpUrl as string).trim()
-        : null,
-    extension:
-      (browser as Record<string, unknown>).extension &&
-      typeof (browser as Record<string, unknown>).extension === 'object' &&
-      !Array.isArray((browser as Record<string, unknown>).extension)
-        ? (browser as Record<string, unknown>).extension
-      : null,
-    cloakbrowser:
-      (browser as Record<string, unknown>).cloakbrowser &&
-      typeof (browser as Record<string, unknown>).cloakbrowser === 'object' &&
-      !Array.isArray((browser as Record<string, unknown>).cloakbrowser)
-        ? (browser as Record<string, unknown>).cloakbrowser
-        : null,
-    humanize:
-      typeof (browser as Record<string, unknown>).humanize === 'boolean'
-        ? (browser as Record<string, unknown>).humanize
-        : null,
-    humanPreset:
-      (browser as Record<string, unknown>).humanPreset === 'default' ||
-      (browser as Record<string, unknown>).humanPreset === 'careful'
-        ? (browser as Record<string, unknown>).humanPreset
-        : null,
-    dialogPolicy:
-      (browser as Record<string, unknown>).dialogPolicy === 'must_respond' ||
-      (browser as Record<string, unknown>).dialogPolicy === 'auto_accept' ||
-      (browser as Record<string, unknown>).dialogPolicy === 'auto_dismiss'
-        ? (browser as Record<string, unknown>).dialogPolicy
-        : null,
-    dialogTimeoutSeconds:
-      typeof (browser as Record<string, unknown>).dialogTimeoutSeconds === 'number' &&
-      Number.isFinite((browser as Record<string, unknown>).dialogTimeoutSeconds as number)
-        ? Math.floor((browser as Record<string, unknown>).dialogTimeoutSeconds as number)
-        : null,
+    enabled: raw.enabled === true,
+    ...(driver ? { driver } : {}),
+    ...(raw.observation ? { observation: raw.observation } : {}),
+    ...(raw.limits ? { limits: raw.limits } : {}),
+    ...(raw.security ? { security: raw.security } : {}),
   };
 }
 

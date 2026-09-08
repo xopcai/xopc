@@ -1001,14 +1001,12 @@
     "browserSetupRequiredCta": "Configure browser",
     "browserSetupRequiredDetailToggle": "View diagnostic detail",
     "browserSetupRequiredReasons": {
-      "generic": "The configured browser backend isn't ready yet. Finish setup in Settings → Browser to continue.",
+      "generic": "The configured browser driver isn't ready yet. Finish setup in Settings → Browser to continue.",
       "extension_not_installed": "The xopc browser extension isn't installed yet. Install it from Settings → Browser to enable the agent to drive Chrome.",
-      "extension_bridge_offline": "The extension bridge isn't listening. Start it from Settings → Browser, then keep Chrome open.",
       "extension_not_connected": "The bridge is up but Chrome hasn't connected yet. Open Chrome and enable the xopc extension.",
-      "local_chromium_missing": "Local Chromium isn't installed. Install it from Settings → Browser (one-click) before using the local backend.",
-      "cloakbrowser_not_installed": "CloakBrowser binary isn't downloaded yet. Install it from Settings → Browser.",
+      "chromium_missing": "Playwright Chromium isn't installed. Install it before using the Playwright driver.",
       "cdp_unreachable": "The configured CDP endpoint isn't reachable. Verify the URL in Settings → Browser and make sure Chrome is running with --remote-debugging-port.",
-      "cloud_api_key_missing": "Cloud browser API key is missing. Add it in Settings → Browser."
+      "remote_api_key_missing": "The remote browser API key is missing. Add it in Settings → Browser."
     },
     "providerSetupRequiredTitle": "Model provider not configured",
     "providerSetupRequiredBody": "No API key found for {{provider}}. Add your credentials in Settings → Providers to start chatting.",

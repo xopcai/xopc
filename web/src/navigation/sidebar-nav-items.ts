@@ -24,7 +24,7 @@ export type BuiltinNavId =
   | 'builtin:home'
   | 'builtin:projects'
   | 'builtin:automations'
-  | 'builtin:browserWorkflows'
+  | 'builtin:browserAutomations'
   | 'builtin:notes'
   | 'builtin:workflows'
   | 'builtin:channels'
@@ -50,7 +50,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
-  { id: 'builtin:browserWorkflows', to: '/browser-workflows', Icon: MonitorPlay },
+  { id: 'builtin:browserAutomations', to: '/browser-automations', Icon: MonitorPlay },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
 ] as const;

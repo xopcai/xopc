@@ -46,7 +46,7 @@ describe('reconcileNavOrder', () => {
       'builtin:agents',
       'builtin:channels',
       'builtin:workflows',
-      'builtin:browserWorkflows',
+      'builtin:browserAutomations',
       'builtin:localApps',
       'builtin:extensions',
     ]);

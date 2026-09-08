@@ -52,7 +52,7 @@ Each run keeps the published revision it started with, so later edits do not cha
 - repository audit with parallel checks;
 - meeting preparation from several sources.
 
-If the request is different every time and only needs one Agent turn, use Chat instead. If the main need is repeating a browser interaction, use [Browser automations](./browser-workflows.md).
+If the request is different every time and only needs one Agent turn, use Chat instead. If the main need is repeating a browser interaction, use [Browser automations](./browser-automations.md).
 
 ## Run and monitor
 

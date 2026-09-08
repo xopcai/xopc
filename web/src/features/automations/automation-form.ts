@@ -33,7 +33,7 @@ export type TriggerMode =
   | 'sessionUpdated'
   | 'event';
 
-export type ActionMode = 'agent' | 'workflow' | 'browser_recipe';
+export type ActionMode = 'agent' | 'workflow' | 'browser_automation';
 
 export interface FormState {
   name: string;
@@ -57,8 +57,8 @@ export interface FormState {
   workflowGoal: string;
   workflowInput: WorkflowRunSetupValue;
   workflowInputValid: boolean;
-  browserWorkflowId: string;
-  browserWorkflowInputs: Record<string, unknown>;
+  browserAutomationId: string;
+  browserAutomationInputs: Record<string, unknown>;
   safetyMode: AutomationSafetyMode;
   timeoutSeconds: string;
   conversationMode: AutomationConversationMode;
@@ -95,8 +95,8 @@ export const initialForm: FormState = {
     maxSubagents: '',
   },
   workflowInputValid: true,
-  browserWorkflowId: '',
-  browserWorkflowInputs: {},
+  browserAutomationId: '',
+  browserAutomationInputs: {},
   safetyMode: 'suggest_only',
   timeoutSeconds: '1800',
   conversationMode: 'new_session',
@@ -206,7 +206,7 @@ export function buildInput(
     form.workflowInput,
   );
   const workflowGoal = form.workflowInput.goal.trim() || form.workflowGoal.trim();
-  const safetyMode = form.actionMode === 'browser_recipe' ? 'auto_apply' : form.safetyMode;
+  const safetyMode = form.actionMode === 'browser_automation' ? 'auto_apply' : form.safetyMode;
   let action: AutomationAction;
   if (form.actionMode === 'workflow') {
     action = {
@@ -232,11 +232,11 @@ export function buildInput(
               }
             : {}),
     };
-  } else if (form.actionMode === 'browser_recipe') {
+  } else if (form.actionMode === 'browser_automation') {
     action = {
-      kind: 'browser_recipe',
-      recipeId: form.browserWorkflowId.trim(),
-      args: form.browserWorkflowInputs,
+      kind: 'browser_automation',
+      automationId: form.browserAutomationId.trim(),
+      inputs: form.browserAutomationInputs,
     };
   } else {
     action = {
@@ -437,7 +437,7 @@ export function formFromAutomation(
     automation.reliability?.executionTimeoutSeconds
     ?? action.timeoutSeconds
     ?? automation.reliability?.timeoutSeconds
-    ?? (action.kind === 'browser_recipe' ? 600 : 1800);
+    ?? (action.kind === 'browser_automation' ? 600 : 1800);
 
   return {
     ...initialForm,
@@ -446,12 +446,12 @@ export function formFromAutomation(
     description: automation.description ?? '',
     projectId: automation.projectId ?? '',
     actionMode: action.kind,
-    agentId: action.kind === 'browser_recipe' ? '' : (action.agentId ?? ''),
+    agentId: action.kind === 'browser_automation' ? '' : (action.agentId ?? ''),
     instruction: action.kind === 'agent' ? action.instruction : '',
     workflowId: action.kind === 'workflow' ? action.workflowId : '',
     workflowGoal: action.kind === 'workflow' ? (action.goal ?? '') : '',
-    browserWorkflowId: action.kind === 'browser_recipe' ? action.recipeId : '',
-    browserWorkflowInputs: action.kind === 'browser_recipe' ? action.args ?? {} : {},
+    browserAutomationId: action.kind === 'browser_automation' ? action.automationId : '',
+    browserAutomationInputs: action.kind === 'browser_automation' ? action.inputs ?? {} : {},
     workflowInput: {
       goal: action.kind === 'workflow' ? (action.goal ?? '') : '',
       argValues: definition
@@ -521,8 +521,8 @@ export function buildAutomationEditInput(
       maxSubagents: input.action.maxSubagents,
     };
   } else if (
-    automation.action.kind === 'browser_recipe' &&
-    input.action.kind === 'browser_recipe'
+    automation.action.kind === 'browser_automation' &&
+    input.action.kind === 'browser_automation'
   ) {
     action = { ...automation.action, ...input.action };
   }

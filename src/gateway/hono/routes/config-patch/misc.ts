@@ -164,7 +164,16 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     if (typeof body.browser !== 'object' || body.browser === null || Array.isArray(body.browser)) {
       return patchError('browser must be an object');
     }
-    const parsed = BrowserConfigSchema.safeParse(body.browser);
+    const browserPatch = structuredClone(body.browser) as Record<string, unknown>;
+    const driver = browserPatch.driver && typeof browserPatch.driver === 'object' && !Array.isArray(browserPatch.driver)
+      ? browserPatch.driver as Record<string, unknown>
+      : undefined;
+    if (driver?.kind === 'remote' && typeof driver.apiKey === 'string' && isMaskedSecretPatchValue(driver.apiKey)) {
+      const currentKey = config.browser.driver.kind === 'remote' ? config.browser.driver.apiKey : undefined;
+      if (currentKey) driver.apiKey = currentKey;
+      else delete driver.apiKey;
+    }
+    const parsed = BrowserConfigSchema.safeParse(browserPatch);
     if (!parsed.success) {
       return patchError(parsed.error.issues.map((i) => i.message).join('; '));
     }

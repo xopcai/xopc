@@ -19,8 +19,9 @@ describe('AgentToolsFactory', () => {
       workspace: '/tmp/xopc-tools-factory-test',
       bus: {} as MessageBus,
       getCurrentContext: () => null,
-      getConfig: () => ConfigSchema.parse({
-          browser: { enabled: false, backend: 'extension' },
+      getConfig: () =>
+        ConfigSchema.parse({
+          browser: { enabled: false, driver: { kind: 'extension' } },
           agents: {
             default: 'main',
             list: [

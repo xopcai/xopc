@@ -57,4 +57,4 @@ Treat a webhook URL and secret as credentials. Do not put them in public reposit
 - check a saved browser task and report changes;
 - trigger a research Workflow from another trusted service.
 
-For the repeatable steps themselves, see [Workflows](./workflows.md). For website interactions, see [Browser automations](./browser-workflows.md).
+For the repeatable steps themselves, see [Workflows](./workflows.md). For website interactions, see [Browser automations](./browser-automations.md).

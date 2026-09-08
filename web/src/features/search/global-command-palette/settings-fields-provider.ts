@@ -117,13 +117,6 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       keywords: ['playwright', 'chromium', 'install', 'local', '安装'],
     },
     {
-      id: 'field:agent:browser-cloak',
-      title: isZh ? 'CloakBrowser 配置' : 'CloakBrowser settings',
-      subtitle: isZh ? '反指纹浏览器下载与高级选项' : 'Stealth browser download and fingerprint options',
-      path: '/settings/agent-browser',
-      keywords: ['cloak', 'cloakbrowser', 'fingerprint', 'stealth', '反指纹'],
-    },
-    {
       id: 'field:agent:browser-headless',
       title: isZh ? '浏览器无头模式' : 'Browser headless mode',
       subtitle: isZh ? '隐藏浏览器窗口' : 'Run without a visible window',
