@@ -15,10 +15,13 @@ export type AgentModelPreference = {
   thinkingByModel?: Record<string, string>;
 };
 
+export type NewSessionExecutionMode = 'local_checkout' | 'managed_worktree';
+
 export type NewSessionPreferences = {
   version: typeof NEW_SESSION_PREFERENCES_VERSION;
   selectedAgentId?: string;
   modelByAgent: Record<string, AgentModelPreference>;
+  executionModeByProject: Record<string, NewSessionExecutionMode>;
   lastChatScope: ChatProjectScope;
 };
 
@@ -72,6 +75,7 @@ export function createDefaultNewSessionPreferences(): NewSessionPreferences {
   return {
     version: NEW_SESSION_PREFERENCES_VERSION,
     modelByAgent: {},
+    executionModeByProject: {},
     lastChatScope: noProjectScope(),
   };
 }
@@ -108,6 +112,18 @@ function parseModelPreferences(value: unknown): Record<string, AgentModelPrefere
   return result;
 }
 
+function parseExecutionModePreferences(value: unknown): Record<string, NewSessionExecutionMode> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([rawProjectId, rawMode]) => {
+      const projectId = normalized(rawProjectId);
+      return projectId && (rawMode === 'local_checkout' || rawMode === 'managed_worktree')
+        ? [[projectId, rawMode]]
+        : [];
+    }),
+  );
+}
+
 export function parseNewSessionPreferences(value: unknown): NewSessionPreferences {
   const fallback = createDefaultNewSessionPreferences();
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
@@ -120,6 +136,7 @@ export function parseNewSessionPreferences(value: unknown): NewSessionPreference
     version: NEW_SESSION_PREFERENCES_VERSION,
     ...(selectedAgentId ? { selectedAgentId } : {}),
     modelByAgent: parseModelPreferences(record.modelByAgent),
+    executionModeByProject: parseExecutionModePreferences(record.executionModeByProject),
     lastChatScope: parseProjectScope(record.lastChatScope) ?? noProjectScope(),
   };
 }
@@ -179,6 +196,30 @@ export function modelPreferenceForAgent(
 ): AgentModelPreference | undefined {
   const normalizedId = normalizedAgentId(agentId);
   return normalizedId ? preferences.modelByAgent[normalizedId] : undefined;
+}
+
+export function withProjectExecutionModePreference(
+  preferences: NewSessionPreferences,
+  projectId: string,
+  mode: NewSessionExecutionMode | null,
+): NewSessionPreferences {
+  const normalizedProjectId = normalized(projectId);
+  if (!normalizedProjectId) return preferences;
+  const executionModeByProject = { ...preferences.executionModeByProject };
+  if (mode === 'local_checkout' || mode === 'managed_worktree') {
+    executionModeByProject[normalizedProjectId] = mode;
+  } else {
+    delete executionModeByProject[normalizedProjectId];
+  }
+  return { ...preferences, executionModeByProject };
+}
+
+export function executionModePreferenceForProject(
+  preferences: NewSessionPreferences,
+  projectId: string,
+): NewSessionExecutionMode | undefined {
+  const normalizedProjectId = normalized(projectId);
+  return normalizedProjectId ? preferences.executionModeByProject[normalizedProjectId] : undefined;
 }
 
 export function resolveProjectScope(

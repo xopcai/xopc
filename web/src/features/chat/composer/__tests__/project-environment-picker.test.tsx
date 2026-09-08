@@ -4,9 +4,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SWRConfig, type Cache } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { executionModePreferenceForProject } from '@xopcai/gateway-contract';
 
-import type { Project } from '@/features/projects/api';
+import {
+  readNewSessionPreferences,
+  rememberProjectExecutionMode,
+} from '@/features/chat/session/new-session-preferences';
 import type { ProjectSessionPreparation } from '@/features/chat/session/use-chat-session-init';
+import type { Project } from '@/features/projects/api';
 import { fetchJson } from '@/lib/fetch';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -51,6 +56,7 @@ describe('composer project environment selection and first send', () => {
     onSend.mockReset();
     commit.mockReset();
     vi.mocked(fetchJson).mockReset().mockResolvedValue({ options: { localAvailable: true } });
+    localStorage.clear();
     useGatewayStore.setState({ token: undefined });
     useLocaleStore.setState({ language: 'en' });
     cache = new Map();
@@ -62,7 +68,7 @@ describe('composer project environment selection and first send', () => {
 
   it('shows only two icon choices without a creation button or eager allocation', async () => {
     await render();
-    expect(select().textContent).toBe('New local worktree');
+    expect(select().textContent).toBe('Local');
     expect(select().querySelector('svg')).not.toBeNull();
     expect(container.textContent).not.toContain('Create session');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -70,8 +76,8 @@ describe('composer project environment selection and first send', () => {
     const options = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')];
     expect(options.map((option) => option.textContent)).toEqual(['Local', 'New local worktree']);
     expect(options.every((option) => option.querySelectorAll('svg').length === 2)).toBe(true);
-    await act(async () => options[0].click());
-    expect(select().textContent).toBe('Local');
+    await act(async () => options[1].click());
+    expect(select().textContent).toBe('New local worktree');
     expect(create).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
   });
@@ -81,7 +87,7 @@ describe('composer project environment selection and first send', () => {
     create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     await render();
     await act(async () => { submit().click(); submit().click(); });
-    expect(create).toHaveBeenCalledExactlyOnceWith('managed_worktree');
+    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
     expect(submit().disabled).toBe(true);
     expect(select().disabled).toBe(true);
     expect(commit).not.toHaveBeenCalled();
@@ -98,6 +104,7 @@ describe('composer project environment selection and first send', () => {
   it('preserves the selected mode and draft after failure; retries without a Local fallback', async () => {
     create.mockRejectedValueOnce(new Error('Worktree creation failed'));
     await render();
+    await act(async () => selection.changeMode('managed_worktree'));
     await act(async () => submit().click());
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Worktree creation failed');
     expect(select().textContent).toBe('New local worktree');
@@ -123,6 +130,7 @@ describe('composer project environment selection and first send', () => {
 
   it('keeps dirty Worktree unavailable without showing an inline warning', async () => {
     vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'uncommitted_changes' } });
+    rememberProjectExecutionMode(preparation.project.id, 'managed_worktree');
     await render();
     expect(container.querySelector('[role="status"]')).toBeNull();
     expect(selection.allowed).toBe(false);
@@ -174,11 +182,22 @@ describe('composer project environment selection and first send', () => {
 
   it('restores each new preparation default rather than leaking another project choice', async () => {
     await render();
-    await act(async () => selection.changeMode('local_checkout'));
-    expect(select().textContent).toBe('Local');
-    await render({ prepared: { ...preparation, project: { ...preparation.project, id: 'another' } } });
+    await act(async () => selection.changeMode('managed_worktree'));
     expect(select().textContent).toBe('New local worktree');
+    await render({ prepared: { ...preparation, project: { ...preparation.project, id: 'another' } } });
+    expect(select().textContent).toBe('Local');
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('remembers the last successfully created mode for each project', async () => {
+    await render();
+    await act(async () => selection.changeMode('managed_worktree'));
+    await act(async () => submit().click());
+    expect(executionModePreferenceForProject(readNewSessionPreferences(), 'code')).toBe('managed_worktree');
+
+    const nextPreparation = { ...preparation };
+    await render({ prepared: nextPreparation, sessionKey: null });
+    expect(select().textContent).toBe('New local worktree');
   });
 
   it('leaves an existing session submission and explicit thinking level unchanged', async () => {

@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ProjectEnvironmentOptions, SessionCreateRequest } from '@xopcai/gateway-contract';
+import {
+  executionModePreferenceForProject,
+  type ProjectEnvironmentOptions,
+  type SessionCreateRequest,
+} from '@xopcai/gateway-contract';
 import useSWR from 'swr';
 
+import {
+  readNewSessionPreferences,
+  rememberProjectExecutionMode,
+} from '@/features/chat/session/new-session-preferences';
 import type { ProjectSessionPreparation } from '@/features/chat/session/use-chat-session-init';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -40,7 +48,11 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
   );
   const supportsWorktree = Boolean(options?.localAvailable && options.worktreeUnavailableReason !== 'git_commit_required' && options.worktreeUnavailableReason !== 'workspace_unavailable');
   const mode: ExecutionMode = supportsWorktree
-    ? selection?.preparation === preparation ? selection.mode : preparation?.project.executionMode ?? 'local_checkout'
+    ? selection?.preparation === preparation
+      ? selection.mode
+      : preparation
+        ? executionModePreferenceForProject(readNewSessionPreferences(), preparation.project.id) ?? 'local_checkout'
+        : 'local_checkout'
     : 'local_checkout';
   const allowed = Boolean(!error && options?.localAvailable && (mode === 'local_checkout' || !options.worktreeUnavailableReason));
   const finish = useCallback((accepted: boolean) => {
@@ -80,6 +92,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
         setPending(current);
         void Promise.resolve().then(() => preparation.create(mode)).then((key) => {
           if (pendingRef.current !== current) return;
+          rememberProjectExecutionMode(preparation.project.id, mode);
           const created = { ...current, sessionKey: key };
           pendingRef.current = created;
           setPending(created);

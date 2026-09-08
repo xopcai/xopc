@@ -5,6 +5,7 @@ import {
   readNewSessionPreferences,
   rememberAgentModel,
   rememberLastChatScope,
+  rememberProjectExecutionMode,
   rememberSelectedAgent,
 } from '@/features/chat/session/new-session-preferences';
 
@@ -15,6 +16,7 @@ describe('web new-session preferences', () => {
     rememberSelectedAgent('Coder');
     rememberAgentModel('Coder', { modelRef: 'openai/gpt-test', thinkingLevel: 'high' });
     rememberAgentModel('main', { modelRef: 'local/model' });
+    rememberProjectExecutionMode('project-1', 'managed_worktree');
     rememberLastChatScope('project-1');
 
     expect(readNewSessionPreferences()).toMatchObject({
@@ -23,6 +25,7 @@ describe('web new-session preferences', () => {
         coder: { modelRef: 'openai/gpt-test', thinkingLevel: 'high' },
         main: { modelRef: 'local/model' },
       },
+      executionModeByProject: { 'project-1': 'managed_worktree' },
       lastChatScope: { kind: 'project', projectId: 'project-1' },
     });
   });
@@ -32,6 +35,7 @@ describe('web new-session preferences', () => {
     expect(readNewSessionPreferences()).toMatchObject({
       version: 1,
       modelByAgent: {},
+      executionModeByProject: {},
       lastChatScope: { kind: 'none' },
     });
   });
