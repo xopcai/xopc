@@ -32,7 +32,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); });
 
 async function render(props = {}) {
   await act(async () => root.render(<MemoryRouter><ComposerModelConfigControl
-    chat={messages('en').chat} sessionModel="test/one" thinkingLevel="high" modelSupportsThinking
+    chat={messages('en').chat} sessionModel="test/one" thinkingLevel="high"
     modelDisabled={false} thinkingDisabled={false} onModelChange={vi.fn()} onThinkingChange={vi.fn()} {...props}
   /></MemoryRouter>));
   await click(container.querySelector('button')!);

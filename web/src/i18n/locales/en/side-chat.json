@@ -22,7 +22,7 @@
     "selectionCount_one": "{{count}} selection",
     "selectionCount_other": "{{count}} selections",
     "parentPermissionsHint": "Inherits the parent task's tool and approval policy",
-    "parentPermissions": "Parent permissions · {{model}}",
+    "parentPermissions": "Parent permissions",
     "selectedTextActionsAria": "Selected text actions",
     "addToChat": "Add to chat",
     "askInSideChat": "Side chat",

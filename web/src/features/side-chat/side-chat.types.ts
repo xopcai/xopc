@@ -33,7 +33,7 @@ export type SideChatView = {
     selections: SideChatSelection[];
     contentHash: string;
   };
-  config: { modelRef: string; thinkingLevel?: string };
+  config: { modelRef: string; thinkingLevel: string };
 };
 
 export type SideChatTab = {

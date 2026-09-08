@@ -73,6 +73,35 @@ describe('EphemeralSideChatManager', () => {
     await manager.disposeAll();
   });
 
+  it('hands ephemeral transcript media to disposal cleanup', async () => {
+    const onBeforeDispose = vi.fn();
+    const manager = createManager({ options: { onBeforeDispose } });
+    const sideChat = await manager.create({
+      parentSessionKey: metadata().key,
+      clientInstanceId: 'tab-1',
+    });
+    manager.getRuntime(sideChat.id, 'tab-1').openSessionManager('/tmp').appendMessage({
+      role: 'user',
+      content: 'Please inspect this file.',
+      timestamp: 2,
+      media: [{
+        uri: 'media://inbound/file-1',
+        path: '/tmp/file-1.txt',
+        name: 'file-1.txt',
+        mimeType: 'text/plain',
+        size: 1,
+      }],
+    } as AgentMessage);
+
+    await manager.dispose(sideChat.id, 'tab-1');
+
+    expect(onBeforeDispose).toHaveBeenCalledWith(
+      sideChat.id,
+      'tab-1',
+      [expect.objectContaining({ media: [expect.objectContaining({ uri: 'media://inbound/file-1' })] })],
+    );
+  });
+
   it('extends only on explicit activity and removes expired side chats', async () => {
     let now = 1_000;
     const manager = createManager({ now: () => now });

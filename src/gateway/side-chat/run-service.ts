@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto';
 import type { AgentService } from '../../agent/service.js';
 import { abortEmbeddedRun } from '../../agent/embedded/runs.js';
 import { ChatStreamMapper } from '../chat-stream/mapper.js';
-import type { ClarifyStreamEvent } from '../clarify-bridge.js';
+import type { ClarificationStreamEvent } from '../ephemeral-clarification-waiter.js';
 import type { GatewayAgentRunner } from '../service/agent-runner.js';
 import { SideChatError, type EphemeralSideChatManager } from './manager.js';
 import { createLogger } from '../../utils/logger.js';
+import type { UserTurnAttachment } from '../user-turn-input.js';
 
 const log = createLogger('Gateway:SideChatRun');
 
@@ -31,9 +32,15 @@ export class SideChatRunService {
 
   constructor(private readonly options: SideChatRunServiceOptions) {}
 
-  submit(sideChatId: string, clientInstanceId: string, content: string): { runId: string } {
-    const text = content.trim();
-    if (!text) throw new SideChatError('content is required', 'INVALID_REQUEST');
+  submit(
+    sideChatId: string,
+    clientInstanceId: string,
+    input: { content: string; attachments?: UserTurnAttachment[] },
+  ): { runId: string } {
+    const text = input.content.trim();
+    if (!text && !input.attachments?.length) {
+      throw new SideChatError('content or attachments are required', 'INVALID_REQUEST');
+    }
     const sideChat = this.options.manager.get(sideChatId, clientInstanceId);
     if (this.activeBySideChat.has(sideChatId)) {
       throw new SideChatError('A side chat run is already active', 'CONFLICT');
@@ -48,7 +55,7 @@ export class SideChatRunService {
     };
     this.activeBySideChat.set(sideChatId, run);
     this.options.manager.setStatus(sideChatId, clientInstanceId, 'running', run.runId);
-    void this.execute(run, text, sideChat.config).catch((err) => {
+    void this.execute(run, { content: text, attachments: input.attachments }, sideChat.config).catch((err) => {
       log.error({ err, sideChatId, runId: run.runId }, 'Side chat run cleanup failed');
     });
     return { runId: run.runId };
@@ -78,14 +85,14 @@ export class SideChatRunService {
   submitClarification(sideChatId: string, clientInstanceId: string, requestId: string, answer: string): boolean {
     const sideChat = this.options.manager.get(sideChatId, clientInstanceId);
     if (sideChat.clarification?.requestId !== requestId) return false;
-    const handled = this.options.agentRunner.submitClarifyResponse(requestId, answer);
+    const handled = this.options.agentRunner.answerEphemeralClarification(requestId, answer);
     if (handled) this.options.manager.setStatus(sideChatId, clientInstanceId, 'running');
     return handled;
   }
 
   private async execute(
     run: ActiveSideChatRun,
-    content: string,
+    input: { content: string; attachments?: UserTurnAttachment[] },
     config: { modelRef: string; thinkingLevel?: import('@earendil-works/pi-agent-core').ThinkingLevel },
   ): Promise<void> {
     const topic = `run:${run.runId}`;
@@ -102,8 +109,10 @@ export class SideChatRunService {
       if (event.type === 'clarify_request') {
         this.options.manager.waitForInput(run.sideChatId, run.clientInstanceId, {
           requestId: String(event.requestId),
+          kind: event.kind === 'approval' ? 'approval' : 'input',
           question: String(event.question),
           choices: Array.isArray(event.choices) ? event.choices.filter((choice): choice is string => typeof choice === 'string') : undefined,
+          suggestedAnswer: typeof event.suggestedAnswer === 'string' ? event.suggestedAnswer : undefined,
         }, event.kind === 'approval' ? 'waiting-approval' : 'waiting-input');
       }
       for (const mapped of mapper.map(event)) publish(mapped);
@@ -113,14 +122,15 @@ export class SideChatRunService {
       for (const event of mapper.start()) publish(event);
       publishMapped({
         type: 'user_message',
-        message: { role: 'user', content, timestamp: Date.now() },
+        content: input.content,
+        media: input.attachments?.map(({ data: _data, ...attachment }) => attachment),
+        timestamp: Date.now(),
       });
       this.options.agentRunner.registerExternalWebchatRun(
         run.executionSessionKey,
         run.runId,
-        (event: ClarifyStreamEvent) => publishMapped(event),
+        (event: ClarificationStreamEvent) => publishMapped(event),
         {
-          clarificationTimeoutMs: null,
           beforeClarificationResponse: () => {
             try {
               this.options.manager.setStatus(run.sideChatId, run.clientInstanceId, 'running');
@@ -133,7 +143,8 @@ export class SideChatRunService {
         executionSessionKey: run.executionSessionKey,
         parentSessionKey: this.options.manager.get(run.sideChatId, run.clientInstanceId).parentSessionKey,
         runId: run.runId,
-        content,
+        content: input.content,
+        attachments: input.attachments,
         modelRef: config.modelRef,
         thinkingLevel: config.thinkingLevel,
         transcriptRuntime: this.options.manager.getRuntime(run.sideChatId, run.clientInstanceId),

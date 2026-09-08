@@ -7,6 +7,7 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
+import { ComposerFrame } from '@/features/chat/composer/composer-frame';
 import { shouldRouteGlobalComposerPaste } from '@/features/chat/composer/composer-global-paste';
 import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/composer/composer-paste';
 import { ChatPendingFollowUpStack } from '@/features/chat/follow-up/chat-pending-follow-up-stack';
@@ -563,11 +564,8 @@ export const ChatComposer = memo(function ChatComposer({
     <div className="relative flex min-h-0 w-full flex-col">
       {sessionKey ? <ConnectionActionBar key={sessionKey} sessionKey={sessionKey} /> : null}
       {composerContext ? <ComposerContextBar {...composerContext} sessionKey={sessionKey} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
-    <div
-      className={cn(
-        'relative flex min-h-0 w-full flex-col overflow-hidden rounded-2xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
-        att.isDragging && 'ring-2 ring-accent ring-inset',
-      )}
+    <ComposerFrame
+      dragging={att.isDragging}
       onDragOver={(e) => {
         if (e.dataTransfer?.types.includes('Files') || hasWorkspaceFileDrag(e.dataTransfer)) {
           e.preventDefault();
@@ -788,7 +786,6 @@ export const ChatComposer = memo(function ChatComposer({
           maxAttachments={MAX_CHAT_ATTACHMENTS}
           onPickFiles={() => fileInputRef.current?.click()}
           thinkingLevel={thinkingLevel}
-          modelSupportsThinking={modelSupportsThinking}
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}
           onStartVoiceInput={voice.startVoiceInput}
@@ -835,7 +832,7 @@ export const ChatComposer = memo(function ChatComposer({
           setWorkspaceTrustDismissedFor(sessionKey);
         }}
       />
-    </div>
+    </ComposerFrame>
     </div>
   );
 });
