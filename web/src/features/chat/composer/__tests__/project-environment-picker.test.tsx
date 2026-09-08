@@ -41,6 +41,7 @@ describe('composer project environment selection and first send', () => {
     selection = useProjectSessionComposer({ preparation: prepared, sessionKey, ready, onSend: sender });
     return <>
       {prepared ? <ProjectEnvironmentPicker selection={selection} /> : null}
+      <button disabled={selection.busy} onClick={() => void selection.prepareSession()}>Terminal</button>
       <button disabled={selection.busy} onClick={() => commitAcceptedSend(selection.send('Keep draft', attachments, 'off', refs), commit)}>Send</button>
     </>;
   }
@@ -48,6 +49,7 @@ describe('composer project environment selection and first send', () => {
     <SWRConfig value={{ provider: () => cache, dedupingInterval: 0 }}><Harness {...props} /></SWRConfig>,
   ));
   const submit = () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Send')!;
+  const openTerminal = () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Terminal')!;
   const select = () => container.querySelector<HTMLButtonElement>('button[aria-label="New session environment"]')!;
 
   beforeEach(() => {
@@ -99,6 +101,21 @@ describe('composer project environment selection and first send', () => {
     expect(currentSender).toHaveBeenCalledExactlyOnceWith('Keep draft', attachments, undefined, refs);
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it('prepares the selected project environment from the terminal action without sending a draft', async () => {
+    let finish!: (key: string) => void;
+    create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    await render();
+    await act(async () => openTerminal().click());
+    expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout');
+    expect(openTerminal().disabled).toBe(true);
+    expect(onSend).not.toHaveBeenCalled();
+
+    await act(async () => finish('created'));
+    await render({ prepared: null, sessionKey: 'created', ready: true });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('preserves the selected mode and draft after failure; retries without a Local fallback', async () => {

@@ -27,6 +27,15 @@ describe('terminal panel store', () => {
     expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(false);
   });
 
+  it('opens a panel idempotently and provisions its first terminal', () => {
+    useTerminalPanelStore.getState().open('session-a');
+    const firstKey = useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a'];
+    useTerminalPanelStore.getState().open('session-a');
+
+    expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(true);
+    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([{ key: firstKey }]);
+  });
+
   it('returns a stable empty tab snapshot for sessions without terminals', () => {
     const tabsBySessionKey = useTerminalPanelStore.getState().tabsBySessionKey;
 

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
 vi.mock('@/features/chat/context/use-session-context', () => ({
@@ -44,7 +45,14 @@ describe('ChatPageHeaderRegistration', () => {
       dispatchEvent: () => false,
     });
     usePageHeaderStore.setState(emptyHeader);
+    useTerminalPanelStore.setState({
+      openBySessionKey: {},
+      tabsBySessionKey: {},
+      activeTabKeyBySessionKey: {},
+      height: 300,
+    });
     useWorkspacePanelStore.setState({ open: false, sessionKeyOverride: null });
+    Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -54,6 +62,7 @@ describe('ChatPageHeaderRegistration', () => {
     act(() => root.unmount());
     container.remove();
     usePageHeaderStore.setState(emptyHeader);
+    Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
   });
 
   it('does not clear the shell header while replacing chat session details', () => {
@@ -210,6 +219,45 @@ describe('ChatPageHeaderRegistration', () => {
     expect(button?.title).toContain('/repo/project');
     act(() => button!.click());
     expect(useWorkspacePanelStore.getState()).toMatchObject({ open: true, sessionKeyOverride: null });
+  });
+
+  it('prepares and opens a terminal before the first project message', async () => {
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { platform: 'darwin', terminal: {} },
+    });
+    const prepareTerminalSession = vi.fn(async () => 'created-session');
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/chat/new?projectId=project-1']}>
+          <Routes>
+            <Route path="/chat/:sessionKey" element={(
+              <>
+                <ChatPageHeaderRegistration
+                  chatHeadline="New code chat"
+                  chatAgents={[]}
+                  showChatAgentSelector={false}
+                  chatAgentId="coder"
+                  onChatAgentChange={() => {}}
+                  chatAgentDisabled={false}
+                  projectId="project-1"
+                  prepareTerminalSession={prepareTerminalSession}
+                />
+                <HeaderEnd />
+              </>
+            )} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    });
+
+    const terminalButton = container.querySelector<HTMLButtonElement>('[aria-label="Open terminal"]');
+    expect(terminalButton).not.toBeNull();
+    await act(async () => terminalButton!.click());
+
+    expect(prepareTerminalSession).toHaveBeenCalledOnce();
+    expect(useTerminalPanelStore.getState().openBySessionKey['created-session']).toBe(true);
+    expect(useTerminalPanelStore.getState().tabsBySessionKey['created-session']).toHaveLength(1);
   });
 
   it('keeps project files available while directory selection is locked', () => {
