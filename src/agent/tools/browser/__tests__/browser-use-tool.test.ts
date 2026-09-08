@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Value } from '@sinclair/typebox/value';
 
 import type { BrowserRuntime } from '../../../../browser/runtime/browser-runtime.js';
 import { BrowserNotReadyError } from '../../../../browser/readiness.js';
@@ -16,6 +17,24 @@ function createTool(result: Awaited<ReturnType<BrowserRuntime['execute']>>) {
 }
 
 describe('browser_use tool', () => {
+  it('exposes a provider-compatible object schema and validates each action strictly', async () => {
+    const { tool, execute } = createTool({
+      ok: true,
+      receipt: { action: 'click', risk: 'read', durationMs: 1, verified: true },
+    });
+
+    expect(tool.parameters.type).toBe('object');
+    expect(Value.Check(tool.parameters, { action: 'click' })).toBe(true);
+
+    const result = await tool.execute('call-invalid', { action: 'click' }, undefined as never, undefined as never);
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.details).toMatchObject({
+      ok: false,
+      kind: 'browser_error',
+      error: { code: 'INVALID_INPUT' },
+    });
+  });
+
   it('forwards a typed action and returns semantic observations', async () => {
     const observation = {
       sessionId: 'session-1', tabId: 'tab-1', revision: 2, documentId: 'doc-1',

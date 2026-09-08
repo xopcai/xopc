@@ -4,6 +4,7 @@ import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   parseBrowserSettings,
   patchBrowserSettings,
+  validateBrowserSettings,
   type BrowserSettingsState,
 } from '@/features/settings/config-api';
 import type { MessageBundle } from '@/i18n/messages';
@@ -84,7 +85,7 @@ export function useAgentDefaultsForm(
     }
   }, [a.saveError]);
 
-  const autosave = useAutosave({ value: form, dirty, onSave: save });
+  const autosave = useAutosave({ value: form, dirty, onSave: save, validate: validateBrowserSettings });
 
   return {
     hasToken,

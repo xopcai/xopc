@@ -77,24 +77,21 @@ export async function runPlaywrightChromiumInstallWithProgress(opts: {
     let stdoutBuf = '';
     let stderrBuf = '';
 
+    const drainLines = (source: 'stdout' | 'stderr', buffer: string): string => {
+      const lines = buffer.split(/\r\n|\r|\n/);
+      const remainder = lines.pop() ?? '';
+      for (const line of lines) emitLine(source, line);
+      return remainder;
+    };
+
     child.stdout?.on('data', (chunk: Buffer) => {
       stdoutBuf += chunk.toString();
-      let idx: number;
-      while ((idx = stdoutBuf.indexOf('\n')) !== -1) {
-        const line = stdoutBuf.slice(0, idx);
-        stdoutBuf = stdoutBuf.slice(idx + 1);
-        emitLine('stdout', line);
-      }
+      stdoutBuf = drainLines('stdout', stdoutBuf);
     });
 
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrBuf += chunk.toString();
-      let idx: number;
-      while ((idx = stderrBuf.indexOf('\n')) !== -1) {
-        const line = stderrBuf.slice(0, idx);
-        stderrBuf = stderrBuf.slice(idx + 1);
-        emitLine('stderr', line);
-      }
+      stderrBuf = drainLines('stderr', stderrBuf);
     });
 
     child.once('error', (err) => {

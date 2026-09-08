@@ -37,10 +37,16 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser/playwright/install/stream')?.id).toBe(
       'browser-install',
     );
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/playwright/install/cancel')?.id).toBe(
+      'browser-install',
+    );
     // Non-stream browser settings (doctor / launch / CDP / remote) live in the
     // `browser` bundle — separate from `config` so the giant config patcher
     // does not load when the UI is only inspecting the extension status.
     expect(findAuthenticatedLazyRouteBundle('/api/browser/playwright/doctor')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/status')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/test')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/extension/install')?.id).toBe('browser');
   });
 
   it('routes image generation APIs to models, not agents', () => {

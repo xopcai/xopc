@@ -13,8 +13,9 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { readFile, readdir, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFile, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -45,6 +46,7 @@ export type BrowserExtBundledFrom = 'npm-dist' | 'git-dev' | 'electron-asar' | '
 export interface BrowserExtInstallMeta {
   xopcVersion: string;
   manifestVersion: string;
+  contentHash: string;
   source: 'bundled';
   bundledFrom: BrowserExtBundledFrom;
   installedAt: string;
@@ -80,6 +82,15 @@ export function validateBrowserExtLayout(dir: string): boolean {
   return BROWSER_EXT_REQUIRED_FILES.every((rel) => existsSync(join(dir, rel)));
 }
 
+export function browserExtContentHash(dir: string): string {
+  const hash = createHash('sha256');
+  for (const relativePath of BROWSER_EXT_REQUIRED_FILES) {
+    hash.update(relativePath);
+    hash.update(readFileSync(join(dir, relativePath)));
+  }
+  return hash.digest('hex');
+}
+
 function readManifestVersion(dir: string): string | undefined {
   try {
     const raw = readFileSync(join(dir, 'manifest.json'), 'utf8');
@@ -94,7 +105,15 @@ async function readMeta(metaPath: string): Promise<BrowserExtInstallMeta | null>
   try {
     const raw = await readFile(metaPath, 'utf8');
     const parsed = JSON.parse(raw) as BrowserExtInstallMeta;
-    if (parsed && typeof parsed === 'object' && typeof parsed.xopcVersion === 'string') {
+    if (
+      parsed
+      && typeof parsed === 'object'
+      && typeof parsed.xopcVersion === 'string'
+      && typeof parsed.manifestVersion === 'string'
+      && typeof parsed.contentHash === 'string'
+      && parsed.source === 'bundled'
+      && typeof parsed.installPath === 'string'
+    ) {
       return parsed;
     }
     return null;
@@ -179,6 +198,7 @@ export async function resolveBundledBrowserExtDir(): Promise<{
 export function computeNeedsRefresh(params: {
   force?: boolean;
   bundledManifestVersion: string;
+  bundledContentHash: string;
   installedPath: string | null;
   meta: BrowserExtInstallMeta | null;
 }): boolean {
@@ -188,7 +208,9 @@ export function computeNeedsRefresh(params: {
   const installedManifest = readManifestVersion(params.installedPath);
   if (!installedManifest || installedManifest !== params.bundledManifestVersion) return true;
 
-  if (!params.meta || params.meta.xopcVersion !== PACKAGE_VERSION) return true;
+  if (browserExtContentHash(params.installedPath) !== params.bundledContentHash) return true;
+
+  if (!params.meta || params.meta.xopcVersion !== PACKAGE_VERSION || params.meta.contentHash !== params.bundledContentHash) return true;
 
   return false;
 }
@@ -275,6 +297,7 @@ export async function browserExtDoctor(opts?: {
 
   const bundled = await resolveBundledBrowserExtDir();
   const bundledManifestVersion = bundled ? readManifestVersion(bundled.dir) : undefined;
+  const bundledContentHash = bundled ? browserExtContentHash(bundled.dir) : undefined;
   const meta = await readMeta(resolveMetaPath(cacheDir));
   const installedPath = resolveInstalledExtensionPath(cacheDir, meta);
 
@@ -282,6 +305,7 @@ export async function browserExtDoctor(opts?: {
     ? computeNeedsRefresh({
         force: false,
         bundledManifestVersion: bundledManifestVersion ?? PACKAGE_VERSION,
+        bundledContentHash: bundledContentHash!,
         installedPath,
         meta,
       })
@@ -328,6 +352,7 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   }
 
   const bundledManifestVersion = readManifestVersion(bundled.dir) ?? PACKAGE_VERSION;
+  const bundledContentHash = browserExtContentHash(bundled.dir);
   const root = browserExtRoot(cacheDir);
   mkdirSync(root, { recursive: true });
   await cleanupStaleStaging(root);
@@ -337,6 +362,7 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   const needsRefresh = computeNeedsRefresh({
     force: opts?.force,
     bundledManifestVersion,
+    bundledContentHash,
     installedPath,
     meta,
   });
@@ -362,6 +388,7 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   const nextMeta: BrowserExtInstallMeta = {
     xopcVersion: PACKAGE_VERSION,
     manifestVersion: bundledManifestVersion,
+    contentHash: bundledContentHash,
     source: 'bundled',
     bundledFrom: bundled.bundledFrom,
     installedAt: new Date().toISOString(),
