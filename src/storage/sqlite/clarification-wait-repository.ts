@@ -9,6 +9,7 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { isXopcDatabaseOpen } from './connection.js';
 import { readCurrentSessionId } from './session-instance-repository.js';
 import {
   bumpSessionInputRevision,
@@ -141,11 +142,13 @@ function markTaskWaiting(wait: ClarificationWait): void {
 }
 
 export function getClarification(id: string): ClarificationWait | undefined {
+  if (!isXopcDatabaseOpen()) return undefined;
   const row = getRow(id);
   return row ? rowToWait(row) : undefined;
 }
 
 export function getActiveClarification(sessionKey: string): ClarificationWait | undefined {
+  if (!isXopcDatabaseOpen()) return undefined;
   const sessionId = readCurrentSessionId(getSqliteDatabase(), sessionKey);
   if (!sessionId) return undefined;
   const row = getSqliteDatabase().prepare(
@@ -158,6 +161,7 @@ export function getActiveClarification(sessionKey: string): ClarificationWait | 
 }
 
 export function getClarificationSnapshot(sessionKey: string): ClarificationWaitSnapshot | undefined {
+  if (!isXopcDatabaseOpen()) return undefined;
   const sessionId = readCurrentSessionId(getSqliteDatabase(), sessionKey);
   if (!sessionId) return undefined;
   const state = getSessionInputState(sessionKey);
@@ -375,6 +379,7 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
 }
 
 export function getClarificationResumeInput(sessionKey: string, runId: string): SessionInput | undefined {
+  if (!isXopcDatabaseOpen()) return undefined;
   const state = getSessionInputState(sessionKey);
   if (state.activeRunId !== runId || !state.activeInputId) return undefined;
   const input = getSessionInputById(sessionKey, state.activeInputId);
