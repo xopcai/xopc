@@ -241,13 +241,35 @@ jobs:
             '
           fi
 
+      # electron-builder also leaves unpacked app directories in dist/release. Stage only
+      # the installable files so Actions artifacts do not contain a second copy of each app.
+      - name: Stage release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          upload_dir="dist/release-upload"
+          rm -rf "$upload_dir"
+          mkdir -p "$upload_dir"
+
+          while IFS= read -r artifact; do
+            relative_path="${artifact#dist/release/}"
+            destination="$upload_dir/$relative_path"
+            mkdir -p "$(dirname "$destination")"
+            cp "$artifact" "$destination"
+          done < <(bash scripts/list-electron-release-upload-files.sh dist/release)
+
+          test -n "$(find "$upload_dir" -type f -print -quit)"
+          find "$upload_dir" -type f -print | sort
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
         with:
           name: xopc-electron-${{ matrix.artifact_name }}
-          path: dist/release
+          path: dist/release-upload
           if-no-files-found: error
           retention-days: 14
+          # Installers are already compressed; recompressing them saves almost no space.
+          compression-level: 0
 
   # Runs only when all `package` matrix jobs succeed. If any platform fails, this job is skipped
   # (no partial GitHub Release).
