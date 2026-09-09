@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, ShieldCheck, X } from 'lucide-react';
+import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -350,7 +350,6 @@ export function SideChatConversation({
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now);
   const [clockOffset, setClockOffset] = useState(0);
-  const [showTemporaryInfo, setShowTemporaryInfo] = useState(false);
   const fresh = useSideChatStore((state) => state.tabs.find((tab) => tab.id === sideChatId)?.fresh);
   const truncated = useSideChatStore((state) => state.readings[sideChatId]?.truncated ?? false);
   const activeRef = useRef(true);
@@ -728,10 +727,6 @@ export function SideChatConversation({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-5 pt-2 text-xs text-fg-muted">
-        <button type="button" className="rounded px-1 py-1 hover:bg-surface-hover" aria-expanded={showTemporaryInfo} onClick={() => setShowTemporaryInfo((current) => !current)}>{sideChatMessages.temporaryLabel}</button>
-        {showTemporaryInfo ? <p className="mt-1">{sideChatMessages.temporaryDescription}</p> : null}
-      </div>
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
@@ -885,10 +880,6 @@ export function SideChatConversation({
               chat={m.chat}
               onPickFiles={() => attachments.fileInputRef.current?.click()}
             />
-            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-fg-muted" title={sideChatMessages.parentPermissionsHint}>
-              <ShieldCheck className="size-3.5 shrink-0" />
-              <span className="truncate">{sideChatMessages.parentPermissions}</span>
-            </span>
             <div className="ml-auto min-w-0">
               {view ? (
                 <ComposerModelConfigControl

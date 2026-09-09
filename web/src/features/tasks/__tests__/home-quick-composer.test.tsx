@@ -22,7 +22,7 @@ function createVoice(
     activities: [], clarification: null, dismissClarification: vi.fn(),
     responsePhase: 'idle',
     muted: false,
-    error: null, failureKind: null,
+    error: null, failureKind: null, settingsRequired: false,
     endedReason: null,
     mode: 'dictation',
     startVoiceInput: vi.fn(async () => {}),

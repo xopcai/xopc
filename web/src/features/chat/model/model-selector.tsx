@@ -10,6 +10,10 @@ import {
   formControlBorderFocusClass,
   selectComboboxTriggerFocusClass,
 } from '@/lib/form-field-width';
+import {
+  selectPopoverContentLayoutClass,
+  selectPopoverScrollAreaClass,
+} from '@/components/ui/popover-select';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
@@ -197,12 +201,14 @@ export function ModelSelector({
         <Popover.Content
           className={cn(
             settingsShellPopoverZ,
+            selectPopoverContentLayoutClass,
             'w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle',
             popoverContentClassName,
           )}
           side={contentSide}
           sideOffset={4}
           align={contentAlign}
+          collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           {showSearch ? (
@@ -210,7 +216,7 @@ export function ModelSelector({
               type="search"
               aria-label={searchPlaceholder}
               className={cn(
-                'mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled dark:bg-surface-hover/40',
+                'mb-1 w-full shrink-0 rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled dark:bg-surface-hover/40',
                 formControlBorderFocusClass,
               )}
               placeholder={searchPlaceholder}
@@ -218,7 +224,7 @@ export function ModelSelector({
               onChange={(e) => setQuery(e.target.value)}
             />
           ) : null}
-          <div className="max-h-60 overflow-auto">
+          <div className="flex min-h-0 max-h-60 flex-1 flex-col overflow-hidden">
             {allowEmpty ? (
               <button
                 type="button"
@@ -260,7 +266,7 @@ export function ModelSelector({
             />
           </div>
           {footerLink ? (
-            <div className="mt-1 border-t border-edge-subtle pt-1">
+            <div className="mt-1 shrink-0 border-t border-edge-subtle pt-1">
               <button
                 type="button"
                 className={cn(
@@ -303,7 +309,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
       {showSearch && <input type="search" aria-label={searchPlaceholder} placeholder={searchPlaceholder}
         value={query} onChange={(event) => setQuery(event.target.value)}
         className={cn('mx-1 mb-2 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg', formControlBorderFocusClass)} />}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div data-select-scroll-region className={selectPopoverScrollAreaClass}>
         {filtered.length === 0 && <p className="px-3 py-4 text-sm text-fg-muted">{noMatches}</p>}
         {filtered.map((model) => (
           <button key={model.id} type="button" disabled={disabled} title={model.id}

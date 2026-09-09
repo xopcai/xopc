@@ -60,4 +60,37 @@ describe('PopoverSelect', () => {
     expect(option).toBeDefined();
     expect(option?.parentElement?.parentElement?.className).toContain(APP_PORTALED_POPOVER_Z);
   });
+
+  it('keeps a single constrained option list as the scroll region', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <PopoverSelect
+          value="option-0"
+          options={Array.from({ length: 20 }, (_, index) => ({
+            value: `option-${index}`,
+            label: `Option ${index}`,
+          }))}
+          placeholder="Choose an option"
+          onChange={() => {}}
+        />,
+      );
+    });
+    mounted.push({ container, unmount: () => root.unmount() });
+
+    await act(async () => {
+      container.querySelector('button')?.click();
+      await Promise.resolve();
+    });
+
+    const scrollRegion = document.body.querySelector<HTMLElement>('[data-select-scroll-region]');
+    expect(scrollRegion?.className).toContain('overflow-y-auto');
+    expect(scrollRegion?.className).toContain('min-h-0');
+    expect(scrollRegion?.parentElement?.className).toContain(
+      'max-h-[min(20rem,var(--radix-popover-content-available-height))]',
+    );
+  });
 });

@@ -3,16 +3,17 @@ import { Square } from 'lucide-react';
 import { ReadAloudButton, type ReadAloudLabels } from '@/features/voice/read-aloud-button';
 import { useReadAloudStore, type ReadAloudInput } from '@/features/voice/read-aloud-store';
 
-export function NoteReadAloudControls({ input, labels }: {
+export function NoteReadAloudControls({ input, labels, showLabel = true }: {
   input: () => ReadAloudInput;
   labels: ReadAloudLabels & { stop: string };
+  showLabel?: boolean;
 }) {
   const sourceId = input().source.id;
   const active = useReadAloudStore((state) => state.source?.type === 'note' && state.source.id === sourceId && state.status !== 'idle');
   const preparing = useReadAloudStore((state) => state.source?.type === 'note' && state.source.id === sourceId && state.status === 'preparing');
   const stop = useReadAloudStore((state) => state.stop);
   return <div className="flex items-center gap-1">
-    <ReadAloudButton input={input} labels={labels} disabled={preparing} showLabel />
+    <ReadAloudButton input={input} labels={labels} disabled={preparing} showLabel={showLabel} />
     {active ? <button
       type="button"
       onClick={stop}
