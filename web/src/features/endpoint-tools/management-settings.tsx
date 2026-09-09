@@ -76,7 +76,6 @@ export function EndpointToolsManagementSettings() {
     <SettingsPageFrame>
       <SettingsPageHeader
         title={copy.title}
-        subtitle={copy.subtitle}
         actions={(
           <Button variant="secondary" onClick={refresh}>
             <RefreshCw className="size-4" aria-hidden />

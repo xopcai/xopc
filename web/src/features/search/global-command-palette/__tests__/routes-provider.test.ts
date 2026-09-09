@@ -19,9 +19,7 @@ describe('buildRouteSeeds', () => {
 
   it('links every capability result to its dedicated route', () => {
     const seeds = buildRouteSeeds('en');
-    expect(seeds.find((s) => s.id === 'route:settings:capabilities')?.path).toBe(
-      '/settings/capabilities/models',
-    );
+    expect(seeds.find((s) => s.id === 'route:settings:capabilities')).toBeUndefined();
     expect(seeds.find((s) => s.id === 'route:settings:capabilities:models')?.path).toBe(
       '/settings/capabilities/models',
     );

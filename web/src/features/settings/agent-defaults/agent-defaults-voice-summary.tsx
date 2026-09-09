@@ -88,7 +88,7 @@ export function AgentDefaultsVoiceSummary({ zh }: { zh: boolean }) {
         <div>
           <h2 className="text-base font-semibold text-fg">{zh ? '语音能力' : 'Voice capabilities'}</h2>
           <p className="mt-1 text-sm text-fg-muted">
-            {zh ? 'STT 和 TTS 由所有 Agent 共用，在全局语音设置中统一管理。' : 'STT and TTS are shared by every agent and managed in global voice settings.'}
+            {zh ? '语音识别和朗读由所有智能体共用，在语音设置中统一管理。' : 'STT and TTS are shared by every agent and managed in global voice settings.'}
           </p>
         </div>
         <Button asChild variant="secondary" className="shrink-0">

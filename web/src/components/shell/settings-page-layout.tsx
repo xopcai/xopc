@@ -1,3 +1,4 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, Menu, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
@@ -12,6 +13,7 @@ import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-n
 import {
   ELECTRON_ONLY_SETTINGS_TABS,
   ELECTRON_SYSTEM_NAV_GROUP,
+  isSettingsTabActiveAtPath,
   pathForTab,
   SETTINGS_SHELL_NAV_GROUPS,
 } from '@/navigation';
@@ -84,7 +86,7 @@ function SettingsNavGroupBlock({
     <div>
       <p
         className={cn(
-          'px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-fg-muted',
+          'px-4 pb-1 pt-2 text-xs font-medium text-fg-muted',
           groupIndex === 0 && 'pt-0',
         )}
       >
@@ -101,8 +103,7 @@ function SettingsNavGroupBlock({
             className={({ isActive: routerActive }) =>
               settingsNavLinkClass({
                 isActive:
-                  routerActive ||
-                  (tab === 'settingsCapabilities' && location.pathname.startsWith('/settings/capabilities/')),
+                  routerActive || isSettingsTabActiveAtPath(tab, location.pathname),
               })
             }
           >
@@ -198,7 +199,11 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   );
 
   const railNavGroups: SettingsShellNavGroup[] = useMemo(
-    () => [...SETTINGS_SHELL_NAV_GROUPS, ...(isElectron() ? [ELECTRON_SYSTEM_NAV_GROUP] : [])],
+    () => SETTINGS_SHELL_NAV_GROUPS.map((group) => (
+      isElectron() && group.id === 'system'
+        ? { ...group, tabs: [...group.tabs, ...ELECTRON_SYSTEM_NAV_GROUP.tabs] }
+        : group
+    )),
     [],
   );
 
@@ -206,10 +211,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     () =>
       railNavGroups
         .flatMap((group) => visibleSettingsNavTabs(group, settingsMode))
-        .find((tab) =>
-          location.pathname === pathForTab(tab) ||
-          (tab === 'settingsCapabilities' && location.pathname.startsWith('/settings/capabilities/')),
-        ),
+        .find((tab) => isSettingsTabActiveAtPath(tab, location.pathname)),
     [location, railNavGroups, settingsMode],
   );
 
@@ -274,30 +276,24 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
         </button>
       </div>
 
-      {mobileNavOpen ? (
-        <div className="fixed inset-0 z-60 md:hidden" role="presentation">
-          <button
-            type="button"
-            className="absolute inset-0 bg-scrim/45 backdrop-blur-[1px]"
-            onClick={() => setMobileNavOpen(false)}
-            aria-label={m.nav.settings}
-          />
-          <aside className="app-chrome-sidebar absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-rail shadow-float">
+      <Dialog.Root open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-mobile-nav-overlay fixed inset-0 z-[75] bg-scrim/45 backdrop-blur-[1px] md:hidden" />
+          <Dialog.Content className="xopc-mobile-nav-content app-chrome-sidebar fixed inset-y-0 left-0 z-[76] flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-rail shadow-float outline-none md:hidden">
+            <Dialog.Title className="sr-only">{m.nav.settings}</Dialog.Title>
+            <Dialog.Description className="sr-only">{activeTitle}</Dialog.Description>
             <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2 pt-4">
               {backControl}
-              <button
-                type="button"
-                className={mobileToolbarButtonClass}
-                onClick={() => setMobileNavOpen(false)}
-                aria-label={m.nav.settings}
-              >
-                <X className="size-5" strokeWidth={1.75} aria-hidden />
-              </button>
+              <Dialog.Close asChild>
+                <button type="button" className={mobileToolbarButtonClass} aria-label={m.nav.settings}>
+                  <X className="size-5" strokeWidth={1.75} aria-hidden />
+                </button>
+              </Dialog.Close>
             </div>
             {railNav}
-          </aside>
-        </div>
-      ) : null}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Left rail stays visually darker than the bright right content surface. */}
       <div
@@ -346,7 +342,13 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
 
       {/* Right: surface-panel — elevated vs left rail */}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-surface-panel scrollbar-gutter-both">
-        {settingsPathBlocked ? <Navigate to="/settings/overview" replace /> : <Outlet />}
+        {settingsPathBlocked ? (
+          <Navigate to="/settings/overview" replace />
+        ) : (
+          <div key={location.pathname} className="settings-content-enter min-h-full">
+            <Outlet />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ export function Button({
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium',
         'transition-colors duration-150 ease-out transition-transform',
-        'active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100',
+        'active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         variantClass[variant],
         className,

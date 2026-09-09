@@ -40,7 +40,7 @@ export function AgentDefaultsRuntimePanel({
     <div className="space-y-5">
       <section className="rounded-2xl border border-edge bg-surface-base p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '执行限制' : 'Execution limits'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '为所有 Agent 设置安全上限；留空时使用系统默认值。' : 'Set safe upper bounds for every agent. Empty fields use system defaults.'}</p>
+        <p className="mt-1 text-sm text-fg-muted">{zh ? '为所有智能体设置安全上限；留空时使用系统默认值。' : 'Set safe upper bounds for every agent. Empty fields use system defaults.'}</p>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           <label className="block text-xs font-medium text-fg-muted">{zh ? '每次运行最多轮数' : 'Maximum turns per run'}<input type="number" min={1} value={draft.runtime.maxTurns ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, maxTurns: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
           <label className="block text-xs font-medium text-fg-muted">{zh ? '单轮超时（毫秒）' : 'Turn timeout (ms)'}<input type="number" min={1} value={draft.runtime.timeoutMs ?? ''} placeholder={zh ? '系统默认' : 'System default'} onChange={(event) => setDraft({ ...draft, runtime: { ...draft.runtime, timeoutMs: positiveInt(event.target.value) } })} className={`${inputClass} mt-2`} /></label>
@@ -59,7 +59,7 @@ export function AgentDefaultsRuntimePanel({
 
       <section className="rounded-2xl border border-edge bg-surface-base p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '工作流' : 'Workflows'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '设置默认工作流，并决定 Agent 可以调用哪些工作流。' : 'Set a default workflow and control which workflows agents may invoke.'}</p>
+        <p className="mt-1 text-sm text-fg-muted">{zh ? '设置默认工作流，并决定智能体可以调用哪些工作流。' : 'Set a default workflow and control which workflows agents may invoke.'}</p>
         <div className="mt-5 max-w-xl">
           <label className="block text-xs font-medium text-fg-muted">{zh ? '默认工作流' : 'Default workflow'}</label>
           <PopoverSelect value={draft.workflows.default ?? ''} options={workflowOptions} placeholder={workflowsQuery.isLoading ? (zh ? '正在加载…' : 'Loading…') : (zh ? '不设置默认工作流' : 'No default workflow')} emptyLabel={zh ? '不设置默认工作流' : 'No default workflow'} disabled={workflowsQuery.isLoading} ariaLabel={zh ? '默认工作流' : 'Default workflow'} onChange={(value) => setDraft({ ...draft, workflows: { ...draft.workflows, default: value || undefined } })} triggerClassName="mt-2" />

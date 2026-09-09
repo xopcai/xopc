@@ -155,7 +155,7 @@ export function SharesSettingsPanel() {
 
   return (
     <SettingsPageFrame>
-      <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
+      <SettingsPageHeader title={t.title} />
 
       <PageTabs
         items={tabItems}

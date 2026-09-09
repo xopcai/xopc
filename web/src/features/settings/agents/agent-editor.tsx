@@ -256,7 +256,7 @@ export function AgentEditor({
             <div className="space-y-6">
               <SectionTitle
                 title={zh ? '配置概览' : 'Configuration overview'}
-                description={zh ? '查看当前真正生效的配置。Agent 未覆盖的部分会持续跟随全局默认值。' : 'Review what actually takes effect. Anything not overridden keeps following global defaults.'}
+                description={zh ? '查看当前真正生效的配置。未覆盖的部分会持续跟随全局默认值。' : 'Review what actually takes effect. Anything not overridden keeps following global defaults.'}
                 action={<Button onClick={onChat}><MessageSquarePlus className="size-4" />{zh ? '开始对话' : 'Start chat'}</Button>}
               />
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-4">
@@ -269,24 +269,24 @@ export function AgentEditor({
                   <p className="mt-1 text-xs leading-5 text-fg-muted">
                     {overrideLabels.length > 0
                       ? (zh ? '其他能力会继续跟随全局默认配置。' : 'All other capabilities continue to follow global defaults.')
-                      : (zh ? '修改全局默认配置后，这个 Agent 会自动同步。' : 'This agent updates automatically when global defaults change.')}
+                      : (zh ? '修改全局默认配置后，这个智能体会自动同步。' : 'This agent updates automatically when global defaults change.')}
                   </p>
                 </div>
                 <Button onClick={onOpenDefaults}>{zh ? '查看全局默认配置' : 'View global defaults'}</Button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <SummaryCard label={zh ? '对话模型' : 'Chat model'} value={agent.effective.models.chat.primary} detail={draft.models?.chat ? (zh ? 'Agent 覆盖' : 'Agent override') : (zh ? '继承全局' : 'Inherited globally')} />
-                <SummaryCard label={zh ? '技能' : 'Skills'} value={skillSummary} detail={draft.skills ? (zh ? 'Agent 覆盖' : 'Agent override') : (zh ? '继承全局' : 'Inherited globally')} />
+                <SummaryCard label={zh ? '对话模型' : 'Chat model'} value={agent.effective.models.chat.primary} detail={draft.models?.chat ? (zh ? '单独设置' : 'Agent override') : (zh ? '继承全局' : 'Inherited globally')} />
+                <SummaryCard label={zh ? '技能' : 'Skills'} value={skillSummary} detail={draft.skills ? (zh ? '单独设置' : 'Agent override') : (zh ? '继承全局' : 'Inherited globally')} />
                 <SummaryCard label={zh ? '工具权限' : 'Tool access'} value={deniedToolCount > 0 ? (zh ? `${deniedToolCount} 个禁用` : `${deniedToolCount} denied`) : (zh ? '全部可用' : 'All available')} detail={draft.tools ? (zh ? `${Object.keys(draft.tools).length} 个本地覆盖` : `${Object.keys(draft.tools).length} local overrides`) : (zh ? '继承全局' : 'Inherited globally')} />
-                <SummaryCard label={zh ? '工作区' : 'Workspace'} value={agent.effective.workspace} detail={draft.workspace ? (zh ? 'Agent 自定义' : 'Agent specific') : (zh ? '自动工作区' : 'Automatic workspace')} />
+                <SummaryCard label={zh ? '工作区' : 'Workspace'} value={agent.effective.workspace} detail={draft.workspace ? (zh ? '单独设置' : 'Agent specific') : (zh ? '自动工作区' : 'Automatic workspace')} />
               </div>
-              {!agent.isDefault ? <Button onClick={() => void makeDefault()} disabled={saving}>{zh ? '设为默认 Agent' : 'Make default agent'}</Button> : null}
+              {!agent.isDefault ? <Button onClick={() => void makeDefault()} disabled={saving}>{zh ? '设为默认智能体' : 'Make default agent'}</Button> : null}
             </div>
           ) : null}
 
           {panel === 'profile' ? (
             <div className="space-y-6">
-              <SectionTitle title={zh ? '个性与工作区' : 'Profile and workspace'} description={zh ? '这里只放这个 Agent 独有的身份、表达方式和工作目录。' : 'Keep only this agent’s identity, behavior, and workspace here.'} />
+              <SectionTitle title={zh ? '个性与工作区' : 'Profile and workspace'} description={zh ? '只设置这个智能体独有的身份、表达方式和工作目录。' : 'Keep only this agent’s identity, behavior, and workspace here.'} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="text-xs font-medium text-fg-muted">
                   {zh ? '名称' : 'Name'}
@@ -376,10 +376,10 @@ export function AgentEditor({
 
           {panel === 'capabilities' ? (
             <div className="space-y-7">
-              <SectionTitle title={zh ? '技能与工具' : 'Skills and tools'} description={zh ? '保持继承即可获得全局能力；只有确实不同的 Agent 才需要覆盖。' : 'Keep inheritance for global capabilities; override only agents that genuinely differ.'} />
+              <SectionTitle title={zh ? '技能与工具' : 'Skills and tools'} description={zh ? '默认继承全局能力；只设置确实不同的部分。' : 'Keep inheritance for global capabilities; override only agents that genuinely differ.'} />
               <section className="rounded-2xl border border-edge bg-surface-base p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div><h4 className="text-sm font-semibold text-fg">{zh ? '技能策略' : 'Skill policy'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.skills ? (zh ? '当前使用 Agent 覆盖' : 'Using an agent override') : (zh ? '当前继承全局' : 'Currently inherited globally')}</p></div>
+                  <div><h4 className="text-sm font-semibold text-fg">{zh ? '技能策略' : 'Skill policy'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.skills ? (zh ? '当前使用单独设置' : 'Using an agent override') : (zh ? '当前继承全局' : 'Currently inherited globally')}</p></div>
                   {draft.skills ? <Button variant="ghost" onClick={() => setDraft({ ...draft, skills: undefined })}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}
                 </div>
                 <div className="mt-4 flex gap-2">
@@ -396,7 +396,7 @@ export function AgentEditor({
                   {allTools.map((id) => {
                     const local = draft.tools?.[id]?.mode;
                     const effective = agent.effective.tools[id]?.mode ?? 'allow';
-                    return <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{local ? (zh ? 'Agent 覆盖' : 'Agent override') : `${zh ? '继承' : 'Inherits'} ${effective}`}</p></div><div className="flex rounded-xl bg-surface-hover p-1">{(['inherit', 'allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => setTool(id, mode)} className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors', (mode === 'inherit' ? !local : local === mode) ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{mode}</button>)}</div></div>;
+                    return <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{local ? (zh ? '单独设置' : 'Agent override') : `${zh ? '继承' : 'Inherits'} ${effective}`}</p></div><div className="flex rounded-xl bg-surface-hover p-1">{(['inherit', 'allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => setTool(id, mode)} className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors', (mode === 'inherit' ? !local : local === mode) ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{mode}</button>)}</div></div>;
                   })}
                 </div>
               </section>
@@ -405,7 +405,7 @@ export function AgentEditor({
 
           {panel === 'runtime' ? (
             <div className="space-y-6">
-              <SectionTitle title={zh ? '运行限制' : 'Runtime limits'} description={zh ? '留空即继承全局限制。这里适合为特殊 Agent 收紧或放宽执行边界。' : 'Leave blank to inherit global limits. Use overrides only to tighten or relax a specialist agent.'} action={draft.runtime || draft.workflows ? <Button variant="ghost" onClick={() => setDraft({ ...draft, runtime: undefined, workflows: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : undefined} />
+              <SectionTitle title={zh ? '运行限制' : 'Runtime limits'} description={zh ? '留空即继承全局限制。' : 'Leave blank to inherit global limits. Use overrides only to tighten or relax a specialist agent.'} action={draft.runtime || draft.workflows ? <Button variant="ghost" onClick={() => setDraft({ ...draft, runtime: undefined, workflows: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : undefined} />
               <div className="grid gap-4 sm:grid-cols-2">
                 {([
                   ['maxTurns', zh ? '单次最大轮数' : 'Maximum turns'],
@@ -421,7 +421,7 @@ export function AgentEditor({
                 </div>
               </section>
               <section className="rounded-2xl border border-edge bg-surface-base p-4">
-                <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.runtime?.promptCache ? (zh ? '使用 Agent 覆盖' : 'Using agent override') : (zh ? '继承全局' : 'Inherited globally')}</p></div>{draft.runtime?.promptCache ? <Button variant="ghost" onClick={() => { const runtime = cleanObject({ ...(draft.runtime ?? {}), promptCache: undefined }); setDraft({ ...draft, runtime }); }}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}</div>
+                <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.runtime?.promptCache ? (zh ? '使用单独设置' : 'Using agent override') : (zh ? '继承全局' : 'Inherited globally')}</p></div>{draft.runtime?.promptCache ? <Button variant="ghost" onClick={() => { const runtime = cleanObject({ ...(draft.runtime ?? {}), promptCache: undefined }); setDraft({ ...draft, runtime }); }}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}</div>
                 {draft.runtime?.promptCache ? <div className="mt-4 grid gap-4 sm:grid-cols-2"><div className="text-xs font-medium text-fg-muted"><span>{zh ? '模式' : 'Mode'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['auto', 'off'] as const).map((mode) => <button key={mode} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, mode } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.mode === mode ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{mode}</button>)}</div></div><div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Lifetime'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['short', 'long'] as const).map((lifetime) => <button key={lifetime} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, lifetime } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.lifetime === lifetime ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{lifetime}</button>)}</div></div></div> : <Button className="mt-4" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...(agent.effective.runtime.promptCache ?? { mode: 'auto', lifetime: 'short' }) } } })}>{zh ? '自定义缓存策略' : 'Customize cache policy'}</Button>}
               </section>
             </div>
@@ -429,9 +429,9 @@ export function AgentEditor({
 
           {panel === 'danger' ? (
             <div className="space-y-6">
-              <SectionTitle title={zh ? '危险区' : 'Danger zone'} description={zh ? '这些操作会改变默认路由或移除 Agent。' : 'These actions change default routing or remove the agent.'} />
-              {!agent.isDefault ? <div className="flex items-center justify-between gap-4 rounded-2xl border border-edge bg-surface-base p-4"><div><h4 className="text-sm font-semibold text-fg">{zh ? '设为默认 Agent' : 'Make default agent'}</h4><p className="mt-1 text-xs text-fg-muted">{zh ? '新会话和未指定路由将使用这个 Agent。' : 'New sessions and unspecified routes will use this agent.'}</p></div><Button disabled={saving} onClick={() => void makeDefault()}>{zh ? '设为默认' : 'Make default'}</Button></div> : null}
-              {!agent.isDefault ? <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/25 bg-red-500/5 p-4"><div><h4 className="text-sm font-semibold text-red-600">{zh ? '删除 Agent' : 'Delete agent'}</h4><p className="mt-1 text-xs text-fg-muted">{zh ? '配置条目会被移除，删除前仍会再次确认。' : 'The configuration entry will be removed after confirmation.'}</p></div><Button variant="ghost" className="text-red-600" onClick={onDelete}><AlertTriangle className="size-4" />{zh ? '删除' : 'Delete'}</Button></div> : <p className="rounded-2xl bg-surface-base p-4 text-sm text-fg-muted">{zh ? '默认 Agent 不能删除，请先将其他 Agent 设为默认。' : 'The default agent cannot be deleted. Make another agent the default first.'}</p>}
+              <SectionTitle title={zh ? '危险区' : 'Danger zone'} description={zh ? '这些操作会改变默认路由或移除智能体。' : 'These actions change default routing or remove the agent.'} />
+              {!agent.isDefault ? <div className="flex items-center justify-between gap-4 rounded-2xl border border-edge bg-surface-base p-4"><div><h4 className="text-sm font-semibold text-fg">{zh ? '设为默认智能体' : 'Make default agent'}</h4><p className="mt-1 text-xs text-fg-muted">{zh ? '新会话和未指定路由将使用这个智能体。' : 'New sessions and unspecified routes will use this agent.'}</p></div><Button disabled={saving} onClick={() => void makeDefault()}>{zh ? '设为默认' : 'Make default'}</Button></div> : null}
+              {!agent.isDefault ? <div className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/25 bg-red-500/5 p-4"><div><h4 className="text-sm font-semibold text-red-600">{zh ? '删除智能体' : 'Delete agent'}</h4><p className="mt-1 text-xs text-fg-muted">{zh ? '配置条目会被移除，删除前仍会再次确认。' : 'The configuration entry will be removed after confirmation.'}</p></div><Button variant="ghost" className="text-red-600" onClick={onDelete}><AlertTriangle className="size-4" />{zh ? '删除' : 'Delete'}</Button></div> : <p className="rounded-2xl bg-surface-base p-4 text-sm text-fg-muted">{zh ? '默认智能体不能删除，请先将其他智能体设为默认。' : 'The default agent cannot be deleted. Make another agent the default first.'}</p>}
             </div>
           ) : null}
         </main>

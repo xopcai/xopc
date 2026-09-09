@@ -50,10 +50,8 @@ export type SettingsNavGroupId =
   | 'general'
   | 'system'
   | 'capabilities'
-  | 'agent'
   | 'connection'
-  | 'automation'
-  | 'diagnostics';
+  | 'automation';
 
 export type SettingsShellNavGroup = {
   id: SettingsNavGroupId;
@@ -74,32 +72,39 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
 };
 
 /**
- * Settings rail. M3.1 collapsed two groups that previously exposed many
- * sibling rail items leading to the same underlying page or hub:
+ * Settings rail. Product capabilities stay visible in the default mode while
+ * implementation details are progressively disclosed inside each page:
  *
- *   - `capabilities` group: one Models & Services center with dedicated
- *     routes for models, images, voice, and web search.
- *   - `agent` group: global defaults configure inherited capabilities;
- *     `/agents` stores only each agent's profile and explicit overrides.
+ *   - `capabilities`: models plus the behavior available to every agent.
+ *   - `connection`: user-facing ways to reach and share this xopc instance.
+ *   - `system`: local service, runtimes, sessions, and diagnostics.
  *
- * Electron system group and extensions append in `SettingsPageLayout`.
+ * Electron-only system rows are merged into the system group by the layout.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'general', tabs: ['settingsOverview', 'settingsAppearance', 'settingsKeyboardShortcuts'] },
-  { id: 'capabilities', tabs: ['settingsCapabilities'] },
   {
-    id: 'agent',
-    tabs: ['settingsAgentDefaults', 'settingsAgentBrowser'],
+    id: 'capabilities',
+    tabs: [
+      'settingsModels',
+      'settingsVoice',
+      'settingsSearch',
+      'settingsAgentBrowser',
+      'settingsAgentDefaults',
+    ],
   },
   {
     id: 'connection',
-    tabs: ['settingsDevices', 'settingsGateway', 'settingsRuntimes', 'settingsTunnel', 'settingsShares'],
+    tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
   },
   {
     id: 'automation',
     tabs: ['settingsHeartbeat'],
   },
-  { id: 'diagnostics', tabs: ['sessions', 'logs'] },
+  {
+    id: 'system',
+    tabs: ['settingsGateway', 'settingsRuntimes', 'sessions', 'logs'],
+  },
 ] as const;
 
 /** Official docs site (VitePress `base: /xopc/`). */
@@ -154,7 +159,9 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'connectors') return '/connectors';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
-  if (tab === 'settingsCapabilities') return capabilitySettingsPath('models');
+  if (tab === 'settingsModels') return capabilitySettingsPath('models');
+  if (tab === 'settingsVoice') return capabilitySettingsPath('voice');
+  if (tab === 'settingsSearch') return capabilitySettingsPath('search');
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {
@@ -174,4 +181,12 @@ export const CAPABILITY_SETTINGS_SECTIONS: readonly CapabilitySettingsSectionId[
 
 export function capabilitySettingsPath(section: CapabilitySettingsSectionId): string {
   return `/settings/capabilities/${section}`;
+}
+
+/** Image models are a subsection of the Models destination in the settings rail. */
+export function isSettingsTabActiveAtPath(tab: Tab, pathname: string): boolean {
+  if (tab === 'settingsModels') {
+    return pathname === capabilitySettingsPath('models') || pathname === capabilitySettingsPath('image');
+  }
+  return pathname === pathForTab(tab);
 }

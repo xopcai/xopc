@@ -42,7 +42,7 @@ export function PreferenceSelectFields({
 
   const rowClass =
     variant === 'page'
-      ? 'flex flex-col gap-2 border-b border-edge-subtle py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:py-4'
+      ? 'flex flex-col gap-2 border-b border-edge-subtle px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-5 sm:py-4'
       : 'flex flex-col gap-1.5';
 
   const show = (id: PreferenceSection) => sections.includes(id);
@@ -95,7 +95,9 @@ export function PreferenceSelectFields({
         <div className={rowClass}>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-fg">{a.languageTitle}</div>
-            <p className="mt-0.5 text-xs text-fg-muted">{a.languageDescription}</p>
+            {variant !== 'page' ? (
+              <p className="mt-0.5 text-xs text-fg-muted">{a.languageDescription}</p>
+            ) : null}
           </div>
           <Select
             className={selectClass}
@@ -113,7 +115,9 @@ export function PreferenceSelectFields({
         <div className={rowClass}>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-fg">{a.themeTitle}</div>
-            <p className="mt-0.5 text-xs text-fg-muted">{a.themeDescription}</p>
+            {variant !== 'page' ? (
+              <p className="mt-0.5 text-xs text-fg-muted">{a.themeDescription}</p>
+            ) : null}
           </div>
           <Select
             className={selectClass}
@@ -132,7 +136,9 @@ export function PreferenceSelectFields({
         <div className={rowClass}>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-fg">{a.fontScaleTitle}</div>
-            <p className="mt-0.5 text-xs text-fg-muted">{a.fontScaleDescription}</p>
+            {variant !== 'page' ? (
+              <p className="mt-0.5 text-xs text-fg-muted">{a.fontScaleDescription}</p>
+            ) : null}
           </div>
           <Select
             className={selectClass}

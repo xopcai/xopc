@@ -26,6 +26,7 @@ import {
   SettingsTabPanel,
 } from '@/features/settings/settings-page-layout';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
@@ -383,7 +384,6 @@ export function HeartbeatSettingsPanel() {
     >
       <SettingsPageHeader
         title={m.settingsSections.heartbeat}
-        subtitle={h.subtitle}
         docsLink={docsGuidePageUrl(language, 'heartbeat')}
         docsLabel={h.docsLink}
         actions={
@@ -408,11 +408,13 @@ export function HeartbeatSettingsPanel() {
         }
       />
 
-      {workspacePath ? (
-        <p className="text-xs text-fg-subtle">
-          {h.workspaceLabel}: <span className="font-mono text-fg-muted">{workspacePath}</span>
-        </p>
-      ) : null}
+      <SettingsAdvancedGate>
+        {workspacePath ? (
+          <p className="text-xs text-fg-subtle">
+            {h.workspaceLabel}: <span className="font-mono text-fg-muted">{workspacePath}</span>
+          </p>
+        ) : null}
+      </SettingsAdvancedGate>
 
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
       {triggerError ? <p className="text-sm text-red-600 dark:text-red-400">{triggerError}</p> : null}

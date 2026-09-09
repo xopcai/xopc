@@ -13,13 +13,10 @@ import type { UseAgentDefaultsFormResult } from './use-browser-settings-form';
 
 export function AgentDefaultsRouteLayout(props: {
   sectionId: SettingsSectionId;
-  intro: string;
   vm: UseAgentDefaultsFormResult;
   children: ReactNode;
-  /** Merged tabbed page: single page title, per-tab intro below tabs. */
-  tabbed?: boolean;
 }) {
-  const { sectionId, intro, vm, children, tabbed = false } = props;
+  const { sectionId, vm, children } = props;
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const a = m.agentSettings;
@@ -63,8 +60,6 @@ export function AgentDefaultsRouteLayout(props: {
     <SettingsPageFrame gap="gap-6" onBlurCapture={vm.onBlurCapture}>
       <SettingsPageHeader
         title={pageTitle}
-        subtitle={!tabbed ? intro : undefined}
-        meta={<p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>}
         actions={<AutosaveStatus status={vm.autosaveStatus} error={vm.error} />}
       />
 
