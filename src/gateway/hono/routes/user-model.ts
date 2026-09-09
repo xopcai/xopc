@@ -18,13 +18,15 @@ import {
 import {
   createPriorityWindow,
   createUserGoal,
-  getActiveAssertionForSlot,
+  applyUserProfilePatch,
+  bootstrapUserModel,
   getAssertionSlot,
   getUserAssertion,
   listPriorityWindows,
   listUserAssertions,
   listUserGoals,
   reconcileAssertion,
+  getUserProfileSnapshot,
   setAssertionStatus,
   setUserGoalStatus,
   type AssertionCandidate,
@@ -78,57 +80,6 @@ const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
 ]);
 const RULE_STATUSES = new Set<CollaborationRule['status']>(['active', 'disabled', 'archived']);
 
-function profileAssertion(predicate: string) {
-  return getActiveAssertionForSlot({
-    subject: { type: 'user', id: 'self' },
-    predicate,
-    scope: { type: 'global' },
-  });
-}
-
-function profileValue(predicate: string): unknown {
-  return profileAssertion(predicate)?.value;
-}
-
-function profileSnapshot() {
-  return {
-    callName: profileValue('identity.call_name'),
-    pronouns: profileValue('identity.pronouns'),
-    timezone: profileValue('preference.timezone'),
-    locale: profileValue('preference.locale'),
-    role: profileValue('identity.role'),
-  };
-}
-
-const PROFILE_FIELDS = {
-  callName: {
-    predicate: 'identity.call_name', kind: 'identity', volatility: 'stable', importance: 0.95,
-    statement: (value: string) => `The user prefers to be called ${value}.`,
-  },
-  role: {
-    predicate: 'identity.role', kind: 'identity', volatility: 'slow', importance: 0.9,
-    statement: (value: string) => `The user's role is ${value}.`,
-  },
-  pronouns: {
-    predicate: 'identity.pronouns', kind: 'identity', volatility: 'stable', importance: 0.75,
-    statement: (value: string) => `The user's pronouns are ${value}.`,
-  },
-  timezone: {
-    predicate: 'preference.timezone', kind: 'preference', volatility: 'slow', importance: 0.85,
-    statement: (value: string) => `The user's timezone is ${value}.`,
-  },
-  locale: {
-    predicate: 'preference.locale', kind: 'preference', volatility: 'slow', importance: 0.85,
-    statement: (value: string) => `The user's language and locale are ${value}.`,
-  },
-} as const satisfies Record<string, {
-  predicate: string;
-  kind: AssertionCandidate['kind'];
-  volatility: AssertionCandidate['volatility'];
-  importance: number;
-  statement: (value: string) => string;
-}>;
-
 function assertionView(assertion: NonNullable<ReturnType<typeof getUserAssertion>>) {
   const slot = getAssertionSlot(assertion.slotId);
   if (!slot) throw new Error(`Assertion slot not found: ${assertion.slotId}`);
@@ -158,7 +109,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       rules: listCollaborationRules(),
       knowledge,
       maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
-      profile: profileSnapshot(),
+      profile: getUserProfileSnapshot(),
       counts: {
         activeAssertions: assertions.filter((item) => item.status === 'active').length,
         reviewAssertions: assertions.filter((item) => item.status === 'needs_review' || item.status === 'conflicted').length,
@@ -172,45 +123,35 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   authenticated.patch('/api/user-model/profile', write, async (c) => {
     const input = await body(c);
     if (!input) return c.json({ error: 'A profile patch is required' }, 400);
-    const entries = Object.entries(PROFILE_FIELDS).filter(([key]) => Object.hasOwn(input, key));
-    if (!entries.length || entries.some(([key]) => typeof input[key] !== 'string')) {
+    const profileFields = ['callName', 'role', 'pronouns', 'timezone', 'locale'] as const;
+    const entries = profileFields.filter((key) => Object.hasOwn(input, key));
+    if (!entries.length || entries.some((key) => typeof input[key] !== 'string')) {
       return c.json({ error: 'Profile fields must be strings' }, 400);
     }
     try {
-      const now = Date.now();
-      for (const [key, field] of entries) {
-        const value = (input[key] as string).trim();
-        const current = profileAssertion(field.predicate);
-        if (!value) {
-          if (current) setAssertionStatus(current.id, 'archived', {
-            actor: 'user', reason: 'Profile field cleared by user.', now,
-          });
-          continue;
-        }
-        reconcileAssertion({
-          subject: { type: 'user', id: 'self' },
-          predicate: field.predicate,
-          cardinality: 'single',
-          scope: { type: 'global' },
-          kind: field.kind,
-          value,
-          normalizedValue: value.toLocaleLowerCase(),
-          statement: field.statement(value),
-          authority: 'user_explicit',
-          confidence: 1,
-          declaredImportance: field.importance,
-          inferredImportance: field.importance,
-          consequence: 'medium',
-          actionability: 0.9,
-          volatility: field.volatility,
-          sensitivity: 'normal',
-          disclosurePolicy: 'referenceable',
-          observedAt: now,
-          createdBy: 'user',
-          ...(current ? { correctionOfAssertionId: current.id } : {}),
-        });
-      }
-      return c.json({ profile: profileSnapshot() });
+      return c.json({ profile: applyUserProfilePatch(Object.fromEntries(
+        entries.map((key) => [key, input[key] as string]),
+      )) });
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 400);
+    }
+  });
+
+  authenticated.post('/api/user-model/bootstrap', write, async (c) => {
+    const input = await body(c);
+    const profile = object(input?.profile);
+    const listFields = ['responsibilities', 'goals', 'communicationPreferences', 'boundaries', 'relationships'] as const;
+    const validProfile = profile && Object.values(profile).every((value) => typeof value === 'string');
+    const validLists = listFields.every((key) => input?.[key] === undefined
+      || (Array.isArray(input[key]) && (input[key] as unknown[]).every((value) => typeof value === 'string')));
+    if (!input || !validProfile || !validLists) {
+      return c.json({ error: 'profile and string-list user-model fields are required' }, 400);
+    }
+    try {
+      return c.json(bootstrapUserModel({
+        profile,
+        ...Object.fromEntries(listFields.flatMap((key) => input[key] === undefined ? [] : [[key, input[key]]])),
+      } as Parameters<typeof bootstrapUserModel>[0]), 201);
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 400);
     }

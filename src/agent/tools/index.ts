@@ -30,6 +30,7 @@ export {
 export {
   createUserContextSearchTool,
   createUserContextGetTool,
+  createUserContextUpdateTool,
   type UserContextToolOptions,
 } from './user-context-tool.js';
 export {

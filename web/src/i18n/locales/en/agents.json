@@ -284,6 +284,7 @@
       "send_media": "Send images or other media attachments through those channels.",
       "user_context_search": "Search active user facts, goals, priorities, and collaboration rules.",
       "user_context_get": "Load one user-model object by id.",
+      "user_context_update": "Apply an explicit user correction to an existing user-model assertion.",
       "knowledge_search": "Search episodic, project, and workspace knowledge visible in the current scope.",
       "knowledge_get": "Load one knowledge item by id.",
       "knowledge_write": "Propose or save scoped knowledge with provenance and lifecycle metadata.",

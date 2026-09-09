@@ -5,9 +5,13 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
-import { reconcileAssertion, type AssertionCandidate } from '../../../user-model/index.js';
+import { getUserAssertion, reconcileAssertion, type AssertionCandidate } from '../../../user-model/index.js';
 import { createKnowledgeWriteTool } from '../knowledge-memory-tool.js';
-import { createUserContextGetTool, createUserContextSearchTool } from '../user-context-tool.js';
+import {
+  createUserContextGetTool,
+  createUserContextSearchTool,
+  createUserContextUpdateTool,
+} from '../user-context-tool.js';
 
 function assertion(overrides: Partial<AssertionCandidate> = {}): AssertionCandidate {
   return {
@@ -66,6 +70,53 @@ describe('structured memory tools', () => {
     expect(search.details).toEqual({ results: [] });
     expect(get.details).toEqual({ id: secret.id });
     expect(disabled.details).toEqual({ error: 'user_context_disabled' });
+  });
+
+  it('lets the agent immediately correct an existing assertion with explicit user evidence', async () => {
+    const inferred = reconcileAssertion(assertion({
+      authority: 'system_inferred', confidence: 0.8, createdBy: 'runtime',
+      statement: 'Likely prefers long responses.', value: 'long', normalizedValue: 'long',
+    }), 200).assertion;
+    const options = {
+      agentId: 'main', workspaceId: '/workspace', getSessionId: () => 'agent:main:main',
+      canRead: () => true, canWrite: () => true,
+      getCurrentUserText: () => '不是长回复，我喜欢简洁回答',
+    };
+    const search = await createUserContextSearchTool(options).execute('search', { query: 'responses' });
+    expect(search.details).toMatchObject({
+      results: [expect.objectContaining({ id: inferred.id, status: 'candidate' })],
+    });
+
+    const update = await createUserContextUpdateTool(options).execute('update', {
+      id: inferred.id,
+      action: 'correct',
+      replacement: 'Prefers concise responses.',
+      userEvidence: '不是长回复，我喜欢简洁回答',
+    });
+    expect(update.details).toMatchObject({
+      action: 'corrected',
+      assertion: { statement: 'Prefers concise responses.', authority: 'user_explicit', status: 'active' },
+      previousAssertionId: inferred.id,
+    });
+    expect(getUserAssertion(inferred.id)?.validTo).toBeDefined();
+  });
+
+  it('blocks user-context updates when write access is unavailable', async () => {
+    const current = reconcileAssertion(assertion(), 200).assertion;
+    const result = await createUserContextUpdateTool({
+      agentId: 'main', workspaceId: '/workspace', getSessionId: () => 'agent:main:main',
+      canRead: () => true, canWrite: () => false,
+    }).execute('update', { id: current.id, action: 'forget', userEvidence: '忘掉它' });
+    expect(result.details).toEqual({ error: 'user_context_update_disabled' });
+  });
+
+  it('rejects evidence that is not quoted from the current user message', async () => {
+    const current = reconcileAssertion(assertion(), 200).assertion;
+    const result = await createUserContextUpdateTool({
+      agentId: 'main', workspaceId: '/workspace', getSessionId: () => 'agent:main:main',
+      canRead: () => true, canWrite: () => true, getCurrentUserText: () => 'Keep this preference.',
+    }).execute('update', { id: current.id, action: 'forget', userEvidence: 'Forget this preference.' });
+    expect(result.details).toEqual({ error: 'user_evidence_mismatch' });
   });
 
   it('applies deny, confirm, allow, and source policies to knowledge writes', async () => {
