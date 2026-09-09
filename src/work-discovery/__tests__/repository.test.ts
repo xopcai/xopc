@@ -14,7 +14,7 @@ import {
   requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { getUserAssertion, reconcileAssertion } from '../../user-model/index.js';
+import { getUserAssertion, listUserAssertionSources, reconcileAssertion } from '../../user-model/index.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
   recordWorkDiscoverySourceRefresh,
@@ -94,7 +94,7 @@ describe('work discovery repository', () => {
     const assertion = reconcileAssertion({
       subject: { type: 'user', id: 'self' },
       predicate: 'identity.work_discovery.role:typescript-builder',
-      cardinality: 'single', scope: { type: 'project', id: 'project-1' }, kind: 'identity',
+      cardinality: 'single', scope: { type: 'global' }, kind: 'identity',
       value: 'The user works mainly with TypeScript.', normalizedValue: 'typescript builder',
       statement: 'The user works mainly with TypeScript.', authority: 'system_inferred',
       confidence: 0.9, inferredImportance: 0.6, consequence: 'low', actionability: 0.5,
@@ -132,6 +132,13 @@ describe('work discovery repository', () => {
       createdAt: 1,
       completedAt: 2,
     });
+    expect(listUserAssertionSources([assertion.id]).get(assertion.id)).toEqual([{
+      id: 'work-folder:project-1',
+      kind: 'work_folder',
+      label: 'workspace',
+      category: 'files',
+      observedAt: 1,
+    }]);
     const service = new WorkDiscoveryService({
       projects: new ProjectService(),
       sessions: {} as SessionIndex,

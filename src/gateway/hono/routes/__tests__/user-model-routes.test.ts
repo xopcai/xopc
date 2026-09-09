@@ -7,9 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  createContextEvidence,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
+import { upsertUnderstandingSourceGrant } from '../../../../user-context/sources/repository.js';
+import { linkAssertionEvidence, reconcileAssertion } from '../../../../user-model/index.js';
 import { writeKnowledgeItem } from '../../../../knowledge-memory/index.js';
 import { runMemoryMaintenance } from '../../../../memory-maintenance/index.js';
 import { registerUserModelRoutes } from '../user-model.js';
@@ -114,6 +117,73 @@ describe('user model routes', () => {
       maintenance: {
         lastRun: { jobType: 'temporal_sweep', status: 'completed', startedAt: now, finishedAt: now },
       },
+    });
+  });
+
+  it('returns global understanding with the channel that formed it', async () => {
+    const grant = upsertUnderstandingSourceGrant({
+      sourceKey: 'local:apple-notes',
+      adapterId: 'apple-notes',
+      category: 'notes',
+      platform: 'darwin',
+      displayName: 'apple-notes',
+      accessMode: 'once',
+      retentionPolicy: 'derived_only',
+      processingPolicy: 'local_only',
+      config: { readOnly: true },
+      lastCollectedAt: 2_000,
+      nowMs: 2_000,
+    });
+    const evidence = createContextEvidence({
+      sourceType: 'runtime',
+      sourceRef: `understanding-source-grant:${grant.id}:candidate-1`,
+      trustLevel: 'trusted',
+      observedAt: 1_500,
+    });
+    const assertion = reconcileAssertion({
+      subject: { type: 'user', id: 'self' },
+      predicate: 'routine.work_discovery.weekly-planning',
+      cardinality: 'single',
+      scope: { type: 'global' },
+      kind: 'routine',
+      value: 'Plans the week on Mondays.',
+      normalizedValue: 'plans the week on mondays',
+      statement: 'Plans the week on Mondays.',
+      authority: 'system_inferred',
+      confidence: 0.8,
+      inferredImportance: 0.6,
+      consequence: 'low',
+      actionability: 0.6,
+      volatility: 'slow',
+      sensitivity: 'normal',
+      disclosurePolicy: 'referenceable',
+      observedAt: 1_500,
+      createdBy: 'runtime',
+    }, 1_500).assertion;
+    linkAssertionEvidence(assertion.id, evidence.id, 'supports', 0.8, 1_500);
+
+    const response = await app.request('/api/user-model');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      sources: [{
+        id: grant.id,
+        kind: 'local_source',
+        adapterId: 'apple-notes',
+        category: 'notes',
+        displayName: 'apple-notes',
+        lastCollectedAt: 2_000,
+      }],
+      assertions: [{
+        id: assertion.id,
+        scope: { type: 'global' },
+        sources: [{
+          id: 'source:apple-notes',
+          kind: 'local_source',
+          label: 'apple-notes',
+          category: 'notes',
+          observedAt: 1_500,
+        }],
+      }],
     });
   });
 

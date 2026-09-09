@@ -1,47 +1,45 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Check, FileText, Loader2, Sparkles, X } from 'lucide-react';
+import { Loader2, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import {
+  correctAssertion,
+  fetchUserModel,
+  setAssertionStatus,
+  type UserAssertion,
+  type UserModelResponse,
+} from '@/features/user-model/user-model-api';
 import { cn } from '@/lib/cn';
-import { loadWorkDiscoveryOverlay, preloadRouteForPath } from '@/lib/route-preload';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   fetchWorkDiscoveryRun,
-  submitWorkDiscoveryRecognitionFeedback,
   updateWorkDiscoveryProfile,
   type WorkDiscoveryProfileCandidate,
 } from './api';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
-import { UnderstandingReveal } from './understanding-reveal';
-import { openWorkDiscoveryOverlaySearch } from './work-discovery-navigation';
+import { UnderstandingUpdateReview } from './understanding-update-review';
 
-export function UnderstandingStatusButton({
-  floating = false,
-  persistent = false,
-}: {
-  floating?: boolean;
-  persistent?: boolean;
-}) {
-  const navigate = useNavigate();
+export function UnderstandingStatusButton() {
   const { pathname, search } = useLocation();
   const language = useLocaleStore((state) => state.language);
   const state = useUnderstandingActivityStore();
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
-  const zh = language === 'zh';
   const onUserModelPage = pathname === '/user-model';
-  const pendingCount = state.memories.filter((memory) => memory.status === 'pending').length
-    + (state.directoryRun?.status === 'completed' && !state.directoryRun.feedback?.recognitionDecision ? 1 : 0);
-
-  useEffect(() => {
-    if (!onUserModelPage || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
-    const timer = window.setTimeout(state.finish, 800);
-    return () => window.clearTimeout(timer);
-  }, [onUserModelPage, pendingCount, state.drawerOpen, state.finish, state.status]);
+  const { data: userModel, mutate: mutateUserModel } = useSWR<UserModelResponse>(
+    onUserModelPage ? '/api/user-model' : null,
+    fetchUserModel,
+  );
+  const zh = language === 'zh';
+  const pendingCount = userModel?.assertions.filter((item) => (
+    item.scope.type === 'global'
+    && ['candidate', 'needs_review', 'conflicted', 'stale'].includes(item.status)
+  )).length ?? 0;
 
   useEffect(() => {
     if (!onUserModelPage) return;
@@ -64,58 +62,13 @@ export function UnderstandingStatusButton({
     return () => { cancelled = true; };
   }, [onUserModelPage, search]);
 
-  const preloadWorkDiscovery = () => {
-    if (persistent) void loadWorkDiscoveryOverlay();
-    else preloadRouteForPath('/onboarding/workspace');
-  };
-  const openWorkDiscovery = () => {
-    if (!persistent) {
-      navigate('/onboarding/workspace?new=1');
-      return;
-    }
-    navigate({ pathname, search: openWorkDiscoveryOverlaySearch(search) });
-  };
+  useEffect(() => {
+    if (onUserModelPage && state.status !== 'running') void mutateUserModel();
+  }, [mutateUserModel, onUserModelPage, state.directoryRun?.id, state.status]);
 
-  if (state.status === 'idle') {
-    if (!persistent || !onUserModelPage) return null;
-    const label = language === 'zh' ? '重新理解工作上下文' : 'Refresh work context';
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        className={cn(
-          'relative size-8 rounded-xl p-0',
-          APP_CHROME_NO_DRAG_CLASS,
-          floating && 'fixed right-4 top-3 z-40 bg-surface-panel shadow-surface',
-        )}
-        title={label}
-        aria-label={label}
-        data-work-discovery-trigger
-        onPointerEnter={preloadWorkDiscovery}
-        onPointerDown={preloadWorkDiscovery}
-        onFocus={preloadWorkDiscovery}
-        onClick={openWorkDiscovery}
-      >
-        <Sparkles className="size-4 text-accent-fg" aria-hidden />
-      </Button>
-    );
-  }
+  if (!onUserModelPage) return null;
 
   const running = state.status === 'running';
-  const pendingMemory = state.memories.find((memory) => memory.status === 'pending' && memory.assertionId);
-  const directoryReady = state.directoryRun?.status === 'completed'
-    && state.directoryRun.result != null
-    && !state.directoryRun.feedback?.recognitionDecision;
-  const sourceStatuses = Object.values(state.sources);
-  const completeSources = sourceStatuses.filter((status) => status === 'completed').length;
-  const unavailableSources = sourceStatuses.filter((status) => status === 'failed' || status === 'denied' || status === 'partial').length;
-
-  const reviewMemory = async (accepted: boolean) => {
-    if (!pendingMemory?.assertionId) return;
-    setReviewing(true);
-    await state.reviewMemory(pendingMemory.assertionId, accepted);
-    setReviewing(false);
-  };
 
   const reviewRunMemory = async (
     candidate: WorkDiscoveryProfileCandidate,
@@ -123,19 +76,19 @@ export function UnderstandingStatusButton({
     statement?: string,
   ) => {
     const currentRun = useUnderstandingActivityStore.getState().directoryRun;
-    if (!currentRun) return false;
+    const runCandidate = currentRun?.result?.profileCandidates?.find((item) => (
+      item.id === candidate.id
+      || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
+    ));
+    const sourceCandidate = state.memories.find((item) => (
+      item.id === candidate.id
+      || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
+    ));
+    if (!runCandidate && !sourceCandidate?.assertionId) return false;
     setReviewing(true);
     setReviewError(null);
     try {
-      const runCandidate = currentRun.result?.profileCandidates?.find((item) => (
-        item.id === candidate.id
-        || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
-      ));
-      const sourceCandidate = state.memories.find((item) => (
-        item.id === candidate.id
-        || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
-      ));
-      if (runCandidate) {
+      if (currentRun && runCandidate) {
         const next = await updateWorkDiscoveryProfile(currentRun.id, [{
           id: runCandidate.id,
           status,
@@ -150,6 +103,7 @@ export function UnderstandingStatusButton({
           statement,
         );
       }
+      await mutateUserModel();
       return true;
     } catch (cause) {
       setReviewError(cause instanceof Error ? cause.message : String(cause));
@@ -159,14 +113,22 @@ export function UnderstandingStatusButton({
     }
   };
 
-  const finishRunReview = async (decision: 'confirmed' | 'corrected', correctedIntent?: string) => {
-    const currentRun = useUnderstandingActivityStore.getState().directoryRun;
-    if (!currentRun) return false;
+  const reviewGlobalAssertion = async (
+    assertion: UserAssertion,
+    decision: 'accepted' | 'edited' | 'rejected',
+    statement?: string,
+  ) => {
+    const candidate = [
+      ...(useUnderstandingActivityStore.getState().directoryRun?.result?.profileCandidates ?? []),
+      ...useUnderstandingActivityStore.getState().memories,
+    ].find((item) => item.assertionId === assertion.id);
+    if (candidate) return reviewRunMemory(candidate, decision, statement);
     setReviewing(true);
     setReviewError(null);
     try {
-      const next = await submitWorkDiscoveryRecognitionFeedback(currentRun.id, decision, correctedIntent);
-      useUnderstandingActivityStore.getState().updateDirectoryRun(next);
+      if (decision === 'edited' && statement) await correctAssertion(assertion.id, statement);
+      else await setAssertionStatus(assertion.id, decision === 'accepted' ? 'active' : 'rejected');
+      await mutateUserModel();
       return true;
     } catch (cause) {
       setReviewError(cause instanceof Error ? cause.message : String(cause));
@@ -176,22 +138,20 @@ export function UnderstandingStatusButton({
     }
   };
 
-  const startRunConversation = async (starter: string, decision: 'confirmed' | 'corrected') => {
-    const currentRun = useUnderstandingActivityStore.getState().directoryRun;
-    if (!currentRun) return false;
-    const completed = await finishRunReview(
-      decision,
-      decision === 'corrected' ? starter : undefined,
-    );
-    if (!completed) return false;
-    const params = new URLSearchParams({ draft: starter, autoSend: '1' });
-    state.setDrawerOpen(false);
-    navigate(`/chat/${encodeURIComponent(currentRun.sessionKey)}?${params.toString()}`);
-    return true;
+  const setReviewOpen = (open: boolean) => {
+    if (!open && userModel && pendingCount === 0 && state.status !== 'running') {
+      state.finish();
+      return;
+    }
+    state.setDrawerOpen(open);
+  };
+
+  const closeReview = () => {
+    setReviewOpen(false);
   };
 
   return (
-    <Dialog.Root open={state.drawerOpen} onOpenChange={state.setDrawerOpen}>
+    <Dialog.Root open={state.drawerOpen} onOpenChange={setReviewOpen}>
       <Dialog.Trigger asChild>
         <Button
           type="button"
@@ -199,7 +159,6 @@ export function UnderstandingStatusButton({
           className={cn(
             'relative size-8 rounded-xl p-0',
             APP_CHROME_NO_DRAG_CLASS,
-            floating && 'fixed right-4 top-3 z-40 bg-surface-panel shadow-surface',
           )}
           title={zh ? '查看 xopc 对你的理解' : 'Review what xopc understands'}
           aria-label={zh ? '查看 xopc 对你的理解' : 'Review what xopc understands'}
@@ -215,69 +174,34 @@ export function UnderstandingStatusButton({
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-edge-subtle px-5 sm:px-6">
             <div>
               <Dialog.Title className="text-sm font-semibold text-fg">
-                {running ? (zh ? '正在理解' : 'Understanding') : pendingCount ? (zh ? '需要你确认' : 'Ready for review') : (zh ? '理解已更新' : 'Understanding updated')}
+                {running ? (zh ? '正在更新用户理解' : 'Updating user understanding') : (zh ? '用户理解' : 'User understanding')}
               </Dialog.Title>
               <Dialog.Description className="mt-0.5 text-xs text-fg-muted">
                 {running
                   ? (zh ? '关闭窗口也会在后台继续' : 'You can close this window; work continues in the background')
                   : pendingCount
-                    ? (zh ? `${pendingCount} 项待确认` : `${pendingCount} item(s) to review`)
-                    : (zh ? '已保存你的选择' : 'Your choices have been saved')}
+                    ? (zh ? `${pendingCount} 条全局理解待确认` : `${pendingCount} global item(s) to review`)
+                    : (zh ? '查看理解来自哪些渠道' : 'See which channels shaped it')}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild><Button variant="ghost" className="size-8 rounded-xl p-0" aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Button></Dialog.Close>
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-7 sm:px-9 sm:py-9">
-            {running ? (
-              <section className="flex min-h-full flex-col items-center justify-center text-center" aria-live="polite">
-                <UnderstandingActivityVisual />
-                <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{zh ? '正在建立默契' : 'Building shared context'}</p>
-                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-fg">{zh ? '我正在把这些线索连接起来。' : 'I am connecting the signals.'}</h2>
-                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-fg-muted">
-                  {zh ? '内容只用于形成候选理解，未经你确认，不会成为长期记忆。' : 'Content only shapes candidates. Nothing becomes lasting memory until you confirm it.'}
-                </p>
-                <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs text-fg-muted">
-                  <span className="rounded-full border border-edge bg-surface-base px-3 py-1.5">{state.directoryStatus === 'completed' ? (zh ? '工作目录已理解' : 'Work folder understood') : (zh ? '正在理解工作目录' : 'Understanding work folder')}</span>
-                  {sourceStatuses.length ? <span className="rounded-full border border-edge bg-surface-base px-3 py-1.5">{zh ? `${completeSources}/${sourceStatuses.length} 个来源已完成` : `${completeSources}/${sourceStatuses.length} sources complete`}</span> : null}
-                </div>
-              </section>
-            ) : directoryReady && state.directoryRun?.result ? (
-              <UnderstandingReveal
-                run={state.directoryRun}
-                sourceMemories={state.memories}
-                activityRunning={false}
+            {userModel ? (
+              <UnderstandingUpdateReview
+                assertions={userModel.assertions}
+                configuredSources={userModel.sources ?? []}
+                activityRunning={running}
                 language={language}
                 busy={reviewing}
                 error={reviewError}
-                onReviewMemory={reviewRunMemory}
-                onFinish={finishRunReview}
-                onStartConversation={startRunConversation}
+                onReviewAssertion={reviewGlobalAssertion}
+                onCompleted={closeReview}
               />
-            ) : pendingMemory ? (
-              <section className="xopc-reveal-scene mx-auto flex min-h-full max-w-xl flex-col justify-center text-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{zh ? '长期理解' : 'Lasting understanding'}</p>
-                <h2 className="mt-3 text-2xl font-semibold tracking-tight text-fg">{zh ? '这件事值得我以后记住吗？' : 'Should I remember this for later?'}</h2>
-                <article className="mt-7 rounded-[1.5rem] border border-edge/80 bg-surface-base/80 p-6 text-left shadow-surface">
-                  <div className="flex items-start gap-4">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-lg font-medium leading-8 text-fg">{pendingMemory.statement}</p>
-                      {pendingMemory.evidence.length ? <p className="mt-4 text-xs leading-5 text-fg-muted"><span className="font-medium text-fg">{zh ? '理解依据：' : 'Based on: '}</span>{pendingMemory.evidence[0]}</p> : null}
-                    </div>
-                  </div>
-                  <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
-                    <Button variant="primary" disabled={reviewing} onClick={() => void reviewMemory(true)}>{reviewing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{zh ? '记住' : 'Remember it'}</Button>
-                    <Button variant="secondary" disabled={reviewing} onClick={() => void reviewMemory(false)}>{zh ? '只用于这次' : 'This time only'}</Button>
-                  </div>
-                </article>
-              </section>
             ) : (
-              <section className="xopc-reveal-scene flex min-h-full flex-col items-center justify-center text-center">
-                <div className="flex size-14 items-center justify-center rounded-full bg-accent-soft text-accent-fg"><Check className="size-6" /></div>
-                <h2 className="mt-4 text-lg font-semibold tracking-tight text-fg">{zh ? '理解已更新' : 'Understanding updated'}</h2>
-                {state.status === 'partial' || unavailableSources ? <p className="mt-5 text-xs leading-5 text-fg-muted">{zh ? `${unavailableSources || 1} 个来源未完成，其余理解仍然可用。` : `${unavailableSources || 1} sources were unavailable; the rest of the understanding remains usable.`}</p> : null}
-                {state.error ? <p className="mt-3 text-sm text-danger">{state.error}</p> : null}
+              <section className="flex min-h-full items-center justify-center" aria-label={zh ? '正在加载用户理解' : 'Loading user understanding'}>
+                <Loader2 className="size-5 animate-spin text-fg-muted motion-reduce:animate-none" />
               </section>
             )}
           </div>
@@ -285,18 +209,5 @@ export function UnderstandingStatusButton({
         </div>
       </Dialog.Portal>
     </Dialog.Root>
-  );
-}
-
-function UnderstandingActivityVisual() {
-  return (
-    <div className="xopc-understanding-constellation relative size-40" aria-hidden>
-      <span className="xopc-constellation-orbit absolute inset-[10%] rounded-full border border-accent/15" />
-      <span className="xopc-constellation-orbit xopc-constellation-orbit-delayed absolute inset-[27%] rounded-full border border-accent/20" />
-      <span className="xopc-constellation-core absolute left-[44%] top-[44%] size-[12%] rounded-full bg-accent" />
-      <span className="xopc-constellation-node absolute left-[10%] top-[34%] flex size-8 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-surface"><FileText className="size-3.5" /></span>
-      <span className="xopc-constellation-node xopc-constellation-node-two absolute right-[8%] top-[20%] size-3 rounded-full bg-accent/55" />
-      <span className="xopc-constellation-node xopc-constellation-node-three absolute bottom-[10%] right-[25%] size-3 rounded-full bg-accent/55" />
-    </div>
   );
 }

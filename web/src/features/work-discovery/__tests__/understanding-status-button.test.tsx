@@ -3,9 +3,17 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useLocaleStore } from '@/stores/locale-store';
+
+const { fetchUserModel } = vi.hoisted(() => ({ fetchUserModel: vi.fn() }));
+
+vi.mock('@/features/user-model/user-model-api', () => ({
+  fetchUserModel,
+  correctAssertion: vi.fn(),
+  setAssertionStatus: vi.fn(),
+}));
 
 import type { WorkDiscoveryRun } from '../api';
 import { useUnderstandingActivityStore } from '../understanding-activity-store';
@@ -38,6 +46,58 @@ describe('UnderstandingStatusButton', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
     useLocaleStore.setState({ language: 'en' });
+    fetchUserModel.mockResolvedValue({
+      profile: {},
+      assertions: [{
+        id: 'assertion-1',
+        predicate: 'identity.work_discovery.role:builder',
+        statement: 'Builds developer tools.',
+        kind: 'identity',
+        status: 'candidate',
+        authority: 'system_inferred',
+        confidence: 0.9,
+        inferredImportance: 0.6,
+        consequence: 'low',
+        actionability: 0.5,
+        volatility: 'stable',
+        sensitivity: 'normal',
+        observedAt: 1,
+        recordedAt: 1,
+        createdAt: 1,
+        createdBy: 'runtime',
+        scope: { type: 'global' },
+        sources: [{ id: 'work-folder:project-1', kind: 'work_folder', label: 'xopc', category: 'files', observedAt: 1 }],
+      }, {
+        id: 'assertion-project-1',
+        predicate: 'project.work_discovery.stack',
+        statement: 'This repository uses a monorepo architecture.',
+        kind: 'derived_insight',
+        status: 'candidate',
+        authority: 'system_inferred',
+        confidence: 0.9,
+        inferredImportance: 0.6,
+        consequence: 'low',
+        actionability: 0.5,
+        volatility: 'stable',
+        sensitivity: 'normal',
+        observedAt: 1,
+        recordedAt: 1,
+        createdAt: 1,
+        createdBy: 'runtime',
+        scope: { type: 'project', id: 'project-1' },
+        sources: [{ id: 'work-folder:project-1', kind: 'work_folder', label: 'xopc', category: 'files', observedAt: 1 }],
+      }],
+      goals: [], priorities: [], rules: [], knowledge: [],
+      sources: [{
+        id: 'source-1', kind: 'work_folder', adapterId: 'local-work-folders',
+        category: 'files', displayName: 'xopc', lastCollectedAt: 1,
+      }],
+      maintenance: { lastRun: null },
+      counts: {
+        activeAssertions: 0, reviewAssertions: 1, activeGoals: 0,
+        activePriorities: 0, activeKnowledge: 0,
+      },
+    });
     useUnderstandingActivityStore.setState({
       status: 'review_ready',
       drawerOpen: false,
@@ -60,7 +120,7 @@ describe('UnderstandingStatusButton', () => {
     useUnderstandingActivityStore.getState().finish();
   });
 
-  it('keeps the review indicator visible on chat while understanding is ready', () => {
+  it('does not render the understanding entry on chat', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat']}>
@@ -69,7 +129,7 @@ describe('UnderstandingStatusButton', () => {
       );
     });
 
-    expect(container.querySelector('[aria-label="Review what xopc understands"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Review what xopc understands"]')).toBeNull();
   });
 
   it('stays hidden outside the user-model page when there is no activity', () => {
@@ -77,7 +137,7 @@ describe('UnderstandingStatusButton', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat']}>
-          <UnderstandingStatusButton persistent />
+          <UnderstandingStatusButton />
         </MemoryRouter>,
       );
     });
@@ -85,11 +145,11 @@ describe('UnderstandingStatusButton', () => {
     expect(container.querySelector('[data-work-discovery-trigger]')).toBeNull();
   });
 
-  it('reviews a completed directory run in place instead of navigating back to onboarding', async () => {
-    act(() => {
+  it('shows global source-to-understanding context instead of the project summary', async () => {
+    await act(async () => {
       root.render(
         <MemoryRouter initialEntries={['/user-model']}>
-          <UnderstandingStatusButton persistent />
+          <UnderstandingStatusButton />
           <LocationProbe />
         </MemoryRouter>,
       );
@@ -98,8 +158,11 @@ describe('UnderstandingStatusButton', () => {
     const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Review what xopc understands"]');
     await act(async () => trigger?.click());
 
-    expect(document.body.textContent).toContain('Here is what I understand so far');
-    expect(document.body.textContent).not.toContain('Review and confirm');
+    expect(document.body.textContent).toContain('How xopc forms its understanding of you');
+    expect(document.body.textContent).toContain('Work folder · xopc');
+    expect(document.body.textContent).toContain('Builds developer tools.');
+    expect(document.body.textContent).not.toContain('The onboarding flow is the current focus.');
+    expect(document.body.textContent).not.toContain('This repository uses a monorepo architecture.');
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/user-model');
   });
 
@@ -107,11 +170,11 @@ describe('UnderstandingStatusButton', () => {
     await act(async () => {
       root.render(
         <MemoryRouter initialEntries={['/user-model?workDiscovery=review&run=run-ready']}>
-          <UnderstandingStatusButton persistent />
+          <UnderstandingStatusButton />
         </MemoryRouter>,
       );
     });
 
-    expect(document.body.textContent).toContain('Here is what I understand so far');
+    expect(document.body.textContent).toContain('How xopc forms its understanding of you');
   });
 });

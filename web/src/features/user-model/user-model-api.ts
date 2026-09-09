@@ -26,6 +26,13 @@ export type UserAssertion = {
   createdAt: number;
   createdBy: 'user' | 'runtime' | 'connector' | 'maintenance' | 'migration';
   scope: Scope;
+  sources?: Array<{
+    id: string;
+    kind: 'user' | 'conversation' | 'connector' | 'work_folder' | 'local_source' | 'inference';
+    label?: string;
+    category?: 'files' | 'recent_documents' | 'calendar' | 'tasks' | 'notes' | 'mail' | 'messages' | 'code_activity';
+    observedAt: number;
+  }>;
 };
 
 export type UserGoal = {
@@ -85,6 +92,14 @@ export type UserModelResponse = {
   priorities: PriorityWindow[];
   rules: CollaborationRule[];
   knowledge: KnowledgeItem[];
+  sources?: Array<{
+    id: string;
+    kind: 'work_folder' | 'local_source' | 'connector';
+    adapterId: string;
+    category: 'files' | 'recent_documents' | 'calendar' | 'tasks' | 'notes' | 'mail' | 'messages' | 'code_activity';
+    displayName: string;
+    lastCollectedAt?: number;
+  }>;
   maintenance: { lastRun: { jobType: string; status: string; startedAt: number; finishedAt?: number } | null };
   counts: {
     activeAssertions: number;

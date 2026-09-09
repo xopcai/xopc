@@ -1062,7 +1062,7 @@ export class WorkDiscoveryService {
     const profileCandidates = result.profileCandidates.map((candidate) => {
       const assertion = persistUnderstandingCandidate(
         candidate,
-        { type: 'project', id: run.projectId },
+        { type: 'global' },
         `work-discovery:${run.id}`,
       );
       return { ...candidate, assertionId: assertion.id };
