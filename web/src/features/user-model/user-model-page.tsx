@@ -31,6 +31,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
 
 import {
   correctAssertion,
@@ -650,7 +651,7 @@ export function UserModelPage() {
     setPageHeader({
       startExtra: null,
       main: <div><h1 className="text-base font-semibold text-fg">{t.pageTitle}</h1><p className="hidden text-xs text-fg-muted sm:block">{t.pageSubtitle}</p></div>,
-      end: null,
+      end: <UnderstandingStatusButton />,
     });
     return clearPageHeader;
   }, [clearPageHeader, setPageHeader, t]);
@@ -721,7 +722,9 @@ export function UserModelPage() {
     const importanceB = b.declaredImportance ?? b.inferredImportance;
     return importanceB - importanceA || b.recordedAt - a.recordedAt;
   });
-  const assertions = allAssertions.filter((item) => !profilePredicates.has(item.predicate));
+  const assertions = allAssertions.filter((item) => (
+    item.scope.type === 'global' && !profilePredicates.has(item.predicate)
+  ));
   const profile = profileFromResponse(data);
   const displayName = profile.callName || (language === 'zh' ? '你' : 'You');
   const pendingAssertions = assertions.filter((item) => reviewStatuses.includes(item.status));

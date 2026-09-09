@@ -18,7 +18,7 @@ import {
   createUnderstandingSourceRun,
   upsertUnderstandingSourceGrant,
 } from '../../user-context/sources/repository.js';
-import { listUserAssertions } from '../../user-model/index.js';
+import { listUserAssertions, listUserAssertionSources } from '../../user-model/index.js';
 import {
   connectedItemsForUnderstanding,
   deriveConnectedSourceUnderstanding,
@@ -101,7 +101,17 @@ describe('connected source understanding', () => {
     });
     expect(result).toEqual({ created: 1, knowledgeCount: 0, status: 'completed' });
     const [assertion] = listUserAssertions();
-    expect(assertion).toMatchObject({ statement: 'Plans work weekly.', authority: 'user_observed' });
+    expect(assertion).toMatchObject({
+      statement: 'Plans work weekly.',
+      authority: 'user_observed',
+    });
+    expect(getSqliteDatabase().prepare(`SELECT scope_type FROM user_assertion_slots
+      WHERE slot_id = ?`).get(assertion!.slotId)).toEqual({ scope_type: 'global' });
+    expect(listUserAssertionSources([assertion!.id]).get(assertion!.id)).toEqual([expect.objectContaining({
+      id: 'connector:slack',
+      kind: 'connector',
+      label: 'slack',
+    })]);
     expect(getSqliteDatabase().prepare(
       'SELECT COUNT(*) AS count FROM user_assertion_evidence WHERE assertion_id = ?',
     ).get(assertion!.id)).toEqual({ count: 3 });

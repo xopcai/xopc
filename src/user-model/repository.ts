@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -52,6 +53,27 @@ type AssertionRow = {
   supersedes_assertion_id: string | null;
   created_by: UserAssertion['createdBy'];
   created_at: number;
+};
+
+type AssertionSourceRow = {
+  assertion_id: string;
+  source_type: 'conversation' | 'connector' | 'user' | 'runtime';
+  source_instance_id: string | null;
+  source_ref: string;
+  observed_at: number;
+  grant_adapter_id: string | null;
+  grant_display_name: string | null;
+  grant_category: UserAssertionSource['category'] | null;
+  work_project_id: string | null;
+  work_root_path: string | null;
+};
+
+export type UserAssertionSource = {
+  id: string;
+  kind: 'user' | 'conversation' | 'connector' | 'work_folder' | 'local_source' | 'inference';
+  label?: string;
+  category?: 'files' | 'recent_documents' | 'calendar' | 'tasks' | 'notes' | 'mail' | 'messages' | 'code_activity';
+  observedAt: number;
 };
 
 function slotFromRow(row: SlotRow): AssertionSlot {
@@ -325,6 +347,91 @@ export function listUserAssertions(input: {
     WHERE s.principal_id = ? AND a.status IN (${placeholders})
     ORDER BY a.recorded_at DESC LIMIT ?`).all(principalId, ...statuses, limit) as AssertionRow[])
     .map(assertionFromRow);
+}
+
+export function listUserAssertionSources(assertionIds: string[]): Map<string, UserAssertionSource[]> {
+  const uniqueIds = [...new Set(assertionIds.filter(Boolean))];
+  const result = new Map<string, UserAssertionSource[]>();
+  if (!uniqueIds.length) return result;
+  const placeholders = uniqueIds.map(() => '?').join(', ');
+  const rows = getSqliteDatabase().prepare(`
+    SELECT ae.assertion_id, e.source_type, e.source_instance_id, e.source_ref, e.observed_at,
+      g.adapter_id AS grant_adapter_id, g.display_name AS grant_display_name,
+      g.category AS grant_category, w.project_id AS work_project_id, w.root_path AS work_root_path
+    FROM user_assertion_evidence ae
+    JOIN context_evidence e ON e.evidence_id = ae.evidence_id
+    LEFT JOIN understanding_source_grants g
+      ON e.source_ref LIKE ('understanding-source-grant:' || g.grant_id || ':%')
+      OR (e.source_type = 'connector' AND e.source_instance_id IS NOT NULL
+        AND json_extract(g.config_json, '$.sourceInstanceId') = e.source_instance_id)
+    LEFT JOIN work_discovery_runs w
+      ON e.source_ref LIKE ('work-discovery:' || w.id || ':%')
+    WHERE ae.assertion_id IN (${placeholders}) AND ae.relation = 'supports'
+    ORDER BY e.observed_at DESC
+  `).all(...uniqueIds) as unknown as AssertionSourceRow[];
+  const rowsByAssertion = new Map<string, AssertionSourceRow[]>();
+  for (const row of rows) {
+    rowsByAssertion.set(row.assertion_id, [...(rowsByAssertion.get(row.assertion_id) ?? []), row]);
+  }
+  for (const assertionId of uniqueIds) {
+    const assertionRows = rowsByAssertion.get(assertionId) ?? [];
+    const hasSpecificUnderstandingSource = assertionRows.some((row) => row.grant_adapter_id || row.work_root_path);
+    const sources = new Map<string, UserAssertionSource>();
+    for (const row of assertionRows) {
+      let source: UserAssertionSource;
+      if (row.grant_adapter_id === 'local-work-folders') {
+        source = {
+          id: `work-folder:${row.grant_display_name ?? row.grant_adapter_id}`,
+          kind: 'work_folder',
+          label: row.grant_display_name ?? row.grant_adapter_id,
+          category: 'files',
+          observedAt: row.observed_at,
+        };
+      } else if (row.grant_adapter_id?.startsWith('connector:')) {
+        source = {
+          id: row.grant_adapter_id,
+          kind: 'connector',
+          label: row.grant_display_name ?? row.grant_adapter_id.slice('connector:'.length),
+          ...(row.grant_category ? { category: row.grant_category } : {}),
+          observedAt: row.observed_at,
+        };
+      } else if (row.grant_adapter_id) {
+        source = {
+          id: `source:${row.grant_adapter_id}`,
+          kind: 'local_source',
+          label: row.grant_display_name ?? row.grant_adapter_id,
+          ...(row.grant_category ? { category: row.grant_category } : {}),
+          observedAt: row.observed_at,
+        };
+      } else if (row.work_root_path) {
+        source = {
+          id: `work-folder:${row.work_project_id ?? basename(row.work_root_path)}`,
+          kind: 'work_folder',
+          label: basename(row.work_root_path),
+          category: 'files',
+          observedAt: row.observed_at,
+        };
+      } else if (row.source_type === 'user') {
+        source = { id: 'user', kind: 'user', observedAt: row.observed_at };
+      } else if (row.source_type === 'conversation') {
+        source = { id: 'conversation', kind: 'conversation', observedAt: row.observed_at };
+      } else if (row.source_type === 'connector') {
+        source = {
+          id: `connector:${row.source_instance_id ?? row.source_ref.split(':', 1)[0]}`,
+          kind: 'connector',
+          ...(row.source_instance_id ? { label: row.source_instance_id } : {}),
+          observedAt: row.observed_at,
+        };
+      } else {
+        if (hasSpecificUnderstandingSource && row.source_ref.startsWith('understanding-source:onboarding:')) continue;
+        source = { id: 'inference', kind: 'inference', observedAt: row.observed_at };
+      }
+      const existing = sources.get(source.id);
+      if (!existing || existing.observedAt < source.observedAt) sources.set(source.id, source);
+    }
+    result.set(assertionId, [...sources.values()]);
+  }
+  return result;
 }
 
 export function getActiveAssertionByPredicate(predicate: string): UserAssertion | undefined {

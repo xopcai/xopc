@@ -10,6 +10,7 @@ import {
   setKnowledgeStatus,
 } from '../../../knowledge-memory/index.js';
 import { listMemoryMaintenanceRuns } from '../../../memory-maintenance/index.js';
+import { listUnderstandingSourceGrants } from '../../../user-context/sources/repository.js';
 import {
   createCollaborationRule,
   getCollaborationRule,
@@ -25,6 +26,7 @@ import {
   getAssertionSlot,
   getUserAssertion,
   listPriorityWindows,
+  listUserAssertionSources,
   listUserAssertions,
   listUserGoals,
   reconcileAssertion,
@@ -93,7 +95,10 @@ const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
 ]);
 const RULE_STATUSES = new Set<CollaborationRule['status']>(['active', 'disabled', 'archived']);
 
-function assertionView(assertion: NonNullable<ReturnType<typeof getUserAssertion>>) {
+function assertionView(
+  assertion: NonNullable<ReturnType<typeof getUserAssertion>>,
+  sources = listUserAssertionSources([assertion.id]).get(assertion.id) ?? [],
+) {
   const slot = getAssertionSlot(assertion.slotId);
   if (!slot) throw new Error(`Assertion slot not found: ${assertion.slotId}`);
   return {
@@ -101,6 +106,7 @@ function assertionView(assertion: NonNullable<ReturnType<typeof getUserAssertion
     predicate: slot.predicate,
     subject: slot.subject,
     scope: slot.scope,
+    sources,
   };
 }
 
@@ -108,14 +114,28 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   const write = deps.strictRateLimitMiddleware;
 
   authenticated.get('/api/user-model', (c) => {
-    const assertions = listUserAssertions({
+    const rawAssertions = listUserAssertions({
       statuses: ['active', 'candidate', 'needs_review', 'conflicted', 'stale'],
       limit: 1_000,
-    }).map(assertionView);
+    });
+    const assertionSources = listUserAssertionSources(rawAssertions.map((item) => item.id));
+    const assertions = rawAssertions.map((item) => assertionView(item, assertionSources.get(item.id) ?? []));
     const goals = listUserGoals();
     const priorities = listPriorityWindows();
     const knowledge = listKnowledgeItems({ recordClass: 'memory', limit: 1_000 });
     const profile = getUserProfileSnapshot();
+    const sources = listUnderstandingSourceGrants().map((source) => ({
+      id: source.id,
+      kind: source.adapterId === 'local-work-folders'
+        ? 'work_folder' as const
+        : source.adapterId.startsWith('connector:')
+          ? 'connector' as const
+          : 'local_source' as const,
+      adapterId: source.adapterId,
+      category: source.category,
+      displayName: source.displayName,
+      ...(source.lastCollectedAt ? { lastCollectedAt: source.lastCollectedAt } : {}),
+    }));
     return c.json({
       assertions,
       goals,
@@ -124,6 +144,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       knowledge,
       maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
       profile,
+      sources,
       suggestedCallName: profile.callName || machineCallName(),
       counts: {
         activeAssertions: assertions.filter((item) => item.status === 'active').length,
@@ -175,10 +196,9 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
   authenticated.get('/api/user-model/assertions', (c) => {
     const requested = c.req.query('status')?.split(',').filter(Boolean) as AssertionStatus[] | undefined;
     if (requested?.some((status) => !ASSERTION_STATUSES.has(status))) return c.json({ error: 'Invalid assertion status' }, 400);
-    return c.json({
-      assertions: listUserAssertions({ ...(requested ? { statuses: requested } : {}), limit: 1_000 })
-        .map(assertionView),
-    });
+    const assertions = listUserAssertions({ ...(requested ? { statuses: requested } : {}), limit: 1_000 });
+    const assertionSources = listUserAssertionSources(assertions.map((item) => item.id));
+    return c.json({ assertions: assertions.map((item) => assertionView(item, assertionSources.get(item.id) ?? [])) });
   });
 
   authenticated.get('/api/user-model/assertions/:id', (c) => {
