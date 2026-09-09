@@ -669,15 +669,27 @@ html.dark {
 .xopc-onboarding-orbit-particles i:nth-child(6) { right: 19%; top: 19%; animation-delay: -2.2s; }
 
 .xopc-onboarding-orbit-core {
-  border: 1px solid color-mix(in oklab, var(--color-edge-strong) 78%, transparent);
-  background:
-    linear-gradient(145deg, color-mix(in oklab, var(--color-surface-panel) 88%, transparent), color-mix(in oklab, var(--color-surface-base) 94%, transparent));
-  box-shadow:
-    0 18px 50px color-mix(in oklab, black 24%, transparent),
-    0 0 0 8px color-mix(in oklab, var(--color-accent) 4%, transparent),
-    inset 0 1px 0 color-mix(in oklab, white 14%, transparent);
-  backdrop-filter: blur(18px);
+  isolation: isolate;
   animation: xopc-onboarding-logo-float 5.2s ease-in-out infinite;
+}
+
+.xopc-onboarding-orbit-core::before {
+  position: absolute;
+  inset: 8%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--color-accent) 22%, transparent),
+    color-mix(in oklab, var(--color-loop-indigo) 8%, transparent) 44%,
+    transparent 72%
+  );
+  content: "";
+  filter: blur(14px);
+  opacity: .8;
+}
+
+.xopc-onboarding-orbit-core img {
+  filter: drop-shadow(0 8px 16px color-mix(in oklab, var(--color-accent) 18%, transparent));
 }
 
 .xopc-onboarding-name-envelope {
