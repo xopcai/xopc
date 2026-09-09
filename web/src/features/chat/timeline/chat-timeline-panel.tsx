@@ -157,10 +157,10 @@ export function ChatTimelinePanel({
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim/70 backdrop-blur-[1px] xl:hidden" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim/70 backdrop-blur-[1px] xl:hidden" />
         <Dialog.Content
           className={cn(
-            'fixed bottom-0 left-0 right-0 z-[90] flex h-[min(72dvh,34rem)] flex-col overflow-hidden',
+            'xopc-dialog-content-pane fixed bottom-0 left-0 right-0 z-[90] flex h-[min(72dvh,34rem)] flex-col overflow-hidden',
             'rounded-t-xl border border-edge bg-surface-panel shadow-popover outline-none',
             'md:bottom-auto md:left-auto md:right-4 md:top-20 md:h-[min(calc(100dvh-7rem),40rem)] md:w-[22rem] md:rounded-xl',
             'xl:hidden',

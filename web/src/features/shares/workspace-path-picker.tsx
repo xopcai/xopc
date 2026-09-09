@@ -125,10 +125,10 @@ export function WorkspacePathPickerDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[71] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[71] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2',
             // Fixed dialog height — the content area below grows to fill it and
             // scrolls internally when the tree overflows. Caps at viewport so
             // narrow windows still see a usable footer.

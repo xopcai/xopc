@@ -849,8 +849,8 @@ export function NotesWorkbench({
       </section>
       <Dialog.Root open={searchOpen} onOpenChange={setSearchOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-24 z-[90] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-24 z-[90] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <Dialog.Title className="text-sm font-semibold text-fg">{searchDialogTitle}</Dialog.Title>
               <Dialog.Description className="sr-only">{n.searchPlaceholder}</Dialog.Description>
