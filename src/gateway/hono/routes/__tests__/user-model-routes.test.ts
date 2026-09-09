@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 
 import { Hono } from 'hono';
@@ -32,6 +32,22 @@ describe('user model routes', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('offers the local account name as a non-persisted call-name suggestion', async () => {
+    const response = await app.request('/api/user-model');
+    const body = await response.json() as {
+      profile: { callName?: string };
+      suggestedCallName: string;
+    };
+    const username = userInfo().username.trim();
+    const expected = ['root', 'admin', 'administrator', 'user'].includes(username.toLocaleLowerCase())
+      ? ''
+      : username.slice(0, 100);
+
+    expect(response.status).toBe(200);
+    expect(body.profile.callName).toBeUndefined();
+    expect(body.suggestedCallName).toBe(expected);
   });
 
   it('creates typed assertions, goals, and bounded priorities', async () => {
