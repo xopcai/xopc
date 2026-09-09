@@ -545,8 +545,8 @@ export function HomePage() {
         onOpenChange={handleConversationOpenChange}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(31rem,calc(100dvh-1.5rem))] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(31rem,calc(100dvh-1.5rem))] w-[min(36rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="flex shrink-0 items-start gap-4 border-b border-edge px-5 py-4">
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-base font-semibold text-fg">{copy.dialogTitle}</Dialog.Title>
@@ -590,8 +590,8 @@ export function HomePage() {
 
       <Dialog.Root open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open) closeJudgment(); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <Dialog.Title className="text-sm font-semibold text-fg">{copy.needsAttention}</Dialog.Title>
               <Dialog.Close asChild><Button type="button" variant="ghost" className="size-8 p-0" title={t.cancel} aria-label={t.cancel}><X className="size-4" aria-hidden /></Button></Dialog.Close>
@@ -687,7 +687,6 @@ export function HomePage() {
               <div className="mt-2 divide-y divide-edge-subtle border-y border-edge-subtle">
                 {home.background.map((item) => <BackgroundRow key={item.id} item={item} onAction={runAction} />)}
               </div>
-              <p className="mt-5 text-xs leading-5 text-fg-subtle">{t.home.autoArchiveNote}</p>
             </section>
           ) : null}
         </div>

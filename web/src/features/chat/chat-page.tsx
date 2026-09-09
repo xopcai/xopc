@@ -1354,8 +1354,8 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(82vh,42rem)] w-[min(100%-2rem,44rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(82vh,42rem)] w-[min(100%-2rem,44rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="shrink-0 border-b border-edge-subtle px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">
                 {m.chat.sourceNoteSaveDialogTitle}

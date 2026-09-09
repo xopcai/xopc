@@ -221,9 +221,7 @@ export function NotesHomePage() {
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-8 lg:px-10 lg:py-9">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0"><h2 className="break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : h.homeTitle}</h2>
-              <p className="mt-2 text-sm leading-6 text-fg-muted">{projectId ? h.projectDescription : h.homeDescription}</p>
-            </div>
+            <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : h.homeTitle}</h2>
             {projectId ? <button type="button" onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}`)} className={cn(quietButton, 'text-xs')}>{h.openProject}<ArrowRight className="size-3.5" aria-hidden /></button> : null}
           </div>
           {actionError ? <p className="mb-4 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}

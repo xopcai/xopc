@@ -199,16 +199,11 @@ export function ProjectsPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{management.title}</h1>
-          <p className="truncate text-xs text-fg-muted">{management.subtitle}</p>
-        </div>
-      ),
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{management.title}</h1>,
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, management.subtitle, management.title, setPageHeader]);
+  }, [clearPageHeader, headerEnd, management.title, setPageHeader]);
 
   const submitCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -273,7 +268,7 @@ export function ProjectsPage() {
     .replace('{{count}}', String(visibleProjects.length));
 
   return (
-    <main className="flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <Dialog.Root
         open={createOpen}
         onOpenChange={(open) => {
@@ -282,8 +277,8 @@ export function ProjectsPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{t.createTitle}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.createDescription}</Dialog.Description>
@@ -426,7 +421,7 @@ export function ProjectsPage() {
           ))}
         </section>
       ) : (
-        <section className="rounded-xl border border-dashed border-edge p-10 text-center">
+        <section className="py-16 text-center">
           <FolderKanban className="mx-auto size-7 text-fg-subtle" aria-hidden />
           <h2 className="mt-3 text-sm font-semibold text-fg">{management.emptyTitle}</h2>
           <p className="mt-1 text-sm text-fg-muted">{management.emptyHint}</p>

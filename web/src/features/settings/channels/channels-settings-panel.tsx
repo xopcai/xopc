@@ -814,7 +814,7 @@ export function ChannelsSettingsPanel() {
   }
 
   return (
-    <SettingsPageFrame gap="gap-4">
+    <SettingsPageFrame gap="gap-4" className="max-w-6xl" padding="px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       {catalog.isLoading ? (
         <SettingsPageSkeleton sections={2} />
       ) : catalog.error ? (

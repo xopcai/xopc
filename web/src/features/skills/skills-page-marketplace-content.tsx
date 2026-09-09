@@ -136,7 +136,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
             </div>
           ) : null}
           {mpPayload.items.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-edge py-12 text-center text-sm text-fg-muted">
+            <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-fg-muted">
               <p className="px-4">
                 {searchInputActive && trimmedQuery
                   ? interpolate(sk.marketplaceEmptySearch, { query: trimmedQuery })

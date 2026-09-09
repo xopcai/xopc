@@ -65,14 +65,14 @@ export function SkillsPageCatalogContent(p: Props) {
   }
   if (catalog.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+      <div className="py-16 text-center text-sm text-fg-muted">
         {sk.empty}
       </div>
     );
   }
   if (filteredCatalog.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+      <div className="py-16 text-center text-sm text-fg-muted">
         {sk.noSearchResults}
       </div>
     );
@@ -97,7 +97,7 @@ export function SkillsPageCatalogContent(p: Props) {
         />
       ) : null}
       {catalogDisplayRows.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+        <div className="py-16 text-center text-sm text-fg-muted">
           {catalogStatusFilter === 'disabled' ? sk.noDisabledSkills : sk.noSearchResults}
         </div>
       ) : (

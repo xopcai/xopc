@@ -251,10 +251,10 @@ export function WorkingDirectoryPickerModal({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 z-[101] flex h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[101] flex h-[min(90vh,32rem)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
             'dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

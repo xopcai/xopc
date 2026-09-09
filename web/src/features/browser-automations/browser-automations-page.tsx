@@ -91,16 +91,11 @@ export function BrowserAutomationsPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{text.title}</h1>
-          <p className="truncate text-xs text-fg-muted">{text.subtitle}</p>
-        </div>
-      ),
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{text.title}</h1>,
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, setPageHeader, text.subtitle, text.title]);
+  }, [clearPageHeader, headerEnd, setPageHeader, text.title]);
   const setEnabled = async () => {
     if (!selected) return;
     setBusy(true);
@@ -135,7 +130,7 @@ export function BrowserAutomationsPage() {
   }
 
   if (automations.length === 0) {
-    return <div className="flex min-h-0 flex-1 flex-col bg-surface-panel p-4 sm:p-6"><div className="m-auto max-w-md rounded-2xl border border-edge bg-surface-base p-8 text-center"><Bot className="mx-auto size-10 text-accent" /><h2 className="mt-4 text-lg font-semibold text-fg">{text.emptyTitle}</h2><p className="mt-2 text-sm leading-6 text-fg-muted">{text.emptyBody}</p><Button className="mt-5" onClick={() => openAssistant(text.createPrompt)}><Bot className="size-4" />{text.create}</Button></div></div>;
+    return <div className="flex min-h-0 flex-1 flex-col bg-surface-panel p-4 sm:p-6"><div className="m-auto max-w-md py-12 text-center"><Bot className="mx-auto size-10 text-accent" /><h2 className="mt-4 text-lg font-semibold text-fg">{text.emptyTitle}</h2><p className="mt-2 text-sm leading-6 text-fg-muted">{text.emptyBody}</p><Button className="mt-5" onClick={() => openAssistant(text.createPrompt)}><Bot className="size-4" />{text.create}</Button></div></div>;
   }
 
   return (

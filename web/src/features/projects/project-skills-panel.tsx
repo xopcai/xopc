@@ -334,9 +334,9 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
 
       <Dialog.Root open={installMode !== null} onOpenChange={(open) => { if (!open) setInstallMode(null); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
           <Dialog.Content className={cn(
-            'fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-xl',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-xl',
             installMode === 'marketplace'
               ? 'h-[min(46rem,calc(100vh-2rem))] w-[min(58rem,calc(100vw-2rem))]'
               : 'h-[min(22rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))]',
@@ -432,8 +432,8 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
 
       <Dialog.Root open={Boolean(preview)} onOpenChange={(open) => { if (!open) setPreview(null); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(42rem,calc(100vh-2rem))] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-xl">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex h-[min(42rem,calc(100vh-2rem))] w-[min(48rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-xl">
             <div className="flex shrink-0 items-center justify-between border-b border-edge px-5 py-4"><Dialog.Title className="text-base font-semibold text-fg">{preview?.name}</Dialog.Title><Dialog.Close asChild><Button type="button" variant="ghost" className="size-9 p-0"><X className="size-4" /></Button></Dialog.Close></div>
             <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-5 text-sm leading-6 text-fg-muted">{preview?.bodyMarkdown}</pre>
           </Dialog.Content>

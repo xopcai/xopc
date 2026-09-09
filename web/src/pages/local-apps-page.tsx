@@ -1,4 +1,4 @@
-import { ArrowRight, Box, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, Box, Plus } from 'lucide-react';
 import { useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
@@ -31,10 +31,7 @@ export function LocalAppsPage() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-surface-panel px-3 py-8 sm:px-5 xl:px-6">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 max-w-2xl">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent">
-            <Sparkles className="size-4" />{zh ? '从想法开始' : 'Start with an idea'}
-          </div>
+        <div className="mb-7 max-w-2xl">
           <h2 className="text-2xl font-semibold tracking-tight text-fg">{zh ? '把自己的工具放进 XOPC' : 'Put your own tools inside XOPC'}</h2>
           <p className="mt-2 text-sm leading-6 text-fg-muted">{zh ? '每个应用都会自动创建一个由 Coder 负责的 Project，可预览、安装到侧栏，并持续迭代。' : 'Every app gets a Coder-owned Project for previewing, installing in the sidebar, and ongoing iteration.'}</p>
         </div>
@@ -64,7 +61,7 @@ export function LocalAppsPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-edge bg-surface-base px-6 py-14 text-center">
+          <div className="px-6 py-16 text-center">
             <Box className="mx-auto size-8 text-fg-subtle" />
             <h3 className="mt-4 text-sm font-semibold text-fg">{zh ? '还没有本地应用' : 'No local apps yet'}</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-fg-muted">{zh ? '描述你想解决的问题，XOPC 会创建应用骨架和可持续开发的 Project。' : 'Describe the problem and XOPC will create an app scaffold and an ongoing Project.'}</p>

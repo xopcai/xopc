@@ -715,8 +715,8 @@ export function LocalAppWorkbenchPage() {
 
       <Dialog.Root open={reviewOpen} onOpenChange={setReviewOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(560px,calc(100vh-32px))] w-[min(520px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-2xl focus:outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex h-[min(560px,calc(100vh-32px))] w-[min(520px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-2xl focus:outline-none">
             <div className="flex items-start justify-between border-b border-edge-subtle p-5">
               <div><Dialog.Title className="text-base font-semibold text-fg">{zh ? '确认安装到 XOPC' : 'Confirm installation'}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-fg-muted">{zh ? '当前草稿会成为左侧导航中的可用版本。' : 'The current draft will become the version available in the sidebar.'}</Dialog.Description></div>
               <Dialog.Close className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover"><X className="size-4" /></Dialog.Close>
@@ -741,8 +741,8 @@ export function LocalAppWorkbenchPage() {
 
       <Dialog.Root open={uninstallOpen} onOpenChange={setUninstallOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(420px,calc(100vh-32px))] w-[min(500px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-2xl focus:outline-none">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex h-[min(420px,calc(100vh-32px))] w-[min(500px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-2xl focus:outline-none">
             <div className="flex items-start justify-between border-b border-edge-subtle p-5">
               <div><Dialog.Title className="text-base font-semibold text-fg">{zh ? '卸载当前应用？' : 'Uninstall this app?'}</Dialog.Title><Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{zh ? '应用会从侧栏移除，但 Project、源码、版本历史和本地数据都会保留。' : 'The app leaves the sidebar, while its Project, source, release history, and local data remain.'}</Dialog.Description></div>
               <Dialog.Close className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover"><X className="size-4" /></Dialog.Close>
