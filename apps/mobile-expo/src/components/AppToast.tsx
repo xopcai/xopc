@@ -36,7 +36,7 @@ export function AppToast({
   children,
   bottomLift = 0,
 }: AppToastProps) {
-  const { colors, isDark } = useTheme();
+  const { colors, elevation } = useTheme();
   const insets = useSafeAreaInsets();
 
   const toastTheme = useMemo(
@@ -63,13 +63,9 @@ export function AppToast({
       borderRadius: radii.xxl,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border.default,
-      shadowColor: '#000',
-      shadowOpacity: isDark ? 0.18 : 0.06,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 3,
+      ...elevation.raised,
     }),
-    [colors.border.default, isDark],
+    [colors.border.default, elevation.raised],
   );
 
   const contentStyle = useMemo(

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Linking, ScrollView, View } from 'react-native';
-import { Button, Switch, Text } from 'react-native-paper';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Switch, Text } from 'react-native-paper';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ListSkeleton } from '../../components/ListSkeleton';
@@ -12,7 +12,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { voiceStatusOptions } from '../../query/voice';
 import { useVoicePreferences } from '../voice/voice-preferences';
 import { SettingsRow, SettingsSection } from './settings-ui';
-import { spacing, useTheme } from '../../theme';
+import { spacing, typography, useTheme } from '../../theme';
 import { voiceErrorMessage } from '../voice/voice-error';
 import { nativeVoiceAvailable } from '../voice/native-audio-session';
 
@@ -30,13 +30,14 @@ export function VoiceSettingsScreen() {
   const selected = gatewayId ? prefs.engines[gatewayId] : undefined;
   return <View style={{ flex: 1, backgroundColor: colors.surface.base }}>
     <NativeScreenHeader title={m.settings} onBack={() => router.back()} />
-    <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
-      {!nativeVoiceAvailable && <Text>{m.upgrade}</Text>}
+    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {!nativeVoiceAvailable ? <Text style={[styles.notice, { color: colors.text.secondary }]}>{m.upgrade}</Text> : null}
       <SettingsSection title={m.mode}>
-        {([undefined, 'omni', 'agent'] as const).map(engine => <SettingsRow key={engine ?? 'default'}
+        {([undefined, 'omni', 'agent'] as const).map((engine, index) => <SettingsRow key={engine ?? 'default'}
           icon={selected === engine ? 'radiobox-marked' : 'radiobox-blank'}
           label={engine === 'omni' ? m.chatOnly : engine === 'agent' ? m.tools : m.followGateway}
           value={engine && status.data && !status.data.capabilities[engine].available ? m.unavailable : undefined}
+          isLast={index === 2}
           showChevron={false}
           onPress={!gatewayId || (engine && !status.data?.capabilities[engine].available) ? undefined : () => {
             if (!gatewayId) return;
@@ -44,31 +45,50 @@ export function VoiceSettingsScreen() {
             prefs.update({ engines });
           }} />)}
       </SettingsSection>
-      <Text>{m.nextCall}</Text>
-      <SettingsSection>
+      <SettingsSection title={m.nextCall}>
         <SettingsRow icon="closed-caption-outline" label={m.captions} showChevron={false} rightAccessory={<Switch value={prefs.captions} onValueChange={captions => prefs.update({ captions })} />} />
-        <SettingsRow icon="phone-outline" label={m.background} showChevron={false} rightAccessory={<Switch value={prefs.background} onValueChange={background => prefs.update({ background })} />} />
+        <SettingsRow icon="phone-outline" label={m.background} isLast showChevron={false} rightAccessory={<Switch value={prefs.background} onValueChange={background => prefs.update({ background })} />} />
       </SettingsSection>
-      <Text>{m.backgroundHint}</Text>
       <SettingsSection title={m.service}>
         {status.isPending && gatewayId ? <ListSkeleton count={3} /> :
-          status.data ? (['dictation', 'omni', 'agent'] as const).map(kind => <SettingsRow key={kind} icon="waveform" label={kind === 'dictation' ? m.dictation : kind === 'omni' ? m.chatOnly : m.tools} value={status.data.capabilities[kind].available ? m.ready : m.unavailable} showChevron={false} />) : <Text>{voiceErrorMessage(status.error?.message ?? 'SERVICE_UNAVAILABLE', m)}</Text>}
+          status.data ? (['dictation', 'omni', 'agent'] as const).map((kind, index) => <SettingsRow key={kind} icon="waveform" label={kind === 'dictation' ? m.dictation : kind === 'omni' ? m.chatOnly : m.tools} value={status.data.capabilities[kind].available ? m.ready : m.unavailable} isLast={index === 2} showChevron={false} />) : <Text style={[styles.notice, { color: colors.semantic.error }]}>{voiceErrorMessage(status.error?.message ?? 'SERVICE_UNAVAILABLE', m)}</Text>}
       </SettingsSection>
-      <Text>{m.serviceHint}</Text>
       {status.data && <SettingsSection>
         <SettingsRow icon="translate" label={m.languages} value={status.data.capabilities.languages.map(language => language === 'zh' ? m.languageZh : m.languageEn).join(' / ')} showChevron={false} />
-        <SettingsRow icon="microphone" label={m.bargeIn} value={status.data.capabilities.bargeIn ? m.supported : m.notSupported} showChevron={false} />
+        <SettingsRow icon="microphone" label={m.bargeIn} value={status.data.capabilities.bargeIn ? m.supported : m.notSupported} isLast showChevron={false} />
       </SettingsSection>}
-      <Button loading={playPreview.isPending} disabled={call.phase !== 'idle' || playPreview.isPending || (selected ?? status.data?.defaultEngine) !== 'agent' || !status.data?.capabilities.agent.available} onPress={() => playPreview.mutate()}>{m.preview}</Button>
-      {playPreview.isError && <Text>{m.error}</Text>}
-      <Text>{m.previewHint}</Text>
-      <Button onPress={() => {
-        const url = new URL(useGatewayStore.getState().apiUrl('/'));
-        if (url.protocol !== 'https:') return;
-        url.hash = '/settings/capabilities/voice';
-        void Linking.openURL(url.toString());
-      }}>{m.manage}</Button>
-      <Button onPress={() => void status.refetch()}>{m.refresh}</Button>
+      <SettingsSection>
+        <SettingsRow
+          icon="play-circle-outline"
+          label={m.preview}
+          value={playPreview.isPending ? m.connecting : playPreview.isError ? m.error : undefined}
+          onPress={call.phase !== 'idle' || playPreview.isPending || (selected ?? status.data?.defaultEngine) !== 'agent' || !status.data?.capabilities.agent.available ? undefined : () => playPreview.mutate()}
+        />
+        <SettingsRow
+          icon="tune-variant"
+          label={m.manage}
+          onPress={() => {
+            const url = new URL(useGatewayStore.getState().apiUrl('/'));
+            if (url.protocol !== 'https:') return;
+            url.hash = '/settings/capabilities/voice';
+            void Linking.openURL(url.toString());
+          }}
+        />
+        <SettingsRow icon="refresh" label={m.refresh} isLast onPress={() => void status.refetch()} />
+      </SettingsSection>
     </ScrollView>
   </View>;
 }
+
+const styles = StyleSheet.create({
+  content: {
+    paddingHorizontal: spacing.content,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
+  },
+  notice: {
+    ...typography.label,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+});

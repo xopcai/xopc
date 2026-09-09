@@ -10,6 +10,7 @@ import { useGatewayConfigured } from '@/query/sessions';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { gatewayProfileHost } from '@/stores/gateway-types';
 import { usePreferencesStore } from '@/stores/preferences-store';
+import { spacing } from '@/theme';
 import {
   disableMobileNotifications,
   enableMobileNotifications,
@@ -79,15 +80,12 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <NativeScreenHeader title={s.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={s.title} largeTitle onBack={() => dismissOrHome(router)} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <SettingsSection>
-          <SettingsRow icon="phone-outline" label={m.voice.settings} onPress={() => router.push('/settings/voice')} />
-        </SettingsSection>
         <SettingsSection title={s.sectionConnection}>
           <SettingsRow
             icon="web"
@@ -102,7 +100,6 @@ export function SettingsScreen() {
               icon="bell-outline"
               iconColor={colors.accent}
               label={s.notifications}
-              value={s.notificationsHint}
               showChevron={false}
               rightAccessory={(
                 <Switch
@@ -137,8 +134,14 @@ export function SettingsScreen() {
                 icon="robot-outline"
                 iconColor={colors.accent}
                 label={m.agentsPage.title}
-                isLast
                 onPress={() => router.push('/ai/agents')}
+              />
+              <SettingsRow
+                icon="waveform"
+                iconColor={colors.accent}
+                label={m.voice.settings}
+                isLast
+                onPress={() => router.push('/settings/voice')}
               />
             </SettingsSection>
 
@@ -184,11 +187,11 @@ export function SettingsScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.content,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
   },
   bottomSpacer: {
-    height: 24,
+    height: spacing.xl,
   },
 });

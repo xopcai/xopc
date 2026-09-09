@@ -49,6 +49,7 @@ export function AutomationScreen() {
     <View style={[styles.screen, { backgroundColor: screenBg }]}>
       <NativeScreenHeader
         title={pm.title}
+        largeTitle
         onBack={() => dismissOrHome(router)}
         rightIcon={tab === 'schedules' ? 'plus' : undefined}
         onRightPress={tab === 'schedules' ? () => router.push('/automation/form') : undefined}

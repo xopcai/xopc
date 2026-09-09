@@ -8,6 +8,7 @@ export function useSettingsColors() {
   return {
     pageBg: colors.surface.base,
     card: colors.surface.panel,
+    input: colors.surface.input,
     iconBg: colors.surface.grouped,
     pressed: colors.surface.pressed,
     text: colors.text.primary,
@@ -139,7 +140,6 @@ export function SettingsOptionRow({
 
 type SettingsAgentRowProps = {
   name: string;
-  agentId: string;
   description?: string;
   selected?: boolean;
   isLast?: boolean;
@@ -150,7 +150,6 @@ type SettingsAgentRowProps = {
 
 export function SettingsAgentRow({
   name,
-  agentId,
   description,
   selected,
   isLast = false,
@@ -172,9 +171,11 @@ export function SettingsAgentRow({
           <Text style={[styles.optionLabel, { color: colors.text }]} numberOfLines={1}>
             {name}
           </Text>
-          <Text style={[styles.optionDescription, { color: colors.textMuted }]} numberOfLines={1}>
-            {description || agentId}
-          </Text>
+          {description ? (
+            <Text style={[styles.optionDescription, { color: colors.textMuted }]} numberOfLines={1}>
+              {description}
+            </Text>
+          ) : null}
         </View>
         {selected ? <Icon source="check-circle" size={22} color={colors.accent} /> : null}
       </Pressable>

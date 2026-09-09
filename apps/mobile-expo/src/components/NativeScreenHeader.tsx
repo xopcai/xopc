@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../i18n/messages';
-import { spacing, useTheme } from '../theme';
+import { spacing, typography, useTheme } from '../theme';
 import { XopcLogo } from './XopcLogo';
 
 type HeaderAction = {
@@ -23,6 +23,7 @@ interface NativeScreenHeaderProps {
   onSearchPress?: () => void;
   onTitlePress?: () => void;
   titleAccessibilityLabel?: string;
+  largeTitle?: boolean;
 }
 
 function HeaderTitleButton({
@@ -77,6 +78,7 @@ export function NativeScreenHeader({
   onSearchPress,
   onTitlePress,
   titleAccessibilityLabel,
+  largeTitle = false,
 }: NativeScreenHeaderProps) {
   const m = useMessages();
   const actions = [
@@ -102,7 +104,8 @@ export function NativeScreenHeader({
               />
             )
           : undefined,
-        headerLargeTitle: false,
+        headerLargeTitle: largeTitle,
+        headerLargeTitleShadowVisible: false,
         headerShadowVisible: false,
         headerBackVisible: !onBack,
         headerLeft: onBack
@@ -139,5 +142,5 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
   },
-  titleText: { maxWidth: 185, fontSize: 16, fontWeight: '600' },
+  titleText: { maxWidth: 185, ...typography.body, fontWeight: '600' },
 });

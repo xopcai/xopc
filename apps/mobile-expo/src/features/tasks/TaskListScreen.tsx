@@ -56,6 +56,7 @@ export function TaskListScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={labels.title}
+        largeTitle
         onBack={() => dismissOrHome(router)}
         rightActions={[{
           icon: 'plus',
@@ -174,13 +175,13 @@ function WorkOverview({
       <WorkSection title={labels.activeProjects} actionLabel={labels.viewAll} onAction={onShowProjects}>
         {activeProjects.length ? activeProjects.map((project, index) => (
           <ProjectRow key={project.id} project={project} last={index === activeProjects.length - 1} />
-        )) : <EmptySection icon="folder-check-outline" label={labels.noActiveProjects} />}
+        )) : <EmptySection label={labels.noActiveProjects} />}
       </WorkSection>
 
       <WorkSection title={labels.activeTasks} actionLabel={labels.viewAll} onAction={onShowTasks}>
         {activeTasks.length ? activeTasks.map((item, index) => (
           <TaskRow key={item.task.id} item={item} last={index === activeTasks.length - 1} />
-        )) : <EmptySection icon="check-all" label={labels.noActiveTasks} />}
+        )) : <EmptySection label={labels.noActiveTasks} />}
       </WorkSection>
 
       <Pressable
@@ -219,7 +220,7 @@ function ProjectsPage({ query }: { query: ProjectsQuery }) {
       renderItem={({ item, index }) => <ProjectRow project={item} last={index === projects.length - 1} />}
       contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xxl }]}
       refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
-      ListEmptyComponent={<EmptySection icon="folder-outline" label={labels.projectsEmpty} />}
+      ListEmptyComponent={<EmptySection label={labels.projectsEmpty} />}
     />
   );
 }
@@ -244,7 +245,7 @@ function TasksPage({ query }: { query: TasksQuery }) {
       renderItem={({ item, index }) => <TaskRow item={item} last={index === items.length - 1} />}
       contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xxl }]}
       refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
-      ListEmptyComponent={<EmptySection icon="target" label={labels.empty} />}
+      ListEmptyComponent={<EmptySection label={labels.empty} />}
     />
   );
 }
@@ -361,11 +362,10 @@ function TaskRow({ item, last }: { item: TaskListItem; last: boolean }) {
   );
 }
 
-function EmptySection({ icon, label }: { icon: string; label: string }) {
+function EmptySection({ label }: { label: string }) {
   const { colors } = useTheme();
   return (
     <View style={styles.empty}>
-      <Icon source={icon} size={28} color={colors.text.tertiary} />
       <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{label}</Text>
     </View>
   );
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     padding: spacing.xs,
     gap: spacing.xs,
   },
-  tabButton: { flex: 1, minHeight: 40, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
+  tabButton: { flex: 1, minHeight: 44, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { ...typography.ui, fontWeight: '500' },
   tabLabelActive: { fontWeight: '600' },
   overview: { padding: spacing.lg, gap: spacing.section },
@@ -423,8 +423,8 @@ const styles = StyleSheet.create({
   healthDot: { width: 8, height: 8, borderRadius: 4 },
   clearState: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
   clearText: { ...typography.body },
-  empty: { minHeight: 120, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
-  emptyText: { ...typography.body, textAlign: 'center' },
+  empty: { minHeight: 120, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  emptyText: { ...typography.label, textAlign: 'center' },
   workflowLink: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
   workflowBody: { flex: 1, gap: spacing.xxs },
   workflowTitle: { ...typography.ui, fontWeight: '600' },

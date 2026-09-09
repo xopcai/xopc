@@ -41,7 +41,7 @@ export function QuickCaptureComposer({
   submitting = false,
   autoFocus = false,
 }: QuickCaptureComposerProps) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const { chat: cm } = useMessages();
   const [mode, setMode] = useState<InputMode>('text');
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -163,7 +163,7 @@ export function QuickCaptureComposer({
       <View
         style={[
           styles.shell,
-          styles.shellRaisedNative,
+          elevation.raised,
           { backgroundColor: surface, borderColor: border },
         ]}
       >
@@ -231,13 +231,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xxl,
     overflow: 'hidden',
-  },
-  shellRaisedNative: {
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
   compactRow: {
     flexDirection: 'row',

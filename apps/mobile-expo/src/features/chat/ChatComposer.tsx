@@ -91,7 +91,7 @@ export const ChatComposer = memo(function ChatComposer({
 }) {
   const m = useMessages();
   const cm = m.chat;
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const transition = useOptionalWorkspaceTransition();
   const shellRef = useRef<RNView>(null);
 
@@ -704,7 +704,7 @@ export const ChatComposer = memo(function ChatComposer({
         }}
         style={[
           styles.shell,
-          styles.shellRaisedNative,
+          elevation.raised,
           { backgroundColor: surface, borderColor: shellBorder },
           shellRevealStyle,
         ]}
@@ -840,13 +840,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     flex: 1,
     lineHeight: 18,
-  },
-  shellRaisedNative: {
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
   captureScroll: { flexGrow: 0, flexShrink: 0 },
   captureRail: {
