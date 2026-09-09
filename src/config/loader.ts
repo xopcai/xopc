@@ -73,9 +73,7 @@ export function loadConfig(configPath?: string): Config {
       return activateConfig(cfg);
     } catch (error) {
       log.error({ err: error, path }, `Failed to load config`);
-      const cfg = ConfigSchema.parse(undefined);
-      assertChannelPluginConfigs(cfg);
-      return activateConfig(cfg);
+      throw error;
     }
   }
 
