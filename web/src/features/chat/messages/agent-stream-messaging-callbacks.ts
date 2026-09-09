@@ -1,3 +1,5 @@
+import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
+
 import type { CompactionState, MessagingCallbacks } from '@/features/chat/messages/message-sender';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
@@ -32,9 +34,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 export type AgentStreamFqCallbacks = {
   dismissClarifyForSession: (chatId: string) => void;
-  clearVisibleClarify: () => void;
   makeOnClarifyRequest: (chatId: string) => MessagingCallbacks['onClarifyRequest'];
 };
+
+export function shouldDismissClarificationForTerminal(status: AgentStreamRunStatus): boolean {
+  return status !== 'suspended';
+}
 
 /**
  * Shared run-event handlers for {@link MessageSender.send} and {@link MessageSender.resume}.
@@ -55,7 +60,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
-  finalizeMessage: (sessionKey?: string) => void;
+  finalizeMessage: (sessionKey?: string, terminalStatus?: AgentStreamRunStatus) => void;
   fq: AgentStreamFqCallbacks;
 }): MessagingCallbacks {
   const {
@@ -106,14 +111,14 @@ export function createAgentStreamMessagingCallbacks(opts: {
     }
   };
 
-  const onBackgroundTerminal = () => {
+  const onBackgroundTerminal = (status: AgentStreamRunStatus) => {
     store().clearStreamingState(chatId);
     if (clearResumeRunIdOnBackgroundTerminal) {
       chatRunManager.setResumeRunId(chatId, null);
     }
     store().setSessionFlags(chatId, { sending: false, streaming: false });
     store().setSessionProgress(chatId, null);
-    fq.dismissClarifyForSession(chatId);
+    if (shouldDismissClarificationForTerminal(status)) fq.dismissClarifyForSession(chatId);
     reloadSessionSnapshot();
   };
 
@@ -277,34 +282,34 @@ export function createAgentStreamMessagingCallbacks(opts: {
       const visible = shouldApplyStreamUpdate(chatId);
       if (chatRunManager.takeUserAborted(chatId) || status === 'cancelled') {
         clearChatRunPresence(chatId);
-        if (visible) finalizeMessage(chatId);
-        else onBackgroundTerminal();
+        if (visible) finalizeMessage(chatId, status);
+        else onBackgroundTerminal(status);
         return;
       }
       if (status === 'error') {
         markChatRunFailed(chatId, !visible);
         if (!visible) {
-          onBackgroundTerminal();
+          onBackgroundTerminal(status);
           return;
         }
-        finalizeMessage(chatId);
+        finalizeMessage(chatId, status);
         reloadSessionSnapshot();
         return;
       }
       if (status === 'suspended') markChatRunWaiting(chatId);
       else markChatRunCompleted(chatId, !visible);
       if (!visible) {
-        onBackgroundTerminal();
+        onBackgroundTerminal(status);
         return;
       }
-      finalizeMessage(chatId);
+      finalizeMessage(chatId, status);
     },
     onError: (msg) => {
       flushReviewDeltas();
       const visible = shouldApplyStreamUpdate(chatId);
       markChatRunFailed(chatId, !visible);
       if (!visible) {
-        onBackgroundTerminal();
+        onBackgroundTerminal('error');
         return;
       }
       store().clearStreamingState(chatId);
