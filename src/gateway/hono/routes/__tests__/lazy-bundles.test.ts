@@ -84,6 +84,20 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/sessions/example/shares-extra')).toBeUndefined();
   });
 
+  it('routes hosted publication APIs to the shares bundle', () => {
+    const paths = [
+      '/api/hosted-publications',
+      '/api/hosted-publications/capabilities',
+      '/api/hosted-publications/static-sites',
+      '/api/notes/note-1/hosted-publications',
+      '/api/notes/note-1/hosted-publications/publication-1/refresh',
+    ];
+    for (const path of paths) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('shares');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/notes/note-1')?.id).toBe('notes');
+  });
+
   it('routes models-json config endpoints to the models bundle', () => {
     // /api/models-json is `/api/models` + `-json`, not `/api/models/...`,
     // so the prefix matcher needs an explicit entry. Without it the

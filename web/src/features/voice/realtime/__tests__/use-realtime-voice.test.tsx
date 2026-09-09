@@ -221,16 +221,36 @@ describe('useRealtimeVoice', () => {
   });
 
   it('reports session preflight failure before starting the recorder', async () => {
-    mocks.connect.mockRejectedValueOnce(new Error('No streaming STT'));
+    mocks.preflight.mockRejectedValueOnce(Object.assign(new Error('No configured streaming speech-to-text provider is available'), {
+      body: { error: { code: 'PROVIDER_UNAVAILABLE' } },
+    }));
     render();
     await act(async () => voice.startVoiceInput());
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
     expect(mocks.startCapture).not.toHaveBeenCalled();
     expect(voice.phase).toBe('error');
+    expect(voice.error).toBe('No streaming STT');
+    expect(voice.settingsRequired).toBe(true);
     expect(mocks.notify).toHaveBeenCalledWith(
       'error',
       'No streaming STT',
       undefined,
       { href: '/settings/capabilities/voice' },
+    );
+  });
+
+  it('keeps transient realtime failures retryable without directing to settings', async () => {
+    mocks.connect.mockRejectedValueOnce(new Error('Realtime voice connection failed'));
+    render();
+    await act(async () => voice.startVoiceInput());
+    expect(voice.phase).toBe('error');
+    expect(voice.error).toBe('Realtime voice connection failed');
+    expect(voice.settingsRequired).toBe(false);
+    expect(mocks.notify).toHaveBeenCalledWith(
+      'error',
+      'Realtime voice connection failed',
+      undefined,
+      undefined,
     );
   });
 

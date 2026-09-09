@@ -282,7 +282,9 @@ describe('SideChatConversation composer', () => {
 
     expect(container.querySelector('[data-side-chat-scroll-viewport]')?.textContent).toContain('侧边对话');
     expect(container.querySelector('form')?.textContent).toContain('1 处选中内容');
-    expect(container.querySelector('[title="沿用主任务的工具与审批策略"]')?.textContent).toContain('主任务权限');
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent === '临时')).toBe(false);
+    expect(container.querySelector('[title="沿用主任务的工具与审批策略"]')).toBeNull();
+    expect(container.querySelector('form')?.textContent).not.toContain('主任务权限');
   });
 
   it('updates only the side chat model configuration', async () => {

@@ -20,6 +20,7 @@ import { mergeWithDefaults as resolveSiteShareConfigFromRaw } from '../../share/
 import { getShareStore } from '../../share/share-store.js';
 import { getSiteShareStore } from '../../share/site-share-store.js';
 import { resolveShareUrl, resolveSiteShareUrl } from '../../share/share-url.js';
+import { publishHostedStaticSite } from '../../share/hosted-static-site-publish.js';
 import { resolveReverseProxyPublicUrl } from '../../gateway/public-url.js';
 import {
   audienceDefaults,
@@ -176,6 +177,38 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
           const siteStore = getSiteShareStore(siteCfg);
           let sitePath = relPath;
           let stagedDir: string | null = null;
+          const titleOut = makeTitle(probe.kind === 'directory' ? (relPath.split('/').pop() || relPath) : (probe.absolutePath.split(/[\\/]/).pop() || relPath), p.title);
+          const directUrl = resolveSiteShareUrl({
+            ...urlCtx,
+            token: 'reachability-check',
+            subdomainLabel: 'reachability-check',
+            publicHostSuffix: siteCfg.publicHostSuffix,
+          });
+          if (directUrl.reachability !== 'public') {
+            const { binding } = await publishHostedStaticSite({
+              workspaceRoot: workspace,
+              path: sitePath,
+              title: titleOut,
+              description: p.description,
+              spaFallback: true,
+              ttlMs,
+              maxViews: maxViews ?? null,
+              agentId: deps.getAgentId?.(),
+            });
+            return successResult(locale, {
+              kind: 'site',
+              delivery: 'hosted',
+              shareUrl: binding.shareUrl,
+              thumbnailUrl: '',
+              reachability: 'public',
+              reachabilityHint: null,
+              title: binding.title,
+              description: makeDescription({ audience, expiresAt: binding.expiresAt, override: p.description }),
+              expiresAt: binding.expiresAt,
+              maxViews: binding.maxViews,
+              routing: { reason: decision.reason, hint: decision.hint },
+            });
+          }
           if (probe.kind === 'file') {
             const staged = await stageSingleHtmlAsSite(workspace, probe.absolutePath);
             sitePath = staged.relativePath;
@@ -209,7 +242,6 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
           );
           siteStore.setThumbnailStatus(siteRec.id, 'pending');
 
-          const titleOut = makeTitle(probe.kind === 'directory' ? (relPath.split('/').pop() || relPath) : (probe.absolutePath.split(/[\\/]/).pop() || relPath), p.title);
           const descOut = makeDescription({ audience, expiresAt: siteRec.expiresAt, override: p.description });
 
           return successResult(locale, {

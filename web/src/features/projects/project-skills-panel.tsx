@@ -22,7 +22,6 @@ import {
   setProjectWorkspaceTrust,
   uploadProjectSkill,
   type ProjectSkill,
-  type ProjectSkillDiagnostic,
   type ProjectSkillSource,
 } from './project-skills-api';
 
@@ -32,21 +31,14 @@ type Copy = {
   add: string;
   empty: string;
   emptyHint: string;
-  path: string;
   xopcSource: string;
   agentsSource: string;
   sourceReadOnly: string;
-  sourceStateActive: string;
-  sourceStateMissing: string;
-  sourceStateDisabled: string;
-  sourceStateUntrusted: string;
-  sourceStateInvalid: string;
   trustTitle: string;
   trustHint: string;
   trustAction: string;
   trusting: string;
   shadowed: string;
-  diagnosticsTitle: string;
   localTitle: string;
   inheritedTitle: string;
   inheritedHint: string;
@@ -90,7 +82,6 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
   const [items, setItems] = useState<ProjectSkill[]>([]);
   const [inheritedItems, setInheritedItems] = useState<ProjectSkill[]>([]);
   const [sources, setSources] = useState<ProjectSkillSource[]>([]);
-  const [diagnostics, setDiagnostics] = useState<ProjectSkillDiagnostic[]>([]);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [selectedSessionKey, setSelectedSessionKey] = useState('');
   const [sessionSkills, setSessionSkills] = useState<ChatSkillsPayload | null>(null);
@@ -117,7 +108,6 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
       setItems(result.items);
       setInheritedItems(result.inheritedItems);
       setSources(result.sources);
-      setDiagnostics(result.diagnostics);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -270,20 +260,6 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
             }}
           />
         </div>
-        {sources.length ? (
-          <div className="mt-3 grid gap-2 rounded-md border border-edge-subtle bg-surface-base p-3">
-            {sources.map((skillSource) => (
-              <div key={skillSource.origin} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                <span className="font-medium text-fg">
-                  {skillSource.origin === 'xopc-workspace' ? copy.xopcSource : copy.agentsSource}
-                </span>
-                {!skillSource.writable ? <span className="rounded bg-surface-hover px-1.5 py-0.5 text-fg-muted">{copy.sourceReadOnly}</span> : null}
-                <span className="text-fg-subtle">{sourceStateLabel(copy, skillSource.state)}</span>
-                <span className="min-w-0 break-all font-mono text-fg-subtle">{copy.path}: {skillSource.rootDir}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
@@ -301,17 +277,6 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
             <ShieldCheck className="size-4" aria-hidden />
             {busy ? copy.trusting : copy.trustAction}
           </Button>
-        </div>
-      ) : null}
-
-      {diagnostics.some((diagnostic) => diagnostic.type !== 'skipped') ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <p className="text-sm font-medium text-fg">{copy.diagnosticsTitle}</p>
-          <ul className="mt-2 grid gap-1 text-xs leading-5 text-fg-muted">
-            {diagnostics.filter((diagnostic) => diagnostic.type !== 'skipped').map((diagnostic, index) => (
-              <li key={`${diagnostic.type}:${diagnostic.path ?? ''}:${index}`}>{diagnostic.message}</li>
-            ))}
-          </ul>
         </div>
       ) : null}
 
@@ -587,14 +552,4 @@ function InstallEntry({ icon: Icon, title, hint, onClick }: { icon: LucideIcon; 
       </button>
     </Popover.Close>
   );
-}
-
-function sourceStateLabel(copy: Copy, state: ProjectSkillSource['state']): string {
-  switch (state) {
-    case 'active': return copy.sourceStateActive;
-    case 'missing': return copy.sourceStateMissing;
-    case 'disabled': return copy.sourceStateDisabled;
-    case 'untrusted': return copy.sourceStateUntrusted;
-    case 'invalid': return copy.sourceStateInvalid;
-  }
 }
