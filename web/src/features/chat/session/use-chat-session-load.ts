@@ -6,7 +6,6 @@ import type { SessionInfo } from '@/features/chat/chat.types';
 import { chooseModelThinking, modelPreferenceForAgent, type SessionCreateRequest } from '@xopcai/gateway-contract';
 import { type Message } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
-import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
 import {
   shouldShowHistoryLoading,
@@ -31,7 +30,6 @@ export function useChatSessionLoad(deps: {
 
   navigateToSession: (key: string, replace?: boolean, search?: string) => void;
   resolveAgentIdForPost: () => string | undefined;
-  dismissClarifyOnSessionLoad: () => void;
   detachForNewConversation: () => void;
 
   sessionKey: string | null;
@@ -50,7 +48,6 @@ export function useChatSessionLoad(deps: {
     thinkingSupportGenRef,
     navigateToSession,
     resolveAgentIdForPost,
-    dismissClarifyOnSessionLoad,
     detachForNewConversation,
     sessionKey,
     sessionAgentId,
@@ -173,9 +170,7 @@ export function useChatSessionLoad(deps: {
         cursor?: string | null,
       ): Promise<Message[] | undefined> => {
         const initialLoad = o === 0 && !cursor;
-        if (initialLoad && !hasPendingAgentRunForChat(k)) {
-          dismissClarifyOnSessionLoad();
-        }
+        // Clarification is hydrated independently from the gateway; transcript refreshes must not clear it.
         loadingSessionRef.current = true;
         const markHistoryLoading =
           initialLoad && shouldShowHistoryLoading(store().sessions[k]?.historyStatus);
@@ -271,7 +266,6 @@ export function useChatSessionLoad(deps: {
       sendingRef,
       streamingRef,
       loadingSessionRef,
-      dismissClarifyOnSessionLoad,
       navigateToSession,
       refreshModelThinkingSupport,
       resolveAgentIdForPost,
@@ -373,7 +367,6 @@ export function useChatSessionLoad(deps: {
           : undefined,
         navigateToSession,
         onOpened: (key) => {
-          dismissClarifyOnSessionLoad();
           detachForNewConversation();
           historyBeforeCursorRef.current = null;
           store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
@@ -382,7 +375,6 @@ export function useChatSessionLoad(deps: {
       });
     },
     [
-      dismissClarifyOnSessionLoad,
       detachForNewConversation,
       navigateToSession,
       resolveAgentIdForPost,
