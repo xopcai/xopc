@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "name": "xopc Browser Bridge",
-  "version": "0.0.258",
+  "version": "0.0.259",
   "description": "Browser automation bridge for xopc — executes commands in Chrome via the local xopc daemon.",
   "permissions": [
     "debugger",
