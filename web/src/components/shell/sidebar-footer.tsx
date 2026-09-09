@@ -85,7 +85,7 @@ export function SidebarFooter({
               to="/user-model"
               onClick={() => onNavigate?.()}
               className={cn(
-                'shrink-0 rounded-full p-1 text-left outline-none transition-transform duration-150 ease-out',
+                'flex size-10 shrink-0 items-center justify-center rounded-full text-left outline-none transition-transform duration-150 ease-out',
                 'hover:bg-surface-active/70',
                 'hover:opacity-95 active:scale-95',
                 'focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
