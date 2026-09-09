@@ -44,18 +44,14 @@ async function serializeConfig(
   return JSON.stringify(validated, null, 2);
 }
 
-async function tryReadDiskConfig(
+async function readDiskConfig(
   configPath: string,
   assertChannelPlugins?: InitWorkspaceCoreOptions['assertChannelPlugins'],
-): Promise<Config | null> {
-  try {
-    const raw = readFileSync(configPath, 'utf-8');
-    const cfg = ConfigSchema.parse(JSON.parse(raw) as unknown);
-    await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
-    return cfg;
-  } catch {
-    return null;
-  }
+): Promise<Config> {
+  const raw = readFileSync(configPath, 'utf-8');
+  const cfg = ConfigSchema.parse(JSON.parse(raw) as unknown);
+  await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
+  return cfg;
 }
 
 /**
@@ -78,7 +74,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
 
   let config: Config;
   if (configExisted) {
-    config = (await tryReadDiskConfig(configPath, assertChannelPlugins)) ?? ConfigSchema.parse(undefined);
+    config = await readDiskConfig(configPath, assertChannelPlugins);
   } else {
     config = ConfigSchema.parse(undefined);
     await assertChannelPluginsIfNeeded(config, assertChannelPlugins);
@@ -133,14 +129,10 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
 
   let needsWrite = configCreated || starterResult.changed;
   if (!needsWrite) {
-    const disk = await tryReadDiskConfig(configPath, assertChannelPlugins);
-    if (!disk) {
-      needsWrite = true;
-    } else {
-      needsWrite =
-        (await serializeConfig(disk, assertChannelPlugins)) !==
-        (await serializeConfig(nextFinal, assertChannelPlugins));
-    }
+    const disk = await readDiskConfig(configPath, assertChannelPlugins);
+    needsWrite =
+      (await serializeConfig(disk, assertChannelPlugins)) !==
+      (await serializeConfig(nextFinal, assertChannelPlugins));
   }
 
   if (needsWrite) {

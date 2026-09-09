@@ -1,9 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { loadConfig } from '../../../config/loader.js';
+import { ConfigSchema } from '../../../config/schema.js';
 import { initWorkspace } from '../init-workspace.js';
 import { initWorkspaceCore } from '../init-workspace-core.js';
 
@@ -81,6 +83,34 @@ describe('initWorkspace', () => {
       });
       const main = result.config.agents?.list.find((agent) => agent.id === 'main');
       expect(main?.workspace).toBe(workspacePath);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves an existing config when it is incompatible with the current schema', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-init-invalid-config-'));
+    try {
+      const configPath = join(root, 'xopc.json');
+      const workspacePath = join(root, 'workspace', 'main');
+      const defaults = ConfigSchema.parse(undefined);
+      const incompatibleConfig = {
+        ...defaults,
+        gateway: {
+          ...defaults.gateway,
+          corsOrigins: ['https://gateway.example.com'],
+        },
+        userContext: {
+          ...defaults.userContext,
+          memory: { mode: 'confirmWrite' },
+        },
+      };
+      const original = `${JSON.stringify(incompatibleConfig, null, 2)}\n`;
+      writeFileSync(configPath, original, 'utf8');
+
+      expect(() => loadConfig(configPath)).toThrow();
+      await expect(initWorkspaceCore({ configPath, workspacePath })).rejects.toThrow();
+      expect(readFileSync(configPath, 'utf8')).toBe(original);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
