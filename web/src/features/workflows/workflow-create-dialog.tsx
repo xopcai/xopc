@@ -309,7 +309,7 @@ export function WorkflowEditor({
     setFitViewRevision((value) => value + 1);
   };
 
-  const useAvailableName = (nextName: string) => {
+  const applyAvailableName = (nextName: string) => {
     setName(nextName);
     if (editorView !== 'source') return;
     const parsed = parseWorkflowSourceDocument(sourceTextRef.current);
@@ -561,7 +561,7 @@ export function WorkflowEditor({
                     : `This workflow has changed to revision ${saveConflict.currentRevision}.`}
               </span>
               {saveConflict.code === 'WORKFLOW_NAME_EXISTS' ? <>
-                <Button variant="secondary" className="h-8" onClick={() => { useAvailableName(saveConflict.suggestedName); onClearSaveConflict(); }}>
+                <Button variant="secondary" className="h-8" onClick={() => { applyAvailableName(saveConflict.suggestedName); onClearSaveConflict(); }}>
                   {language === 'zh' ? `使用 ${saveConflict.suggestedName}` : `Use ${saveConflict.suggestedName}`}
                 </Button>
                 <Link className="text-sm font-medium text-accent-fg hover:underline" to={`/workflows/${encodeURIComponent(saveConflict.name)}`}>
@@ -580,7 +580,7 @@ export function WorkflowEditor({
               <span className="min-w-0 flex-1">
                 {language === 'zh' ? `内部名称“${name}”已被使用。` : `The internal name “${name}” is already in use.`}
               </span>
-              <Button variant="secondary" className="h-8" onClick={() => useAvailableName(suggestedName)}>
+              <Button variant="secondary" className="h-8" onClick={() => applyAvailableName(suggestedName)}>
                 {language === 'zh' ? `使用 ${suggestedName}` : `Use ${suggestedName}`}
               </Button>
             </div>
