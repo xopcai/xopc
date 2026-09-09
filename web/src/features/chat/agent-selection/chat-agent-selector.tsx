@@ -7,6 +7,10 @@ import {
   formControlBorderFocusClass,
   selectComboboxTriggerFocusClass,
 } from '@/lib/form-field-width';
+import {
+  selectPopoverContentLayoutClass,
+  selectPopoverScrollAreaClass,
+} from '@/components/ui/popover-select';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -125,12 +129,13 @@ export function ChatAgentSelector({
           sideOffset={4}
           collisionPadding={8}
           className={cn(
-            'z-50 w-[var(--radix-popover-trigger-width)] min-w-[12rem] max-h-[min(20rem,calc(100vh-6rem))] overflow-hidden rounded-lg border border-edge bg-surface-panel shadow-md',
+            selectPopoverContentLayoutClass,
+            'z-50 w-[var(--radix-popover-trigger-width)] min-w-[12rem] rounded-lg border border-edge bg-surface-panel shadow-md',
             interaction,
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <div className="border-b border-edge p-2">
+          <div className="shrink-0 border-b border-edge p-2">
             <input
               type="search"
               value={query}
@@ -143,7 +148,11 @@ export function ChatAgentSelector({
               aria-label={searchPlaceholder}
             />
           </div>
-          <ul className="max-h-[min(16rem,calc(100vh-10rem))] overflow-y-auto p-1" role="listbox">
+          <ul
+            data-select-scroll-region
+            className={cn(selectPopoverScrollAreaClass, 'max-h-64 p-1')}
+            role="listbox"
+          >
             {filtered.length === 0 ? (
               <li className="p-2 text-sm text-fg-muted">{noMatches}</li>
             ) : (

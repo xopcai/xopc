@@ -16,6 +16,15 @@ export type VoiceInputPhase = 'idle' | 'requesting' | 'starting' | 'recording' |
 type VoiceCaptureStartStage = 'permission' | 'media' | 'session' | 'recorder';
 type VoiceCaptureFailureKind = 'permission' | 'device' | 'session' | 'recorder';
 
+function isVoiceConfigurationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const body = (error as Error & {
+    body?: { error?: string | { code?: string } };
+  }).body;
+  const code = typeof body?.error === 'object' ? body.error.code : undefined;
+  return code === 'VOICE_DISABLED' || code === 'PROVIDER_UNAVAILABLE';
+}
+
 export type VoiceSessionMode = 'dictation' | 'conversation';
 export type VoiceResponsePhase = 'idle' | 'thinking' | 'speaking';
 
@@ -86,6 +95,7 @@ export interface UseRealtimeVoiceReturn {
   muted: boolean;
   error: string | null;
   failureKind: VoiceCaptureFailureKind | null;
+  settingsRequired: boolean;
   endedReason: string | null;
   mode: VoiceSessionMode;
   startVoiceInput: () => Promise<void>;
@@ -112,6 +122,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const mutedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [failureKind, setFailureKind] = useState<VoiceCaptureFailureKind | null>(null);
+  const [settingsRequired, setSettingsRequired] = useState(false);
   const [endedReason, setEndedReason] = useState<string | null>(null);
   const callSessionKeyRef = useRef<string | undefined>(undefined);
   const controllerRef = useRef<AbortController | null>(null);
@@ -184,6 +195,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     speechStoppedAtRef.current = null;
     mutedRef.current = false;
     setMuted(false);
+    setSettingsRequired(false);
     transcriptRevisionsRef.current.clear();
     dictationRef.current.clear();
     finalizingRef.current = false;
@@ -386,9 +398,18 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             showComposerNotification('warning', m.voiceInputDropped);
           }
           if (event.type === 'session.error' && !event.payload.recoverable) {
-            setError(event.payload.code === 'CONTEXT_CHANGED' ? m.voiceContextChanged : event.payload.message);
+            const needsSettings = event.payload.code === 'PROVIDER_UNAVAILABLE';
+            const message = event.payload.code === 'CONTEXT_CHANGED'
+              ? m.voiceContextChanged
+              : needsSettings
+                ? m.voiceSttNotConfigured
+                : event.payload.message;
+            setError(message);
             setFailureKind('session');
-            if (purpose === 'dictation') showComposerNotification('error', event.payload.message);
+            setSettingsRequired(needsSettings);
+            if (purpose === 'dictation') {
+              showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/voice' } : undefined);
+            }
             clientRef.current?.stop('surface_closed');
             if (purpose === 'conversation') reset();
             else { stopTimer(); stopMedia(); captureRef.current?.cancel(); captureRef.current = null; clientRef.current = null; }
@@ -467,16 +488,22 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       clientRef.current?.stop('surface_closed');
       reset();
       updatePhase(failureKind === 'session' ? 'error' : 'idle');
+      const needsSettings = failureKind === 'session' && isVoiceConfigurationError(error);
       const message = failureKind === 'permission'
         ? m.voiceMicDenied
         : failureKind === 'device'
           ? m.voiceMicUnavailable
           : failureKind === 'recorder'
             ? m.voiceRecorderFailed
+            : needsSettings
+              ? m.voiceSttNotConfigured
             : error instanceof Error ? error.message : m.voiceSttNotConfigured;
       setError(message);
       setFailureKind(failureKind);
-      if (purpose === 'dictation') showComposerNotification('error', message, undefined, failureKind === 'session' ? { href: '/settings/capabilities/voice' } : undefined);
+      setSettingsRequired(needsSettings);
+      if (purpose === 'dictation') {
+        showComposerNotification('error', message, undefined, needsSettings ? { href: '/settings/capabilities/voice' } : undefined);
+      }
     }
   }, [disabled, handleSessionClose, m, reset, startTimer, stopMedia, stopTimer, updatePhase]);
 
@@ -570,6 +597,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     muted,
     error,
     failureKind,
+    settingsRequired,
     endedReason,
     mode,
     startVoiceInput,

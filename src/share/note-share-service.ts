@@ -218,7 +218,7 @@ export class NoteShareService {
     for (const id of selected) {
       if (!referenced.has(id)) throw new Error(`Attachment is not referenced by this Note: ${id}`);
     }
-    const projectedMarkdown = projectPublicMarkdown(note, new Set(selected));
+    const projectedMarkdown = projectPublicNoteMarkdown(note, new Set(selected));
     const markdownBytes = Buffer.byteLength(projectedMarkdown, 'utf8');
     if (markdownBytes > cfg.maxMarkdownBytes) throw new Error('Note Markdown exceeds sharing limit');
     if (selected.length > cfg.maxAttachmentCount) throw new Error('Note has too many attachments to share');
@@ -284,7 +284,7 @@ export class NoteShareService {
   }
 }
 
-function projectPublicMarkdown(note: Note, selected: Set<string>): string {
+export function projectPublicNoteMarkdown(note: Note, selected: Set<string>): string {
   const canonicalTarget = 'xopc-attachment://notes/([^/\\s)]+)/([^\\s)]+)';
   const assertOwned = new RegExp(canonicalTarget, 'gi');
   note.markdown.replace(assertOwned, (_match, rawNoteId: string) => {

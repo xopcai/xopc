@@ -144,6 +144,8 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
               audioLevel={voice.audioLevel}
               partialTranscript={voice.partialTranscript}
               finalTranscript={voice.finalTranscript}
+              error={voice.error}
+              settingsRequired={voice.settingsRequired}
 
 
 

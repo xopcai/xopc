@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
-import { readFile, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 
 import { CredentialResolver } from '../auth/credentials.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
@@ -28,6 +28,7 @@ const ALLOWED_MIME_TYPES = new Set([
 
 export interface HostedSessionShareManifest {
   schemaVersion: 1;
+  kind: 'session_document';
   title: string;
   snapshotAt: string;
   description?: string;
@@ -103,6 +104,7 @@ export class HostedSessionShareBuilder {
       cutoffSeq: source.snapshot.lastSeq,
       manifest: {
         schemaVersion: 1,
+        kind: 'session_document',
         title: (source.metadata.name?.trim() || 'Shared conversation').slice(0, 200),
         snapshotAt: new Date().toISOString(),
         ...(input.description?.trim() ? { description: input.description.trim().slice(0, 1_000) } : {}),
@@ -148,6 +150,14 @@ export interface HostedShareResult {
   snapshotRevision: number;
 }
 
+export type HostedPublicationKind = 'session_document' | 'note_document' | 'static_site';
+
+export interface HostedPublicationSnapshot {
+  kind: HostedPublicationKind;
+  manifest: unknown;
+  assets: Array<{ id: string; path: string; size: number }>;
+}
+
 type DraftResponse = {
   shareId: string;
   uploadId: string;
@@ -156,7 +166,7 @@ type DraftResponse = {
   assetUploads: Array<{ assetId: string; uploadUrl: string }>;
 };
 
-type OwnerShare = {
+export type HostedPublicationSummary = {
   id: string;
   title: string;
   description: string | null;
@@ -167,9 +177,29 @@ type OwnerShare = {
   viewCount: number;
   createdAt: string;
   updatedAt: string;
+  kind: HostedPublicationKind;
+  deliveryMode: 'hosted_snapshot';
+  owner: { type: 'user' | 'workspace'; id: string };
+  workspaceId: string;
+  createdByPrincipalId: string;
 };
 
-export class HostedSessionSharePublisher {
+type OwnerShare = HostedPublicationSummary;
+
+export interface HostedPublicationCapabilities {
+  protocolVersion: string;
+  kinds: string[];
+  deliveryModes: string[];
+  accessModes: string[];
+  upload: { direct: boolean; multipart: boolean; resumable: boolean; streaming: boolean };
+  security?: { contentScanning: boolean; quarantineBeforeActivation: boolean };
+  lifecycle: { revisions: boolean; revoke: boolean; asynchronousDeletion: boolean };
+  publishing: { allowed: boolean; managedBy: 'platform_admin' };
+}
+
+type NodeRequestInit = RequestInit & { duplex?: 'half' };
+
+export class HostedPublicationPublisher {
   private readonly baseUrl: string;
 
   constructor(
@@ -181,15 +211,19 @@ export class HostedSessionSharePublisher {
   }
 
   async create(snapshot: HostedSessionShareSnapshot, lifecycle: { ttlMs: number; maxViews: number | null }): Promise<HostedShareResult> {
+    return this.createPublication({ kind: 'session_document', manifest: snapshot.manifest, assets: snapshot.assets }, lifecycle);
+  }
+
+  async createPublication(snapshot: HostedPublicationSnapshot, lifecycle: { ttlMs: number; maxViews: number | null }): Promise<HostedShareResult> {
     const publicToken = randomBytes(32).toString('base64url');
-    const draft = await this.request<DraftResponse>('/api/v1/session-shares', {
+    const draft = await this.request<DraftResponse>('/api/v1/publications', {
       method: 'POST',
       headers: { 'Idempotency-Key': `xopc-${randomUUID()}` },
-      body: JSON.stringify({ publicToken, manifest: snapshot.manifest, ...lifecycle }),
+      body: JSON.stringify({ kind: snapshot.kind, publicToken, manifest: snapshot.manifest, ...lifecycle }),
     });
     await this.uploadAssets(draft, snapshot.assets);
     const finalized = await this.request<{ item: OwnerShare }>(
-      `/api/v1/session-shares/${encodeURIComponent(draft.shareId)}/uploads/${encodeURIComponent(draft.uploadId)}/finalize`,
+      `/api/v1/publications/${encodeURIComponent(draft.shareId)}/uploads/${encodeURIComponent(draft.uploadId)}/finalize`,
       { method: 'POST' },
     );
     if (!draft.publicUrl) throw new Error('Hosted Share did not return a public URL');
@@ -197,43 +231,79 @@ export class HostedSessionSharePublisher {
   }
 
   async refresh(shareId: string, expectedRevision: number, publicUrl: string, snapshot: HostedSessionShareSnapshot): Promise<HostedShareResult> {
-    const draft = await this.request<DraftResponse>(`/api/v1/session-shares/${encodeURIComponent(shareId)}/revisions`, {
+    return this.refreshPublication(
+      shareId,
+      expectedRevision,
+      publicUrl,
+      { kind: 'session_document', manifest: snapshot.manifest, assets: snapshot.assets },
+    );
+  }
+
+  async refreshPublication(
+    shareId: string,
+    expectedRevision: number,
+    publicUrl: string,
+    snapshot: HostedPublicationSnapshot,
+  ): Promise<HostedShareResult> {
+    const draft = await this.request<DraftResponse>(`/api/v1/publications/${encodeURIComponent(shareId)}/revisions`, {
       method: 'POST',
       headers: { 'Idempotency-Key': `xopc-${randomUUID()}` },
       body: JSON.stringify({ expectedRevision, manifest: snapshot.manifest }),
     });
     await this.uploadAssets(draft, snapshot.assets);
     const finalized = await this.request<{ item: OwnerShare }>(
-      `/api/v1/session-shares/${encodeURIComponent(shareId)}/uploads/${encodeURIComponent(draft.uploadId)}/finalize`,
+      `/api/v1/publications/${encodeURIComponent(shareId)}/uploads/${encodeURIComponent(draft.uploadId)}/finalize`,
       { method: 'POST' },
     );
     return toResult(finalized.item, publicUrl);
   }
 
-  async list(): Promise<OwnerShare[]> {
-    return (await this.request<{ items: OwnerShare[] }>('/api/v1/session-shares')).items;
+  async listPublications(): Promise<HostedPublicationSummary[]> {
+    return (await this.request<{ items: HostedPublicationSummary[] }>('/api/v1/publications')).items;
+  }
+
+  async capabilities(): Promise<HostedPublicationCapabilities> {
+    return this.request<HostedPublicationCapabilities>('/api/v1/publications/capabilities');
   }
 
   async revoke(shareId: string): Promise<void> {
-    await this.request(`/api/v1/session-shares/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
+    await this.revokePublication(shareId);
   }
 
-  private async uploadAssets(draft: DraftResponse, assets: HostedSessionShareSnapshot['assets']): Promise<void> {
+  async revokePublication(shareId: string): Promise<void> {
+    await this.request(`/api/v1/publications/${encodeURIComponent(shareId)}`, { method: 'DELETE' });
+  }
+
+  async listRevisions(shareId: string): Promise<Array<{ revision: number; createdAt: string; current: boolean }>> {
+    return (await this.request<{ items: Array<{ revision: number; createdAt: string; current: boolean }> }>(
+      `/api/v1/publications/${encodeURIComponent(shareId)}/revisions`,
+    )).items;
+  }
+
+  async rollbackPublication(shareId: string, expectedRevision: number, targetRevision: number): Promise<HostedPublicationSummary> {
+    return (await this.request<{ item: HostedPublicationSummary }>(`/api/v1/publications/${encodeURIComponent(shareId)}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ expectedRevision, targetRevision }),
+    })).item;
+  }
+
+  private async uploadAssets(draft: DraftResponse, assets: HostedPublicationSnapshot['assets']): Promise<void> {
     const uploads = new Map(draft.assetUploads.map((upload) => [upload.assetId, upload.uploadUrl]));
     for (const asset of assets) {
       const uploadUrl = uploads.get(asset.id);
       if (!uploadUrl) throw new Error(`Hosted Share did not accept attachment: ${asset.id}`);
-      const bytes = await readFile(asset.path);
-      if (bytes.byteLength !== asset.size) throw new Error(`Attachment changed during upload: ${asset.id}`);
+      const current = await stat(asset.path);
+      if (!current.isFile() || current.size !== asset.size) throw new Error(`Attachment changed during upload: ${asset.id}`);
       await this.request(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Length': String(bytes.byteLength), 'Content-Type': 'application/octet-stream' },
-        body: bytes,
+        headers: { 'Content-Length': String(asset.size), 'Content-Type': 'application/octet-stream' },
+        body: createReadStream(asset.path) as unknown as RequestInit['body'],
+        duplex: 'half',
       });
     }
   }
 
-  private async request<T = { ok: true }>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T = { ok: true }>(path: string, init: NodeRequestInit = {}): Promise<T> {
     const token = await this.credentials.loadOAuthToken('xopc-share');
     if (!token) throw new HostedShareAuthorizationError();
     const url = new URL(path, `${this.baseUrl}/`);
@@ -248,9 +318,15 @@ export class HostedSessionSharePublisher {
       },
       signal: init.signal ?? AbortSignal.timeout(120_000),
     });
-    const body = await response.json().catch(() => ({})) as { error?: { message?: string } };
+    const body = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } };
     if (response.status === 401) throw new HostedShareAuthorizationError();
-    if (!response.ok) throw new Error(body.error?.message || `Hosted Share request failed (${response.status})`);
+    if (!response.ok) {
+      throw new HostedShareRemoteError(
+        body.error?.message || `Hosted Share request failed (${response.status})`,
+        response.status,
+        body.error?.code,
+      );
+    }
     return body as T;
   }
 }
@@ -262,14 +338,31 @@ export class HostedShareAuthorizationError extends Error {
   }
 }
 
+export class HostedShareRemoteError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'HostedShareRemoteError';
+  }
+}
+
+export type HostedPublicationSource = { kind: 'session' | 'note' | 'static_site'; id: string; version: string };
+
 export interface HostedShareBinding extends HostedShareResult {
-  sessionId: string;
-  cutoffSeq: number;
+  kind: HostedPublicationKind;
+  source: HostedPublicationSource;
+  revisionSources: Record<string, HostedPublicationSource>;
+  workspaceContext?: { workspaceRoot?: string; sessionKey?: string; agentId?: string };
+  sessionId?: string;
+  cutoffSeq?: number;
   title: string;
   description: string | null;
-  messageCount: number;
+  messageCount?: number;
   attachmentCount: number;
-  includeToolActivities: boolean;
+  includeToolActivities?: boolean;
   attachmentIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -283,7 +376,22 @@ export class HostedShareBindingStore {
     return this.state.values().filter(item => item.sessionId === sessionId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  async listBySource(kind: HostedPublicationSource['kind'], id: string): Promise<HostedShareBinding[]> {
+    return this.state.values()
+      .filter(item => item.source.kind === kind && item.source.id === id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listAll(): Promise<HostedShareBinding[]> {
+    return this.state.values().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
   async upsert(binding: HostedShareBinding): Promise<void> { this.state.set(binding.id, binding); }
+
+  async markRevoked(id: string): Promise<void> {
+    const binding = this.state.get(id);
+    if (binding) this.state.set(id, { ...binding, revoked: true, updatedAt: new Date().toISOString() });
+  }
 
   async reconcile(remote: OwnerShare[]): Promise<void> {
     const byId = new Map(remote.map(item => [item.id, item]));

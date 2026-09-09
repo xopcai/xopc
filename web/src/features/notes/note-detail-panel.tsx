@@ -1,4 +1,5 @@
-import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Search, Share2, Sparkles, Trash2 } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCircle, MoreHorizontal, Search, Share2, Sparkles, Trash2 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -69,34 +70,49 @@ function NoteDetailModeSwitcher({
     { id: 'source' as const, label: labels.source, Icon: Code2 },
     { id: 'preview' as const, label: labels.preview, Icon: Eye },
   ];
+  const activeMode = modes.find((item) => item.id === mode) ?? modes[0];
+  const ActiveIcon = activeMode.Icon;
+
+  const preloadMode = (id: EditorMode) => {
+    if (id === 'wysiwyg') void loadBlockEditor();
+    if (id === 'source') void loadMarkdownEditor();
+  };
 
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-edge p-0.5">
-      {modes.map(({ id, label, Icon }) => (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger asChild>
         <button
-          key={id}
           type="button"
-          onClick={() => onModeChange(id)}
-          onMouseEnter={() => {
-            if (id === 'wysiwyg') void loadBlockEditor();
-            if (id === 'source') void loadMarkdownEditor();
-          }}
-          onFocus={() => {
-            if (id === 'wysiwyg') void loadBlockEditor();
-            if (id === 'source') void loadMarkdownEditor();
-          }}
-          className={cn(
-            'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors',
-            mode === id
-              ? 'bg-surface-hover text-fg'
-              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-          )}
+          aria-label={activeMode.label}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-edge px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <Icon className="size-3.5" aria-hidden />
-          {label}
+          <ActiveIcon className="size-3.5" aria-hidden />
+          <span>{activeMode.label}</span>
+          <ChevronDown className="size-3 text-fg-subtle" aria-hidden />
         </button>
-      ))}
-    </div>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={6}
+          className="z-50 min-w-36 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+        >
+          {modes.map(({ id, label, Icon }) => (
+            <DropdownMenu.Item
+              key={id}
+              onSelect={() => onModeChange(id)}
+              onPointerMove={() => preloadMode(id)}
+              onFocus={() => preloadMode(id)}
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
+            >
+              <Icon className="size-4 text-fg-muted" aria-hidden />
+              <span className="flex-1">{label}</span>
+              {mode === id ? <Check className="size-4 text-accent" aria-hidden /> : null}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
@@ -445,6 +461,7 @@ function NoteDetailPanelInner({
         ) : null}
         <NoteReadAloudControls
           input={getNoteReadAloudInput}
+          showLabel={false}
           labels={{
             read: n.readAloud,
             preparing: n.readAloudPreparing,
@@ -454,14 +471,6 @@ function NoteDetailPanelInner({
             stop: n.readAloudStop,
           }}
         />
-        <button
-          type="button"
-          onClick={() => void handleShare()}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
-        >
-          <Share2 className="size-3.5" aria-hidden />
-          {language === 'zh' ? '分享' : 'Share'}
-        </button>
         <button
           type="button"
           onClick={handleBreakdownClick}
@@ -494,29 +503,50 @@ function NoteDetailPanelInner({
           onModeChange={handleModeChange}
           labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }}
         />
-        <button
-          type="button"
-          onClick={() => setActiveSidePanel(activeSidePanel === 'history' ? null : 'history')}
-          aria-label={n.history}
-          className={cn(
-            'rounded-lg p-1.5 transition-colors',
-            activeSidePanel === 'history'
-              ? 'bg-accent/10 text-accent'
-              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-          )}
-        >
-          <History className="size-4" aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={() => setDeleteConfirmOpen(true)}
-          disabled={deleting || saving}
-          aria-label={n.delete}
-          title={n.delete}
-          className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Trash2 className="size-4" aria-hidden />
-        </button>
+        <DropdownMenu.Root modal={false}>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              aria-label={n.noteActions}
+              title={n.noteActions}
+              className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <MoreHorizontal className="size-4" aria-hidden />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={6}
+              className="z-50 min-w-40 rounded-xl border border-edge bg-surface-panel p-1 shadow-popover"
+            >
+              <DropdownMenu.Item
+                onSelect={() => void handleShare()}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
+              >
+                <Share2 className="size-4 text-fg-muted" aria-hidden />
+                {language === 'zh' ? '分享' : 'Share'}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onSelect={() => setActiveSidePanel(activeSidePanel === 'history' ? null : 'history')}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover focus:bg-surface-hover"
+              >
+                <History className="size-4 text-fg-muted" aria-hidden />
+                <span className="flex-1">{n.history}</span>
+                {activeSidePanel === 'history' ? <Check className="size-4 text-accent" aria-hidden /> : null}
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-1 h-px bg-edge-subtle" />
+              <DropdownMenu.Item
+                disabled={deleting || saving}
+                onSelect={() => setDeleteConfirmOpen(true)}
+                className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-danger outline-none hover:bg-danger-soft focus:bg-danger-soft data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {n.delete}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
     ),
     [

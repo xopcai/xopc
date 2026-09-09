@@ -4,8 +4,11 @@ import { createHash } from 'node:crypto';
 import { extractToken } from '../../auth.js';
 import { getSiteShareStore } from '../../../share/site-share-store.js';
 import { resolveSiteShareConfig } from '../../../share/site-share-config.js';
+import { resolveSiteShareUrl } from '../../../share/share-url.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
+import { resolveReverseProxyPublicUrl } from '../../public-url.js';
+import type { GatewayService } from '../../service.js';
 
 function hashGatewayToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex').slice(0, 12);
@@ -14,13 +17,21 @@ function hashGatewayToken(token: string): string {
 function buildShareUrls(
   record: import('../../../share/site-share-types.js').SiteShareRecord,
   publicHostSuffix: string,
-  gatewayHost: string,
-  gatewayPort: number,
+  service: GatewayService,
 ): { publicUrl: string; subpathUrl: string } {
   const label = record.subdomain ?? record.token;
-  const publicUrl = `https://${label}.${publicHostSuffix}/`;
+  const gatewayHost = resolveGatewayEffectiveHost(service.currentConfig);
+  const gatewayPort = service.currentConfig.gateway.port ?? 18790;
   const subpathUrl = `http://${gatewayHost}:${gatewayPort}/site/${record.token}/`;
-  return { publicUrl, subpathUrl };
+  const resolved = resolveSiteShareUrl({
+    gatewayHost,
+    gatewayPort,
+    reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
+    token: record.token,
+    subdomainLabel: label,
+    publicHostSuffix,
+  });
+  return { publicUrl: resolved.shareUrl, subpathUrl };
 }
 
 export function registerSiteShareRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -115,8 +126,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
       });
 
       const cfg = store.getConfig();
-      const gw = service.currentConfig.gateway;
-      const urls = buildShareUrls(record, cfg.publicHostSuffix, resolveGatewayEffectiveHost(service.currentConfig), gw.port ?? 18790);
+      const urls = buildShareUrls(record, cfg.publicHostSuffix, service);
 
       return c.json(
         {
@@ -145,11 +155,8 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
   authenticated.get('/api/site-shares', (c) => {
     store.updateConfig(resolveSiteShareConfig(service));
     const cfg = store.getConfig();
-    const gw = service.currentConfig.gateway;
-    const gatewayHost = resolveGatewayEffectiveHost(service.currentConfig);
-    const gatewayPort = gw.port ?? 18790;
     const items = store.getAllShares().map((r) => {
-      const urls = buildShareUrls(r, cfg.publicHostSuffix, gatewayHost, gatewayPort);
+      const urls = buildShareUrls(r, cfg.publicHostSuffix, service);
       const expired = Date.now() >= new Date(r.expiresAt).getTime();
       return {
         id: r.id,
@@ -177,8 +184,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
     const record = store.getById(id);
     if (!record) return c.json({ ok: false, error: { message: 'Not found' } }, 404);
     const cfg = store.getConfig();
-    const gw = service.currentConfig.gateway;
-    const urls = buildShareUrls(record, cfg.publicHostSuffix, resolveGatewayEffectiveHost(service.currentConfig), gw.port ?? 18790);
+    const urls = buildShareUrls(record, cfg.publicHostSuffix, service);
     return c.json({
       ok: true,
       payload: {

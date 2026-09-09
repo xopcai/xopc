@@ -30,11 +30,15 @@ import { NoteShareService } from '../../../share/note-share-service.js';
 import { SessionShareService, SessionShareSnapshotConflictError } from '../../../share/session-share-service.js';
 import {
   HostedSessionShareBuilder,
-  HostedSessionSharePublisher,
+  HostedPublicationPublisher,
+  HostedShareRemoteError,
   HostedShareAuthorizationError,
   HostedShareBindingStore,
   type HostedShareBinding,
 } from '../../../share/hosted-session-share.js';
+import { HostedNotePublicationBuilder, HostedNoteVersionConflictError } from '../../../share/hosted-note-publication.js';
+import { HostedStaticSitePublicationBuilder } from '../../../share/hosted-static-site-publication.js';
+import { publishHostedStaticSite } from '../../../share/hosted-static-site-publish.js';
 import { loadCompactionSourceSnapshot } from '../../../storage/sqlite/index.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { SHARE_CONFIG_DEFAULTS } from '../../../share/share-types.js';
@@ -617,7 +621,9 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   const noteShares = new NoteShareService(store, service.notesServiceInstance);
   const sessionShares = createSessionShareService(service, store);
   const hostedBuilder = new HostedSessionShareBuilder(createSessionShareSource(service));
-  const hostedPublisher = new HostedSessionSharePublisher();
+  const hostedNoteBuilder = new HostedNotePublicationBuilder(service.notesServiceInstance);
+  const hostedSiteBuilder = new HostedStaticSitePublicationBuilder();
+  const hostedPublisher = new HostedPublicationPublisher();
   const hostedBindings = new HostedShareBindingStore();
   const siteStoreEager = getSiteShareStore(resolveSiteShareConfig(service));
   // Register once: when a site share is revoked / expires, drop its staging dir (if any).
@@ -764,7 +770,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
     if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
     try {
-      await hostedBindings.reconcile(await hostedPublisher.list());
+      await hostedBindings.reconcile(await hostedPublisher.listPublications());
       return c.json({
         ok: true,
         payload: { shares: (await hostedBindings.list(metadata.sessionId)).map(hostedBindingResponse) },
@@ -788,6 +794,11 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       const now = new Date().toISOString();
       const binding: HostedShareBinding = {
         ...result,
+        kind: 'session_document',
+        source: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+        revisionSources: {
+          [String(result.snapshotRevision)]: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+        },
         sessionId: snapshot.sessionId,
         cutoffSeq: snapshot.cutoffSeq,
         title: snapshot.manifest.title,
@@ -830,6 +841,12 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       const binding: HostedShareBinding = {
         ...previous,
         ...result,
+        kind: 'session_document',
+        source: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+        revisionSources: {
+          ...previous.revisionSources,
+          [String(result.snapshotRevision)]: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+        },
         cutoffSeq: snapshot.cutoffSeq,
         title: snapshot.manifest.title,
         messageCount: snapshot.manifest.messages.length,
@@ -856,6 +873,262 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       await hostedPublisher.revoke(binding.id);
       await hostedBindings.upsert({ ...binding, revoked: true, updatedAt: new Date().toISOString() });
       return c.json({ ok: true, payload: { revoked: binding.id } });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.get('/api/hosted-publications/capabilities', async (c) => {
+    try {
+      return c.json({ ok: true, payload: await hostedPublisher.capabilities() });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.get('/api/notes/:id/hosted-publications', async (c) => {
+    try {
+      return c.json({ ok: true, payload: {
+        publications: (await hostedBindings.listBySource('note', c.req.param('id'))).map(hostedPublicationBindingResponse),
+      } });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/notes/:id/hosted-publications', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    try {
+      const snapshot = await hostedNoteBuilder.build(c.req.param('id'), {
+        expectedNoteVersion: typeof body.expectedNoteVersion === 'number' ? body.expectedNoteVersion : undefined,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : undefined,
+        description: typeof body.description === 'string' ? body.description : undefined,
+      });
+      const result = await hostedPublisher.createPublication(snapshot, {
+        ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 86_400_000,
+        maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : null,
+      });
+      const now = new Date().toISOString();
+      const binding: HostedShareBinding = {
+        ...result,
+        kind: 'note_document',
+        source: { kind: 'note', id: snapshot.sourceNoteId, version: String(snapshot.sourceVersion) },
+        revisionSources: {
+          [String(result.snapshotRevision)]: { kind: 'note', id: snapshot.sourceNoteId, version: String(snapshot.sourceVersion) },
+        },
+        title: snapshot.title,
+        description: typeof body.description === 'string' ? body.description.trim() || null : null,
+        attachmentCount: snapshot.attachmentCount,
+        attachmentIds: snapshot.assets.map((asset) => asset.id),
+        createdAt: now,
+        updatedAt: now,
+        revoked: false,
+      };
+      await hostedBindings.upsert(binding);
+      return c.json({ ok: true, payload: hostedPublicationBindingResponse(binding) }, 201);
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/notes/:id/hosted-publications/:publicationId/refresh', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const previous = (await hostedBindings.listBySource('note', c.req.param('id')))
+      .find((binding) => binding.id === c.req.param('publicationId') && !binding.revoked);
+    if (!previous) return c.json({ ok: false, error: { message: 'Hosted publication not found' } }, 404);
+    try {
+      const snapshot = await hostedNoteBuilder.build(c.req.param('id'), {
+        expectedNoteVersion: typeof body.expectedNoteVersion === 'number' ? body.expectedNoteVersion : undefined,
+        attachmentIds: Array.isArray(body.attachmentIds)
+          ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
+          : previous.attachmentIds,
+        description: previous.description ?? undefined,
+      });
+      const result = await hostedPublisher.refreshPublication(previous.id, previous.snapshotRevision, previous.shareUrl, snapshot);
+      const binding: HostedShareBinding = {
+        ...previous,
+        ...result,
+        kind: 'note_document',
+        source: { kind: 'note', id: snapshot.sourceNoteId, version: String(snapshot.sourceVersion) },
+        revisionSources: {
+          ...previous.revisionSources,
+          [String(result.snapshotRevision)]: { kind: 'note', id: snapshot.sourceNoteId, version: String(snapshot.sourceVersion) },
+        },
+        title: snapshot.title,
+        attachmentCount: snapshot.attachmentCount,
+        attachmentIds: snapshot.assets.map((asset) => asset.id),
+        updatedAt: new Date().toISOString(),
+      };
+      await hostedBindings.upsert(binding);
+      return c.json({ ok: true, payload: hostedPublicationBindingResponse(binding) });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/hosted-publications/static-sites', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.path !== 'string') return c.json({ ok: false, error: { message: 'Static site path is required' } }, 400);
+    try {
+      const workspaceRoot = await resolveWorkspaceRootForShare(
+        service,
+        typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+        typeof body.agentId === 'string' ? body.agentId : undefined,
+      );
+      if (!workspaceRoot) return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+      const { binding, snapshot } = await publishHostedStaticSite({
+        workspaceRoot,
+        path: body.path,
+        title: typeof body.title === 'string' ? body.title : undefined,
+        description: typeof body.description === 'string' ? body.description : undefined,
+        spaFallback: typeof body.spaFallback === 'boolean' ? body.spaFallback : undefined,
+        ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 86_400_000,
+        maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : null,
+        sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+        agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+      }, { builder: hostedSiteBuilder, publisher: hostedPublisher, bindings: hostedBindings });
+      return c.json({ ok: true, payload: { ...hostedPublicationBindingResponse(binding), fileCount: snapshot.fileCount, totalBytes: snapshot.totalBytes } }, 201);
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/hosted-publications/static-sites/:publicationId/refresh', async (c) => {
+    const previous = (await hostedBindings.listAll()).find((binding) =>
+      binding.id === c.req.param('publicationId') && binding.kind === 'static_site' && !binding.revoked);
+    if (!previous || previous.source.kind !== 'static_site') {
+      return c.json({ ok: false, error: { message: 'Hosted publication not found' } }, 404);
+    }
+    try {
+      const workspaceRoot = previous.workspaceContext?.workspaceRoot ?? await resolveWorkspaceRootForShare(
+        service,
+        previous.workspaceContext?.sessionKey,
+        previous.workspaceContext?.agentId,
+      );
+      if (!workspaceRoot) return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+      const snapshot = await hostedSiteBuilder.build(workspaceRoot, {
+        path: previous.source.id,
+        title: previous.title,
+        description: previous.description ?? undefined,
+        spaFallback: true,
+      });
+      const result = await hostedPublisher.refreshPublication(
+        previous.id,
+        previous.snapshotRevision,
+        previous.shareUrl,
+        snapshot,
+      );
+      const now = new Date().toISOString();
+      const binding: HostedShareBinding = {
+        ...previous,
+        ...result,
+        source: { kind: 'static_site', id: previous.source.id, version: now },
+        revisionSources: {
+          ...previous.revisionSources,
+          [String(result.snapshotRevision)]: { kind: 'static_site', id: previous.source.id, version: now },
+        },
+        attachmentCount: snapshot.fileCount,
+        attachmentIds: snapshot.assets.map((asset) => asset.id),
+        updatedAt: now,
+      };
+      await hostedBindings.upsert(binding);
+      return c.json({ ok: true, payload: {
+        ...hostedPublicationBindingResponse(binding),
+        fileCount: snapshot.fileCount,
+        totalBytes: snapshot.totalBytes,
+      } });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.get('/api/hosted-publications/:publicationId/revisions', async (c) => {
+    try {
+      return c.json({ ok: true, payload: {
+        revisions: await hostedPublisher.listRevisions(c.req.param('publicationId')),
+      } });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.post('/api/hosted-publications/:publicationId/rollback', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (typeof body.expectedRevision !== 'number' || typeof body.targetRevision !== 'number') {
+      return c.json({ ok: false, error: { message: 'Expected and target revisions are required' } }, 400);
+    }
+    try {
+      const id = c.req.param('publicationId');
+      const binding = (await hostedBindings.listAll()).find((item) => item.id === id);
+      const targetSource = binding?.revisionSources[String(body.targetRevision)];
+      if (binding && !targetSource) {
+        return c.json({ ok: false, error: { message: 'Publication revision source not found' } }, 409);
+      }
+      const item = await hostedPublisher.rollbackPublication(id, body.expectedRevision, body.targetRevision);
+      if (binding) await hostedBindings.upsert({
+        ...binding,
+        source: targetSource!,
+        snapshotRevision: item.revision!,
+        title: item.title,
+        description: item.description,
+        expiresAt: item.expiresAt,
+        maxViews: item.maxViews,
+        viewCount: item.viewCount,
+        updatedAt: item.updatedAt,
+      });
+      return c.json({ ok: true, payload: { publicationId: id, revision: body.targetRevision } });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.get('/api/hosted-publications', async (c) => {
+    try {
+      const [remote, localBindings] = await Promise.all([
+        hostedPublisher.listPublications(),
+        hostedBindings.listAll(),
+      ]);
+      const bindingById = new Map(localBindings.map((binding) => [binding.id, binding]));
+      return c.json({
+        ok: true,
+        payload: {
+          publications: remote.map((item) => {
+            const binding = bindingById.get(item.id);
+            return {
+              id: item.id,
+              kind: item.kind,
+              delivery: item.deliveryMode,
+              title: item.title,
+              description: item.description,
+              status: item.status,
+              revision: item.revision,
+              expiresAt: item.expiresAt,
+              maxViews: item.maxViews,
+              viewCount: item.viewCount,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+              owner: item.owner ?? null,
+              workspaceId: item.workspaceId ?? null,
+              createdByPrincipalId: item.createdByPrincipalId ?? null,
+              shareUrl: binding?.shareUrl ?? null,
+              managedFromThisDevice: Boolean(binding),
+            };
+          }),
+        },
+      });
+    } catch (err) {
+      return hostedShareErrorResponse(c, err);
+    }
+  });
+
+  authenticated.delete('/api/hosted-publications/:publicationId', async (c) => {
+    try {
+      const id = c.req.param('publicationId');
+      await hostedPublisher.revokePublication(id);
+      await hostedBindings.markRevoked(id);
+      return c.json({ ok: true, payload: { revoked: id } });
     } catch (err) {
       return hostedShareErrorResponse(c, err);
     }
@@ -1032,11 +1305,55 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     try {
       if (decision.kind === 'site') {
         const siteStore = getSiteShareStore(resolveSiteShareConfig(service));
-        // Single HTML file → stage into a temp dir as index.html so it can be
-        // served as a site (recipient lands on a rendered page, not the
-        // file-landing). The staging dir is auto-cleaned on revoke/expire.
         let sitePath = path;
         let stagedDir: string | null = null;
+        const titleOut = makeTitle(probe.kind === 'directory' ? path.split('/').pop() || path : path, title);
+        const directUrl = resolveSiteShareUrl({
+          ...urlCtx,
+          token: 'reachability-check',
+          subdomainLabel: 'reachability-check',
+          publicHostSuffix: siteStore.getConfig().publicHostSuffix,
+        });
+        if (directUrl.reachability !== 'public') {
+          const { binding } = await publishHostedStaticSite({
+            workspaceRoot,
+            path: sitePath,
+            title: titleOut,
+            description,
+            spaFallback: true,
+            ttlMs,
+            maxViews: maxViews ?? null,
+            sessionKey,
+            agentId,
+          }, { builder: hostedSiteBuilder, publisher: hostedPublisher, bindings: hostedBindings });
+          return c.json({
+            ok: true,
+            payload: {
+              share: {
+                id: binding.id,
+                kind: 'site',
+                delivery: 'hosted',
+                title: binding.title,
+                description: makeDescription({ audience, expiresAt: binding.expiresAt, override: description }),
+                shareUrl: binding.shareUrl,
+                lanUrl: null,
+                reachability: 'public',
+                reachabilityHint: null,
+                expiresAt: binding.expiresAt,
+                maxViews: binding.maxViews,
+              },
+              thumbnail: {
+                url: '',
+                status: 'unavailable',
+                width: SHARE_CONFIG_DEFAULTS.thumbnail.viewportWidth,
+                height: SHARE_CONFIG_DEFAULTS.thumbnail.viewportHeight,
+              },
+              routing: { reason: decision.reason, hint: decision.hint },
+            },
+          }, 201);
+        }
+        // Direct gateway serving needs a directory root; hosted publishing can
+        // snapshot a standalone HTML file without staging it.
         if (probe.kind === 'file') {
           const staged = await stageSingleHtmlAsSite(workspaceRoot, probe.absolutePath);
           sitePath = staged.relativePath;
@@ -1068,7 +1385,6 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
           scheduleThumbnail({ scope: 'site', token: siteRec.token, recordId: siteRec.id }, thumbnailRenderContext(service));
           siteStore.setThumbnailStatus(siteRec.id, 'pending');
         }
-        const titleOut = makeTitle(probe.kind === 'directory' ? path.split('/').pop() || path : path, title);
         return c.json({
           ok: true,
           payload: {
@@ -1302,13 +1618,36 @@ function hostedBindingResponse(binding: HostedShareBinding) {
   };
 }
 
+function hostedPublicationBindingResponse(binding: HostedShareBinding) {
+  return {
+    id: binding.id,
+    kind: binding.kind,
+    delivery: 'hosted_snapshot' as const,
+    shareUrl: binding.shareUrl,
+    expiresAt: binding.expiresAt,
+    maxViews: binding.maxViews,
+    viewCount: binding.viewCount,
+    revision: binding.snapshotRevision,
+    title: binding.title,
+    description: binding.description,
+    attachmentCount: binding.attachmentCount,
+    createdAt: binding.createdAt,
+    updatedAt: binding.updatedAt,
+    revoked: binding.revoked,
+    expired: Date.now() >= new Date(binding.expiresAt).getTime(),
+    source: binding.source,
+  };
+}
+
 function hostedShareErrorResponse(c: Context, err: unknown): Response {
   const message = err instanceof Error ? err.message : String(err);
   const status = err instanceof HostedShareAuthorizationError
     ? 401
-    : err instanceof SessionShareSnapshotConflictError
+    : err instanceof HostedShareRemoteError && err.status === 403
+      ? 403
+    : err instanceof SessionShareSnapshotConflictError || err instanceof HostedNoteVersionConflictError
       ? 409
-      : message === 'Session not found' || message === 'Hosted share not found'
+      : message === 'Session not found' || message === 'Hosted share not found' || message === 'Hosted publication not found' || message === 'Note not found'
         ? 404
         : 400;
   return c.json({
@@ -1317,6 +1656,8 @@ function hostedShareErrorResponse(c: Context, err: unknown): Response {
       message,
       code: err instanceof HostedShareAuthorizationError
         ? 'hosted_share_auth_required'
+        : err instanceof HostedShareRemoteError && err.status === 403
+          ? err.code ?? 'hosted_share_forbidden'
         : status === 409 ? 'session_snapshot_conflict' : undefined,
     },
   }, status);

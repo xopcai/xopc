@@ -1,4 +1,4 @@
-import { loadTunnelState } from '../tunnel/tunnel-state.js';
+import { getTunnelService } from '../tunnel/tunnel-service.js';
 import { enumerateLanGatewayCandidates } from '../gateway/host.js';
 
 import type { ResolvedShareUrl, ShareReachability } from './share-types.js';
@@ -19,13 +19,13 @@ export interface ShareUrlContext {
 }
 
 export function resolveShareUrl(token: string, ctx: ShareUrlContext): ResolvedShareUrl {
-  const tunnelState = loadTunnelState();
+  const tunnelPublicUrl = activeTunnelPublicUrl();
   const { gatewayHost, gatewayPort, reverseProxyPublicUrl } = ctx;
 
   const path = `/s/${token}`;
 
-  if (tunnelState?.publicUrl) {
-    const base = tunnelState.publicUrl.replace(/\/+$/, '');
+  if (tunnelPublicUrl) {
+    const base = tunnelPublicUrl.replace(/\/+$/, '');
     return {
       shareUrl: `${base}${path}`,
       lanUrl: buildLanUrl(gatewayHost, gatewayPort, path),
@@ -76,7 +76,7 @@ function isLoopbackHost(host: string): boolean {
 }
 
 export function resolveReachabilityForList(ctx: ShareUrlContext): ShareReachability {
-  if (loadTunnelState()?.publicUrl) return 'public';
+  if (activeTunnelPublicUrl()) return 'public';
   if (ctx.reverseProxyPublicUrl?.trim()) return 'public';
   if (!isLoopbackHost(ctx.gatewayHost)) return 'lan';
   return 'local-only';
@@ -104,16 +104,16 @@ export interface ResolvedSiteShareUrl {
 
 /**
  * Resolve the URL pair for a site share. Priority mirrors `resolveShareUrl`:
- *  1. FRP tunnel → wildcard subdomain on `<publicHostSuffix>`.
+ *  1. FRP tunnel → gateway `/site/<token>/` subpath.
  *  2. Reverse-proxy `publicUrl` → `<publicUrl>/site/<token>/` subpath.
  *  3. Direct gateway bind → `http://<host>:<port>/site/<token>/`.
  */
 export function resolveSiteShareUrl(ctx: SiteShareUrlContext): ResolvedSiteShareUrl {
-  const tunnelState = loadTunnelState();
-  if (tunnelState?.publicUrl) {
-    const root = `https://${ctx.subdomainLabel}.${ctx.publicHostSuffix}`;
+  const tunnelPublicUrl = activeTunnelPublicUrl();
+  if (tunnelPublicUrl) {
+    const root = tunnelPublicUrl.replace(/\/+$/, '');
     return {
-      shareUrl: `${root}/`,
+      shareUrl: `${root}/site/${ctx.token}/`,
       thumbnailUrl: `${root}/site/${ctx.token}/thumbnail`,
       reachability: 'public',
       reachabilityHint: null,
@@ -141,4 +141,9 @@ export function resolveSiteShareUrl(ctx: SiteShareUrlContext): ResolvedSiteShare
       ? '当前仅本机可访问，开启远程隧道后对外可达'
       : '当前局域网内可访问，开启远程隧道后对外网可达',
   };
+}
+
+function activeTunnelPublicUrl(): string | null {
+  const status = getTunnelService().getStatus();
+  return status.state === 'connected' && status.publicUrl ? status.publicUrl : null;
 }

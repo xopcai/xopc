@@ -1,9 +1,12 @@
 import {
   Check,
   ChevronDown,
+  Cloud,
   Clock,
   Copy,
   FileText,
+  FolderOpen,
+  History,
   Loader2,
   Plus,
   RefreshCw,
@@ -22,6 +25,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import {
   SettingsPageFrame,
   SettingsPageHeader,
@@ -29,11 +33,18 @@ import {
 } from '@/features/settings/settings-page-layout';
 import {
   cleanExpiredShares,
+  createHostedStaticSite,
   createShare,
   extendShare,
+  fetchHostedPublications,
+  fetchHostedPublicationRevisions,
   fetchShares,
+  refreshHostedStaticSite,
+  revokeHostedPublication,
+  rollbackHostedPublication,
   revokeShare,
   type CreateShareParams,
+  type HostedPublicationItem,
   type ShareItem,
 } from '@/features/shares/shares-api';
 import {
@@ -185,6 +196,7 @@ function SharesManageTab({
     isLoading,
     mutate,
   } = useSWR('shares-list', fetchShares, { refreshInterval: 30_000 });
+  const hosted = useSWR('hosted-publications-list', fetchHostedPublications, { refreshInterval: 30_000 });
 
   const shares = data?.payload?.shares ?? [];
   const [showExpired, setShowExpired] = useState(false);
@@ -200,6 +212,12 @@ function SharesManageTab({
   return (
     <div className="flex flex-col gap-6">
       <CreateShareSection t={t} onCreated={() => void mutate()} />
+      <HostedStaticSiteSection
+        language={language}
+        connected={hosted.data?.connected === true}
+        publishingAllowed={hosted.data?.publishingAllowed === true}
+        onCreated={() => void hosted.mutate()}
+      />
 
       <SettingsFormSection>
         <div className="mb-3 flex items-center justify-between">
@@ -273,7 +291,351 @@ function SharesManageTab({
           <CleanExpiredButton t={t} onCleaned={() => void mutate()} />
         )}
       </SettingsFormSection>
+
+      <HostedPublicationsSection
+        data={hosted.data}
+        error={hosted.error}
+        isLoading={hosted.isLoading}
+        language={language}
+        t={t}
+        onChanged={() => void hosted.mutate()}
+      />
     </div>
+  );
+}
+
+function HostedStaticSiteSection({ language, connected, publishingAllowed, onCreated }: {
+  language: 'en' | 'zh';
+  connected: boolean;
+  publishingAllowed: boolean;
+  onCreated: () => void;
+}) {
+  const zh = language === 'zh';
+  const [path, setPath] = useState('');
+  const [agentId, setAgentId] = useState('');
+  const [isDirectory, setIsDirectory] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [ttlMs, setTtlMs] = useState(604_800_000);
+  const [publishing, setPublishing] = useState(false);
+  const [result, setResult] = useState<{ shareUrl: string; fileCount: number; totalBytes: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const publish = async () => {
+    if (!path.trim()) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const publication = await createHostedStaticSite({
+        path: path.trim(),
+        title: title.trim() || undefined,
+        ttlMs,
+        spaFallback: true,
+        ...(agentId ? { agentId } : {}),
+      });
+      setResult(publication);
+      onCreated();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  return (
+    <SettingsFormSection>
+      <div className="flex items-start gap-3">
+        <Cloud className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-fg">{zh ? '发布静态网站' : 'Publish static website'}</h2>
+          <p className="mt-1 text-xs text-fg-muted">
+            {zh ? '把工作区内的 HTML 文件，或包含 index.html 的网站目录，发布到隔离的托管域名。' : 'Publish an HTML file or a website directory containing index.html to the isolated hosted origin.'}
+          </p>
+          {connected && !publishingAllowed ? (
+            <p className="mt-3 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+              {zh ? '管理员已暂停你的公网分享能力。已有远端链接当前不可访问；你仍可在下方撤销它们。' : 'An administrator has paused public sharing for your account. Existing hosted links are unavailable, but you can still revoke them below.'}
+            </p>
+          ) : null}
+          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_12rem]">
+            <div className="flex min-w-0 items-center gap-2">
+              <input
+                value={path}
+                onChange={(event) => {
+                  setPath(event.target.value);
+                  setIsDirectory(false);
+                  setResult(null);
+                }}
+                placeholder={zh ? '选择 HTML 文件或网站目录' : 'Select an HTML file or website directory'}
+                className="h-9 min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
+              />
+              <Button type="button" variant="ghost" className="shrink-0" onClick={() => setPickerOpen(true)}>
+                {path && !isDirectory ? <FileText className="size-4" /> : <FolderOpen className="size-4" />}
+                {path ? (zh ? '更换' : 'Change') : (zh ? '选择' : 'Browse')}
+              </Button>
+            </div>
+            <Select value={String(ttlMs)} onChange={(event) => setTtlMs(Number(event.target.value))}>
+              <SelectOption value="86400000">{zh ? '24 小时' : '24 hours'}</SelectOption>
+              <SelectOption value="604800000">{zh ? '7 天' : '7 days'}</SelectOption>
+              <SelectOption value="2592000000">{zh ? '30 天' : '30 days'}</SelectOption>
+            </Select>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder={zh ? '网站标题（可选）' : 'Site title (optional)'}
+              className="h-9 rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg outline-none focus:border-accent sm:col-span-2"
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <Button type="button" onClick={() => void publish()} disabled={!path.trim() || publishing || !connected || !publishingAllowed}>
+              {publishing ? <Loader2 className="size-4 animate-spin" /> : <Cloud className="size-4" />}
+              {publishing ? (zh ? '发布中…' : 'Publishing…') : (zh ? '发布网站' : 'Publish site')}
+            </Button>
+            {result ? (
+              <button type="button" className="min-w-0 truncate text-xs text-accent hover:underline" onClick={() => void copyTextToClipboard(result.shareUrl)}>
+                {result.shareUrl} · {result.fileCount} {zh ? '个文件' : 'files'} · {formatFileSize(result.totalBytes)}
+              </button>
+            ) : null}
+          </div>
+          {error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}
+        </div>
+      </div>
+      <WorkspacePathPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        initialPath={path || undefined}
+        agentId={agentId || undefined}
+        selectKind="any"
+        onConfirm={(picked) => {
+          setPath(picked.path);
+          setAgentId(picked.agentId);
+          setIsDirectory(picked.isDirectory);
+          setResult(null);
+          setError(null);
+        }}
+      />
+    </SettingsFormSection>
+  );
+}
+
+function HostedPublicationsSection({
+  data,
+  error,
+  isLoading,
+  language,
+  t,
+  onChanged,
+}: {
+  data: { connected: boolean; publishingAllowed: boolean; publications: HostedPublicationItem[] } | undefined;
+  error: unknown;
+  isLoading: boolean;
+  language: 'en' | 'zh';
+  t: ReturnType<typeof messages>['sharesSettings'];
+  onChanged: () => void;
+}) {
+  return (
+    <SettingsFormSection>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Cloud className="size-4 text-accent" aria-hidden />
+            {t.hostedTitle}
+          </h2>
+          <p className="mt-1 text-xs text-fg-muted">{t.hostedHint}</p>
+        </div>
+      </div>
+
+      {isLoading && !data ? (
+        <div className="grid gap-2" aria-busy="true">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="rounded-lg border border-edge bg-surface-base p-3">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="mt-2 h-3 w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <p className="text-sm text-red-600 dark:text-red-400">{t.error}</p>
+      ) : !data?.connected ? (
+        <div className="space-y-3">
+          <p className="text-sm text-fg-muted">{t.hostedDisconnected}</p>
+          <OAuthProviderConnect
+            providerId="xopc-share"
+            displayName="XOPC Hosted Share"
+            connected={false}
+            onConnected={onChanged}
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {!data.publishingAllowed ? (
+            <p className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+              {language === 'zh' ? '管理员已暂停公网分享。已有托管链接当前不可访问，也不能更新；撤销操作仍然可用。' : 'An administrator has paused public sharing. Existing hosted links are unavailable and cannot be updated; revocation remains available.'}
+            </p>
+          ) : null}
+          {data.publications.length === 0 ? (
+            <p className="text-sm text-fg-muted">{t.hostedEmpty}</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {data.publications.map((publication) => (
+                <HostedPublicationRow
+                  key={publication.id}
+                  publication={publication}
+                  language={language}
+                  t={t}
+                  publishingAllowed={data.publishingAllowed}
+                  onChanged={onChanged}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </SettingsFormSection>
+  );
+}
+
+function HostedPublicationRow({
+  publication,
+  language,
+  t,
+  publishingAllowed,
+  onChanged,
+}: {
+  publication: HostedPublicationItem;
+  language: 'en' | 'zh';
+  t: ReturnType<typeof messages>['sharesSettings'];
+  publishingAllowed: boolean;
+  onChanged: () => void;
+}) {
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const expired = Date.now() >= new Date(publication.expiresAt).getTime();
+  const active = publication.status === 'active' && !expired;
+  const status = publication.status === 'revoked'
+    ? t.statusRevoked
+    : expired ? t.statusExpired : publication.status === 'staging'
+      ? (language === 'zh' ? '准备中' : 'Staging')
+      : t.statusActive;
+  const PublicationIcon = publication.kind === 'note_document' ? StickyNote
+    : publication.kind === 'static_site' ? Cloud : MessageSquare;
+  const kindLabel = publication.kind === 'note_document'
+    ? (language === 'zh' ? '笔记文档' : 'Note document')
+    : publication.kind === 'static_site'
+      ? (language === 'zh' ? '静态网站' : 'Static website')
+      : (language === 'zh' ? '会话快照' : 'Conversation snapshot');
+
+  const copyLink = useCallback(async () => {
+    if (!publication.shareUrl) return;
+    if (await copyTextToClipboard(publication.shareUrl)) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2_000);
+    }
+  }, [publication.shareUrl]);
+
+  const revoke = useCallback(async () => {
+    setRevokeOpen(false);
+    setRevoking(true);
+    try {
+      await revokeHostedPublication(publication.id);
+      onChanged();
+    } catch {
+      // Keep the publication visible when the remote revoke fails.
+    } finally {
+      setRevoking(false);
+    }
+  }, [publication.id, onChanged]);
+
+  const rollback = useCallback(async () => {
+    if (!publication.revision || publication.revision <= 1) return;
+    setRollingBack(true);
+    try {
+      const revisions = await fetchHostedPublicationRevisions(publication.id);
+      const target = revisions.find((item) => item.revision < publication.revision!);
+      if (!target) return;
+      await rollbackHostedPublication(publication.id, publication.revision, target.revision);
+      onChanged();
+    } catch {
+      // Keep the current revision visible when rollback fails.
+    } finally {
+      setRollingBack(false);
+    }
+  }, [publication.id, publication.revision, onChanged]);
+
+  const refreshSite = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshHostedStaticSite(publication.id);
+      onChanged();
+    } catch {
+      // Keep the current revision visible when publishing the update fails.
+    } finally {
+      setRefreshing(false);
+    }
+  }, [publication.id, onChanged]);
+
+  return (
+    <>
+      <div className="rounded-lg border border-edge bg-surface-panel/80 px-3 py-2.5">
+        <div className="flex items-start gap-3">
+          <PublicationIcon className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate text-sm font-medium text-fg">{publication.title}</span>
+              <span className={cn('text-xs font-medium', active ? 'text-emerald-600 dark:text-emerald-400' : 'text-fg-subtle')}>{status}</span>
+            </div>
+            <p className="mt-0.5 text-xs text-fg-subtle">
+              {kindLabel} · {t.hostedRevision} {publication.revision ?? '—'} · {publication.managedFromThisDevice ? t.hostedThisDevice : t.hostedOtherDevice}
+            </p>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">
+              <span>{language === 'zh' ? '浏览' : 'Views'}: {publication.viewCount}{publication.maxViews !== null ? ` / ${publication.maxViews}` : ''}</span>
+              <span>{expired ? t.statusExpired : formatRelativeTime(publication.expiresAt, language)}</span>
+              {publication.description ? <span className="italic">{publication.description}</span> : null}
+            </div>
+          </div>
+          {active ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {publication.shareUrl ? (
+                <Button type="button" variant="ghost" className="px-2 py-1" disabled={!publishingAllowed} title={t.copyUrl} onClick={() => void copyLink()}>
+                  {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+                </Button>
+              ) : null}
+              {(publication.revision ?? 0) > 1 ? (
+                <Button type="button" variant="ghost" className="px-2 py-1" disabled={rollingBack || !publishingAllowed} onClick={() => void rollback()} title={language === 'zh' ? '回滚上一版本' : 'Roll back one revision'}>
+                  {rollingBack ? <Loader2 className="size-3.5 animate-spin" /> : <History className="size-3.5" />}
+                </Button>
+              ) : null}
+              {publication.kind === 'static_site' && publication.managedFromThisDevice ? (
+                <Button type="button" variant="ghost" className="px-2 py-1" disabled={refreshing || !publishingAllowed} onClick={() => void refreshSite()} title={language === 'zh' ? '发布工作区中的最新版本' : 'Publish latest workspace version'}>
+                  <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-2 py-1 text-red-600 hover:text-red-700 dark:text-red-400"
+                disabled={revoking}
+                onClick={() => setRevokeOpen(true)}
+              >
+                {revoking ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <ConfirmDialog
+        open={revokeOpen}
+        title={t.revokeConfirmTitle}
+        description={t.revokeConfirmBody}
+        confirmLabel={t.revokeConfirmLabel}
+        cancelLabel={t.cancel}
+        destructive
+        onConfirm={() => void revoke()}
+        onCancel={() => setRevokeOpen(false)}
+      />
+    </>
   );
 }
 

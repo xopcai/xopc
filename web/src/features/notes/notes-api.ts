@@ -289,6 +289,49 @@ export async function refreshNoteShare(id: string, shareId: string, input: Pick<
   });
 }
 
+export interface HostedNotePublication {
+  id: string;
+  kind: 'note_document';
+  delivery: 'hosted_snapshot';
+  shareUrl: string;
+  expiresAt: string;
+  maxViews: number | null;
+  viewCount: number;
+  revision: number;
+  title: string;
+  description: string | null;
+  attachmentCount: number;
+  createdAt: string;
+  updatedAt: string;
+  revoked: boolean;
+  expired: boolean;
+  source: { kind: 'note'; id: string; version: string } | null;
+}
+
+export async function listHostedNotePublications(id: string): Promise<HostedNotePublication[]> {
+  return (await fetchJson<{ ok: true; payload: { publications: HostedNotePublication[] } }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/hosted-publications`),
+  )).payload.publications;
+}
+
+export async function createHostedNotePublication(id: string, input: CreateNoteShareInput): Promise<HostedNotePublication> {
+  return (await fetchJson<{ ok: true; payload: HostedNotePublication }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/hosted-publications`),
+    { method: 'POST', body: JSON.stringify(input) },
+  )).payload;
+}
+
+export async function refreshHostedNotePublication(
+  id: string,
+  publicationId: string,
+  input: Pick<CreateNoteShareInput, 'expectedNoteVersion' | 'attachmentIds'>,
+): Promise<HostedNotePublication> {
+  return (await fetchJson<{ ok: true; payload: HostedNotePublication }>(
+    apiUrl(`/api/notes/${encodeURIComponent(id)}/hosted-publications/${encodeURIComponent(publicationId)}/refresh`),
+    { method: 'POST', body: JSON.stringify(input) },
+  )).payload;
+}
+
 export async function catalyzeNote(id: string): Promise<{ note: Note; report: NoteCatalysisReport }> {
   return fetchJson<{ note: Note; report: NoteCatalysisReport }>(
     apiUrl(`/api/notes/${encodeURIComponent(id)}/catalyze`),
