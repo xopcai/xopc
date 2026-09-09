@@ -5,6 +5,7 @@ import { Text } from 'react-native-paper';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { useMessages } from '@/i18n/messages';
+import { spacing, typography } from '@/theme';
 
 import { SettingsRow, SettingsSection, useSettingsColors } from './settings-ui';
 
@@ -55,28 +56,25 @@ export function AboutScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 32,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.content,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxxl,
   },
   hero: {
     alignItems: 'center',
-    marginBottom: 32,
-    gap: 6,
+    marginBottom: spacing.xxl,
+    gap: spacing.xs,
   },
   appName: {
-    fontSize: 34,
-    lineHeight: 41,
-    fontWeight: '700',
+    ...typography.display,
   },
   version: {
-    fontSize: 15,
+    ...typography.ui,
   },
   tagline: {
-    fontSize: 14,
+    ...typography.label,
     textAlign: 'center',
-    lineHeight: 20,
-    marginTop: 8,
-    paddingHorizontal: 24,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
   },
 });

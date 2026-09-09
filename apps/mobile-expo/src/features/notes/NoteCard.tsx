@@ -66,7 +66,7 @@ export const NoteCard = memo(function NoteCard({
   const kindLabel = noteKindLabel(note.kind, pm);
   const statusText = statusLabel(note.status, pm);
   const taskStateText = note.taskDone ? pm.done : pm.kindTodo;
-  const visibleTags = note.tags?.slice(0, 2) ?? [];
+  const visibleTags = note.tags?.slice(0, 1) ?? [];
   const updatedAt = note.updatedAt ?? note.createdAt;
   const time = new Date(updatedAt).toLocaleString(undefined, {
     month: 'short',
@@ -74,13 +74,12 @@ export const NoteCard = memo(function NoteCard({
     hour: '2-digit',
     minute: '2-digit',
   });
-  const metaParts = [
-    kindLabel,
-    statusText,
-    note.kind === 'task' && note.taskDone != null ? taskStateText : null,
-    ...visibleTags,
-    time,
-  ].filter((part): part is string => Boolean(part));
+  const stateText = statusText ?? (
+    note.kind === 'task' && note.taskDone != null ? taskStateText : null
+  );
+  const typeText = note.kind === 'thought' || note.kind === 'mixed' ? null : kindLabel;
+  const metaParts = [stateText ?? typeText, visibleTags[0], time]
+    .filter((part): part is string => Boolean(part));
 
   const handlePress = useCallback(() => onPress(note), [note, onPress]);
   const handleLongPress = useCallback(() => onLongPress?.(note), [note, onLongPress]);
@@ -191,13 +190,11 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
+    ...typography.body,
     fontWeight: '600',
   },
   subtitle: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...typography.label,
   },
   metaText: {
     ...typography.caption,

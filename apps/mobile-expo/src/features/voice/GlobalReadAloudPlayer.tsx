@@ -22,7 +22,7 @@ export function GlobalReadAloudPlayer() {
   const call = useVoiceCall();
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const { chat: m, notesPage: nm } = useMessages();
   const source = useReadAloudStore((state) => state.source);
   const status = useReadAloudStore((state) => state.status);
@@ -106,6 +106,7 @@ export function GlobalReadAloudPlayer() {
                   backgroundColor: colors.surface.panel,
                   borderColor: colors.border.default,
                 },
+                elevation.overlay,
               ]}
             >
               <View style={[styles.voiceMark, { backgroundColor: colors.accent.selectionBg }]}>
@@ -248,11 +249,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
   },
   voiceMark: {
     width: 40,

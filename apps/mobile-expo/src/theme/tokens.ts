@@ -1,8 +1,8 @@
 /**
  * Design tokens — single source of truth for all visual constants.
  *
- * Aligned with xopc DESIGN.md: "Calm Intelligence" — neutral surfaces dominate,
- * Loop Blue is the primary direction/focus signal, semantic colors are status-only.
+ * Aligned with xopc DESIGN.md: "Quiet Momentum" — neutral surfaces dominate,
+ * indigo is the primary direction/focus signal, semantic colors are status-only.
  *
  * Usage:
  *   import { colors, spacing, radii, typography } from '../theme/tokens';
@@ -74,6 +74,19 @@ export type ColorScheme = {
   accent: AccentColors;
   semantic: SemanticColors;
   overlay: OverlayColors;
+};
+
+export type ElevationRecipe = {
+  shadowColor: string;
+  shadowOpacity: number;
+  shadowRadius: number;
+  shadowOffset: { width: number; height: number };
+  elevation: number;
+};
+
+export type ElevationScheme = {
+  raised: ElevationRecipe;
+  overlay: ElevationRecipe;
 };
 
 // ── Surface & Layer ─────────────────────────────────────────
@@ -196,6 +209,43 @@ export const darkColors: ColorScheme = {
 
 export const colors = { light: lightColors, dark: darkColors } as const;
 
+// ── Depth ──────────────────────────────────────────────────
+
+export const elevations: { light: ElevationScheme; dark: ElevationScheme } = {
+  light: {
+    raised: {
+      shadowColor: lightText.primary,
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 5 },
+      elevation: 3,
+    },
+    overlay: {
+      shadowColor: lightText.primary,
+      shadowOpacity: 0.16,
+      shadowRadius: 28,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 8,
+    },
+  },
+  dark: {
+    raised: {
+      shadowColor: '#000000',
+      shadowOpacity: 0.12,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 2,
+    },
+    overlay: {
+      shadowColor: '#000000',
+      shadowOpacity: 0.24,
+      shadowRadius: 22,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 6,
+    },
+  },
+};
+
 // ── Spacing (8pt grid) ──────────────────────────────────────
 
 export const spacing = {
@@ -241,22 +291,22 @@ export const radii = {
 // ── Typography ──────────────────────────────────────────────
 
 export const typography = {
-  /** 30px — welcome/empty state hero */
-  display: { fontSize: 30, lineHeight: 36, fontWeight: '600' as const },
+  /** 34px — welcome/empty state hero; use sparingly */
+  display: { fontSize: 34, lineHeight: 41, fontWeight: '700' as const },
   /** 28px — root screen identity */
   largeTitle: { fontSize: 28, lineHeight: 34, fontWeight: '700' as const },
-  /** 20px — page/modal titles */
-  title: { fontSize: 20, lineHeight: 28, fontWeight: '600' as const },
+  /** 22px — page/modal titles */
+  title: { fontSize: 22, lineHeight: 28, fontWeight: '700' as const },
   /** 17px — section titles */
   heading: { fontSize: 17, lineHeight: 24, fontWeight: '600' as const },
-  /** 15px — body, main UI text */
-  body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
-  /** 14px — UI controls, buttons */
-  ui: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
+  /** 16px — body, main UI text */
+  body: { fontSize: 16, lineHeight: 23, fontWeight: '400' as const },
+  /** 15px — UI controls, buttons */
+  ui: { fontSize: 15, lineHeight: 20, fontWeight: '500' as const },
   /** 13px — secondary labels */
-  label: { fontSize: 13, lineHeight: 18, fontWeight: '400' as const },
+  label: { fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
   /** 12px — timestamps, metadata */
-  caption: { fontSize: 12, lineHeight: 17, fontWeight: '400' as const },
-  /** 11px — tiny badges, micro-copy */
-  micro: { fontSize: 11, lineHeight: 14, fontWeight: '500' as const },
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' as const },
+  /** 11px — exceptional badges only */
+  micro: { fontSize: 11, lineHeight: 14, fontWeight: '600' as const },
 } as const;

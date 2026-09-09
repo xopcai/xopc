@@ -37,7 +37,7 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
   onAgentDecide,
   onCancel,
 }: ClarifyPromptProps) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const labels = useMessages().chat;
   const [draft, setDraft] = useState('');
   const [tick, setTick] = useState(0);
@@ -77,7 +77,7 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
   };
 
   return (
-    <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor }, elevation.raised]}>
       <View style={styles.headerRow}>
         <View style={styles.headerIcon}>
           {submitting ? (
@@ -214,11 +214,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 10,
     padding: 12,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   headerRow: {
     flexDirection: 'row',

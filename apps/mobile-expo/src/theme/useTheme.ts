@@ -9,11 +9,17 @@ import { useMemo } from 'react';
 
 import { usePreferencesStore } from '../stores/preferences-store';
 
-import { colors as tokenColors, type ColorScheme } from './tokens';
+import {
+  colors as tokenColors,
+  elevations,
+  type ColorScheme,
+  type ElevationScheme,
+} from './tokens';
 
 export type ThemeContext = {
   isDark: boolean;
   colors: ColorScheme;
+  elevation: ElevationScheme;
 };
 
 export function useTheme(): ThemeContext {
@@ -22,6 +28,7 @@ export function useTheme(): ThemeContext {
     () => ({
       isDark: resolvedTheme === 'dark',
       colors: resolvedTheme === 'dark' ? tokenColors.dark : tokenColors.light,
+      elevation: resolvedTheme === 'dark' ? elevations.dark : elevations.light,
     }),
     [resolvedTheme],
   );

@@ -14,12 +14,12 @@ export const VoiceRecordingCard = memo(function VoiceRecordingCard({
   durationMillis?: number;
   hint: string;
 }) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   if (!visible) return null;
   const color = cancelled ? colors.semantic.errorBold : colors.text.secondary;
   return (
     <View style={styles.anchor}>
-      <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+      <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }, elevation.raised]}>
         {processing ? (
           <View style={styles.processingRow} accessibilityLiveRegion="polite">
             <ActivityIndicator size="small" color={color} />
@@ -57,11 +57,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    elevation: 4,
   },
   meterRow: {
     minHeight: 38,

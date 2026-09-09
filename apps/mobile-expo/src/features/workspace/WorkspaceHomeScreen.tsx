@@ -1057,7 +1057,7 @@ function WorkspaceActionDock({
   onAskAi: () => void;
   askAiPending: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const { homePage: hm } = useMessages();
   const insets = useSafeAreaInsets();
   const transition = useOptionalWorkspaceTransition();
@@ -1080,7 +1080,7 @@ function WorkspaceActionDock({
 
   return (
     <View pointerEvents="box-none" style={[styles.dockWrap, { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET }]}>
-      <View style={[styles.dock, { backgroundColor: colors.surface.elevated, borderColor: colors.border.default }]}>
+      <View style={[styles.dock, { backgroundColor: colors.surface.elevated, borderColor: colors.border.default }, elevation.raised]}>
         <Pressable
           ref={askAiRef}
           style={({ pressed }) => [styles.dockSecondary, pressed && { backgroundColor: colors.surface.pressed }]}

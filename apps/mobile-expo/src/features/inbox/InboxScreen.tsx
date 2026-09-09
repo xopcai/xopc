@@ -27,7 +27,6 @@ import { deleteNote, fetchNotes, updateNote, type NoteIndexEntry } from '../../q
 import { queryKeys } from '../../query/keys';
 import { decideAgentJudgment, fetchAgentJudgments, transitionAgentJudgment, type AgentJudgment } from '../../query/judgments';
 import { useGatewayConfigured } from '../../query/sessions';
-import { usePreferencesStore } from '../../stores/preferences-store';
 import { invalidateHomeFeed } from '../../query/workspace-sync';
 import { captureWorkspaceText, captureWorkspaceVoice } from '../../sync/workspace-sync';
 import { NOTE_KIND_ICONS } from '../notes/note-list-display';
@@ -72,7 +71,6 @@ export function InboxScreen() {
   const cm = m.chat;
   const li = m.listInteraction;
   const configured = useGatewayConfigured();
-  const language = usePreferencesStore((state) => state.language);
   const [captureText, setCaptureText] = useState('');
   const [snackMsg, setSnackMsg] = useState('');
   const [showBatchDelete, setShowBatchDelete] = useState(false);
@@ -407,6 +405,7 @@ export function InboxScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : im.title}
+        largeTitle={!selectionMode}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
         rightActions={selectionMode ? undefined : [
           {
@@ -446,12 +445,11 @@ export function InboxScreen() {
           ListFooterComponent={inboxQuery.isFetchingNextPage ? <View style={styles.footerLoader}><Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text></View> : null}
           ListHeaderComponent={<>
             {(judgmentsQuery.data?.length ?? 0) > 0 ? <View style={styles.judgmentSection}>
-              <Text style={[styles.judgmentSectionTitle, { color: colors.text.primary }]}>{language === 'zh' ? '需要你判断' : 'Needs your decision'}</Text>
+              <Text style={[styles.judgmentSectionTitle, { color: colors.text.primary }]}>{im.needsDecision}</Text>
               {judgmentsQuery.data!.map((judgment) => <AgentJudgmentCard
                 key={judgment.id}
                 item={judgment}
                 highlighted={params.item === judgment.id}
-                language={language}
                 busy={judgmentMutation.isPending && judgmentMutation.variables?.itemId === judgment.id}
                 onChoice={(choice) => judgmentMutation.mutate({ itemId: judgment.id, choice })}
                 onAction={(action) => judgmentMutation.mutate({ itemId: judgment.id, action })}
@@ -461,7 +459,6 @@ export function InboxScreen() {
           </>}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Icon source="tray" size={42} color={colors.text.tertiary} />
               <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{im.emptyTitle}</Text>
               <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{im.emptyHint}</Text>
             </View>
@@ -532,24 +529,23 @@ export function InboxScreen() {
   );
 }
 
-function AgentJudgmentCard({ item, highlighted, language, busy, onChoice, onAction }: {
+function AgentJudgmentCard({ item, highlighted, busy, onChoice, onAction }: {
   item: AgentJudgment;
   highlighted: boolean;
-  language: 'en' | 'zh';
   busy: boolean;
   onChoice: (choice: string) => void;
   onAction: (action: 'snoozed' | 'resolved') => void;
 }) {
   const { colors } = useTheme();
+  const im = useMessages().inboxPage;
   return <View style={[styles.judgmentCard, { backgroundColor: colors.surface.panel, borderColor: highlighted ? colors.accent.primary : colors.border.subtle }]}>
     <View style={styles.judgmentTitleRow}><Icon source="creation-outline" size={20} color={colors.accent.primary} /><Text style={[styles.judgmentTitle, { color: colors.text.primary }]}>{item.insight.title}</Text></View>
     <Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.summary}</Text>
-    <Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{language === 'zh' ? 'AI 已检查' : 'AI checked'}</Text>
-    <Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.workDone}</Text>
-    <Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{language === 'zh' ? '建议' : 'Recommendation'}</Text>
+    {item.insight.workDone && item.insight.workDone !== item.insight.summary ? <><Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{im.aiChecked}</Text><Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.workDone}</Text></> : null}
+    <Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{im.recommendation}</Text>
     <Text style={[styles.judgmentSummary, { color: colors.text.primary }]}>{item.insight.recommendation}</Text>
     {item.insight.decision ? <View style={styles.judgmentOptions}><Text style={[styles.judgmentQuestion, { color: colors.text.primary }]}>{item.insight.decision.question}</Text>{item.insight.decision.options.map((option) => <Pressable key={option.id} disabled={busy} onPress={() => onChoice(option.id)} style={[styles.judgmentOption, { backgroundColor: colors.accent.soft }]}><Text style={{ color: colors.accent.primary }}>{option.label}</Text><Text style={[styles.judgmentConsequence, { color: colors.text.secondary }]}>{option.consequence}</Text></Pressable>)}</View> : null}
-    <View style={styles.judgmentActions}><Pressable disabled={busy} onPress={() => onAction('snoozed')}><Text style={{ color: colors.text.secondary }}>{language === 'zh' ? '明天再看' : 'Tomorrow'}</Text></Pressable><Pressable disabled={busy} onPress={() => onAction('resolved')}><Text style={{ color: colors.text.secondary }}>{language === 'zh' ? '忽略' : 'Dismiss'}</Text></Pressable></View>
+    <View style={styles.judgmentActions}><Pressable style={styles.judgmentTextAction} disabled={busy} onPress={() => onAction('snoozed')}><Text style={{ color: colors.text.secondary }}>{im.tomorrow}</Text></Pressable><Pressable style={styles.judgmentTextAction} disabled={busy} onPress={() => onAction('resolved')}><Text style={{ color: colors.text.secondary }}>{im.dismiss}</Text></Pressable></View>
   </View>;
 }
 
@@ -573,6 +569,7 @@ const styles = StyleSheet.create({
   judgmentOption: { borderRadius: radii.md, padding: spacing.sm, gap: 2 },
   judgmentConsequence: { ...typography.caption },
   judgmentActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.lg, marginTop: spacing.sm },
+  judgmentTextAction: { minHeight: 44, justifyContent: 'center' },
   itemCard: {
     marginHorizontal: spacing.content,
     height: INBOX_ITEM_HEIGHT,

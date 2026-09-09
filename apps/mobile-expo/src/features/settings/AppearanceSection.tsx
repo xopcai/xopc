@@ -17,6 +17,7 @@ import {
   SettingsSection,
   useSettingsColors,
 } from './settings-ui';
+import { spacing, typography } from '../../theme';
 
 const LANGUAGE_OPTIONS: { value: Language; labelKey: 'languageEn' | 'languageZh' }[] = [
   { value: 'en', labelKey: 'languageEn' },
@@ -80,15 +81,15 @@ export const AppearanceSection = memo(function AppearanceSection() {
 
 const styles = StyleSheet.create({
   groupLabel: {
-    fontSize: 13,
+    ...typography.label,
     fontWeight: '600',
-    marginTop: 8,
-    marginBottom: 4,
-    marginLeft: 12,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    marginLeft: spacing.md,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 8,
-    marginHorizontal: 16,
+    marginVertical: spacing.sm,
+    marginHorizontal: spacing.content,
   },
 });

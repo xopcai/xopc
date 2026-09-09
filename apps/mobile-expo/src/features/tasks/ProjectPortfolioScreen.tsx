@@ -70,7 +70,7 @@ export function ProjectPortfolioScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.projectsTitle} largeTitle onBack={() => dismissOrHome(router)} />
       {query.isLoading ? <View style={styles.skeleton}><ListSkeleton count={6} /></View> : query.isError ? (
         <View style={styles.center}>
           <Text style={{ color: colors.semantic.error }}>{labels.projectsLoadFailed}</Text>
@@ -91,7 +91,7 @@ export function ProjectPortfolioScreen() {
           ) : null}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
-          ListEmptyComponent={<Text style={{ color: colors.text.tertiary }}>{labels.projectsEmpty}</Text>}
+          ListEmptyComponent={<View style={styles.empty}><Text style={[styles.emptyText, { color: colors.text.primary }]}>{labels.projectsEmpty}</Text></View>}
         />
       )}
     </View>
@@ -102,10 +102,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   skeleton: { padding: spacing.lg },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, flexGrow: 1 },
+  list: { paddingHorizontal: spacing.content, paddingBottom: spacing.xxl, flexGrow: 1 },
   briefing: { paddingVertical: spacing.md, gap: spacing.xs },
   briefingTitle: { ...typography.heading },
-  briefingSummary: { ...typography.body },
+  briefingSummary: { ...typography.label },
   row: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md },
   healthDot: { width: 8, height: 8, borderRadius: 4, alignSelf: 'flex-start', marginTop: 7 },
   rowBody: { flex: 1, minWidth: 0, gap: spacing.xxs },
@@ -113,5 +113,7 @@ const styles = StyleSheet.create({
   rowTitle: { ...typography.ui, fontWeight: '600', flex: 1 },
   time: { ...typography.micro },
   status: { ...typography.label },
-  summary: { ...typography.body },
+  summary: { ...typography.label },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  emptyText: { ...typography.heading, textAlign: 'center' },
 });

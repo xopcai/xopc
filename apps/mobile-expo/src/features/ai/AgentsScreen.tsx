@@ -8,6 +8,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
+import { ListSkeleton } from '../../components/ListSkeleton';
 import { useMessages } from '../../i18n/messages';
 import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { fetchChatAgents, type ChatAgentOption } from '../../query/agents';
@@ -88,7 +89,7 @@ export function AgentsScreen() {
   if (!configured) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <NativeScreenHeader title={am.title} onBack={() => dismissOrHome(router)} />
+        <NativeScreenHeader title={am.title} largeTitle onBack={() => dismissOrHome(router)} />
         <View style={styles.center}>
           <Text style={{ color: colors.textMuted }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>
@@ -99,10 +100,8 @@ export function AgentsScreen() {
   if (agentsQuery.isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <NativeScreenHeader title={am.title} onBack={() => router.back()} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" />
-        </View>
+        <NativeScreenHeader title={am.title} largeTitle onBack={() => router.back()} />
+        <ListSkeleton count={6} />
       </View>
     );
   }
@@ -110,7 +109,7 @@ export function AgentsScreen() {
   if (agentsQuery.isError) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <NativeScreenHeader title={am.title} onBack={() => router.back()} />
+        <NativeScreenHeader title={am.title} largeTitle onBack={() => router.back()} />
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>{am.loadFailed}</Text>
           <Button mode="outlined" onPress={() => void queryClient.invalidateQueries({ queryKey: queryKeys.agents })}>
@@ -124,10 +123,9 @@ export function AgentsScreen() {
   if (agents.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <NativeScreenHeader title={am.title} onBack={() => router.back()} />
+        <NativeScreenHeader title={am.title} largeTitle onBack={() => router.back()} />
         <View style={styles.center}>
-          <Icon source="robot-off-outline" size={48} color={colors.textMuted} />
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>{am.empty}</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>{am.empty}</Text>
         </View>
       </View>
     );
@@ -135,13 +133,13 @@ export function AgentsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <NativeScreenHeader title={am.title} onBack={() => router.back()} />
+      <NativeScreenHeader title={am.title} largeTitle onBack={() => router.back()} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.searchBox, { backgroundColor: colors.input }]}>
           <Icon source="magnify" size={20} color={colors.textMuted} />
           <TextInput
             value={search}
@@ -200,7 +198,7 @@ function AgentCard({
   const colors = useSettingsColors();
   const am = useMessages().agentsPage;
   const name = agentDisplayName(agent, am);
-  const subtitle = agentDisplayDescription(agent, am) || agent.id;
+  const subtitle = agentDisplayDescription(agent, am);
 
   return (
     <View style={[styles.card, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
@@ -221,9 +219,11 @@ function AgentCard({
             </View>
           ) : null}
         </View>
-        <Text style={[styles.description, { color: colors.textMuted }]} numberOfLines={1}>
-          {subtitle}
-        </Text>
+        {subtitle ? (
+          <Text style={[styles.description, { color: colors.textMuted }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
       </Pressable>
 
       <Pressable
@@ -256,14 +256,16 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   emptyText: {
-    marginTop: 12,
-    fontSize: 14,
+    ...typography.label,
+    textAlign: 'center',
+  },
+  emptyTitle: {
+    ...typography.heading,
     textAlign: 'center',
   },
   searchBox: {
     minHeight: 48,
     borderRadius: radii.md,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -277,8 +279,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   noResults: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.label,
     paddingHorizontal: 4,
     paddingTop: 8,
   },
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: {
-    fontSize: 12,
+    ...typography.caption,
     fontWeight: '600',
   },
   description: {

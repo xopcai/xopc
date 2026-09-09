@@ -34,7 +34,7 @@ function approvalValue(value: unknown): string {
 export function VoiceCallSurface() {
   const state = useVoiceCall();
   const { voice: m } = useMessages();
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const captions = useVoicePreferences(s => s.captions);
@@ -110,7 +110,7 @@ export function VoiceCallSurface() {
   return <VoiceCallOverlay expanded={state.expanded} onClose={() => voiceCall.expand(false)}>
     {!state.expanded ?
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        <View style={[styles.miniBar, { top: insets.top + spacing.sm, backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+        <View style={[styles.miniBar, { top: insets.top + spacing.sm, backgroundColor: colors.surface.panel, borderColor: colors.border.default }, elevation.overlay]}>
           <Pressable style={styles.miniBody} accessibilityRole="button" accessibilityLabel={m.expand} onPress={() => voiceCall.expand()}>
             <View style={[styles.miniIcon, { backgroundColor: colors.accent.selectionBg }]}>
               <Icon source="waveform" size={20} color={colors.accent.primary} />
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   controlCircle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   controlLabel: { ...typography.caption, textAlign: 'center' },
   disabled: { opacity: 0.42 },
-  miniBar: { position: 'absolute', left: spacing.md, right: spacing.md, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl, elevation: 5, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  miniBar: { position: 'absolute', left: spacing.md, right: spacing.md, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.xl },
   miniBody: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   miniIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   miniEnd: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
