@@ -159,7 +159,7 @@ export function ReviewLauncherDialog({
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[120] bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[121] flex h-[min(86vh,34rem)] w-[min(100vw-2rem,40rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none">
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[121] flex h-[min(86vh,34rem)] w-[min(100vw-2rem,40rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none">
           <div className="flex shrink-0 items-center gap-2 border-b border-edge px-4 py-3">
             {step !== 'presets' ? (
               <button

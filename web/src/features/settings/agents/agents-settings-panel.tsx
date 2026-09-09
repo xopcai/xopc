@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -10,7 +10,7 @@ import { AgentEditor } from '@/features/settings/agents/agent-editor';
 import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
 import { AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
 import { CreateAgentDialog } from '@/features/settings/agents/create-agent-dialog';
-import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
+import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
 import {
   createGatewayAgent,
   deleteGatewayAgent,
@@ -19,6 +19,7 @@ import {
 import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 function AgentsSkeleton() {
   return (
@@ -41,12 +42,31 @@ export function AgentsSettingsPanel() {
   const navigate = useNavigate();
   const { agentId } = useParams();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
+  const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [createDraft, setCreateDraft] = useState({ open: false, name: '', instructions: '' });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const editorDirtyRef = useRef(false);
 
   const selected = data?.agents.find((agent) => agent.id === agentId);
+  const headerEnd = useMemo(() => (
+    <div className="flex items-center gap-2">
+      <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
+      <Button variant="primary" onClick={() => { setActionError(null); setCreateDraft((current) => ({ ...current, open: true })); }}>
+        <Plus className="size-4" />{zh ? '新建智能体' : 'New agent'}
+      </Button>
+    </div>
+  ), [navigate, zh]);
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: null,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{zh ? '智能体' : 'Agents'}</h1>,
+      end: headerEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, headerEnd, setPageHeader, zh]);
 
   const createAgent = async () => {
     setBusy(true);
@@ -118,17 +138,7 @@ export function AgentsSettingsPanel() {
   if (isLoading || !data) return <AgentsSkeleton />;
 
   return (
-    <SettingsPageFrame gap="gap-5">
-      <SettingsPageHeader
-        title={zh ? '智能体' : 'Agents'}
-        actions={(
-          <>
-            <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
-            <Button variant="primary" onClick={() => { setActionError(null); setCreateDraft((current) => ({ ...current, open: true })); }}><Plus className="size-4" />{zh ? '新建智能体' : 'New agent'}</Button>
-          </>
-        )}
-      />
-
+    <SettingsPageFrame gap="gap-5" className="max-w-6xl" padding="px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       {(error || actionError) && !selected ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{actionError ?? String(error)}</p> : null}
 
       <AgentsListGrid
