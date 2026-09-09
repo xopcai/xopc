@@ -514,7 +514,7 @@ export function ConnectorsPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
         {!hasToken ? (
           <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">{cs.tokenHint}</p>
         ) : null}
@@ -582,12 +582,12 @@ export function ConnectorsPage() {
                   {CONNECTOR_SKELETON_KEYS.slice(0, 3).map((key) => <InstalledConnectorRowSkeleton key={key} />)}
                 </div>
               ) : installedCount === 0 ? (
-                <div className="rounded-2xl border border-dashed border-edge p-8 text-center">
+                <div className="py-14 text-center">
                   <p className="text-sm text-fg-muted">{cs.connectionsEmpty}</p>
                   <Button type="button" variant="primary" className="mt-4" onClick={() => selectTab('discover')}>{cs.addFromCatalog}</Button>
                 </div>
               ) : visibleInstalledCount === 0 ? (
-                <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">{cs.connectionsSearchEmpty}</div>
+                <div className="py-14 text-center text-sm text-fg-muted">{cs.connectionsSearchEmpty}</div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {visibleInstances.map((instance) => (
@@ -681,7 +681,7 @@ export function ConnectorsPage() {
                   {CONNECTOR_SKELETON_KEYS.map((key) => <ConnectorCardSkeleton key={key} />)}
                 </div>
               ) : discoveryCatalog.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-edge p-8 text-center text-sm text-fg-muted">{cs.discoverEmpty}</div>
+                <div className="py-14 text-center text-sm text-fg-muted">{cs.discoverEmpty}</div>
               ) : (
                 <div className="relative">
                   {registryLoading ? (

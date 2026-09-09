@@ -77,8 +77,8 @@ export function ProjectMonitoringControl({ policy, copy, onSave }: {
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(36rem,calc(100vh-2rem))] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(36rem,calc(100vh-2rem))] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-5 py-4">
             <div><Dialog.Title className="text-base font-semibold text-fg">{copy.title}</Dialog.Title><Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">{copy.description}</Dialog.Description></div>
             <Dialog.Close asChild><Button type="button" variant="ghost" className="size-9 p-0" disabled={saving}><X className="size-4" aria-hidden /></Button></Dialog.Close>

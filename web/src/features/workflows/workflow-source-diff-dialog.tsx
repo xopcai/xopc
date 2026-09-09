@@ -25,8 +25,8 @@ export function WorkflowSourceDiffDialog({
   return (
     <Dialog.Root open={Boolean(comparison)} onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(46rem,calc(100vh-2rem))] w-[min(64rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-float">
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex h-[min(46rem,calc(100vh-2rem))] w-[min(64rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-float">
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4">
             <div>
               <Dialog.Title className="text-base font-semibold text-fg">{language === 'zh' ? '源码变更' : 'Source changes'}</Dialog.Title>

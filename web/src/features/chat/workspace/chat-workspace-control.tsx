@@ -103,9 +103,9 @@ export function ChatWorkspaceControl({
 
       <Dialog.Root open={errorMessage !== null} onOpenChange={(open) => { if (!open) setErrorMessage(null); }}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover"
+            className="xopc-dialog-content fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover"
             onOpenAutoFocus={(event) => event.preventDefault()}
           >
             <Dialog.Title className="text-base font-semibold text-fg">

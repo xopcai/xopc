@@ -131,18 +131,11 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     }
     setPageHeader({
       startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>
-          <p className="truncate text-xs text-fg-muted">
-            {pageTab === 'runs' ? labels.runsSubtitle : labels.librarySubtitle}
-          </p>
-        </div>
-      ),
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>,
       end: <WorkflowsPageHeaderActions vm={vm} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, labels.librarySubtitle, labels.runsSubtitle, labels.title, pageTab, setPageHeader, vm]);
+  }, [clearPageHeader, hasToken, labels.title, setPageHeader, vm]);
 
   if (!hasToken) {
     return (
@@ -176,7 +169,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               draggable={false}
               className={cn(
                 'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
-                'transition-transform duration-150 ease-out active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100',
+                'transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 pageTab === tab
                   ? 'bg-accent-soft text-accent-fg'
@@ -232,7 +225,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                       <p className="mt-1 truncate text-xs text-fg-muted">
                         {resolveRunCardTitle(attentionRuns[0])} · {formatRelativeTime(attentionRuns[0].completedAtMs ?? attentionRuns[0].createdAtMs, nowMs, localeTag)}
                       </p>
-                      <p className="mt-1 text-xs text-fg-subtle">{labels.attentionHint}</p>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 pl-7 lg:pl-0">
@@ -335,10 +327,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             {runLayout === 'list' ? (
               <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-base" aria-labelledby="workflow-runs-heading">
                 <header className="flex items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
-                  <div>
-                    <h2 id="workflow-runs-heading" className="text-sm font-semibold text-fg">{labels.allRuns}</h2>
-                    <p className="mt-1 text-xs text-fg-muted">{labels.allRunsHint}</p>
-                  </div>
+                  <h2 id="workflow-runs-heading" className="text-sm font-semibold text-fg">{labels.allRuns}</h2>
                   <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-fg-muted">{filteredRuns.length}</span>
                 </header>
                 {loading && filteredRuns.length === 0 ? (

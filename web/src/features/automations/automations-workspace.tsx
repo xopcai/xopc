@@ -805,20 +805,15 @@ export function AutomationsWorkspace({
     if (embedded) return;
     setPageHeader({
       startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>
-          <p className="truncate text-xs text-fg-muted">{labels.subtitle}</p>
-        </div>
-      ),
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>,
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, embedded, headerEnd, labels.subtitle, labels.title, setPageHeader]);
+  }, [clearPageHeader, embedded, headerEnd, labels.title, setPageHeader]);
 
   return (
     <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', embedded ? 'bg-transparent' : 'bg-surface-panel')}>
-      <div className={cn('flex w-full flex-col gap-4', embedded ? 'py-1' : 'px-3 py-5 sm:px-5 xl:px-6')}>
+      <div className={cn('flex w-full flex-col gap-4', embedded ? 'py-1' : 'mx-auto max-w-[96rem] px-4 py-7 sm:px-6 lg:px-8 lg:py-9')}>
         {embedded ? (
           <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-3 shadow-surface">
             <div className="min-w-0">
@@ -960,7 +955,7 @@ export function AutomationsWorkspace({
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">
                 {createMode === 'draft'
@@ -1086,7 +1081,7 @@ export function AutomationsWorkspace({
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <Dialog.Title className="truncate text-base font-semibold text-fg">
                 {selectedRun?.automationName ?? labels.dashboard.result}
@@ -2034,7 +2029,7 @@ function EmptyState({
 }) {
   return (
     <div className={cn(
-      'flex min-h-48 flex-col items-center justify-center rounded-lg border border-edge-subtle bg-surface-base text-fg-muted shadow-surface',
+      'flex min-h-48 flex-col items-center justify-center text-fg-muted',
       className,
     )}>
       {icon}

@@ -39,8 +39,8 @@ export function WorkflowContextPicker({ projectId, language, value, onChange }: 
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/35" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[min(42rem,calc(100vh-2rem))] w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-xl">
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex h-[min(42rem,calc(100vh-2rem))] w-[min(44rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-xl">
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4">
             <div>
               <Dialog.Title className="text-base font-semibold text-fg">{labels.contextPickerTitle}</Dialog.Title>

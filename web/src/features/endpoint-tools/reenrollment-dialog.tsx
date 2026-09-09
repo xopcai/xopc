@@ -13,8 +13,8 @@ export function EndpointReenrollmentDialog() {
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && settleEndpointReenrollment(false)}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[140] bg-scrim backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[150] flex h-[min(22rem,calc(100vh-2rem))] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[140] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[150] flex h-[min(22rem,calc(100vh-2rem))] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
             <Dialog.Title className="text-base font-semibold text-fg">
               {zh ? '重新注册此端？' : 'Re-enroll this endpoint?'}

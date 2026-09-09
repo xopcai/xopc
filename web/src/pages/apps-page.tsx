@@ -149,8 +149,8 @@ export function ExtensionsPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
-        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
+      <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+        <div className="mb-6 flex flex-col gap-3 border-b border-edge-subtle pb-4 sm:flex-row sm:items-center sm:justify-between">
           <PageTabs
             items={tabItems}
             activeTab={mainTab}
@@ -185,7 +185,7 @@ export function ExtensionsPage() {
         ) : mainTab === 'user' && userExtensions.length === 0 ? (
           <EmptyExtensionsState message={m.extensionsPage.emptyUser} />
         ) : filtered.length === 0 ? (
-          <p className="rounded-xl border border-edge-subtle bg-surface-base px-3 py-8 text-center text-sm text-fg-muted shadow-surface sm:px-5 xl:px-6">
+          <p className="px-3 py-14 text-center text-sm text-fg-muted sm:px-5 xl:px-6">
             {m.extensionsPage.noSearchResults}
           </p>
         ) : (

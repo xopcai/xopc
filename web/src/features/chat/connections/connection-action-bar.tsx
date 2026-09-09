@@ -58,8 +58,8 @@ export function ConnectionActionBar({ sessionKey }: { sessionKey: string }) {
     {error && <p role="alert" className="mt-2 text-xs text-fg-muted">{error} <button type="button" className="text-accent" onClick={() => void act('check')}>{t.retry}</button></p>}
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[60] bg-scrim" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] flex h-[min(90dvh,34rem)] w-[min(94vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel outline-none">
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(90dvh,34rem)] w-[min(94vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
           <div className="flex shrink-0 items-center justify-between border-b border-edge px-5 py-4">
             <Dialog.Title className="font-medium text-fg">{t.preserved}</Dialog.Title>
             <Dialog.Close aria-label={t.close}><X className="size-4" /></Dialog.Close>

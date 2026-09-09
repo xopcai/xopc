@@ -85,7 +85,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     <>
       <SkillsPageHeaderRegistration vm={vm} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
         {actionFeedback ? (
           <div
             role="status"
@@ -115,7 +115,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             <div className="font-medium">
               {interpolate(sk.diagnosticsTitle, { count: visibleSkillDiagnostics.length })}
             </div>
-            <p className="mt-1 text-xs opacity-80">{sk.diagnosticsHint}</p>
             <ul className="mt-1 space-y-1">
               {visibleSkillDiagnostics.slice(0, 3).map((diag, index) => (
                 <li key={`${diag.path ?? diag.skillName ?? 'diagnostic'}-${index}`} className="truncate">
@@ -158,7 +157,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-balance text-sm font-semibold text-fg">{sk.installedHeading}</h2>
-                  <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.installedHint}</p>
                 </div>
                 <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
                   <PopoverSelect
@@ -204,7 +202,6 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-balance text-sm font-semibold text-fg">{sk.discoverHeading}</h2>
-                  <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.discoverHint}</p>
                 </div>
                 <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
                   {!searchInputActive ? (
