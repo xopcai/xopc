@@ -1,24 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../tunnel/tunnel-state.js', () => ({
-  loadTunnelState: vi.fn(() => null),
+const { mockedGetTunnelStatus } = vi.hoisted(() => ({
+  mockedGetTunnelStatus: vi.fn(() => ({ state: 'disconnected', publicUrl: null })),
+}));
+vi.mock('../../tunnel/tunnel-service.js', () => ({
+  getTunnelService: () => ({ getStatus: mockedGetTunnelStatus }),
 }));
 
-import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import {
   resolveReachabilityForList,
   resolveShareUrl,
   resolveSiteShareUrl,
 } from '../share-url.js';
 
-const mockedLoadTunnelState = vi.mocked(loadTunnelState);
-
 describe('resolveShareUrl', () => {
   it('returns public and lan URLs when tunnel is active', () => {
-    mockedLoadTunnelState.mockReturnValue({
+    mockedGetTunnelStatus.mockReturnValue({
+      state: 'connected',
       publicUrl: 'https://abc123.frp.xopc.ai',
-      subdomain: 'abc123',
-      registeredAt: '2026-01-01T00:00:00.000Z',
     });
 
     const resolved = resolveShareUrl('token123', { gatewayHost: '192.168.1.10', gatewayPort: 18790 });
@@ -29,7 +28,7 @@ describe('resolveShareUrl', () => {
   });
 
   it('returns lan reachability for non-loopback gateway without tunnel', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const resolved = resolveShareUrl('token123', { gatewayHost: '192.168.1.10', gatewayPort: 18790 });
 
@@ -39,7 +38,7 @@ describe('resolveShareUrl', () => {
   });
 
   it('returns local-only for loopback gateway without tunnel', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const resolved = resolveShareUrl('token123', { gatewayHost: '127.0.0.1', gatewayPort: 18790 });
 
@@ -50,7 +49,7 @@ describe('resolveShareUrl', () => {
   });
 
   it('reports public via the user-configured reverse-proxy URL when no tunnel is up', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const resolved = resolveShareUrl('token123', {
       gatewayHost: '127.0.0.1',
@@ -64,7 +63,7 @@ describe('resolveShareUrl', () => {
   });
 
   it('strips a trailing slash on the reverse-proxy URL before joining the share path', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const resolved = resolveShareUrl('token123', {
       gatewayHost: '127.0.0.1',
@@ -76,10 +75,9 @@ describe('resolveShareUrl', () => {
   });
 
   it('prefers the FRP tunnel over the reverse-proxy URL when both are present', () => {
-    mockedLoadTunnelState.mockReturnValue({
+    mockedGetTunnelStatus.mockReturnValue({
+      state: 'connected',
       publicUrl: 'https://abc123.frp.xopc.ai',
-      subdomain: 'abc123',
-      registeredAt: '2026-01-01T00:00:00.000Z',
     });
 
     const resolved = resolveShareUrl('token123', {
@@ -95,7 +93,7 @@ describe('resolveShareUrl', () => {
 
 describe('resolveReachabilityForList', () => {
   it('reports public when only the reverse-proxy URL is configured', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const reachability = resolveReachabilityForList({
       gatewayHost: '127.0.0.1',
@@ -107,7 +105,7 @@ describe('resolveReachabilityForList', () => {
   });
 
   it('falls through to lan / local-only when reverse-proxy URL is empty', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     expect(
       resolveReachabilityForList({
@@ -136,22 +134,31 @@ describe('resolveSiteShareUrl', () => {
     publicHostSuffix: 'share.xopc.ai',
   };
 
-  it('uses the wildcard subdomain when an FRP tunnel is up', () => {
-    mockedLoadTunnelState.mockReturnValue({
+  it('uses the FRP gateway subpath when an FRP tunnel is up', () => {
+    mockedGetTunnelStatus.mockReturnValue({
+      state: 'connected',
       publicUrl: 'https://abc123.frp.xopc.ai',
-      subdomain: 'abc123',
-      registeredAt: '2026-01-01T00:00:00.000Z',
     });
 
     const resolved = resolveSiteShareUrl(baseCtx);
 
     expect(resolved.reachability).toBe('public');
-    expect(resolved.shareUrl).toBe('https://sitelabel.share.xopc.ai/');
-    expect(resolved.thumbnailUrl).toBe('https://sitelabel.share.xopc.ai/site/sitetok/thumbnail');
+    expect(resolved.shareUrl).toBe('https://abc123.frp.xopc.ai/site/sitetok/');
+    expect(resolved.thumbnailUrl).toBe('https://abc123.frp.xopc.ai/site/sitetok/thumbnail');
+  });
+
+  it('does not treat a stopped persisted tunnel as public', () => {
+    mockedGetTunnelStatus.mockReturnValue({
+      state: 'disconnected',
+      publicUrl: 'https://abc123.frp.xopc.ai',
+    });
+
+    expect(resolveSiteShareUrl(baseCtx).reachability).toBe('local-only');
+    expect(resolveShareUrl('token123', baseCtx).reachability).toBe('local-only');
   });
 
   it('falls back to the reverse-proxy subpath when no tunnel is up', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const resolved = resolveSiteShareUrl({
       ...baseCtx,
@@ -164,7 +171,7 @@ describe('resolveSiteShareUrl', () => {
   });
 
   it('falls back to the bind host with local-only / lan when nothing public is configured', () => {
-    mockedLoadTunnelState.mockReturnValue(null);
+    mockedGetTunnelStatus.mockReturnValue({ state: 'disconnected', publicUrl: null });
 
     const local = resolveSiteShareUrl(baseCtx);
     expect(local.reachability).toBe('local-only');

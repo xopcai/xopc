@@ -3,7 +3,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { publishHostedStaticSiteMock } = vi.hoisted(() => ({
+  publishHostedStaticSiteMock: vi.fn(async (input: { path: string; title?: string }) => ({
+    binding: {
+      id: 'hosted-site-1',
+      shareUrl: 'https://sites.share.test/p/site-token/',
+      expiresAt: '2026-09-12T00:00:00.000Z',
+      maxViews: null,
+      viewCount: 0,
+      snapshotRevision: 1,
+      title: input.title ?? 'Published site',
+    },
+    snapshot: { fileCount: 1, totalBytes: 42 },
+  })),
+}));
+
+vi.mock('../../../../share/hosted-static-site-publish.js', () => ({
+  publishHostedStaticSite: publishHostedStaticSiteMock,
+}));
 
 import { saveMediaBuffer } from '../../../../media/store.js';
 import { ConfigSchema } from '../../../../config/schema.js';
@@ -31,6 +50,7 @@ describe('managed file sharing', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     resetShareStoreForTests();
     resetSiteShareStoreForTests();
+    publishHostedStaticSiteMock.mockClear();
     roots = { agent: join(stateDir, 'agent'), project: join(stateDir, 'project'), session: join(stateDir, 'session') };
     for (const [kind, root] of Object.entries(roots)) {
       mkdirSync(root);
@@ -154,19 +174,22 @@ describe('managed file sharing', () => {
     expect(getShareStore().getById(payload.share.id)).toMatchObject({ kind: 'directory', workspaceRoot: realpathSync(roots.project) });
   });
 
-  it('keeps HTML auto-routing to a site in the selected project workspace', async () => {
+  it('publishes HTML through hosted share when the selected project workspace has no public gateway', async () => {
     const html = '<html><body>Project report</body></html>';
     writeFileSync(join(roots.project, 'report.html'), html);
     const resource = await resolveFile('project', 'report.html');
     const response = await share({ fileId: resource.id });
     expect(response.status).toBe(201);
-    const { payload } = await response.json() as { payload: { share: { id: string; kind: string } } };
+    const { payload } = await response.json() as { payload: { share: { id: string; kind: string; delivery: string; shareUrl: string } } };
     expect(payload.share.kind).toBe('site');
-    const record = getSiteShareStore().getById(payload.share.id);
-    expect(record?.source.kind).toBe('static');
-    if (record?.source.kind !== 'static') throw new Error('Expected static site');
-    expect(record.source.workspaceRoot).toBe(realpathSync(roots.project));
-    expect(readFileSync(join(record.source.rootDir, 'index.html'), 'utf8')).toBe(html);
+    expect(payload.share.delivery).toBe('hosted');
+    expect(payload.share.shareUrl).toBe('https://sites.share.test/p/site-token/');
+    expect(getSiteShareStore().getById(payload.share.id)).toBeNull();
+    expect(publishHostedStaticSiteMock).toHaveBeenCalledOnce();
+    const input = publishHostedStaticSiteMock.mock.calls[0]?.[0];
+    expect(input.workspaceRoot).toBe(realpathSync(roots.project));
+    expect(input.path).toBe('report.html');
+    expect(readFileSync(join(input.workspaceRoot, input.path), 'utf8')).toBe(html);
   });
 
   it('retains path-based share requests', async () => {

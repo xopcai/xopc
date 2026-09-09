@@ -8,6 +8,7 @@ import {
   createHostedSessionShare,
   createSessionShare,
   fetchHostedSessionShares,
+  fetchHostedPublicationCapabilities,
   fetchHostedShareAuthStatus,
   fetchSessionSharePreview,
   fetchSessionShares,
@@ -38,6 +39,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
   const [delivery, setDelivery] = useState<'hosted' | 'local'>('hosted');
   const [hostedConnected, setHostedConnected] = useState(false);
+  const [hostedPublishingAllowed, setHostedPublishingAllowed] = useState(false);
 
   useEffect(() => {
     if (!open || preview || result) return;
@@ -53,6 +55,11 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
         if (cancelled) return;
         setPreview(value);
         setHostedConnected(connected);
+        const capabilities = connected
+          ? await fetchHostedPublicationCapabilities().catch(() => null)
+          : null;
+        if (cancelled) return;
+        setHostedPublishingAllowed(capabilities?.publishing.allowed === true);
         const hostedShares = connected
           ? await fetchHostedSessionShares(sessionKey).catch(() => [])
           : [];
@@ -74,6 +81,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setDescription('');
     setIncludeToolActivities(false);
     setAttachmentIds([]);
+    setHostedPublishingAllowed(false);
   };
 
   const create = async () => {
@@ -219,8 +227,18 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
                     providerId="xopc-share"
                     displayName={t.hosted}
                     connected={false}
-                    onConnected={() => setHostedConnected(true)}
+                    onConnected={() => {
+                      setHostedConnected(true);
+                      void fetchHostedPublicationCapabilities()
+                        .then((capabilities) => setHostedPublishingAllowed(capabilities.publishing.allowed))
+                        .catch(() => setHostedPublishingAllowed(false));
+                    }}
                   />
+                ) : null}
+                {delivery === 'hosted' && hostedConnected && !hostedPublishingAllowed ? (
+                  <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+                    {t.hostedDisabled}
+                  </p>
                 ) : null}
                 {preview.toolActivities.length ? (
                   <label className="flex items-start gap-2 rounded-lg border border-edge-subtle px-3 py-2.5 text-sm text-fg">
@@ -291,14 +309,14 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
                 <Button type="button" variant="ghost" disabled={loading} onClick={() => void revoke()}>
                   <Trash2 className="size-4" />{t.revoke}
                 </Button>
-                <Button type="button" disabled={loading} onClick={() => void refresh()}>
+                <Button type="button" disabled={loading || (result.delivery === 'hosted' && !hostedPublishingAllowed)} onClick={() => void refresh()}>
                   {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}{t.refresh}
                 </Button>
               </>
             ) : (
               <>
                 <Dialog.Close asChild><Button type="button" variant="ghost">{t.cancel}</Button></Dialog.Close>
-                <Button type="button" disabled={!preview || loading || preview.messageCount === 0 || (delivery === 'hosted' && !hostedConnected)} onClick={() => void create()}>
+                <Button type="button" disabled={!preview || loading || preview.messageCount === 0 || (delivery === 'hosted' && (!hostedConnected || !hostedPublishingAllowed))} onClick={() => void create()}>
                   {loading ? <Loader2 className="size-4 animate-spin" /> : null}{t.create}
                 </Button>
               </>
@@ -325,6 +343,7 @@ const LABELS_ZH = {
   publicWarning: '任何获得链接的人都可以查看这份快照。后续会话消息不会自动加入。', cancel: '取消', create: '创建分享', revoke: '撤销分享', refresh: '更新到当前会话', open: '打开分享页面',
   revision: '快照版本 {{revision}}', sharedAttachments: '{{count}} 个附件', newShare: '新建分享',
   delivery: '分享方式', hosted: 'XOPC 托管分享', local: '本机 Gateway 分享',
+  hostedDisabled: '管理员已暂停你的公网分享能力。已有托管链接当前不可访问，但仍可撤销。',
   reviewContent: '检查将要公开的内容', you: '你', assistant: '助手',
 };
 
@@ -337,5 +356,6 @@ const LABELS_EN = {
   publicWarning: 'Anyone with the link can view this snapshot. Later conversation messages are not added automatically.', cancel: 'Cancel', create: 'Create share', revoke: 'Revoke share', refresh: 'Update to current conversation', open: 'Open shared page',
   revision: 'Snapshot revision {{revision}}', sharedAttachments: '{{count}} attachments', newShare: 'New share',
   delivery: 'Delivery', hosted: 'XOPC Hosted Share', local: 'Local Gateway Share',
+  hostedDisabled: 'An administrator has paused public sharing for your account. Existing hosted links are unavailable, but can still be revoked.',
   reviewContent: 'Review the content to publish', you: 'You', assistant: 'Assistant',
 };

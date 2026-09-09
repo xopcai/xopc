@@ -23,6 +23,12 @@ export type SelectChangeEvent = {
   currentTarget: { value: string };
 };
 
+export const selectPopoverContentLayoutClass =
+  'flex max-h-[min(20rem,var(--radix-popover-content-available-height))] flex-col overflow-hidden';
+
+export const selectPopoverScrollAreaClass =
+  'min-h-0 flex-1 overflow-y-auto overscroll-y-contain touch-pan-y [scrollbar-gutter:stable]';
+
 type SelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children' | 'multiple' | 'onChange' | 'size'> & {
   align?: 'start' | 'center' | 'end';
   children: ReactNode;
@@ -130,9 +136,11 @@ export function PopoverSelect({
           side={side}
           align={align}
           sideOffset={4}
+          collisionPadding={8}
           className={cn(
             popoverZ,
-            'w-[var(--radix-popover-trigger-width)] min-w-[16rem] overflow-hidden rounded-lg border border-edge bg-surface-panel p-1 shadow-popover outline-none',
+            selectPopoverContentLayoutClass,
+            'w-[var(--radix-popover-trigger-width)] min-w-[16rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-popover outline-none',
             contentClassName,
           )}
         >
@@ -143,10 +151,10 @@ export function PopoverSelect({
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(event) => onSearchChange?.(event.target.value)}
-              className="mb-1 w-full rounded-md bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="mb-1 w-full shrink-0 rounded-md bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           ) : null}
-          <div className="max-h-64 overflow-y-auto">
+          <div data-select-scroll-region className={cn(selectPopoverScrollAreaClass, 'max-h-64')}>
             {allowEmpty ? (
               <button
                 type="button"

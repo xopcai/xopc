@@ -1,4 +1,4 @@
-import { Check, Loader2, RotateCcw, X } from 'lucide-react';
+import { Check, Loader2, RotateCcw, Settings2, X } from 'lucide-react';
 import { memo } from 'react';
 
 import type { VoiceInputPhase } from '@/features/voice/realtime/use-realtime-voice';
@@ -12,6 +12,8 @@ export interface ComposerVoiceInputBarProps {
   audioLevel: number;
   partialTranscript: string;
   finalTranscript: string;
+  error?: string | null;
+  settingsRequired?: boolean;
   disabled?: boolean;
   chat: ChatMessages;
   onCancel: () => void;
@@ -34,6 +36,8 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
   audioLevel,
   partialTranscript,
   finalTranscript,
+  error,
+  settingsRequired,
   disabled,
   chat: m,
   onCancel,
@@ -45,7 +49,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
   const starting = phase === 'starting';
   const failed = phase === 'error';
   const status = failed
-    ? m.voiceTranscribeFailed
+    ? error || m.voiceTranscribeFailed
     : partialTranscript
         ? partialTranscript
         : finalTranscript
@@ -95,7 +99,17 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
         >
           <X className="size-4" />
         </button>
-        {failed ? (
+        {failed && settingsRequired ? (
+          <a
+            href="#/settings/capabilities/voice"
+            className={cn(iconBtnClass, 'w-auto gap-1 px-2 text-xs font-medium text-accent')}
+            title={m.voiceOpenSettings}
+          >
+            <Settings2 className="size-3.5" aria-hidden />
+            {m.voiceOpenSettings}
+          </a>
+        ) : null}
+        {failed && !settingsRequired ? (
           <button type="button" className={cn(iconBtnClass, 'text-fg')} disabled={disabled} title={m.voiceRetry} aria-label={m.voiceRetry} onClick={onRetry}>
             <RotateCcw className="size-4" />
           </button>

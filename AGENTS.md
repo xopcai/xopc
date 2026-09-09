@@ -202,6 +202,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/earendil-works/pi-mono). |
 | New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
 | New gateway console screen | `web/src/pages/<name>.tsx` or `web/src/features/<area>/`; register route in `web/src/app.tsx`; follow [Web UI](#web-ui). |
+| New authenticated Gateway API | Add the handler to its route module, then **always** add or verify its matcher in `src/gateway/hono/routes/lazy-bundles.ts` and add a mapping assertion in `src/gateway/hono/routes/__tests__/lazy-bundles.test.ts`. |
 | MCP servers / channel bridge | Config: `mcp.servers` in `xopc.json`; outbound runtime `src/agent/mcp/`; inbound `src/mcp/` + `xopc mcp serve`; UI `#/settings/agent-mcp`. See [docs/cli/mcp.md](./docs/cli/mcp.md). |
 | Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |
 | GitHub issues / PRs | Templates under `.github/ISSUE_TEMPLATE/`; process in **[CONTRIBUTING.md](./CONTRIBUTING.md)**; sync labels with `./scripts/sync-github-labels.sh` |
@@ -377,6 +378,14 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ## When Making Changes
 
+### Authenticated Gateway route lazy loading
+
+- Authenticated routes are loaded on demand through `src/gateway/hono/routes/lazy-bundles.ts`. Adding a handler to `src/gateway/hono/routes/*.ts` alone does **not** make the endpoint reachable.
+- Whenever an authenticated API route is added, renamed, or moved, update the corresponding lazy-bundle matcher in the same change. Include every new route prefix and parameterized route shape.
+- Matchers are evaluated in registry order. Check for overlap with broader prefixes such as `/api/notes`; either place the more specific matcher first or explicitly exclude it from the broader matcher so the correct bundle wins.
+- Add positive mapping assertions for every new route family and at least one nearby negative/non-overlap assertion in `src/gateway/hono/routes/__tests__/lazy-bundles.test.ts`.
+- Before considering the route complete, test the real path through a running Gateway with authentication. A direct unit test of the route module is insufficient because it bypasses lazy-bundle selection.
+
 ### Session transcript (LLM vs on-disk rows)
 
 - **Authoritative storage:** `~/.xopc/xopc.db` (SQLite). Session metadata, transcripts, per-session config, compaction checkpoints, and FTS5 search all live in `src/storage/sqlite/`. Gateway opens the DB on start via `openXopcDatabase()`.
@@ -406,4 +415,4 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ---
 
-_Last updated: 2026-06-15_
+_Last updated: 2026-09-09_

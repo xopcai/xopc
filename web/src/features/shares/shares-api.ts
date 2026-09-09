@@ -89,8 +89,100 @@ export type UpdateShareResponse = {
   payload: { id: string; expiresAt: string; maxViews: number | null; shareUrl: string };
 };
 
+export type HostedPublicationItem = {
+  id: string;
+  kind: 'session_document' | 'note_document' | 'static_site';
+  delivery: 'hosted_snapshot';
+  title: string;
+  description: string | null;
+  status: 'staging' | 'active' | 'revoked';
+  revision: number | null;
+  expiresAt: string;
+  maxViews: number | null;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+  owner: { type: 'user' | 'workspace'; id: string } | null;
+  workspaceId: string | null;
+  createdByPrincipalId: string | null;
+  shareUrl: string | null;
+  managedFromThisDevice: boolean;
+};
+
+export type HostedPublicationCapabilities = {
+  protocolVersion: string;
+  kinds: string[];
+  publishing: { allowed: boolean; managedBy: 'platform_admin' };
+};
+
 export async function fetchShares(): Promise<ShareListResponse> {
   return fetchJson<ShareListResponse>(apiUrl('/api/shares'));
+}
+
+export async function fetchHostedPublicationCapabilities(): Promise<HostedPublicationCapabilities> {
+  return (await fetchJson<{ ok: true; payload: HostedPublicationCapabilities }>(
+    apiUrl('/api/hosted-publications/capabilities'),
+  )).payload;
+}
+
+export async function fetchHostedPublications(): Promise<{
+  connected: boolean;
+  publishingAllowed: boolean;
+  publications: HostedPublicationItem[];
+}> {
+  if (!(await fetchHostedShareAuthStatus())) {
+    return { connected: false, publishingAllowed: false, publications: [] };
+  }
+  const [response, capabilities] = await Promise.all([
+    fetchJson<{ ok: true; payload: { publications: HostedPublicationItem[] } }>(apiUrl('/api/hosted-publications')),
+    fetchHostedPublicationCapabilities(),
+  ]);
+  return {
+    connected: true,
+    publishingAllowed: capabilities.publishing.allowed,
+    publications: response.payload.publications,
+  };
+}
+
+export async function revokeHostedPublication(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/hosted-publications/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export async function createHostedStaticSite(input: {
+  path: string;
+  title?: string;
+  description?: string;
+  ttlMs?: number;
+  maxViews?: number | null;
+  spaFallback?: boolean;
+  sessionKey?: string;
+  agentId?: string;
+}): Promise<Omit<HostedPublicationItem, 'shareUrl'> & { shareUrl: string; fileCount: number; totalBytes: number }> {
+  return (await fetchJson<{ ok: true; payload: Omit<HostedPublicationItem, 'shareUrl'> & { shareUrl: string; fileCount: number; totalBytes: number } }>(
+    apiUrl('/api/hosted-publications/static-sites'),
+    { method: 'POST', body: JSON.stringify(input) },
+  )).payload;
+}
+
+export async function refreshHostedStaticSite(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/hosted-publications/static-sites/${encodeURIComponent(id)}/refresh`), { method: 'POST' });
+}
+
+export async function fetchHostedPublicationRevisions(id: string): Promise<Array<{
+  revision: number;
+  createdAt: string;
+  current: boolean;
+}>> {
+  return (await fetchJson<{ ok: true; payload: { revisions: Array<{ revision: number; createdAt: string; current: boolean }> } }>(
+    apiUrl(`/api/hosted-publications/${encodeURIComponent(id)}/revisions`),
+  )).payload.revisions;
+}
+
+export async function rollbackHostedPublication(id: string, expectedRevision: number, targetRevision: number): Promise<void> {
+  await fetchJson(apiUrl(`/api/hosted-publications/${encodeURIComponent(id)}/rollback`), {
+    method: 'POST',
+    body: JSON.stringify({ expectedRevision, targetRevision }),
+  });
 }
 
 export async function createShare(params: CreateShareParams): Promise<CreateShareResponse> {

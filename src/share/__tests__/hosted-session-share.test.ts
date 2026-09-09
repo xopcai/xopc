@@ -10,7 +10,8 @@ import { SessionStatus, type SessionMetadata } from '../../session/types.js';
 import type { CompactionSourceSnapshot, TranscriptSourceEntry } from '../../storage/sqlite/index.js';
 import {
   HostedSessionShareBuilder,
-  HostedSessionSharePublisher,
+  HostedPublicationPublisher,
+  HostedShareRemoteError,
   HostedShareBindingStore,
   type HostedShareBinding,
 } from '../hosted-session-share.js';
@@ -113,18 +114,21 @@ describe('hosted session sharing', () => {
       const method = init?.method ?? 'GET';
       requests.push({ path: url.pathname, method });
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer share-access');
-      if (method === 'POST' && url.pathname === '/api/v1/session-shares') {
+      if (method === 'POST' && url.pathname === '/api/v1/publications') {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        expect(body.kind).toBe('session_document');
         expect(body).not.toHaveProperty('sessionId');
         expect(body).not.toHaveProperty('sessionKey');
         return Response.json({
           shareId: 'share-1', uploadId: 'upload-1', targetRevision: 1,
           publicUrl: 'https://share.test/s/public-token',
-          assetUploads: [{ assetId: attachmentId, uploadUrl: `/api/v1/session-shares/share-1/uploads/upload-1/assets/${attachmentId}` }],
+          assetUploads: [{ assetId: attachmentId, uploadUrl: `/api/v1/publications/share-1/uploads/upload-1/assets/${attachmentId}` }],
         }, { status: 201 });
       }
       if (method === 'PUT') {
-        expect(Buffer.from(init?.body as Buffer).toString()).toBe('image-bytes');
+        const chunks: Buffer[] = [];
+        for await (const chunk of init?.body as unknown as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk));
+        expect(Buffer.concat(chunks).toString()).toBe('image-bytes');
         return Response.json({ ok: true });
       }
       return Response.json({ item: {
@@ -139,11 +143,58 @@ describe('hosted session sharing', () => {
         expiresAt: Date.now() + 60_000, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }),
     } as unknown as CredentialResolver;
-    const publisher = new HostedSessionSharePublisher('https://share.test', credentials, fetchImpl);
+    const publisher = new HostedPublicationPublisher('https://share.test', credentials, fetchImpl);
     const result = await publisher.create(built, { ttlMs: 86_400_000, maxViews: 10 });
 
     expect(result).toMatchObject({ id: 'share-1', shareUrl: 'https://share.test/s/public-token', snapshotRevision: 1 });
     expect(requests.map(({ method }) => method)).toEqual(['POST', 'PUT', 'POST']);
+  });
+
+  it('discovers and lists the generic Publication control plane', async () => {
+    const credentials = {
+      loadOAuthToken: async () => ({
+        type: 'oauth' as const, provider: 'xopc-share', access: 'share-access', refresh: 'share-refresh',
+        expiresAt: Date.now() + 60_000, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }),
+    } as unknown as CredentialResolver;
+    const summary = {
+      id: 'share-1', title: 'Hosted conversation', description: null, status: 'active' as const, revision: 1,
+      expiresAt: '2024-01-02T00:00:00.000Z', maxViews: null, viewCount: 0,
+      createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z',
+      kind: 'session_document' as const, deliveryMode: 'hosted_snapshot' as const,
+      owner: { type: 'user' as const, id: 'user-1' }, workspaceId: 'workspace-1', createdByPrincipalId: 'principal-1',
+    };
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path.endsWith('/capabilities')) return Response.json({
+        protocolVersion: '1', kinds: ['session_document'], deliveryModes: ['hosted_snapshot'],
+        accessModes: ['anyone_with_link'], upload: { direct: false, multipart: false, resumable: false, streaming: true },
+        lifecycle: { revisions: true, revoke: true, asynchronousDeletion: true },
+        publishing: { allowed: true, managedBy: 'platform_admin' },
+      });
+      return Response.json({ items: [summary] });
+    });
+    const publisher = new HostedPublicationPublisher('https://share.test', credentials, fetchImpl);
+
+    await expect(publisher.capabilities()).resolves.toMatchObject({ kinds: ['session_document'], upload: { streaming: true } });
+    await expect(publisher.listPublications()).resolves.toEqual([summary]);
+  });
+
+  it('preserves the remote admin policy denial', async () => {
+    const credentials = {
+      loadOAuthToken: async () => ({
+        type: 'oauth' as const, provider: 'xopc-share', access: 'share-access', refresh: 'share-refresh',
+        expiresAt: Date.now() + 60_000, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }),
+    } as unknown as CredentialResolver;
+    const publisher = new HostedPublicationPublisher('https://share.test', credentials, async () => Response.json({
+      error: { code: 'CONTENT_DISTRIBUTION_DISABLED', message: 'Public sharing has been disabled by an administrator' },
+    }, { status: 403 }));
+
+    await expect(publisher.capabilities()).rejects.toMatchObject<HostedShareRemoteError>({
+      status: 403,
+      code: 'CONTENT_DISTRIBUTION_DISABLED',
+    });
   });
 
   it('persists only local hosted-share bindings for the matching session', async () => {
@@ -151,6 +202,8 @@ describe('hosted session sharing', () => {
     const binding: HostedShareBinding = {
       id: 'share-1', shareUrl: 'https://share.test/s/token', expiresAt: '2024-01-02T00:00:00.000Z',
       maxViews: null, viewCount: 0, snapshotRevision: 1, sessionId: 'session-hosted-1', cutoffSeq: 4,
+      kind: 'session_document', source: { kind: 'session', id: 'session-hosted-1', version: '4' },
+      revisionSources: { '1': { kind: 'session', id: 'session-hosted-1', version: '4' } },
       title: 'Hosted conversation', description: null, messageCount: 2, attachmentCount: 0,
       includeToolActivities: false, attachmentIds: [], createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z', revoked: false,

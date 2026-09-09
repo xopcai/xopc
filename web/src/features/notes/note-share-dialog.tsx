@@ -5,15 +5,26 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
-import { extendShare, revokeShare } from '@/features/shares/shares-api';
+import {
+  extendShare,
+  fetchHostedPublicationCapabilities,
+  fetchHostedShareAuthStatus,
+  revokeHostedPublication,
+  revokeShare,
+} from '@/features/shares/shares-api';
 
 import {
   createNoteShare,
+  createHostedNotePublication,
   listNoteShares,
+  listHostedNotePublications,
   refreshNoteShare,
+  refreshHostedNotePublication,
+  type HostedNotePublication,
   type Note,
   type NoteShareItem,
 } from './notes-api';
@@ -33,10 +44,22 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
   const zh = language === 'zh';
   const t = zh ? COPY_ZH : COPY_EN;
   const { data, mutate } = useSWR(open ? ['note-shares', note.id] : null, () => listNoteShares(note.id));
+  const hostedAuth = useSWR(open ? 'hosted-share-auth-status' : null, fetchHostedShareAuthStatus);
+  const hostedConnected = hostedAuth.data === true;
+  const hostedCapabilities = useSWR(
+    open && hostedConnected ? 'hosted-publication-capabilities' : null,
+    fetchHostedPublicationCapabilities,
+  );
+  const hostedPublishingAllowed = hostedCapabilities.data?.publishing.allowed === true;
+  const hosted = useSWR(
+    open && hostedConnected ? ['hosted-note-publications', note.id] : null,
+    () => listHostedNotePublications(note.id),
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [ttlMs, setTtlMs] = useState('86400000');
   const [maxViews, setMaxViews] = useState('');
   const [description, setDescription] = useState('');
+  const [delivery, setDelivery] = useState<'local' | 'hosted'>('hosted');
   const [creating, setCreating] = useState(false);
   const [busyShareId, setBusyShareId] = useState<string | null>(null);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
@@ -66,19 +89,46 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
     setCreating(true);
     setError(null);
     try {
-      const result = await createNoteShare(note.id, {
+      const input = {
         expectedNoteVersion: note.updatedAt,
         attachmentIds: [...selectedIds],
         ttlMs: Number(ttlMs),
         maxViews: maxViews.trim() ? Number(maxViews) : null,
         description: description.trim() || undefined,
-      });
-      setCreatedUrl(result.payload.shareUrl);
-      await mutate();
+      };
+      if (delivery === 'hosted') {
+        const result = await createHostedNotePublication(note.id, input);
+        setCreatedUrl(result.shareUrl);
+        await hosted.mutate();
+      } else {
+        const result = await createNoteShare(note.id, input);
+        setCreatedUrl(result.payload.shareUrl);
+        await mutate();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const actOnHosted = async (publication: HostedNotePublication, action: 'refresh' | 'revoke') => {
+    setBusyShareId(publication.id);
+    setError(null);
+    try {
+      if (action === 'refresh') {
+        await refreshHostedNotePublication(note.id, publication.id, {
+          expectedNoteVersion: note.updatedAt,
+          attachmentIds: [...selectedIds],
+        });
+      } else {
+        await revokeHostedPublication(publication.id);
+      }
+      await hosted.mutate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyShareId(null);
     }
   };
 
@@ -166,6 +216,28 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
             ) : null}
 
             <section className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-xs text-fg-muted sm:col-span-2">
+                {t.delivery}
+                <Select value={delivery} onChange={(event) => setDelivery(event.target.value as 'local' | 'hosted')}>
+                  <SelectOption value="hosted">{t.deliveryHosted}</SelectOption>
+                  <SelectOption value="local">{t.deliveryLocal}</SelectOption>
+                </Select>
+              </label>
+              {delivery === 'hosted' && hostedAuth.data === false ? (
+                <div className="sm:col-span-2">
+                  <OAuthProviderConnect
+                    providerId="xopc-share"
+                    displayName="XOPC Hosted Share"
+                    connected={false}
+                    onConnected={() => void hostedAuth.mutate(true, { revalidate: false })}
+                  />
+                </div>
+              ) : null}
+              {delivery === 'hosted' && hostedConnected && hostedCapabilities.data && !hostedPublishingAllowed ? (
+                <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning sm:col-span-2">
+                  {t.hostedDisabled}
+                </p>
+              ) : null}
               <label className="grid gap-1.5 text-xs text-fg-muted">
                 {t.expires}
                 <Select value={ttlMs} onChange={(event) => setTtlMs(event.target.value)}>
@@ -202,15 +274,75 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
                 </div>
               </section>
             ) : null}
+
+            {(hosted.data?.length ?? 0) > 0 ? (
+              <section className="mt-6 border-t border-edge pt-5">
+                <h3 className="text-sm font-medium text-fg">{t.hostedLinks}</h3>
+                <div className="mt-2 grid gap-2">
+                  {hosted.data!.map((publication) => (
+                    <HostedShareRow
+                      key={publication.id}
+                      publication={publication}
+                      stale={publication.source?.version !== String(note.updatedAt)}
+                      busy={busyShareId === publication.id}
+                      publishingAllowed={hostedPublishingAllowed}
+                      t={t}
+                      onCopy={copyUrl}
+                      onAction={actOnHosted}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-edge px-5 py-3">
             <Dialog.Close asChild><Button type="button" variant="ghost">{t.close}</Button></Dialog.Close>
-            <Button type="button" onClick={() => void handleCreate()} disabled={creating}>{creating ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}{creating ? t.creating : t.create}</Button>
+            <Button
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={creating || (delivery === 'hosted' && (!hostedConnected || !hostedPublishingAllowed))}
+            >
+              {creating ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}
+              {creating ? t.creating : t.create}
+            </Button>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function HostedShareRow({ publication, stale, busy, publishingAllowed, t, onCopy, onAction }: {
+  publication: HostedNotePublication;
+  stale: boolean;
+  busy: boolean;
+  publishingAllowed: boolean;
+  t: Copy;
+  onCopy: (url: string) => Promise<void>;
+  onAction: (publication: HostedNotePublication, action: 'refresh' | 'revoke') => Promise<void>;
+}) {
+  const inactive = publication.revoked || publication.expired;
+  return (
+    <div className={cn('rounded-lg border border-edge-subtle p-3', inactive && 'opacity-60')}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs text-fg-muted">
+            <span>{stale && !inactive ? t.stale : inactive ? t.inactive : t.active}</span>
+            <span>·</span><span>{t.views} {publication.viewCount}{publication.maxViews !== null ? ` / ${publication.maxViews}` : ''}</span>
+            <span>·</span><span>{t.revision} {publication.revision}</span>
+          </div>
+          <div className="mt-1 truncate text-xs text-fg-subtle">{publication.shareUrl}</div>
+        </div>
+        {busy ? <Loader2 className="size-4 animate-spin text-fg-muted" /> : null}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        <Button className="px-2 py-1 text-xs" variant="ghost" disabled={!publishingAllowed} onClick={() => void onCopy(publication.shareUrl)}><Copy className="size-3.5" />{t.copy}</Button>
+        <Button className="px-2 py-1 text-xs" variant="ghost" disabled={!publishingAllowed} onClick={() => window.open(publication.shareUrl, '_blank', 'noopener,noreferrer')}><ExternalLink className="size-3.5" />{t.open}</Button>
+        {stale && !inactive ? <Button className="px-2 py-1 text-xs" variant="ghost" disabled={busy || !publishingAllowed} onClick={() => void onAction(publication, 'refresh')}><RefreshCw className="size-3.5" />{t.refresh}</Button> : null}
+        {!publication.revoked ? <Button className="px-2 py-1 text-xs" variant="ghost" disabled={busy} onClick={() => void onAction(publication, 'revoke')}><Trash2 className="size-3.5" />{t.revoke}</Button> : null}
+      </div>
+    </div>
   );
 }
 
@@ -257,6 +389,8 @@ const COPY_ZH = {
   privateExcluded: '不会分享标签、AI 元数据、项目、讨论、历史版本或未引用附件。', attachments: '包含的附件', expires: '有效期', maxViews: '最多查看次数', unlimited: '不限',
   publicDescription: '公开说明（可选）', create: '创建分享链接', creating: '创建中…', copy: '复制', copied: '已复制', open: '打开', activeLinks: '这条笔记的分享',
   copyFailed: '无法复制到剪贴板，请手动选择链接并复制。',
+  delivery: '发布方式', deliveryHosted: '平台托管（外网稳定访问）', deliveryLocal: '本机直连（需要隧道或公网部署）', hostedLinks: '平台托管发布', revision: '版本',
+  hostedDisabled: '管理员已暂停你的公网分享能力。已有托管链接当前不可访问，但仍可撤销。',
   stale: '旧版本', inactive: '已失效', active: '有效', views: '查看', refresh: '更新快照', extend: '延长 24 小时', revoke: '撤销',
 } as const;
 
@@ -267,5 +401,7 @@ const COPY_EN: Copy = {
   privateExcluded: 'Tags, AI metadata, projects, discussions, history, and unreferenced attachments are excluded.', attachments: 'Included attachments', expires: 'Expires', maxViews: 'Maximum views', unlimited: 'Unlimited',
   publicDescription: 'Public description (optional)', create: 'Create share link', creating: 'Creating…', copy: 'Copy', copied: 'Copied', open: 'Open', activeLinks: 'Shares for this Note',
   copyFailed: 'Could not copy to the clipboard. Select the link and copy it manually.',
+  delivery: 'Publishing method', deliveryHosted: 'Hosted platform (stable public access)', deliveryLocal: 'Direct from this device (requires public access)', hostedLinks: 'Hosted publications', revision: 'Revision',
+  hostedDisabled: 'An administrator has paused public sharing for your account. Existing hosted links are unavailable, but can still be revoked.',
   stale: 'Older version', inactive: 'Inactive', active: 'Active', views: 'Views', refresh: 'Update snapshot', extend: 'Extend 24 hours', revoke: 'Revoke',
 };

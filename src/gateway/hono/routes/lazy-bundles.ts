@@ -221,7 +221,9 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'notes',
-    match: (path) => startsWithAny(path, ['/api/notes']),
+    match: (path) =>
+      startsWithAny(path, ['/api/notes'])
+      && !/^\/api\/notes\/[^/]+\/hosted-publications(?:\/.*)?$/.test(path),
     load: async () => {
       const { registerNotesRoutes } = await import('./notes.js');
       return { register: registerNotesRoutes };
@@ -254,7 +256,8 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   {
     id: 'shares',
     match: (path) =>
-      startsWithAny(path, ['/api/shares']) ||
+      startsWithAny(path, ['/api/shares', '/api/hosted-publications']) ||
+      /^\/api\/notes\/[^/]+\/hosted-publications(?:\/.*)?$/.test(path) ||
       /^\/api\/sessions\/[^/]+\/(?:share-preview|shares|hosted-shares)(?:\/.*)?$/.test(path),
     load: async () => {
       const { registerShareRoutes } = await import('./shares.js');
