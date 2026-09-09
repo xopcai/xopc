@@ -3,17 +3,10 @@ import type { SettingsMode } from '@/stores/settings-mode-store';
 
 /** Settings rail tabs hidden when `mode === 'simple'`. */
 export const SIMPLE_MODE_HIDDEN_SETTINGS_TABS = new Set<Tab>([
-  'settingsTunnel',
-  'settingsShares',
-  'settingsHeartbeat',
   'logs',
 ]);
 
 const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
-  '/settings/remote-access',
-  '/settings/tunnel',
-  '/settings/shares',
-  '/settings/heartbeat',
   '/settings/logs',
   '/settings/extensions/debug',
   '/settings/ext/',

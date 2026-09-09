@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
 import { messages } from '@/i18n/messages';
@@ -604,25 +605,22 @@ export function WorkDiscoveryPage({
       : 'xopc-work-discovery-experience relative flex min-h-full flex-1 flex-col bg-surface-base'}>
       <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
       <main key={pageState} className={embedded
-        ? `xopc-work-discovery-stage relative z-10 mx-auto flex h-full min-h-0 w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[46rem]'} flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto [scrollbar-gutter:stable]'}`
+        ? `xopc-work-discovery-stage xopc-onboarding-scroll relative z-10 mx-auto flex h-full min-h-0 w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[46rem]'} flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto'}`
         : `mx-auto flex w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16`}>
-        {pageState !== 'recognition' && pageState !== 'running' && pageState !== 'loading' ? (
+        {pageState === 'intro' ? (
           <div className={cn('flex items-center justify-center', embedded ? 'mb-7 sm:mb-9' : 'mb-10')}>
-            <div className="xopc-discovery-logo relative flex size-16 items-center justify-center rounded-[1.35rem] border border-edge bg-surface-panel shadow-elevated">
-              <span className="xopc-discovery-logo-ring absolute -inset-3 rounded-[1.8rem] border border-accent/10" aria-hidden />
-              <BrandLogo className="size-10" />
+            <div className="xopc-discovery-logo relative flex size-16 items-center justify-center">
+              <span className="xopc-discovery-logo-glow absolute -inset-5 rounded-full" aria-hidden />
+              <BrandLogo className="relative size-12" />
             </div>
           </div>
         ) : null}
 
         {pageState === 'loading' ? (
-          <section className="mx-auto flex min-h-[32rem] w-full max-w-md flex-1 flex-col items-center justify-center text-center" aria-busy>
-            <BrandLogo className="size-14" aria-hidden />
-            <div className="mt-7 flex items-center gap-2 text-sm font-medium text-fg">
-              <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-              {copy.loading}
-            </div>
-            <p className="mt-2 text-xs leading-5 text-fg-muted">{copy.loadingHint}</p>
+          <section className="mx-auto flex min-h-[32rem] w-full max-w-md flex-1 flex-col items-center justify-center text-center" aria-busy aria-label={copy.loading}>
+            <Skeleton className="size-14 rounded-2xl" />
+            <Skeleton className="mt-7 h-5 w-44 rounded-full" />
+            <Skeleton className="mt-3 h-3.5 w-64 max-w-full rounded-full" />
           </section>
         ) : null}
 
@@ -637,14 +635,12 @@ export function WorkDiscoveryPage({
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
               {localSources.length ? (
-                <details open className="group mb-5 rounded-2xl border border-edge bg-surface-panel text-left shadow-surface">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-sm font-medium text-fg marker:content-none">
-                    <span>{copy.localSourcesTitle}</span>
-                    <ChevronDown className="size-4 text-fg-muted transition-transform duration-200 group-open:rotate-180" aria-hidden />
-                  </summary>
-                  <div className="border-t border-edge-subtle px-4 pb-4 pt-3">
-                    <p className="text-xs leading-5 text-fg-muted">{copy.localSourcesSubtitle}</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="mb-5 overflow-hidden rounded-2xl border border-edge bg-surface-panel/75 text-left shadow-surface backdrop-blur-xl">
+                  <div className="px-4 py-3.5">
+                    <p className="text-sm font-medium text-fg">{copy.localSourcesTitle}</p>
+                    <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.localSourcesSubtitle}</p>
+                  </div>
+                  <div className="grid border-t border-edge-subtle sm:grid-cols-2">
                     {localSources.map((source) => {
                       const selected = selectedSourceIds.has(source.id);
                       return (
@@ -652,27 +648,26 @@ export function WorkDiscoveryPage({
                           key={source.id}
                           type="button"
                           className={cn(
-                            'flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors',
+                            'flex min-h-12 items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3 text-left text-sm transition-colors last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-child(odd)]:border-r',
                             selected
-                              ? 'border-accent/40 bg-accent-soft text-accent-fg'
-                              : 'border-edge bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg',
+                              ? 'bg-accent-soft/55 text-fg'
+                              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
                           )}
                           aria-pressed={selected}
                           onClick={() => toggleSource(source.id)}
                         >
+                          <span className="truncate font-medium">{source.displayName}</span>
                           <span className={cn(
-                            'flex size-4 items-center justify-center rounded-full border',
+                            'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
                             selected ? 'border-accent bg-accent text-white' : 'border-edge',
                           )}>
                             {selected ? <Check className="size-3" aria-hidden /> : null}
                           </span>
-                          {source.displayName}
                         </button>
                       );
                     })}
-                    </div>
                   </div>
-                </details>
+                </div>
               ) : null}
               <Button
                 type="button"
@@ -711,13 +706,14 @@ export function WorkDiscoveryPage({
             aria-labelledby="work-discovery-candidates-title"
           >
             <div className={embedded ? 'shrink-0 text-center' : 'text-center'}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.sourceStepEyebrow}</p>
               <h1 id="work-discovery-candidates-title" className="text-2xl font-semibold tracking-tight text-fg">
                 {copy.candidatesTitle}
               </h1>
               <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.candidatesSubtitle}</p>
             </div>
             <div className={embedded
-              ? 'mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]'
+              ? 'xopc-onboarding-scroll mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1'
               : 'mt-7 space-y-2'}>
               {candidates.map((candidate, index) => {
                 const selected = selectedCandidatePaths.has(candidate.rootPath);
@@ -750,7 +746,7 @@ export function WorkDiscoveryPage({
               })}
             </div>
             <div className={embedded ? 'shrink-0 border-t border-edge-subtle pt-4' : undefined}>
-              <div className={`${embedded ? '' : 'mt-5 '}flex items-start gap-2 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3 text-xs leading-5 text-fg-muted`}>
+              <div className={`${embedded ? '' : 'mt-5 '}flex items-start gap-2 rounded-xl bg-surface-muted/70 px-4 py-3 text-xs leading-5 text-fg-muted`}>
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
                 <span>
                   {copy.multiFolderPrivacyNote}{' '}
@@ -783,10 +779,11 @@ export function WorkDiscoveryPage({
         {pageState === 'consent' && preview ? (
           <section aria-labelledby="work-discovery-consent-title">
             <div className="text-center">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">{copy.sourceStepEyebrow}</p>
               <h1 id="work-discovery-consent-title" className="text-2xl font-semibold tracking-tight text-fg">{copy.selectedTitle}</h1>
               <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.selectedSubtitle}</p>
             </div>
-            <div className="mt-8 overflow-hidden rounded-xl border border-edge bg-surface-panel">
+            <div className="mt-8 overflow-hidden rounded-2xl border border-edge bg-surface-panel/75 shadow-surface backdrop-blur-xl">
               <div className="flex items-center gap-3 border-b border-edge-subtle px-4 py-3.5">
                 <FolderOpen className="size-5 shrink-0 text-accent-fg" />
                 <div className="min-w-0 flex-1">
@@ -797,7 +794,7 @@ export function WorkDiscoveryPage({
                   {preview.projectKind === 'coding' ? copy.codingProject : preview.projectKind === 'general' ? copy.generalProject : copy.unknownProject}
                 </span>
               </div>
-              <div className="grid gap-3 border-b border-edge-subtle bg-surface-base/60 p-4 sm:grid-cols-2">
+              <div className="grid gap-4 border-b border-edge-subtle bg-surface-base/35 p-4 sm:grid-cols-2">
                 <div>
                   <p className="text-xs font-medium text-fg-muted">{copy.localFingerprint}</p>
                   <p className="mt-1 text-sm text-fg">
@@ -880,17 +877,15 @@ export function WorkDiscoveryPage({
               ariaLabel={copy.sourceSignals.ariaLabel}
               centerLabel={copy.sourceSignals.centerLabel}
             />
-            <div className="xopc-understanding-progress mx-auto -mt-2 grid max-w-xl grid-cols-3 gap-2">
+            <div className="xopc-understanding-progress mx-auto mt-6 grid max-w-[34rem] grid-cols-3 gap-2">
               {STAGES.map((stage, index) => {
                 const activeIndex = Math.max(0, STAGES.indexOf(run.stage ?? 'folder_structure'));
                 const complete = index < activeIndex;
                 const active = index === activeIndex;
                 return (
-                  <div key={stage} className={`xopc-understanding-step flex min-w-0 flex-col items-center gap-2 rounded-xl border px-2 py-3 text-center ${active ? 'border-accent/30 bg-accent-soft/70' : 'border-edge bg-surface-panel/70'}`} data-active={active || undefined} data-complete={complete || undefined}>
-                    <span className={`xopc-understanding-step-icon flex size-7 items-center justify-center rounded-full ${complete ? 'bg-accent text-white' : active ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-subtle'}`}>
-                      {complete ? <Check className="size-3.5" /> : active ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" /> : <span className="size-1.5 rounded-full bg-current" />}
-                    </span>
-                    <span className={active || complete ? 'text-xs font-medium leading-5 text-fg' : 'text-xs leading-5 text-fg-muted'}>{copy.stages[stage]}</span>
+                  <div key={stage} className="xopc-understanding-step min-w-0 text-left" data-active={active || undefined} data-complete={complete || undefined}>
+                    <span className={cn('block h-1 rounded-full', active || complete ? 'bg-accent' : 'bg-surface-muted')} />
+                    <span className={cn('mt-2 block text-[11px] leading-4', active ? 'font-medium text-fg' : 'text-fg-muted')}>{copy.stages[stage]}</span>
                   </div>
                 );
               })}
@@ -930,9 +925,9 @@ export function WorkDiscoveryPage({
               <h1 id="work-discovery-recommendation-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg">{copy.primaryRecommendationTitle}</h1>
             </div>
             {batchRunSwitcher}
-            <article className="mt-7 rounded-2xl border border-accent/30 bg-surface-panel p-5 sm:p-6">
+            <article className="mt-7 rounded-[1.75rem] border border-edge bg-surface-panel/75 p-5 shadow-surface backdrop-blur-xl sm:p-7">
               <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"><ChevronRight className="size-5" /></div>
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"><ChevronRight className="size-5" /></div>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-lg font-semibold text-fg">{primarySuggestion.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-fg-muted">{primarySuggestion.rationale}</p>

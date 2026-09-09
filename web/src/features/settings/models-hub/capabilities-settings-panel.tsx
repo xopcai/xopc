@@ -1,8 +1,7 @@
-import { ImageIcon, Mic, Plug, Search, Users, type LucideIcon } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ImageIcon, Plug, type LucideIcon } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import {
@@ -12,7 +11,6 @@ import {
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 import {
   CAPABILITY_SETTINGS_SECTIONS,
   capabilitySettingsPath,
@@ -32,7 +30,6 @@ interface SectionDefinition {
   id: CapabilitySettingsSectionId;
   icon: LucideIcon;
   label: string;
-  hint: string;
   suffix?: ReactNode;
 }
 
@@ -65,25 +62,12 @@ export function CapabilitiesSettingsPanel() {
     setSearchParams(next, { replace: true });
   }, [capability, searchParams, setSearchParams]);
 
-  const sections: readonly SectionDefinition[] = [
-    { id: 'models', icon: Plug, label: c.tabs.models, hint: c.modelsHint },
+  const modelSections: readonly SectionDefinition[] = [
+    { id: 'models', icon: Plug, label: c.tabs.models },
     {
       id: 'image',
       icon: ImageIcon,
       label: c.tabs.image,
-      hint: c.imageHint,
-    },
-    {
-      id: 'voice',
-      icon: Mic,
-      label: c.tabs.voice,
-      hint: c.voiceHint,
-    },
-    {
-      id: 'search',
-      icon: Search,
-      label: c.tabs.search,
-      hint: c.searchHint,
     },
   ];
 
@@ -100,52 +84,55 @@ export function CapabilitiesSettingsPanel() {
     return <Navigate to={capabilitySettingsPath('models')} replace />;
   }
 
+  const isModelSection = capability === 'models' || capability === 'image';
+  const pageTitle = capability === 'voice'
+    ? m.nav.settingsVoice
+    : capability === 'search'
+      ? m.nav.settingsSearch
+      : m.nav.settingsModels;
+
   return (
     <SettingsPageFrame>
       <SettingsPageHeader
-        title={m.nav.settingsCapabilities}
-        subtitle={c.subtitle}
+        title={pageTitle}
         docsLink={docsGuidePageUrl(language, 'configuration')}
         docsLabel={c.docsLink}
-        actions={(
-          <Button asChild variant="secondary">
-            <Link to="/agents">
-              <Users className="size-4" aria-hidden />
-              {c.agentSettingsLink}
-            </Link>
-          </Button>
-        )}
       />
 
 
       {capability === 'voice' && chatReturnPath ? <Link to={chatReturnPath} className="text-sm text-accent-fg hover:underline">{language === 'zh' ? '返回对话' : 'Return to conversation'}</Link> : null}
-      <PageTabs
-        items={sections}
-        activeTab={capability}
-        onChange={setActiveSection}
-        ariaLabel={c.tabsAria}
-        tabIdPrefix="capability-tab"
-        panelIdPrefix="capability-panel"
-      />
+      {isModelSection ? (
+        <PageTabs
+          items={modelSections}
+          activeTab={capability}
+          onChange={setActiveSection}
+          ariaLabel={c.tabsAria}
+          tabIdPrefix="capability-tab"
+          panelIdPrefix="capability-panel"
+        />
+      ) : null}
 
-      {sections.map((section) => (
-        <LazySectionHost key={section.id} id={section.id} activeSection={capability} hint={section.hint}>
-          {section.id === 'models' ? (
-            <>
-              {xopcCloudConfigured ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
-              <ModelCatalogStatus />
-              <ConnectedProvidersGrid
-                labels={c.connectedProviders}
-                data={providerData}
-                onAdd={() => setAddDialogOpen(true)}
-                onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
-              />
-            </>
-          ) : (
-            <CapabilitySectionPanel section={section.id} />
-          )}
-        </LazySectionHost>
-      ))}
+      <div
+        role={isModelSection ? 'tabpanel' : undefined}
+        id={`capability-panel-${capability}`}
+        aria-labelledby={isModelSection ? `capability-tab-${capability}` : undefined}
+        className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface-base px-4 py-5 sm:px-5"
+      >
+        {capability === 'models' ? (
+          <>
+            {xopcCloudConfigured ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
+            <ModelCatalogStatus />
+            <ConnectedProvidersGrid
+              labels={c.connectedProviders}
+              data={providerData}
+              onAdd={() => setAddDialogOpen(true)}
+              onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
+            />
+          </>
+        ) : (
+          <CapabilitySectionPanel section={capability} />
+        )}
+      </div>
 
       <AddProviderDialog
         open={addDialogOpen}
@@ -188,37 +175,4 @@ function CapabilitySectionPanel({ section }: { section: CapabilitySettingsSectio
     case 'search':
       return <WebSearchSettingsPanel />;
   }
-}
-
-function LazySectionHost({
-  id,
-  activeSection,
-  hint,
-  children,
-}: {
-  id: CapabilitySettingsSectionId;
-  activeSection: CapabilitySettingsSectionId;
-  hint: string;
-  children: React.ReactNode;
-}) {
-  const visible = id === activeSection;
-  const mountedRef = useRef(visible);
-  if (visible) mountedRef.current = true;
-  if (!mountedRef.current) return null;
-
-  return (
-    <div
-      role="tabpanel"
-      id={`capability-panel-${id}`}
-      aria-labelledby={`capability-tab-${id}`}
-      hidden={!visible}
-      className={cn(
-        'min-w-0 rounded-2xl bg-surface-base px-4 py-5 sm:px-5',
-        visible ? 'flex flex-col gap-3' : undefined,
-      )}
-    >
-      {visible && id !== 'voice' ? <p className="text-sm leading-relaxed text-fg-muted">{hint}</p> : null}
-      {id === 'voice' && !visible ? null : children}
-    </div>
-  );
 }

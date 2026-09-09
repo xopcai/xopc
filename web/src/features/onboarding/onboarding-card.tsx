@@ -224,8 +224,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       const recommendedModel = await resolveRecommendedModel(selectedProvider);
       if (!recommendedModel) {
         throw new Error(language === 'zh'
-          ? '没有找到可用模型，请检查密钥或前往“模型与服务”进行高级配置。'
-          : 'No available model was found. Check the key or open Models & services for advanced setup.');
+          ? '没有找到可用模型，请检查密钥或前往“模型”进行高级配置。'
+          : 'No available model was found. Check the key or open Models for advanced setup.');
       }
       await finishSetup(recommendedModel.id);
     } catch (cause) {
@@ -280,7 +280,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         </div>
       </header>
 
-      <main className="relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(18rem,0.8fr)_minmax(30rem,1.2fr)]">
+      <main className="xopc-onboarding-scroll relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(18rem,0.8fr)_minmax(30rem,1.2fr)]">
         <section className="xopc-onboarding-visual relative hidden min-h-0 items-center justify-center overflow-hidden lg:flex">
           <div className="xopc-onboarding-mark relative flex size-64 items-center justify-center" aria-hidden>
             <span className="xopc-onboarding-mark-halo absolute inset-[10%] rounded-full" />
@@ -291,7 +291,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           </div>
         </section>
 
-        <section className="flex min-h-[30rem] items-center overflow-y-auto border-t border-edge-subtle bg-surface-panel/45 px-5 py-8 sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,6rem)]">
+        <section className="xopc-onboarding-scroll flex min-h-[30rem] items-center overflow-y-auto border-t border-edge-subtle bg-surface-panel/45 px-5 py-8 sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,6rem)]">
           <div className="xopc-onboarding-stage w-full max-w-[30rem]" key={step}>
             {step === 'callName' ? (
               <div className="flex min-h-[30rem] flex-col">

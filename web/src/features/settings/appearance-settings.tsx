@@ -10,6 +10,7 @@ import {
   patchActivityDetailDefault,
 } from '@/features/settings/activity-detail-config-api';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+import { SettingsGroup } from '@/features/settings/settings-group';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -17,10 +18,6 @@ import { interaction } from '@/lib/interaction';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { type ColorScheme, useThemeStore } from '@/stores/theme-store';
-
-function preferenceCardClassName() {
-  return cn('rounded-xl bg-surface-base px-4 py-1 sm:px-5');
-}
 
 /**
  * Mini chrome preview per globals.css tokens — left: light, right: dark for the same palette.
@@ -159,10 +156,9 @@ function ColorSchemeSelector() {
   const setColorScheme = useThemeStore((s) => s.setColorScheme);
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-surface-panel/50 p-3.5 sm:py-4">
+    <div className="flex flex-col gap-3 px-4 py-3.5 sm:px-5 sm:py-4">
       <div className="min-w-0">
-        <div className="text-sm font-semibold text-fg">{a.colorSchemeTitle}</div>
-        <p className="mt-0.5 text-xs text-fg-muted">{a.colorSchemeDescription}</p>
+        <div className="text-sm font-medium text-fg">{a.colorSchemeTitle}</div>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {COLOR_SCHEME_OPTIONS.map(({ value, labelKey }) => {
@@ -223,28 +219,29 @@ function ActivityDetailDefaultSection() {
   };
 
   return (
-    <div className="flex flex-col gap-2 py-3.5 sm:py-4">
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-fg">{a.activityDetailDefaultTitle}</div>
-        <p className="mt-0.5 text-xs text-fg-muted">{a.activityDetailDefaultDescription}</p>
+    <div className="flex flex-col gap-2 px-4 py-3.5 sm:px-5 sm:py-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="min-w-0 text-sm font-medium text-fg">{a.activityDetailDefaultTitle}</div>
+        {isLoading ? (
+          <Skeleton className="h-10 w-full rounded-lg sm:max-w-[11rem]" />
+        ) : (
+          <Select
+            value={level}
+            disabled={saving}
+            onChange={(event) => changeLevel(event.target.value as ReasoningLevel)}
+            triggerClassName="w-full sm:max-w-[11rem]"
+          >
+            <SelectOption value="off">{a.activityDetailLevels.off}</SelectOption>
+            <SelectOption value="on">{a.activityDetailLevels.on}</SelectOption>
+            <SelectOption value="stream">{a.activityDetailLevels.stream}</SelectOption>
+          </Select>
+        )}
       </div>
-      {isLoading ? (
-        <Skeleton className="h-10 w-full rounded-lg sm:max-w-sm" />
-      ) : (
-        <Select
-          value={level}
-          disabled={saving}
-          onChange={(event) => changeLevel(event.target.value as ReasoningLevel)}
-          triggerClassName="sm:max-w-sm"
-        >
-          <SelectOption value="off">{a.activityDetailLevels.off}</SelectOption>
-          <SelectOption value="on">{a.activityDetailLevels.on}</SelectOption>
-          <SelectOption value="stream">{a.activityDetailLevels.stream}</SelectOption>
-        </Select>
-      )}
-      <p className={cn('min-h-4 text-xs', error ? 'text-red-600 dark:text-red-400' : 'text-fg-subtle')}>
-        {error ? a.activityDetailSaveError : saving ? a.activityDetailSaving : a.activityDetailDefaultHint}
-      </p>
+      {error || saving ? (
+        <p className={cn('text-xs', error ? 'text-red-600 dark:text-red-400' : 'text-fg-subtle')}>
+          {error ? a.activityDetailSaveError : a.activityDetailSaving}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -256,12 +253,8 @@ function DeveloperOptionsSection() {
   const setShowRawToolData = useDevViewStore((s) => s.setShowRawToolData);
 
   return (
-    <div className="flex flex-col gap-2 py-3.5 sm:py-4">
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-fg">{a.developerGroupTitle}</div>
-        <p className="mt-0.5 text-xs text-fg-muted">{a.developerGroupDescription}</p>
-      </div>
-      <label className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
+    <div className="px-4 py-3.5 sm:px-5 sm:py-4">
+      <label className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-medium text-fg">{a.showRawToolDataTitle}</div>
           <p className="text-xs text-fg-muted">{a.showRawToolDataDescription}</p>
@@ -284,31 +277,22 @@ export function AppearanceSettingsPanel() {
 
   return (
     <SettingsPageFrame gap="gap-6">
-      <SettingsPageHeader title={a.pageTitle} subtitle={a.subtitle} />
+      <SettingsPageHeader title={a.pageTitle} />
 
-      <section className={preferenceCardClassName()} aria-labelledby="pref-language-heading">
-        <h2 id="pref-language-heading" className="sr-only">
-          {a.languageTitle}
-        </h2>
+      <SettingsGroup>
         <PreferenceSelectFields variant="page" sections={['language']} />
-      </section>
+      </SettingsGroup>
 
-      <section className={preferenceCardClassName()} aria-labelledby="pref-appearance-heading">
-        <h2 id="pref-appearance-heading" className="sr-only">
-          {a.themeTitle}
-        </h2>
+      <SettingsGroup>
         <PreferenceSelectFields variant="page" sections={['theme', 'font']} />
         <ColorSchemeSelector />
         <ActivityDetailDefaultSection />
-      </section>
+      </SettingsGroup>
 
       <SettingsAdvancedGate>
-        <section className={preferenceCardClassName()} aria-labelledby="pref-developer-heading">
-          <h2 id="pref-developer-heading" className="sr-only">
-            {a.developerGroupTitle}
-          </h2>
+        <SettingsGroup title={a.developerGroupTitle}>
           <DeveloperOptionsSection />
-        </section>
+        </SettingsGroup>
       </SettingsAdvancedGate>
     </SettingsPageFrame>
   );

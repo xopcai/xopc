@@ -38,6 +38,7 @@ import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useShowAdvancedSettings } from '@/stores/settings-mode-store';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { VoiceDeviceSettings } from './voice-device-settings';
 import { useVoicePreferencesStore } from '@/stores/voice-preferences-store';
@@ -208,10 +209,17 @@ export function VoiceSettingsPanel() {
   const m = messages(language);
   const v = m.voiceSettings;
   const [group, setGroup] = useState<'listening' | 'input' | 'devices' | 'service' | 'diagnostics'>('listening');
+  const showAdvanced = useShowAdvancedSettings();
   const captions = useVoicePreferencesStore((state) => state.captions);
   const setCaptions = useVoicePreferencesStore((state) => state.setCaptions);
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+
+  useEffect(() => {
+    if (!showAdvanced && (group === 'service' || group === 'diagnostics')) {
+      setGroup('listening');
+    }
+  }, [group, showAdvanced]);
 
   const [formDraft, dispatchForm] = useReducer(voiceFormReducer, { form: null, baseline: null });
   const form = formDraft.form;
@@ -469,13 +477,12 @@ export function VoiceSettingsPanel() {
   return (
     <div className="flex w-full flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm leading-relaxed text-fg-muted">{v.setup.subtitle}</p>
         <AutosaveStatus status={autosave.status} error={autosave.error} />
       </div>
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <nav aria-label={v.setup.advanced} className="flex flex-wrap gap-2">
-        {(['listening', 'input', 'devices', 'service', 'diagnostics'] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
+        {(['listening', 'input', 'devices', ...(showAdvanced ? ['service', 'diagnostics'] as const : [])] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
       </nav>
       {group === 'listening' || group === 'service' || group === 'diagnostics' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} /> : null}
       {group === 'listening' ? <>

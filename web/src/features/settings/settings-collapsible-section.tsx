@@ -32,28 +32,37 @@ export function SettingsCollapsibleSection({
   const [open, setOpen] = useState(defaultOpen ?? false);
 
   const section = (
-    <details
-      open={open}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
-      className={cn(
-        'group rounded-2xl bg-surface-base open:pb-1',
-        className,
-      )}
-    >
-      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-medium text-fg transition-colors hover:text-fg group-open:rounded-b-none [&::-webkit-details-marker]:hidden">
+    <section className={cn('rounded-2xl bg-surface-base', className)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-2 rounded-2xl px-4 py-3.5 text-left text-sm font-medium text-fg transition-colors hover:text-fg"
+      >
         <ChevronDown
-          className="size-4 shrink-0 text-fg-muted transition-transform group-open:rotate-180"
+          className={cn(
+            'size-4 shrink-0 text-fg-muted transition-transform duration-200 motion-reduce:transition-none',
+            open && 'rotate-180',
+          )}
           aria-hidden
         />
         {Icon ? <Icon className="size-4 shrink-0 text-accent" strokeWidth={1.75} aria-hidden /> : null}
-        <span className="group-open:hidden">{showLabel}</span>
-        <span className="hidden group-open:inline">{hideLabel}</span>
-      </summary>
-      <div className="flex flex-col gap-4 px-4 pb-4 pt-1">
-        {hint ? <p className="text-xs text-fg-subtle">{hint}</p> : null}
-        {children}
+        <span>{open ? hideLabel : showLabel}</span>
+      </button>
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-col gap-4 px-4 pb-4 pt-1">
+            {hint ? <p className="text-xs text-fg-subtle">{hint}</p> : null}
+            {children}
+          </div>
+        </div>
       </div>
-    </details>
+    </section>
   );
 
   if (advancedOnly) {

@@ -1,7 +1,8 @@
-import { CheckCircle2, ChevronDown, ChevronUp, Loader2, PlugZap } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   fetchComposioConnectorCatalog,
   fetchConnectorInstances,
@@ -127,7 +128,7 @@ export function WorkDiscoveryConnectorsStep({
         <p className="mx-auto mt-3 max-w-[36rem] text-[0.95rem] leading-7 text-fg-muted">{copy.connectorStepSubtitle}</p>
       </div>
 
-      <div className="mt-7 rounded-2xl border border-edge bg-surface-panel p-3 shadow-surface sm:p-4">
+      <div className="mt-7 rounded-[1.75rem] border border-edge bg-surface-panel/75 p-3 shadow-surface backdrop-blur-xl sm:p-4">
         <div className="flex items-center justify-between gap-3 px-1 pb-3">
           <div>
             <h2 className="text-sm font-semibold text-fg">{copy.popularWorkServices}</h2>
@@ -155,12 +156,10 @@ export function WorkDiscoveryConnectorsStep({
                   {isConnected ? (
                     <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success"><CheckCircle2 className="size-4" />{copy.connected}</span>
                   ) : instancesLoading ? (
-                    <span className="inline-flex h-8 w-[4.5rem] shrink-0 items-center justify-center text-fg-muted" aria-label={connectorCopy.loading}>
-                      <Loader2 className="size-4 animate-spin" />
-                    </span>
+                    <Skeleton className="h-8 w-[4.5rem] shrink-0 rounded-lg" aria-label={connectorCopy.loading} />
                   ) : (
                     <Button type="button" variant="secondary" className="h-8 shrink-0 px-3 text-xs" onClick={() => setInstallDraft(buildInitialDraft(connector))}>
-                      <PlugZap className="size-3.5" />{connectorCopy.connect}
+                      <Plus className="size-3.5" />{connectorCopy.connect}
                     </Button>
                   )}
                 </article>

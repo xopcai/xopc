@@ -239,9 +239,10 @@ function AppShellContent() {
                     <div
                       key={routeKey}
                       className={cn(
-                        'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel',
+                        'flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel',
+                        routeKey !== 'settings' && 'page-enter',
                         routeKey === 'settings'
-                          ? 'page-enter--gentle overflow-hidden'
+                          ? 'overflow-hidden'
                           : routeUsesInternalScroll
                             ? 'overflow-hidden'
                             : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',

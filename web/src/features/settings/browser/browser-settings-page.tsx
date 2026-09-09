@@ -3,6 +3,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { PopoverSelect } from '@/components/ui/popover-select';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -40,7 +41,6 @@ export function AgentBrowserSettingsPage() {
   return (
     <AgentDefaultsRouteLayout
       sectionId="agent-browser"
-      intro={zh ? '让 Agent 读取网页结构并可靠地点击、输入和切换标签页；仅在语义信息不足时使用截图。' : 'Let the agent read page structure and reliably click, type, and switch tabs. Screenshots are used only when semantic data is insufficient.'}
       vm={vm}
     >
       {form ? <>
@@ -48,12 +48,10 @@ export function AgentBrowserSettingsPage() {
 
         <Section
           title={zh ? '运行方式' : 'Connection'}
-          description={zh ? '选择 Agent 在哪里操作浏览器。配置会自动保存，状态卡会验证实际连接。' : 'Choose where the agent operates the browser. Settings save automatically; the readiness card verifies the real connection.'}
           icon={<MousePointerClick className="size-4" />}
         >
           <Toggle
             label={zh ? '启用浏览器控制' : 'Enable browser control'}
-            description={zh ? '启用后向 Agent 提供 browser_use 工具。' : 'Makes the browser_use tool available to the agent.'}
             checked={form.enabled}
             onChange={(enabled) => vm.update({ enabled })}
           />
@@ -63,7 +61,7 @@ export function AgentBrowserSettingsPage() {
           <DriverDescription kind={form.driverKind} zh={zh} />
 
           {form.driverKind === 'playwright' ? <div className="space-y-4 rounded-lg bg-surface-subtle p-4">
-            <Toggle label={zh ? '无头模式' : 'Headless mode'} description={zh ? '后台运行，不显示浏览器窗口。关闭后可观察 Agent 的操作过程。' : 'Run in the background without a visible window. Turn off to watch the agent work.'} checked={form.headless} onChange={(headless) => vm.update({ headless })} />
+            <Toggle label={zh ? '无头模式' : 'Headless mode'} description={zh ? '后台运行，不显示浏览器窗口。关闭后可观察智能体的操作过程。' : 'Run in the background without a visible window. Turn off to watch the agent work.'} checked={form.headless} onChange={(headless) => vm.update({ headless })} />
             <TextField label={zh ? 'Chromium 可执行文件（可选）' : 'Chromium executable (optional)'} description={zh ? '留空时使用由 xopc 安装的 Chromium。' : 'Leave empty to use Chromium installed by xopc.'} value={form.executablePath} onChange={(executablePath) => vm.update({ executablePath })} />
           </div> : null}
           {form.driverKind === 'cdp' ? <div className="rounded-lg bg-surface-subtle p-4"><TextField label="CDP endpoint" description={zh ? '例如 http://127.0.0.1:9222。Chrome 需要开启 remote debugging。' : 'For example http://127.0.0.1:9222. Chrome must be started with remote debugging enabled.'} value={form.cdpEndpoint} onChange={(cdpEndpoint) => vm.update({ cdpEndpoint })} /></div> : null}
@@ -74,31 +72,23 @@ export function AgentBrowserSettingsPage() {
           </div> : null}
         </Section>
 
-        <Section
-          title={zh ? '页面理解与 Token' : 'Page understanding and tokens'}
-          description={zh ? '默认发送可交互元素和正文摘要，比整页截图更省 Token；视觉回退只处理语义无法覆盖的页面。' : 'By default the model receives interactive elements and a text summary, which costs fewer tokens than full-page screenshots. Visual fallback covers pages that semantics cannot.'}
-          icon={<Eye className="size-4" />}
-        >
-          <Toggle label={zh ? '语义信息不足时附加截图' : 'Attach a screenshot when semantics are insufficient'} description={zh ? '推荐开启。正常网页不会每一步都发送截图。' : 'Recommended. Normal pages do not send a screenshot on every step.'} checked={form.visualFallback} onChange={(visualFallback) => vm.update({ visualFallback })} />
-          <div className="grid gap-4 sm:grid-cols-2"><NumberField label={zh ? '最大语义节点' : 'Maximum semantic nodes'} description="20–500" min={20} max={500} value={form.maxNodes} onChange={(maxNodes) => vm.update({ maxNodes })} /><NumberField label={zh ? '最大文本字符' : 'Maximum text characters'} description="1,000–50,000" min={1_000} max={50_000} step={1_000} value={form.maxCharacters} onChange={(maxCharacters) => vm.update({ maxCharacters })} /></div>
-        </Section>
+        <SettingsAdvancedGate>
+          <>
+            <Section title={zh ? '页面理解' : 'Page understanding'} icon={<Eye className="size-4" />}>
+              <Toggle label={zh ? '需要时附加截图' : 'Attach screenshots when needed'} checked={form.visualFallback} onChange={(visualFallback) => vm.update({ visualFallback })} />
+              <div className="grid gap-4 sm:grid-cols-2"><NumberField label={zh ? '语义节点上限' : 'Semantic node limit'} description="20–500" min={20} max={500} value={form.maxNodes} onChange={(maxNodes) => vm.update({ maxNodes })} /><NumberField label={zh ? '文本字符上限' : 'Text character limit'} description="1,000–50,000" min={1_000} max={50_000} step={1_000} value={form.maxCharacters} onChange={(maxCharacters) => vm.update({ maxCharacters })} /></div>
+            </Section>
 
-        <Section
-          title={zh ? '执行限制' : 'Execution limits'}
-          description={zh ? '限制单次操作、浏览器会话和批量步骤，避免页面卡住时无限等待。' : 'Bound individual actions, browser sessions, and action sequences so a stuck page cannot wait indefinitely.'}
-          icon={<Gauge className="size-4" />}
-        >
-          <div className="grid gap-4 sm:grid-cols-3"><NumberField label={zh ? '操作超时（毫秒）' : 'Action timeout (ms)'} min={1_000} max={120_000} step={1_000} value={form.actionTimeoutMs} onChange={(actionTimeoutMs) => vm.update({ actionTimeoutMs })} /><NumberField label={zh ? '会话超时（毫秒）' : 'Session timeout (ms)'} min={60_000} max={3_600_000} step={60_000} value={form.sessionTimeoutMs} onChange={(sessionTimeoutMs) => vm.update({ sessionTimeoutMs })} /><NumberField label={zh ? '批量步骤上限' : 'Sequence step limit'} min={1} max={10} value={form.maxSequenceLength} onChange={(maxSequenceLength) => vm.update({ maxSequenceLength })} /></div>
-        </Section>
+            <Section title={zh ? '执行限制' : 'Execution limits'} icon={<Gauge className="size-4" />}>
+              <div className="grid gap-4 sm:grid-cols-3"><NumberField label={zh ? '操作超时（毫秒）' : 'Action timeout (ms)'} min={1_000} max={120_000} step={1_000} value={form.actionTimeoutMs} onChange={(actionTimeoutMs) => vm.update({ actionTimeoutMs })} /><NumberField label={zh ? '会话超时（毫秒）' : 'Session timeout (ms)'} min={60_000} max={3_600_000} step={60_000} value={form.sessionTimeoutMs} onChange={(sessionTimeoutMs) => vm.update({ sessionTimeoutMs })} /><NumberField label={zh ? '批量步骤上限' : 'Sequence step limit'} min={1} max={10} value={form.maxSequenceLength} onChange={(maxSequenceLength) => vm.update({ maxSequenceLength })} /></div>
+            </Section>
 
-        <Section
-          title={zh ? '安全与审批' : 'Safety and approvals'}
-          description={zh ? '私网访问始终拒绝，只有下面明确列出的主机例外。敏感动作可逐次询问、允许或拒绝。' : 'Private-network access is always denied except for exact hosts listed below. Sensitive actions can ask each time, be allowed, or be denied.'}
-          icon={<LockKeyhole className="size-4" />}
-        >
-          <TextField label={zh ? '允许访问的私网主机' : 'Allowed private hosts'} description={zh ? '每行一个精确的小写主机名或 IP，不支持通配符。' : 'One exact lowercase hostname or IP per line. Wildcards are not supported.'} multiline value={form.allowedPrivateHosts} onChange={(allowedPrivateHosts) => vm.update({ allowedPrivateHosts })} />
-          <div className="grid gap-4 sm:grid-cols-3"><Policy zh={zh} label={zh ? '跨域导航' : 'Cross-domain navigation'} value={form.crossDomainNavigation} onChange={(crossDomainNavigation) => vm.update({ crossDomainNavigation })} /><Policy zh={zh} label={zh ? '高影响动作' : 'Consequential actions'} value={form.consequentialActions} onChange={(consequentialActions) => vm.update({ consequentialActions })} /><Policy zh={zh} label={zh ? '文件上传' : 'File uploads'} value={form.uploads} onChange={(uploads) => vm.update({ uploads })} /></div>
-        </Section>
+            <Section title={zh ? '安全与审批' : 'Safety and approvals'} icon={<LockKeyhole className="size-4" />}>
+              <TextField label={zh ? '允许访问的私网主机' : 'Allowed private hosts'} description={zh ? '每行一个主机名或 IP，不支持通配符。' : 'One hostname or IP per line. Wildcards are not supported.'} multiline value={form.allowedPrivateHosts} onChange={(allowedPrivateHosts) => vm.update({ allowedPrivateHosts })} />
+              <div className="grid gap-4 sm:grid-cols-3"><Policy zh={zh} label={zh ? '跨域导航' : 'Cross-domain navigation'} value={form.crossDomainNavigation} onChange={(crossDomainNavigation) => vm.update({ crossDomainNavigation })} /><Policy zh={zh} label={zh ? '高影响动作' : 'Consequential actions'} value={form.consequentialActions} onChange={(consequentialActions) => vm.update({ consequentialActions })} /><Policy zh={zh} label={zh ? '文件上传' : 'File uploads'} value={form.uploads} onChange={(uploads) => vm.update({ uploads })} /></div>
+            </Section>
+          </>
+        </SettingsAdvancedGate>
       </> : null}
     </AgentDefaultsRouteLayout>
   );

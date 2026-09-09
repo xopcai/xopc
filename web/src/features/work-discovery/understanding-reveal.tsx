@@ -28,9 +28,9 @@ type UnderstandingRevealProps = {
 
 const copy = {
   zh: {
-    eyebrow: '待确认',
-    summaryTitle: '这是我目前的理解',
-    summaryQuestion: '是否准确？',
+    eyebrow: '请确认',
+    summaryTitle: '我理解的是这样',
+    summaryQuestion: '这准确吗？',
     matches: '准确',
     adjust: '修改',
     why: '查看依据',
@@ -46,7 +46,7 @@ const copy = {
     startConversation: '进入对话',
     cancel: '取消',
     memoryEyebrow: '长期理解',
-    memoryTitle: '要记住这条信息吗？',
+    memoryTitle: '以后也记得这一点？',
     remember: '记住',
     sessionOnly: '不记住',
     edit: '修改',
@@ -57,12 +57,12 @@ const copy = {
     focusHint: '只用于排序和提醒，不会自动执行。',
     activateFocus: '加入关注',
     notNow: '暂时不用',
-    trustNote: '之后可以随时修改。',
+    trustNote: '这由你决定，之后也可以随时修改。',
     sourcesFinishing: '其他来源还在处理，完成后继续。',
   },
   en: {
-    eyebrow: 'Review',
-    summaryTitle: 'Here is what I understand so far',
+    eyebrow: 'Confirm',
+    summaryTitle: 'Here’s how I understand it',
     summaryQuestion: 'Is this right?',
     matches: 'Accurate',
     adjust: 'Edit',
@@ -79,7 +79,7 @@ const copy = {
     startConversation: 'Start conversation',
     cancel: 'Cancel',
     memoryEyebrow: 'Lasting understanding',
-    memoryTitle: 'Remember this information?',
+    memoryTitle: 'Remember this for next time?',
     remember: 'Remember',
     sessionOnly: 'Do not remember',
     edit: 'Edit',
@@ -90,7 +90,7 @@ const copy = {
     focusHint: 'This only affects sorting and reminders. It never acts automatically.',
     activateFocus: 'Add to focus',
     notNow: 'Not now',
-    trustNote: 'You can change this anytime.',
+    trustNote: 'This is your choice, and you can change it anytime.',
     sourcesFinishing: 'Other sources are still processing. Review will continue when ready.',
   },
 } as const;
@@ -176,11 +176,13 @@ export function UnderstandingReveal({
   return (
     <section className="xopc-understanding-reveal flex min-h-full flex-1 flex-col" aria-live="polite">
       {step === 'summary' ? (
-        <div className="xopc-reveal-scene mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-center py-8 text-center sm:py-12">
+        <div className="xopc-reveal-scene mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-center py-6 text-center sm:py-10">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.eyebrow}</p>
           <h1 className="mx-auto mt-4 max-w-[34rem] text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.25rem]">{t.summaryTitle}</h1>
-          <div className="xopc-understanding-hero-card relative mt-8 overflow-hidden rounded-[1.75rem] border border-edge bg-surface-panel px-6 py-7 text-left shadow-elevated sm:px-8">
-            <UnderstandingConstellation />
+          <div className="xopc-understanding-hero-card relative mt-8 overflow-hidden rounded-[1.75rem] border border-edge bg-surface-panel/75 px-6 py-7 text-left shadow-surface backdrop-blur-xl sm:px-8">
+            <div className="mb-5 flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent-fg" aria-hidden>
+              <Sparkles className="size-[1.125rem]" />
+            </div>
             <p className="relative text-lg font-medium leading-8 text-fg sm:text-xl">{run.result?.projectSummary}</p>
             {(run.result?.currentState || workThreads.length || primarySuggestion?.evidence.length) ? (
               <div className="relative mt-5 border-t border-edge-subtle pt-4">
@@ -208,7 +210,7 @@ export function UnderstandingReveal({
               </div>
             </div>
           ) : (
-            <div className="xopc-reveal-calibration mx-auto mt-7 w-full max-w-xl rounded-2xl border border-edge bg-surface-panel/80 p-5 text-left shadow-surface backdrop-blur-xl">
+            <div className="xopc-reveal-calibration mx-auto mt-7 w-full max-w-xl rounded-[1.5rem] border border-edge bg-surface-panel/75 p-5 text-left shadow-surface backdrop-blur-xl">
               <label className="text-sm font-semibold text-fg" htmlFor="understanding-correction">{lowConfidence ? t.starterTitle : t.correctionTitle}</label>
               {lowConfidence ? <p className="mt-1.5 text-xs leading-5 text-fg-muted">{t.starterHint}</p> : null}
               <textarea id="understanding-correction" value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder={t.correctionPlaceholder} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/15" />
@@ -227,7 +229,7 @@ export function UnderstandingReveal({
         <div className="xopc-reveal-scene mx-auto flex w-full max-w-[38rem] flex-1 flex-col justify-center py-10 text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.memoryEyebrow}</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-fg">{t.memoryTitle}</h1>
-          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-edge bg-surface-panel p-6 text-left shadow-elevated sm:p-8">
+          <article className="xopc-understanding-review-card mt-7 rounded-[1.75rem] border border-edge bg-surface-panel/75 p-6 text-left shadow-surface backdrop-blur-xl sm:p-8">
             <div className="flex items-start gap-4">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
               <div className="min-w-0 flex-1">
@@ -243,18 +245,5 @@ export function UnderstandingReveal({
       ) : null}
 
     </section>
-  );
-}
-
-function UnderstandingConstellation() {
-  return (
-    <div className="pointer-events-none absolute -right-10 -top-12 size-52 opacity-45" aria-hidden>
-      <span className="absolute inset-[12%] rounded-full border border-accent/15" />
-      <span className="absolute inset-[28%] rounded-full border border-accent/20" />
-      <span className="xopc-constellation-core absolute left-[45%] top-[45%] size-[10%] rounded-full bg-accent" />
-      <span className="absolute left-[12%] top-[36%] size-2.5 rounded-full bg-accent/55" />
-      <span className="absolute right-[14%] top-[24%] size-2 rounded-full bg-accent/45" />
-      <span className="absolute bottom-[15%] right-[30%] size-2.5 rounded-full bg-accent/35" />
-    </div>
   );
 }

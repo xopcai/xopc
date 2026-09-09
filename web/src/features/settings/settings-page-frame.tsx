@@ -17,7 +17,7 @@ export function SettingsPageFrame({
   return (
     <div
       className={cn(
-        'flex min-h-full w-full flex-col bg-surface-panel',
+        'mx-auto flex min-h-full w-full max-w-[56rem] flex-col bg-surface-panel',
         gap,
         padding,
         className,

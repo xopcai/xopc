@@ -10,6 +10,8 @@ export function AutosaveStatus({ status, error, className }: {
   className?: string;
 }) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
+  if (status === 'idle') return null;
+
   const label = status === 'saving'
     ? (zh ? '正在保存…' : 'Saving…')
     : status === 'saved'
@@ -18,7 +20,7 @@ export function AutosaveStatus({ status, error, className }: {
         ? (error || (zh ? '自动保存失败' : 'Autosave failed'))
         : status === 'dirty'
           ? (zh ? '编辑中，将自动保存' : 'Editing — autosave pending')
-          : (zh ? '自动保存' : 'Autosave');
+          : '';
 
   return (
     <span

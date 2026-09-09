@@ -118,6 +118,12 @@ export function useAutosave<T>({
     };
   }, [clearTimer]);
 
+  useEffect(() => {
+    if (status !== 'saved') return;
+    const statusTimer = window.setTimeout(() => setStatus('idle'), 1_600);
+    return () => window.clearTimeout(statusTimer);
+  }, [status]);
+
   return {
     status,
     error,
