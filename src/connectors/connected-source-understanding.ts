@@ -137,7 +137,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
           subject: { type: 'user', id: 'self' },
           predicate: `${candidate.category}.connected.${candidate.factKey}`,
           cardinality: 'single',
-          scope: { type: 'agent', id: input.agentId },
+          scope: { type: 'global' },
           kind: candidate.category === 'communication' ? 'preference' : candidate.category,
           value: candidate.statement,
           normalizedValue: candidate.statement.toLocaleLowerCase(),
