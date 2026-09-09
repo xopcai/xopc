@@ -50,7 +50,8 @@ import {
   BrowserSetupRequiredCard,
 } from '@/features/chat/tool-results/browser-setup-required-card';
 import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
-import { BrowserApprovalCard, parseBrowserApproval } from '@/features/chat/tool-results/browser-approval-card';
+import { BrowserApprovalCard } from '@/features/chat/tool-results/browser-approval-card';
+import { parseBrowserApproval } from '@/features/chat/tool-results/browser-approval';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';

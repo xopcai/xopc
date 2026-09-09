@@ -136,7 +136,9 @@ describe('note Mermaid diagrams', () => {
     act(() => { editor.view.dispatch(editor.state.tr.insertText('UpdatedFS', start, start + 'TodayFS'.length)); });
     expect(onChange).toHaveBeenLastCalledWith(markdown.replace('TodayFS', 'UpdatedFS'));
     act(() => container.querySelector<HTMLButtonElement>('.block-editor-mermaid button[aria-pressed]')!.click());
-    expect(container.querySelector('[data-mermaid-diagram] svg')?.textContent).toContain('UpdatedFS');
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-mermaid-diagram] svg')?.textContent).toContain('UpdatedFS');
+    });
   });
 
   it('preserves Mermaid language and source through edits and Markdown reload', () => {
