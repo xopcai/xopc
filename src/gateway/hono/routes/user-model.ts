@@ -1,3 +1,5 @@
+import { userInfo } from 'node:os';
+
 import type { Hono } from 'hono';
 
 import { getExecutionContextAudit, recordExecutionContextFeedback } from '../../../agent/context/audit.js';
@@ -70,6 +72,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function machineCallName(): string {
+  try {
+    const username = userInfo().username.trim();
+    return ['root', 'admin', 'administrator', 'user'].includes(username.toLocaleLowerCase())
+      ? ''
+      : username.slice(0, 100);
+  } catch {
+    return '';
+  }
+}
+
 const ASSERTION_STATUSES = new Set<AssertionStatus>([
   'candidate', 'active', 'needs_review', 'conflicted', 'stale', 'archived', 'rejected',
 ]);
@@ -102,6 +115,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     const goals = listUserGoals();
     const priorities = listPriorityWindows();
     const knowledge = listKnowledgeItems({ recordClass: 'memory', limit: 1_000 });
+    const profile = getUserProfileSnapshot();
     return c.json({
       assertions,
       goals,
@@ -109,7 +123,8 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       rules: listCollaborationRules(),
       knowledge,
       maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
-      profile: getUserProfileSnapshot(),
+      profile,
+      suggestedCallName: profile.callName || machineCallName(),
       counts: {
         activeAssertions: assertions.filter((item) => item.status === 'active').length,
         reviewAssertions: assertions.filter((item) => item.status === 'needs_review' || item.status === 'conflicted').length,

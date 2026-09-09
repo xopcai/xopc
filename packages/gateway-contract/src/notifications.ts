@@ -9,6 +9,11 @@ export const NotificationTargetSchema = z.discriminatedUnion('kind', [
     runId: z.string().min(1),
   }),
   z.object({ kind: z.literal('insight'), inboxItemId: z.string().min(1) }),
+  z.object({
+    kind: z.literal('work_discovery'),
+    runId: z.string().min(1),
+    sessionKey: z.string().min(1),
+  }),
 ]);
 
 export type NotificationTarget = z.infer<typeof NotificationTargetSchema>;
@@ -24,6 +29,8 @@ export const ProductNotificationTypeSchema = z.enum([
   'automation.completed',
   'automation.failed',
   'proactive.insight',
+  'work_discovery.review_ready',
+  'work_discovery.failed',
 ]);
 
 export const NotificationLocalizedTextSchema = z.object({
@@ -75,6 +82,10 @@ export function notificationTargetRoute(
       return surface === 'web'
         ? `/?judgment=${encodeURIComponent(target.inboxItemId)}`
         : `/inbox?item=${encodeURIComponent(target.inboxItemId)}`;
+    case 'work_discovery':
+      return surface === 'web'
+        ? `/user-model?workDiscovery=review&run=${encodeURIComponent(target.runId)}`
+        : `/chat/${encodeURIComponent(target.sessionKey)}`;
   }
 }
 

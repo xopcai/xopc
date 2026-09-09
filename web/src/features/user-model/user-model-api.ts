@@ -79,6 +79,7 @@ export type KnowledgeItem = {
 
 export type UserModelResponse = {
   profile: { callName?: unknown; pronouns?: unknown; timezone?: unknown; locale?: unknown; role?: unknown };
+  suggestedCallName?: unknown;
   assertions: UserAssertion[];
   goals: UserGoal[];
   priorities: PriorityWindow[];
@@ -108,13 +109,18 @@ export function fetchUserModel(): Promise<UserModelResponse> {
 
 export async function fetchUserProfile(): Promise<{ profile: UserProfile; suggestedCallName?: string }> {
   const model = await fetchUserModel();
-  return { profile: {
-    callName: typeof model.profile.callName === 'string' ? model.profile.callName : '',
-    role: typeof model.profile.role === 'string' ? model.profile.role : '',
-    pronouns: typeof model.profile.pronouns === 'string' ? model.profile.pronouns : '',
-    timezone: typeof model.profile.timezone === 'string' ? model.profile.timezone : '',
-    locale: typeof model.profile.locale === 'string' ? model.profile.locale : '',
-  } };
+  return {
+    profile: {
+      callName: typeof model.profile.callName === 'string' ? model.profile.callName : '',
+      role: typeof model.profile.role === 'string' ? model.profile.role : '',
+      pronouns: typeof model.profile.pronouns === 'string' ? model.profile.pronouns : '',
+      timezone: typeof model.profile.timezone === 'string' ? model.profile.timezone : '',
+      locale: typeof model.profile.locale === 'string' ? model.profile.locale : '',
+    },
+    ...(typeof model.suggestedCallName === 'string'
+      ? { suggestedCallName: model.suggestedCallName }
+      : {}),
+  };
 }
 
 export async function updateUserProfile(input: Partial<UserProfile>): Promise<UserProfile> {
