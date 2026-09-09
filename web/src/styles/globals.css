@@ -591,7 +591,18 @@ html.dark {
 }
 
 .xopc-work-discovery-stage {
-  animation: xopc-onboarding-stage-in 460ms cubic-bezier(.22, 1, .36, 1) both;
+  animation: xopc-onboarding-stage-in 240ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.xopc-onboarding-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.xopc-onboarding-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .xopc-onboarding-provider-options {
@@ -599,20 +610,20 @@ html.dark {
 }
 
 .xopc-discovery-logo {
-  animation: xopc-onboarding-orbit-enter 480ms cubic-bezier(.18, .9, .28, 1.12) both;
+  animation: xopc-onboarding-logo-in 520ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-.xopc-understanding-step[data-active="true"] .xopc-understanding-step-icon {
-  animation: xopc-understanding-pulse 1.8s ease-in-out infinite;
-  box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 22%, transparent);
-}
-
-.xopc-constellation-core {
-  box-shadow: 0 0 28px color-mix(in oklab, var(--color-accent) 32%, transparent);
+.xopc-discovery-logo-glow {
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--color-accent) 12%, transparent),
+    transparent 70%
+  );
+  filter: blur(12px);
 }
 
 .xopc-understanding-step[data-complete="true"] {
-  animation: xopc-understanding-complete 420ms cubic-bezier(.22, 1, .36, 1) both;
+  animation: xopc-understanding-complete 260ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .xopc-understanding-center {
@@ -625,156 +636,25 @@ html.dark {
 
 .xopc-understanding-hero-card,
 .xopc-understanding-review-card {
-  animation: xopc-understanding-card-settle 420ms 60ms cubic-bezier(.18, .9, .28, 1.08) both;
+  animation: xopc-understanding-card-settle 360ms 40ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .xopc-reveal-calibration {
   animation: xopc-onboarding-options-in 360ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
-.xopc-understanding-constellation {
-  animation: xopc-understanding-constellation-in 480ms cubic-bezier(.18, .9, .28, 1.12) both;
-}
-
-.xopc-constellation-orbit {
-  animation: xopc-constellation-orbit 10s linear infinite;
-}
-
-.xopc-constellation-orbit-delayed {
-  animation-direction: reverse;
-  animation-duration: 7s;
-}
-
-.xopc-constellation-node {
-  animation: xopc-constellation-node-float 4.4s ease-in-out infinite;
-}
-
-.xopc-constellation-node-two {
-  animation-delay: -1.5s;
-}
-
-.xopc-constellation-node-three {
-  animation-delay: -2.8s;
-}
-
-.xopc-source-convergence-field {
-  background: radial-gradient(
-    circle at center,
-    color-mix(in oklab, var(--color-accent) 12%, transparent) 0,
-    color-mix(in oklab, var(--color-accent) 4%, transparent) 24%,
-    transparent 62%
-  );
-}
-
-.xopc-source-convergence-orbit {
-  transform: translate(-50%, -50%);
-  animation: xopc-source-convergence-orbit 14s linear infinite;
-}
-
-.xopc-source-convergence-orbit--outer {
-  width: min(29rem, 84vw);
-  aspect-ratio: 1.9;
-}
-
-.xopc-source-convergence-orbit--inner {
-  width: min(17rem, 54vw);
-  aspect-ratio: 1.45;
-  animation-direction: reverse;
-  animation-duration: 9s;
-}
-
-.xopc-source-convergence-signal {
-  z-index: 2;
-  transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y)));
-  animation: xopc-source-convergence-signal 5.7s var(--xopc-source-delay) cubic-bezier(.42, 0, .3, 1) infinite;
-}
-
-.xopc-source-convergence-signal::after {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 3.5rem;
-  height: 1px;
-  background: linear-gradient(90deg, color-mix(in oklab, var(--color-accent) 34%, transparent), transparent);
-  content: "";
-  opacity: 0;
-  transform: translate(-100%, -50%);
-}
-
-.xopc-source-convergence-chip {
-  animation: xopc-source-convergence-chip 5.7s var(--xopc-source-delay) ease-in-out infinite;
-}
-
 .xopc-source-convergence-core {
-  z-index: 4;
+  animation: xopc-onboarding-logo-in 520ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .xopc-source-convergence-core-glow {
-  background: radial-gradient(circle, color-mix(in oklab, var(--color-accent) 20%, transparent), transparent 68%);
-  animation: xopc-source-convergence-breathe 2.8s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 70%);
+  filter: blur(10px);
 }
 
-.xopc-source-convergence-particles i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 3px;
-  height: 3px;
-  border-radius: 9999px;
-  background: var(--color-accent);
-  box-shadow: 0 0 8px color-mix(in oklab, var(--color-accent) 60%, transparent);
-  animation: xopc-source-convergence-particle 3.8s ease-in-out infinite;
+.xopc-source-convergence-progress {
+  animation: xopc-source-convergence-progress 1.6s ease-in-out infinite;
 }
-
-.xopc-source-convergence-particles i:nth-child(1) { --particle-x: -8rem; --particle-y: -4rem; animation-delay: -.2s; }
-.xopc-source-convergence-particles i:nth-child(2) { --particle-x: 7rem; --particle-y: -5rem; animation-delay: -.7s; }
-.xopc-source-convergence-particles i:nth-child(3) { --particle-x: 10rem; --particle-y: 2rem; animation-delay: -1.2s; }
-.xopc-source-convergence-particles i:nth-child(4) { --particle-x: 5rem; --particle-y: 6rem; animation-delay: -1.7s; }
-.xopc-source-convergence-particles i:nth-child(5) { --particle-x: -6rem; --particle-y: 7rem; animation-delay: -2.2s; }
-.xopc-source-convergence-particles i:nth-child(6) { --particle-x: -10rem; --particle-y: 2rem; animation-delay: -2.7s; }
-.xopc-source-convergence-particles i:nth-child(7) { --particle-x: 1rem; --particle-y: -8rem; animation-delay: -3.2s; }
-.xopc-source-convergence-particles i:nth-child(8) { --particle-x: -2rem; --particle-y: 8rem; animation-delay: -3.7s; }
-.xopc-source-convergence-particles i:nth-child(9) { --particle-x: 13rem; --particle-y: -1rem; animation-delay: -1.45s; }
-.xopc-source-convergence-particles i:nth-child(10) { --particle-x: -13rem; --particle-y: -1rem; animation-delay: -2.45s; }
-.xopc-source-convergence-particles i:nth-child(11) { --particle-x: 8rem; --particle-y: 7rem; animation-delay: -3.45s; }
-.xopc-source-convergence-particles i:nth-child(12) { --particle-x: -7rem; --particle-y: -7rem; animation-delay: -0.95s; }
-
-.xopc-source-convergence-meteors {
-  z-index: 1;
-  overflow: hidden;
-}
-
-.xopc-source-convergence-meteors i {
-  --meteor-duration: 5.4s;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 9999px;
-  background: color-mix(in oklab, var(--color-accent) 88%, white);
-  box-shadow: 0 0 9px color-mix(in oklab, var(--color-accent) 70%, transparent);
-  opacity: 0;
-  animation: xopc-source-convergence-meteor var(--meteor-duration) var(--meteor-delay) cubic-bezier(.34, 0, .28, 1) infinite;
-}
-
-.xopc-source-convergence-meteors i::before {
-  position: absolute;
-  right: 2px;
-  top: 50%;
-  width: var(--meteor-tail, 4.5rem);
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-accent) 72%, transparent));
-  content: "";
-  transform: translateY(-50%);
-}
-
-.xopc-source-convergence-meteors i:nth-child(1) { --meteor-x: -15rem; --meteor-y: -8rem; --meteor-angle: 28deg; --meteor-delay: -1s; }
-.xopc-source-convergence-meteors i:nth-child(2) { --meteor-x: 14rem; --meteor-y: -9rem; --meteor-angle: 147deg; --meteor-delay: -3.1s; --meteor-duration: 6.1s; }
-.xopc-source-convergence-meteors i:nth-child(3) { --meteor-x: 16rem; --meteor-y: 5rem; --meteor-angle: -163deg; --meteor-delay: -4.5s; --meteor-tail: 3.5rem; }
-.xopc-source-convergence-meteors i:nth-child(4) { --meteor-x: -14rem; --meteor-y: 7rem; --meteor-angle: -27deg; --meteor-delay: -2.2s; --meteor-duration: 5.8s; }
-.xopc-source-convergence-meteors i:nth-child(5) { --meteor-x: 5rem; --meteor-y: -11rem; --meteor-angle: 114deg; --meteor-delay: -5.2s; --meteor-tail: 3rem; }
-.xopc-source-convergence-meteors i:nth-child(6) { --meteor-x: -4rem; --meteor-y: 11rem; --meteor-angle: -70deg; --meteor-delay: -.25s; --meteor-duration: 6.4s; }
 
 @keyframes xopc-onboarding-dialog-in {
   from { opacity: 0; transform: translateY(4px) scale(.992); }
@@ -789,11 +669,6 @@ html.dark {
 @keyframes xopc-onboarding-mark-in {
   from { opacity: 0; transform: translateY(8px) scale(.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-@keyframes xopc-onboarding-orbit-enter {
-  from { opacity: 0; transform: scale(.72) rotate(-12deg); }
-  to { opacity: 1; transform: scale(1) rotate(0); }
 }
 
 @keyframes xopc-onboarding-halo-settle {
@@ -816,11 +691,6 @@ html.dark {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes xopc-understanding-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 22%, transparent); }
-  50% { box-shadow: 0 0 0 10px transparent; }
-}
-
 @keyframes xopc-understanding-complete {
   from { opacity: 0.55; transform: translateX(-4px); }
   to { opacity: 1; transform: translateX(0); }
@@ -841,90 +711,10 @@ html.dark {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-@keyframes xopc-understanding-constellation-in {
-  from { opacity: 0; transform: scale(0.72) rotate(-8deg); }
-  to { opacity: 1; transform: scale(1) rotate(0); }
-}
-
-@keyframes xopc-constellation-orbit {
-  from { transform: rotate(0deg) scale(0.98); }
-  50% { transform: rotate(180deg) scale(1.04); }
-  to { transform: rotate(360deg) scale(0.98); }
-}
-
-@keyframes xopc-constellation-node-float {
-  0%, 100% { transform: translate3d(0, 0, 0); }
-  50% { transform: translate3d(0, -6px, 0); }
-}
-
-@keyframes xopc-source-convergence-orbit {
-  from { transform: translate(-50%, -50%) rotate(0deg) scale(.98); }
-  50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.03); }
-  to { transform: translate(-50%, -50%) rotate(360deg) scale(.98); }
-}
-
-@keyframes xopc-source-convergence-signal {
-  0%, 18% {
-    opacity: 0;
-    transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y))) scale(.82);
-  }
-  28%, 54% {
-    opacity: 1;
-    transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y))) scale(1);
-  }
-  88% {
-    opacity: .72;
-    transform: translate(-50%, -50%) scale(.48);
-  }
-  92%, 100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(.22);
-  }
-}
-
-@keyframes xopc-source-convergence-chip {
-  0%, 48% { box-shadow: var(--shadow-elevated); }
-  68% { border-color: color-mix(in oklab, var(--color-accent) 42%, var(--color-edge)); }
-  100% { box-shadow: 0 0 20px color-mix(in oklab, var(--color-accent) 22%, transparent); }
-}
-
-@keyframes xopc-source-convergence-breathe {
-  0%, 100% { opacity: .58; transform: scale(.86); }
-  50% { opacity: 1; transform: scale(1.12); }
-}
-
-@keyframes xopc-source-convergence-particle {
-  0% { opacity: 0; transform: translate(var(--particle-x), var(--particle-y)) scale(.5); }
-  24% { opacity: .8; }
-  82% { opacity: .35; }
-  100% { opacity: 0; transform: translate(0, 0) scale(1.35); }
-}
-
-@keyframes xopc-source-convergence-meteor {
-  0%, 14% {
-    opacity: 0;
-    transform: translate(var(--meteor-x), var(--meteor-y)) rotate(var(--meteor-angle)) scale(.72);
-  }
-  20% { opacity: .92; }
-  76% { opacity: .68; }
-  92%, 100% {
-    opacity: 0;
-    transform: translate(0, 0) rotate(var(--meteor-angle)) scale(.25);
-  }
-}
-
-@media (max-width: 480px) {
-  .xopc-source-convergence-signal[data-position="0"] { --xopc-source-x: -8.2rem !important; --xopc-source-y: -5.6rem !important; }
-  .xopc-source-convergence-signal[data-position="1"] { --xopc-source-x: -1.8rem !important; --xopc-source-y: -7.6rem !important; }
-  .xopc-source-convergence-signal[data-position="2"] { --xopc-source-x: 7.5rem !important; --xopc-source-y: -5rem !important; }
-  .xopc-source-convergence-signal[data-position="3"] { --xopc-source-x: 8.6rem !important; --xopc-source-y: 3.5rem !important; }
-  .xopc-source-convergence-signal[data-position="4"] { --xopc-source-x: 2.2rem !important; --xopc-source-y: 7.4rem !important; }
-  .xopc-source-convergence-signal[data-position="5"] { --xopc-source-x: -7.8rem !important; --xopc-source-y: 5.5rem !important; }
-
-  .xopc-source-convergence-chip {
-    max-width: 7.5rem;
-    padding: .42rem .6rem;
-  }
+@keyframes xopc-source-convergence-progress {
+  from { transform: translateX(-110%); }
+  50% { transform: translateX(80%); }
+  to { transform: translateX(250%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -943,25 +733,14 @@ html.dark {
   .xopc-understanding-hero-card,
   .xopc-understanding-review-card,
   .xopc-reveal-calibration,
-  .xopc-understanding-constellation,
-  .xopc-constellation-orbit,
-  .xopc-constellation-node,
-  .xopc-source-convergence-orbit,
-  .xopc-source-convergence-signal,
-  .xopc-source-convergence-chip,
   .xopc-source-convergence-core-glow,
-  .xopc-source-convergence-particles i,
-  .xopc-source-convergence-meteors i {
+  .xopc-source-convergence-progress {
     animation: none;
   }
 
-  .xopc-source-convergence-meteors {
-    display: none;
-  }
-
-  .xopc-source-convergence-signal {
-    opacity: 1;
-    transform: translate(calc(-50% + var(--xopc-source-x)), calc(-50% + var(--xopc-source-y)));
+  .xopc-source-convergence-progress {
+    width: 100%;
+    transform: none;
   }
 }
 
@@ -982,6 +761,23 @@ html.dark {
 
   .page-enter--gentle {
     animation: none;
+  }
+}
+
+@keyframes settings-content-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-content-enter {
+    animation: settings-content-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 }
 
@@ -1015,7 +811,7 @@ html.dark {
 @media (prefers-reduced-motion: no-preference) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation-duration: 0.42s;
+    animation-duration: 0.26s;
     animation-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
   }
 }

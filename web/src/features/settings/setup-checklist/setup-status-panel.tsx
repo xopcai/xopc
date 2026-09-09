@@ -17,6 +17,7 @@ import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -112,7 +113,12 @@ function HealthBanner({
     targetId ? (
       <button
         type="button"
-        onClick={() => document.getElementById(targetId)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+        onClick={() =>
+          document.getElementById(targetId)?.scrollIntoView({
+            block: 'start',
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+          })
+        }
         className="inline-flex items-center gap-1 rounded-lg bg-surface-base px-3 py-2 text-sm font-medium text-fg shadow-sm hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {meta.action}
@@ -135,8 +141,11 @@ function HealthBanner({
           <Icon className="mt-0.5 size-5 shrink-0" aria-hidden />
           <div className="min-w-0">
             <h2 className="text-base font-semibold">{meta.title}</h2>
-            <p className="mt-1 text-sm opacity-85">{meta.body}</p>
-            <p className="mt-2 text-xs opacity-75">{s.health.issueCount.replace('{{count}}', String(issueCount))}</p>
+            {issueCount > 0 ? (
+              <p className="mt-1 text-sm opacity-80">
+                {s.health.issueCount.replace('{{count}}', String(issueCount))}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -161,15 +170,15 @@ function HealthBanner({
           </button>
         </div>
       </div>
-      <p className="mt-3 text-xs opacity-75" role="status" aria-live="polite">
-        {doctorRunning
-          ? s.health.doctorRunningMessage
-          : doctorRunState === 'success'
-            ? s.health.doctorCompleteMessage
-            : doctorRunState === 'error'
-              ? s.health.doctorFailedMessage
-              : s.health.doctorIdleMessage}
-      </p>
+      {doctorRunning || doctorRunState !== 'idle' ? (
+        <p className="mt-3 text-xs opacity-75" role="status" aria-live="polite">
+          {doctorRunning
+            ? s.health.doctorRunningMessage
+            : doctorRunState === 'success'
+              ? s.health.doctorCompleteMessage
+              : s.health.doctorFailedMessage}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -180,12 +189,7 @@ function IssueRow({ issue, fixLabel }: { issue: SetupIssue; fixLabel: string }) 
     <>
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-fg">{issue.label}</span>
-          <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase', statusClass(issue.status))}>
-            {issue.status}
-          </span>
-        </span>
+        <span className="text-sm font-semibold text-fg">{issue.label}</span>
         <span className="mt-1 block text-sm text-fg-muted">{issue.message}</span>
         {issue.hints[0] ? <span className="mt-1 block truncate text-xs text-fg-subtle">{issue.hints[0]}</span> : null}
       </span>
@@ -250,9 +254,6 @@ function DiagnosticSignalRow({ signal, fixLabel }: { signal: SetupDiagnosticSign
         <span className="block truncate text-sm font-medium text-fg">{signal.label}</span>
         <span className="mt-0.5 block truncate text-xs text-fg-muted">{signal.message}</span>
       </span>
-      <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase', statusClass(signal.status))}>
-        {signal.status}
-      </span>
       {signal.path ? <span className="sr-only">{fixLabel}</span> : null}
     </>
   );
@@ -296,26 +297,7 @@ export function SetupStatusPanel() {
 
   return (
     <SettingsPageFrame gap="gap-6">
-      <SettingsPageHeader
-        title={s.title}
-        subtitle={s.subtitle}
-        actions={
-        <button
-          type="button"
-          className={cn(
-            'inline-flex shrink-0 items-center gap-2 rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg',
-            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            interaction.press,
-          )}
-          onClick={() => void runDoctor()}
-          disabled={!ready || doctorRunning}
-          aria-busy={doctorRunning}
-        >
-          <RefreshCw className={cn('size-4', (!ready || doctorRunning) && 'animate-spin')} aria-hidden />
-          {doctorRunning ? s.health.runDoctorRunning : s.refresh}
-        </button>
-        }
-      />
+      <SettingsPageHeader title={s.title} />
 
       {error ? (
         <p className="rounded-xl border border-red-300/40 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
@@ -340,7 +322,6 @@ export function SetupStatusPanel() {
             <SettingsFormSectionHeader
               icon={snapshot.issues.length ? AlertTriangle : Activity}
               title={s.nextStepsTitle}
-              subtitle={snapshot.issues.length ? s.nextStepsIssuesSubtitle : s.nextStepsReadySubtitle}
             />
             {snapshot.issues.length ? (
               <div className="mt-4 flex flex-col gap-2">
@@ -357,24 +338,22 @@ export function SetupStatusPanel() {
             )}
           </SettingsFormSection>
 
-          <SettingsFormSection>
-            <SettingsFormSectionHeader
-              icon={Stethoscope}
-              title={s.diagnosticsTitle}
-              subtitle={s.diagnosticsSubtitle}
-            />
-            {diagnosticAttentionSignals.length ? (
-              <div className="mt-4 grid gap-2 md:grid-cols-2">
-                {diagnosticAttentionSignals.map((signal) => (
-                  <DiagnosticSignalRow key={signal.id} signal={signal} fixLabel={s.fixIssue} />
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 rounded-lg bg-surface-panel/80 p-3 text-sm text-fg-muted shadow-surface">
-                {snapshot.diagnosticSignals.length ? s.diagnosticsAllClear : s.diagnosticsEmpty}
-              </p>
-            )}
-          </SettingsFormSection>
+          <SettingsAdvancedGate>
+            <SettingsFormSection>
+              <SettingsFormSectionHeader icon={Stethoscope} title={s.diagnosticsTitle} />
+              {diagnosticAttentionSignals.length ? (
+                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  {diagnosticAttentionSignals.map((signal) => (
+                    <DiagnosticSignalRow key={signal.id} signal={signal} fixLabel={s.fixIssue} />
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 rounded-lg bg-surface-panel/80 p-3 text-sm text-fg-muted shadow-surface">
+                  {snapshot.diagnosticSignals.length ? s.diagnosticsAllClear : s.diagnosticsEmpty}
+                </p>
+              )}
+            </SettingsFormSection>
+          </SettingsAdvancedGate>
         </>
       )}
     </SettingsPageFrame>

@@ -31,7 +31,7 @@ function Field({
   children,
 }: {
   label: string;
-  description: string;
+  description?: string;
   children: ReactNode;
 }) {
   return (
@@ -157,9 +157,9 @@ export function WebSearchSettingsPanel() {
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Search} title={w.sectionRegion} subtitle={w.sectionRegionHint} trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />} />
+        <SettingsFormSectionHeader icon={Search} title={w.sectionRegion} trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />} />
         <div className="flex max-w-md flex-col gap-4">
-          <Field label={w.regionLabel} description={w.regionDesc}>
+          <Field label={w.regionLabel}>
             <Select
               className={selectClassName()}
               value={form.regionMode}
@@ -179,7 +179,7 @@ export function WebSearchSettingsPanel() {
 
       <SettingsAdvancedGate>
         <SettingsFormSection>
-          <SettingsFormSectionHeader icon={Ban} title={w.sectionBlocklist} subtitle={w.sectionBlocklistHint} />
+          <SettingsFormSectionHeader icon={Ban} title={w.sectionBlocklist} />
           <div className="flex max-w-xl flex-col gap-4">
             <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
               <input
@@ -213,9 +213,9 @@ export function WebSearchSettingsPanel() {
       </SettingsAdvancedGate>
 
       <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Search} title={w.sectionSearch} subtitle={w.sectionSearchHint} />
+        <SettingsFormSectionHeader icon={Search} title={w.sectionSearch} />
         <div className="flex max-w-xl flex-col gap-6">
-          <Field label={w.maxResultsLabel} description={w.maxResultsDesc}>
+          <Field label={w.maxResultsLabel}>
             <input
               type="number"
               min={1}
@@ -258,7 +258,6 @@ export function WebSearchSettingsPanel() {
         </div>
       </SettingsFormSection>
 
-      <p className="text-xs leading-relaxed text-fg-subtle">{w.footerHint}</p>
     </div>
   );
 }

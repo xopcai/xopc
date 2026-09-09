@@ -60,7 +60,7 @@ export function AgentDefaultsSkillsPanel({
     <div className="space-y-5">
       <section className="rounded-2xl border border-edge bg-surface-base p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '技能策略' : 'Skill policy'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '决定所有 Agent 默认可以发现和使用哪些技能。' : 'Choose which skills every agent can discover and use by default.'}</p>
+        <p className="mt-1 text-sm text-fg-muted">{zh ? '决定所有智能体默认可以使用哪些技能。' : 'Choose which skills every agent can discover and use by default.'}</p>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={() => setDraft({ ...draft, skills: { mode: 'all-enabled', exclude: [] } })} className={cn('flex items-start gap-3 rounded-xl border p-4 text-left', draft.skills.mode === 'all-enabled' ? 'border-accent bg-accent/5 ring-1 ring-accent/20' : 'border-edge bg-surface-panel hover:border-edge-strong')}>
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-accent" />

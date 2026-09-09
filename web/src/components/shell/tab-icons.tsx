@@ -10,6 +10,7 @@ import {
   Keyboard,
   Layers,
   MessageSquare,
+  Mic,
   Package,
   TerminalSquare,
   Palette,
@@ -18,6 +19,7 @@ import {
   Share2,
   Shield,
   Smartphone,
+  Search,
   Users,
 } from 'lucide-react';
 
@@ -33,7 +35,9 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   agents: Users,
   logs: FileText,
   settingsOverview: Activity,
-  settingsCapabilities: Layers,
+  settingsModels: Layers,
+  settingsVoice: Mic,
+  settingsSearch: Search,
   settingsAppearance: Palette,
   settingsKeyboardShortcuts: Keyboard,
   settingsSystem: Shield,

@@ -69,7 +69,7 @@ export function AgentDefaultsToolsPanel({
     <section className="rounded-2xl border border-edge bg-surface-base p-5">
       <div>
         <h2 className="text-base font-semibold text-fg">{zh ? '默认工具权限' : 'Default tool permissions'}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{zh ? '允许：直接执行；询问：执行前确认；禁用：Agent 无法使用。' : 'Allow runs directly, Ask requires confirmation, and Deny makes the tool unavailable.'}</p>
+        <p className="mt-1 text-sm text-fg-muted">{zh ? '允许：直接执行；询问：执行前确认；禁用：智能体无法使用。' : 'Allow runs directly, Ask requires confirmation, and Deny makes the tool unavailable.'}</p>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">

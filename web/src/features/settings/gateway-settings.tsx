@@ -431,7 +431,6 @@ export function GatewaySettingsPanel() {
     <SettingsPageFrame gap="gap-6">
       <SettingsPageHeader
         title={m.settingsSections.gateway}
-        subtitle={g.subtitle}
         docsLink={docsGuidePageUrl(language, 'gateway')}
         docsLabel={g.docsLink}
         actions={
@@ -463,7 +462,6 @@ export function GatewaySettingsPanel() {
         </div>
       ) : null}
 
-      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{g.unsavedHint}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       {showRestartPrompt ? (
@@ -558,7 +556,6 @@ export function GatewaySettingsPanel() {
               }}
             />
           </div>
-          <p className="text-xs text-fg-subtle sm:col-span-2">{g.listenHint}</p>
         </div>
 
         <SettingsAdvancedGate>
@@ -666,12 +663,10 @@ export function GatewaySettingsPanel() {
             <SelectOption value="beta">{g.channelBeta}</SelectOption>
             <SelectOption value="dev">{g.channelDev}</SelectOption>
           </Select>
-          <p className="text-xs text-fg-subtle">{g.updateChannelHint}</p>
         </div>
 
         <div className="space-y-4 border-t border-edge pt-4">
           <div className="text-sm font-medium text-fg">{g.updateAutoSection}</div>
-          <p className="text-xs text-fg-subtle">{g.updateAutoSectionHint}</p>
           <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
             <input
               type="checkbox"
@@ -708,6 +703,7 @@ export function GatewaySettingsPanel() {
               <span className="mt-0.5 block text-xs text-fg-subtle">{g.updateAutoEnabledHint}</span>
             </span>
           </label>
+          <SettingsAdvancedGate>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-fg" htmlFor="update-auto-stable-delay">
@@ -774,6 +770,7 @@ export function GatewaySettingsPanel() {
               <p className="mt-1 text-xs text-fg-subtle">{g.updateAutoBetaCheckIntervalHoursHint}</p>
             </div>
           </div>
+          </SettingsAdvancedGate>
         </div>
       </GatewayTabPanel>
 
@@ -847,6 +844,7 @@ function GatewayTabPanel({
       panelIdPrefix="gateway-settings-panel"
       title={gatewaySettingsTabLabel(g, id)}
       hint={gatewaySettingsTabHint(g, id)}
+      showHeading={false}
     >
       <div className="space-y-4">{children}</div>
     </SettingsTabPanel>
