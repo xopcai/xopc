@@ -1,11 +1,10 @@
-import { ChevronRight, ExternalLink, Mail, ShieldCheck, X } from 'lucide-react';
+import { ChevronRight, ExternalLink, LoaderCircle, ShieldCheck, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
-import { Skeleton } from '@/components/ui/skeleton';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
@@ -43,7 +42,6 @@ type OnboardingState = {
   busy: boolean;
   error: string | null;
   callName: string;
-  profileLoading: boolean;
 };
 
 type OnboardingAction =
@@ -57,7 +55,6 @@ const initialOnboarding: OnboardingState = {
   busy: false,
   error: null,
   callName: '',
-  profileLoading: true,
 };
 
 function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
@@ -73,6 +70,25 @@ const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey'];
 
 const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 1;
 
+function OnboardingProgress({ step, label }: { step: OnboardingStep; label: string }) {
+  const current = stepNumber(step) - 1;
+  return (
+    <div className="flex items-center gap-1.5" aria-label={label}>
+      {STEP_ORDER.map((item, index) => (
+        <span
+          key={item}
+          className={cn(
+            'h-1.5 rounded-full transition-[width,background-color] duration-200 motion-reduce:transition-none',
+            index === current ? 'w-5 bg-accent' : 'w-1.5',
+            index < current ? 'bg-accent/45' : index > current ? 'bg-edge-strong' : undefined,
+          )}
+          aria-hidden
+        />
+      ))}
+    </div>
+  );
+}
+
 export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
   const setLanguage = useLocaleStore((s) => s.setLanguage);
@@ -80,7 +96,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
   const {
-    step, selectedProvider, apiKey, busy, error, callName, profileLoading,
+    step, selectedProvider, apiKey, busy, error, callName,
   } = state;
 
   const stepLabel = useMemo(
@@ -122,7 +138,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           if (prefill) {
             dispatch({ type: 'prefillCallName', value: prefill });
           }
-          dispatch({ type: 'patch', patch: { profileLoading: false } });
           return;
         } catch {
           if (attempt < 2) {
@@ -132,7 +147,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           }
         }
       }
-      if (!cancelled) dispatch({ type: 'patch', patch: { profileLoading: false } });
     })();
     return () => {
       cancelled = true;
@@ -145,7 +159,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
       await updateUserProfile({
-        callName: normalizedCallName,
+        ...(normalizedCallName ? { callName: normalizedCallName } : {}),
         timezone: detectBrowserTimezone(),
         locale: language === 'zh' ? 'zh-CN' : 'en-US',
       });
@@ -246,18 +260,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
       <header className="relative z-20 flex h-18 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-2">
-          <div className="mr-2 hidden items-center gap-1.5 sm:flex" aria-label={stepLabel}>
-            {STEP_ORDER.map((item, index) => (
-              <span
-                key={item}
-                className={cn(
-                  'h-1.5 w-5 rounded-full transition-[transform,background-color,opacity] duration-500 motion-reduce:transition-none',
-                  index === stepNumber(step) - 1 ? 'scale-x-100 bg-accent' : index < stepNumber(step) ? 'scale-x-[.35] bg-accent/45' : 'scale-x-[.35] bg-edge-strong',
-                )}
-                aria-hidden
-              />
-            ))}
-          </div>
           <OnboardingLanguageSwitch
             value={language}
             onChange={(nextLanguage) => {
@@ -278,86 +280,66 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         </div>
       </header>
 
-      <main className="relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(16rem,0.65fr)_minmax(32rem,1.35fr)]">
+      <main className="relative z-10 grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(18rem,0.8fr)_minmax(30rem,1.2fr)]">
         <section className="xopc-onboarding-visual relative hidden min-h-0 items-center justify-center overflow-hidden lg:flex">
-          <div className="xopc-onboarding-orbit relative flex size-72 items-center justify-center" aria-hidden>
-            <span className="xopc-onboarding-orbit-glow absolute inset-[14%] rounded-full" />
-            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--outer absolute inset-0 rounded-full" />
-            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--middle absolute inset-[17%] rounded-full" />
-            <span className="xopc-onboarding-orbit-ring xopc-onboarding-orbit-ring--inner absolute inset-[31%] rounded-full" />
-            <span className="xopc-onboarding-orbit-sweep absolute inset-[8%] rounded-full" />
-            <span className="xopc-onboarding-orbit-satellite xopc-onboarding-orbit-satellite--one absolute inset-[8%] rounded-full"><i /></span>
-            <span className="xopc-onboarding-orbit-satellite xopc-onboarding-orbit-satellite--two absolute inset-[24%] rounded-full"><i /></span>
-            <span className="xopc-onboarding-orbit-particles absolute inset-0">
-              <i /><i /><i /><i /><i /><i />
-            </span>
-            <span className="xopc-onboarding-orbit-core relative flex size-28 items-center justify-center">
-              <BrandLogo className="relative z-10 size-20 lg:size-24" />
+          <div className="xopc-onboarding-mark relative flex size-64 items-center justify-center" aria-hidden>
+            <span className="xopc-onboarding-mark-halo absolute inset-[10%] rounded-full" />
+            <span className="xopc-onboarding-mark-trace absolute inset-[13%] rounded-full" />
+            <span className="xopc-onboarding-mark-core relative flex size-36 items-center justify-center">
+              <BrandLogo className="relative z-10 size-28 lg:size-32" />
             </span>
           </div>
         </section>
 
-        <section className="flex min-h-[30rem] items-center overflow-y-auto border-t border-edge-subtle bg-surface-panel/80 px-5 py-10 backdrop-blur-2xl sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,7rem)]">
-          <div className="xopc-onboarding-stage w-full max-w-[36rem]" key={step}>
+        <section className="flex min-h-[30rem] items-center overflow-y-auto border-t border-edge-subtle bg-surface-panel/45 px-5 py-8 sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,6rem)]">
+          <div className="xopc-onboarding-stage w-full max-w-[30rem]" key={step}>
             {step === 'callName' ? (
-              <div>
-                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '先认识彼此' : 'First, let’s meet'}</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">{o.step0Title}</h1>
-                <p className="mt-3 text-sm leading-7 text-fg-muted">{o.step0Subtitle}</p>
-                <label className="mt-10 block">
-                  <span className="sr-only">{o.profileCallNameLabel}</span>
-                  {profileLoading ? <Skeleton className="h-24 w-full rounded-3xl" /> : (
-                    <span className="xopc-onboarding-name-envelope group relative flex min-h-24 w-full items-center gap-4 overflow-hidden rounded-3xl border border-edge bg-surface-panel px-5 py-4 shadow-surface">
-                      <span className="xopc-onboarding-name-envelope-fold pointer-events-none absolute inset-0" aria-hidden />
-                      <span className="xopc-onboarding-name-envelope-icon relative z-10 flex size-11 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-panel text-accent-fg shadow-surface" aria-hidden>
-                        <Mail className="size-5" strokeWidth={1.6} />
-                      </span>
-                      <span className="relative z-10 min-w-0 flex-1">
-                        <span className="block text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-                          {o.profileCallNameLabel}
-                        </span>
-                        <input
-                          autoFocus
-                          autoComplete="name"
-                          value={callName}
-                          onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
-                          onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void continueFromCallName(); }}
-                          placeholder={o.profileCallNamePlaceholder}
-                          className="mt-1.5 h-8 w-full bg-transparent text-lg font-medium tracking-[-0.01em] text-fg outline-none placeholder:font-normal placeholder:text-fg-subtle"
-                        />
-                      </span>
-                      <span className="xopc-onboarding-name-envelope-seal relative z-10 hidden size-9 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent-soft sm:flex" aria-hidden>
-                        <span className="size-2 rounded-full bg-accent shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-accent)_12%,transparent)]" />
-                      </span>
-                    </span>
-                  )}
+              <div className="flex min-h-[30rem] flex-col">
+                <p className="text-xs font-medium tracking-wide text-accent-fg">{o.title}</p>
+                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{o.step0Title}</h1>
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{o.step0Subtitle}</p>
+                <label className="mt-9 block">
+                  <span className="mb-2 flex items-center justify-between text-[13px] font-medium text-fg-muted">
+                    <span>{o.profileCallNameLabel}</span>
+                    <span className="font-normal text-fg-subtle">{language === 'zh' ? '可选' : 'Optional'}</span>
+                  </span>
+                  <input
+                    autoFocus
+                    autoComplete="name"
+                    value={callName}
+                    onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                    onKeyDown={(event) => { if (event.key === 'Enter' && !busy) void continueFromCallName(); }}
+                    placeholder={o.profileCallNamePlaceholder}
+                    className="h-12 w-full rounded-xl border border-edge bg-surface-base/80 px-3.5 text-[15px] text-fg outline-none transition-[border-color,box-shadow,background-color] duration-200 placeholder:text-fg-subtle hover:border-edge-strong focus:border-accent focus:bg-surface-base focus:ring-4 focus:ring-accent/10 motion-reduce:transition-none"
+                  />
                 </label>
-                {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
-                <div className="mt-10 flex items-center justify-end gap-3">
-                  <Button className="h-11 bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy || profileLoading} onClick={() => void continueFromCallName()}>
-                    {busy ? o.savingProfile : o.continue}<ChevronRight className="size-4" aria-hidden />
+                <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
+                <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
+                  <span />
+                  <OnboardingProgress step={step} label={stepLabel} />
+                  <Button className="h-11 justify-self-end bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy} onClick={() => void continueFromCallName()}>
+                    {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                    {busy ? o.savingProfile : o.continue}
+                    {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
                   </Button>
                 </div>
               </div>
             ) : null}
 
             {step === 'provider' ? (
-              <div>
-                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '配置智能模型' : 'Configure intelligence'}</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">{language === 'zh' ? '选择模型服务' : 'Choose an AI service'}</h1>
-                <p className="mt-3 text-sm leading-7 text-fg-muted">
-                  {callName.trim()
-                    ? (language === 'zh' ? `${callName.trim()}，选择一个服务，我们会为你配置推荐模型。你可以稍后在设置中进行调整。` : `${callName.trim()}, choose a service and we’ll configure its recommended model. You can adjust it later in Settings.`)
-                    : o.step1Subtitle}
-                </p>
+              <div className="flex min-h-[30rem] flex-col">
+                <p className="text-xs font-medium tracking-wide text-accent-fg">{language === 'zh' ? '模型设置' : 'Model setup'}</p>
+                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{o.step1Title}</h1>
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">{o.step1Subtitle}</p>
                 <div className="mt-8">
                   <OnboardingProviderGrid
                     onSelect={(id) => dispatch({ type: 'patch', patch: { selectedProvider: id, step: 'apiKey', apiKey: '', error: null } })}
                   />
                 </div>
-                <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-                  <Button variant="ghost" onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
-                  <Link to="/settings/capabilities/models" className="text-xs font-medium text-fg-muted hover:text-accent-fg hover:underline">
+                <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-8">
+                  <Button variant="ghost" className="justify-self-start" onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
+                  <OnboardingProgress step={step} label={stepLabel} />
+                  <Link to="/settings/capabilities/models" className="justify-self-end text-right text-xs font-medium text-fg-muted hover:text-accent-fg hover:underline">
                     {language === 'zh' ? '打开高级模型设置' : 'Open advanced model settings'}
                   </Link>
                 </div>
@@ -365,14 +347,14 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             ) : null}
 
             {step === 'apiKey' ? (
-              <div>
-                <p className="text-sm font-medium text-accent-fg">{language === 'zh' ? '最后一步' : 'One last step'}</p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-fg sm:text-4xl">
+              <div className="flex min-h-[30rem] flex-col">
+                <p className="text-xs font-medium tracking-wide text-accent-fg">{o.step2Title}</p>
+                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">
                   {selectedProvider === 'xopc-cloud'
                     ? (language === 'zh' ? '连接 XOPC Cloud' : 'Connect XOPC Cloud')
                     : (language === 'zh' ? `连接 ${selectedProvider ?? ''}` : `Connect ${selectedProvider ?? ''}`)}
                 </h1>
-                <p className="mt-3 text-sm leading-7 text-fg-muted">
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">
                   {selectedProvider === 'xopc-cloud'
                     ? (language === 'zh' ? '登录后会自动同步可用模型，不需要填写 API Key。' : 'Sign in to sync available models automatically. No API key is required.')
                     : o.step2Subtitle}
@@ -394,7 +376,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                           onChange={(next) => dispatch({ type: 'patch', patch: { apiKey: next } })}
                           placeholder={o.step2Placeholder}
                           labels={secretInputLabelsFromChannels(messages(language).providersSettings)}
-                          inputClassName="h-14 rounded-2xl bg-surface-panel px-4 text-base ring-accent focus:border-accent focus:ring-4 focus:ring-accent/10"
+                          inputClassName="h-12 rounded-xl bg-surface-base/80 px-3.5 text-[15px] ring-accent focus:border-accent focus:ring-4 focus:ring-accent/10"
                         />
                       </label>
                       <div className="mt-4 flex items-center gap-2 text-xs leading-5 text-fg-muted"><ShieldCheck className="size-4 text-accent-fg" />{o.step2SecurityNote.replace('🔒 ', '')}</div>
@@ -402,14 +384,17 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                   )}
                 </div>
                 {busy && selectedProvider === 'xopc-cloud' ? <p className="mt-4 text-sm text-fg-muted">{language === 'zh' ? '正在应用推荐模型…' : 'Applying the recommended model…'}</p> : null}
-                {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
-                <div className="mt-10 flex items-center justify-between gap-3">
-                  <Button variant="ghost" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>{o.back}</Button>
+                <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
+                <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
+                  <Button variant="ghost" className="justify-self-start" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>{o.back}</Button>
+                  <OnboardingProgress step={step} label={stepLabel} />
                   {selectedProvider !== 'xopc-cloud' ? (
-                    <Button className="h-11 bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy || !apiKey.trim()} onClick={() => void onContinueApiKey()}>
-                      {busy ? o.continue : (language === 'zh' ? '接入我的工作' : 'Connect my work')}<ChevronRight className="size-4" aria-hidden />
+                    <Button className="h-11 justify-self-end bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy || !apiKey.trim()} onClick={() => void onContinueApiKey()}>
+                      {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                      {o.continue}
+                      {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
                     </Button>
-                  ) : null}
+                  ) : <span />}
                 </div>
               </div>
             ) : null}
