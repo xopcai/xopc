@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
@@ -46,7 +46,7 @@ import {
 } from '../../query/note-list-cache';
 import { refreshNotesList, resetNoteListPagination } from '../../query/infinite-list-sync';
 import { useGatewayConfigured } from '../../query/sessions';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, typography, useTheme } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, typography, useTheme } from '../../theme';
 
 import { useNoteTagsStore } from '../../stores/note-tags-store';
 import { NoteTagPickerSheet } from './NoteTagPickerSheet';
@@ -416,7 +416,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <NativeScreenHeader title={pm.title} onBack={embedded ? undefined : handleBack} />
+        <NativeScreenHeader title={pm.title} largeTitle={!embedded} onBack={embedded ? undefined : handleBack} />
         <View style={styles.center}>
           <Text style={{ opacity: 0.6 }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>
@@ -428,29 +428,20 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
+        largeTitle={!embedded && !selectionMode}
         onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}
         onSearchPress={!selectionMode ? handleSearchToggle : undefined}
         searchPlaceholder={searchText.trim() || m.common.search}
-        rightActions={!selectionMode ? [
-          {
-            icon: 'note-plus-outline',
-            accessibilityLabel: pm.quickCapturePlaceholder,
-            onPress: handleCreateNote,
-          },
-          {
-            icon: 'tag-outline',
-            accessibilityLabel: pm.tagPickerTitle,
-            onPress: () => {
-              setFocusTagCreate(false);
-              setShowTagPicker(true);
-            },
-          },
-        ] : undefined}
+        rightActions={!selectionMode ? [{
+          icon: 'note-plus-outline',
+          accessibilityLabel: pm.quickCapturePlaceholder,
+          onPress: handleCreateNote,
+        }] : undefined}
       />
 
       {!selectionMode && searchOpen ? (
         <View style={styles.searchWrap}>
-          <View style={[styles.searchBox, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
+          <View style={[styles.searchBox, { backgroundColor: colors.surface.input }]}>
             <Icon source="magnify" size={18} color={colors.text.tertiary} />
             <TextInput
               ref={searchInputRef}
@@ -481,8 +472,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
                 style={({ pressed }) => [
                   styles.filterChip,
                   {
-                    backgroundColor: active ? colors.accent.selectionBg : colors.surface.panel,
-                    borderColor: active ? colors.accent.primary : colors.border.subtle,
+                    backgroundColor: active ? colors.accent.selectionBg : 'transparent',
                     opacity: pressed ? 0.72 : 1,
                   },
                 ]}
@@ -495,6 +485,26 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
               </Pressable>
             );
           })}
+          <Pressable
+            onPress={() => {
+              setFocusTagCreate(false);
+              setShowTagPicker(true);
+            }}
+            style={({ pressed }) => [
+              styles.filterChip,
+              {
+                backgroundColor: tagFilter === 'all' ? 'transparent' : colors.accent.selectionBg,
+                opacity: pressed ? 0.72 : 1,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: tagFilter !== 'all' }}
+            accessibilityLabel={pm.tagPickerTitle}
+          >
+            <Text style={[styles.filterChipText, { color: tagFilter === 'all' ? colors.text.secondary : colors.accent.primary }]}>
+              {tagFilter === 'all' ? pm.tagPickerTitle : `#${tagFilter}`}
+            </Text>
+          </Pressable>
         </ScrollView>
       ) : null}
 
@@ -517,15 +527,17 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
             }
             ListEmptyComponent={
               <View style={styles.empty}>
-                <View style={[styles.emptyIconWrap, { backgroundColor: colors.accent.selectionBg }]}>
-                  <Icon source="note-text-outline" size={40} color={colors.accent.primary} />
-                </View>
-                <Text style={{ color: colors.text.secondary, marginTop: spacing.md, ...typography.heading }}>
+                <Text style={{ color: colors.text.primary, ...typography.heading }}>
                   {searchText.trim() ? pm.searchNoResults : tagFilter === 'all' && scopeFilter === 'all' ? pm.empty : pm.tagEmptyFiltered}
                 </Text>
                 <Text style={{ color: colors.text.tertiary, textAlign: 'center', maxWidth: 240, ...typography.label }}>
                   {searchText.trim() ? pm.searchPlaceholder : tagFilter === 'all' && scopeFilter === 'all' ? pm.emptyHint : pm.tagEmptyFilteredHint}
                 </Text>
+                {!searchText.trim() && tagFilter === 'all' && scopeFilter === 'all' ? (
+                  <Button mode="contained" style={styles.emptyAction} onPress={handleCreateNote} loading={createNoteMutation.isPending}>
+                    {pm.createNote}
+                  </Button>
+                ) : null}
               </View>
             }
           />
@@ -586,8 +598,7 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     minHeight: 44,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -605,10 +616,9 @@ const styles = StyleSheet.create({
   },
   filterScroll: { flexGrow: 0, flexShrink: 0 },
   filterChip: {
-    minHeight: 34,
+    minHeight: 44,
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 17,
+    borderRadius: radii.md,
     paddingHorizontal: spacing.md,
   },
   filterChipText: {
@@ -618,12 +628,6 @@ const styles = StyleSheet.create({
   listArea: { flex: 1, minHeight: 0 },
   list: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
-  empty: { alignItems: 'center', paddingVertical: 48, gap: 6 },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  empty: { alignItems: 'center', paddingHorizontal: spacing.content, paddingVertical: spacing.xxxl, gap: spacing.sm },
+  emptyAction: { marginTop: spacing.sm },
 });

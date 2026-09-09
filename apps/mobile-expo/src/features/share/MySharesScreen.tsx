@@ -27,7 +27,6 @@ import {
   View,
 } from 'react-native';
 import {
-  ActivityIndicator,
   Button,
   Dialog,
   Icon,
@@ -40,6 +39,7 @@ import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipbo
 import { useQueryClient } from '@tanstack/react-query';
 
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
+import { ListSkeleton } from '../../components/ListSkeleton';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 
 import { t, useMessages } from '../../i18n/messages';
@@ -110,21 +110,16 @@ export function MySharesScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
-      <NativeScreenHeader title={pm.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={pm.title} largeTitle onBack={() => dismissOrHome(router)} />
 
       {list.isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
-        </View>
+        <ListSkeleton count={6} />
       ) : (
         <FlatList
           data={list.data ?? []}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
-          ListHeaderComponent={
-            <Text style={[styles.subtitle, { color: palette.muted }]}>{pm.subtitle}</Text>
-          }
           ListEmptyComponent={empty}
           refreshControl={
             <RefreshControl refreshing={list.isFetching && !list.isLoading} onRefresh={onRefresh} />
@@ -502,7 +497,6 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   list: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: 40, gap: 0 },
   separator: { height: StyleSheet.hairlineWidth },
-  subtitle: { ...typography.label, marginBottom: spacing.md },
   card: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing.md,

@@ -52,7 +52,7 @@ export function BottomSheetModal({
   keyboardAvoiding = false,
   testID,
 }: BottomSheetModalProps) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const { height: screenHeight } = useWindowDimensions();
@@ -159,6 +159,7 @@ export function BottomSheetModal({
             maxHeight,
             paddingBottom: Math.max(insets.bottom, spacing.xl),
           },
+          elevation.overlay,
           sheetStyle,
         ]}
         accessibilityViewIsModal
