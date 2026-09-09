@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
@@ -341,6 +341,7 @@ export function SessionsScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
+        largeTitle={!selectionMode}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
         rightActions={selectionMode ? undefined : [
           {
@@ -369,13 +370,6 @@ export function SessionsScreen() {
           onEndReached={onEndReached}
           onEndReachedThreshold={0.5}
           onMomentumScrollBegin={onMomentumScrollBegin}
-          ListHeaderComponent={allSessions.length > 0 ? (
-            <View style={styles.listHeader}>
-              <Text style={[styles.listSummary, { color: colors.text.tertiary }]}>
-                {t(sm.chatCount, { count: allSessions.length })}
-              </Text>
-            </View>
-          ) : null}
           ListFooterComponent={renderListFooter}
           extraData={listExtraData}
           refreshControl={
@@ -387,9 +381,16 @@ export function SessionsScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: listBottomPadding }]}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Icon source="message-processing-outline" size={42} color={colors.text.tertiary} />
               <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{sm.empty}</Text>
               <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{sm.emptyHint}</Text>
+              <Button
+                mode="contained"
+                style={styles.emptyAction}
+                loading={createSessionMutation.isPending}
+                onPress={() => createSessionMutation.mutate()}
+              >
+                {sm.newChat}
+              </Button>
             </View>
           }
         />
@@ -433,14 +434,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
   list: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
-  listHeader: {
-    paddingHorizontal: spacing.content,
-    paddingBottom: spacing.sm,
-  },
-  listSummary: {
-    ...typography.label,
-  },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
-  emptyTitle: { fontSize: 18, fontWeight: '600' },
-  emptyText: { fontSize: 13, textAlign: 'center' },
+  emptyTitle: { ...typography.heading },
+  emptyText: { ...typography.label, textAlign: 'center', maxWidth: 260 },
+  emptyAction: { marginTop: spacing.sm },
 });

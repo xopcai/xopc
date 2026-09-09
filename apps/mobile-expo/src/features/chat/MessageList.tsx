@@ -17,6 +17,7 @@ import {
 import { ActivityIndicator, Button, Icon, IconButton, Text } from 'react-native-paper';
 
 import { useKeyboardListPadding } from '../../hooks/use-keyboard-list-padding';
+import { useMessages } from '../../i18n/messages';
 import { typography, useTheme } from '../../theme';
 import { GatewayUnreachableTip } from '../gateway/GatewayUnreachableTip';
 import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
@@ -123,7 +124,8 @@ export const MessageList = memo(function MessageList({
   loadError?: { message: string; retryLabel: string; onRetry: () => void } | null;
   networkUnreachableTip?: { message: string; onPress: () => void } | null;
 }) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
+  const chatMessages = useMessages().chat;
   const keyboardPadding = useKeyboardListPadding();
   const showLoadingIndicator = useDelayedLoadingIndicator(loading);
   const listRef = useRef<FlashListRef<Message>>(null);
@@ -280,14 +282,11 @@ export const MessageList = memo(function MessageList({
         showsVerticalScrollIndicator={false}
       >
         {listHeader}
-        <View style={[styles.emptyMark, { backgroundColor: colors.accent.selectionBg }]}>
-          <Icon source="creation-outline" size={26} color={colors.accent.primary} />
-        </View>
         <Text variant="titleMedium" style={[styles.emptyTitle, { color: colors.text.primary }]}>
-          {welcomeTitle ?? 'Start a conversation'}
+          {welcomeTitle ?? chatMessages.welcomeTitle}
         </Text>
         <Text variant="bodySmall" style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
-          {welcomeSubtitle ?? 'Type a message below to begin chatting with your AI assistant.'}
+          {welcomeSubtitle ?? chatMessages.welcomeSubtitle}
         </Text>
         {starters.length > 0 ? (
           <View style={styles.starterColumn}>
@@ -386,7 +385,7 @@ export const MessageList = memo(function MessageList({
           icon="arrow-down"
           mode="contained"
           size={20}
-          style={styles.scrollToBottomButton}
+          style={[styles.scrollToBottomButton, elevation.overlay]}
           onPress={scrollToBottom}
         />
       ) : null}
@@ -417,14 +416,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-  },
-  emptyMark: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
   },
   emptyTitle: {
     ...typography.heading,
@@ -493,11 +484,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 16,
-    elevation: 4,
-    shadowColor: '#000000',
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
   },
   bubbleError: {
     paddingHorizontal: 12,

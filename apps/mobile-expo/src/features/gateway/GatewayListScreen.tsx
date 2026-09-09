@@ -35,11 +35,11 @@ export function GatewayListScreen() {
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
       <NativeScreenHeader
         title={m.settings.gateway}
+        largeTitle
         onBack={() => router.back()}
         rightActions={[{ icon: 'plus', onPress: () => router.push('/settings/gateway/new'), accessibilityLabel: m.settings.addGateway }]}
       />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text variant="bodySmall" style={{ color: colors.textMuted }}>{m.settings.gatewayHint}</Text>
         {profiles.length === 0 ? (
           <Text style={{ color: colors.textMuted }}>{m.settings.gatewaysEmpty}</Text>
         ) : (

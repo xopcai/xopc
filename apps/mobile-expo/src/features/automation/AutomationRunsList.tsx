@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
-import { Button, Chip, Icon, Text } from 'react-native-paper';
+import { Button, Icon, Text } from 'react-native-paper';
 
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { useMessages } from '../../i18n/messages';
@@ -133,10 +133,9 @@ export function AutomationRunsList() {
       renderItem={renderRun}
       stickySectionHeadersEnabled={false}
       renderSectionHeader={({ section }) => <Text style={[styles.sectionHeader, { color: section.key === 'attention' ? colors.semantic.error : colors.text.primary }]}>{section.title} · {section.data.length}</Text>}
-      ListHeaderComponent={<View style={styles.headerBlock}><Text style={[styles.subtitle, { color: colors.text.secondary }]}>{pm.subtitle}</Text></View>}
       contentContainerStyle={styles.list}
       refreshControl={<RefreshControl refreshing={runsQuery.isFetching && !runsQuery.isLoading} onRefresh={onRefresh} />}
-      ListEmptyComponent={<View style={styles.empty}><Chip icon="playlist-remove" mode="outlined">{pm.empty}</Chip></View>}
+      ListEmptyComponent={<View style={styles.empty}><Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{pm.empty}</Text></View>}
     />
   );
 }
@@ -145,16 +144,15 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   skeleton: { paddingHorizontal: spacing.xl },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, flexGrow: 1 },
-  headerBlock: { marginBottom: spacing.md },
-  subtitle: typography.label,
   sectionHeader: { ...typography.heading, paddingTop: spacing.md, paddingBottom: spacing.xs },
   card: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md, gap: spacing.sm },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   cardTitleArea: { flex: 1, minWidth: 0 },
   cardTitle: { ...typography.ui, fontWeight: '600' },
   statusPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  row: { fontSize: 12, lineHeight: 17, marginTop: 2 },
-  summary: { fontSize: 12, lineHeight: 17 },
-  error: { fontSize: 12, lineHeight: 17 },
+  row: { ...typography.caption, marginTop: spacing.xxs },
+  summary: { ...typography.caption },
+  error: { ...typography.caption },
   empty: { alignItems: 'center', paddingVertical: 32 },
+  emptyTitle: { ...typography.heading },
 });

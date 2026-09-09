@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
-import { Button, Chip, Icon, IconButton, Menu, Text } from 'react-native-paper';
+import { Button, Icon, IconButton, Menu, Text } from 'react-native-paper';
 
 import { AppToast } from '../../components/AppToast';
 import { ListSkeleton } from '../../components/ListSkeleton';
@@ -21,9 +21,9 @@ import {
 import { queryKeys } from '../../query/keys';
 import { useGatewayConfigured } from '../../query/sessions';
 import { usePreferencesStore } from '../../stores/preferences-store';
-import { spacing, typography, useTheme } from '../../theme';
+import { radii, spacing, typography, useTheme } from '../../theme';
 
-import { automationActionPreview, formatAutomationDate } from './automation-presentation';
+import { formatAutomationDate } from './automation-presentation';
 import { formatScheduleLabel } from './cron-schedule';
 
 export function SchedulesList() {
@@ -123,10 +123,9 @@ export function SchedulesList() {
             </View>
           </View>
           <Text style={[styles.meta, { color: colors.text.secondary }]}>{trigger}</Text>
-          <Text style={[styles.preview, { color: colors.text.secondary }]} numberOfLines={2}>{automationActionPreview(item)}</Text>
           <View style={styles.statusLine}>
             {item.state.nextRunAtMs ? <Text style={[styles.meta, { color: colors.text.tertiary }]}>{pm.nextRun} · {formatAutomationDate(item.state.nextRunAtMs, locale)}</Text> : null}
-            {lastStatus ? <Text style={[styles.meta, { color: lastStatusColor }]}>{pm.lastRun} · {lastStatus}{lastRunAt ? ` · ${lastRunAt}` : ''}</Text> : null}
+            {!item.state.nextRunAtMs && lastStatus ? <Text style={[styles.meta, { color: lastStatusColor }]}>{pm.lastRun} · {lastStatus}{lastRunAt ? ` · ${lastRunAt}` : ''}</Text> : null}
           </View>
           {item.state.lastError ? <Text style={[styles.error, { color: colors.semantic.error }]} numberOfLines={2}>{item.state.lastError}</Text> : null}
         </View>
@@ -168,7 +167,7 @@ export function SchedulesList() {
         ) : null}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={automationsQuery.isFetching && !automationsQuery.isLoading} onRefresh={refresh} />}
-        ListEmptyComponent={<View style={styles.empty}><Chip icon="timer-off-outline" mode="outlined">{pm.empty}</Chip><Button mode="contained" icon="plus" onPress={() => router.push('/automation/form')}>{pm.createFirst}</Button></View>}
+        ListEmptyComponent={<View style={styles.empty}><Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{pm.empty}</Text><Button mode="contained" icon="plus" onPress={() => router.push('/automation/form')}>{pm.createFirst}</Button></View>}
       />
       <AppToast visible={Boolean(toast)} onDismiss={() => setToast('')} duration={TOAST_DURATION_DEFAULT}>{toast}</AppToast>
     </>
@@ -179,19 +178,19 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl, gap: spacing.sm },
   skeleton: { paddingHorizontal: spacing.xl },
   list: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl, flexGrow: 1 },
-  briefing: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: spacing.md, gap: spacing.xs, marginBottom: spacing.md },
+  briefing: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs, marginBottom: spacing.md },
   briefingLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   briefingTitle: { ...typography.ui, fontWeight: '600', flex: 1 },
-  row: { minHeight: 112, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md, flexDirection: 'row', gap: spacing.sm },
+  row: { minHeight: 88, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.md, flexDirection: 'row', gap: spacing.sm },
   rowMain: { flex: 1, minWidth: 0, gap: spacing.xxs },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { ...typography.ui, fontWeight: '600', flex: 1 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  badge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xxs, borderRadius: radii.sm },
   badgeText: { ...typography.micro, fontWeight: '600' },
-  preview: { ...typography.body },
   meta: { ...typography.label },
   statusLine: { gap: spacing.xxs, marginTop: spacing.xs },
   error: { ...typography.label },
   actions: { justifyContent: 'center', alignItems: 'center' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingVertical: spacing.xxl },
+  emptyTitle: { ...typography.heading },
 });

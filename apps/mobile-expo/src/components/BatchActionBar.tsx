@@ -10,7 +10,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { motion, useReducedMotion } from '../motion';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, useTheme } from '../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, typography, useTheme } from '../theme';
 
 export type BatchActionBarItem = {
   key: string;
@@ -27,7 +27,7 @@ interface BatchActionBarProps {
 }
 
 export function BatchActionBar({ items }: BatchActionBarProps) {
-  const { colors } = useTheme();
+  const { colors, elevation } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(reducedMotion ? 1 : 0);
@@ -53,7 +53,7 @@ export function BatchActionBar({ items }: BatchActionBarProps) {
 
   return (
     <Animated.View style={[styles.wrap, animatedStyle, { paddingBottom: floatingBottomPadding(insets.bottom) }]}>
-      <View style={[styles.bar, { backgroundColor: barBg, shadowColor: '#000' }]}>
+      <View style={[styles.bar, { backgroundColor: barBg }, elevation.raised]}>
         {items.map((item) => {
           const iconColor = item.destructive ? colors.semantic.error : defaultIcon;
           const labelColor = item.destructive ? colors.semantic.error : defaultLabel;
@@ -97,10 +97,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 8,
     maxWidth: '96%',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
   action: {
     alignItems: 'center',
@@ -118,8 +114,6 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   label: {
-    fontSize: 10,
-    fontWeight: '400',
-    lineHeight: 13,
+    ...typography.micro,
   },
 });

@@ -3,7 +3,7 @@ import { Icon, Text } from 'react-native-paper';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, useTheme } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, typography, useTheme } from '../../theme';
 
 export interface NoteViewActionBarItem {
   key: string;
@@ -20,7 +20,7 @@ interface NoteViewActionBarProps {
 }
 
 export function NoteViewActionBar({ items }: NoteViewActionBarProps) {
-  const { colors, isDark } = useTheme();
+  const { colors, elevation, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const barBg = isDark ? colors.surface.panel : colors.surface.base;
   const iconColor = colors.text.secondary;
@@ -38,8 +38,8 @@ export function NoteViewActionBar({ items }: NoteViewActionBarProps) {
             {
               backgroundColor: barBg,
               borderColor: colors.border.default,
-              shadowColor: colors.text.primary,
             },
+            elevation.raised,
           ]}
         >
           {items.map((item) => (
@@ -87,10 +87,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     maxWidth: '96%',
     borderWidth: StyleSheet.hairlineWidth,
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
   action: {
     alignItems: 'center',
@@ -109,8 +105,6 @@ const styles = StyleSheet.create({
     opacity: 0.48,
   },
   label: {
-    fontSize: 10,
-    fontWeight: '400',
-    lineHeight: 13,
+    ...typography.micro,
   },
 });

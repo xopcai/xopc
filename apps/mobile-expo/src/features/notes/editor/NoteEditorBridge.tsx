@@ -165,7 +165,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   aiLoadingKey,
   onRequestAiAction,
 }, ref) {
-  const { colors, isDark } = useTheme();
+  const { colors, elevation, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboardBottomInset = useKeyboardBottomInset();
   const linkUrlInputRef = useRef<TextInput | null>(null);
@@ -491,6 +491,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
             actions={actions}
             isDark={isDark}
             colors={colors}
+            elevation={elevation}
           />
         </View>
       ) : null}
@@ -723,10 +724,12 @@ function EditorToolbar({
   actions,
   isDark,
   colors,
+  elevation,
 }: {
   actions: ToolbarAction[];
   isDark: boolean;
   colors: ReturnType<typeof useTheme>['colors'];
+  elevation: ReturnType<typeof useTheme>['elevation'];
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const contentWidth = (actions.length * TOOL_BUTTON_SIZE)
@@ -743,8 +746,8 @@ function EditorToolbar({
           width: toolbarWidth,
           backgroundColor: isDark ? colors.surface.panel : colors.surface.base,
           borderColor: colors.border.default,
-          shadowColor: colors.text.primary,
         },
+        elevation.raised,
       ]}
     >
       <ScrollView
@@ -844,10 +847,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radii.xl,
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
     overflow: 'hidden',
   },
   toolbarScroll: {

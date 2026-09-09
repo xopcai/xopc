@@ -21,7 +21,7 @@ import {
   type FileContextKind,
 } from '../../query/files';
 import { queryKeys } from '../../query/keys';
-import { floatingBottomPadding, spacing, useTheme } from '../../theme';
+import { floatingBottomPadding, radii, spacing, typography, useTheme } from '../../theme';
 import { FilePreviewModal, type PreviewableFile } from '../file-preview/FilePreviewModal';
 
 import { useFileActions } from './file-actions';
@@ -111,7 +111,7 @@ export function FilesHubScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.title} onBack={() => router.back()} />
+      <NativeScreenHeader title={labels.title} largeTitle onBack={() => router.back()} />
       <View style={[styles.searchBox, { backgroundColor: colors.surface.input }]}>
         <Icon source="magnify" size={20} color={colors.text.tertiary} />
         <TextInput
@@ -181,7 +181,6 @@ function EmptyState({ title, hint }: { title: string; hint: string }) {
   const { colors } = useTheme();
   return (
     <View style={styles.empty}>
-      <Icon source="folder-open-outline" size={40} color={colors.text.tertiary} />
       <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{title}</Text>
       <Text style={[styles.emptyHint, { color: colors.text.tertiary }]}>{hint}</Text>
     </View>
@@ -316,25 +315,25 @@ function FileSpaceBrowserScreen({ space }: { space: FileSpace }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  searchBox: { marginHorizontal: 16, marginTop: 12, minHeight: 42, borderRadius: 12, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  searchInput: { flex: 1, fontSize: 15, paddingVertical: 8 },
-  segment: { margin: 16, padding: 3, borderRadius: 10, flexDirection: 'row' },
-  segmentButton: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
-  list: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: floatingBottomPadding(0) + spacing.xxl },
-  row: { minHeight: 64, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  locationRow: { minHeight: 68, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  icon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  searchBox: { marginHorizontal: spacing.content, marginTop: spacing.sm, minHeight: 44, borderRadius: radii.md, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  searchInput: { flex: 1, ...typography.body, paddingVertical: spacing.sm },
+  segment: { margin: spacing.content, padding: spacing.xxs, borderRadius: radii.md, flexDirection: 'row' },
+  segmentButton: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radii.sm },
+  list: { flexGrow: 1, paddingHorizontal: spacing.content, paddingBottom: floatingBottomPadding(0) + spacing.xxl },
+  row: { minHeight: 64, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  locationRow: { minHeight: 68, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  icon: { width: 38, height: 38, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   rowCopy: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 14, fontWeight: '600' },
-  rowMeta: { fontSize: 12, marginTop: 3 },
-  skeletonIcon: { width: 38, height: 38, borderRadius: 10 },
-  skeletonCopy: { flex: 1, gap: 8 },
+  rowTitle: { ...typography.ui, fontWeight: '600' },
+  rowMeta: { ...typography.caption, marginTop: spacing.xxs },
+  skeletonIcon: { width: 38, height: 38, borderRadius: radii.md },
+  skeletonCopy: { flex: 1, gap: spacing.sm },
   skeletonLine: { height: 10, borderRadius: 5 },
-  empty: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 80, gap: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  emptyHint: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  empty: { alignItems: 'center', paddingHorizontal: spacing.content, paddingTop: spacing.xxxl, gap: spacing.sm },
+  emptyTitle: { ...typography.heading, textAlign: 'center' },
+  emptyHint: { ...typography.label, textAlign: 'center', maxWidth: 280 },
   breadcrumbScroll: { flexGrow: 0 },
   crumbButton: { minHeight: spacing.xxxl, minWidth: spacing.xxxl, justifyContent: 'center' },
-  breadcrumbs: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  crumbGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  breadcrumbs: { paddingHorizontal: spacing.content, paddingVertical: spacing.sm, gap: spacing.sm },
+  crumbGroup: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

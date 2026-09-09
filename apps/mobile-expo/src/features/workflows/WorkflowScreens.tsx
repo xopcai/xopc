@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Icon, Text } from 'react-native-paper';
+import { Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
@@ -43,7 +43,7 @@ export function WorkflowRunsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.title} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.title} largeTitle onBack={() => dismissOrHome(router)} />
       {agents.isLoading || query.isLoading ? <ListSkeleton count={6} /> : agents.isError || query.isError ? (
         <View style={styles.center}>
           <Text style={{ color: colors.semantic.error }}>{labels.loadFailed}</Text>
@@ -55,7 +55,7 @@ export function WorkflowRunsScreen() {
           keyExtractor={(run) => run.id}
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
           refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
-          ListEmptyComponent={<View style={styles.center}><Icon source="source-branch" size={40} color={colors.text.tertiary} /><Text style={{ color: colors.text.tertiary }}>{labels.empty}</Text></View>}
+          ListEmptyComponent={<View style={styles.center}><Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.empty}</Text></View>}
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
@@ -69,7 +69,6 @@ export function WorkflowRunsScreen() {
                 <Text numberOfLines={2} style={[styles.itemTitle, { color: colors.text.primary }]}>{item.title}</Text>
                 <Text style={[styles.meta, { color: colors.accent.primary }]}>{labels.status[item.status]}</Text>
               </View>
-              <Text style={[styles.meta, { color: colors.text.secondary }]}>{item.definitionId}</Text>
               <Text style={[styles.meta, { color: colors.text.tertiary }]}>
                 {labels.progress.replace('{{done}}', String(item.metrics.doneAgentCount)).replace('{{total}}', String(item.metrics.agentCount))}
               </Text>
@@ -262,7 +261,7 @@ function StatusRow({ title, status, detail, detailMarkdown, error }: { title: st
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xxl },
+  content: { paddingHorizontal: spacing.content, paddingVertical: spacing.sm, gap: spacing.sm, paddingBottom: spacing.xxl },
   center: { alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
   resultCard: { paddingBottom: spacing.sm },
@@ -273,5 +272,6 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.label },
   body: { ...typography.body },
   meta: { ...typography.caption },
+  emptyTitle: { ...typography.heading, textAlign: 'center' },
   statusRow: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: spacing.sm, gap: spacing.xs },
 });
