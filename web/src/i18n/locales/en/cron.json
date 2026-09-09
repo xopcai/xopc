@@ -69,7 +69,7 @@
     "workflowDefinition": "Workflow template *",
     "workflowDefinitionPlaceholder": "Select a workflow…",
     "workflowDefinitionsLoading": "Loading workflows…",
-    "workflowDefinitionsEmpty": "No workflows found. Add templates under ~/.xopc/workflows/ or use built-ins.",
+    "workflowDefinitionsEmpty": "No workflows found. Create one in Workflow Studio or use a built-in workflow.",
     "workflowDefinitionCustom": "custom",
     "workflowDefinitionMissing": "This workflow id is not in the current catalog. Pick another template or fix the id.",
     "workflowDefinitionRequired": "Select a workflow template",

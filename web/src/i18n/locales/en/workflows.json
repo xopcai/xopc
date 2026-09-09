@@ -67,7 +67,7 @@
     "copyAndEditWorkflow": "Copy and edit",
     "saveWorkflow": "Save workflow",
     "savingWorkflow": "Saving…",
-    "saveWorkflowSuccess": "Workflow saved to ~/.xopc/workflows/.",
+    "saveWorkflowSuccess": "Workflow saved.",
     "saveWorkflowFailed": "Failed to save workflow.",
     "noDefinitions": "No workflows match your filters.",
     "noDefinitionsHint": "Change the source, category, or search to see other workflows.",

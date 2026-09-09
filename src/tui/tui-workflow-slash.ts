@@ -11,11 +11,8 @@
  *   shortest reliable path is to turn `/audit_repo` into the same plain-text
  *   request the model already knows how to handle.
  *
- * Why catalog the workflow list at the TUI layer?
- *   The catalog reads `~/.xopc/workflows/` synchronously (single `readdir`),
- *   so the slash dispatch stays sync and the user sees no latency. The lookup
- *   only runs for inputs that started with `/` and didn't match any built-in
- *   or extension command, so the cost is negligible.
+ * The lookup only runs for inputs that started with `/` and did not match a
+ * built-in or extension command. A short cache keeps repeated dispatch cheap.
  *
  * Built-in TUI command names that overlap with a workflow file name keep their
  * existing TUI behaviour — the slash dispatcher matches the built-in switch
@@ -28,7 +25,7 @@ let cachedNames: Set<string> | null = null;
 let cachedAt = 0;
 const CACHE_TTL_MS = 5_000;
 
-/** Reset the cache (for tests, or after a `/workflow save`). */
+/** Reset the cache after workflow changes and in tests. */
 export function resetWorkflowSlashCache(): void {
   cachedNames = null;
   cachedAt = 0;
