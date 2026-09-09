@@ -35,6 +35,7 @@ export const GATEWAY_BUILTIN_TOOLS = [
   { id: 'text_to_speech', description: { en: 'Convert text into spoken audio.', zh: '将文本转换为语音音频。' } },
   { id: 'user_context_search', description: { en: 'Search typed user facts and preferences.', zh: '搜索结构化的用户事实与偏好。' } },
   { id: 'user_context_get', description: { en: 'Read a typed user assertion.', zh: '读取一条结构化用户事实。' } },
+  { id: 'user_context_update', description: { en: 'Apply an explicit user correction to an existing assertion.', zh: '根据用户明确表达修正已有用户理解。' } },
   { id: 'knowledge_search', description: { en: 'Search scoped project and workspace knowledge.', zh: '搜索有作用域的项目与工作区知识。' } },
   { id: 'knowledge_get', description: { en: 'Read a scoped knowledge item.', zh: '读取一条有作用域的知识。' } },
   { id: 'knowledge_write', description: { en: 'Store a reviewable knowledge candidate.', zh: '保存一条可审查的知识候选。' } },

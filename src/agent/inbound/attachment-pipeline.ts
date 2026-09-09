@@ -241,6 +241,12 @@ export function setPendingTranscriptUserMessage(sessionKey: string, message: Tra
   pendingTranscriptBySession.set(sessionKey, message);
 }
 
+export function getPendingTranscriptUserText(sessionKey: string): string | undefined {
+  const message = pendingTranscriptBySession.get(sessionKey);
+  if (!message) return undefined;
+  return stripRuntimeUserMessageEnvelope(messageTextForPendingCompare(message)).trim();
+}
+
 export function takePendingTranscriptUserMessage(sessionKey: string): TranscriptUserMessage | undefined {
   const msg = pendingTranscriptBySession.get(sessionKey);
   pendingTranscriptBySession.delete(sessionKey);

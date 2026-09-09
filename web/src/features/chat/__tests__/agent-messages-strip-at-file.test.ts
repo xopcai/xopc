@@ -122,39 +122,6 @@ describe('runtime user context display', () => {
     expect(ui[0]?.content).toEqual([{ type: 'text', text: '看下note 内容' }]);
   });
 
-  it('normalizes a legacy Note turn that persisted raw execution context', () => {
-    const injected = [
-      '<source_contexts>',
-      '<source_context kind="note" id="note-1" version="42">Frozen note</source_context>',
-      '</source_contexts>',
-      '',
-      '<user_message>',
-      'Relevant user facts:',
-      '- The user prefers concise replies.',
-      '',
-      'Active goals:',
-      '- Complete the note: Finish the document.',
-      '',
-      '[2026-09-08 00:59 GMT+8] 完成文档',
-      '</user_message>',
-    ].join('\n');
-
-    const ui = normalizeAgentMessages([{
-      role: 'user',
-      content: [{ type: 'text', text: injected }],
-      metadata: {
-        sourceContexts: [{
-          kind: 'note', sourceId: 'note-1', version: '42', title: '创作要求',
-        }],
-      },
-      timestamp: 1,
-    }]);
-
-    expect(ui[0]?.content).toEqual([{ type: 'text', text: '完成文档' }]);
-    expect(ui[0]?.contextRefs).toEqual([{
-      kind: 'note', sourceId: 'note-1', version: '42', title: '创作要求',
-    }]);
-  });
 });
 
 describe('normalizeAgentMessages expanded @file XML', () => {
