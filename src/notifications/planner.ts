@@ -156,10 +156,47 @@ function proactivePlan(payload: unknown): NotificationPlan | null {
   };
 }
 
+function workDiscoveryPlan(
+  eventType: 'work-discovery.completed' | 'work-discovery.failed',
+  payload: unknown,
+): NotificationPlan | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const event = payload as { runId?: unknown; sessionKey?: unknown; status?: unknown };
+  const completed = eventType === 'work-discovery.completed';
+  if (
+    typeof event.runId !== 'string'
+    || !event.runId
+    || typeof event.sessionKey !== 'string'
+    || !event.sessionKey
+    || event.status !== (completed ? 'completed' : 'failed')
+  ) return null;
+  const type: ProductNotificationType = completed
+    ? 'work_discovery.review_ready'
+    : 'work_discovery.failed';
+  return {
+    dedupeKey: `${type}:${event.runId}`,
+    notification: {
+      type,
+      target: { kind: 'work_discovery', runId: event.runId, sessionKey: event.sessionKey },
+      priority: completed ? 'normal' : 'high',
+      title: completed
+        ? { en: 'Understanding ready for review', zh: '用户理解已可确认' }
+        : { en: 'Understanding needs attention', zh: '用户理解需要处理' },
+      body: completed
+        ? { en: 'Review what xopc learned about your work.', zh: '查看并确认 xopc 对你工作的理解。' }
+        : { en: 'Open user understanding to review or retry.', zh: '打开用户理解，查看详情或重试。' },
+      payload: { runId: event.runId },
+    },
+  };
+}
+
 export function notificationPlanFromGatewayEvent(type: string, payload: unknown): NotificationPlan | null {
   if (type === 'agent.run.ended') return chatPlan(payload);
   if (type === 'task.attention_required.v2' || type === 'task.phase_changed.v2') return taskPlan(payload);
   if (type === 'automation.run.completed') return automationPlan(payload);
   if (type === 'proactive.inbox.created') return proactivePlan(payload);
+  if (type === 'work-discovery.completed' || type === 'work-discovery.failed') {
+    return workDiscoveryPlan(type, payload);
+  }
   return null;
 }

@@ -108,6 +108,33 @@ describe('notificationPlanFromGatewayEvent', () => {
     });
   });
 
+  it('maps work discovery completion and failure to review notifications', () => {
+    expect(notificationPlanFromGatewayEvent('work-discovery.completed', {
+      runId: 'run-understanding',
+      sessionKey: 'agent:main:webchat:one',
+      status: 'completed',
+    })).toMatchObject({
+      dedupeKey: 'work_discovery.review_ready:run-understanding',
+      notification: {
+        type: 'work_discovery.review_ready',
+        target: {
+          kind: 'work_discovery',
+          runId: 'run-understanding',
+          sessionKey: 'agent:main:webchat:one',
+        },
+        priority: 'normal',
+      },
+    });
+    expect(notificationPlanFromGatewayEvent('work-discovery.failed', {
+      runId: 'run-understanding',
+      sessionKey: 'agent:main:webchat:one',
+      status: 'failed',
+    })).toMatchObject({
+      dedupeKey: 'work_discovery.failed:run-understanding',
+      notification: { type: 'work_discovery.failed', priority: 'high' },
+    });
+  });
+
   it('keeps routine information in Home while still pushing decisions', () => {
     expect(notificationPlanFromGatewayEvent('proactive.inbox.created', {
       id: 'info-1', insightId: 'insight-info',

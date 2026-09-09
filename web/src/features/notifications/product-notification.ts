@@ -15,7 +15,7 @@ export type ProductNotificationPresentation = {
   route: string;
   target: NotificationTarget;
   status: 'success' | 'error';
-  source: 'chat' | 'task' | 'automation' | 'insight';
+  source: 'chat' | 'task' | 'automation' | 'insight' | 'understanding';
 };
 
 export function parseProductNotification(value: unknown): ProductNotification | null {
@@ -32,12 +32,15 @@ export function presentProductNotification(
     || notification.type === 'task.blocked'
     || notification.type === 'task.failed'
     || notification.type === 'task.needs_input'
-    || notification.type === 'automation.failed';
+    || notification.type === 'automation.failed'
+    || notification.type === 'work_discovery.failed';
   const source = notification.target.kind === 'automation_run'
     ? 'automation'
     : notification.target.kind === 'insight'
       ? 'insight'
-      : notification.target.kind;
+      : notification.target.kind === 'work_discovery'
+        ? 'understanding'
+        : notification.target.kind;
   return {
     id: notification.id,
     title: localized.localizedTitle,

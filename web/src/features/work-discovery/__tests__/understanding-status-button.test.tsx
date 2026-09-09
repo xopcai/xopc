@@ -60,7 +60,7 @@ describe('UnderstandingStatusButton', () => {
     useUnderstandingActivityStore.getState().finish();
   });
 
-  it('stays hidden outside the user-model page', () => {
+  it('keeps the review indicator visible on chat while understanding is ready', () => {
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat']}>
@@ -69,7 +69,20 @@ describe('UnderstandingStatusButton', () => {
       );
     });
 
-    expect(container.querySelector('[aria-label="Review what xopc understands"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Review what xopc understands"]')).not.toBeNull();
+  });
+
+  it('stays hidden outside the user-model page when there is no activity', () => {
+    useUnderstandingActivityStore.getState().finish();
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/chat']}>
+          <UnderstandingStatusButton persistent />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.querySelector('[data-work-discovery-trigger]')).toBeNull();
   });
 
   it('reviews a completed directory run in place instead of navigating back to onboarding', async () => {
@@ -88,5 +101,17 @@ describe('UnderstandingStatusButton', () => {
     expect(document.body.textContent).toContain('Here is what I understand so far');
     expect(document.body.textContent).not.toContain('Review and confirm');
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/user-model');
+  });
+
+  it('opens a completed run linked from a product notification', async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/user-model?workDiscovery=review&run=run-ready']}>
+          <UnderstandingStatusButton persistent />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(document.body.textContent).toContain('Here is what I understand so far');
   });
 });

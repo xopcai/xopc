@@ -10,6 +10,7 @@ import { loadWorkDiscoveryOverlay, preloadRouteForPath } from '@/lib/route-prelo
 import { useLocaleStore } from '@/stores/locale-store';
 
 import {
+  fetchWorkDiscoveryRun,
   submitWorkDiscoveryRecognitionFeedback,
   updateWorkDiscoveryProfile,
   type WorkDiscoveryProfileCandidate,
@@ -32,16 +33,36 @@ export function UnderstandingStatusButton({
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const zh = language === 'zh';
+  const onUserModelPage = pathname === '/user-model';
   const pendingCount = state.memories.filter((memory) => memory.status === 'pending').length
     + (state.directoryRun?.status === 'completed' && !state.directoryRun.feedback?.recognitionDecision ? 1 : 0);
 
   useEffect(() => {
-    if (pathname !== '/user-model' || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
+    if (!onUserModelPage || !state.drawerOpen || state.status === 'running' || pendingCount > 0) return;
     const timer = window.setTimeout(state.finish, 800);
     return () => window.clearTimeout(timer);
-  }, [pathname, pendingCount, state.drawerOpen, state.finish, state.status]);
+  }, [onUserModelPage, pendingCount, state.drawerOpen, state.finish, state.status]);
 
-  if (pathname !== '/user-model') return null;
+  useEffect(() => {
+    if (!onUserModelPage) return;
+    const params = new URLSearchParams(search);
+    if (params.get('workDiscovery') !== 'review') return;
+    const runId = params.get('run');
+    let cancelled = false;
+    void (async () => {
+      if (runId && useUnderstandingActivityStore.getState().directoryRun?.id !== runId) {
+        try {
+          const run = await fetchWorkDiscoveryRun(runId);
+          if (cancelled) return;
+          useUnderstandingActivityStore.getState().updateDirectoryRun(run);
+        } catch {
+          return;
+        }
+      }
+      if (!cancelled) useUnderstandingActivityStore.getState().setDrawerOpen(true);
+    })();
+    return () => { cancelled = true; };
+  }, [onUserModelPage, search]);
 
   const preloadWorkDiscovery = () => {
     if (persistent) void loadWorkDiscoveryOverlay();
@@ -56,7 +77,7 @@ export function UnderstandingStatusButton({
   };
 
   if (state.status === 'idle') {
-    if (!persistent) return null;
+    if (!persistent || !onUserModelPage) return null;
     const label = language === 'zh' ? '重新理解工作上下文' : 'Refresh work context';
     return (
       <Button

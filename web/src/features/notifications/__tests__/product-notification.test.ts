@@ -32,4 +32,18 @@ describe('product notification presentation', () => {
   it('rejects malformed realtime payloads', () => {
     expect(parseProductNotification({ ...event, target: { kind: 'chat', sessionKey: '' } })).toBeNull();
   });
+
+  it('presents failed work discovery as an understanding alert', () => {
+    expect(presentProductNotification({
+      ...event,
+      id: 'notification-understanding',
+      type: 'work_discovery.failed',
+      target: { kind: 'work_discovery', runId: 'run-1', sessionKey: 'session-1' },
+      title: { en: 'Understanding needs attention', zh: '用户理解需要处理' },
+    }, 'zh')).toMatchObject({
+      status: 'error',
+      source: 'understanding',
+      route: '/user-model?workDiscovery=review&run=run-1',
+    });
+  });
 });

@@ -34,6 +34,11 @@ describe('notification targets', () => {
       web: '/?judgment=item%3Fone',
       mobile: '/inbox?item=item%3Fone',
     },
+    {
+      target: { kind: 'work_discovery', runId: 'run/one', sessionKey: 'agent:main' },
+      web: '/user-model?workDiscovery=review&run=run%2Fone',
+      mobile: '/chat/agent%3Amain',
+    },
   ];
 
   it.each(cases)('derives safe routes for $target.kind', ({ target, web, mobile }) => {
