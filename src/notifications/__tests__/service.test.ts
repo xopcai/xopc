@@ -87,4 +87,33 @@ describe('NotificationService', () => {
     await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ dead: 1 }));
     expect(getNotificationDevice('device-1')?.enabled).toBe(false);
   });
+
+  it('publishes and queues a review notification when work discovery completes', async () => {
+    const published: unknown[] = [];
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      data: { status: 'ok', id: 'ticket-understanding' },
+    }), { status: 200 }));
+    const service = new NotificationService({
+      publish: (_type, payload) => published.push(payload),
+      fetch: fetchMock,
+    });
+
+    service.handleGatewayEvent('work-discovery.completed', {
+      runId: 'run-understanding',
+      sessionKey: 'session-understanding',
+      status: 'completed',
+    });
+
+    await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 }));
+    expect(published).toEqual([
+      expect.objectContaining({
+        type: 'work_discovery.review_ready',
+        target: {
+          kind: 'work_discovery',
+          runId: 'run-understanding',
+          sessionKey: 'session-understanding',
+        },
+      }),
+    ]);
+  });
 });
