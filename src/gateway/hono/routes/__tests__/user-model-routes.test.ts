@@ -153,4 +153,54 @@ describe('user model routes', () => {
     expect(clear.status).toBe(200);
     expect(result.profile).not.toHaveProperty('role');
   });
+
+  it('bootstraps explicit role, goals, collaboration rules, and relationships idempotently', async () => {
+    const payload = {
+      profile: { callName: 'Mic', role: 'Founder', timezone: 'Asia/Shanghai', locale: 'zh-CN' },
+      responsibilities: ['Own product direction'],
+      goals: ['Ship the private beta'],
+      communicationPreferences: ['Lead with the conclusion'],
+      boundaries: ['Ask before sending anything externally'],
+      relationships: ['Alice is my cofounder'],
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await app.request('/api/user-model/bootstrap', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      expect(response.status).toBe(201);
+      if (attempt === 1) {
+        await expect(response.json()).resolves.toMatchObject({
+          created: { assertions: 0, goals: 0, rules: 0 },
+        });
+      }
+    }
+
+    const summary = await (await app.request('/api/user-model')).json() as {
+      profile: Record<string, unknown>;
+      assertions: Array<{ kind: string; statement: string; status: string }>;
+      goals: Array<{ desiredOutcome: string; status: string }>;
+      rules: Array<{ category: string; statement: string; status: string; conditions: Record<string, unknown> }>;
+      priorities: Array<{ targetType: string; status: string }>;
+    };
+    expect(summary.profile).toMatchObject({ callName: 'Mic', role: 'Founder', locale: 'zh-CN' });
+    expect(summary.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'identity', statement: 'Own product direction', status: 'active' }),
+      expect.objectContaining({ kind: 'relationship', statement: 'Alice is my cofounder', status: 'active' }),
+    ]));
+    expect(summary.goals).toEqual([
+      expect.objectContaining({ desiredOutcome: 'Ship the private beta', status: 'active' }),
+    ]);
+    expect(summary.priorities).toEqual([
+      expect.objectContaining({ targetType: 'goal', status: 'active' }),
+    ]);
+    expect(summary.rules).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'communication', statement: 'Lead with the conclusion', status: 'active' }),
+      expect.objectContaining({
+        category: 'boundary', statement: 'Ask before sending anything externally', status: 'active',
+        conditions: expect.objectContaining({ enforcementLevel: 'prompt' }),
+      }),
+    ]));
+  });
 });

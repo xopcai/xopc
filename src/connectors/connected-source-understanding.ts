@@ -68,10 +68,12 @@ export function connectedItemsForUnderstanding(items: KnowledgeSourceItem[]): Un
     });
 }
 
-type PortraitCandidate = WorkDiscoveryProfileCandidate & { category: 'preference' | 'routine' };
+type PortraitCandidate = WorkDiscoveryProfileCandidate & { category: 'preference' | 'routine' | 'communication' };
 
 function isPortraitCandidate(candidate: WorkDiscoveryProfileCandidate): candidate is PortraitCandidate {
-  return candidate.category === 'preference' || candidate.category === 'routine';
+  return candidate.category === 'preference'
+    || candidate.category === 'routine'
+    || candidate.category === 'communication';
 }
 
 function durableEvidence(candidate: PortraitCandidate, items: Map<string, UnderstandingSourceItem>) {
@@ -136,7 +138,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
           predicate: `${candidate.category}.connected.${candidate.factKey}`,
           cardinality: 'single',
           scope: { type: 'agent', id: input.agentId },
-          kind: candidate.category,
+          kind: candidate.category === 'communication' ? 'preference' : candidate.category,
           value: candidate.statement,
           normalizedValue: candidate.statement.toLocaleLowerCase(),
           statement: candidate.statement,
@@ -145,8 +147,8 @@ export async function deriveConnectedSourceUnderstanding(input: {
           inferredImportance: 0.65,
           consequence: 'medium',
           actionability: 0.6,
-          volatility: candidate.category === 'routine' ? 'slow' : 'stable',
-          sensitivity: 'personal',
+          volatility: candidate.category === 'routine' || candidate.category === 'communication' ? 'slow' : 'stable',
+          sensitivity: 'normal',
           disclosurePolicy: 'referenceable',
           observedAt: evidenceItem.occurredAt ?? evidenceItem.modifiedAt ?? Date.now(),
           createdBy: 'connector',

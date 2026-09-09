@@ -8,6 +8,7 @@ import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { listCollaborationRules } from '../../storage/sqlite/collaboration-rule-repository.js';
 import { calculateExecutionValue } from '../../user-model/importance.js';
 import { listUserAssertions } from '../../user-model/repository.js';
+import { isWorkingAssumption } from '../../user-model/usage-policy.js';
 import type { UserAssertion, UserModelScope } from '../../user-model/domain.js';
 import { buildUserContextBlock } from '../memory/context-fence.js';
 import { getExecutionContextFeedbackScores } from './audit.js';
@@ -94,7 +95,12 @@ function rankAssertion(
     feedbackScore > 0 ? 'historically_helpful' : '',
     feedbackScore < 0 ? 'historically_irrelevant' : '',
   ].filter(Boolean);
-  return { assertion, score, reasons };
+  return {
+    assertion,
+    usage: assertion.status === 'active' ? 'confirmed' : 'working_assumption',
+    score: assertion.status === 'candidate' ? score - 0.05 : score,
+    reasons,
+  };
 }
 
 function ruleEnforcement(conditions: Record<string, unknown>): RuleEnforcementLevel {
@@ -135,6 +141,7 @@ function loadGoals(context: ExecutionContextRequest, asOf: number): ExecutionGoa
     title: row.title,
     desiredOutcome: row.desired_outcome,
     status: row.status,
+    usage: row.status === 'active' ? 'confirmed' : 'working_assumption',
     ...(row.declared_importance === null ? {} : { declaredImportance: row.declared_importance }),
     ...(row.target_at === null ? {} : { targetAt: row.target_at }),
   }));
@@ -167,7 +174,8 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
   const asOf = request.asOf ?? Date.now();
   const includeUserModel = request.includeUserModel !== false;
   const feedbackScores = getExecutionContextFeedbackScores();
-  const assertions = includeUserModel ? listUserAssertions({ statuses: ['active'], limit: 1_000 })
+  const assertionLimit = Math.max(1, Math.min(100, request.maxAssertions ?? 20));
+  const rankedAssertions = includeUserModel ? listUserAssertions({ statuses: ['active', 'candidate'], limit: 1_000 })
     .filter((item) => scopeVisible(getAssertionScope(item.slotId), request))
     .filter((item) => applicabilityVisible(item.applicability, request))
     .filter((item) => (item.validFrom === undefined || item.validFrom <= asOf)
@@ -175,6 +183,7 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
     .filter((item) => item.authority !== 'external_untrusted')
     .filter((item) => item.sensitivity !== 'secret' && item.sensitivity !== 'regulated'
       && item.disclosurePolicy !== 'ask_before_reference')
+    .filter((item) => item.status === 'active' || isWorkingAssumption(item))
     .map((item) => rankAssertion(
       item,
       request.query,
@@ -182,8 +191,11 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
       feedbackScores.get(`assertion:${item.id}`) ?? 0,
     ))
     .filter((item) => item.score >= 0.12 || item.reasons.includes('high_consequence'))
-    .sort((left, right) => right.score - left.score)
-    .slice(0, Math.max(1, Math.min(100, request.maxAssertions ?? 20))) : [];
+    .sort((left, right) => right.score - left.score) : [];
+  const assertions = [
+    ...rankedAssertions.filter((item) => item.usage === 'confirmed'),
+    ...rankedAssertions.filter((item) => item.usage === 'working_assumption'),
+  ].slice(0, assertionLimit);
   const maxKnowledge = Math.max(0, Math.min(100, request.maxKnowledge ?? 12));
   const knowledge = request.includeKnowledge === false || maxKnowledge === 0
     ? []
@@ -227,11 +239,21 @@ export function renderExecutionContext(context: ExecutionContext): string {
   if (context.rules.length) {
     sections.push(`Collaboration rules:\n${context.rules.map((rule) => `- ${rule.statement}`).join('\n')}`);
   }
-  if (context.assertions.length) {
-    sections.push(`Relevant user facts:\n${context.assertions.map((item) => `- ${item.assertion.statement}`).join('\n')}`);
+  const confirmedAssertions = context.assertions.filter((item) => item.usage === 'confirmed');
+  const workingAssumptions = context.assertions.filter((item) => item.usage === 'working_assumption');
+  if (confirmedAssertions.length) {
+    sections.push(`Confirmed user context:\n${confirmedAssertions.map((item) => `- ${item.assertion.statement}`).join('\n')}`);
   }
-  if (context.goals.length) {
-    sections.push(`Active goals:\n${context.goals.map((goal) => `- ${goal.title}: ${goal.desiredOutcome}`).join('\n')}`);
+  if (workingAssumptions.length) {
+    sections.push(`Working assumptions (may be wrong; adapt quietly, never present them as confirmed facts, and accept corrections immediately):\n${workingAssumptions.map((item) => `- ${item.assertion.statement} (confidence ${item.assertion.confidence.toFixed(2)})`).join('\n')}`);
+  }
+  const confirmedGoals = context.goals.filter((goal) => goal.usage === 'confirmed');
+  const assumedGoals = context.goals.filter((goal) => goal.usage === 'working_assumption');
+  if (confirmedGoals.length) {
+    sections.push(`Confirmed goals:\n${confirmedGoals.map((goal) => `- ${goal.title}: ${goal.desiredOutcome}`).join('\n')}`);
+  }
+  if (assumedGoals.length) {
+    sections.push(`Possible goals (not yet confirmed):\n${assumedGoals.map((goal) => `- ${goal.title}: ${goal.desiredOutcome}`).join('\n')}`);
   }
   if (context.priorities.length) {
     sections.push(`Current priorities:\n${context.priorities.map((item) => `- ${item.rank}: ${item.targetType}/${item.targetId}`).join('\n')}`);
