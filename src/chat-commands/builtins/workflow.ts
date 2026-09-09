@@ -72,7 +72,7 @@ function formatWorkflowListContent(entries: CatalogEntry[]): string {
 const workflowsCommand: CommandDefinition = {
   id: 'system.workflows',
   name: 'workflows',
-  description: 'List saved workflows (built-in + ~/.xopc/workflows/)',
+  description: 'List built-in and saved workflows',
   category: 'system',
   scope: ['global', 'private', 'group'],
   handler: async (_ctx: CommandContext) => {

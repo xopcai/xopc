@@ -29,6 +29,16 @@ describe('workflow graph validation', () => {
     expect(validateWorkflowDefinitionInput({ name: 'demo' }).errors[0]?.code).toBe('graph_required');
   });
 
+  it('rejects malformed manifest limits', () => {
+    const result = validateWorkflowDefinitionInput({
+      name: 'demo_workflow',
+      graph: validGraph,
+      manifest: { defaults: { concurrency: 0 } },
+    });
+
+    expect(result.errors).toContainEqual(expect.objectContaining({ code: 'invalid_manifest', field: 'manifest.defaults.concurrency' }));
+  });
+
   it('reports multiple structural problems at once', () => {
     const graph: WorkflowGraph = {
       schemaVersion: 1,
