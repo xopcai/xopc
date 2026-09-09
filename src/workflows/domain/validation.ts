@@ -1,4 +1,4 @@
-import type { WorkflowDefinition, WorkflowGraph, WorkflowGraphNode } from './definition.js';
+import type { WorkflowDefinition, WorkflowDefinitionManifest, WorkflowGraph, WorkflowGraphNode } from './definition.js';
 import { buildWorkflowDefinition } from './definition-utils.js';
 
 export type WorkflowDefinitionValidationIssueCode =
@@ -18,6 +18,7 @@ export type WorkflowDefinitionValidationIssueCode =
   | 'unreachable_node'
   | 'dead_end_node'
   | 'missing_prompt'
+  | 'invalid_manifest'
   | 'invalid_node_config';
 
 export interface WorkflowDefinitionValidationIssue {
@@ -37,9 +38,8 @@ export interface WorkflowDefinitionValidationResult {
 
 export interface ValidateWorkflowDefinitionInput {
   name?: string;
-  graph?: WorkflowGraph;
-  title?: string;
-  description?: string;
+  graph?: unknown;
+  manifest?: unknown;
 }
 
 const NAME_RE = /^[a-z][a-z0-9_-]*$/;
@@ -47,7 +47,7 @@ const NAME_RE = /^[a-z][a-z0-9_-]*$/;
 export function validateWorkflowDefinitionInput(
   input: ValidateWorkflowDefinitionInput,
 ): WorkflowDefinitionValidationResult {
-  const name = input.name?.trim() ?? '';
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
   const errors: WorkflowDefinitionValidationIssue[] = [];
   const warnings: WorkflowDefinitionValidationIssue[] = [];
 
@@ -61,13 +61,18 @@ export function validateWorkflowDefinitionInput(
     });
   }
 
+  const graph = isWorkflowGraphInput(input.graph) ? input.graph : undefined;
   if (!input.graph) {
     errors.push({ code: 'graph_required', message: 'Workflow graph is required.', field: 'graph' });
+  } else if (!graph) {
+    errors.push({ code: 'invalid_node_config', message: 'Workflow graph has an invalid structure.', field: 'graph' });
   } else {
-    validateWorkflowGraph(input.graph, errors, warnings);
+    validateWorkflowGraph(graph, errors, warnings);
   }
 
-  if (errors.length > 0 || !input.graph) return { valid: false, errors, warnings };
+  const manifest = validateManifest(input.manifest, errors);
+
+  if (errors.length > 0 || !graph) return { valid: false, errors, warnings };
 
   return {
     valid: true,
@@ -76,13 +81,102 @@ export function validateWorkflowDefinitionInput(
     definition: buildWorkflowDefinition({
       name,
       source: 'user',
-      graph: input.graph,
-      manifest: {
-        title: input.title,
-        description: input.description,
-      },
+      graph,
+      manifest,
     }),
   };
+}
+
+function validateManifest(value: unknown, errors: WorkflowDefinitionValidationIssue[]): WorkflowDefinitionManifest | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    errors.push({ code: 'invalid_manifest', message: 'Workflow manifest must be an object.', field: 'manifest' });
+    return undefined;
+  }
+  for (const field of ['title', 'description', 'version', 'whenToUse'] as const) {
+    if (value[field] !== undefined && typeof value[field] !== 'string') {
+      errors.push({ code: 'invalid_manifest', message: `Workflow manifest ${field} must be a string.`, field: `manifest.${field}` });
+    }
+  }
+  if (value.tags !== undefined && (!Array.isArray(value.tags) || value.tags.some((tag) => typeof tag !== 'string'))) {
+    errors.push({ code: 'invalid_manifest', message: 'Workflow manifest tags must be strings.', field: 'manifest.tags' });
+  }
+  if (value.defaults !== undefined) {
+    if (!isRecord(value.defaults)) {
+      errors.push({ code: 'invalid_manifest', message: 'Workflow manifest defaults must be an object.', field: 'manifest.defaults' });
+    } else {
+      for (const field of ['concurrency', 'timeoutSec', 'maxSubagents'] as const) {
+        const limit = value.defaults[field];
+        if (limit !== undefined && (typeof limit !== 'number' || !Number.isFinite(limit) || limit < 1)) {
+          errors.push({ code: 'invalid_manifest', message: `Workflow manifest ${field} must be a positive number.`, field: `manifest.defaults.${field}` });
+        }
+      }
+    }
+  }
+  if (value.inputSchema !== undefined && !isRecord(value.inputSchema)) {
+    errors.push({ code: 'invalid_manifest', message: 'Workflow inputSchema must be an object.', field: 'manifest.inputSchema' });
+  }
+  if (value.outputSchema !== undefined && !isRecord(value.outputSchema)) {
+    errors.push({ code: 'invalid_manifest', message: 'Workflow outputSchema must be an object.', field: 'manifest.outputSchema' });
+  }
+  if (value.permissions !== undefined) {
+    const permissions = value.permissions;
+    if (!isRecord(permissions)
+      || (permissions.tools !== undefined && (!Array.isArray(permissions.tools) || permissions.tools.some((tool) => typeof tool !== 'string')))
+      || (permissions.network !== undefined && typeof permissions.network !== 'boolean')
+      || (permissions.approvalRequired !== undefined && typeof permissions.approvalRequired !== 'boolean')
+      || (permissions.fileSystem !== undefined && !['read', 'write', 'none'].includes(String(permissions.fileSystem)))) {
+      errors.push({ code: 'invalid_manifest', message: 'Workflow permissions have an invalid structure.', field: 'manifest.permissions' });
+    }
+  }
+  if (value.resources !== undefined) {
+    const resources = value.resources;
+    const stringListsValid = isRecord(resources) && ['skills', 'contextFiles', 'promptTemplates'].every((field) => (
+      resources[field] === undefined || (Array.isArray(resources[field]) && resources[field].every((item) => typeof item === 'string'))
+    ));
+    if (!stringListsValid) errors.push({ code: 'invalid_manifest', message: 'Workflow resources have an invalid structure.', field: 'manifest.resources' });
+  }
+  if (value.connectors !== undefined && (!Array.isArray(value.connectors) || value.connectors.some((connector) => (
+    !isRecord(connector)
+    || typeof connector.connectorId !== 'string'
+    || (connector.scope !== undefined && !['read', 'write', 'admin'].includes(String(connector.scope)))
+    || (connector.connectionRequired !== undefined && typeof connector.connectionRequired !== 'boolean')
+    || (connector.optional !== undefined && typeof connector.optional !== 'boolean')
+    || (connector.reason !== undefined && typeof connector.reason !== 'string')
+  )))) {
+    errors.push({ code: 'invalid_manifest', message: 'Workflow connectors must contain connectorId strings.', field: 'manifest.connectors' });
+  }
+  return value as WorkflowDefinitionManifest;
+}
+
+function isWorkflowGraphInput(value: unknown): value is WorkflowGraph {
+  if (!isRecord(value) || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) return false;
+  const nodesValid = value.nodes.every((node) => isRecord(node)
+    && typeof node.id === 'string'
+    && typeof node.title === 'string'
+    && ['input', 'agent', 'decision', 'merge', 'output'].includes(String(node.kind))
+    && isRecord(node.position)
+    && typeof node.position.x === 'number'
+    && Number.isFinite(node.position.x)
+    && typeof node.position.y === 'number'
+    && Number.isFinite(node.position.y)
+    && isRecord(node.config)
+    && (node.kind !== 'agent' || typeof node.config.prompt === 'string')
+    && (node.kind !== 'decision' || (
+      isRecord(node.config.rule)
+      && typeof node.config.rule.path === 'string'
+      && ['exists', 'equals', 'not_equals', 'contains'].includes(String(node.config.rule.operator))
+    ))
+    && (node.kind !== 'merge' || ['array', 'object'].includes(String(node.config.mode))));
+  const edgesValid = value.edges.every((edge) => isRecord(edge)
+    && typeof edge.id === 'string'
+    && typeof edge.source === 'string'
+    && typeof edge.target === 'string');
+  return nodesValid && edgesValid;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 export function validateWorkflowGraph(

@@ -67,7 +67,7 @@
     "copyAndEditWorkflow": "复制后编辑",
     "saveWorkflow": "保存工作流",
     "savingWorkflow": "保存中…",
-    "saveWorkflowSuccess": "工作流已保存到 ~/.xopc/workflows/。",
+    "saveWorkflowSuccess": "工作流已保存。",
     "saveWorkflowFailed": "保存工作流失败。",
     "noDefinitions": "没有匹配的工作流。",
     "noDefinitionsHint": "调整来源、分类或搜索条件，查看其他工作流。",

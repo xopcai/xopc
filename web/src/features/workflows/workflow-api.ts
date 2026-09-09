@@ -42,7 +42,16 @@ export interface WorkflowDefinition {
   defaults: WorkflowDefinitionDefaults;
   permissions?: WorkflowPermissionPolicy;
   resources?: WorkflowResourceRefs;
+  connectors?: WorkflowConnectorRequirement[];
   metadata: WorkflowDefinitionMetadata;
+}
+
+export interface WorkflowConnectorRequirement {
+  connectorId: string;
+  scope?: 'read' | 'write' | 'admin';
+  connectionRequired?: boolean;
+  optional?: boolean;
+  reason?: string;
 }
 
 export interface WorkflowPermissionPolicy {
@@ -231,6 +240,7 @@ export interface WorkflowRunDefinitionSnapshot {
   id: string;
   name: string;
   title: string;
+  description?: string;
   version: string;
   contentHash?: string;
   revision: number;
@@ -241,6 +251,12 @@ export interface WorkflowRunDefinitionSnapshot {
   defaults?: WorkflowDefinitionDefaults;
   permissions?: WorkflowPermissionPolicy;
   resources?: WorkflowResourceRefs;
+  connectors?: WorkflowConnectorRequirement[];
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  whenToUse?: string;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
+  i18n?: Record<string, WorkflowDefinitionLocaleBundle>;
   estimatedAgents?: WorkflowDefinitionEstimatedAgents;
 }
 
@@ -524,8 +540,11 @@ export interface WorkflowDefinitionManifest {
   defaults?: Partial<WorkflowDefinitionDefaults>;
   tags?: string[];
   whenToUse?: string;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
+  i18n?: Record<string, WorkflowDefinitionLocaleBundle>;
   permissions?: WorkflowPermissionPolicy;
   resources?: WorkflowResourceRefs;
+  connectors?: WorkflowConnectorRequirement[];
   estimatedAgents?: WorkflowDefinitionEstimatedAgents;
 }
 
@@ -581,10 +600,11 @@ export async function removeProjectWorkflowPreset(projectId: string, definitionI
 export async function validateWorkflowDefinition(
   name: string,
   graph: WorkflowGraph,
+  manifest: WorkflowDefinitionManifest,
 ): Promise<ValidateWorkflowDefinitionResponse> {
   return fetchJson<ValidateWorkflowDefinitionResponse>(apiUrl('/api/workflows/definitions/validate'), {
     method: 'POST',
-    body: JSON.stringify({ name, graph }),
+    body: JSON.stringify({ name, graph, manifest }),
   });
 }
 
@@ -625,6 +645,13 @@ export async function listWorkflowRevisions(id: string): Promise<WorkflowRevisio
     apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}/revisions`),
   );
   return data.revisions ?? [];
+}
+
+export async function getWorkflowRevision(id: string, revision: number): Promise<WorkflowDefinition> {
+  const data = await fetchJson<{ definition: WorkflowDefinition }>(
+    apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}/revisions/${revision}`),
+  );
+  return data.definition;
 }
 
 export async function restoreWorkflowRevision(

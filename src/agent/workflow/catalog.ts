@@ -4,7 +4,7 @@ import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 
 import type { WorkflowDefinition, WorkflowDefinitionManifest, WorkflowGraph } from '../../workflows/domain/definition.js';
 import { buildWorkflowDefinition } from '../../workflows/domain/definition-utils.js';
-import { validateWorkflowGraph } from '../../workflows/domain/validation.js';
+import { validateWorkflowDefinitionInput } from '../../workflows/domain/validation.js';
 
 import { BUILTIN_WORKFLOWS } from './builtins/index.js';
 
@@ -72,7 +72,7 @@ export function createWorkflowCatalog(): WorkflowCatalog {
   const save = (input: SaveWorkflowInput): { definition: WorkflowDefinition } => {
     const name = input.name.trim();
     requireValidName(name);
-    const validation = validateWorkflowGraph(input.graph);
+    const validation = validateWorkflowDefinitionInput({ name, graph: input.graph, manifest: input.manifest });
     if (!validation.valid) throw new Error(validation.errors.map((issue) => issue.message).join(' '));
     requireXopcDatabase();
     return runSqliteWriteTransaction(() => {

@@ -16,7 +16,10 @@ export function definitionToManifest(
     tags: definition.metadata.tags,
     whenToUse: definition.metadata.whenToUse,
     estimatedAgents: definition.metadata.estimatedAgents,
+    examplePrompts: definition.metadata.examplePrompts,
+    i18n: definition.metadata.i18n,
     permissions: definition.permissions,
     resources: definition.resources,
+    connectors: definition.connectors,
   };
 }

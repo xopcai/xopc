@@ -69,7 +69,7 @@
     "workflowDefinition": "工作流模板 *",
     "workflowDefinitionPlaceholder": "选择工作流…",
     "workflowDefinitionsLoading": "正在加载工作流…",
-    "workflowDefinitionsEmpty": "未找到工作流。可在 ~/.xopc/workflows/ 添加，或使用内置模板。",
+    "workflowDefinitionsEmpty": "未找到工作流。可在工作流工作室中创建，或使用内置工作流。",
     "workflowDefinitionCustom": "自定义",
     "workflowDefinitionMissing": "该工作流 ID 不在当前目录中，请重新选择或修正 ID。",
     "workflowDefinitionRequired": "请选择工作流模板",

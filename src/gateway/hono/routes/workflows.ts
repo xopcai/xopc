@@ -194,6 +194,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const result = validateWorkflowDefinitionInput({
       name: body.name,
       graph: body.graph,
+      manifest: body.manifest,
     });
     return c.json(result);
   });
@@ -229,6 +230,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const validation = validateWorkflowDefinitionInput({
       name: body.name,
       graph: body.graph,
+      manifest: body.manifest,
     });
     if (!validation.valid) {
       return c.json({ error: validation.errors[0]?.message ?? 'Invalid workflow definition', validation }, 400);
@@ -268,7 +270,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision! < 1) {
       return c.json({ error: 'expectedRevision is required' }, 400);
     }
-    const validation = validateWorkflowDefinitionInput({ name: id, graph: body.graph });
+    const validation = validateWorkflowDefinitionInput({ name: id, graph: body.graph, manifest: body.manifest });
     if (!validation.valid) {
       return c.json({ error: validation.errors[0]?.message ?? 'Invalid workflow definition', validation }, 400);
     }
