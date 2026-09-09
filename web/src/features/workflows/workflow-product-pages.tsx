@@ -23,6 +23,8 @@ import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 import { ACTIVE_RUN_STATUSES, type WorkflowRunPanelTab } from './workflow-page.constants';
 import { WorkflowRunPanel } from './workflow-run-panel';
 import { WorkflowRunSetupPanel, type WorkflowRunSetupValue } from './workflow-run-setup-panel';
+import { WorkflowSourcePanel } from './workflow-source-panel';
+import { serializeWorkflowSourceDocument, workflowDefinitionToSourceDocument } from './workflow-source';
 import { useWorkflowRunLive } from './use-workflow-run-live';
 import {
   parseWorkflowSaveConflict,
@@ -97,6 +99,7 @@ export function WorkflowDetailPage() {
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const { ownerAgentId } = useWorkflowOwnerAgent();
   const projectId = searchParams.get('projectId')?.trim() || undefined;
+  const definitionView = searchParams.get('view') === 'source' ? 'source' : 'canvas';
   const { definition, loading, error } = useWorkflowDefinition(definitionId);
   const projects = useSWR('workflow-project-options', () => fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' }), { revalidateOnFocus: false });
   const projectPresets = useSWR(
@@ -182,6 +185,14 @@ export function WorkflowDetailPage() {
   if (ownerAgentId) runParams.set('agentId', ownerAgentId);
   if (projectId) runParams.set('projectId', projectId);
   const runSearch = runParams.size ? `?${runParams.toString()}` : '';
+  const setDefinitionView = (view: 'canvas' | 'source') => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (view === 'source') next.set('view', 'source');
+      else next.delete('view');
+      return next;
+    }, { replace: true });
+  };
 
   let editHref: string | null = null;
   if (definition) {
@@ -255,11 +266,36 @@ export function WorkflowDetailPage() {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
       <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6">
-        <p className="max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="max-w-3xl text-sm leading-6 text-fg-muted">{localized.description}</p>
+          <div className="flex rounded-lg bg-surface-base p-1" role="tablist" aria-label={language === 'zh' ? '工作流视图' : 'Workflow view'}>
+            {(['canvas', 'source'] as const).map((view) => (
+              <button
+                key={view}
+                type="button"
+                role="tab"
+                aria-selected={definitionView === view}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium ${definitionView === view ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg'}`}
+                onClick={() => setDefinitionView(view)}
+              >
+                {view === 'canvas' ? (language === 'zh' ? '画布' : 'Canvas') : (language === 'zh' ? '源码' : 'Source')}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-w-0">
-            <WorkflowDefinitionGraph graph={definition.graph} language={language} className="h-[28rem] rounded-xl border border-edge" />
+            {definitionView === 'source' ? (
+              <WorkflowSourcePanel
+                initialSource={serializeWorkflowSourceDocument(workflowDefinitionToSourceDocument(definition))}
+                resetKey={`${definition.id}:${definition.revision}`}
+                fileName={`${definition.name}.workflow.json`}
+                language={language}
+              />
+            ) : (
+              <WorkflowDefinitionGraph graph={definition.graph} language={language} className="h-[28rem] rounded-xl border border-edge" />
+            )}
           </div>
 
           <aside className="rounded-xl border border-edge bg-surface-base/45 p-4">

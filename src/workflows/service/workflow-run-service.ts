@@ -816,6 +816,7 @@ export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinitio
     id: definition.id,
     name: definition.name,
     title: definition.title,
+    description: definition.description,
     version: definition.version,
     revision: definition.revision,
     graph: structuredClone(definition.graph),
@@ -824,10 +825,16 @@ export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinitio
     phaseCount: definition.phases.length,
     defaults: { ...definition.defaults },
     estimatedAgents: definition.metadata.estimatedAgents,
+    whenToUse: definition.metadata.whenToUse,
+    examplePrompts: definition.metadata.examplePrompts,
+    i18n: definition.metadata.i18n,
   };
   if (definition.contentHash) snapshot.contentHash = definition.contentHash;
   if (definition.permissions) snapshot.permissions = structuredClone(definition.permissions);
   if (definition.resources) snapshot.resources = structuredClone(definition.resources);
+  if (definition.connectors) snapshot.connectors = structuredClone(definition.connectors);
+  if (definition.inputSchema) snapshot.inputSchema = structuredClone(definition.inputSchema);
+  if (definition.outputSchema) snapshot.outputSchema = structuredClone(definition.outputSchema);
   return snapshot;
 }
 

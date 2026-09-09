@@ -40,7 +40,7 @@ export const WORKFLOW_STATUS_FILTERS = ['all', 'attention', 'running', 'queued',
 export type WorkflowStatusFilter = (typeof WORKFLOW_STATUS_FILTERS)[number];
 export const WORKFLOW_STATUS_FILTER_SET = new Set<string>(WORKFLOW_STATUS_FILTERS);
 
-export const WORKFLOW_RUN_PANEL_TABS = ['result', 'process', 'diagnostics', 'artifacts', 'debug'] as const;
+export const WORKFLOW_RUN_PANEL_TABS = ['result', 'process', 'artifacts', 'source'] as const;
 export type WorkflowRunPanelTab = (typeof WORKFLOW_RUN_PANEL_TABS)[number];
 export const WORKFLOW_RUN_PANEL_TAB_SET = new Set<string>(WORKFLOW_RUN_PANEL_TABS);
 

@@ -1,4 +1,14 @@
-import type { WorkflowDefinitionDefaults, WorkflowDefinitionEstimatedAgents, WorkflowGraph, WorkflowPermissionPolicy, WorkflowResourceRefs } from './definition.js';
+import type {
+  JsonSchema,
+  WorkflowConnectorRequirement,
+  WorkflowDefinitionDefaults,
+  WorkflowDefinitionEstimatedAgents,
+  WorkflowDefinitionExamplePrompt,
+  WorkflowDefinitionMetadata,
+  WorkflowGraph,
+  WorkflowPermissionPolicy,
+  WorkflowResourceRefs,
+} from './definition.js';
 import type { WorkflowArtifactRef, WorkflowResultEnvelope } from './result.js';
 
 export type WorkflowRunStatus =
@@ -127,6 +137,7 @@ export interface WorkflowRunDefinitionSnapshot {
   id: string;
   name: string;
   title: string;
+  description?: string;
   version: string;
   contentHash?: string;
   revision: number;
@@ -137,6 +148,12 @@ export interface WorkflowRunDefinitionSnapshot {
   defaults?: WorkflowDefinitionDefaults;
   permissions?: WorkflowPermissionPolicy;
   resources?: WorkflowResourceRefs;
+  connectors?: WorkflowConnectorRequirement[];
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  whenToUse?: string;
+  examplePrompts?: WorkflowDefinitionExamplePrompt[];
+  i18n?: WorkflowDefinitionMetadata['i18n'];
   estimatedAgents?: WorkflowDefinitionEstimatedAgents;
 }
 

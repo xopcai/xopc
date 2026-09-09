@@ -28,6 +28,8 @@ import type { StoredLanguage } from '@/lib/storage';
 
 import { runViewToSnapshot } from './run-view-to-snapshot';
 import { WorkflowRunGraph } from './workflow-run-graph';
+import { WorkflowSourcePanel } from './workflow-source-panel';
+import { serializeWorkflowSourceDocument, workflowRunSnapshotToSourceDocument } from './workflow-source';
 import {
   downloadWorkflowArtifact,
   type WorkflowArtifactRef,
@@ -300,9 +302,6 @@ export function WorkflowRunPanel({
     : runSummary);
   const hasDiagnostics = diagnostics.length > 0 || Boolean(diagnosticHint);
   const canRepair = (run.status === 'failed' || run.status === 'timeout') && Boolean(onRepairWorkflow);
-  const visibleActiveTab: WorkflowRunPanelTab =
-    activeTab === 'diagnostics' || activeTab === 'debug' ? 'process' : activeTab;
-
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
       <section className="mx-auto w-full max-w-6xl p-5">
@@ -353,13 +352,15 @@ export function WorkflowRunPanel({
               </header>
 
               <WorkflowRunTabs
-                activeTab={visibleActiveTab}
+                activeTab={activeTab}
                 onChange={onTabChange}
                 labels={labels}
                 artifactCount={task?.artifacts.length ?? view.artifacts.length}
+                language={language}
+                showSource={Boolean(run.metadata?.definition)}
               />
 
-              {visibleActiveTab === 'result' ? (
+              {activeTab === 'result' ? (
                 <section className="mt-5 space-y-4">
                   {hasResult ? (
                     <section className="overflow-hidden rounded-2xl border border-edge bg-surface-base">
@@ -466,7 +467,7 @@ export function WorkflowRunPanel({
                 </section>
               ) : null}
 
-              {visibleActiveTab === 'process' ? (
+              {activeTab === 'process' ? (
                 <>
                   {view.run.metadata?.definition.graph ? (
                     <WorkflowRunGraph
@@ -513,7 +514,7 @@ export function WorkflowRunPanel({
                 </>
               ) : null}
 
-              {visibleActiveTab === 'artifacts' ? (
+              {activeTab === 'artifacts' ? (
                 <WorkflowTaskPanel
                   task={task}
                   labels={labels}
@@ -522,6 +523,16 @@ export function WorkflowRunPanel({
                   onCopyText={(text) => void copyTextToClipboard(text)}
                   onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
                   onStartFollowUp={handleStartFollowUp}
+                />
+              ) : null}
+
+              {activeTab === 'source' && run.metadata?.definition ? (
+                <WorkflowSourcePanel
+                  initialSource={serializeWorkflowSourceDocument(workflowRunSnapshotToSourceDocument(run.metadata.definition))}
+                  resetKey={`${run.id}:${run.metadata.definition.revision}`}
+                  fileName={`${run.definitionId}-${run.id.slice(0, 8)}.workflow.json`}
+                  language={language}
+                  className="mt-5 h-[36rem]"
                 />
               ) : null}
       </section>
@@ -586,16 +597,21 @@ function WorkflowRunTabs({
   onChange,
   labels,
   artifactCount,
+  language,
+  showSource,
 }: {
   activeTab: WorkflowRunPanelTab;
   onChange: (tab: WorkflowRunPanelTab) => void;
   labels: WorkflowsMessages;
   artifactCount: number;
+  language: StoredLanguage;
+  showSource: boolean;
 }) {
   const tabs: Array<{ id: WorkflowRunPanelTab; label: string; count?: number }> = [
     { id: 'result', label: labels.resultTitle },
     { id: 'process', label: labels.process },
     { id: 'artifacts', label: labels.taskArtifacts, count: artifactCount || undefined },
+    ...(showSource ? [{ id: 'source' as const, label: language === 'zh' ? '执行定义' : 'Run definition' }] : []),
   ];
 
   return (

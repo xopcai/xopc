@@ -20,6 +20,7 @@ export interface CodeEditorProps {
   isDark?: boolean;
   className?: string;
   lineWrap?: boolean;
+  readOnly?: boolean;
   keyBindings?: readonly KeyBinding[];
 }
 
@@ -36,6 +37,7 @@ export function CodeEditor({
   isDark = false,
   className,
   lineWrap = false,
+  readOnly = false,
   keyBindings,
 }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -63,6 +65,8 @@ export function CodeEditor({
         ...historyKeymap,
       ])),
       lineWrapCompartmentRef.current.of(lineWrap ? EditorView.lineWrapping : []),
+      EditorState.readOnly.of(readOnly),
+      EditorView.editable.of(!readOnly),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChangeRef.current(update.state.doc.toString());
@@ -86,7 +90,7 @@ export function CodeEditor({
       editorRef.current?.destroy();
       editorRef.current = null;
     };
-  }, [isDark, language]);
+  }, [isDark, language, readOnly]);
 
   useEffect(() => {
     editorRef.current?.dispatch({
