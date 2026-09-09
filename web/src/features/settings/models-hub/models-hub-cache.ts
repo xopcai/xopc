@@ -8,7 +8,7 @@ export const MODELS_JSON_SWR_KEY = 'models-json-config';
 export const MODEL_CATALOG_SWR_KEY = 'model-catalog';
 export const CAPABILITY_READINESS_SWR_KEY = 'capability-readiness';
 
-/** Revalidate all data sources that drive the Models & services cards. */
+/** Revalidate all data sources that drive the Models cards. */
 export async function revalidateModelsHubCaches(): Promise<void> {
   await Promise.all([
     revalidateGatewayConfig(),

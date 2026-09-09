@@ -72,7 +72,7 @@ const copy = {
   },
   zh: {
     title: '图片生成',
-    intro: '为 Agent 选择图片模型，也可以连接你自己的 OpenAI Images 服务。',
+    intro: '为智能体选择图片模型，也可以连接你自己的图片服务。',
     agent: 'Agent',
     provider: 'Provider',
     model: '模型',

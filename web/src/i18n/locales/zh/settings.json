@@ -1,19 +1,19 @@
 {
   "settingsSections": {
-    "overview": "系统状态",
+    "overview": "概览",
     "appearance": "偏好设置",
     "agent": "智能体",
     "agent-browser": "浏览器",
-    "agent-defaults": "Agent 默认配置",
+    "agent-defaults": "智能体设置",
     "connectors": "连接器",
     "channels": "消息通道",
-    "devices": "设备与工具",
-    "gateway": "网关",
-    "runtimes": "工具运行时",
-    "heartbeat": "心跳",
+    "devices": "设备",
+    "gateway": "本机服务",
+    "runtimes": "运行环境",
+    "heartbeat": "主动提醒",
     "tunnel": "远程访问",
     "remote-access": "远程访问",
-    "shares": "文件分享",
+    "shares": "分享",
     "system": "系统授权",
     "desktop-pet": "宠物",
     "desktop-app": "应用数据",
@@ -25,7 +25,7 @@
     "comingSoon": "设置 · {{title}}（即将推出）。"
   },
   "runtimeToolsSettings": {
-    "title": "工具运行时",
+    "title": "运行环境",
     "subtitle": "管理智能体、MCP 服务和技能使用的隔离 Node.js 与 Python 环境。",
     "loadError": "无法加载运行时状态。",
     "refresh": "刷新",
@@ -173,7 +173,7 @@
   "capabilitiesSettings": {
     "subtitle": "配置 xopc 全局可用的模型、图片、语音与搜索服务。",
     "docsLink": "查看文档",
-    "tabsAria": "模型与服务分区",
+    "tabsAria": "模型分区",
     "agentSettingsLink": "配置智能体",
     "unsavedChanges": "有未保存改动",
     "saveBar": {
@@ -186,8 +186,8 @@
       "discardAll": "全部丢弃"
     },
     "tabs": {
-      "models": "模型服务",
-      "image": "图片",
+      "models": "对话模型",
+      "image": "图像模型",
       "voice": "语音",
       "search": "网络搜索"
     },
@@ -312,7 +312,7 @@
     }
   },
   "setupStatus": {
-    "title": "系统状态",
+    "title": "概览",
     "subtitle": "查看当前配置进度，完成必要步骤后即可开始对话。",
     "refresh": "刷新",
     "loading": "正在加载状态…",
@@ -889,10 +889,10 @@
   },
   "settingsNavGroups": {
     "general": "通用",
-    "system": "系统设置",
-    "capabilities": "模型与服务",
+    "system": "系统",
+    "capabilities": "智能",
     "agent": "智能体能力",
-    "connection": "连接",
+    "connection": "设备与连接",
     "automation": "自动化",
     "diagnostics": "诊断",
     "extensions": "扩展"
@@ -1085,7 +1085,7 @@
   },
   "connectorsSettings": {
     "title": "连接器",
-    "subtitle": "管理现有连接，或发现能为 Agent 提供上下文和操作能力的新连接器。",
+    "subtitle": "管理现有连接，或发现能为智能体提供上下文和操作能力的新连接器。",
     "understandingSetupTitle": "连接一个用于理解你的来源",
     "understandingSetupHint": "这里只展示具备只读学习方案的来源。连接后可选择持续访问策略；来源可以随时审阅或撤销。",
     "understandingSetupDone": "完成",

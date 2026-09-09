@@ -110,7 +110,7 @@ export function AgentsSettingsPanel() {
   }, []);
 
   if (!token) {
-    return <SettingsPageFrame><p className="text-sm text-fg-muted">Gateway token required.</p></SettingsPageFrame>;
+    return <SettingsPageFrame><p className="text-sm text-fg-muted">{zh ? '需要本机服务令牌。' : 'Local service token required.'}</p></SettingsPageFrame>;
   }
   if (error && !data) {
     return <SettingsPageFrame><p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{String(error)}</p><Button onClick={() => void mutate()}>{zh ? '重试' : 'Retry'}</Button></SettingsPageFrame>;
@@ -120,12 +120,11 @@ export function AgentsSettingsPanel() {
   return (
     <SettingsPageFrame gap="gap-5">
       <SettingsPageHeader
-        title="Agents"
-        subtitle={zh ? '所有 Agent 默认继承全局能力；这里只配置身份和必要差异。' : 'Every agent inherits global capabilities; configure only identity and necessary differences here.'}
+        title={zh ? '智能体' : 'Agents'}
         actions={(
           <>
             <Button onClick={() => navigate('/settings/agent-defaults')}>{zh ? '全局默认配置' : 'Global defaults'}</Button>
-            <Button variant="primary" onClick={() => { setActionError(null); setCreateDraft((current) => ({ ...current, open: true })); }}><Plus className="size-4" />{zh ? '新建 Agent' : 'New agent'}</Button>
+            <Button variant="primary" onClick={() => { setActionError(null); setCreateDraft((current) => ({ ...current, open: true })); }}><Plus className="size-4" />{zh ? '新建智能体' : 'New agent'}</Button>
           </>
         )}
       />

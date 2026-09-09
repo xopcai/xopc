@@ -8,6 +8,7 @@ import { messages } from '@/i18n/messages';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
+import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import {
   runRuntimeOperation,
@@ -110,7 +111,6 @@ export function RuntimeToolsSettingsPanel() {
     <SettingsPageFrame gap="gap-6">
       <SettingsPageHeader
         title={t.title}
-        subtitle={t.subtitle}
         actions={(
           <>
             <Button onClick={() => void mutate()} disabled={running !== null}>
@@ -147,6 +147,7 @@ export function RuntimeToolsSettingsPanel() {
         </label>
       </section>
 
+      <SettingsAdvancedGate>
       <section className="grid gap-4 rounded-xl border border-edge bg-surface-subtle p-4 md:grid-cols-2">
         <label className="space-y-1.5 text-xs font-medium text-fg-muted">
           {t.downloadSource}
@@ -202,6 +203,7 @@ export function RuntimeToolsSettingsPanel() {
           />
         </label>
       </section>
+      </SettingsAdvancedGate>
 
       <div className="grid gap-4 xl:grid-cols-3">
         {RUNTIMES.map((runtime) => {
@@ -308,9 +310,11 @@ export function RuntimeToolsSettingsPanel() {
                   </Button>
                 ) : null}
               </div>
-              {status?.resolved?.executable ? (
-                <code className="break-all text-[11px] text-fg-subtle">{status.resolved.executable}</code>
-              ) : null}
+              <SettingsAdvancedGate>
+                {status?.resolved?.executable ? (
+                  <code className="break-all text-[11px] text-fg-subtle">{status.resolved.executable}</code>
+                ) : null}
+              </SettingsAdvancedGate>
             </section>
           );
         })}

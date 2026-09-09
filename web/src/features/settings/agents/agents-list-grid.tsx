@@ -68,7 +68,7 @@ export function AgentsListGrid({
               </div>
 
               <p className="pointer-events-none relative z-10 mt-5 line-clamp-2 min-h-10 text-sm leading-5 text-fg-muted">
-                {agent.description || agent.override.profile?.instructions || (zh ? '继承全局能力，仅保存这个 Agent 的差异。' : 'Inherits global capabilities and stores only this agent’s differences.')}
+                {agent.description || agent.override.profile?.instructions || (zh ? '继承全局能力，仅保存这个智能体的差异。' : 'Inherits global capabilities and stores only this agent’s differences.')}
               </p>
 
               <div className="pointer-events-none relative z-10 mt-4 rounded-xl bg-surface-base px-3 py-2.5">
@@ -90,7 +90,7 @@ export function AgentsListGrid({
                   }}
                 >
                   <MessageSquarePlus className="size-4" />
-                  {zh ? '与这个 Agent 对话' : 'Chat with this agent'}
+                  {zh ? '与这个智能体对话' : 'Chat with this agent'}
                 </Button>
               </div>
             </article>

@@ -41,7 +41,7 @@ export function CreateAgentDialog({
         )}>
           <header className="flex items-start justify-between gap-4 border-b border-edge px-5 py-4">
             <div>
-              <Dialog.Title className="text-base font-semibold text-fg">{zh ? '新建 Agent' : 'Create agent'}</Dialog.Title>
+              <Dialog.Title className="text-base font-semibold text-fg">{zh ? '新建智能体' : 'Create agent'}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-fg-muted">
                 {zh ? '只设置身份即可开始，所有能力自动继承全局配置。' : 'Set its identity and start. Every capability inherits globally.'}
               </Dialog.Description>
@@ -52,7 +52,7 @@ export function CreateAgentDialog({
             {error ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
             <label htmlFor="create-agent-name" className="block text-xs font-medium text-fg-muted">
               {zh ? '名称' : 'Name'}
-              <input id="create-agent-name" aria-label={zh ? 'Agent 名称' : 'Agent name'} className={`${inputClass} mt-1.5`} value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={zh ? '例如：数据分析师' : 'For example: Data analyst'} />
+              <input id="create-agent-name" aria-label={zh ? '智能体名称' : 'Agent name'} className={`${inputClass} mt-1.5`} value={name} onChange={(event) => onNameChange(event.target.value)} placeholder={zh ? '例如：数据分析师' : 'For example: Data analyst'} />
             </label>
             <label htmlFor="create-agent-instructions" className="block text-xs font-medium text-fg-muted">
               {zh ? '个性与工作方式（可选）' : 'Personality and working style (optional)'}
@@ -61,7 +61,7 @@ export function CreateAgentDialog({
           </div>
           <footer className="flex justify-end gap-2 border-t border-edge px-5 py-4">
             <Dialog.Close asChild><Button disabled={busy}>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
-            <Button variant="primary" disabled={busy || !name.trim()} onClick={onCreate}>{busy ? (zh ? '创建中…' : 'Creating…') : (zh ? '创建 Agent' : 'Create agent')}</Button>
+            <Button variant="primary" disabled={busy || !name.trim()} onClick={onCreate}>{busy ? (zh ? '创建中…' : 'Creating…') : (zh ? '创建智能体' : 'Create agent')}</Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>

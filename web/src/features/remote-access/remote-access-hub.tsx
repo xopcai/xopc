@@ -116,7 +116,6 @@ export function RemoteAccessHub() {
     <SettingsPageFrame>
       <SettingsPageHeader
         title={ra.pageTitle}
-        subtitle={ra.pageSubtitle}
         meta={
           <RemoteAccessDocsLink
             language={language}
@@ -172,6 +171,7 @@ export function RemoteAccessHub() {
             panelIdPrefix="remote-access-panel"
             title={tabLabel(ra, activeTab)}
             hint={activeTab !== 'public' ? intro : undefined}
+            showHeading={false}
           >
             <RemoteAccessTabPanel tab={activeTab} onOpenTab={setActiveTab} />
           </SettingsTabPanel>

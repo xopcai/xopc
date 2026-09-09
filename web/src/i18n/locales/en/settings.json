@@ -1,19 +1,19 @@
 {
   "settingsSections": {
-    "overview": "System status",
+    "overview": "Overview",
     "appearance": "Preferences",
     "agent": "Agent",
     "agent-browser": "Browser",
-    "agent-defaults": "Agent defaults",
+    "agent-defaults": "Agent settings",
     "connectors": "Connectors",
     "channels": "Channels",
-    "devices": "Devices & tools",
-    "gateway": "Gateway",
-    "runtimes": "Tool runtimes",
-    "heartbeat": "Heartbeat",
+    "devices": "Devices",
+    "gateway": "Local service",
+    "runtimes": "Runtime",
+    "heartbeat": "Proactive reminders",
     "tunnel": "Remote access",
     "remote-access": "Remote access",
-    "shares": "File sharing",
+    "shares": "Sharing",
     "system": "System permissions",
     "desktop-pet": "Pet",
     "desktop-app": "Application data",
@@ -173,7 +173,7 @@
   "capabilitiesSettings": {
     "subtitle": "Configure the model, image, voice, and search services available across xopc.",
     "docsLink": "Read the docs",
-    "tabsAria": "Models & services sections",
+    "tabsAria": "Model sections",
     "agentSettingsLink": "Configure agents",
     "unsavedChanges": "Unsaved changes",
     "saveBar": {
@@ -186,8 +186,8 @@
       "discardAll": "Discard all"
     },
     "tabs": {
-      "models": "Model services",
-      "image": "Images",
+      "models": "Chat models",
+      "image": "Image models",
       "voice": "Voice",
       "search": "Web search"
     },
@@ -889,10 +889,10 @@
   },
   "settingsNavGroups": {
     "general": "General",
-    "system": "System settings",
-    "capabilities": "Models & services",
+    "system": "System",
+    "capabilities": "Intelligence",
     "agent": "Agent capabilities",
-    "connection": "Connection",
+    "connection": "Devices & connections",
     "automation": "Automation",
     "diagnostics": "Diagnostics",
     "extensions": "Extensions"
