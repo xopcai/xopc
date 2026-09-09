@@ -1,7 +1,12 @@
 import { useCallback, type RefObject } from 'react';
+import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
-import { createAgentStreamMessagingCallbacks, readStreamingBubbleFromStore } from '@/features/chat/messages/agent-stream-messaging-callbacks';
+import {
+  createAgentStreamMessagingCallbacks,
+  readStreamingBubbleFromStore,
+  shouldDismissClarificationForTerminal,
+} from '@/features/chat/messages/agent-stream-messaging-callbacks';
 import type { ComposerContextRef, WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
@@ -93,7 +98,7 @@ export function useChatSessionStreaming(deps: {
   const clearShellError = () => store().setShellError(null);
 
   const finalizeMessage = useCallback(
-    (targetSessionKey?: string) => {
+    (targetSessionKey?: string, terminalStatus?: AgentStreamRunStatus) => {
       const cacheKey = targetSessionKey ?? sessionKeyRef.current;
       if (cacheKey && !shouldApplyStreamUpdate(cacheKey)) {
         return;
@@ -116,7 +121,7 @@ export function useChatSessionStreaming(deps: {
       sendingRef.current = false;
       streamingRef.current = false;
       if (cacheKey) chatRunManager.resetRunTracking(cacheKey);
-      fq.dismissClarify();
+      if (!terminalStatus || shouldDismissClarificationForTerminal(terminalStatus)) fq.dismissClarify();
       void pollSessionNameAfterTurn();
       const syncKey = sessionKeyRef.current;
       if (syncKey) {

@@ -212,7 +212,6 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     thinkingSupportGenRef,
     navigateToSession,
     resolveAgentIdForPost,
-    dismissClarifyOnSessionLoad: fq.clearVisibleClarify,
     detachForNewConversation,
     sessionKey: focusedSessionKey,
     sessionAgentId: displayAgentId,
