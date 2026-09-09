@@ -171,10 +171,18 @@ jobs:
           # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
           # macOS: build architectures sequentially to avoid DMG temp file conflicts
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            mac_manifest_dir="$(mktemp -d)"
+            trap 'rm -rf "$mac_manifest_dir"' EXIT
             echo "Building macOS x64..."
             bash scripts/build-electron-with-retry.sh --mac --x64
+            # The following arm64 build overwrites latest-mac.yml, so retain the x64 input first.
+            cp dist/release/latest-mac.yml "$mac_manifest_dir/latest-mac-x64.yml"
             echo "Building macOS arm64..."
             bash scripts/build-electron-with-retry.sh --mac --arm64
+            node scripts/merge-macos-electron-latest-yml.mjs \
+              "$mac_manifest_dir/latest-mac-x64.yml" \
+              dist/release/latest-mac.yml \
+              dist/release/latest-mac.yml
           else
             bash scripts/build-electron-with-retry.sh ${{ matrix.electron_builder_args }}
           fi
