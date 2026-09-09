@@ -17,6 +17,7 @@ export interface ExecutionRule {
 
 export interface RankedExecutionAssertion {
   assertion: UserAssertion;
+  usage: 'confirmed' | 'working_assumption';
   score: number;
   reasons: string[];
 }
@@ -26,6 +27,7 @@ export interface ExecutionGoal {
   title: string;
   desiredOutcome: string;
   status: string;
+  usage: 'confirmed' | 'working_assumption';
   declaredImportance?: number;
   targetAt?: number;
 }

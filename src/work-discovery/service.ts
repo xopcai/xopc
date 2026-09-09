@@ -209,17 +209,19 @@ function persistUnderstandingCandidate(
     cardinality: 'single',
     scope,
     kind: candidate.category === 'role' ? 'identity'
-      : candidate.category === 'responsibility' ? 'derived_insight' : candidate.category,
+      : candidate.category === 'responsibility' || candidate.category === 'boundary' ? 'derived_insight'
+        : candidate.category === 'communication' ? 'preference'
+          : candidate.category,
     value: candidate.statement,
     normalizedValue: candidate.statement.toLocaleLowerCase(),
     statement: candidate.statement,
     authority: 'system_inferred',
     confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.58,
     inferredImportance: 0.55,
-    consequence: 'low',
+    consequence: candidate.category === 'boundary' ? 'critical' : 'low',
     actionability: 0.5,
-    volatility: candidate.category === 'routine' ? 'slow' : 'stable',
-    sensitivity: 'normal',
+    volatility: candidate.category === 'routine' || candidate.category === 'communication' ? 'slow' : 'stable',
+    sensitivity: candidate.category === 'relationship' ? 'personal' : 'normal',
     disclosurePolicy: 'referenceable',
     observedAt: Date.now(),
     createdBy: 'runtime',

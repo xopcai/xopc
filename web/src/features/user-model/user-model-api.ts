@@ -131,6 +131,22 @@ export async function updateUserProfile(input: Partial<UserProfile>): Promise<Us
   };
 }
 
+export type UserModelBootstrapInput = {
+  profile: Partial<UserProfile>;
+  responsibilities?: string[];
+  goals?: string[];
+  communicationPreferences?: string[];
+  boundaries?: string[];
+  relationships?: string[];
+};
+
+export function bootstrapUserModel(input: UserModelBootstrapInput): Promise<unknown> {
+  return fetchJson(apiUrl('/api/user-model/bootstrap'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export function detectBrowserTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }

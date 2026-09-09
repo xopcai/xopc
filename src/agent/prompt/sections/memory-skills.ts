@@ -15,11 +15,14 @@ export function buildMemorySection(params: {
   const lines = [
     '## Context and memory',
     '',
-    'Relevant user facts, goals, priorities, collaboration rules, and task knowledge are selected for each turn.',
+    'Confirmed user context, labeled working assumptions, goals, priorities, collaboration rules, and task knowledge are selected for each turn.',
     'When exact or additional context is needed:',
   ];
   if (names.has('user_context_search')) {
     lines.push('- Use `user_context_search` for user identity, preferences, routines, and current state.');
+  }
+  if (names.has('user_context_update')) {
+    lines.push('- When the current user explicitly corrects, confirms, rejects, or asks to forget an existing user assertion, use `user_context_update` immediately and include an exact quote as evidence. Never use it for an inference of your own.');
   }
   if (names.has('knowledge_search')) {
     lines.push('- Use `knowledge_search` for project facts, decisions, lessons, commitments, and open questions.');

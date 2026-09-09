@@ -7,7 +7,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
-import { reconcileAssertion, type AssertionCandidate } from '../../../user-model/index.js';
+import { createUserGoal, reconcileAssertion, type AssertionCandidate } from '../../../user-model/index.js';
 import {
   getExecutionContextAudit,
   recordExecutionContext,
@@ -93,7 +93,76 @@ describe('execution context', () => {
     expect(context.knowledge.map((item) => item.content)).toEqual([
       'The release uses a blue deployment strategy.',
     ]);
-    expect(renderExecutionContext(context)).toContain('Relevant user facts');
+    expect(renderExecutionContext(context)).toContain('Confirmed user context');
+  });
+
+  it('uses strong observed and inferred candidates as labeled working assumptions', () => {
+    reconcileAssertion(assertion({
+      authority: 'system_inferred',
+      confidence: 0.8,
+      declaredImportance: undefined,
+      consequence: 'medium',
+      statement: 'Likely prefers concise responses.',
+      createdBy: 'runtime',
+    }), 200);
+
+    const context = buildExecutionContext(request);
+    expect(context.assertions).toEqual([
+      expect.objectContaining({
+        usage: 'working_assumption',
+        assertion: expect.objectContaining({ statement: 'Likely prefers concise responses.' }),
+      }),
+    ]);
+    expect(renderExecutionContext(context)).toContain('Working assumptions (may be wrong');
+    expect(renderExecutionContext(context)).toContain('confidence 0.80');
+  });
+
+  it('does not use weak, sensitive, untrusted, or critical candidates as assumptions', () => {
+    reconcileAssertion(assertion({
+      predicate: 'preference.weak', authority: 'system_inferred', confidence: 0.69,
+      consequence: 'low', createdBy: 'runtime',
+    }), 200);
+    reconcileAssertion(assertion({
+      predicate: 'preference.sensitive', authority: 'system_inferred', confidence: 0.9,
+      consequence: 'low', sensitivity: 'personal', createdBy: 'runtime',
+    }), 200);
+    reconcileAssertion(assertion({
+      predicate: 'preference.untrusted', authority: 'external_untrusted', confidence: 1,
+      consequence: 'low', createdBy: 'connector',
+    }), 200);
+    reconcileAssertion(assertion({
+      predicate: 'preference.critical', authority: 'system_inferred', confidence: 0.9,
+      consequence: 'critical', createdBy: 'runtime',
+    }), 200);
+
+    expect(buildExecutionContext(request).assertions).toEqual([]);
+  });
+
+  it('never lets a working assumption displace confirmed context', () => {
+    reconcileAssertion(assertion({ statement: 'Confirmed response preference.' }), 200);
+    reconcileAssertion(assertion({
+      predicate: 'preference.inferred', authority: 'system_inferred', confidence: 0.99,
+      consequence: 'high', statement: 'Inferred release preference.', createdBy: 'runtime',
+    }), 200);
+
+    const context = buildExecutionContext({ ...request, maxAssertions: 1 });
+    expect(context.assertions).toEqual([
+      expect.objectContaining({
+        usage: 'confirmed',
+        assertion: expect.objectContaining({ statement: 'Confirmed response preference.' }),
+      }),
+    ]);
+  });
+
+  it('labels proposed goals as assumptions instead of active goals', () => {
+    createUserGoal({
+      title: 'Possible launch', desiredOutcome: 'Launch next month', scope: { type: 'global' },
+      status: 'proposed', authority: 'system_inferred', confidence: 0.8, createdBy: 'runtime', now: 200,
+    });
+
+    const rendered = renderExecutionContext(buildExecutionContext(request));
+    expect(rendered).toContain('Possible goals (not yet confirmed)');
+    expect(rendered).not.toContain('Confirmed goals');
   });
 
   it('excludes expired assertions at the requested valid time', () => {

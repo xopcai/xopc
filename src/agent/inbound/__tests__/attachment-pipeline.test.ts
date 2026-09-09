@@ -238,7 +238,7 @@ describe('attachment-pipeline', () => {
           '',
           '<user_message>',
           '<user-context>',
-          'Relevant user facts:',
+          'Confirmed user context:',
           '- Prefers concise replies.',
           '</user-context>',
           '',

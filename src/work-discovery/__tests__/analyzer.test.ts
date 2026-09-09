@@ -236,6 +236,31 @@ describe('work discovery analyzer', () => {
     expect(analysis.profileCandidates).toEqual([]);
   });
 
+  it('keeps directly evidenced communication, boundary, and relationship candidates', async () => {
+    const evidenceRef = 'local-recent-files://item-1';
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({
+        profileCandidates: [
+          { category: 'communication', factKey: 'communication:direct', statement: 'Prefers direct feedback.', confidence: 'high', evidence: ['explicit'], evidenceRefs: [evidenceRef] },
+          { category: 'boundary', factKey: 'boundary:external-send', statement: 'Ask before sending externally.', confidence: 'high', evidence: ['explicit'], evidenceRefs: [evidenceRef] },
+          { category: 'relationship', factKey: 'relationship:alice', statement: 'Alice is a cofounder.', confidence: 'high', evidence: ['explicit'], evidenceRefs: [evidenceRef] },
+        ],
+        workThreads: [],
+      }) }],
+      stopReason: 'stop',
+    } as never);
+    const item: UnderstandingSourceItem = {
+      id: 'item-1', sourceId: 'local-recent-files', type: 'document', title: 'Profile notes',
+      ownerAttribution: 'user', sensitivity: 'personal', evidenceRef,
+    };
+
+    const analysis = await analyzeUnderstandingSources({ config: {} as never, items: [item] });
+
+    expect(analysis.profileCandidates.map((candidate) => candidate.category)).toEqual([
+      'communication', 'boundary', 'relationship',
+    ]);
+  });
+
   it('keeps every valid understanding and work stream instead of applying fixed item caps', async () => {
     const evidenceRef = 'local-recent-files://item-1';
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue({

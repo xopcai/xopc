@@ -30,6 +30,7 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
   'session_search',
   'user_context_search',
   'user_context_get',
+  'user_context_update',
   'knowledge_search',
   'knowledge_get',
   'knowledge_write',

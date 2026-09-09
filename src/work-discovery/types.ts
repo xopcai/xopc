@@ -218,7 +218,7 @@ export interface WorkDiscoveryResult {
 export interface WorkDiscoveryProfileCandidate {
   id: string;
   assertionId?: string;
-  category: 'role' | 'responsibility' | 'preference' | 'routine';
+  category: 'role' | 'responsibility' | 'preference' | 'routine' | 'communication' | 'boundary' | 'relationship';
   factKey: string;
   statement: string;
   confidence: 'high' | 'medium' | 'low';

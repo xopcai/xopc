@@ -44,6 +44,7 @@ import {
   isShareToolAvailable,
   createUserContextSearchTool,
   createUserContextGetTool,
+  createUserContextUpdateTool,
   createKnowledgeSearchTool,
   createKnowledgeGetTool,
   createKnowledgeWriteTool,
@@ -66,6 +67,7 @@ import {
   type MarketplaceSkillInstallToolResult,
 } from './index.js';
 import { createSessionSearchTool } from './session-search-tool.js';
+import { getPendingTranscriptUserText } from '../inbound/attachment-pipeline.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import type { SessionStore } from '../../session/store.js';
@@ -462,6 +464,18 @@ export class AgentToolsFactory {
         getSessionId: currentSessionKey,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().userModel,
+      }),
+      createUserContextUpdateTool({
+        agentId: resolvedAgentId,
+        workspaceId: workspace,
+        getSessionId: currentSessionKey,
+        getProjectId: currentProjectId,
+        canRead: () => currentAccess().userModel,
+        canWrite: () => currentAccess().userModel,
+        getCurrentUserText: () => {
+          const sessionKey = currentSessionKey();
+          return sessionKey ? getPendingTranscriptUserText(sessionKey) : undefined;
+        },
       }),
       createKnowledgeSearchTool({
         agentId: resolvedAgentId,
