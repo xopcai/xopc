@@ -586,6 +586,72 @@ html.dark {
   filter: drop-shadow(0 10px 22px color-mix(in oklab, var(--color-accent) 14%, transparent));
 }
 
+.xopc-loop-logo {
+  --xopc-loop-ai: #1d1d1f;
+  --xopc-loop-ai-highlight: #4a4a4e;
+  --xopc-loop-ai-shadow: #0d0d0f;
+  --xopc-loop-human: #007aff;
+  --xopc-loop-human-highlight: #58adff;
+  --xopc-loop-human-shadow: #0062cc;
+}
+
+.dark .xopc-loop-logo {
+  --xopc-loop-ai: #f5f5f7;
+  --xopc-loop-ai-highlight: #ffffff;
+  --xopc-loop-ai-shadow: #c9c9ce;
+  --xopc-loop-human: #0a84ff;
+  --xopc-loop-human-highlight: #67b7ff;
+  --xopc-loop-human-shadow: #006edb;
+}
+
+.xopc-loop-logo circle {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.xopc-loop-logo__ambient {
+  stroke: var(--xopc-loop-human);
+  stroke-width: 168;
+  opacity: 0;
+  filter: blur(30px);
+  animation: xopc-loop-ambient 8.4s cubic-bezier(.22, 1, .36, 1) infinite;
+}
+
+.xopc-loop-logo__origin {
+  stroke: url(#xopc-onboarding-human-glass);
+  stroke-width: 136;
+  opacity: 0;
+  animation: xopc-loop-origin 8.4s cubic-bezier(.22, 1, .36, 1) infinite;
+}
+
+.xopc-loop-logo__ai,
+.xopc-loop-logo__ai-glow {
+  stroke-width: 136;
+  animation: xopc-loop-ai-fill 8.4s cubic-bezier(.4, 0, .16, 1) infinite;
+}
+
+.xopc-loop-logo__ai-glow {
+  stroke: var(--xopc-loop-human-highlight);
+  stroke-width: 164;
+  opacity: 0;
+  filter: blur(19px);
+  animation-name: xopc-loop-ai-glow;
+}
+
+.xopc-loop-logo__human {
+  stroke-width: 136;
+  opacity: 1;
+  animation: xopc-loop-human-settle 8.4s cubic-bezier(.22, 1, .36, 1) infinite;
+}
+
+.xopc-loop-logo__liquid-front {
+  stroke: rgba(255, 255, 255, .9);
+  stroke-width: 34;
+  opacity: 0;
+  filter: drop-shadow(0 0 18px var(--xopc-loop-human-highlight));
+  animation: xopc-loop-liquid-front 8.4s cubic-bezier(.4, 0, .16, 1) infinite;
+}
+
 .xopc-onboarding-stage {
   animation: xopc-onboarding-stage-in 220ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -686,6 +752,73 @@ html.dark {
   to { opacity: 1; filter: blur(0); transform: scale(1); }
 }
 
+@keyframes xopc-loop-origin {
+  0%, 48% { opacity: 1; }
+  58%, 82% { opacity: 0; }
+  94%, 100% { opacity: 1; }
+}
+
+@keyframes xopc-loop-ai-fill {
+  0%, 8% {
+    opacity: 0;
+    stroke-dasharray: 0 2073.451151;
+  }
+  14% { opacity: 1; }
+  52%, 84% {
+    opacity: 1;
+    stroke-dasharray: 1419.162121 654.289030;
+  }
+  94% {
+    opacity: 0;
+    stroke-dasharray: 1419.162121 654.289030;
+  }
+  100% {
+    opacity: 0;
+    stroke-dasharray: 0 2073.451151;
+  }
+}
+
+@keyframes xopc-loop-ai-glow {
+  0%, 8% {
+    opacity: 0;
+    stroke-dasharray: 0 2073.451151;
+  }
+  18%, 46% { opacity: .2; }
+  56%, 94% {
+    opacity: 0;
+    stroke-dasharray: 1419.162121 654.289030;
+  }
+  100% {
+    opacity: 0;
+    stroke-dasharray: 0 2073.451151;
+  }
+}
+
+@keyframes xopc-loop-human-settle {
+  0%, 48% { opacity: 0; }
+  58%, 84% { opacity: 1; }
+  94%, 100% { opacity: 0; }
+}
+
+@keyframes xopc-loop-liquid-front {
+  0%, 8% {
+    opacity: 0;
+    stroke-dashoffset: 0;
+  }
+  14%, 46% { opacity: .82; }
+  56%, 100% {
+    opacity: 0;
+    stroke-dashoffset: -1394;
+  }
+}
+
+@keyframes xopc-loop-ambient {
+  0% { opacity: .2; transform: scale(.92); transform-origin: center; }
+  52% { opacity: .08; }
+  62%, 84% { opacity: 0; transform: scale(1.04); transform-origin: center; }
+  96%, 100% { opacity: .2; transform: scale(.92); transform-origin: center; }
+}
+
 @keyframes xopc-onboarding-options-in {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -723,6 +856,12 @@ html.dark {
   .xopc-onboarding-mark-halo,
   .xopc-onboarding-mark-trace,
   .xopc-onboarding-mark-core,
+  .xopc-loop-logo__ambient,
+  .xopc-loop-logo__origin,
+  .xopc-loop-logo__ai,
+  .xopc-loop-logo__ai-glow,
+  .xopc-loop-logo__human,
+  .xopc-loop-logo__liquid-front,
   .xopc-onboarding-stage,
   .xopc-onboarding-provider-options,
   .xopc-work-discovery-stage,
@@ -736,6 +875,13 @@ html.dark {
   .xopc-source-convergence-core-glow,
   .xopc-source-convergence-progress {
     animation: none;
+  }
+
+  .xopc-loop-logo__origin,
+  .xopc-loop-logo__ambient,
+  .xopc-loop-logo__ai-glow,
+  .xopc-loop-logo__liquid-front {
+    opacity: 0;
   }
 
   .xopc-source-convergence-progress {

@@ -75,4 +75,17 @@ describe('native voice memory lifecycle', () => {
     notifyUserContextChange({ kind: 'session-reset', id: sessionKey }); await closed;
     expect(engine.close).toHaveBeenCalledOnce();
   });
+
+  it('ends a history-only call when its agent persona snapshot changes', async () => {
+    let current = true;
+    await start({ identity: 'Ada', history: [], isCurrent: () => current });
+    const closed = once(socket, 'close');
+    current = false;
+    await closed;
+    expect(engine.close).toHaveBeenCalledOnce();
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'session.error',
+      payload: expect.objectContaining({ code: 'CONTEXT_CHANGED' }),
+    }));
+  });
 });

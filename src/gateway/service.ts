@@ -4,7 +4,8 @@ import { insertSessionInput } from '../storage/sqlite/session-input-repository.j
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
-import { voiceMemoryBudget } from '../voice/realtime/conversation-context.js';
+import { buildVoicePersonaContext } from '../voice/realtime/persona-context.js';
+import { voiceMemoryBudget, voicePersonaBudget } from '../voice/realtime/conversation-context.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { notifyUserContextChange } from '../user-context/changes.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
@@ -184,9 +185,15 @@ export class GatewayService {
       const after = await this.sessionIndex.getSessionMetadata(sessionKey);
       if (after?.sessionId !== expectedSessionId) throw new Error('Conversation changed while loading voice context');
       const profile = resolveEffectiveAgentProfileForSession(this.config, sessionKey);
+      const persona = buildVoicePersonaContext({
+        getConfig: () => this.config,
+        sessionKey,
+        maxChars: voicePersonaBudget(this.config.voice.realtime.omni.instructions),
+      });
       const context = {
-        identity: [`Your name is ${profile.config.profile?.name ?? profile.agentId}.`, profile.customInstructions ?? ''].join('\n'),
+        identity: persona.block,
         history: messages,
+        isCurrent: persona.isCurrent,
       };
       const memory = buildVoiceMemoryContext({
         getConfig: () => this.config, sessionKey,
