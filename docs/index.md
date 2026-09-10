@@ -35,7 +35,7 @@ features:
     link: /product#trust-is-a-product-surface
 ---
 
-[![xopc desktop app demo](/xopc-desktop.gif)](https://xopc.ai/en#download)
+<video src="/xopc-desktop.mp4" controls muted autoplay loop playsinline width="100%" aria-label="xopc desktop app demo"></video>
 
 ## Start with one important thing
 

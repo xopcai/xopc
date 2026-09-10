@@ -34,7 +34,7 @@ features:
     link: /zh/product#信任本身就是产品界面
 ---
 
-[![xopc 桌面应用演示](/xopc-desktop.gif)](https://xopc.ai/zh#download)
+<video src="/xopc-desktop.mp4" controls muted autoplay loop playsinline width="100%" aria-label="xopc 桌面应用演示"></video>
 
 ## 从一件重要的事开始
 
