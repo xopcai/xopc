@@ -1,4 +1,9 @@
-import { realtimeVoiceStatusSchema, createVoiceSessionResponseSchema, type CreateVoiceSessionRequest } from '@xopcai/realtime-protocol/voice';
+import {
+  realtimeVoiceStatusSchema,
+  createVoiceSessionResponseSchema,
+  type CreateVoiceSessionRequest,
+  type CreateVoiceSessionResponse,
+} from '@xopcai/realtime-protocol/voice';
 import { apiFetch } from '../api/client';
 import { queryClient } from './query-client';
 import { fetchSession } from './sessions';
@@ -7,7 +12,7 @@ export class VoiceRequestError extends Error {
   constructor(readonly code: string, readonly status = 0) { super(code); }
 }
 export const voiceStatusOptions = (gatewayId: string | null) => ({
-  queryKey: ['voice-status', gatewayId], staleTime: 15_000, retry: false as const,
+  queryKey: ['voice-status', gatewayId], staleTime: 5 * 60_000, retry: false as const,
   queryFn: async ({ signal }: { signal: AbortSignal }) => {
     const response = await apiFetch('/api/voice/realtime/status', { signal });
     if (!response.ok) throw new VoiceRequestError('SERVICE_UNAVAILABLE', response.status);
@@ -29,6 +34,18 @@ export async function createVoiceConnection(request: CreateVoiceSessionRequest, 
   const session = createVoiceSessionResponseSchema.parse((await response.json()).payload);
   if (session.inputFormat.sampleRate !== 16000) throw new VoiceRequestError('UNSUPPORTED_FORMAT');
   return { origin, session };
+}
+export async function cancelVoiceConnection(
+  connection: { session: Pick<CreateVoiceSessionResponse, 'sessionId' | 'ticket'> },
+): Promise<void> {
+  const response = await apiFetch('/api/voice/realtime/sessions/cancel', {
+    method: 'POST',
+    body: JSON.stringify({
+      sessionId: connection.session.sessionId,
+      ticket: connection.session.ticket,
+    }),
+  });
+  if (!response.ok) throw new VoiceRequestError('CANCEL_FAILED', response.status);
 }
 export function voiceSessionIdentity(gatewayId: string, sessionKey: string) {
   return queryClient.fetchQuery({ queryKey: ['voice-identity', gatewayId, sessionKey], staleTime: 0, retry: false,

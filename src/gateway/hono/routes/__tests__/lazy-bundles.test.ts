@@ -31,6 +31,7 @@ describe('lazy route bundles', () => {
   it('uses distinct bundles for voice models vs voice settings', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/voice/models')?.id).toBe('agents');
     expect(findAuthenticatedLazyRouteBundle('/api/voice/providers')?.id).toBe('voice');
+    expect(findAuthenticatedLazyRouteBundle('/api/voice/realtime/sessions/cancel')?.id).toBe('voice');
   });
 
   it('routes browser install SSE streams to browser-install, not the broader browser bundle', () => {

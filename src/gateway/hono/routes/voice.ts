@@ -8,6 +8,7 @@
 import type { Context, Hono } from 'hono';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import { createVoiceSessionRequestSchema } from '@xopcai/realtime-protocol/voice';
+import { z } from 'zod';
 
 import type { Config } from '../../../config/schema.js';
 import { withModelConfigLock } from '../../../session/model-config-lock.js';
@@ -59,6 +60,10 @@ function readVoiceApiKeyFromConfigFileOnly(
 const REFINE_TIMEOUT_MS = 15_000;
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB
 const MAX_SPEECH_TEXT_LENGTH = 1_200;
+const cancelVoiceSessionSchema = z.strictObject({
+  sessionId: z.uuid(),
+  ticket: z.string().min(32).max(512),
+});
 
 function speechMimeType(format: string): string {
   if (format === 'opus' || format === 'ogg') return 'audio/ogg';
@@ -273,6 +278,16 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       }
       return c.json({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE', message } }, 503);
     }
+  });
+
+  authenticated.post('/api/voice/realtime/sessions/cancel', strictRateLimitMiddleware, async (c) => {
+    const parsed = cancelVoiceSessionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice cancellation request' } }, 400);
+    }
+    const principal = getGatewayPrincipal(c);
+    service.voiceRealtime.cancelSession(parsed.data.sessionId, parsed.data.ticket, principal.principalId);
+    return c.json({ ok: true });
   });
 
   authenticated.post('/api/voice/language', strictRateLimitMiddleware, async (c) => {

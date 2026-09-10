@@ -10,11 +10,12 @@ describe('authenticated lazy voice context', () => {
 
   function mount(app: Hono) {
     const createSession = vi.fn(async (_request, principalId: string) => ({ principalId }));
+    const cancelSession = vi.fn(() => true);
     registerAuthenticatedLazyRouteFallback(app, {
-      service: { voiceRealtime: { createSession } },
+      service: { voiceRealtime: { createSession, cancelSession } },
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
-    return createSession;
+    return { createSession, cancelSession };
   }
 
   const request = (token?: string) => ({
@@ -26,16 +27,16 @@ describe('authenticated lazy voice context', () => {
   it('preserves the authenticated owner across lazy dispatch', async () => {
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
-    const createSession = mount(app);
+    const { createSession } = mount(app);
     const response = await app.request('/api/voice/realtime/sessions', request('test-token'));
     expect(response.status).toBe(200);
     expect(createSession).toHaveBeenCalledWith({ purpose: 'dictation' }, 'gateway-owner');
   });
 
-  it.each(['sessions', 'preflight'])('does not bypass authentication for %s', async (action) => {
+  it.each(['sessions', 'preflight', 'sessions/cancel'])('does not bypass authentication for %s', async (action) => {
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
-    const createSession = mount(app);
+    const { createSession } = mount(app);
     expect((await app.request(`/api/voice/realtime/${action}`, request())).status).toBe(401);
     expect(createSession).not.toHaveBeenCalled();
   });
@@ -47,11 +48,27 @@ describe('authenticated lazy voice context', () => {
       setGatewayPrincipal(c, { kind: 'device', principalId: `device-${++count}`, scopes: ['gateway.admin'] });
       await next();
     });
-    const createSession = mount(app);
+    const { createSession } = mount(app);
     const responses = await Promise.all([1, 2].map(() => app.request('/api/voice/realtime/sessions', request())));
     expect(responses.map((response) => response.status)).toEqual([200, 200]);
     expect(createSession.mock.calls.map((call) => call[1]).sort()).toEqual(['device-1', 'device-2']);
   });
+
+  it('cancels an unused ticket as the authenticated owner', async () => {
+    const app = new Hono();
+    app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
+    const { cancelSession } = mount(app);
+    const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+    const ticket = 'x'.repeat(32);
+    const response = await app.request('/api/voice/realtime/sessions/cancel', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer test-token' },
+      body: JSON.stringify({ sessionId, ticket }),
+    });
+    expect(response.status).toBe(200);
+    expect(cancelSession).toHaveBeenCalledWith(sessionId, ticket, 'gateway-owner');
+  });
+
   it('preflights without creating a call', async () => {
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
