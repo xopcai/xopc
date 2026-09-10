@@ -114,6 +114,22 @@ describe('VoiceRealtimeRuntime session creation', () => {
     });
   });
 
+  it('releases an unused conversation reservation for its authenticated owner', async () => {
+    const service = createRuntime();
+    const request = {
+      purpose: 'conversation' as const, engine: 'agent' as const,
+      sessionKey: 'agent:main:webchat:default:direct:voice',
+    };
+    const issued = await service.createSession(request, 'user-1');
+
+    expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-2')).toBe(false);
+    expect(service.hasConversation(request.sessionKey)).toBe(true);
+    expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).toBe(true);
+    expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).toBe(false);
+    expect(service.hasConversation(request.sessionKey)).toBe(false);
+    await expect(service.createSession(request, 'user-1')).resolves.toHaveProperty('ticket');
+  });
+
   it('releases an unused conversation reservation when its ticket expires', async () => {
     const service = createRuntime();
     const request = {

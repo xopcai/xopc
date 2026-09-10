@@ -1,7 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import { queryClient } from '../../query/query-client';
 import { queryKeys } from '../../query/keys';
-import { preflightVoice, createVoiceConnection, voiceSessionIdentity, voiceStatusOptions } from '../../query/voice';
+import {
+  cancelVoiceConnection,
+  createVoiceConnection,
+  preflightVoice,
+  voiceSessionIdentity,
+  voiceStatusOptions,
+} from '../../query/voice';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { messages } from '../../i18n/messages';
@@ -25,10 +31,17 @@ export const voiceCall = new VoiceCallController({
     const status = await queryClient.fetchQuery(voiceStatusOptions(target.gatewayId));
     const engine = target.engine ?? status.defaultEngine;
     if (!status.capabilities[engine].available) throw new Error(status.capabilities[engine].reasonCode ?? 'PROVIDER_UNAVAILABLE');
-    const session = await voiceSessionIdentity(target.gatewayId, target.sessionKey);
-    assertGateway();
-    if (!session?.sessionId) throw new Error('SESSION_CHANGED');
-    for (const delay of recovering ? [0, 1000, 3000] : [0]) {
+    let identity = target.identity;
+    let name = target.name;
+    if (recovering || !identity) {
+      const session = await voiceSessionIdentity(target.gatewayId, target.sessionKey);
+      assertGateway();
+      if (!session?.sessionId) throw new Error('SESSION_CHANGED');
+      identity = session.sessionId;
+      name = session.name ?? name;
+    }
+    if (!identity) throw new Error('SESSION_CHANGED');
+    for (const delay of recovering ? [0, 1000, 3000] : []) {
       if (delay) await new Promise<void>((resolve, reject) => {
         const onAbort = () => { clearTimeout(timer); reject(new Error('CANCELLED')); };
         const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(); }, delay);
@@ -42,17 +55,10 @@ export const voiceCall = new VoiceCallController({
       }
     }
     assertGateway();
-    return { engine, identity: session.sessionId, name: session.name ?? messages(usePreferencesStore.getState().language).voice.title };
+    return { engine, identity, name: name ?? messages(usePreferencesStore.getState().language).voice.title };
   },
-  create: async (request, signal, identity) => {
-    const connection = await createVoiceConnection(request, signal);
-    const gatewayId = useGatewayStore.getState().activeGatewayId;
-    if (!gatewayId || !request.sessionKey) throw new Error('GATEWAY_CHANGED');
-    const session = await voiceSessionIdentity(gatewayId, request.sessionKey);
-    if (signal.aborted) throw new Error('CANCELLED');
-    if (session?.sessionId !== identity) throw new Error('SESSION_CHANGED');
-    return connection;
-  },
+  create: createVoiceConnection,
+  discard: cancelVoiceConnection,
   transport: callbacks => new VoiceTransport(callbacks),
   invalidate: target => {
     if (target.gatewayId !== useGatewayStore.getState().activeGatewayId) return;

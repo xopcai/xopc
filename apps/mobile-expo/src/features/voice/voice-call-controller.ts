@@ -4,7 +4,14 @@ import { VoiceDiagnostics, voiceDiagnosticFinding } from './voice-diagnostics';
 
 type Transport = Pick<VoiceTransport, 'connect' | 'send' | 'audio' | 'close'>;
 
-export type CallTarget = { gatewayId: string; sessionKey: string; engine?: 'agent' | 'omni'; background: boolean };
+export type CallTarget = {
+  gatewayId: string;
+  sessionKey: string;
+  engine?: 'agent' | 'omni';
+  background: boolean;
+  identity?: string;
+  name?: string;
+};
 export type CallState = {
   phase: 'idle' | 'connecting' | 'connected' | 'recovering' | 'paused' | 'ending';
   target?: CallTarget; name: string; engine?: 'agent' | 'omni'; expanded: boolean; muted: boolean;
@@ -29,7 +36,8 @@ export type CallDependencies = {
     enqueue(id: string, bytes: Uint8Array): Promise<void>;
   };
   prepare(target: CallTarget, signal: AbortSignal, recovering?: boolean): Promise<{ identity: string; name: string; engine: 'agent' | 'omni' }>;
-  create(request: CreateVoiceSessionRequest, signal: AbortSignal, identity: string): Promise<{ origin: string; session: CreateVoiceSessionResponse }>;
+  create(request: CreateVoiceSessionRequest, signal: AbortSignal): Promise<{ origin: string; session: CreateVoiceSessionResponse }>;
+  discard(connection: { origin: string; session: CreateVoiceSessionResponse }): Promise<void>;
   transport(callbacks: VoiceTransportCallbacks): Transport;
   invalidate(target: CallTarget): void;
 };
@@ -100,7 +108,7 @@ export class VoiceCallController {
       this.identity = prepared.identity;
       this.diagnostics.setEngine(prepared.engine);
       this.update({ name: prepared.name, engine: prepared.engine, target: { ...target, engine: prepared.engine } });
-      await this.deps.audio.start(target.background, {
+      const audioStart = this.deps.audio.start(target.background, {
         pcm: bytes => {
           if (!current() || this.state.phase !== 'connected' || this.state.muted || this.state.clarification || this.approvalPending) return;
           try { this.transport?.audio(bytes); this.diagnostics.input(bytes.byteLength); } catch { void this.pause('INPUT_DROPPED'); }
@@ -117,9 +125,26 @@ export class VoiceCallController {
         },
         interrupted: reason => { if (current()) { if (reason === 'ended') void this.end(); else void this.pause(reason); } },
       });
-      if (!current()) return;
-      const connection = await this.deps.create({ purpose: 'conversation', sessionKey: target.sessionKey, engine: prepared.engine }, abort.signal, prepared.identity);
-      if (!current()) return;
+      let created: { origin: string; session: CreateVoiceSessionResponse } | undefined;
+      const create = this.deps.create(
+        { purpose: 'conversation', sessionKey: target.sessionKey, engine: prepared.engine },
+        abort.signal,
+      ).then((connection) => {
+        created = connection;
+        return connection;
+      });
+      let connection: { origin: string; session: CreateVoiceSessionResponse };
+      try {
+        [connection] = await Promise.all([create, audioStart]);
+      } catch (error) {
+        if (created) void this.deps.discard(created).catch(() => undefined);
+        else void create.then((late) => this.deps.discard(late)).catch(() => undefined);
+        throw error;
+      }
+      if (!current()) {
+        void this.deps.discard(connection).catch(() => undefined);
+        return;
+      }
       const transport = this.deps.transport({
         event: event => { if (current()) this.onEvent(event); },
         audio: (id, pcm) => {

@@ -11,6 +11,7 @@ function harness() {
     audio: { start: vi.fn(async (_background, value) => { audioCallbacks = value; }), capture: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), enqueue: vi.fn(async () => {}) },
     prepare: vi.fn(async () => ({ identity: 'original', name: 'Assistant', engine: 'omni' as const })),
     create: vi.fn(async () => ({ origin: 'https://gateway', session: { limits: { maxSessionMs: 60000 } } as never })),
+    discard: vi.fn(async () => {}),
     transport: vi.fn(value => { callbacks = value; return transport; }), invalidate: vi.fn(),
   };
   const controller = new VoiceCallController(deps);
@@ -154,9 +155,31 @@ describe('mobile persistent voice controller', () => {
     const start = h.controller.start(target);
     await vi.waitFor(() => expect(release).toBeDefined());
     const end = h.controller.end(); release(); await Promise.all([start, end]);
-    expect(h.deps.create).not.toHaveBeenCalled();
+    expect(h.deps.create).toHaveBeenCalledOnce();
+    expect(h.deps.discard).toHaveBeenCalledOnce();
     expect(h.deps.audio.capture).not.toHaveBeenCalledWith(true);
     expect(h.controller.getSnapshot().phase).toBe('idle');
+  });
+  it('creates the remote session while native audio is still starting', async () => {
+    const h = harness();
+    let release!: () => void;
+    vi.mocked(h.deps.audio.start).mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    const start = h.controller.start(target);
+    await vi.waitFor(() => expect(h.deps.create).toHaveBeenCalledOnce());
+    expect(h.transport.connect).not.toHaveBeenCalled();
+    release();
+    await start;
+    expect(h.transport.connect).toHaveBeenCalledOnce();
+    await h.controller.end();
+  });
+  it('discards an issued ticket when native audio startup fails', async () => {
+    const h = harness();
+    vi.mocked(h.deps.audio.start).mockRejectedValueOnce(new Error('PERMISSION_DENIED'));
+    await h.controller.start(target);
+    await vi.waitFor(() => expect(h.deps.discard).toHaveBeenCalledOnce());
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'paused', error: 'PERMISSION_DENIED' });
+    expect(h.transport.connect).not.toHaveBeenCalled();
+    await h.controller.end();
   });
   it('keeps mute intent when resuming and rejects callbacks from the previous connection', async () => {
     const h = harness(); await h.controller.start(target);
