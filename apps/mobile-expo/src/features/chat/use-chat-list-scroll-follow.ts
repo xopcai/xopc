@@ -114,8 +114,9 @@ export function useChatListScrollFollow({
   const onContentSizeChange = useCallback((_width: number, height: number) => {
     metricsRef.current.contentHeight = height;
     syncButtonVisibility();
-    scheduleFollow();
-  }, [syncButtonVisibility, scheduleFollow]);
+    // FlashList owns continuous bottom anchoring while the streamed row changes height.
+    // Imperatively scrolling here would race its maintainVisibleContentPosition correction.
+  }, [syncButtonVisibility]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     metricsRef.current.viewportHeight = event.nativeEvent.layout.height;

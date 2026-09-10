@@ -85,11 +85,14 @@ function formatToolDisplayText(block: ToolUseContent): string {
 export const ToolUseBlock = memo(function ToolUseBlock({
   block,
   inline,
+  deferCompletedDetails = false,
   labels,
 }: {
   block: ToolUseContent;
   /** When true, renders as a compact row inside AssistantStepsBlock. */
   inline?: boolean;
+  /** Keep a completed step height-stable until the parent assistant turn settles. */
+  deferCompletedDetails?: boolean;
   labels?: ToolUseBlockLabels;
 }) {
   const { colors, isDark } = useTheme();
@@ -101,6 +104,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
   const bodyColor = colors.text.primary;
   const isRunning = block.status === 'running';
   const isError = block.status === 'error';
+  const showCompletedDetails = !isRunning && !deferCompletedDetails;
 
   const friendlyLabels = labels ?? {
     searchedWeb: 'Searched web',
@@ -191,7 +195,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {detailLine}
             </Text>
           ) : null}
-          {isError && resultText ? (
+          {isError && resultText && showCompletedDetails ? (
             <Text
               variant="bodySmall"
               numberOfLines={2}
@@ -200,7 +204,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               {resultText}
             </Text>
           ) : null}
-          {!isRunning ? (
+          {showCompletedDetails ? (
             <Pressable
               style={inlineStyles.detailsToggle}
               onPress={() => setDetailsExpanded((v) => !v)}
@@ -218,7 +222,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               </Text>
             </Pressable>
           ) : null}
-          {detailsExpanded && !isRunning ? (
+          {detailsExpanded && showCompletedDetails ? (
             <ScrollView
               style={[inlineStyles.detailsScroll, { backgroundColor: colors.surface.input }]}
               nestedScrollEnabled
@@ -251,7 +255,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
               </View>
             </ScrollView>
           ) : null}
-          {!isRunning && !isError && webSearchLinks.length > 0 ? (
+          {showCompletedDetails && !isError && webSearchLinks.length > 0 ? (
             <WebSearchToolResultLinks
               links={webSearchLinks}
               labels={{

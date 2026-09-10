@@ -8,7 +8,7 @@ import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { spacing, useTheme } from '../../theme';
-import { dataSharingConsent, revokeDataSharingConsent } from './data-sharing-consent';
+import { reviewDataSharingConsent, revokeDataSharingConsent } from './data-sharing-consent';
 
 export function PrivacyScreen({ onClose }: { onClose?: () => void } = {}) {
   const router = useRouter();
@@ -27,7 +27,7 @@ export function PrivacyScreen({ onClose }: { onClose?: () => void } = {}) {
   ];
   const review = async () => {
     setBusy(true);
-    try { await dataSharingConsent.ensure(true); }
+    try { await reviewDataSharingConsent(); }
     catch (error) { Alert.alert(m.title, error instanceof Error ? error.message : m.consentRequired); }
     finally { setBusy(false); }
   };
