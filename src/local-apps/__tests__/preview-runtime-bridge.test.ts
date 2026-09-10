@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
 import {
@@ -56,14 +56,14 @@ describe('local app preview runtime bridge', () => {
       ports: [port],
     }));
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(messages).toContainEqual(expect.objectContaining({
-      source: 'xopc-local-app-preview',
-      version: 1,
-      type: 'ready',
-    }));
-    expect(messages).toContainEqual(expect.objectContaining({ type: 'acceptance' }));
+    await vi.waitFor(() => {
+      expect(messages).toContainEqual(expect.objectContaining({
+        source: 'xopc-local-app-preview',
+        version: 1,
+        type: 'ready',
+      }));
+      expect(messages).toContainEqual(expect.objectContaining({ type: 'acceptance' }));
+    });
     dom.window.close();
   });
 
@@ -92,11 +92,11 @@ describe('local app preview runtime bridge', () => {
     } as MessagePort);
     dom.window.dispatchEvent(new dom.window.ErrorEvent('error', { message: 'reconnect-check' }));
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(firstClosed).toBe(true);
-    expect(secondMessages).toContainEqual(expect.objectContaining({ type: 'ready' }));
-    expect(secondMessages).toContainEqual(expect.objectContaining({ type: 'acceptance' }));
+    await vi.waitFor(() => {
+      expect(firstClosed).toBe(true);
+      expect(secondMessages).toContainEqual(expect.objectContaining({ type: 'ready' }));
+      expect(secondMessages).toContainEqual(expect.objectContaining({ type: 'acceptance' }));
+    });
     expect(firstMessages).not.toContainEqual(expect.objectContaining({
       type: 'error',
       detail: expect.objectContaining({ message: 'reconnect-check' }),
