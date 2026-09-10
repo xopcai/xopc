@@ -7,6 +7,7 @@ describe('data sharing consent', () => {
   let revision: string;
   let memory: Map<string, string>;
   let confirm: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+  let onGranted: ReturnType<typeof vi.fn<(gatewayId: string, revision: string) => void>>;
   let controller: ReturnType<typeof createConsentController>;
 
   beforeEach(() => {
@@ -14,6 +15,7 @@ describe('data sharing consent', () => {
     revision = 'revision-one';
     memory = new Map();
     confirm = vi.fn(async () => true);
+    onGranted = vi.fn();
     controller = createConsentController({
       activeGatewayId: () => gatewayId,
       loadDisclosure: async () => ({ version: 1, revision, recipients: [] }),
@@ -21,6 +23,7 @@ describe('data sharing consent', () => {
       read: (key) => memory.get(key),
       write: (key, value) => { memory.set(key, value); },
       errorMessage: () => 'Permission required',
+      onGranted,
     });
   });
 
@@ -43,6 +46,7 @@ describe('data sharing consent', () => {
     await vi.waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
     finish(true);
     await Promise.all([first, second]);
+    expect(onGranted).toHaveBeenCalledExactlyOnceWith('gateway-one', 'revision-one');
   });
 
   it('declines without saving and does not repeatedly prompt on background retries', async () => {

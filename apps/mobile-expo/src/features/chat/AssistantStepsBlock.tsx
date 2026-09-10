@@ -9,7 +9,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { AnimatedDisclosureIcon } from '../../components/AnimatedDisclosureIcon';
 import {
@@ -24,7 +23,6 @@ import { chatColors } from './styles';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolUseBlock } from './ToolUseBlock';
 import { useMessages } from '../../i18n/messages';
-import { motion, useReducedMotion } from '../../motion';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { useTheme } from '../../theme';
 
@@ -51,7 +49,7 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
 
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setTick((n) => n + 1), 500);
+    const id = setInterval(() => setTick((n) => n + 1), 1_000);
     return () => clearInterval(id);
   }, [active]);
 
@@ -88,7 +86,6 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   const m = useMessages();
   const language = usePreferencesStore((s) => s.language);
   const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
 
   const visibleBlocks = useMemo(
     () => resolveStepBlocksForRender(blocks, isMessageStreaming),
@@ -192,10 +189,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   const headerMain = completedHeader;
 
   return (
-    <Animated.View
-      layout={reducedMotion || anyActive ? undefined : LinearTransition.duration(motion.duration.standard)}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <Pressable
         style={({ pressed }) => [
           styles.header,
@@ -242,11 +236,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
       </Pressable>
 
       {expanded ? (
-        <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
-          exiting={reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
-          style={styles.timelineOuter}
-        >
+        <View style={styles.timelineOuter}>
           <View
             style={[
               styles.timeline,
@@ -273,14 +263,15 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
                   key={`tool-${block.id || i}`}
                   block={block}
                   inline
+                  deferCompletedDetails={isMessageStreaming}
                   labels={stepLabels}
                 />
               );
             })}
           </View>
-        </Animated.View>
+        </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 });
 
@@ -351,9 +342,11 @@ const styles = StyleSheet.create({
   },
   durationText: {
     flexShrink: 0,
+    minWidth: 52,
     fontSize: 11,
     color: chatColors.timestamp,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   timelineOuter: {
     paddingHorizontal: 4,

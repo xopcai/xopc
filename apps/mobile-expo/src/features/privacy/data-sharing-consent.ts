@@ -16,6 +16,8 @@ type ConsentPrompt = {
   finish: (accepted: boolean) => void;
 };
 
+const DATA_SHARING_CONSENT_GRANTED_EVENT = 'data-sharing-consent-granted';
+
 export const useDataSharingPrompt = create<{ prompt: ConsentPrompt | null }>(() => ({ prompt: null }));
 
 function copy() {
@@ -27,16 +29,23 @@ export const dataSharingConsent = createConsentController({
   read: (key) => storage.getString(key),
   write: (key, value) => storage.set(key, value),
   errorMessage: () => copy().consentRequired,
+  onGranted: (gatewayId) => {
+    DeviceEventEmitter.emit(DATA_SHARING_CONSENT_GRANTED_EVENT, gatewayId);
+  },
   loadDisclosure: (gatewayId) => queryClient.fetchQuery({
     queryKey: ['mobile-privacy', gatewayId],
     staleTime: 0,
     retry: false,
     queryFn: async () => {
       const response = await apiFetch('/api/mobile/privacy');
-      if (!response.ok) throw new DataSharingConsentError(copy().disclosureUnavailable);
+      if (!response.ok) {
+        throw new DataSharingConsentError(copy().disclosureUnavailable, 'disclosure-unavailable');
+      }
       const json = await response.json() as { payload?: unknown };
       const parsed = MobilePrivacyDisclosureSchema.safeParse(json.payload);
-      if (!parsed.success) throw new DataSharingConsentError(copy().disclosureUnavailable);
+      if (!parsed.success) {
+        throw new DataSharingConsentError(copy().disclosureUnavailable, 'disclosure-unavailable');
+      }
       return parsed.data;
     },
   }),
@@ -74,4 +83,20 @@ export function revokeDataSharingConsent(): void {
   dataSharingConsent.revoke(gatewayId);
   DeviceEventEmitter.emit('voice-consent-revoked');
   useDataSharingPrompt.getState().prompt?.finish(false);
+}
+
+/** Opens the global disclosure dialog and notifies mounted surfaces after approval. */
+export async function reviewDataSharingConsent(): Promise<void> {
+  await dataSharingConsent.ensure(true);
+}
+
+export function subscribeDataSharingConsentGranted(
+  listener: (gatewayId: string) => void,
+): () => void {
+  const subscription = DeviceEventEmitter.addListener(DATA_SHARING_CONSENT_GRANTED_EVENT, listener);
+  return () => subscription.remove();
+}
+
+export function isDataSharingConsentRequiredError(error: unknown): boolean {
+  return error instanceof DataSharingConsentError && error.reason === 'consent-required';
 }

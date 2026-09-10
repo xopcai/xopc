@@ -22,7 +22,6 @@ import { typography, useTheme } from '../../theme';
 import { GatewayUnreachableTip } from '../gateway/GatewayUnreachableTip';
 import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
 import { MessageBubble } from './MessageBubble';
-import { isLastAssistantMessage } from './composer-send-helpers';
 import { messageKey } from './message-key';
 import type { Message, ProgressState, ReasoningLevel } from './messages.types';
 import type { MobileWelcomeStarter } from './mobile-welcome-starters';
@@ -30,7 +29,11 @@ import { useChatListScrollFollow } from './use-chat-list-scroll-follow';
 
 const LIST_BASE_PADDING_BOTTOM = 8;
 const LOADING_INDICATOR_DELAY_MS = 160;
-const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = { startRenderingFromBottom: true } as const;
+const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = {
+  startRenderingFromBottom: true,
+  autoscrollToBottomThreshold: 0.08,
+  animateAutoScrollToBottom: false,
+} as const;
 
 function useDelayedLoadingIndicator(loading: boolean): boolean {
   const [visible, setVisible] = useState(false);
@@ -129,6 +132,13 @@ export const MessageList = memo(function MessageList({
   const keyboardPadding = useKeyboardListPadding();
   const showLoadingIndicator = useDelayedLoadingIndicator(loading);
   const listRef = useRef<FlashListRef<Message>>(null);
+  const lastMessageIndex = messages.length - 1;
+  const latestAssistantIndex = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      if (messages[index].role === 'assistant') return index;
+    }
+    return -1;
+  }, [messages]);
 
   const {
     listKey,
@@ -189,7 +199,7 @@ export const MessageList = memo(function MessageList({
 
   const renderItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
-      const isLast = index === messages.length - 1;
+      const isLast = index === lastMessageIndex;
       const isStreamRow = streaming && isLast && item.role === 'assistant';
       return (
         <ChatRenderErrorBoundary
@@ -205,7 +215,7 @@ export const MessageList = memo(function MessageList({
             message={item}
             reasoningLevel={reasoningLevel}
             messageIndex={index}
-            isLatestAssistant={isLastAssistantMessage(messages, index)}
+            isLatestAssistant={index === latestAssistantIndex}
             isStreaming={isStreamRow}
             progress={isStreamRow ? progress : null}
             sessionKey={sessionKey}
@@ -217,7 +227,7 @@ export const MessageList = memo(function MessageList({
             onAssistantCopy={onAssistantCopy}
             onAssistantSaveToNote={onAssistantSaveToNote}
             onAssistantRegenerate={
-              onAssistantRegenerate && isLastAssistantMessage(messages, index)
+              onAssistantRegenerate && index === latestAssistantIndex
                 ? () => onAssistantRegenerate(index)
                 : undefined
             }
@@ -226,7 +236,8 @@ export const MessageList = memo(function MessageList({
       );
     },
     [
-      messages,
+      lastMessageIndex,
+      latestAssistantIndex,
       reasoningLevel,
       onUserMessageCopy,
       onUserMessageEdit,
