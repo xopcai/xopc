@@ -8,15 +8,19 @@ import { queryClient } from '../../query/query-client';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { consentDecisionStorage } from './consent-storage';
-import { createConsentController, DataSharingConsentError, requiresDataSharingConsent } from './consent-controller';
+import {
+  createConsentController,
+  type ConsentDecision,
+  DataSharingConsentError,
+  requiresDataSharingConsent,
+  waitForConsentDecision,
+} from './consent-controller';
 
 type ConsentPrompt = {
   gatewayId: string;
   disclosure: MobilePrivacyDisclosure;
-  finish: (accepted: boolean) => void;
+  finish: (decision: ConsentDecision) => void;
 };
-
-const DATA_SHARING_CONSENT_GRANTED_EVENT = 'data-sharing-consent-granted';
 
 export const useDataSharingPrompt = create<{ prompt: ConsentPrompt | null }>(() => ({ prompt: null }));
 
@@ -29,9 +33,6 @@ export const dataSharingConsent = createConsentController({
   read: (key) => consentDecisionStorage.getString(key),
   write: (key, value) => consentDecisionStorage.set(key, value),
   errorMessage: () => copy().consentRequired,
-  onGranted: (gatewayId) => {
-    DeviceEventEmitter.emit(DATA_SHARING_CONSENT_GRANTED_EVENT, gatewayId);
-  },
   loadDisclosure: (gatewayId) => queryClient.fetchQuery({
     queryKey: ['mobile-privacy', gatewayId],
     staleTime: 0,
@@ -51,15 +52,15 @@ export const dataSharingConsent = createConsentController({
   }),
   confirm: (disclosure, gatewayId) => {
     if (AppState.currentState !== 'active') return Promise.reject(new DataSharingConsentError(copy().consentRequired));
-    useDataSharingPrompt.getState().prompt?.finish(false);
-    return new Promise<boolean>((resolve) => {
+    useDataSharingPrompt.getState().prompt?.finish('cancelled');
+    return new Promise<ConsentDecision>((resolve) => {
       const prompt: ConsentPrompt = {
         gatewayId,
         disclosure,
-        finish: (accepted) => {
+        finish: (decision) => {
           if (useDataSharingPrompt.getState().prompt !== prompt) return;
           useDataSharingPrompt.setState({ prompt: null });
-          resolve(accepted);
+          resolve(decision);
         },
       };
       useDataSharingPrompt.setState({ prompt });
@@ -69,12 +70,11 @@ export const dataSharingConsent = createConsentController({
 
 export async function authorizeMobileRequest(path: string, method: string, signal?: AbortSignal | null): Promise<void> {
   if (!requiresDataSharingConsent(path, method)) return;
-  if (signal?.aborted) throw new DataSharingConsentError(copy().consentRequired);
-  const onAbort = () => useDataSharingPrompt.getState().prompt?.finish(false);
-  signal?.addEventListener('abort', onAbort, { once: true });
-  try { await dataSharingConsent.ensure(false, signal ?? undefined); }
-  finally { signal?.removeEventListener('abort', onAbort); }
-  if (signal?.aborted) throw new DataSharingConsentError(copy().consentRequired);
+  await waitForConsentDecision(
+    () => dataSharingConsent.ensure(),
+    signal,
+    () => copy().consentRequired,
+  );
 }
 
 export function revokeDataSharingConsent(): void {
@@ -82,21 +82,10 @@ export function revokeDataSharingConsent(): void {
   if (!gatewayId) return;
   dataSharingConsent.revoke(gatewayId);
   DeviceEventEmitter.emit('voice-consent-revoked');
-  useDataSharingPrompt.getState().prompt?.finish(false);
+  useDataSharingPrompt.getState().prompt?.finish('cancelled');
 }
 
-/** Opens the global disclosure dialog and notifies mounted surfaces after approval. */
+/** Opens the global disclosure dialog even when the current revision was already approved. */
 export async function reviewDataSharingConsent(): Promise<void> {
   await dataSharingConsent.ensure(true);
-}
-
-export function subscribeDataSharingConsentGranted(
-  listener: (gatewayId: string) => void,
-): () => void {
-  const subscription = DeviceEventEmitter.addListener(DATA_SHARING_CONSENT_GRANTED_EVENT, listener);
-  return () => subscription.remove();
-}
-
-export function isDataSharingConsentRequiredError(error: unknown): boolean {
-  return error instanceof DataSharingConsentError && error.reason === 'consent-required';
 }
