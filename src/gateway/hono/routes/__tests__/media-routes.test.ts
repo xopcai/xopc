@@ -63,6 +63,10 @@ describe('media routes', () => {
     expect(response.headers.get('Accept-Ranges')).toBe('bytes');
     expect(response.headers.get('Content-Length')).toBe('10');
     await expect(response.text()).resolves.toBe('0123456789');
+    expect(readMediaReference).toHaveBeenCalledWith(
+      'media://tts/reply.mp3',
+      32 * 1024 * 1024,
+    );
   });
 
   it.each([

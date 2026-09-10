@@ -8,10 +8,16 @@ import {
   isImageInboundAttachment,
   type MediaRef,
 } from '../../channels/attachments/inbound-persist.js';
-import { readMediaReferenceBase64 } from '../../media/media-reference.js';
+import { readMediaReference } from '../../media/media-reference.js';
+import { mimeTypeFromMediaPath } from '../../media/store.js';
 import { expandAtFileMentionsInPlainText } from '../context/expand-at-file-mentions.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
+import {
+  MODEL_IMAGE_MAX_BYTES,
+  MODEL_IMAGE_SOURCE_MAX_BYTES,
+  prepareImageForModel,
+} from '../image/prepare-image-for-model.js';
 import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 
@@ -26,8 +32,6 @@ export type LlmUserTurn = {
   text: string;
   images: ImageContent[];
 };
-
-const VISION_INLINE_MAX_BYTES = 2 * 1024 * 1024;
 
 function textBlocksFromContent(content: unknown): string[] {
   if (typeof content === 'string') {
@@ -96,10 +100,15 @@ export function assertTranscriptUserMessage(message: AgentMessage): void {
 }
 
 async function readImageBase64FromRef(ref: MediaRef): Promise<{ data: string; mimeType: string }> {
-  const loaded = await readMediaReferenceBase64(ref.uri, VISION_INLINE_MAX_BYTES);
+  const loaded = await readMediaReference(ref.uri, MODEL_IMAGE_SOURCE_MAX_BYTES);
+  const prepared = await prepareImageForModel(
+    loaded.buffer,
+    ref.mimeType || mimeTypeFromMediaPath(loaded.path),
+    MODEL_IMAGE_MAX_BYTES,
+  );
   return {
-    data: loaded.data,
-    mimeType: ref.mimeType || loaded.mimeType,
+    data: prepared.buffer.toString('base64'),
+    mimeType: prepared.mimeType,
   };
 }
 
