@@ -329,6 +329,15 @@ export class VoiceRealtimeRuntime {
     return this.conversationReservations.has(sessionKey);
   }
 
+  cancelSession(sessionId: string, ticket: string, principalId: string): boolean {
+    const key = ticketKey(ticket);
+    const claim = this.tickets.get(key);
+    if (!claim || claim.sessionId !== sessionId || claim.principalId !== principalId) return false;
+    this.tickets.delete(key);
+    this.releaseConversationReservation(claim);
+    return true;
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;

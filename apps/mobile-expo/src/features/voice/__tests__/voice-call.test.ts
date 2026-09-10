@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  status: vi.fn(), identity: vi.fn(), preflight: vi.fn(), create: vi.fn(),
+  status: vi.fn(), identity: vi.fn(), preflight: vi.fn(), create: vi.fn(), cancel: vi.fn(),
   start: vi.fn(), stop: vi.fn(), capture: vi.fn(), connect: vi.fn(),
 }));
 vi.mock('../../../query/query-client', () => ({
@@ -11,6 +11,7 @@ vi.mock('../../../query/query-client', () => ({
 vi.mock('../../../query/voice', () => ({
   voiceStatusOptions: () => ({}), voiceSessionIdentity: mocks.identity,
   preflightVoice: mocks.preflight, createVoiceConnection: mocks.create,
+  cancelVoiceConnection: mocks.cancel,
 }));
 vi.mock('../../../stores/gateway-store', () => ({
   useGatewayStore: { getState: () => ({ activeGatewayId: 'gateway' }) },
@@ -39,7 +40,7 @@ import { voiceCall } from '../voice-call';
 // Match the device runtime, not Node's more complete AbortSignal API.
 const requireReactNative = createRequire(import.meta.resolve('react-native/package.json'));
 const { AbortController: NativeAbortController } = requireReactNative('abort-controller/dist/abort-controller');
-const target = { gatewayId: 'gateway', sessionKey: 'chat', background: false };
+const target = { gatewayId: 'gateway', sessionKey: 'chat', background: false, identity: 'original', name: 'Assistant' };
 const identity = { sessionId: 'original', name: 'Assistant' };
 
 beforeEach(() => {
@@ -60,21 +61,21 @@ describe('mobile voice call entry with React Native AbortController', () => {
     await voiceCall.start({ ...target, engine });
     expect(voiceCall.getSnapshot()).toMatchObject({ phase: 'connected', engine, error: undefined });
     expect(mocks.status).toHaveBeenCalledOnce();
-    expect(mocks.preflight).toHaveBeenCalledWith({ purpose: 'conversation', engine, sessionKey: 'chat' }, expect.anything());
+    expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.start).toHaveBeenCalledOnce();
     expect(mocks.create).toHaveBeenCalledOnce();
-    expect(mocks.identity).toHaveBeenCalledTimes(2);
+    expect(mocks.identity).not.toHaveBeenCalled();
     expect(mocks.connect).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledWith(true);
   });
 
   it('does not open the microphone when cancelled during preparation', async () => {
-    let resolveIdentity!: (value: typeof identity) => void;
-    mocks.identity.mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
+    let resolveStatus!: (value: { defaultEngine: 'omni'; capabilities: { omni: { available: true } } }) => void;
+    mocks.status.mockImplementationOnce(() => new Promise(resolve => { resolveStatus = resolve; }));
     const starting = voiceCall.start(target);
-    await vi.waitFor(() => expect(mocks.identity).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(mocks.status).toHaveBeenCalledOnce());
     const ending = voiceCall.end();
-    resolveIdentity(identity);
+    resolveStatus({ defaultEngine: 'omni', capabilities: { omni: { available: true } } });
     await Promise.all([starting, ending]);
     expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.start).not.toHaveBeenCalled();
@@ -82,25 +83,13 @@ describe('mobile voice call entry with React Native AbortController', () => {
     expect(voiceCall.getSnapshot().phase).toBe('idle');
   });
 
-  it('does not connect when cancelled during the post-creation identity check', async () => {
-    let resolveIdentity!: (value: typeof identity) => void;
-    mocks.identity.mockResolvedValueOnce(identity)
-      .mockImplementationOnce(() => new Promise(resolve => { resolveIdentity = resolve; }));
-    const starting = voiceCall.start(target);
-    await vi.waitFor(() => expect(mocks.identity).toHaveBeenCalledTimes(2));
-    const ending = voiceCall.end();
-    resolveIdentity(identity);
-    await Promise.all([starting, ending]);
-    expect(mocks.connect).not.toHaveBeenCalled();
-    expect(mocks.capture).not.toHaveBeenCalledWith(true);
-    expect(voiceCall.getSnapshot().phase).toBe('idle');
-  });
-
-  it('still rejects a changed session identity before connecting', async () => {
-    mocks.identity.mockResolvedValueOnce(identity).mockResolvedValueOnce({ sessionId: 'changed' });
+  it('checks identity and preflights when recovering a call', async () => {
     await voiceCall.start(target);
+    await voiceCall.pause('NETWORK');
+    mocks.identity.mockResolvedValueOnce({ sessionId: 'changed' });
+    await voiceCall.resume();
+    expect(mocks.identity).toHaveBeenCalledOnce();
+    expect(mocks.preflight).toHaveBeenCalledOnce();
     expect(voiceCall.getSnapshot()).toMatchObject({ phase: 'paused', error: 'SESSION_CHANGED' });
-    expect(mocks.connect).not.toHaveBeenCalled();
-    expect(mocks.stop).toHaveBeenCalled();
   });
 });
