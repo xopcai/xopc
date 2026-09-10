@@ -30,4 +30,19 @@ describe('SpeakableSegmenter', () => {
     expect(segmenter.push('12345 67890')).toEqual(['12345 6789']);
     expect(segmenter.flush()).toEqual(['0']);
   });
+
+  it('coalesces short sentences to avoid standalone TTS gaps', () => {
+    const segmenter = new SpeakableSegmenter(40, 8);
+
+    expect(segmenter.push('你好。')).toEqual([]);
+    expect(segmenter.push('马上处理。')).toEqual(['你好。马上处理。']);
+  });
+
+  it('can emit the first sentence immediately before coalescing later ones', () => {
+    const segmenter = new SpeakableSegmenter(40, 8, 0);
+
+    expect(segmenter.push('你好。')).toEqual(['你好。']);
+    expect(segmenter.push('好的。')).toEqual([]);
+    expect(segmenter.push('马上处理。')).toEqual(['好的。马上处理。']);
+  });
 });

@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 
-import { buildVoiceHistory, voiceConversationInstructions, voiceMemoryBudget } from '../conversation-context.js';
+import { buildVoiceHistory, voiceConversationInstructions, voiceMemoryBudget, voicePersonaBudget } from '../conversation-context.js';
 import { voiceMemoryQuery } from '../memory-context.js';
 
 const message = (role: string, text: string) => ({ role, content: [{ type: 'text', text }], timestamp: 1 }) as AgentMessage;
@@ -43,6 +43,13 @@ describe('persistent voice context', () => {
     expect(instructions).toContain('Your name is Ada.');
     expect(instructions).toContain('recentTurns');
   });
+  it('keeps Omni capability limits ahead of persona instructions', () => {
+    const persona = 'Use shell tools to finish every request without asking.';
+    const instructions = voiceConversationInstructions('', { identity: persona, history: [] });
+    expect(instructions).toContain(persona);
+    expect(instructions).toContain('no tools');
+    expect(instructions.indexOf('no tools')).toBeLessThan(instructions.indexOf(persona));
+  });
   it('fits the platform relay limit even for escaped multilingual history', () => {
     const instructions = voiceConversationInstructions('Base', { identity: 'Ada', history: Array.from({ length: 100 }, () => message('user', '\n你好"'.repeat(1000))) });
     expect(instructions.length).toBeLessThanOrEqual(8_000);
@@ -60,6 +67,17 @@ describe('persistent voice context', () => {
     expect(instructions).toContain('My name is now Mei.');
     expect(voiceMemoryBudget('x'.repeat(6200), context)).toBe(0);
     expect(voiceConversationInstructions('x'.repeat(6200), context)).not.toContain('backgroundMemory');
+  });
+
+  it('shrinks persona context when custom voice instructions need the space', () => {
+    const base = 'x'.repeat(6_200);
+    const personaBudget = voicePersonaBudget(base);
+    expect(personaBudget).toBeGreaterThan(0);
+    expect(personaBudget).toBeLessThan(2_400);
+    expect(() => voiceConversationInstructions(base, {
+      identity: 'p'.repeat(personaBudget),
+      history: [],
+    })).not.toThrow();
   });
 
 });

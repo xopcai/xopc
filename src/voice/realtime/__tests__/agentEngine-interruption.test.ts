@@ -120,6 +120,30 @@ describe('Agent voice interruption cleanup', () => {
     releaseTool();
   });
 
+  it('prefetches the next TTS segment before the current stream finishes', async () => {
+    let finishFirst: (() => void) | undefined;
+    cleanups.push(() => finishFirst?.());
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: 'This first sentence is long enough to start speaking now!' } };
+      yield { type: 'assistant_delta', payload: { delta: ' The second sentence is also long enough to synthesize early!' } };
+    });
+    mocks.speak.mockImplementationOnce(async () => ({
+      outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { finishFirst = () => controller.close(); } }),
+    })).mockImplementationOnce(async () => ({
+      outputFormat: 'pcm', release: test.release,
+      audioStream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
+    }));
+
+    test.final('first');
+    await vi.waitFor(() => expect(mocks.speak).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+    expect(test.send.mock.calls.some(([type]) => type === 'response.done')).toBe(false);
+    const finish = finishFirst;
+    finishFirst = undefined;
+    finish?.();
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
+  });
+
   it('cancels a thinking response only after barge-in transcription is final', async () => {
     let responseSignal!: AbortSignal;
     const test = await setup(async function* (_text, _key, signal) {
