@@ -132,19 +132,22 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     startAutoSession();
   }, [urlSessionKey, gatewayOnline, startAutoSession]);
 
-  useEffect(() => subscribeDataSharingConsentGranted((gatewayId) => {
-    if (gatewayId !== scopeKey || !bootstrapConsentRequiredRef.current) return;
+  const resumeAfterConsent = useCallback((gatewayId?: string) => {
+    if ((gatewayId && gatewayId !== scopeKey) || !bootstrapConsentRequiredRef.current) return;
     bootstrapConsentRequiredRef.current = false;
     setBootstrapConsentRequired(false);
     setBootstrapError(null);
     autoSessionAttemptedRef.current = false;
     startAutoSession();
-  }), [scopeKey, startAutoSession]);
+  }, [scopeKey, startAutoSession]);
+
+  useEffect(() => subscribeDataSharingConsentGranted(resumeAfterConsent), [resumeAfterConsent]);
 
   const reviewConsent = useCallback(() => {
     if (!bootstrapConsentRequiredRef.current || reviewingConsent) return;
     setReviewingConsent(true);
     void reviewDataSharingConsent()
+      .then(() => resumeAfterConsent())
       .catch((error) => {
         const consentRequired = isDataSharingConsentRequiredError(error);
         bootstrapConsentRequiredRef.current = consentRequired;
@@ -152,7 +155,7 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
         setBootstrapError(error instanceof Error ? error.message : messages.privacy.consentRequired);
       })
       .finally(() => setReviewingConsent(false));
-  }, [messages.privacy.consentRequired, reviewingConsent]);
+  }, [messages.privacy.consentRequired, resumeAfterConsent, reviewingConsent]);
 
   return {
     pendingBootstrapKey,

@@ -77,12 +77,12 @@ export function useChatListScrollFollow({
       buttonVisibleRef.current = false;
       setShowScrollToBottom(false);
       onAtBottomChange?.(true);
-    } else if (
-      messages.length > previous.length && lastKey !== previous.lastKey
-      && (last?.role === 'user' || last?.role === 'user-with-attachments')
-    ) {
-      // Sending a new prompt may pin; an incoming answer must not interrupt history reading.
-      setPinned(true);
+    } else if (messages.length > previous.length && lastKey !== previous.lastKey) {
+      if (last?.role === 'user' || last?.role === 'user-with-attachments') {
+        // A newly sent prompt always returns the conversation to the live edge.
+        setPinned(true);
+      }
+      // Assistant rows follow only while already pinned; history readers stay undisturbed.
       scheduleFollow();
     }
     previousRef.current = { sessionKey, lastKey, length: messages.length };
@@ -112,11 +112,14 @@ export function useChatListScrollFollow({
   }, []);
 
   const onContentSizeChange = useCallback((_width: number, height: number) => {
+    const previousHeight = metricsRef.current.contentHeight;
     metricsRef.current.contentHeight = height;
     syncButtonVisibility();
     // FlashList owns continuous bottom anchoring while the streamed row changes height.
-    // Imperatively scrolling here would race its maintainVisibleContentPosition correction.
-  }, [syncButtonVisibility]);
+    // A completion can collapse thinking/tool details or replace the live row; explicitly
+    // restore the live edge after that shrink because native anchoring retains the old row.
+    if (previousHeight > 0 && height < previousHeight - 1) scheduleFollow();
+  }, [scheduleFollow, syncButtonVisibility]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     metricsRef.current.viewportHeight = event.nativeEvent.layout.height;
