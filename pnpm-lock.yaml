@@ -135,6 +135,9 @@ importers:
       semver:
         specifier: ^7.8.1
         version: 7.8.1
+      sharp:
+        specifier: 0.35.3
+        version: 0.35.3(@types/node@25.9.1)
       silk-wasm:
         specifier: ^3.7.1
         version: 3.7.1

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { extname, join, parse as parsePath } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -11,6 +11,18 @@ export const MEDIA_MAX_BYTES = 5 * 1024 * 1024;
 
 const MEDIA_DIR_MODE = 0o700;
 const MEDIA_FILE_MODE = 0o644;
+
+function formatMediaSize(bytes: number): string {
+  const mib = bytes / (1024 * 1024);
+  const formattedMiB = Number.isInteger(mib) ? String(mib) : mib.toFixed(2);
+  return `${formattedMiB} MiB (${bytes} bytes)`;
+}
+
+function mediaReadLimitError(id: string, actualBytes: number, maxBytes: number): Error {
+  return new Error(
+    `Media ${JSON.stringify(id)} exceeds read limit: ${formatMediaSize(actualBytes)}, limit ${formatMediaSize(maxBytes)}`,
+  );
+}
 
 const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',
@@ -159,9 +171,13 @@ export async function readMediaBuffer(
   maxBytes = MEDIA_MAX_BYTES,
 ): Promise<{ id: string; path: string; buffer: Buffer; size: number }> {
   const path = resolveMediaBufferPath(id, bucket);
+  const metadata = await stat(path);
+  if (metadata.size > maxBytes) {
+    throw mediaReadLimitError(id, metadata.size, maxBytes);
+  }
   const buffer = await readFile(path);
   if (buffer.byteLength > maxBytes) {
-    throw new Error(`Media ${JSON.stringify(id)} exceeds read limit`);
+    throw mediaReadLimitError(id, buffer.byteLength, maxBytes);
   }
   return { id, path, buffer, size: buffer.byteLength };
 }
