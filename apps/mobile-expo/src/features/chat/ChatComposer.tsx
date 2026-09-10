@@ -13,19 +13,11 @@ import {
   Text,
   TextInput,
   View,
-  type View as RNView,
 } from 'react-native';
-import Animated, {
-  Extrapolation,
-  interpolate,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
 import { Icon } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
-import { motion } from '../../motion';
 import { radii, spacing, typography, useTheme } from '../../theme';
-import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
 import { detectAtMentionRange, formatWorkspacePath, replaceAtMention } from './at-mention-utils';
 import { canSendComposerDraft } from './composer-send-helpers';
 import {
@@ -70,7 +62,6 @@ export const ChatComposer = memo(function ChatComposer({
   suggestionDraft,
   onConsumeSuggestionDraft,
   keyboardVisible = false,
-  overlayShell = false,
   contextRefs,
   onContextRefsChange,
   contextControl,
@@ -84,7 +75,6 @@ export const ChatComposer = memo(function ChatComposer({
   suggestionDraft?: string;
   onConsumeSuggestionDraft?: () => void;
   keyboardVisible?: boolean;
-  overlayShell?: boolean;
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
   contextControl?: ReactNode;
@@ -92,8 +82,6 @@ export const ChatComposer = memo(function ChatComposer({
   const m = useMessages();
   const cm = m.chat;
   const { colors, elevation } = useTheme();
-  const transition = useOptionalWorkspaceTransition();
-  const shellRef = useRef<RNView>(null);
 
   const [mode, setMode] = useState<InputMode>('text');
   const [draft, setDraft] = useState('');
@@ -133,37 +121,6 @@ export const ChatComposer = memo(function ChatComposer({
       appendSubscription.remove();
     };
   }, []);
-
-  const measureShell = useCallback(async () => {
-    return new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
-      shellRef.current?.measureInWindow((x, y, width, height) => {
-        if (width <= 0 || height <= 0) {
-          resolve(null);
-          return;
-        }
-        resolve({ x, y, width, height });
-      });
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!overlayShell || !transition) return;
-    transition.registerComposerMeasurer(measureShell);
-    return () => transition.registerComposerMeasurer(null);
-  }, [measureShell, overlayShell, transition]);
-
-  const shellRevealStyle = useAnimatedStyle(() => {
-    if (!overlayShell || !transition) return { opacity: 1 };
-    const t = transition.progress.value;
-    return {
-      opacity: interpolate(
-        t,
-        [0, motion.hero.revealComposerAt, 1],
-        [0, 0, 1],
-        Extrapolation.CLAMP,
-      ),
-    };
-  }, [overlayShell, transition]);
 
   const att = useComposerAttachments({
     maxAttachmentsReached: cm.maxAttachmentsReached,
@@ -694,19 +651,11 @@ export const ChatComposer = memo(function ChatComposer({
 
       {renderCaptureRail()}
 
-      <Animated.View
-        ref={shellRef}
-        onLayout={() => {
-          if (!overlayShell) return;
-          void measureShell().then((rect) => {
-            if (rect) transition?.notifyComposerAnchor(rect);
-          });
-        }}
+      <View
         style={[
           styles.shell,
           elevation.raised,
           { backgroundColor: surface, borderColor: shellBorder },
-          shellRevealStyle,
         ]}
       >
         {mode === 'text' ? (
@@ -802,7 +751,7 @@ export const ChatComposer = memo(function ChatComposer({
             {streaming ? renderStreamingRightActions() : renderAttachButton()}
           </View>
         )}
-      </Animated.View>
+      </View>
 
       <AttachmentSourceSheet
         visible={att.sheetOpen}

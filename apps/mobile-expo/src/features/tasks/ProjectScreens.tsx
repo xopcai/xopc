@@ -19,7 +19,7 @@ import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
-import { dismissOrHome } from '../../lib/navigation';
+import { dismissOrRoot } from '../../lib/navigation';
 import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { updateNote } from '../../query/notes';
@@ -141,7 +141,7 @@ export function CreateTaskScreen() {
       style={[styles.screen, { backgroundColor: colors.surface.base }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <NativeScreenHeader title={labels.create} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.create} onBack={() => dismissOrRoot(router)} />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"

@@ -26,7 +26,7 @@ import { useDelayedDelete } from '../../hooks/use-delayed-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 
 import { useMessages, t } from '../../i18n/messages';
-import { dismissOrHome, noteDetailRoute, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, noteDetailRoute, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import {
   createBlankNote,
@@ -57,15 +57,10 @@ type StatusFilter = 'all' | NoteStatus;
 type KindFilter = 'all' | NoteKind;
 type ScopeFilter = 'all' | 'inbox' | 'tasks' | 'archived';
 
-export type NotesScreenProps = {
-  embedded?: boolean;
-  onRequestHome?: () => void;
-};
-
-export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProps) {
+export function NotesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ kind?: string }>();
-  useDismissOnHardwareBack(router, { enabled: !embedded });
+  useDismissOnHardwareBack(router);
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const configured = useGatewayConfigured();
@@ -91,12 +86,8 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   const [batchTagPicker, setBatchTagPicker] = useState(false);
 
   const handleBack = useCallback(() => {
-    if (onRequestHome) {
-      onRequestHome();
-      return;
-    }
-    dismissOrHome(router);
-  }, [onRequestHome, router]);
+    dismissOrRoot(router);
+  }, [router]);
 
   const initialScope: ScopeFilter = params.kind === 'task' ? 'tasks' : 'all';
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScope);
@@ -416,7 +407,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <NativeScreenHeader title={pm.title} largeTitle={!embedded} onBack={embedded ? undefined : handleBack} />
+        <NativeScreenHeader title={pm.title} largeTitle onBack={handleBack} />
         <View style={styles.center}>
           <Text style={{ opacity: 0.6 }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>
@@ -428,8 +419,8 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
-        largeTitle={!embedded && !selectionMode}
-        onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}
+        largeTitle={!selectionMode}
+        onBack={selectionMode ? exitSelectionMode : handleBack}
         onSearchPress={!selectionMode ? handleSearchToggle : undefined}
         searchPlaceholder={searchText.trim() || m.common.search}
         rightActions={!selectionMode ? [{

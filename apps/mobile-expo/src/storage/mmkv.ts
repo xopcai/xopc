@@ -16,7 +16,7 @@ export const KEYS = {
   notificationsEnabled: 'prefs.notificationsEnabled',
   noteTags: 'prefs.noteTags',
   usageEvents: 'product.usageEvents',
-  homePinnedFocusId: 'home.pinnedFocusId',
+  chatAttentionSeenPrefix: 'chat.attentionSeen:',
 } as const;
 
 export type KeyValueStorage = {

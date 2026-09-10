@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
-import { dismissOrHome } from '../../lib/navigation';
+import { dismissOrRoot } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
 import { fetchProjectSkills, type ProjectSkill, type ProjectSkillSource } from '../../query/projects';
 import { useGatewayConfigured } from '../../query/sessions';
@@ -33,7 +33,7 @@ export function ProjectSkillsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.projectSkillsTitle} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.projectSkillsTitle} onBack={() => dismissOrRoot(router)} />
       {skills.isLoading ? <View style={styles.skeleton}><ListSkeleton count={6} /></View> : skills.isError || !skills.data ? (
         <View style={styles.center}>
           <Icon source="alert-circle-outline" size={32} color={colors.semantic.error} />

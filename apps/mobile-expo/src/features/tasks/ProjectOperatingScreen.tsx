@@ -10,7 +10,7 @@ import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
-import { dismissOrHome, openChat, openNoteDetail } from '../../lib/navigation';
+import { dismissOrRoot, openChat, openNoteDetail } from '../../lib/navigation';
 import { fetchAutomations, runAutomationNow, setAutomationEnabled } from '../../query/automations';
 import { queryKeys } from '../../query/keys';
 import { fetchFileChildren, fetchFileSpaceForContext } from '../../query/files';
@@ -182,13 +182,13 @@ export function ProjectOperatingScreen() {
 
   if (view.isLoading) return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrRoot(router)} />
       <View style={styles.skeleton}><ListSkeleton count={5} /></View>
     </View>
   );
   if (view.isError || !view.data) return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.projectsTitle} onBack={() => dismissOrRoot(router)} />
       <View style={styles.center}>
         <Text style={{ color: colors.semantic.error }}>{labels.projectLoadFailed}</Text>
         <Button onPress={() => void view.refetch()}>{labels.retry}</Button>
@@ -201,7 +201,7 @@ export function ProjectOperatingScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader
         title={data.project.name}
-        onBack={() => dismissOrHome(router)}
+        onBack={() => dismissOrRoot(router)}
         rightActions={[
           { icon: 'cog-outline', onPress: () => setSettingsVisible(true), accessibilityLabel: labels.projectSettings },
           { icon: 'plus', onPress: () => setCreateMenuVisible(true), accessibilityLabel: labels.projectCreateTitle },

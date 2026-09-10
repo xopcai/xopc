@@ -7,7 +7,7 @@ import { Button, Icon, Text } from 'react-native-paper';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
-import { dismissOrHome } from '../../lib/navigation';
+import { dismissOrRoot } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
 import { fetchProjects, type Project } from '../../query/projects';
 import { useGatewayConfigured } from '../../query/sessions';
@@ -70,7 +70,7 @@ export function ProjectPortfolioScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.projectsTitle} largeTitle onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.projectsTitle} largeTitle onBack={() => dismissOrRoot(router)} />
       {query.isLoading ? <View style={styles.skeleton}><ListSkeleton count={6} /></View> : query.isError ? (
         <View style={styles.center}>
           <Text style={{ color: colors.semantic.error }}>{labels.projectsLoadFailed}</Text>

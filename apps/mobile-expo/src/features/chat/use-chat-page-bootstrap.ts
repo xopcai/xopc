@@ -1,9 +1,4 @@
-/**
- * Encapsulates the "auto-create session on cold start" logic.
- *
- * On first mount, if no session key exists in the URL, create a server-owned
- * webchat session and navigate with the returned canonical key.
- */
+/** Resumes the most recent session on cold start, or creates one when none exists. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import type { ResolvedNewSessionSpec, SessionInitialAgentConfig } from '@xopcai/gateway-contract';
@@ -14,7 +9,10 @@ import { takeNewChatSessionKey } from './session-prefetch';
 import type { useMessages } from '../../i18n/messages';
 
 export type ChatBootstrapDeps = {
+  scopeKey?: string;
   urlSessionKey: string;
+  resumeSessionKey?: string;
+  resumeLookupComplete?: boolean;
   gatewayOnline: boolean;
   newSessionSpec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>;
   initialAgentConfig?: SessionInitialAgentConfig;
@@ -32,13 +30,14 @@ export type ChatBootstrapResult = {
   creatingInitialSession: boolean;
   bootstrapError: string | null;
   retryBootstrapSession: () => void;
-  /** Force a fresh session when the workspace Ask AI overlay settles open. */
-  startFreshSession: () => void;
 };
 
 export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResult {
   const {
+    scopeKey = '',
     urlSessionKey,
+    resumeSessionKey = '',
+    resumeLookupComplete = true,
     gatewayOnline,
     newSessionSpec,
     initialAgentConfig,
@@ -54,22 +53,32 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
   const [creatingInitialSession, setCreatingInitialSession] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const autoSessionAttemptedRef = useRef(false);
+  const previousScopeRef = useRef(scopeKey);
+
+  useEffect(() => {
+    if (previousScopeRef.current === scopeKey) return;
+    previousScopeRef.current = scopeKey;
+    autoSessionAttemptedRef.current = false;
+    activeSessionKeyRef.current = '';
+    setPendingBootstrapKey('');
+    setBootstrapError(null);
+  }, [activeSessionKeyRef, scopeKey]);
 
   useEffect(() => {
     if (urlSessionKey) setPendingBootstrapKey('');
   }, [urlSessionKey]);
 
-  const startAutoSession = useCallback((options?: { force?: boolean }) => {
+  const startAutoSession = useCallback(() => {
     if (urlSessionKey || !gatewayOnline) return;
-    if (autoSessionAttemptedRef.current && !options?.force) return;
-
-    if (options?.force) {
-      autoSessionAttemptedRef.current = false;
-      setPendingBootstrapKey('');
-      activeSessionKeyRef.current = '';
-    }
+    if (!resumeLookupComplete || autoSessionAttemptedRef.current) return;
 
     autoSessionAttemptedRef.current = true;
+    if (resumeSessionKey) {
+      activeSessionKeyRef.current = resumeSessionKey;
+      setPendingBootstrapKey(resumeSessionKey);
+      if (shouldNavigateToRoute) openChat(router, resumeSessionKey, { replace: true });
+      return;
+    }
     setCreatingInitialSession(true);
     setBootstrapError(null);
 
@@ -88,24 +97,19 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
       .finally(() => {
         setCreatingInitialSession(false);
       });
-  }, [urlSessionKey, gatewayOnline, newSessionSpec, initialAgentConfig, messages.sessions.bootstrapFailed, router, activeSessionKeyRef, shouldNavigateToRoute]);
+  }, [urlSessionKey, gatewayOnline, resumeLookupComplete, resumeSessionKey, newSessionSpec, initialAgentConfig, messages.sessions.bootstrapFailed, router, activeSessionKeyRef, shouldNavigateToRoute]);
 
   // Auto-start on first mount when gateway is online
   useEffect(() => {
-    if (!shouldAutoBootstrap || urlSessionKey || !gatewayOnline) return;
+    if (!shouldAutoBootstrap || urlSessionKey || !gatewayOnline || !resumeLookupComplete) return;
     if (autoSessionAttemptedRef.current) return;
     startAutoSession();
-  }, [shouldAutoBootstrap, urlSessionKey, gatewayOnline, startAutoSession]);
+  }, [shouldAutoBootstrap, urlSessionKey, gatewayOnline, resumeLookupComplete, startAutoSession]);
 
   const retryBootstrapSession = useCallback(() => {
     if (urlSessionKey || !gatewayOnline) return;
     autoSessionAttemptedRef.current = false;
     startAutoSession();
-  }, [urlSessionKey, gatewayOnline, startAutoSession]);
-
-  const startFreshSession = useCallback(() => {
-    if (urlSessionKey || !gatewayOnline) return;
-    startAutoSession({ force: true });
   }, [urlSessionKey, gatewayOnline, startAutoSession]);
 
   return {
@@ -114,6 +118,5 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     creatingInitialSession,
     bootstrapError,
     retryBootstrapSession,
-    startFreshSession,
   };
 }
