@@ -143,7 +143,7 @@ The app may use a floating lower control area, but only one system may own that 
 
 ### 4.1 Color philosophy
 
-The color system is neutral-led with a distinctive, softened indigo primary. Blue should direct attention, not paint the interface. A warm paper base in light mode and a blue-black base in dark mode add character without turning either mode into a theme effect.
+The product color system is neutral-led with a distinctive, softened indigo primary. The Human–AI Loop mark reserves system blue for its 20% human judgment segment; that logo colour does not become a second general-purpose interface accent. A warm paper base in light mode and a blue-black base in dark mode add character without turning either mode into a theme effect.
 
 Target balance: 82–88% neutral surface/text, 8–12% accent-supporting tints, 2–5% semantic signal. Actual screens should not use all colors merely because tokens exist.
 
@@ -174,7 +174,7 @@ The implementation remains semantic: components consume `useTheme()` / `src/them
 
 Rules:
 
-- There is one brand direction: indigo. Do not introduce a general-purpose purple, teal, or gradient “AI” accent.
+- The interface has one accent direction: indigo. Keep the mark's system blue reserved for its human segment; do not introduce a general-purpose purple, teal, or gradient “AI” accent.
 - Status colors never classify notes, agents, or chat messages. Use iconography or neutral grouping for categories.
 - A subtle warm surface difference in light mode is intentional; do not flatten it to white.
 - Dark mode is not inverse light mode. Preserve luminance steps, reduce border contrast, and avoid pure black panels.
@@ -275,7 +275,7 @@ overlay: {
 
 - Use one outlined icon family with rounded terminals. Keep standard actions at 20–22pt and metadata glyphs at 14–16pt.
 - Use familiar system metaphors. Icons are never the only visible explanation of a non-obvious destructive or operational action.
-- Brand expression comes from the XOPC mark, careful indigo use, agent avatars, and motion — not from decorative icon backgrounds.
+- Brand expression comes from the XOPC mark's graphite/white AI loop and blue human segment, careful interface-indigo use, agent avatars, and motion — not from decorative icon backgrounds.
 - A color-filled icon tile is reserved for a high-value route in a grouped settings/list context or a meaningful status. It is not the default leading treatment for every row.
 
 ## 5. Component grammar
