@@ -1,7 +1,7 @@
 /** Chat-first root and session detail surface. */
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Banner, Text } from 'react-native-paper';
@@ -11,6 +11,7 @@ import { AppToast } from '../../components/AppToast';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { queryKeys } from '../../query/keys';
+import { voiceStatusOptions } from '../../query/voice';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 
@@ -94,6 +95,11 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const attentionQuery = useAttentionFeed();
   const attentionItems = attentionQuery.data?.needsUser ?? [];
 
+  useEffect(() => {
+    if (!activeGatewayId || !sessionKey) return;
+    void queryClient.prefetchQuery(voiceStatusOptions(activeGatewayId));
+  }, [activeGatewayId, queryClient, sessionKey]);
+
   useAutoReadAloud({
     language,
     messages: displayMessages,
@@ -116,8 +122,10 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       sessionKey,
       engine: voicePreferences.engines[activeGatewayId],
       background: voicePreferences.background,
+      identity: sessionHistoryQuery.data?.pages[0]?.session.sessionId,
+      name: sessionHistoryQuery.data?.pages[0]?.session.name ?? agentName,
     });
-  }, [activeGatewayId, call.phase, chat.streaming, composerDisabled, sessionKey, voicePreferences.background, voicePreferences.engines]);
+  }, [activeGatewayId, agentName, call.phase, chat.streaming, composerDisabled, sessionHistoryQuery.data?.pages, sessionKey, voicePreferences.background, voicePreferences.engines]);
 
   const headerPaddingTop = insets.top + 8;
   const canvasBg = colors.surface.base;
