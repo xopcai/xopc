@@ -430,6 +430,7 @@ export class VoiceRealtimeRuntime {
     const startTimer = setTimeout(() => socket.close(4401, 'Voice session start timeout'), VOICE_REALTIME_START_TIMEOUT_MS);
     const lifecycleTimer = setInterval(() => {
       if (!claim) return;
+      if (context?.isCurrent && !context.isCurrent()) { invalidateContext(); return; }
       if (context?.memory && !context.memory.isCurrent()) { invalidateContext(); return; }
       const now = Date.now();
       if (now - lastActivityAt > claim.idleTimeoutMs) void shutdown('idle_timeout', true);
@@ -466,6 +467,7 @@ export class VoiceRealtimeRuntime {
           });
           context = await this.options.getConversationContext!(consumed.request.sessionKey!, consumed.conversationSessionId!);
           if (closed) return;
+          if (context.isCurrent && !context.isCurrent()) { invalidateContext(); return; }
           if (context.memory) {
             unsubscribeMemory = context.memory.subscribe(invalidateContext);
             if (!context.memory.isCurrent()) { invalidateContext(); return; }
