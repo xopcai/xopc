@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { apiFetch } from '../../api/client';
-import { fetchFileChildren, fetchFileHostPath, fetchFileResource, resolveFileResource, uploadFileResource } from '../files';
+import { fetchDefaultFileSpace, fetchFileChildren, fetchFileHostPath, fetchFileResource, resolveFileResource, uploadFileResource } from '../files';
 import { fetchHostDirectories } from '../host-fs';
 
 vi.mock('../../api/client', () => ({
@@ -13,6 +13,13 @@ const fetch = vi.mocked(apiFetch);
 beforeEach(() => fetch.mockReset());
 
 describe('managed file requests', () => {
+  it('loads the default workspace used by standalone file deep links', async () => {
+    const space = { id: 'space', title: 'main', kind: 'workspace', bindings: [{ kind: 'agent', id: 'main' }], writable: true };
+    fetch.mockResolvedValue(new Response(JSON.stringify({ space })));
+    await expect(fetchDefaultFileSpace()).resolves.toEqual(space);
+    expect(fetch).toHaveBeenCalledWith('/api/files/default-space');
+  });
+
   it('propagates listing errors instead of returning an empty directory', async () => {
     fetch.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Workspace unavailable' } }), { status: 404 }));
     await expect(fetchFileChildren('space', 'docs')).rejects.toThrow('Workspace unavailable');
