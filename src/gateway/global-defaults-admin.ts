@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { AgentDefaultsSchema, type AgentDefaults } from '../agent-config/index.js';
 import type { Config } from '../config/schema.js';
 import {
@@ -29,7 +31,7 @@ export function listGlobalDefaults(cfg: Config): GlobalDefaultsPayload {
 export function prepareUpdateGlobalDefaults(
   cfg: Config,
   body: UpdateGlobalDefaultsBody,
-): GlobalDefaultsAdminResult<{ nextConfig: Config }> {
+): GlobalDefaultsAdminResult<{ nextConfig: Config; changed: boolean }> {
   const parsed = AgentDefaultsSchema.safeParse(body.defaults);
   if (!parsed.success) {
     return { ok: false, error: `defaults ${parsed.error.issues[0]?.message ?? 'is invalid'}`, status: 400 };
@@ -37,6 +39,7 @@ export function prepareUpdateGlobalDefaults(
   return {
     ok: true,
     data: {
+      changed: !isDeepStrictEqual(cfg.agents.defaults, parsed.data),
       nextConfig: {
         ...cfg,
         agents: {

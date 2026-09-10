@@ -1,8 +1,9 @@
-import { Gauge, Puzzle, RotateCcw, ShieldCheck, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { Gauge, Puzzle, ShieldCheck, Sparkles } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AgentDefaultsModelsPanel } from '@/features/settings/agent-defaults/agent-defaults-models-panel';
 import { AgentDefaultsRuntimePanel } from '@/features/settings/agent-defaults/agent-defaults-runtime-panel';
@@ -12,6 +13,7 @@ import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/setti
 import { fetchGlobalDefaults, updateGlobalDefaults } from '@/features/settings/global-defaults-api';
 import type { AgentDefaults, BuiltinToolSummary } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
+import { useAutosave } from '@/lib/use-autosave';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -40,8 +42,6 @@ function AgentDefaultsEditor({
   const [activePanel, setActivePanel] = useState<DefaultsPanel>('models');
   const [draft, setDraft] = useState<AgentDefaults>(() => structuredClone(initial));
   const [saved, setSaved] = useState<AgentDefaults>(() => structuredClone(initial));
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   const tabs: Array<{ id: DefaultsPanel; label: string; icon: typeof Sparkles }> = [
@@ -51,36 +51,33 @@ function AgentDefaultsEditor({
     { id: 'runtime', label: zh ? '运行' : 'Runtime', icon: Gauge },
   ];
 
-  const save = async () => {
-    const submitted = structuredClone(draft);
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const next = await updateGlobalDefaults(submitted);
-      const normalized = structuredClone(next.defaults);
-      setDraft((current) => JSON.stringify(current) === JSON.stringify(submitted) ? normalized : current);
-      setSaved(structuredClone(normalized));
-    } catch (cause) {
-      setSaveError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const save = useCallback(async (snapshot: AgentDefaults) => {
+    const submitted = structuredClone(snapshot);
+    const next = await updateGlobalDefaults(submitted);
+    const normalized = structuredClone(next.defaults);
+    setDraft((current) => JSON.stringify(current) === JSON.stringify(submitted) ? normalized : current);
+    setSaved(structuredClone(normalized));
+  }, []);
+
+  const autosave = useAutosave({ value: draft, dirty, onSave: save, delayMs: 0 });
 
   return (
-    <SettingsPageFrame gap="gap-5">
+    <SettingsPageFrame gap="gap-5" onBlurCapture={autosave.onBlurCapture}>
       <SettingsPageHeader
         title={zh ? '智能体设置' : 'Agent settings'}
         actions={(
-          <>
-            {dirty ? <span className="hidden text-xs text-amber-700 sm:inline dark:text-amber-300">{zh ? '有未保存的更改' : 'Unsaved changes'}</span> : null}
-            {dirty ? <Button onClick={() => setDraft(structuredClone(saved))}><RotateCcw className="size-4" />{zh ? '撤销' : 'Reset'}</Button> : null}
-            <Button variant="primary" disabled={saving || !dirty} onClick={() => void save()}>{saving ? (zh ? '保存中…' : 'Saving…') : (zh ? '保存' : 'Save')}</Button>
-          </>
+          <AutosaveStatus status={autosave.status} error={autosave.error} />
         )}
       />
 
-      {saveError ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{saveError}</p> : null}
+      {autosave.error ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">
+          <span>{autosave.error}</span>
+          <Button type="button" variant="ghost" className="h-8 text-red-600" onClick={autosave.retry}>
+            {zh ? '重试' : 'Retry'}
+          </Button>
+        </div>
+      ) : null}
 
       <nav className="grid grid-cols-2 gap-2 rounded-2xl border border-edge bg-surface-base p-2 lg:grid-cols-4" aria-label={zh ? '默认配置分区' : 'Default configuration sections'}>
         {tabs.map(({ id, label, icon: Icon }) => (
