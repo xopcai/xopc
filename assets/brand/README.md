@@ -15,8 +15,10 @@ committing to confirm the repository has no stale brand assets.
 The generator uses three purpose-built compositions:
 
 - **UI mark:** transparent two-colour artwork that adapts to light and dark surfaces.
-- **App icon:** full-bleed artwork for iOS, Android launchers, and PWA installation;
-  the operating system supplies the final mask where appropriate.
+- **App icon:** full-bleed background for iOS, Android launchers, and PWA
+  installation; the mobile glyph stays within roughly 56% of the canvas so the
+  operating system can apply circular, squircle, or adaptive masks without
+  crowding the mark.
 - **Desktop / badge:** a transparent outer canvas with a rounded desktop tile or
   compact badge, so Windows taskbar and browser toolbar icons remain legible.
 
