@@ -34,8 +34,15 @@ if (!validTargets.has(target)) {
 
 const DARK = '#0B0D10';
 const LIGHT = '#F8FAFC';
-const LIGHT_MARK = '#111827';
-const MOBILE_MARK_SCALE = 0.60;
+const AI_LIGHT = '#1D1D1F';
+const AI_DARK = '#F5F5F7';
+const HUMAN_LIGHT = '#007AFF';
+const HUMAN_DARK = '#0A84FF';
+const SOURCE_HUMAN = '#007AFF';
+const MOBILE_MARK_SCALE = 0.88;
+
+const ROLE_LIGHT = { ai: AI_LIGHT, human: HUMAN_LIGHT };
+const ROLE_DARK = { ai: AI_DARK, human: HUMAN_DARK };
 
 const outputs = [];
 
@@ -67,107 +74,40 @@ function document(definitions, body) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">\n${definitions ? `  <defs>${definitions}</defs>\n` : ''}${body}\n</svg>\n`;
 }
 
-function markLayer(foreground, scale = 1, offsetX = 0, offsetY = 0) {
-  const recolouredMark = mark.replaceAll('currentColor', foreground);
+function markLayer(palette, scale = 1, offsetX = 0, offsetY = 0) {
+  const colours = typeof palette === 'string' ? { ai: palette, human: palette } : palette;
+  const recolouredMark = mark
+    .replaceAll(SOURCE_HUMAN, colours.human)
+    .replaceAll('currentColor', colours.ai);
   return `  <g transform="translate(${512 + offsetX} ${512 + offsetY}) scale(${scale}) translate(-512 -512)">\n    <svg width="1024" height="1024" viewBox="${markViewBox}">\n      ${recolouredMark}\n    </svg>\n  </g>`;
 }
 
-function uiMarkSvg(foreground, scale = 1, offsetX = 0, offsetY = 0) {
-  return document('', markLayer(foreground, scale, offsetX, offsetY));
+function uiMarkSvg(palette, scale = 1, offsetX = 0, offsetY = 0) {
+  return document('', markLayer(palette, scale, offsetX, offsetY));
 }
 
 function appIconSvg(appearance, options = {}) {
   const isDark = appearance === 'dark';
   const {
-    markScale = 0.77,
+    markScale = 0.88,
     markOffsetX = 0,
     markOffsetY = 0,
-    palette = 'default',
   } = options;
-  const isMobile = palette === 'mobile';
-  const definitions = isMobile && isDark
-    ? `
-    <linearGradient id="surface" x1="90" y1="74" x2="910" y2="950" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3A425F" />
-      <stop offset="0.52" stop-color="#252B40" />
-      <stop offset="1" stop-color="#302B48" />
-    </linearGradient>
-    <radialGradient id="bloom" cx="0" cy="0" r="1" gradientTransform="translate(744 264) rotate(133) scale(640)">
-      <stop stop-color="#A8B3FF" stop-opacity="0.28" />
-      <stop offset="1" stop-color="#A8B3FF" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="mark" x1="344" y1="244" x2="690" y2="780" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" />
-      <stop offset="1" stop-color="#D9E0FF" />
-    </linearGradient>`
-    : isMobile
-      ? `
-    <linearGradient id="surface" x1="68" y1="74" x2="936" y2="940" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FBFCFF" />
-      <stop offset="0.53" stop-color="#F0F2F8" />
-      <stop offset="1" stop-color="#E8EAF3" />
-    </linearGradient>
-    <radialGradient id="bloom" cx="0" cy="0" r="1" gradientTransform="translate(770 248) rotate(133) scale(620)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.75" />
-      <stop offset="0.5" stop-color="#AEB9EF" stop-opacity="0.2" />
-      <stop offset="1" stop-color="#AEB9EF" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="mark" x1="346" y1="244" x2="686" y2="780" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#151A2C" />
-      <stop offset="1" stop-color="#46547E" />
-    </linearGradient>`
-      : isDark
-    ? `
-    <linearGradient id="surface" x1="90" y1="74" x2="910" y2="950" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#181D31" />
-      <stop offset="0.5" stop-color="#0B0E18" />
-      <stop offset="1" stop-color="#151127" />
-    </linearGradient>
-    <radialGradient id="bloom" cx="0" cy="0" r="1" gradientTransform="translate(744 264) rotate(133) scale(640)">
-      <stop stop-color="#717BFF" stop-opacity="0.34" />
-      <stop offset="1" stop-color="#717BFF" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="mark" x1="344" y1="244" x2="690" y2="780" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" />
-      <stop offset="1" stop-color="#B8C6FF" />
-    </linearGradient>`
-    : `
-    <linearGradient id="surface" x1="68" y1="74" x2="936" y2="940" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF" />
-      <stop offset="0.53" stop-color="#EDF0F8" />
-      <stop offset="1" stop-color="#DFE3F4" />
-    </linearGradient>
-    <radialGradient id="bloom" cx="0" cy="0" r="1" gradientTransform="translate(770 248) rotate(133) scale(620)">
-      <stop stop-color="#8996FF" stop-opacity="0.23" />
-      <stop offset="1" stop-color="#8996FF" stop-opacity="0" />
-    </radialGradient>
-    <linearGradient id="mark" x1="346" y1="244" x2="686" y2="780" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0B1020" />
-      <stop offset="1" stop-color="#35436E" />
-    </linearGradient>`;
-  const orbit = isMobile
-    ? isDark
-      ? '#C5CEFA'
-      : '#53618A'
-    : isDark
-      ? '#AEBBFF'
-      : '#6473AD';
-  const body = `  <rect width="1024" height="1024" fill="url(#surface)" />
-  <rect width="1024" height="1024" fill="url(#bloom)" />
-  <circle cx="512" cy="512" r="402" fill="none" stroke="${orbit}" stroke-opacity="0.14" stroke-width="2" />
-${markLayer('url(#mark)', markScale, markOffsetX, markOffsetY)}`;
-  return document(definitions, body);
+  const rolePalette = isDark ? ROLE_DARK : ROLE_LIGHT;
+  const surface = isDark ? '#000000' : '#FFFFFF';
+  const body = `  <rect width="1024" height="1024" fill="${surface}" />
+${markLayer(rolePalette, markScale, markOffsetX, markOffsetY)}`;
+  return document('', body);
 }
 
 function mobileAppIconSvg(appearance) {
   return appIconSvg(appearance, {
     markScale: MOBILE_MARK_SCALE,
-    palette: 'mobile',
   });
 }
 
-function mobileAdaptiveIconSvg(foreground) {
-  return uiMarkSvg(foreground, MOBILE_MARK_SCALE);
+function mobileAdaptiveIconSvg(palette) {
+  return uiMarkSvg(palette, MOBILE_MARK_SCALE);
 }
 
 function desktopIconSvg() {
@@ -189,8 +129,7 @@ function desktopIconSvg() {
   const body = `  <rect x="64" y="64" width="896" height="896" rx="264" fill="url(#desktop-surface)" />
   <rect x="64" y="64" width="896" height="896" rx="264" fill="url(#desktop-bloom)" />
   <rect x="65" y="65" width="894" height="894" rx="263" fill="none" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="2" />
-  <circle cx="512" cy="512" r="338" fill="none" stroke="#53618A" stroke-opacity="0.12" stroke-width="2" />
-${markLayer('url(#desktop-mark)', 0.68)}`;
+${markLayer(ROLE_LIGHT, 0.82)}`;
   return document(definitions, body);
 }
 
@@ -206,14 +145,14 @@ function badgeSvg() {
     </linearGradient>`;
   const body = `  <rect x="72" y="72" width="880" height="880" rx="160" fill="url(#badge-surface)" />
   <rect x="73" y="73" width="878" height="878" rx="159" fill="none" stroke="#0B1020" stroke-opacity="0.12" stroke-width="2" />
-${markLayer('url(#badge-mark)', 0.67)}`;
+${markLayer(ROLE_LIGHT, 0.82)}`;
   return document(definitions, body);
 }
 
 function faviconSvg() {
   const body = `  <rect x="40" y="40" width="944" height="944" rx="216" fill="#F8FAFC" />
   <rect x="41" y="41" width="942" height="942" rx="215" fill="none" stroke="#0B1020" stroke-opacity="0.14" stroke-width="2" />
-${markLayer('#111827', 0.85)}`;
+${markLayer(ROLE_LIGHT, 0.9)}`;
   return document('', body);
 }
 
@@ -226,16 +165,16 @@ function renderSvg(scene) {
   if (scene === 'app-light') return appIconSvg('light');
   if (scene === 'mobile-app-dark') return mobileAppIconSvg('dark');
   if (scene === 'mobile-app-light') return mobileAppIconSvg('light');
-  if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(LIGHT_MARK);
+  if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(ROLE_LIGHT);
   if (scene === 'mobile-adaptive-monochrome') return mobileAdaptiveIconSvg(LIGHT);
   if (scene === 'desktop') return desktopIconSvg();
   if (scene === 'badge') return badgeSvg();
   if (scene === 'favicon') return faviconSvg();
   if (scene === 'tray-template') return trayTemplateSvg();
-  if (scene === 'mark-light') return uiMarkSvg(LIGHT_MARK);
-  if (scene === 'mark-dark') return uiMarkSvg(LIGHT);
-  if (scene === 'mark-dark-plain') return uiMarkSvg(DARK);
-  if (scene === 'mark-light-plain') return uiMarkSvg(LIGHT);
+  if (scene === 'mark-light') return uiMarkSvg(ROLE_LIGHT);
+  if (scene === 'mark-dark') return uiMarkSvg(ROLE_DARK);
+  if (scene === 'mark-dark-plain') return uiMarkSvg(ROLE_LIGHT);
+  if (scene === 'mark-light-plain') return uiMarkSvg(ROLE_DARK);
   throw new Error(`Unknown SVG scene: ${scene}`);
 }
 
