@@ -18,12 +18,12 @@ function tickClass(opts: {
 }): string {
   const { active, scrubbing, distance } = opts;
   if (!scrubbing) {
-    return active ? 'w-3.5 bg-fg-muted' : 'w-2.5 bg-edge-strong/45';
+    return active ? 'w-3.5 bg-accent' : 'w-2.5 bg-edge-strong/45';
   }
   if (distance === 0) return 'w-7 bg-fg';
   if (distance === 1) return 'w-5 bg-fg-muted';
   if (distance === 2) return 'w-4 bg-edge-strong/70';
-  return active ? 'w-3.5 bg-fg-muted' : 'w-2.5 bg-edge-strong/45';
+  return active ? 'w-3.5 bg-accent' : 'w-2.5 bg-edge-strong/45';
 }
 
 function TimelinePreviewCard({
