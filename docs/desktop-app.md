@@ -2,7 +2,7 @@
 
 The desktop app is the primary local home for xopc. It includes the Gateway console, starts the local service when needed, and brings conversation, user understanding, Projects, Tasks, models, permissions, and run history into one place without keeping a terminal open.
 
-![xopc desktop app demo](/xopc-desktop.gif)
+<video src="/xopc-desktop.mp4" controls muted autoplay loop playsinline width="100%" aria-label="xopc desktop app demo"></video>
 
 ## Install
 

@@ -27,9 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://xopcai.github.io/xopc/zh/desktop-app">
-    <img src="docs/public/xopc-desktop.gif" alt="xopc 桌面端演示" width="1200">
-  </a>
+  <video src="docs/public/xopc-desktop.mp4" controls muted width="1200"></video>
 </p>
 
 > 安装后可以直接告诉它：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
