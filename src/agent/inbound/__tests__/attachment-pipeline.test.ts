@@ -1,8 +1,10 @@
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { readMediaReference } from '../../../media/media-reference.js';
 import { saveMediaBuffer } from '../../../media/store.js';
 import {
   assertTranscriptUserMessage,
@@ -117,6 +119,40 @@ describe('attachment-pipeline', () => {
 
     expect(turn.images).toHaveLength(1);
     expect(turn.images[0]!.data).toBe(Buffer.from('img').toString('base64'));
+  });
+
+  it('hydrateUserTurnForLlm optimizes oversized images without replacing the original', async () => {
+    const png = await sharp({
+      create: { width: 32, height: 32, channels: 3, background: '#f00' },
+    }).png().toBuffer();
+    const original = Buffer.concat([png, Buffer.alloc(2 * 1024 * 1024)]);
+    expect(original.byteLength).toBeGreaterThan(2 * 1024 * 1024);
+    const uri = await seedMedia(original, 'large.png');
+
+    const turn = await hydrateUserTurnForLlm({
+      message: {
+        role: 'user',
+        content: 'analyze',
+        media: [{
+          id: 'large',
+          bucket: 'inbound',
+          type: 'image',
+          mimeType: 'image/png',
+          name: 'large.png',
+          size: original.byteLength,
+          uri,
+          path: '/tmp/large.png',
+        }],
+      },
+      modelRef: 'openai/gpt-4o',
+    });
+
+    const optimized = Buffer.from(turn.images[0]!.data, 'base64');
+    expect(turn.images[0]!.mimeType).toBe('image/webp');
+    expect(optimized.byteLength).toBeLessThanOrEqual(2 * 1024 * 1024);
+    expect(optimized.byteLength).toBeLessThan(original.byteLength);
+    const stored = await readMediaReference(uri);
+    expect(stored.buffer).toEqual(original);
   });
 
   it('hydrateUserTurnForLlm does not pass svg attachments to native vision models', async () => {
