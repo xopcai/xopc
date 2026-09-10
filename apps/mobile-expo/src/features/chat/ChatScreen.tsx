@@ -135,7 +135,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           voiceCallDisabled={call.phase === 'idle' && (!activeGatewayId || !sessionKey || composerDisabled || chat.streaming)}
           onBackPress={root ? undefined : handleBack}
           onNavigationPress={root ? () => setNavigationVisible(true) : undefined}
-          navigationAttentionCount={attentionItems.length}
           onAgentPress={openAgentsPicker}
           onVoiceCallPress={handleVoiceCallPress}
           onModelSelect={handleModelSelect}
