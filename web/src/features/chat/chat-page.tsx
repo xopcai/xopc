@@ -1231,9 +1231,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
               )}
             >
+              {/* Keep the floating action on the same axis as the wide-screen timeline ticks. */}
               <div
                 className={cn(
-                  'absolute bottom-full right-0 z-20 mb-2 flex items-center gap-1 rounded-full border border-edge bg-surface-panel p-1 shadow-float empty:hidden dark:shadow-none',
+                  'absolute bottom-full right-0 z-20 mb-2 flex items-center gap-0.5 rounded-full border border-edge-subtle bg-surface-panel/95 p-1 shadow-elevated backdrop-blur-sm empty:hidden',
+                  'xl:translate-x-[4.5rem]',
                   (session.showSessionLoading || atBottom) && 'xl:hidden',
                 )}
               >

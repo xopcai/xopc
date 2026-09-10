@@ -209,13 +209,21 @@
       "directionFallback": "补充项目简介或创建任务，让下一步更明确。",
       "saveDigest": "保存摘要",
       "savingDigest": "保存中",
+      "activitySummary": "{{moving}} 项推进中 · {{attention}} 项需关注",
       "nextActions": "下一步",
       "recentResults": "最近结果",
       "milestones": "里程碑",
       "noMilestones": "暂无里程碑。",
       "projectUpdates": "项目更新",
       "noProjectUpdates": "暂无项目更新。",
+      "healthLabels": {
+        "unknown": "状态未知",
+        "on_track": "进展正常",
+        "at_risk": "存在风险",
+        "off_track": "偏离计划"
+      },
       "resultStatuses": {
+        "succeeded": "已完成",
         "running": "执行中",
         "completed": "已达成",
         "partial": "待验收",

@@ -18,12 +18,15 @@ describe('ScrollToBottomButton', () => {
       const button = container.querySelector('button')!;
       expect(button.classList.contains('fixed')).toBe(false);
       expect(button.classList.contains('absolute')).toBe(false);
+      expect(button.classList.contains('size-10')).toBe(true);
       expect(button.getAttribute('aria-label')).toBeTruthy();
       await act(async () => button.click());
       expect(onClick).toHaveBeenCalledOnce();
 
       await act(async () => root.render(<ScrollToBottomButton visible contained onClick={onClick} />));
-      expect(container.querySelector('button')!.classList.contains('absolute')).toBe(true);
+      const containedButton = container.querySelector('button')!;
+      expect(containedButton.classList.contains('absolute')).toBe(true);
+      expect(containedButton.classList.contains('size-9')).toBe(true);
 
       await act(async () => root.render(<ScrollToBottomButton visible={false} onClick={onClick} />));
       expect(container.childElementCount).toBe(0);
