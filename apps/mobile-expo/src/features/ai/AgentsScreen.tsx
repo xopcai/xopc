@@ -10,7 +10,7 @@ import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { useMessages } from '../../i18n/messages';
-import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { fetchChatAgents, type ChatAgentOption } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
@@ -89,7 +89,7 @@ export function AgentsScreen() {
   if (!configured) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <NativeScreenHeader title={am.title} largeTitle onBack={() => dismissOrHome(router)} />
+        <NativeScreenHeader title={am.title} largeTitle onBack={() => dismissOrRoot(router)} />
         <View style={styles.center}>
           <Text style={{ color: colors.textMuted }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>

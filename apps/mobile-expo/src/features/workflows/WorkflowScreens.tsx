@@ -10,7 +10,7 @@ import { AppToast } from '../../components/AppToast';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
-import { dismissOrHome } from '../../lib/navigation';
+import { dismissOrRoot } from '../../lib/navigation';
 import { fetchChatAgents } from '../../query/agents';
 import { queryKeys } from '../../query/keys';
 import { fetchProjects } from '../../query/projects';
@@ -43,7 +43,7 @@ export function WorkflowRunsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-      <NativeScreenHeader title={labels.title} largeTitle onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={labels.title} largeTitle onBack={() => dismissOrRoot(router)} />
       {agents.isLoading || query.isLoading ? <ListSkeleton count={6} /> : agents.isError || query.isError ? (
         <View style={styles.center}>
           <Text style={{ color: colors.semantic.error }}>{labels.loadFailed}</Text>

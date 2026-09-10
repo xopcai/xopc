@@ -24,22 +24,20 @@ describe('usage metrics', () => {
   beforeEach(() => memory.clear());
 
   it('stores only event names and timestamps', () => {
-    recordUsageEvent('home_viewed', 10);
-    recordUsageEvent('home_attention_opened', 20);
-    recordUsageEvent('gateway_switch_completed', 30);
+    recordUsageEvent('gateway_switch_completed', 10);
+    recordUsageEvent('notification_opened', 20);
 
     expect(readUsageSummary()).toEqual({
-      home_viewed: 1,
-      home_attention_opened: 1,
       gateway_switch_completed: 1,
+      notification_opened: 1,
     });
     expect(memory.get('product.usageEvents')).toBe(
-      '[{"name":"home_viewed","at":10},{"name":"home_attention_opened","at":20},{"name":"gateway_switch_completed","at":30}]',
+      '[{"name":"gateway_switch_completed","at":10},{"name":"notification_opened","at":20}]',
     );
   });
 
   it('clears the bounded local history', () => {
-    recordUsageEvent('ask_ai_started', 10);
+    recordUsageEvent('capture_completed', 10);
     clearUsageEvents();
     expect(readUsageSummary()).toEqual({});
   });
@@ -58,11 +56,11 @@ describe('usage metrics', () => {
 
   it('records each startup marker once per app lifecycle', () => {
     clearUsageEvents();
-    recordPerformanceEvent('home_content_ready', 200, 20);
-    recordPerformanceEvent('home_content_ready', 900, 30);
+    recordPerformanceEvent('app_shell_rendered', 200, 20);
+    recordPerformanceEvent('app_shell_rendered', 900, 30);
 
     expect(readPerformanceSummary()).toEqual({
-      home_content_ready: { averageMs: 200, count: 1, latestMs: 200 },
+      app_shell_rendered: { averageMs: 200, count: 1, latestMs: 200 },
     });
   });
 

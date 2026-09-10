@@ -126,41 +126,35 @@ export const en = {
     deletion: "Your gateway administrator and configured providers control server retention, backups, logs and any use for model training. Ask the administrator for their privacy policy and deletion contact. Delete content through the relevant app screens, revoke your paired device on the gateway, and contact the administrator to request removal from backups or other services. Uninstalling the app does not delete remote data. Withdrawing mobile permission does not cancel existing automations; pause them separately.",
     support: "Technical support",
   },
-  nav: {
-    sessions: 'Sessions',
-    chat: 'Chat',
-    settings: 'Settings',
-  },
-
-  // ── Drawer sidebar ──────────────────────────────────────
   drawer: {
     newChat: 'New chat',
+    recentChats: 'Recent chats',
+    workbench: 'Workspace',
+    needsAttention: 'Needs attention',
+    tasks: 'Tasks',
+    projects: 'Projects',
+    inbox: 'Inbox',
+    notes: 'Notes',
+    files: 'Files',
+    automation: 'Automation',
+    settings: 'Settings',
+    currentChat: 'Current',
     agents: 'Agents',
-    cron: 'Scheduled tasks',
-    conversations: 'Conversations',
     chats: 'Chats',
-    brandDescription: 'Language, theme & font',
     historyTitle: 'History',
-    sectionThisWeek: 'This week',
-    sectionThisYear: 'This year',
-    sectionEarlier: 'Earlier',
-    profileFallbackName: 'XOPC',
-    search: 'Search',
-    multiSelectCancel: 'Cancel',
-    multiSelectDelete: 'Delete ({{count}})',
   },
 
-  // ── Drawer settings popup menu ──────────────────────────
-  drawerMenu: {
-    language: 'Language',
-    theme: 'Theme',
-    themeLight: 'Light',
-    themeDark: 'Dark',
-    themeSystem: 'Follow system',
-    fontSize: 'Chat font size',
-    about: 'About',
-    helpDocs: 'Help docs',
-    openAllSettings: 'Open all settings',
+  attentionCenter: {
+    title: 'Needs attention',
+    trayTitle: 'Needs your attention · {{count}}',
+    trayCount: '{{count}} pending',
+    trayDismiss: 'Hide until something changes',
+    sheetTitle: 'Needs your attention',
+    sheetSubtitle: 'Most urgent first',
+    viewAll: 'View all pending items',
+    emptyTitle: 'Nothing needs you right now',
+    emptyHint: 'New decisions and blocked work will appear here.',
+    loadFailed: 'Could not load pending items.',
   },
 
   // ── Sessions screen ─────────────────────────────────────
@@ -839,11 +833,6 @@ export const en = {
     subtitle: 'Tasks your agents run on schedule.',
     schedulesTab: 'Schedules',
     runsTab: 'Run history',
-  },
-
-  workspaceHome: {
-    automationSection: 'Automation',
-    automationHint: 'Create and manage scheduled agent tasks.',
   },
 
   workspaceSearch: {

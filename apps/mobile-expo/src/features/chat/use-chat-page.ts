@@ -15,7 +15,7 @@ import {
   resolveNewSessionSpec,
 } from '@xopcai/gateway-contract';
 
-import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
@@ -29,6 +29,7 @@ import { chatModelDisplayName, fetchChatModels, resolveEffectiveModelId, session
 import { queryKeys } from '../../query/keys';
 import { fetchTask, handoffTaskConversation } from '../../query/tasks';
 import { fetchProject, fetchProjectOperatingView } from '../../query/projects';
+import { fetchSessionsList, readPlaceholderSessions, type SessionsPage } from '../../query/sessions';
 import { getColors } from '../../theme';
 
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
@@ -49,19 +50,17 @@ import {
 import { reconcileMessageRows } from './reconcile-message-rows';
 import { takeNewChatSessionKey } from './session-prefetch';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
+import { resumableRootChatSessions, rootChatResumeKey } from './chat-root-session';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
 import { useSessionHistory } from './use-session-history';
-import { useWorkspaceNavigation } from '../workspace/workspace-navigation-context';
-import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
 
 export type UseChatPageOptions = {
-  embedded?: boolean;
-  onBack?: () => void;
+  root?: boolean;
 };
 
 export function useChatPage(options: UseChatPageOptions = {}) {
-  const { embedded = false, onBack } = options;
+  const { root = false } = options;
   const { k: rawKey, taskId: rawTaskId } = useLocalSearchParams<{
     k?: string;
     taskId?: string;
@@ -70,7 +69,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const urlSessionKey = typeof rawKey === 'string' ? rawKey : Array.isArray(rawKey) ? rawKey[0] : '';
   const routeTaskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
   const router = useRouter();
-  useDismissOnHardwareBack(router, { enabled: !embedded });
+  useDismissOnHardwareBack(router, { enabled: !root });
   const queryClient = useQueryClient();
   const { gatewayOnline } = useGatewayHealth();
   const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
@@ -126,21 +125,34 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   // ── Bootstrap ────────────────────────────────────────────
   // Shared ref for session key — bootstrap writes here, chatSession reads it.
   const activeSessionKeyRef = useRef('');
-  const transition = useOptionalWorkspaceTransition();
-  const overlaySessionKey = embedded ? transition?.overlaySessionKey ?? '' : '';
+  const recentSessionsQuery = useQuery({
+    queryKey: [...queryKeys.sessionsRecent, activeGatewayId ?? ''],
+    queryFn: () => fetchSessionsList({ limit: 6, offset: 0, channel: 'webchat' }),
+    enabled: root && Boolean(activeGatewayId),
+    placeholderData: () => {
+      const items = resumableRootChatSessions(readPlaceholderSessions() ?? []).slice(0, 6);
+      if (!items?.length) return undefined;
+      return { items, total: items.length, limit: 6, offset: 0, hasMore: false } satisfies SessionsPage;
+    },
+    staleTime: 30_000,
+  });
+  const resumeSessionKey = root ? rootChatResumeKey(recentSessionsQuery.data?.items ?? []) : '';
 
   const bootstrap = useChatPageBootstrap({
+    scopeKey: activeGatewayId ?? '',
     urlSessionKey,
+    resumeSessionKey,
+    resumeLookupComplete: !root || !activeGatewayId || !recentSessionsQuery.isLoading,
     gatewayOnline,
     newSessionSpec: bootstrapSpec,
     initialAgentConfig: bootstrapInitialAgentConfig,
     messages: m,
     activeSessionKeyRef,
-    shouldNavigateToRoute: !embedded,
-    shouldAutoBootstrap: !embedded,
+    shouldNavigateToRoute: !root,
+    shouldAutoBootstrap: true,
   });
 
-  const sessionKey = urlSessionKey || overlaySessionKey || bootstrap.pendingBootstrapKey;
+  const sessionKey = urlSessionKey || bootstrap.pendingBootstrapKey;
 
   // ── Session history ──────────────────────────────────────
   const { sessionHistoryQuery } = useSessionHistory(sessionKey);
@@ -189,16 +201,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const modelMutation = useMutation(
     sessionModelMutationOptions(queryClient, sessionKey, sessionContext.taskId),
   );
-
-  // Overlay: reset UI when a new Ask AI session key arrives from the transition.
-  const prevOverlayKeyRef = useRef('');
-  useEffect(() => {
-    if (!embedded || !overlaySessionKey || overlaySessionKey === prevOverlayKeyRef.current) return;
-    prevOverlayKeyRef.current = overlaySessionKey;
-    activeSessionKeyRef.current = overlaySessionKey;
-    chatSession.cancelRecovery();
-    chatSession.clearAllState();
-  }, [embedded, overlaySessionKey, chatSession]);
 
   const preferredModel = modelPreferenceForAgent(
     newSessionPreferences,
@@ -356,12 +358,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // ── Handlers ─────────────────────────────────────────────
   const handleBack = useCallback(() => {
-    if (onBack) {
-      onBack();
-      return;
-    }
-    dismissOrHome(router);
-  }, [onBack, router]);
+    dismissOrRoot(router);
+  }, [router]);
 
   const handleModelSelect = useCallback(
     (modelId: string) => {
@@ -422,17 +420,18 @@ export function useChatPage(options: UseChatPageOptions = {}) {
         if (activeGatewayId) rememberSelectedAgent(activeGatewayId, agentId);
         chatSession.activeSessionKeyRef.current = key;
         bootstrap.setPendingBootstrapKey(key);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
         if (routeTaskId) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.task(routeTaskId) });
         }
-        if (!embedded) {
+        if (!root) {
           openChat(router, key, { replace: true, ...(routeTaskId ? { taskId: routeTaskId } : {}) });
         }
       })().catch((err) => {
         chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
       });
     },
-    [activeGatewayId, embedded, queryClient, routeTaskId, router, chatSession, bootstrap, newSessionPreferences, rememberSelectedAgent, sessionContext.projectId],
+    [activeGatewayId, root, queryClient, routeTaskId, router, chatSession, bootstrap, newSessionPreferences, rememberSelectedAgent, sessionContext.projectId],
   );
 
   const handleNewChat = useCallback(() => {
@@ -454,13 +453,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       );
       chatSession.activeSessionKeyRef.current = key;
       bootstrap.setPendingBootstrapKey(key);
-      if (!embedded) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
+      if (!root) {
         openChat(router, key, { replace: true });
       }
     })().catch((err) => {
       chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
     });
-  }, [currentSessionAgentId, defaultAgentId, embedded, router, chatSession, bootstrap, newSessionPreferences, sessionContext.projectId]);
+  }, [currentSessionAgentId, defaultAgentId, root, router, chatSession, bootstrap, newSessionPreferences, queryClient, sessionContext.projectId]);
 
   const handleContextChange = useCallback((projectId: string | null, executionMode?: 'local_checkout' | 'managed_worktree') => {
     chatSession.activeSessionKeyRef.current = '';
@@ -481,12 +481,22 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       );
       chatSession.activeSessionKeyRef.current = key;
       bootstrap.setPendingBootstrapKey(key);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
       if (activeGatewayId) rememberLastChatScope(activeGatewayId, projectId);
-      if (!embedded) openChat(router, key, { replace: true });
+      if (!root) openChat(router, key, { replace: true });
     })().catch((err) => {
       chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
     });
-  }, [activeGatewayId, bootstrap, chatSession, currentSessionAgentId, defaultAgentId, embedded, newSessionPreferences, rememberLastChatScope, router]);
+  }, [activeGatewayId, bootstrap, chatSession, currentSessionAgentId, defaultAgentId, root, newSessionPreferences, queryClient, rememberLastChatScope, router]);
+
+  const handleSessionSelect = useCallback((key: string) => {
+    if (!key || key === sessionKey) return;
+    chatSession.cancelRecovery();
+    chatSession.clearAllState();
+    chatSession.activeSessionKeyRef.current = key;
+    bootstrap.setPendingBootstrapKey(key);
+    if (!root) openChat(router, key, { replace: true });
+  }, [bootstrap, chatSession, root, router, sessionKey]);
 
   const handleStarterSend = useCallback((text: string) => {
     if (!sessionKey || chatSession.runningRef.current) {
@@ -499,19 +509,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const trimmed = text.trim();
     if (trimmed) setComposerSuggestion(trimmed);
   }, []);
-
-  const { registerFinalizeHandler } = useWorkspaceNavigation();
-
-  const prepareAskAiFromHome = useCallback(() => {
-    chatSession.cancelRecovery();
-    chatSession.clearAllState();
-  }, [chatSession]);
-
-  useEffect(() => {
-    if (!embedded) return;
-    registerFinalizeHandler(prepareAskAiFromHome);
-    return () => registerFinalizeHandler(null);
-  }, [embedded, prepareAskAiFromHome, registerFinalizeHandler]);
 
   const handleUserMessageCopy = useCallback(
     (text: string) => {
@@ -599,6 +596,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     agentsQuery,
     modelsQuery,
     sessionHistoryQuery,
+    recentSessionsQuery,
     currentSessionAgentId,
     sessionContext,
     effectiveModelId,
@@ -608,7 +606,9 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     modelName,
     displayMessages,
     reasoningLevel: coerceReasoningLevel(sessionAgentConfigQuery.data?.reasoningLevel),
-    sessionPresentationReady: !sessionKey || !sessionAgentConfigQuery.isLoading,
+    sessionPresentationReady:
+      (!root || !recentSessionsQuery.isLoading)
+      && (!sessionKey || !sessionAgentConfigQuery.isLoading),
     welcomeModel,
     isEmptyChat,
     composerDisabled,
@@ -635,6 +635,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
+    handleSessionSelect,
     handleContextChange,
     handleStarterSend,
     handleStarterPrefill,

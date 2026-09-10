@@ -15,7 +15,7 @@ import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
 import { SwipeableRow, type SwipeAction } from '../../components/SwipeableRow';
 import { LIST_DELAY_LONG_PRESS, LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
-import { dismissOrHome, noteDetailRoute } from '../../lib/navigation';
+import { dismissOrRoot, noteDetailRoute } from '../../lib/navigation';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { useDelayedDelete } from '../../hooks/use-delayed-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
@@ -27,7 +27,7 @@ import { deleteNote, fetchNotes, updateNote, type NoteIndexEntry } from '../../q
 import { queryKeys } from '../../query/keys';
 import { decideAgentJudgment, fetchAgentJudgments, transitionAgentJudgment, type AgentJudgment } from '../../query/judgments';
 import { useGatewayConfigured } from '../../query/sessions';
-import { invalidateHomeFeed } from '../../query/workspace-sync';
+import { invalidateAttentionFeed } from '../../query/workspace-sync';
 import { captureWorkspaceText, captureWorkspaceVoice } from '../../sync/workspace-sync';
 import { NOTE_KIND_ICONS } from '../notes/note-list-display';
 import { radii, spacing, typography, useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
@@ -107,7 +107,7 @@ export function InboxScreen() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.judgments });
-      invalidateHomeFeed(queryClient);
+      invalidateAttentionFeed(queryClient);
     },
     onError: (error) => setSnackMsg(error instanceof Error ? error.message : pm.actionFailed),
   });
@@ -122,7 +122,7 @@ export function InboxScreen() {
 
   const invalidateInbox = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.notes('inbox') });
-    invalidateHomeFeed(queryClient);
+    invalidateAttentionFeed(queryClient);
   }, [queryClient]);
 
   const handleLoadMore = useCallback(() => {
@@ -406,7 +406,7 @@ export function InboxScreen() {
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : im.title}
         largeTitle={!selectionMode}
-        onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
+        onBack={selectionMode ? exitSelectionMode : () => dismissOrRoot(router)}
         rightActions={selectionMode ? undefined : [
           {
             icon: 'filter-variant',

@@ -1,15 +1,8 @@
-/**
- * Chat detail screen — renders the existing chat UI.
- *
- * Route: /chat/[k] where k is the session key.
- * Delegates to `useChatPage()` which reads route params via
- * `useLocalSearchParams`.
- */
+/** Chat-first root and session detail surface. */
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Banner, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,36 +18,32 @@ import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
 import { ChatHeader } from './ChatHeader';
+import { ChatNavigationSheet } from './ChatNavigationSheet';
 import { ContinuousReadAloudBar } from './ContinuousReadAloudBar';
-import { ChatOverlayDismissHandle } from './ChatOverlayDismissHandle';
 import { ClarifyPrompt } from './ClarifyPrompt';
 import { MessageList } from './MessageList';
 import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
 import { useAutoReadAloud } from './use-auto-read-aloud';
-import { useOptionalWorkspaceTransition } from '../workspace/workspace-transition-context';
 import type { ComposerContextRef } from './composer.types';
 import { dispatchMobileComposerAppend } from './mobile-composer-fill';
 import { useReadAloudStore } from '../voice/read-aloud-store';
 import { useVoiceCall, voiceCall } from '../voice/voice-call';
 import { useVoicePreferences } from '../voice/voice-preferences';
-
-const AnimatedView = Animated.createAnimatedComponent(View);
+import { ChatAttentionTray } from '../attention/ChatAttentionTray';
+import { useAttentionFeed } from '../attention/use-attention-feed';
 
 export type ChatScreenProps = {
-  embedded?: boolean;
-  overlay?: boolean;
-  onRequestHome?: () => void;
+  root?: boolean;
 };
 
-export function ChatScreen({ embedded = false, overlay = false, onRequestHome }: ChatScreenProps) {
+export function ChatScreen({ root = false }: ChatScreenProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const transition = useOptionalWorkspaceTransition();
-  const isShellEmbedded = embedded || overlay;
-  const page = useChatPage({ embedded: isShellEmbedded, onBack: onRequestHome });
+  const page = useChatPage({ root });
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
+  const [navigationVisible, setNavigationVisible] = useState(false);
   const {
     sessionKey,
     urlSessionKey,
@@ -64,6 +53,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     agentsQuery,
     modelsQuery,
     sessionHistoryQuery,
+    recentSessionsQuery,
     currentSessionAgentId,
     effectiveModelId,
     agentName,
@@ -86,6 +76,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
+    handleSessionSelect,
     handleContextChange,
     handleStarterPrefill,
     handleComposerSend,
@@ -100,6 +91,8 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
   const language = usePreferencesStore((state) => state.language);
   const call = useVoiceCall();
   const voicePreferences = useVoicePreferences();
+  const attentionQuery = useAttentionFeed();
+  const attentionItems = attentionQuery.data?.needsUser ?? [];
 
   useAutoReadAloud({
     language,
@@ -126,33 +119,13 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     });
   }, [activeGatewayId, call.phase, chat.streaming, composerDisabled, sessionKey, voicePreferences.background, voicePreferences.engines]);
 
-  const headerPaddingTop = insets.top + (overlay ? 0 : 8);
+  const headerPaddingTop = insets.top + 8;
   const canvasBg = colors.surface.base;
-
-  const headerRevealStyle = useAnimatedStyle(() => {
-    if (!overlay || !transition) return { opacity: 1, transform: [{ translateY: 0 }] };
-    const t = transition.progress.value;
-    return {
-      opacity: interpolate(t, [0.45, 0.85], [0, 1], Extrapolation.CLAMP),
-      transform: [{ translateY: interpolate(t, [0.45, 0.85], [10, 0], Extrapolation.CLAMP) }],
-    };
-  }, [overlay, transition]);
-
-  const bodyRevealStyle = useAnimatedStyle(() => {
-    if (!overlay || !transition) return { opacity: 1, transform: [{ translateY: 0 }] };
-    const t = transition.progress.value;
-    return {
-      opacity: interpolate(t, [0.55, 0.92], [0, 1], Extrapolation.CLAMP),
-      transform: [{ translateY: interpolate(t, [0.55, 0.92], [14, 0], Extrapolation.CLAMP) }],
-    };
-  }, [overlay, transition]);
 
   return (
     <View style={[styles.screen, { backgroundColor: canvasBg }]}>
-      {overlay ? <ChatOverlayDismissHandle /> : null}
-      <AnimatedView style={headerRevealStyle}>
-        <ChatHeader
-          agentName={agentName}
+      <ChatHeader
+        agentName={agentName}
           modelName={modelName}
           models={modelsQuery.data?.items ?? []}
           currentModelId={effectiveModelId}
@@ -160,14 +133,15 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
           pillText={colors.text.primary}
           voiceCallActive={call.phase !== 'idle'}
           voiceCallDisabled={call.phase === 'idle' && (!activeGatewayId || !sessionKey || composerDisabled || chat.streaming)}
-          onBackPress={overlay ? onRequestHome : isShellEmbedded ? undefined : handleBack}
+          onBackPress={root ? undefined : handleBack}
+          onNavigationPress={root ? () => setNavigationVisible(true) : undefined}
+          navigationAttentionCount={attentionItems.length}
           onAgentPress={openAgentsPicker}
           onVoiceCallPress={handleVoiceCallPress}
           onModelSelect={handleModelSelect}
           onFilesPress={sessionKey ? () => router.push(`/files/context/session/${encodeURIComponent(sessionKey)}` as never) : undefined}
           onNewChat={handleNewChat}
-        />
-      </AnimatedView>
+      />
 
       <ConnectionInterventionBanner
         onOpenSettings={handleGatewayManageSettings}
@@ -176,7 +150,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
 
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>
-        <AnimatedView style={[styles.chatBodyInner, bodyRevealStyle]}>
+        <View style={styles.chatBodyInner}>
         {!urlSessionKey && bootstrap.bootstrapError ? (
           <Banner
             visible
@@ -270,6 +244,9 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             onAgentDecide={() => void chat.letAgentDecideClarification()}
             onCancel={() => void chat.cancelClarification()}
           />
+          {!chat.clarifyPrompt ? (
+            <ChatAttentionTray gatewayId={activeGatewayId} items={attentionItems} />
+          ) : null}
           <ChatComposer
             contextControl={sessionKey ? <ChatContextControl
               sessionKey={sessionKey}
@@ -287,12 +264,11 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             placeholder={m.chat.inputPlaceholder}
             suggestionDraft={composerSuggestion}
             onConsumeSuggestionDraft={() => setComposerSuggestion(undefined)}
-            overlayShell={overlay}
             contextRefs={composerContextRefs}
             onContextRefsChange={setComposerContextRefs}
           />
         </KeyboardStickyView>
-        </AnimatedView>
+        </View>
       </View>
 
       <AppToast
@@ -310,6 +286,15 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
         currentAgentId={currentSessionAgentId}
         onSelect={handleAgentSelect}
         onDismiss={() => setAgentSheetVisible(false)}
+      />
+      <ChatNavigationSheet
+        visible={navigationVisible}
+        onDismiss={() => setNavigationVisible(false)}
+        currentSessionKey={sessionKey}
+        recentSessions={recentSessionsQuery.data?.items ?? []}
+        attentionCount={attentionItems.length}
+        onSessionSelect={handleSessionSelect}
+        onNewChat={handleNewChat}
       />
     </View>
   );
