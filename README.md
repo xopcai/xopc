@@ -26,7 +26,15 @@
   <a href="https://xopcai.github.io/xopc/">Read the docs</a>
 </p>
 
-https://github.com/user-attachments/assets/8325d037-676c-4fbf-ad0f-b4d0786faa82
+<p align="center">
+  <a href="https://xopcai.github.io/xopc/xopc-desktop.mp4">
+    <img src="docs/public/xopc-desktop-preview.gif" alt="xopc desktop onboarding demo" width="960">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://xopcai.github.io/xopc/xopc-desktop.mp4"><strong>Watch the full onboarding video (1:02) →</strong></a>
+</p>
 
 > After setup, try: **“One thing I want to move forward this week is ____. Help me find the smallest credible next step.”**
 
