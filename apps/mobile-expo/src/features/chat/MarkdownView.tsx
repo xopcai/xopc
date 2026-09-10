@@ -15,6 +15,7 @@ import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
 import { shouldUseMarkdownFallback } from './markdown-render-safety';
 import { typography, useTheme, type ColorScheme } from '../../theme';
 import { mobileRouteFromProductDeepLink } from './product-delivery';
+import { workspaceFileLinkRoute } from '../../lib/workspace-file-link';
 
 function createMarkdownStyle(themeColors: ColorScheme, isDark: boolean) {
   const codeBackground = isDark ? themeColors.surface.active : themeColors.surface.input;
@@ -325,6 +326,7 @@ export const MarkdownView = memo(function MarkdownView({
   content,
   streaming = false,
   allowTrailingMargin = false,
+  sessionKey,
   onLinkPress,
 }: {
   content: string;
@@ -335,6 +337,8 @@ export const MarkdownView = memo(function MarkdownView({
    * Use when another view (e.g. deliverables) sits directly below the markdown.
    */
   allowTrailingMargin?: boolean;
+  /** Session scope used to resolve assistant-authored workspace file links. */
+  sessionKey?: string | null;
   onLinkPress?: (url: string) => void;
 }) {
   const { colors, isDark } = useTheme();
@@ -352,8 +356,13 @@ export const MarkdownView = memo(function MarkdownView({
       router.push(productRoute as Href);
       return;
     }
+    const workspaceRoute = workspaceFileLinkRoute(url, sessionKey);
+    if (workspaceRoute) {
+      router.push(workspaceRoute as Href);
+      return;
+    }
     void Linking.openURL(url);
-  }, [onLinkPress, router]);
+  }, [onLinkPress, router, sessionKey]);
 
   if (!content?.trim()) return null;
 
