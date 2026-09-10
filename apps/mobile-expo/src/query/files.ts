@@ -26,6 +26,12 @@ export async function fetchFileSpaces(): Promise<FileSpace[]> {
   return FileSpacesResponseSchema.parse(await response.json()).spaces;
 }
 
+export async function fetchDefaultFileSpace(): Promise<FileSpace> {
+  const response = await apiFetch('/api/files/default-space');
+  if (!response.ok) throw await apiError(response);
+  return FileSpaceSchema.parse((await response.json() as { space?: unknown }).space);
+}
+
 export async function fetchFileSpaceForContext(kind: FileContextKind, id: string): Promise<FileSpace> {
   const response = await apiFetch(`/api/files/contexts/${kind}/${encodeURIComponent(id)}`);
   if (!response.ok) throw await apiError(response);

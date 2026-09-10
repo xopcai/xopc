@@ -280,6 +280,7 @@ function renderAssistantContent(
               content={merged}
               streaming={isStreaming}
               allowTrailingMargin={allowTrailingMargin}
+              sessionKey={sessionKey}
             />,
           );
         }
