@@ -65,6 +65,15 @@ describe('measured chat scroll follow', () => {
     expect(chat.onAtBottomChange).not.toHaveBeenCalled();
   });
 
+  it('restores the bottom when completion collapses the live assistant row', () => {
+    const chat = setup();
+    chat.onContentSizeChange(400, 1200);
+    chat.onScroll(scroll(700, 1200));
+    chat.onContentSizeChange(400, 900);
+    vi.runAllTimers();
+    expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
+  });
+
   it('cancels pending follow and keeps history reading position as tokens arrive', () => {
     const chat = setup();
     chat.onContentSizeChange(400, 1200);
