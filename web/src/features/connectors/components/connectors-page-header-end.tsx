@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, Plus, Search, Settings2, Store, Wrench } from 'lucide-react';
+import { ChevronDown, Plus, Search, Store, Wrench } from 'lucide-react';
 import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ export const ConnectorSearchField = memo(function ConnectorSearchField({
       />
       <input
         type="search"
+        aria-label={placeholder}
         enterKeyHint="search"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -44,33 +45,18 @@ export const ConnectorSearchField = memo(function ConnectorSearchField({
 export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
   onBrowseCatalog,
   onAddCustomServer,
-  onOpenRuntimeSettings,
   addLabel,
   browseLabel,
   customLabel,
-  settingsLabel,
 }: {
   onBrowseCatalog: () => void;
   onAddCustomServer: () => void;
-  onOpenRuntimeSettings: () => void;
   addLabel: string;
   browseLabel: string;
   customLabel: string;
-  settingsLabel: string;
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      <Button
-        type="button"
-        variant="secondary"
-        className="shrink-0 gap-2"
-        aria-label={settingsLabel}
-        title={settingsLabel}
-        onClick={onOpenRuntimeSettings}
-      >
-        <Settings2 className="size-4" strokeWidth={1.75} aria-hidden />
-        <span className="hidden sm:inline">{settingsLabel}</span>
-      </Button>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="primary" className="shrink-0 gap-2">
