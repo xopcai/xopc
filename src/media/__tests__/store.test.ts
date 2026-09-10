@@ -62,6 +62,19 @@ describe('media store', () => {
     expect(mimeTypeFromMediaPath(saved.path)).toBe('image/svg+xml');
   });
 
+  it('reports actual and allowed sizes before reading oversized media', async () => {
+    prevStateDir = process.env.XOPC_STATE_DIR;
+    const work = join(tmpdir(), `xopc-media-${Date.now()}`);
+    process.env.XOPC_STATE_DIR = work;
+    await mkdir(work, { recursive: true });
+
+    const saved = await saveMediaBuffer(Buffer.alloc(20), { maxBytes: 20 });
+
+    await expect(readMediaBuffer(saved.id, 'inbound', 10)).rejects.toThrow(
+      /20 bytes.*limit.*10 bytes/,
+    );
+  });
+
   it('parseMediaUri rejects traversal and invalid buckets', () => {
     expect(() => parseMediaUri('media://inbound/id/extra')).toThrow();
     expect(() => parseMediaUri('media://other/id')).toThrow();

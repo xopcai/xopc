@@ -79,7 +79,10 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
     try {
       const parsed = await resolveScopedMediaReference(deps.service, uriRaw.trim(), { sessionKey, taskId });
-      const { buffer, path } = await readMediaReference(parsed.uri);
+      const { buffer, path } = await readMediaReference(
+        parsed.uri,
+        MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
+      );
       const contentType = mimeTypeFromMediaPath(path);
       const range = parseByteRange(c.req.header('Range'), buffer.byteLength);
       const commonHeaders = {

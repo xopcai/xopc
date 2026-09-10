@@ -2,10 +2,10 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { readMediaReference } from '../../media/media-reference.js';
-import { mimeTypeFromMediaPath } from '../../media/store.js';
+import { MEDIA_MAX_BYTES, mimeTypeFromMediaPath } from '../../media/store.js';
 
-const DEFAULT_MAX_BYTES = 1024 * 1024;
-const HARD_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_MAX_BYTES = MEDIA_MAX_BYTES;
+const HARD_MAX_BYTES = MEDIA_MAX_BYTES;
 
 const ReadMediaSchema = Type.Object({
   uri: Type.String({

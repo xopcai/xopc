@@ -67,7 +67,7 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
   if (!text) return null;
 
   return (
-    <Text variant="labelSmall" style={styles.durationText}>
+    <Text variant="labelSmall" style={styles.durationText} numberOfLines={1}>
       {text}
     </Text>
   );
@@ -194,16 +194,13 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
   return (
     <Animated.View
       layout={reducedMotion || anyActive ? undefined : LinearTransition.duration(motion.duration.standard)}
-      style={[
-        styles.container,
-        {
-          backgroundColor: isDark ? chatColors.stepsBgDark : chatColors.stepsBg,
-          borderColor: isDark ? chatColors.stepsBorderDark : chatColors.stepsBorder,
-        },
-      ]}
+      style={styles.container}
     >
       <Pressable
-        style={styles.header}
+        style={({ pressed }) => [
+          styles.header,
+          pressed && { backgroundColor: colors.surface.pressed },
+        ]}
         onPress={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
         accessibilityRole="button"
         accessibilityLabel={headerMain}
@@ -214,33 +211,32 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
         ) : (
           <Icon
             source="check-circle-outline"
-            size={14}
-            color={colors.semantic.success}
+            size={16}
+            color={colors.text.secondary}
           />
         )}
 
-        <View style={styles.headerCenter}>
-          <Text
-            variant="labelSmall"
-            style={[styles.headerLabel, { color: colors.text.primary }]}
-            numberOfLines={2}
-          >
-            {headerMain}
-          </Text>
-          {anyActive ? (
-            <StepRoundDurationText
-              active={anyActive}
-              roundStartRef={roundStartRef}
-              frozenMs={null}
-            />
-          ) : (
-            <StepRoundDurationText
-              active={false}
-              roundStartRef={roundStartRef}
-              frozenMs={frozenDurationMs}
-            />
-          )}
-        </View>
+        <Text
+          variant="labelSmall"
+          style={[styles.headerLabel, { color: colors.text.secondary }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {headerMain}
+        </Text>
+        {anyActive ? (
+          <StepRoundDurationText
+            active={anyActive}
+            roundStartRef={roundStartRef}
+            frozenMs={null}
+          />
+        ) : (
+          <StepRoundDurationText
+            active={false}
+            roundStartRef={roundStartRef}
+            frozenMs={frozenDurationMs}
+          />
+        )}
 
         <AnimatedDisclosureIcon expanded={expanded} size={16} color={colors.text.tertiary} />
       </Pressable>
@@ -249,10 +245,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
           exiting={reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
-          style={[
-            styles.timelineOuter,
-            { borderTopColor: isDark ? chatColors.stepsBorderDark : chatColors.stepsBorder },
-          ]}
+          style={styles.timelineOuter}
         >
           <View
             style={[
@@ -337,42 +330,35 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
     minWidth: 0,
-    borderWidth: 1,
-    borderRadius: 12,
-    marginVertical: 4,
-    overflow: 'hidden',
+    marginVertical: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
     minHeight: 44,
-  },
-  headerCenter: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
+    borderRadius: 8,
   },
   headerLabel: {
+    flex: 1,
+    minWidth: 0,
     flexShrink: 1,
     fontWeight: '500',
     fontSize: 12,
     lineHeight: 16,
   },
   durationText: {
+    flexShrink: 0,
     fontSize: 11,
     color: chatColors.timestamp,
     fontVariant: ['tabular-nums'],
   },
   timelineOuter: {
-    borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   timeline: {
     marginLeft: 4,
