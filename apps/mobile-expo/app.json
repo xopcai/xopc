@@ -6,7 +6,7 @@
       "xopc-mobile",
       "xopc"
     ],
-    "version": "0.0.43",
+    "version": "0.0.44",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -60,7 +60,7 @@
           ]
         }
       ],
-      "versionCode": 43,
+      "versionCode": 44,
       "package": "ai.xopc.xopc",
       "googleServicesFile": "./google-services.json"
     },
