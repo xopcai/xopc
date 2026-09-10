@@ -1,8 +1,9 @@
 # xopc brand assets
 
-`xopc-mark.svg` is the canonical vector trace of the supplied logo. Its orbit and
-asymmetric centre geometry are immutable: platform variants may change only the canvas,
-colour, material, and uniform scale around this exact mark.
+`xopc-mark.svg` is the canonical Human–AI Loop mark. Its two segments share one
+circle, radius, and stroke width. The arc centre lines use an exact 80:20 ratio:
+AI handles the larger execution segment while the blue human segment represents
+intention, judgment, and final control.
 
 Run `pnpm run assets:brand` from the repository root after changing that source. The
 generator creates every consumable asset under `docs/public`, `web/public`,
@@ -11,28 +12,17 @@ generator creates every consumable asset under `docs/public`, `web/public`,
 Do not edit generated files by hand. Use `pnpm run assets:brand:check` in CI or before
 committing to confirm the repository has no stale brand assets.
 
-The generator uses three purpose-built compositions rather than applying one square
-PNG everywhere:
+The generator uses three purpose-built compositions:
 
-- **UI mark:** transparent, monochrome artwork for light and dark product surfaces.
-- **App icon:** full-bleed, subtly layered artwork for iOS, Android launchers, and PWA
-  installation; the operating system supplies the final mask where appropriate.
-- **Desktop / badge:** a transparent outer canvas with a rounded desktop tile or circular
-  badge, so Windows taskbar and browser toolbar icons never show a blunt black square.
+- **UI mark:** transparent two-colour artwork that adapts to light and dark surfaces.
+- **App icon:** full-bleed artwork for iOS, Android launchers, and PWA installation;
+  the operating system supplies the final mask where appropriate.
+- **Desktop / badge:** a transparent outer canvas with a rounded desktop tile or
+  compact badge, so Windows taskbar and browser toolbar icons remain legible.
 
-The palette is deliberately compact:
+The role palette is deliberately compact:
 
-- `#0B0D10` / `#F8FAFC`: splash surfaces and high-contrast marks.
-- `#FBFCFF` / `#E8EAF3`: pale mobile and desktop icon surfaces; the mobile dark
-  appearance uses a softer blue-slate range instead of near-black.
-- `#111827` / `#F8FAFC`: transparent UI mark on light and dark themes.
-- Android uses a slate foreground over `#EEF1F8`; its monochrome image exposes the same
-  alpha silhouette for Android themed icons.
-- iOS receives opaque Light, Dark, and Tinted App Icon variants; Android receives legacy
-  density PNGs plus adaptive foreground, background, and monochrome resources.
-
-The macOS menu-bar asset remains a transparent template image and is recoloured by the
-system. Browser and Windows/Linux tray assets use a white rounded-square badge with an
-ink mark. Mobile application icons use their own richer composition, while the desktop
-application icon uses a pale porcelain surface with a slate ink mark for a lighter native
-appearance.
+- Light surfaces: AI graphite `#1D1D1F`, human blue `#007AFF`.
+- Dark surfaces: AI soft white `#F5F5F7`, human blue `#0A84FF`.
+- Monochrome assets are generated only where the platform owns the tint, such as the
+  macOS menu-bar template and Android themed icons.
