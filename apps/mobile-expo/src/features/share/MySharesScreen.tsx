@@ -44,7 +44,7 @@ import { BottomSheetModal } from '../../components/BottomSheetModal';
 
 import { t, useMessages } from '../../i18n/messages';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
-import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, spacing, typography, type ColorScheme } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
@@ -110,7 +110,7 @@ export function MySharesScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
-      <NativeScreenHeader title={pm.title} largeTitle onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={pm.title} largeTitle onBack={() => dismissOrRoot(router)} />
 
       {list.isLoading ? (
         <ListSkeleton count={6} />

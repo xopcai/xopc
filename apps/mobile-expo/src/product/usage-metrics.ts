@@ -1,19 +1,10 @@
 import { KEYS, storage } from '../storage/mmkv';
 
 export type UsageEventName =
-  | 'home_viewed'
-  | 'home_continue_opened'
-  | 'home_attention_opened'
-  | 'home_attention_action_completed'
-  | 'home_update_opened'
-  | 'home_library_opened'
-  | 'home_search_opened'
   | 'gateway_switcher_opened'
   | 'gateway_switch_completed'
   | 'gateway_switch_failed'
-  | 'capture_started'
   | 'capture_completed'
-  | 'ask_ai_started'
   | 'notification_opened'
   | 'read_aloud_started'
   | 'read_aloud_completed'
@@ -21,8 +12,7 @@ export type UsageEventName =
   | 'read_aloud_failed';
 
 export type PerformanceEventName =
-  | 'app_shell_rendered'
-  | 'home_content_ready';
+  | 'app_shell_rendered';
 
 export type InteractionPerformanceEventName =
   | 'read_aloud_first_audio'

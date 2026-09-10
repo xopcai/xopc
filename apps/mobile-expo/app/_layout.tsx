@@ -146,12 +146,9 @@ export default function RootLayout() {
           <PaperProvider theme={paperTheme}>
             <GatewayConnectLandingContext.Provider value={gatewayConnectCtx}>
               <Stack screenOptions={stackScreenOptions}>
-              {/**
-               * (home) is the default landing group — single home screen.
-               * chat/[k] pushes a full-screen chat detail on top.
-               */}
-                <Stack.Screen name="(home)" options={{ headerShown: false }} />
+                <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen name="chat" options={{ headerShown: false }} />
+                <Stack.Screen name="attention" options={{ headerShown: false }} />
                 <Stack.Screen name="inbox" options={{ headerShown: false }} />
                 <Stack.Screen name="tasks" options={{ headerShown: false }} />
                 <Stack.Screen name="projects" options={{ headerShown: false }} />
