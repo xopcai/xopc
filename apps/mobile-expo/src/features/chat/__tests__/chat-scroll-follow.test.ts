@@ -55,13 +55,13 @@ afterEach(() => {
 });
 
 describe('measured chat scroll follow', () => {
-  it('coalesces native height changes and stays pinned through layout scroll events', () => {
+  it('lets FlashList own continuous height anchoring without issuing a competing scroll', () => {
     const chat = setup();
     chat.onContentSizeChange(400, 1200);
     chat.onScroll(scroll(500, 1200));
     chat.onContentSizeChange(400, 1200);
     vi.runAllTimers();
-    expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
+    expect(chat.scrollToEnd).not.toHaveBeenCalled();
     expect(chat.onAtBottomChange).not.toHaveBeenCalled();
   });
 
@@ -128,7 +128,7 @@ describe('measured chat scroll follow', () => {
 
   it('cancels a scheduled native scroll on unmount', () => {
     const chat = setup();
-    chat.onContentSizeChange(400, 1200);
+    chat.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 500 } } } as Parameters<typeof chat.onLayout>[0]);
     lifecycle.cleanups.splice(0).forEach((cleanup) => cleanup());
     vi.runAllTimers();
     expect(chat.scrollToEnd).not.toHaveBeenCalled();

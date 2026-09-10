@@ -1,7 +1,10 @@
 import type { MobilePrivacyDisclosure } from '@xopcai/gateway-contract';
 
 export class DataSharingConsentError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason: 'consent-required' | 'disclosure-unavailable' = 'consent-required',
+  ) {
     super(message);
     this.name = 'DataSharingConsentError';
   }
@@ -14,6 +17,7 @@ type ConsentDependencies = {
   read: (key: string) => string | undefined;
   write: (key: string, value: string) => void;
   errorMessage: () => string;
+  onGranted?: (gatewayId: string, revision: string) => void;
 };
 
 const consentKey = (gatewayId: string) => `privacy.dataSharing.v1:${gatewayId}`;
@@ -63,6 +67,7 @@ export function createConsentController(deps: ConsentDependencies) {
           throw new DataSharingConsentError(deps.errorMessage());
         }
         deps.write(key, disclosure.revision);
+        deps.onGranted?.(gatewayId, disclosure.revision);
       })().finally(() => pending.delete(pendingKey));
       pending.set(pendingKey, decision);
       return decision;

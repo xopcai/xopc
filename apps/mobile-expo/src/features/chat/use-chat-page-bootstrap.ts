@@ -4,6 +4,11 @@ import { useRouter } from 'expo-router';
 import type { ResolvedNewSessionSpec, SessionInitialAgentConfig } from '@xopcai/gateway-contract';
 
 import { openChat } from '../../lib/navigation';
+import {
+  isDataSharingConsentRequiredError,
+  reviewDataSharingConsent,
+  subscribeDataSharingConsentGranted,
+} from '../privacy/data-sharing-consent';
 
 import { takeNewChatSessionKey } from './session-prefetch';
 import type { useMessages } from '../../i18n/messages';
@@ -20,7 +25,7 @@ export type ChatBootstrapDeps = {
   /** Shared mutable ref — bootstrap writes the new session key here so callers stay in sync. */
   activeSessionKeyRef: React.MutableRefObject<string>;
   shouldNavigateToRoute?: boolean;
-  /** When false, skip auto session creation (overlay supplies its own key). */
+  /** When false, the caller owns session creation. */
   shouldAutoBootstrap?: boolean;
 };
 
@@ -29,6 +34,9 @@ export type ChatBootstrapResult = {
   setPendingBootstrapKey: (key: string) => void;
   creatingInitialSession: boolean;
   bootstrapError: string | null;
+  bootstrapConsentRequired: boolean;
+  reviewingConsent: boolean;
+  reviewConsent: () => void;
   retryBootstrapSession: () => void;
 };
 
@@ -52,6 +60,9 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
   const [pendingBootstrapKey, setPendingBootstrapKey] = useState('');
   const [creatingInitialSession, setCreatingInitialSession] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [bootstrapConsentRequired, setBootstrapConsentRequired] = useState(false);
+  const [reviewingConsent, setReviewingConsent] = useState(false);
+  const bootstrapConsentRequiredRef = useRef(false);
   const autoSessionAttemptedRef = useRef(false);
   const previousScopeRef = useRef(scopeKey);
 
@@ -62,6 +73,8 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     activeSessionKeyRef.current = '';
     setPendingBootstrapKey('');
     setBootstrapError(null);
+    bootstrapConsentRequiredRef.current = false;
+    setBootstrapConsentRequired(false);
   }, [activeSessionKeyRef, scopeKey]);
 
   useEffect(() => {
@@ -81,9 +94,13 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     }
     setCreatingInitialSession(true);
     setBootstrapError(null);
+    bootstrapConsentRequiredRef.current = false;
+    setBootstrapConsentRequired(false);
 
     void takeNewChatSessionKey(newSessionSpec, initialAgentConfig)
       .then((key) => {
+        bootstrapConsentRequiredRef.current = false;
+        setBootstrapConsentRequired(false);
         activeSessionKeyRef.current = key;
         setPendingBootstrapKey(key);
         if (shouldNavigateToRoute) {
@@ -92,6 +109,9 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
       })
       .catch((err) => {
         autoSessionAttemptedRef.current = false;
+        const consentRequired = isDataSharingConsentRequiredError(err);
+        bootstrapConsentRequiredRef.current = consentRequired;
+        setBootstrapConsentRequired(consentRequired);
         setBootstrapError(err instanceof Error ? err.message : messages.sessions.bootstrapFailed);
       })
       .finally(() => {
@@ -112,11 +132,36 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     startAutoSession();
   }, [urlSessionKey, gatewayOnline, startAutoSession]);
 
+  useEffect(() => subscribeDataSharingConsentGranted((gatewayId) => {
+    if (gatewayId !== scopeKey || !bootstrapConsentRequiredRef.current) return;
+    bootstrapConsentRequiredRef.current = false;
+    setBootstrapConsentRequired(false);
+    setBootstrapError(null);
+    autoSessionAttemptedRef.current = false;
+    startAutoSession();
+  }), [scopeKey, startAutoSession]);
+
+  const reviewConsent = useCallback(() => {
+    if (!bootstrapConsentRequiredRef.current || reviewingConsent) return;
+    setReviewingConsent(true);
+    void reviewDataSharingConsent()
+      .catch((error) => {
+        const consentRequired = isDataSharingConsentRequiredError(error);
+        bootstrapConsentRequiredRef.current = consentRequired;
+        setBootstrapConsentRequired(consentRequired);
+        setBootstrapError(error instanceof Error ? error.message : messages.privacy.consentRequired);
+      })
+      .finally(() => setReviewingConsent(false));
+  }, [messages.privacy.consentRequired, reviewingConsent]);
+
   return {
     pendingBootstrapKey,
     setPendingBootstrapKey,
     creatingInitialSession,
     bootstrapError,
+    bootstrapConsentRequired,
+    reviewingConsent,
+    reviewConsent,
     retryBootstrapSession,
   };
 }
