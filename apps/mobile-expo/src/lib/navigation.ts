@@ -40,7 +40,7 @@ export function openNoteDetail(router: ImperativeRouter, noteId: string, options
  * Leave a modal (or any screen) without assuming a parent route exists.
  * Cold start / deep links can mount only `settings`, so `router.back()` throws LogBox "GO_BACK was not handled".
  */
-export function dismissOrHome(router: ImperativeRouter): void {
+export function dismissOrRoot(router: ImperativeRouter): void {
   if (router.canGoBack()) {
     router.back();
   } else {
@@ -63,7 +63,7 @@ export function useDismissOnHardwareBack(
         if (onBack) {
           onBack();
         } else {
-          dismissOrHome(router);
+          dismissOrRoot(router);
         }
         return true;
       });

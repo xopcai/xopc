@@ -1,8 +1,4 @@
-/**
- * Chat detail stack — pushed on top of the home navigator.
- *
- * Route: /chat/[k]   (k = session key)
- */
+/** Chat detail stack for session deep links and links from secondary screens. */
 import { Stack } from 'expo-router';
 
 import { useThemedStackScreenOptions } from '@/lib/stack-screen-theme';

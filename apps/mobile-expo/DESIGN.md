@@ -6,7 +6,7 @@ Status: target design direction. This document is the source of truth for mobile
 
 ## 1. Product intent
 
-XOPC is a private workspace in a person’s pocket: a place to capture a thought, recover context, direct an agent, and see what needs attention. It must feel composed and personal rather than like a remote admin console or a generic chat clone.
+XOPC is a private AI assistant in a person’s pocket: a place to continue a conversation, direct an agent, capture a thought, and resolve work that needs attention. It must feel composed and personal rather than like a remote admin console or a generic chat clone.
 
 The intended feeling is **quiet momentum**:
 
@@ -35,41 +35,32 @@ The system takes Apple’s current HIG principles of hierarchy, harmony, consist
 - Do not imitate Apple Notes or ChatGPT pixel-for-pixel.
 - Do not use a gradient page background, glass-card grids, neon AI effects, illustration-led empty states, or decorative status colors.
 - Do not make every control a pill, every object a card, or every list item elevated.
-- Do not add a permanent bottom tab bar merely to resemble a consumer app. XOPC’s home workspace and focused overlays are deliberate; navigation must earn persistent chrome.
+- Do not add a permanent bottom tab bar merely to resemble a consumer app. Chat owns the bottom composer; global destinations belong in the leading navigation drawer.
 - Do not use AI sparkle imagery or a second brand accent as a substitute for useful product feedback.
 
 ## 2. Product model and information architecture
 
-The current application has a single workspace landing surface and task routes for Inbox, Notes, Sessions, Chat, Files, Agents, Automations, Sharing, and Settings. This model is sound, but the home currently presents too many equally weighted sections and every collection uses a similar card treatment.
+Chat is the application root. A cold launch resumes the most recent usable conversation; when none exists it opens a new conversation. Secondary destinations remain available from the leading navigation control without competing with the composer.
 
-The target model has four modes. A person should always know which mode they are in.
+The product has five modes. A person should always know which mode they are in.
 
 | Mode | Purpose | Primary surface | Primary action | Entry / exit |
 |---|---|---|---|---|
-| **Workspace** | Resume the most useful work | Home | Ask AI or capture | Root; return with a direct home action |
+| **Chat** | Ask, continue, and direct an agent | Conversation | Send a message | Root; cold launch resumes the latest conversation |
+| **Attention** | Resolve decisions and blocked work | Attention tray / list | Decide or acknowledge | Composer tray, navigation badge, notification |
 | **Capture** | Save without interrupting the moment | Inbox composer / capture sheet | Save | Bottom capture control; dismiss returns to context |
-| **Library** | Find and organize durable material | Inbox, Notes, Sessions, Files | Open or filter | Home shortcuts and search; back returns to prior context |
-| **Focus** | Read, edit, converse, or run a task | Note, Chat, Automation detail | Contextual to the task | Push or workspace overlay; back preserves context |
+| **Library** | Find and organize durable material | Inbox, Notes, Sessions, Files | Open or filter | Leading navigation; back returns to prior context |
+| **Focus** | Read, edit, converse, or run a task | Note, Chat, Automation detail | Contextual to the task | Push; back preserves context |
 
-### 2.1 Workspace home
+### 2.1 Chat root
 
-The home is a **briefing**, not a dashboard or app launcher.
-
-Order its content by actionability:
-
-1. A quiet greeting/context line and a compact connection indicator only when it changes what a person can do.
-2. **Continue**: one to three most relevant items. It is the visual anchor, not a full recent-activity feed.
-3. **Needs attention**: show only items requiring an action. Hide the section entirely when empty.
-4. **Ask an agent**: a horizontally scrolling roster with recognisable avatars and names; selecting one begins a focused conversation.
-5. **Library**: one compact grouped navigation list, not five independent feature buttons.
-
-Home rules:
-
-- Keep the first actionable content within one viewport below the header on a regular iPhone.
-- Show a gateway banner only for unavailable, starting, or degraded conditions. A healthy connection is a quiet dot/status in the header or context line, never a persistent card.
-- “Continue” uses one featured surface plus plain rows when more than one item is needed; it must not become a grid of cards.
-- A section title uses a small, quiet trailing action only when it leads to a useful complete collection.
-- The create note action and Ask AI must not compete. The current centered circular button becomes part of a unified bottom action dock described below.
+- Preserve the established Chat header and trailing actions. The leading control opens global navigation on the root and becomes Back on pushed chat routes.
+- Keep the composer visible and make it the dominant action.
+- Show urgent, unseen decisions in a compact tray immediately above the composer. The tray disappears when empty or dismissed.
+- Dismissing the tray marks the current versions as seen. It returns only for a new item, a changed item, or an escalation; unresolved items remain in Attention and on the navigation badge.
+- Tapping the tray opens a short bottom sheet. The complete queue lives in the Attention destination.
+- The leading navigation contains recent conversations followed by Tasks, Projects, Inbox, Notes, Files, Automation, Agents, and Settings.
+- Show a gateway banner only for unavailable, starting, or degraded conditions.
 
 ### 2.2 Capture and Inbox
 
@@ -119,15 +110,15 @@ Replace the universal “three circular controls plus a central pill” header w
 
 | Header | Use | Structure |
 |---|---|---|
-| **Large title** | Library roots, settings, home at rest | Safe-area top, optional leading brand/context, title aligned to the content grid, 0–2 trailing icon actions |
-| **Compact title** | Scroll-collapsed roots and focus/detail screens | Standard 44pt control area, back where appropriate, centered or leading title based on platform convention, 0–1 trailing action |
+| **Large title** | Library roots and settings | Safe-area top, optional leading context, title aligned to the content grid, 0–2 trailing icon actions |
+| **Compact title** | Chat root, scroll-collapsed roots, and focus/detail screens | Standard 44pt control area, navigation or back where appropriate, current context selector, 0–2 established trailing actions |
 
 Rules:
 
 - Header controls are 44 × 44pt hit targets; their visible glyphs remain 20–22pt.
 - The content grid starts at 20pt on iPhone (16pt only for dense lists or very narrow widths). Header and body share the same leading alignment.
 - Do not give every header control a filled circular background. Use a bare glyph by default; apply a material circle only when it floats over scrolling or visual content.
-- The XOPC mark appears on the workspace root and onboarding, not in every pushed screen.
+- The XOPC mark appears in onboarding and identity surfaces, not in every pushed screen.
 - Search is a field in content context, never a decorative replacement for screen identity.
 
 ### 3.2 Presentations
@@ -135,7 +126,6 @@ Rules:
 | Containment | Use | Behavior |
 |---|---|---|
 | Push | Read, edit, inspect, or a task with history | Forward movement; standard back gesture; preserve draft state |
-| Workspace overlay | Ask AI from Home | Home remains perceptibly behind the task; drag/down or explicit close returns to the same scroll position |
 | Bottom sheet | Agent/model picker, capture source, filters, short choices | Clear grabber, title, grouped options, swipe-to-dismiss where safe |
 | Dialog | Confirm an irreversible or blocking decision | One concise consequence, safe action, destructive action only when needed |
 | Full-screen modal | Pair gateway, long form, scanner, complex configuration | Clear cancel/done affordance; never hide unsaved changes silently |
@@ -144,9 +134,8 @@ Rules:
 
 The app may use a floating lower control area, but only one system may own that space per screen.
 
-- **Home:** a small raised dock contains `Capture` and `Ask AI`. Capture is the primary direct action; Ask AI is a text-labeled secondary action. On compact widths, use a primary circular Capture button with an adjacent unobtrusive Ask control, never two matching circular FABs.
+- **Chat:** the message composer owns the dock; on the root, the temporary attention tray may sit directly above it.
 - **Inbox:** the capture composer owns the dock.
-- **Chat:** the message composer owns the dock.
 - **Lists:** use a trailing `+` or compose action in the header/content; do not overlay an unrelated central FAB.
 - **Selection mode:** the batch action bar replaces the normal dock. It has a visible selected count and safe-area-aware background.
 
@@ -197,7 +186,7 @@ Use the platform system typeface: SF Pro on iOS, Roboto on Android, and the syst
 
 | Token | Size / line height | Weight | Use |
 |---|---:|---:|---|
-| `display` | 34 / 41 | 700 | Home moment, empty-state title; rare |
+| `display` | 34 / 41 | 700 | Opening moment or empty-state title; rare |
 | `largeTitle` | 28 / 34 | 700 | Library roots, settings, page identity |
 | `title` | 22 / 28 | 700 | Detail title, sheet title |
 | `heading` | 17 / 22 | 600 | Section title, important card title |
@@ -366,14 +355,12 @@ Motion must explain a relationship: where content came from, what changed, or wh
 | `press` | 80ms | ease-out; surface and 0.98–0.99 scale |
 | `quick` | 140ms | ease-out; icon, selection, small reveal |
 | `standard` | 220ms | system-like ease / spring; sheet, compact header, dock |
-| `focus` | 320ms | gentle spring; home-to-Ask-AI transition |
 | `ambient` | 600ms max | only low-amplitude streaming/progress feedback |
 
 - Respect `useReducedMotion`; remove transform, blur, and nonessential repeating motion when enabled.
-- The Home → Ask AI overlay retains a hint of the home surface behind it, then returns to the same home context. It must feel like entering focus, not launching a separate app.
 - List rows do not bounce on scroll. Swipe action reveal follows the finger directly and includes a label, icon, semantic color, and an undo/confirmation path.
 - Use haptics for entering selection, committing a capture, sending a message, completing a meaningful action, and warning before a destructive state. Do not haptic ordinary navigation or every tap.
-- Route transitions should use platform-native behavior wherever Expo Router provides it; custom motion is only for the workspace overlay and small state continuity.
+- Route transitions should use platform-native behavior wherever Expo Router provides it; custom motion is reserved for the navigation drawer and small state continuity.
 
 ## 7. Accessibility and adaptive design
 
@@ -405,7 +392,7 @@ The present token file contains the v2 palette and an 8pt-only spacing scale. Th
 
 1. Add semantic roles (`grouped`, `elevated`, `pressed`, and central elevation recipes) without removing compatibility aliases in the same change.
 2. Update Paper mapping and shared primitives first.
-3. Migrate home, headers, composer/dock, lists, and sheets in the order below.
+3. Migrate the Chat root, headers, composer/dock, lists, and sheets in the order below.
 4. Remove hardcoded component values (including card-specific shadows, `fontSize`, and radius) as each primitive is migrated.
 5. Verify both schemes and every state with screenshots on iOS and Android before removing old aliases.
 
@@ -416,7 +403,7 @@ These observations come from the current implementation and directly motivate th
 | Area | Current issue | Target correction |
 |---|---|---|
 | Header | `FloatingHeader` renders a filled circle + central filled pill + filled circle for almost every destination | Introduce large/compact native header modes; material only when floating over content |
-| Home | Continue, attention, agents, and library are all similarly weighted sections, plus a centered note FAB | Make home an action-ranked briefing; use a single bottom dock and hide empty attention |
+| Root navigation | The former workspace landing surface competed with the primary chat intent | Open in Chat, resume the latest conversation, and keep secondary destinations in the leading drawer |
 | Collections | Note, inbox, and session objects are nearly all bordered, rounded cards with shadows | Make plain/grouped rows the default; preserve featured cards only for intentional summaries |
 | Note rows | Title, chips, tag chips, status chip, task chip, pin chip, and timestamp compete in one compact card | Show title, preview, one metadata line, and only high-value tags/states |
 | Chat | The feature has rich state, which risks a visual stack of controls and blocks | Make transcript reading-first and progressively disclose operational/AI detail |
@@ -424,11 +411,11 @@ These observations come from the current implementation and directly motivate th
 
 ## 9. Delivery sequence and acceptance criteria
 
-This design phase intentionally does not change runtime UI. Implement in small, reviewable passes with visual QA after each pass.
+Implement the remaining work in small, reviewable passes with visual QA after each pass.
 
 ### Phase 0 — baseline and decisions
 
-- Capture iOS and Android screenshots of Home, Inbox, Notes, Session list, Chat, Settings, offline gateway, selection mode, and one long-text case in both themes.
+- Capture iOS and Android screenshots of the Chat root, attention tray, navigation drawer, Inbox, Notes, Session list, Settings, offline gateway, selection mode, and one long-text case in both themes.
 - Confirm typography/font-scaling constraints in the Expo SDK 56 environment.
 - Inventory component-local hardcoded visual values and duplicate header/card styles.
 - Lock the v3 token table and approve any platform-specific material fallback before code work.
@@ -442,7 +429,7 @@ This design phase intentionally does not change runtime UI. Implement in small, 
 
 ### Phase 2 — product-defining paths
 
-1. Workspace home and Ask AI transition.
+1. Chat root, conversation resume, navigation drawer, and attention tray.
 2. Inbox capture and list.
 3. Notes list and note detail/editor.
 4. Chat transcript, composer, and progressive AI/tool states.

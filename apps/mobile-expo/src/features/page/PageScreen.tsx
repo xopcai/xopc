@@ -7,7 +7,7 @@ import { ActivityIndicator, Button, Icon, Snackbar, Text } from 'react-native-pa
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
-import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useTheme } from '../../theme';
 
 import { NoteShareSheet } from '../notes/NoteShareSheet';
@@ -237,7 +237,7 @@ export function PageScreen() {
       try {
         await saveEditorBeforeLeave();
         allowNextRemoveRef.current = true;
-        dismissOrHome(router);
+        dismissOrRoot(router);
       } finally {
         savingBeforeLeaveRef.current = false;
       }

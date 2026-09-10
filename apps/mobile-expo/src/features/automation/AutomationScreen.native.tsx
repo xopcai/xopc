@@ -6,7 +6,7 @@ import { Text } from 'react-native-paper';
 
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { useMessages } from '../../i18n/messages';
-import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useGatewayConfigured } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
@@ -50,7 +50,7 @@ export function AutomationScreen() {
       <NativeScreenHeader
         title={pm.title}
         largeTitle
-        onBack={() => dismissOrHome(router)}
+        onBack={() => dismissOrRoot(router)}
         rightIcon={tab === 'schedules' ? 'plus' : undefined}
         onRightPress={tab === 'schedules' ? () => router.push('/automation/form') : undefined}
       />

@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
-import { dismissOrHome } from '../../lib/navigation';
+import { dismissOrRoot } from '../../lib/navigation';
 import { queryKeys } from '../../query/keys';
 import { fetchProjects, type Project } from '../../query/projects';
 import { useGatewayConfigured } from '../../query/sessions';
@@ -57,7 +57,7 @@ export function TaskListScreen() {
       <NativeScreenHeader
         title={labels.title}
         largeTitle
-        onBack={() => dismissOrHome(router)}
+        onBack={() => dismissOrRoot(router)}
         rightActions={[{
           icon: 'plus',
           onPress: () => router.push('/tasks/create'),

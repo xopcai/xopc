@@ -128,41 +128,35 @@ export const zh: MessageBundle = {
     deletion: "服务器的数据保存、备份、日志及模型训练使用规则由网关管理员和已配置的服务商决定。请向管理员索取其隐私政策及删除请求联系方式。你可以在相应页面删除内容，在网关撤销设备配对，并联系管理员申请删除备份或其他服务中的数据。卸载 App 不会删除远程数据。撤回移动端授权不会取消已有自动化，请另行暂停。",
     support: "技术支持",
   },
-  nav: {
-    sessions: '对话',
-    chat: '聊天',
-    settings: '设置',
-  },
-
-  // ── 侧边栏 ─────────────────────────────────────────────
   drawer: {
     newChat: '新建对话',
+    recentChats: '最近对话',
+    workbench: '工作台',
+    needsAttention: '待处理',
+    tasks: '任务',
+    projects: '项目',
+    inbox: '收件箱',
+    notes: '笔记',
+    files: '文件',
+    automation: '自动化',
+    settings: '设置',
+    currentChat: '当前',
     agents: '智能体',
-    cron: '定时任务',
-    conversations: '对话',
     chats: '对话',
-    brandDescription: '语言、主题与字号',
     historyTitle: '历史对话',
-    sectionThisWeek: '本周',
-    sectionThisYear: '本年',
-    sectionEarlier: '更早',
-    profileFallbackName: 'XOPC',
-    search: '搜索',
-    multiSelectCancel: '取消',
-    multiSelectDelete: '删除 ({{count}})',
   },
 
-  // ── 侧边栏设置弹出菜单 ─────────────────────────────────
-  drawerMenu: {
-    language: '语言',
-    theme: '主题亮暗',
-    themeLight: '浅色',
-    themeDark: '深色',
-    themeSystem: '跟随系统',
-    fontSize: '对话字号',
-    about: '关于',
-    helpDocs: '帮助文档',
-    openAllSettings: '打开全部设置',
+  attentionCenter: {
+    title: '待处理',
+    trayTitle: '{{count}} 项需要你处理',
+    trayCount: '{{count}} 项',
+    trayDismiss: '关闭，直到事项发生变化',
+    sheetTitle: '需要你处理',
+    sheetSubtitle: '按紧急程度排序',
+    viewAll: '查看全部待处理事项',
+    emptyTitle: '目前没有需要你处理的事项',
+    emptyHint: '新的决策和受阻任务会出现在这里。',
+    loadFailed: '暂时无法加载待处理事项。',
   },
 
   // ── 会话列表 ────────────────────────────────────────────
@@ -839,11 +833,6 @@ export const zh: MessageBundle = {
     subtitle: '智能体按计划执行的任务。',
     schedulesTab: '定时安排',
     runsTab: '运行记录',
-  },
-
-  workspaceHome: {
-    automationSection: '自动化',
-    automationHint: '创建和管理智能体定时任务。',
   },
 
   workspaceSearch: {

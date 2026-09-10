@@ -17,7 +17,7 @@ import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
-import { dismissOrHome, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrRoot, openChat, useDismissOnHardwareBack } from '../../lib/navigation';
 import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
 import {
@@ -342,7 +342,7 @@ export function SessionsScreen() {
       <NativeScreenHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
         largeTitle={!selectionMode}
-        onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
+        onBack={selectionMode ? exitSelectionMode : () => dismissOrRoot(router)}
         rightActions={selectionMode ? undefined : [
           {
             icon: 'square-edit-outline',

@@ -5,7 +5,7 @@ import { Switch } from 'react-native-paper';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { useMessages } from '@/i18n/messages';
-import { dismissOrHome, useDismissOnHardwareBack } from '@/lib/navigation';
+import { dismissOrRoot, useDismissOnHardwareBack } from '@/lib/navigation';
 import { useGatewayConfigured } from '@/query/sessions';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { gatewayProfileHost } from '@/stores/gateway-types';
@@ -80,7 +80,7 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <NativeScreenHeader title={s.title} largeTitle onBack={() => dismissOrHome(router)} />
+      <NativeScreenHeader title={s.title} largeTitle onBack={() => dismissOrRoot(router)} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
