@@ -26,9 +26,7 @@
   <a href="https://xopcai.github.io/xopc/zh/">查看文档</a>
 </p>
 
-<p align="center">
-  <video src="docs/public/xopc-desktop.mp4" controls muted width="1200"></video>
-</p>
+https://github.com/user-attachments/assets/8325d037-676c-4fbf-ad0f-b4d0786faa82
 
 > 安装后可以直接告诉它：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
 

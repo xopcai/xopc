@@ -26,9 +26,7 @@
   <a href="https://xopcai.github.io/xopc/">Read the docs</a>
 </p>
 
-<p align="center">
-  <video src="docs/public/xopc-desktop.mp4" controls muted width="1200"></video>
-</p>
+https://github.com/user-attachments/assets/8325d037-676c-4fbf-ad0f-b4d0786faa82
 
 > After setup, try: **“One thing I want to move forward this week is ____. Help me find the smallest credible next step.”**
 
