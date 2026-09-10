@@ -51,6 +51,9 @@ export function registerGlobalDefaultsRoutes(authenticated: Hono, deps: Authenti
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
     }
+    if (!prep.data.changed) {
+      return c.json({ ok: true, payload: await listGlobalDefaults(service.currentConfig as Config) });
+    }
     const save = await service.saveConfig(prep.data.nextConfig);
     if (!save.saved) {
       return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
