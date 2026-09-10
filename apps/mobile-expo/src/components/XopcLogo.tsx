@@ -1,20 +1,20 @@
 import { Image, StyleSheet } from 'react-native';
 
 import { useTheme } from '../theme';
-import logoMarkSource from '../../assets/splash-icon.png';
-
+import darkLogoMarkSource from '../../assets/splash-icon-dark.png';
+import lightLogoMarkSource from '../../assets/splash-icon.png';
 
 interface XopcLogoProps {
   size?: number;
 }
 
 export function XopcLogo({ size = 32 }: XopcLogoProps) {
-  const { colors } = useTheme();
+  const { isDark } = useTheme();
 
   return (
     <Image
-      source={logoMarkSource}
-      style={[styles.logo, { width: size, height: size, tintColor: colors.text.primary }]}
+      source={isDark ? darkLogoMarkSource : lightLogoMarkSource}
+      style={[styles.logo, { width: size, height: size }]}
       resizeMode="contain"
       accessible
       accessibilityLabel="xopc"
