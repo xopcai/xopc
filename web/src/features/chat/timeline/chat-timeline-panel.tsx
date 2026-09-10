@@ -149,25 +149,26 @@ export function ChatTimelinePanel({
         <Button
           type="button"
           variant="ghost"
-          className="size-11 shrink-0 rounded-full p-0 xl:hidden"
+          className="size-10 shrink-0 rounded-full p-0 sm:size-9 xl:hidden"
           aria-label={openLabel}
           title={openLabel}
         >
-          <History className="size-5" strokeWidth={1.75} aria-hidden />
+          <History className="size-[1.125rem]" strokeWidth={1.8} aria-hidden />
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim/70 backdrop-blur-[1px] xl:hidden" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim/60 backdrop-blur-[1px] xl:hidden" />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content-pane fixed bottom-0 left-0 right-0 z-[90] flex h-[min(72dvh,34rem)] flex-col overflow-hidden',
-            'rounded-t-xl border border-edge bg-surface-panel shadow-popover outline-none',
-            'md:bottom-auto md:left-auto md:right-4 md:top-20 md:h-[min(calc(100dvh-7rem),40rem)] md:w-[22rem] md:rounded-xl',
+            'xopc-dialog-content-pane fixed inset-x-2 bottom-[max(.5rem,env(safe-area-inset-bottom))] z-[90] flex h-[min(72dvh,34rem)] flex-col overflow-hidden',
+            'rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none',
+            'sm:left-auto sm:right-3 sm:w-[min(24rem,calc(100vw-1.5rem))]',
+            'md:bottom-[max(1rem,env(safe-area-inset-bottom))] md:right-4 md:h-[min(calc(100dvh-6rem),40rem)]',
             'xl:hidden',
           )}
           aria-describedby={undefined}
         >
-          <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
+          <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge-subtle px-3.5 py-3">
             <Dialog.Title className="min-w-0 truncate text-base font-semibold text-fg">
               {labels.title}
             </Dialog.Title>

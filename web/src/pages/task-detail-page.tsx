@@ -136,6 +136,7 @@ const TaskDependenciesField = memo(function TaskDependenciesField({
   selected,
   disabled,
   labels,
+  getTaskHref,
   onChange,
 }: {
   candidates: DependencyCandidate[];
@@ -149,12 +150,14 @@ const TaskDependenciesField = memo(function TaskDependenciesField({
     noCandidates: string;
     remove: string;
   };
+  getTaskHref: (taskId: string) => string;
   onChange: (taskIds: string[]) => void;
 }) {
-  return <DependencyPicker borderless candidates={candidates} selectedIds={selected.map((task) => task.id)} disabled={disabled} onChange={onChange} labels={labels} />;
+  return <DependencyPicker borderless candidates={candidates} selectedIds={selected.map((task) => task.id)} disabled={disabled} getTaskHref={getTaskHref} onChange={onChange} labels={labels} />;
 }, (previous, next) => (
   previous.disabled === next.disabled
   && previous.labels === next.labels
+  && previous.getTaskHref === next.getTaskHref
   && previous.onChange === next.onChange
   && previous.candidates.length === next.candidates.length
   && previous.candidates.every((candidate, index) => candidate.id === next.candidates[index]?.id && candidate.title === next.candidates[index]?.title)
@@ -196,6 +199,13 @@ function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'ready') return 'ready';
   if (detail.task.phase === 'review') return 'review';
   return 'paused';
+}
+
+function detailStatusTone(status: DetailStatusKey): string {
+  if (status === 'needsUser' || status === 'blocked') return 'bg-warning/10 text-warning';
+  if (status === 'completed') return 'bg-success-soft text-success';
+  if (status === 'running' || status === 'verifying' || status === 'review') return 'bg-accent-soft text-accent-fg';
+  return 'bg-surface-hover text-fg-muted';
 }
 
 function TextList({ items, empty, verificationByCriterion }: {
@@ -280,6 +290,9 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
     '/',
     ['/projects', '/chat', '/notes', '/tasks'],
   ), [searchParams]);
+  const taskHref = useCallback((relatedTaskId: string) => presentation === 'modal' && backgroundPath
+    ? taskDetailModalHref(backgroundPath, relatedTaskId)
+    : withReturnTo(`/tasks/${encodeURIComponent(relatedTaskId)}`, returnPath), [backgroundPath, presentation, returnPath]);
   detailRef.current = detail;
 
   const setOperationPending = useCallback((operation: TaskPendingOperation, pending: boolean) => {
@@ -571,8 +584,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const activeWait = detail.waits[0];
   const pausedWait = activeWait?.kind === 'paused' ? activeWait : undefined;
   const latestReceipt = detail.receipts[0];
-  const statusLabel = copy.detailStatuses[detailStatusKey(detail)];
-  const statusDescription = copy.detailStatusDescriptions[detailStatusKey(detail)];
+  const statusKey = detailStatusKey(detail);
+  const statusLabel = copy.detailStatuses[statusKey];
   const objective = detail.task.body?.trim() || detail.task.contract?.objective.trim();
   const verificationByCriterion = new Map(latestReceipt?.verification.checks.map((check) => [check.criterion, check.status]));
   const canSchedule = detail.allowedCommands.includes('mark_ready');
@@ -601,10 +614,6 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const recentlyChanged = (...fields: TaskChangedEvent['changedFields']): boolean => Boolean(
     recentChange?.changedFields.some((field) => fields.includes(field)),
   );
-  const taskHref = (relatedTaskId: string) => presentation === 'modal' && backgroundPath
-    ? taskDetailModalHref(backgroundPath, relatedTaskId)
-    : withReturnTo(`/tasks/${relatedTaskId}`, returnPath);
-
   const canMovePhase = detail.allowedCommands.includes('move');
   const commandPending = pendingOperations.has('command');
   const deletePending = pendingOperations.has('delete');
@@ -697,6 +706,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
               {projectName ? <span className="inline-flex items-center gap-1.5"><FolderKanban className="size-3.5" aria-hidden />{projectName}</span> : null}
               <span>/</span><span>{copy.taskLabel}</span>
+              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', detailStatusTone(statusKey))}>{statusLabel}</span>
+              <span className="text-fg-subtle">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</span>
               {recentChange ? (
                 <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg" role="status">
                   {recentChange.source === 'agent'
@@ -742,10 +753,12 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
       </header>
 
-      <div className="mt-5 flex flex-col gap-5">
-        <main className="order-2 min-w-0 space-y-5">
-          <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('body') && 'task-detail-live-update')}>
-            <h2 className="font-medium text-fg">{copy.taskDescription}</h2>
+      {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`}>{item.summary}</li>)}</ul></section> : null}
+
+      <div className="flex flex-col gap-4">
+        <main className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
+          <section className={cn('p-5', recentlyChanged('body') && 'task-detail-live-update')}>
+            <h2 className="text-sm font-semibold text-fg">{copy.taskDescription}</h2>
             {editingDescription ? (
               <textarea
                 autoFocus
@@ -780,44 +793,40 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             ) : null}
           </section>
 
-          {detail.attention.length > 0 ? <section className={cn('rounded-xl bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h3 className="font-medium text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h3><ul className="mt-3 space-y-2 text-sm text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`}>{item.summary}</li>)}</ul></section> : null}
-
-          <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('contract') && 'task-detail-live-update')}>
-            <h2 className="font-medium text-fg">{copy.taskDefinition}</h2>
+          <section className={cn('p-5', recentlyChanged('contract') && 'task-detail-live-update')}>
+            <h2 className="text-sm font-semibold text-fg">{copy.taskDefinition}</h2>
             <div className="mt-5"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-medium text-fg">{copy.successDefinition}</h3>{acceptanceCriteria.length > 0 ? <span className="text-xs text-fg-subtle">{copy.criteriaProgress.replace('{{verified}}', String(verifiedCriteriaCount)).replace('{{total}}', String(acceptanceCriteria.length))}</span> : null}</div><div className="mt-3"><TextList items={acceptanceCriteria} empty={copy.noDefinition} verificationByCriterion={verificationByCriterion} /></div></div>
-            {expectedOutputs.length > 0 ? <div className="mt-5 rounded-lg bg-surface-hover p-4"><h3 className="text-sm font-medium text-fg">{copy.expectedOutputs}</h3><div className="mt-3"><TextList items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
-            {constraints.length > 0 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{copy.constraints}</summary><div className="mt-3"><TextList items={constraints} empty={copy.noDefinition} /></div></details> : null}
-            {approvalRequired.length > 0 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{copy.approvalRequired}</summary><div className="mt-3"><TextList items={approvalRequired} empty={copy.noDefinition} /></div></details> : null}
-            {assumptions.length > 0 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{copy.contextAssumptions}</summary><div className="mt-3"><TextList items={assumptions} empty={copy.noDefinition} /></div></details> : null}
-            {risks.length > 0 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList items={risks} empty={copy.noDefinition} /></div></details> : null}
+            {expectedOutputs.length > 0 ? <div className="mt-5 border-t border-edge-subtle pt-5"><h3 className="text-sm font-medium text-fg">{copy.expectedOutputs}</h3><div className="mt-3"><TextList items={expectedOutputs} empty={copy.noDefinition} /></div></div> : null}
+            {constraints.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.constraints}</summary><div className="mt-3"><TextList items={constraints} empty={copy.noDefinition} /></div></details> : null}
+            {approvalRequired.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.approvalRequired}</summary><div className="mt-3"><TextList items={approvalRequired} empty={copy.noDefinition} /></div></details> : null}
+            {assumptions.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextAssumptions}</summary><div className="mt-3"><TextList items={assumptions} empty={copy.noDefinition} /></div></details> : null}
+            {risks.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList items={risks} empty={copy.noDefinition} /></div></details> : null}
           </section>
 
-          {latestReceipt ? <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="font-medium text-fg">{copy.latestResult}</h2><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button>{latestReceipt.evidence.filter((evidence) => evidence.uri).map((evidence) => <a key={`${evidence.title}-${evidence.uri}`} className="ml-auto inline-flex items-center gap-1 text-xs text-accent hover:underline" href={evidence.uri}><ExternalLink className="size-3" />{evidence.title}</a>)}</div>{detail.receipts.length > 1 ? <details className="mt-4 rounded-lg bg-surface-hover p-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-active p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
+          {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button>{latestReceipt.evidence.filter((evidence) => evidence.uri).map((evidence) => <a key={`${evidence.title}-${evidence.uri}`} className="ml-auto inline-flex items-center gap-1 text-xs text-accent hover:underline" href={evidence.uri}><ExternalLink className="size-3" />{evidence.title}</a>)}</div>{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
 
-          {detail.context.length > 0 ? <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="font-medium text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
+          {detail.context.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </main>
 
-        <aside className="order-1 min-w-0 space-y-4">
-          <section className={cn('rounded-xl bg-surface-subtle p-4', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
-            <h2 className="font-medium text-fg">{copy.taskProperties}</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <aside className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
+          <section className={cn('p-5', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
+            <h2 className="text-sm font-semibold text-fg">{copy.taskProperties}</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <TaskPhaseField value={detail.task.phase} disabled={pendingOperations.has('phase')} canMove={canMovePhase} canApprove={canApprove} canReopen={canReopen} language={language} label={copy.taskPhase} onChange={changePhase} />
               <TaskPriorityField value={detail.task.priority} disabled={pendingOperations.has('priority')} label={copy.priority} labels={copy.priorityLabels} onChange={changePriority} />
               <TaskDueDateField value={dateInputValue(detail.task.dueAt)} disabled={pendingOperations.has('dueAt')} label={copy.dueDate} onChange={changeDueDate} />
               <TaskExecutorField value={detail.conversation.currentExecutorAgentId ?? ''} disabled={pendingOperations.has('delegateAgentId')} label={copy.executorLabel} unassignedLabel={copy.unassigned} agents={agents} onChange={switchExecutor} />
-              {projectName ? <div className="grid gap-1 text-xs text-fg-muted"><span>{copy.projectLabel}</span><span className="flex items-center gap-1.5 rounded-lg bg-surface-hover px-3 py-2 text-sm text-fg"><FolderKanban className="size-3.5" />{projectName}</span></div> : null}
             </div>
-            <div className="mt-4 rounded-lg bg-surface-hover p-3 text-xs leading-5 text-fg-subtle"><p>{statusLabel}</p><p>{statusDescription}</p><p className="mt-2">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</p></div>
           </section>
 
-          <section className={cn('rounded-xl bg-surface-panel p-4', recentlyChanged('dependencies') && 'task-detail-live-update')}>
-            <h2 className="font-medium text-fg">{copy.taskRelations}</h2>
+          <section className={cn('p-5', recentlyChanged('dependencies') && 'task-detail-live-update')}>
+            <h2 className="text-sm font-semibold text-fg">{copy.taskRelations}</h2>
             <div className="mt-4 space-y-4">
               <div>
                 <p className="mb-2 text-xs text-fg-muted">{copy.dependencies}</p>
-                <TaskDependenciesField candidates={dependencyCandidates} selected={detail.dependencies} disabled={pendingOperations.has('dependencies')} labels={dependencyPickerLabels} onChange={saveDependencies} />
+                <TaskDependenciesField candidates={dependencyCandidates} selected={detail.dependencies} disabled={pendingOperations.has('dependencies')} labels={dependencyPickerLabels} getTaskHref={taskHref} onChange={saveDependencies} />
               </div>
-              <div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.length > 0 ? <div className="space-y-1.5">{detail.dependents.map((task) => <Link key={task.id} to={taskHref(task.id)} className="block rounded-lg bg-surface-hover p-2.5 text-sm text-accent hover:underline">{task.title}</Link>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependents}</p>}</div>
+              <div><p className="mb-2 text-xs text-fg-muted">{copy.dependents}</p>{detail.dependents.length > 0 ? <div className="space-y-1.5">{detail.dependents.map((task) => <Link key={task.id} to={taskHref(task.id)} className="block rounded-lg bg-surface-hover p-2.5 text-sm text-fg-muted transition-colors hover:text-fg">{task.title}</Link>)}</div> : <p className="text-sm text-fg-subtle">{copy.noDependents}</p>}</div>
             </div>
           </section>
         </aside>
